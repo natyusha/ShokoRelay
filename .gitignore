@@ -1,0 +1,6 @@
+# Build results
+bin/
+obj/
+
+# VS Code
+*.code-workspace

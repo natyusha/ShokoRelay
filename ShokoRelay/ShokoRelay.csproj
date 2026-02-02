@@ -1,0 +1,24 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <VersionRegex>Version\s*=\s*"([^"]+)"</VersionRegex>
+    <ShokoRelayInfoFile>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/ShokoRelayInfo.cs'))</ShokoRelayInfoFile>
+    <Version>$([System.Text.RegularExpressions.Regex]::Match($(ShokoRelayInfoFile), $(VersionRegex)).Groups[1].Value)</Version>
+    <AssemblyVersion>$(Version).0</AssemblyVersion>
+    <FileVersion>$(Version).0</FileVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Versioning" Version="5.1.0" ExcludeAssets="runtime" />
+    <PackageReference Include="NLog" Version="5.2.8" ExcludeAssets="runtime" />
+    <PackageReference Include="Shoko.Plugin.Abstractions" Version="5.2.0" ExcludeAssets="runtime" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+</Project>
