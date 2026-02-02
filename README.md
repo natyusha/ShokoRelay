@@ -3,6 +3,7 @@
 -
 This is a plugin for Shoko Server that acts as a [Custom Metadata Provider](https://forums.plex.tv/t/announcement-custom-metadata-providers/934384) for Plex.
 It is a successor to the [ShokoRelay.bundle](https://github.com/natyusha/ShokoRelay.bundle) legacy agent/scanner and intends to mirror all of its features. Scanning is much faster now and it will be possible to add many new features as well.
+
 Due to the lack of a custom scanner this plugin leverages [.plexmatch](https://support.plex.tv/articles/plexmatch/) files to ensure that varied folder structures are supported.
 This means that your anime can be organised with whatever file or folder structure you want. The only caveat is that a folder cannot contain more than one AniDB series at a time (subfolders are fine).
 These matching files will be automatically generated when a file move or rename is detected by Shoko. This means that the potentially lengthy first time generation should only be a one time deal.
@@ -59,7 +60,7 @@ Due to this plugin relying on Shoko's plugin abstractions as well as Plex still 
 - collections from shoko groups (not implemented)
 - `.plexmatch` for multi episode files (bugged)
 
-## TOOD
+## TODO
 - Add the missing TMDB info listed above
 - Add a different way to configure the plugin as it seems broken
 - Add weight based content ratings
