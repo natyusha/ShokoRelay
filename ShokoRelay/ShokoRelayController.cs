@@ -32,13 +32,11 @@ namespace ShokoRelay.Controllers
         private readonly PlexMatching _plexMatcher;
         private readonly PlexMetadata _mapper;
 
-        private string ApiRoot => ApiBase.Substring(0, ApiBase.LastIndexOf('/'));
-        private string ApiBase => $"api/v{HttpContext.GetRequestedApiVersion()?.ToString() ?? "3"}/{ControllerContext.ActionDescriptor.ControllerName}";
         private string BaseUrl => $"{Request.Scheme}://{Request.Host}";
 
-        private const string SeasonPrefix = "s";
+        private const string SeasonPrefix  = "s";
         private const string EpisodePrefix = "e";
-        private const string PartPrefix = "p";
+        private const string PartPrefix    = "p";
 
         public ShokoRelayController(
             IVideoService videoService,
@@ -139,9 +137,9 @@ namespace ShokoRelay.Controllers
                 },
                 Feature = new[]
                 {
-                    new { type = "metadata", key = "/metadata" },
-                    new { type = "match", key = "/match" },
-                    new { type = "collection", key = "/collection" }
+                    new { type = "metadata"   , key = "/metadata" },
+                    new { type = "match"      , key = "/match" },
+                    new { type = "collection" , key = "/collection" }
                 }
             }
         });

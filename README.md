@@ -39,6 +39,20 @@ For the Library under "Advanced" it is recommended to set these settings:
 > [!NOTE]
 > You can convert existing "TV Show" libraries to the new Agent as long as they contain files matched to Shoko and the `.plexmatch` files have been generated.
 
+## Relay API Endpoints
+Append paths to the base: `http://ShokoHost:ShokoPort/api/v3/ShokoRelay`
+```
+Matching        : /match
+Plexmatch       : /plexmatchmatch?path={ShokoFolderPath}
+Collection      : /collection/{ShokoGroupID} (not fully implemented)
+Series          : /metadata/{ShokoSeriesID}
+Series Seasons  : /metadata/{ShokoSeriesID}/children
+Series Episodes : /metadata/{ShokoSeriesID}/grandchildren
+Season          : /metadata/{ShokoSeriesID}s{SeasonNumber}
+Episode         : /metadata/e{ShokoEpisodeID}
+Episode Parts   : /metadata/e{ShokoEpisodeID}p{PartNumber}
+```
+
 ## Information
 Due to this plugin relying on Shoko's plugin abstractions as well as Plex still actively developing this feature some TMDB/AniDB features are currently missing.
 
@@ -57,13 +71,33 @@ Due to this plugin relying on Shoko's plugin abstractions as well as Plex still 
 - tag weights (not in shoko plugin abstractions)
 - similar anime
 
-#### Missing Plex Features
+#### Missing Plex Provider Features
 - collections from shoko groups (not implemented)
+- ratings that aren't from tmdb/imdb/rotten tomatoes
 - `.plexmatch` for multi episode files (bugged)
 
 ## TODO
-- Add the missing TMDB info listed above
-- Add a different way to configure the plugin as it seems broken
-- Add weight based content ratings
-- Add collection support
-- Integrate animethemes
+- Once available in Shoko plugin abstractions:
+    - Add a different way to configure the plugin as it seems broken/clunky
+        - Full Web UI integration will be possible
+    - Add weight based content indicators/ratings
+    - Add the missing TMDB info listed above
+- Once available in Plex metadata providers
+    - Add collection support
+    - Add custom series/episode rating sources
+- Fully replace [collection-posters.py](https://github.com/natyusha/ShokoRelay.bundle/blob/master/Contents/Scripts/collection-posters.py)
+    - Users will simply put posters with the same name as a collection into a configurable folder
+    - Collection posters from the primary series in a Shoko group will already work
+- Switch from .plexmatch to a full VFS
+    - Bypass inability to fully map extras (without putting them in seasons)
+    - Need to account for local plex metadata like posters/themes
+- Potentially auth to plex and use plex's api for features not yet present in metadata providers
+    - Will only do this if Shoko's integrated Auth flow will allow it
+- Explore plex [webhooks](https://support.plex.tv/articles/115002267687-webhooks/) for full scrobble support
+    - Should now be possible due to Relay's unique GUID scheme which utilises Shoko IDs
+- Fully integrate the animethemes video .torrent as extras in the VFS
+    - This will be configured to only add themes to the VFS if the user has the series in Shoko
+    - Make a mapping file via animethemes API so other users don't hammer it
+    - No need to link anything to anidb/shoko can use Plex extras folders
+- Potentially integrate [animethemes.py](https://github.com/natyusha/ShokoRelay.bundle/blob/master/Contents/Scripts/animethemes.py) into the plugin
+    - This would require ffmpeg

@@ -7,6 +7,7 @@ namespace ShokoRelay.Helpers
     {
         public string tag { get; init; } = "";
     }
+
     public static class CastHelper
     {
         private static string? GetName(ICreator? creator, string fallback) => creator?.Name ?? fallback;
