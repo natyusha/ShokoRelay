@@ -1,5 +1,6 @@
 using Shoko.Plugin.Abstractions.DataModels;
 using Shoko.Plugin.Abstractions.DataModels.Shoko;
+using ShokoRelay.Config;
 using System.Text.RegularExpressions;
 
 namespace ShokoRelay.Helpers
@@ -156,16 +157,25 @@ namespace ShokoRelay.Helpers
             return rawEpTitle;
         }
 
-        public static string SummarySanitizer(string? summary, int mode)
+        public static string SummarySanitizer(string? summary, SummaryMode mode)
         {
             if (string.IsNullOrWhiteSpace(summary)) return string.Empty;
 
-            if (mode != 4)
+            switch (mode)
             {
-                if (mode == 1 || mode == 3)
-                    summary = _sourceNoteSummaryRegex.Replace(summary, "");      // Remove the line if it starts with ("Source: ", "Note: ", "Summary: ")
-                if (mode == 1 || mode == 2)
-                    summary = _listIndicatorRegex.Replace(summary, "");          // Remove the line if it starts with ("* ", "— ", "- ", "~ ")
+                case SummaryMode.FullySanitize:
+                    summary = _sourceNoteSummaryRegex.Replace(summary, "");
+                    summary = _listIndicatorRegex.Replace(summary, "");
+                    break;
+                case SummaryMode.AllowInfoLines:
+                    summary = _listIndicatorRegex.Replace(summary, "");
+                    break;
+                case SummaryMode.AllowMiscLines:
+                    summary = _sourceNoteSummaryRegex.Replace(summary, "");
+                    break;
+                case SummaryMode.AllowBoth:
+                default:
+                    break;
             }
 
             summary = _aniDBLinkRegex.Replace(summary, "$1");                    // Replace AniDB links with text

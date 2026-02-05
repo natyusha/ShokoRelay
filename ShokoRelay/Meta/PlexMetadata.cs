@@ -99,7 +99,7 @@ namespace ShokoRelay.Meta
                 ["originalTitle"]         = titles.OriginalTitle,
                 ["titleSort"]             = titles.SortTitle,
                 ["year"]                  = series.AirDate?.Year,
-                ["summary"]               = TextHelper.SummarySanitizer(((IWithDescriptions)series).PreferredDescription, ShokoRelay.Settings.SanitizeSummary) ?? "",
+                ["summary"]               = TextHelper.SummarySanitizer(((IWithDescriptions)series).PreferredDescription, ShokoRelay.Settings.SummaryMode) ?? "",
                 ["isAdult"]               = contentRating.IsAdult,
                 ["duration"]              = totalDuration,
                 //["tagline"]             = TMDB has this but it is not exposed
@@ -215,7 +215,7 @@ namespace ShokoRelay.Meta
                 //["originalTitle"]
                 ["titleSort"]             = epTitle,
                 ["year"]                  = ep.AirDate?.Year,
-                ["summary"]               = TextHelper.SummarySanitizer(epSummary, ShokoRelay.Settings.SanitizeSummary) ?? "",
+                ["summary"]               = TextHelper.SummarySanitizer(epSummary, ShokoRelay.Settings.SummaryMode) ?? "",
                 ["isAdult"]               = RatingHelper.GetContentRatingAndAdult(series).IsAdult,
                 ["duration"]              = (int)ep.Runtime.TotalMilliseconds,
 

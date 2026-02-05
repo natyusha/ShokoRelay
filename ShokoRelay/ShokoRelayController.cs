@@ -1,3 +1,6 @@
+using System;
+using System.IO;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
 using Shoko.Plugin.Abstractions.DataModels;
 using Shoko.Plugin.Abstractions.DataModels.Shoko;
@@ -11,6 +14,8 @@ using static ShokoRelay.Helpers.MapHelper;
 namespace ShokoRelay.Controllers
 {
     # region Models
+    public record PlexMatchBody(string? Filename);
+
     public record SeriesContext(
         ISeries Series,
         string ApiUrl,
@@ -19,7 +24,6 @@ namespace ShokoRelay.Controllers
         SeriesFileData FileData
     );
 
-    public record PlexMatchBody(string? Filename);
     #endregion
 
     [ApiVersion("3.0")]
@@ -29,8 +33,8 @@ namespace ShokoRelay.Controllers
     {
         private readonly IVideoService _videoService;
         private readonly IMetadataService _metadataService;
-        private readonly PlexMatching _plexMatcher;
         private readonly PlexMetadata _mapper;
+        private readonly VfsBuilder _vfsBuilder;
 
         private string BaseUrl => $"{Request.Scheme}://{Request.Host}";
 
@@ -41,13 +45,55 @@ namespace ShokoRelay.Controllers
         public ShokoRelayController(
             IVideoService videoService,
             IMetadataService metadataService,
-            PlexMatching plexMatcher,
-            PlexMetadata mapper)
+            PlexMetadata mapper,
+            VfsBuilder vfsBuilder)
         {
             _videoService = videoService;
             _metadataService = metadataService;
-            _plexMatcher = plexMatcher;
             _mapper = mapper;
+            _vfsBuilder = vfsBuilder;
+        }
+
+        [Route("match")]
+        [HttpPost]
+        [HttpGet]
+        public IActionResult Match([FromQuery] string? name, [FromBody] PlexMatchBody? body = null)
+        {
+            string? rawPath = name ?? body?.Filename;
+            if (string.IsNullOrWhiteSpace(rawPath))
+                return EmptyMatch();
+
+            int? fileId = ExtractFileId(rawPath);
+            if (!fileId.HasValue)
+                return EmptyMatch();
+
+            var video = _videoService.GetVideoByID(fileId.Value);
+            var series = video?.Series?.FirstOrDefault();
+
+            if (series == null)
+                return EmptyMatch();
+
+            var poster = (series as IWithImages)?.GetImages(ImageEntityType.Poster).FirstOrDefault();
+
+            return Ok(new
+            {
+                MediaContainer = new
+                {
+                    size = 1,
+                    identifier = ShokoRelayInfo.AgentScheme,
+                    Metadata = new[]
+                    {
+                        new
+                        {
+                            guid = _mapper.GetGuid("show", series.ID),
+                            title = series.PreferredTitle,
+                            year = series.AirDate?.Year,
+                            score = 100,
+                            thumb = poster != null ? ImageHelper.GetImageUrl(poster) : null
+                        }
+                    }
+                }
+            });
         }
 
         private SeriesContext? GetSeriesContext(string ratingKey)
@@ -96,6 +142,8 @@ namespace ShokoRelay.Controllers
                 Metadata = new[] { metadata }
             }
         });
+
+        private IActionResult EmptyMatch() => Ok(new { MediaContainer = new { size = 0, Metadata = Array.Empty<object>() } });
 
         private IActionResult WrapInPagedContainer(IEnumerable<object> metadataList)
         {
@@ -254,55 +302,35 @@ namespace ShokoRelay.Controllers
             return WrapInPagedContainer(allEpisodes);
         }
 
-        [Route("match")]
-        [HttpPost]
-        [HttpGet]
-        public IActionResult Match([FromQuery] string? name, [FromBody] PlexMatchBody? body = null)
+        [HttpGet("vfs")]
+        public IActionResult BuildVfs([FromQuery] int? seriesId = null, [FromQuery] bool clean = true, [FromQuery] bool dryRun = false, [FromQuery] bool run = false)
         {
-            string? rawPath = name ?? body?.Filename;
-            if (string.IsNullOrEmpty(rawPath))
-                return Ok(new { MediaContainer = new { size = 0, Metadata = new object[0] } });
+            if (!run)
+            {
+                return Ok(new
+                {
+                    status = "skipped",
+                    message = "Set run=true to build the VFS.",
+                    seriesId,
+                    clean,
+                    dryRun
+                });
+            }
 
-            var videoFile = _videoService.GetVideoFileByRelativePath(rawPath.Replace('\\', '/'));
-            var series = videoFile?.Video?.Series?.FirstOrDefault();
-
-            if (series == null)
-                return Ok(new { MediaContainer = new { size = 0, Metadata = new object[0] } });
-
-            var poster = ((IWithImages)series).GetImages(ImageEntityType.Poster).FirstOrDefault();
-
+            var result = _vfsBuilder.Build(seriesId, clean, dryRun);
             return Ok(new
             {
-                MediaContainer = new
-                {
-                    size = 1,
-                    identifier = ShokoRelayInfo.AgentScheme,
-                    Metadata = new[]
-                    {
-                        new
-                        {
-                            guid = _mapper.GetGuid("show", series.ID),
-                            title = series.PreferredTitle,
-                            year = series.AirDate?.Year,
-                            score = 100,
-                            thumb = poster != null ? ImageHelper.GetImageUrl(poster) : null
-                        }
-                    }
-                }
+                status = "ok",
+                root = result.RootPath,
+                seriesProcessed = result.SeriesProcessed,
+                linksCreated = result.CreatedLinks,
+                plannedLinks = result.PlannedLinks,
+                skipped = result.Skipped,
+                dryRun = result.DryRun,
+                reportPath = result.ReportPath,
+                report = result.ReportContent,
+                errors = result.Errors
             });
-        }
-
-        [HttpGet("plexmatch")]
-        public IActionResult GeneratePlexMatch([FromQuery] string? path)
-        {
-            if (string.IsNullOrEmpty(path))
-                return BadRequest("Please provide a 'path' parameter.");
-
-            var res = new List<string>();
-            var err = new List<string>();
-            _plexMatcher.ProcessFolder(path, res, err, cleanup: true);
-
-            return Ok(new { status = $"Process complete for {path}", generated = res.Count, errors = err });
         }
 
         private List<object> BuildEpisodeList(SeriesContext ctx, int seasonNum)
@@ -326,6 +354,18 @@ namespace ShokoRelay.Controllers
             }
 
             return items.OrderBy(x => x.Coords.Episode).Select(x => x.Meta).ToList();
+        }
+
+        private static int? ExtractFileId(string rawPath)
+        {
+            var name = Path.GetFileName(rawPath);
+            if (string.IsNullOrWhiteSpace(name)) return null;
+
+            var match = Regex.Match(name, "\\[(\\d+)\\]");
+            if (match.Success && int.TryParse(match.Groups[1].Value, out var id))
+                return id;
+
+            return null;
         }
     }
 }

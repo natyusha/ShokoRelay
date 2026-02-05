@@ -1,9 +1,24 @@
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel;
 
 namespace ShokoRelay.Config
 {
     public static class ConfigConstants { public const string ConfigFileName = "ShokoRelayConfig.json"; }
+    public enum RelayMode
+    {
+        None = 0,
+        Vfs = 1
+    }
+
+    public enum SummaryMode
+    {
+        FullySanitize = 0,
+        AllowInfoLines = 1,
+        AllowMiscLines = 2,
+        AllowBoth = 3
+    }
+
     public class RelayConfig
     {
         [Display(Name = "Series Title Language", Description = "Languages separated by comma (e.g. SHOKO, X-JAT, EN).")]
@@ -58,9 +73,9 @@ namespace ShokoRelay.Config
         //[DefaultValue("AniDB")]
         //public string CriticRatings { get; set; } = "AniDB";
 
-        [Display(Name = "Sanitize Summary", Description = "1: Fully Sanitize, 2: Allow Info Lines, 3: Allow Misc. Lines, 4: Allow Both Types")]
-        [DefaultValue(1)]
-        public int SanitizeSummary { get; set; } = 1;
+        [Display(Name = "Summary Mode", Description = "Choose summary sanitization level.")]
+        [DefaultValue(SummaryMode.FullySanitize)]
+        public SummaryMode SummaryMode { get; set; } = SummaryMode.FullySanitize;
 
         //[Display(Name = "Minimum Tag Weight", Description = "Predefined values: 600, 500, 400, 300, 200, 100, 0")]
         //[DefaultValue("0")]
@@ -69,5 +84,13 @@ namespace ShokoRelay.Config
         [Display(Name = "Tag Blacklist", Description = "Tags to exclude, separated by a comma.")]
         [DefaultValue("")]
         public string TagBlacklist { get; set; } = "";
+
+        [Display(Name = "VFS Root Folder", Description = "Folder name created inside each import folder to host virtual links.")]
+        [DefaultValue("!ShokoRelayVFS")]
+        public string VfsRootPath { get; set; } = "!ShokoRelayVFS";
+
+        [Display(Name = "Library Mode", Description = "Choose VFS links or no automation.")]
+        [DefaultValue(RelayMode.Vfs)]
+        public RelayMode Mode { get; set; } = RelayMode.Vfs;
     }
 }
