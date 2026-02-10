@@ -2,11 +2,12 @@ using System.Runtime.InteropServices;
 using NLog;
 using Shoko.Plugin.Abstractions.DataModels;
 
-namespace ShokoRelay.Helpers;
+namespace ShokoRelay.Vfs;
 
 internal static class VfsShared
 {
     private const string DefaultRootName = "!ShokoRelayVFS";
+    private const string DefaultCollectionPostersName = "!CollectionPosters";
 
     public static string? ResolveImportRootPath(IVideoFile location)
     {
@@ -55,6 +56,24 @@ internal static class VfsShared
 
         configured = VfsHelper.SanitizeName(configured);
         return string.IsNullOrWhiteSpace(configured) ? DefaultRootName : configured;
+    }
+
+    public static string ResolveCollectionPostersFolderName()
+    {
+        string configured = ShokoRelay.Settings.CollectionPostersRootFolder;
+        if (string.IsNullOrWhiteSpace(configured))
+            configured = DefaultCollectionPostersName;
+
+        configured = configured.Trim().TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        if (Path.IsPathRooted(configured))
+            configured = Path.GetFileName(configured);
+
+        if (string.IsNullOrWhiteSpace(configured))
+            configured = DefaultCollectionPostersName;
+
+        configured = VfsHelper.SanitizeName(configured);
+        return string.IsNullOrWhiteSpace(configured) ? DefaultCollectionPostersName : configured;
     }
 
     public static bool TryCreateLink(string source, string dest, Logger logger, string? targetOverride = null, bool useRelativeTarget = true)

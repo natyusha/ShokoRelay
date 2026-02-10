@@ -23,4 +23,10 @@
     <PackageReference Include="Shoko.Plugin.Abstractions" Version="5.2.0" ExcludeAssets="runtime" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="ShokoRelayController.cshtml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
 </Project>

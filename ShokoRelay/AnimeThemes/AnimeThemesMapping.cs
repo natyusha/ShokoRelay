@@ -4,7 +4,9 @@ using NLog;
 using Shoko.Plugin.Abstractions;
 using Shoko.Plugin.Abstractions.DataModels.Shoko;
 using Shoko.Plugin.Abstractions.Services;
+using ShokoRelay.Config;
 using ShokoRelay.Helpers;
+using ShokoRelay.Vfs;
 
 namespace ShokoRelay.AnimeThemes;
 
@@ -37,7 +39,7 @@ public class AnimeThemesMapping
     public AnimeThemesMapping(IMetadataService metadataService, IApplicationPaths applicationPaths)
     {
         _metadataService = metadataService;
-        _pluginPath = PluginPaths.PluginDirectory;
+        _pluginPath = Path.Combine(applicationPaths.PluginsPath, ConfigConstants.PluginSubfolder);
         AnimeThemesConstants.EnsureUserAgent(Http);
     }
 
@@ -45,7 +47,7 @@ public class AnimeThemesMapping
     {
         string basePath = !string.IsNullOrWhiteSpace(torrentRoot)
             ? torrentRoot
-            : (!string.IsNullOrWhiteSpace(ShokoRelay.Settings.AnimeThemesBasePath) ? ShokoRelay.Settings.AnimeThemesBasePath : AnimeThemesConstants.BasePath);
+            : (!string.IsNullOrWhiteSpace(ShokoRelay.Settings.AnimeThemesPathMapping) ? ShokoRelay.Settings.AnimeThemesPathMapping : AnimeThemesConstants.BasePath);
 
         string resolvedRoot = Path.GetFullPath(string.IsNullOrWhiteSpace(basePath) ? "." : basePath);
         if (!Directory.Exists(resolvedRoot))
@@ -96,7 +98,13 @@ public class AnimeThemesMapping
         return new AnimeThemesMappingBuildResult(mapPath, entries.Count, errors, messages);
     }
 
-    public async Task<AnimeThemesMappingApplyResult> ApplyMappingAsync(string? mapPath = null, string? torrentRoot = null, bool dryRun = false, CancellationToken ct = default)
+    public async Task<AnimeThemesMappingApplyResult> ApplyMappingAsync(
+        string? mapPath = null,
+        string? torrentRoot = null,
+        bool dryRun = false,
+        IReadOnlyCollection<int>? seriesFilter = null,
+        CancellationToken ct = default
+    )
     {
         string resolvedMap = mapPath ?? Path.Combine(_pluginPath, AnimeThemesConstants.MapFileName);
         if (!File.Exists(resolvedMap))
@@ -105,7 +113,17 @@ public class AnimeThemesMapping
         string json = await File.ReadAllTextAsync(resolvedMap, ct);
         var entries = JsonSerializer.Deserialize<List<AnimeThemesMappingEntry>>(json, _jsonOptions) ?? new();
 
-        var seriesList = _metadataService.GetAllShokoSeries().Where(s => s != null && s.AnidbAnimeID > 0).ToList();
+        List<IShokoSeries?> seriesList = [];
+        if (seriesFilter != null && seriesFilter.Count > 0)
+        {
+            seriesList = seriesFilter.Distinct().Select(id => _metadataService.GetShokoSeriesByID(id)).ToList();
+        }
+        else
+        {
+            seriesList = _metadataService.GetAllShokoSeries().Cast<IShokoSeries?>().ToList();
+        }
+
+        seriesList = seriesList.Where(s => s != null && s.AnidbAnimeID > 0).ToList();
         var byAniDb = seriesList.GroupBy(s => s!.AnidbAnimeID).ToDictionary(g => g.Key, g => g.ToList());
 
         string rootName = VfsShared.ResolveRootFolderName();
@@ -115,6 +133,15 @@ public class AnimeThemesMapping
         int skipped = 0;
         int matchedSeries = 0;
         var errors = new List<string>();
+
+        if (seriesFilter != null && seriesFilter.Count > 0)
+        {
+            foreach (var id in seriesFilter)
+            {
+                if (seriesList.All(s => s?.ID != id))
+                    errors.Add($"Series {id} not found or missing AniDB id");
+            }
+        }
         var planned = new List<string>();
 
         foreach (var entry in entries)
@@ -137,6 +164,12 @@ public class AnimeThemesMapping
 
             foreach (var series in matches!)
             {
+                if (series == null)
+                {
+                    skipped++;
+                    continue;
+                }
+
                 var roots = GetImportRoots(series);
                 if (roots.Count == 0)
                 {
@@ -156,7 +189,10 @@ public class AnimeThemesMapping
                     }
 
                     string shortsDir = Path.Combine(importRoot, rootName, series.ID.ToString(), "Shorts");
-                    string destName = EnsureExtension(VfsHelper.SanitizeName(entry.NewFileName), Path.GetExtension(source));
+                    string destName = VfsHelper.CleanEpisodeTitleForFilename(entry.NewFileName);
+                    destName = TextHelper.AnimeThemesPlexFileNames(destName);
+                    destName = TextHelper.ReplaceFirstHyphenWithArrow(destName);
+                    destName = EnsureExtension(destName, Path.GetExtension(source));
                     string destPath = Path.Combine(shortsDir, destName);
 
                     string relativeTarget = BuildThemeRelativeTarget(relativePath);
@@ -275,7 +311,7 @@ public class AnimeThemesMapping
             baseName += $" [{lookup.Tags}]";
 
         string full = baseName + extension;
-        return VfsHelper.SanitizeName(full);
+        return VfsHelper.CleanEpisodeTitleForFilename(full);
     }
 
     private static string GetThemeRootFolderName()

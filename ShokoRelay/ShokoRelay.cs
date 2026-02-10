@@ -2,10 +2,13 @@
 using Microsoft.Extensions.DependencyInjection;
 using NLog;
 using Shoko.Plugin.Abstractions;
+using Shoko.Plugin.Abstractions.Services;
 using ShokoRelay.AnimeThemes;
 using ShokoRelay.Config;
 using ShokoRelay.Helpers;
-using ShokoRelay.Meta;
+using ShokoRelay.Integrations.Shoko;
+using ShokoRelay.Plex;
+using ShokoRelay.Vfs;
 
 namespace ShokoRelay
 {
@@ -16,9 +19,14 @@ namespace ShokoRelay
             serviceCollection.AddHttpContextAccessor();
             serviceCollection.AddControllers().AddApplicationPart(typeof(ServiceRegistration).Assembly);
             serviceCollection.AddSingleton(new ConfigProvider(applicationPaths));
-            serviceCollection.AddSingleton<AnimeThemesGenerator>();
-            serviceCollection.AddSingleton<AnimeThemesMapping>();
-            serviceCollection.AddSingleton<PlexMetadata>();
+            serviceCollection.AddSingleton(provider => new AnimeThemesGenerator(provider.GetRequiredService<IVideoService>(), applicationPaths));
+            serviceCollection.AddSingleton(provider => new AnimeThemesMapping(provider.GetRequiredService<IMetadataService>(), applicationPaths));
+            serviceCollection.AddSingleton(provider => new PlexMetadata(provider.GetRequiredService<IMetadataService>(), provider.GetRequiredService<ShokoClient>()));
+            serviceCollection.AddSingleton(provider => new PlexAuth(new HttpClient(), provider.GetRequiredService<ConfigProvider>().GetSettings().PlexAuth));
+            serviceCollection.AddSingleton(provider => new PlexClient(new HttpClient(), provider.GetRequiredService<ConfigProvider>()));
+            serviceCollection.AddSingleton(provider => new PlexCollections(new HttpClient(), provider.GetRequiredService<ConfigProvider>(), provider.GetRequiredService<PlexClient>()));
+            serviceCollection.AddSingleton(provider => new ShokoClient(new HttpClient(), provider.GetRequiredService<ConfigProvider>()));
+            serviceCollection.AddSingleton<Services.IPlexCollectionManager, Services.PlexCollectionManager>();
             serviceCollection.AddSingleton<VfsBuilder>();
             serviceCollection.AddSingleton<VfsWatcher>();
         }

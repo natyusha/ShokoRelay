@@ -27,7 +27,10 @@ namespace ShokoRelay.Helpers
         private static readonly Regex _condenseLinesRegex = new(@"(\r?\n\s*){2,}", RegexOptions.Compiled);
         private static readonly Regex _condenseSpacesRegex = new(@"\s{2,}", RegexOptions.Compiled);
         private static readonly Regex _plexSplitTagRegex = new(@"(?ix)(?:^|[\s._-])(cd|disc|disk|dvd|part|pt)[\s._-]*([1-8])(?!\d)", RegexOptions.Compiled);
-        private static readonly Regex _fileIdRegex = new(@"\\[(\d+)\\](?=\\.[^.]+$)", RegexOptions.Compiled);
+        private static readonly Regex _fileIdRegex = new(@"\[(\d+)\](?=\.[^.]+$)", RegexOptions.Compiled);
+        private static readonly Regex _animeThemesTagRegex = new(@"\[([^\]]+)\](?=\.webm$)", RegexOptions.Compiled);
+        private static readonly Regex _bdDvdRegex = new(@"BD|DVD", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex _numbersRegex = new(@"\d+", RegexOptions.Compiled);
         private static readonly IReadOnlySet<string> _ambiguousTitles = new HashSet<string>(
             ["Complete Movie", "Music Video", "OAD", "OVA", "Short Movie", "Special", "TV Special", "Web"],
             StringComparer.OrdinalIgnoreCase
@@ -165,6 +168,7 @@ namespace ShokoRelay.Helpers
             return summary.Trim(' ', '\r', '\n');
         }
 
+        // Check for plex split tags as this is the only reliable way to handle this - https://support.plex.tv/articles/naming-and-organizing-your-tv-show-files/
         public static bool HasPlexSplitTag(string fileName)
         {
             if (string.IsNullOrWhiteSpace(fileName))
@@ -188,6 +192,67 @@ namespace ShokoRelay.Helpers
                 return id;
 
             return null;
+        }
+
+        public static string AnimeThemesPlexFileNames(string? name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return string.Empty;
+
+            string result = name;
+
+            // Handle OP/ED at the start
+            const string zws = "\u200B"; // Zero-width space to prevent Plex from renaming files with OP/ED tags
+            if (result.StartsWith("OP", StringComparison.Ordinal))
+                result = $"O{zws}P{result[2..]}";
+            else if (result.StartsWith("ED", StringComparison.Ordinal))
+                result = $"E{zws}D{result[2..]}";
+
+            // Tag cleaning: Process bracketed tag before the .webm extension (always .webm)
+            var tagMatch = _animeThemesTagRegex.Match(result);
+            if (tagMatch.Success)
+            {
+                string tagContent = tagMatch.Groups[1].Value;
+                string prefix = "";
+
+                // If "NC" is present, prepend to the name and remove from tag
+                if (tagContent.Contains("NC", StringComparison.Ordinal))
+                {
+                    prefix = "NC";
+                    tagContent = tagContent.Replace("NC", "", StringComparison.Ordinal).Trim();
+                }
+
+                // Remove "BD" and "DVD"
+                tagContent = _bdDvdRegex.Replace(tagContent, "");
+
+                // Remove any numbers (resolutions)
+                tagContent = _numbersRegex.Replace(tagContent, "");
+
+                // Trim whitespace
+                tagContent = tagContent.Trim();
+
+                // If tag content is empty, don't add parentheses; otherwise, use parentheses
+                string cleanedTag = string.IsNullOrEmpty(tagContent) ? "" : $" ({tagContent})";
+
+                // Reconstruct: Prepend prefix to the base name, append cleaned tag, then .webm
+                string baseName = result.Substring(0, tagMatch.Index).TrimEnd(); // Trim trailing space before tag
+                result = prefix + baseName + cleanedTag + ".webm";
+            }
+
+            return result;
+        }
+
+        // Purely for aesthetic reasons, replace the first hyphen in extras filenames as they don't show an episode number
+        public static string ReplaceFirstHyphenWithArrow(string? name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return string.Empty;
+
+            int index = name.IndexOf('-');
+            if (index < 0)
+                return name;
+
+            return string.Concat(name.AsSpan(0, index), "\u276F", name.AsSpan(index + 1));
         }
     }
 }

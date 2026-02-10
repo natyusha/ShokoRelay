@@ -1,3 +1,4 @@
+using System.Linq;
 using Microsoft.AspNetCore.Http;
 using Shoko.Plugin.Abstractions.DataModels;
 using Shoko.Plugin.Abstractions.Enums;
@@ -15,7 +16,7 @@ namespace ShokoRelay.Helpers
     {
         public static IHttpContextAccessor? HttpContextAccessor { get; set; }
 
-        private static string GetBaseUrl()
+        public static string GetBaseUrl()
         {
             var ctx = HttpContextAccessor?.HttpContext;
             if (ctx is not null)
@@ -54,6 +55,38 @@ namespace ShokoRelay.Helpers
                 .Concat(Project(ImageEntityType.Poster, "coverPoster"))
                 .Concat(Project(ImageEntityType.Thumbnail, "snapshot"))
                 .ToArray();
+        }
+
+        /// <summary>
+        /// Build a `coverPoster` image array for a season. If `seasonPosters` is provided, use those (honoring `addEveryImage`).
+        /// Otherwise fall back to the series `coverPoster` images returned by <see cref="GenerateImageArray"/>.
+        /// </summary>
+        public static ImageInfo[] BuildCoverPosterArray(IWithImages seriesImages, string alt, bool addEveryImage, IEnumerable<string>? seasonPosters = null)
+        {
+            if (seasonPosters != null && seasonPosters.Any())
+            {
+                if (addEveryImage)
+                    return seasonPosters
+                        .Select(url => new ImageInfo
+                        {
+                            alt = alt,
+                            type = "coverPoster",
+                            url = url,
+                        })
+                        .ToArray();
+
+                return new[]
+                {
+                    new ImageInfo
+                    {
+                        alt = alt,
+                        type = "coverPoster",
+                        url = seasonPosters.First(),
+                    },
+                };
+            }
+
+            return GenerateImageArray(seriesImages, alt, addEveryImage).Where(i => i.type == "coverPoster").ToArray();
         }
     }
 }

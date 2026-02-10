@@ -5,8 +5,9 @@ using Shoko.Plugin.Abstractions.DataModels;
 using Shoko.Plugin.Abstractions.DataModels.Shoko;
 using Shoko.Plugin.Abstractions.Services;
 using ShokoRelay.Helpers;
+using ShokoRelay.Plex;
 
-namespace ShokoRelay.Meta
+namespace ShokoRelay.Vfs
 {
     public record VfsBuildResult(string RootPath, int SeriesProcessed, int CreatedLinks, int Skipped, List<string> Errors, bool DryRun, int PlannedLinks, string? ReportPath, string? ReportContent);
 
@@ -30,6 +31,16 @@ namespace ShokoRelay.Meta
 
         public VfsBuildResult Build(int? seriesId = null, bool cleanRoot = true, bool dryRun = false, bool pruneSeries = false)
         {
+            return BuildInternal(seriesId.HasValue ? new[] { seriesId.Value } : null, cleanRoot, dryRun, pruneSeries);
+        }
+
+        public VfsBuildResult Build(IReadOnlyCollection<int> seriesIds, bool cleanRoot = true, bool dryRun = false, bool pruneSeries = false)
+        {
+            return BuildInternal(seriesIds, cleanRoot, dryRun, pruneSeries);
+        }
+
+        private VfsBuildResult BuildInternal(IReadOnlyCollection<int>? seriesIds, bool cleanRoot, bool dryRun, bool pruneSeries)
+        {
             var errors = new List<string>();
             int created = 0;
             int skipped = 0;
@@ -45,20 +56,25 @@ namespace ShokoRelay.Meta
                 cleanRoot = false;
 
             IEnumerable<IShokoSeries> seriesList;
-            if (seriesId.HasValue)
+            if (seriesIds != null && seriesIds.Count > 0)
             {
-                var s = _metadataService.GetShokoSeriesByID(seriesId.Value);
-                if (s == null)
+                var list = new List<IShokoSeries>();
+                foreach (var id in seriesIds.Distinct())
                 {
-                    errors.Add($"Series {seriesId.Value} not found");
-                    return new VfsBuildResult(rootName, 0, 0, 0, errors, dryRun, planned, null, null);
-                }
-                seriesList = new[] { s };
+                    var s = _metadataService.GetShokoSeriesByID(id);
+                    if (s == null)
+                    {
+                        errors.Add($"Series {id} not found");
+                        continue;
+                    }
 
-                if (pruneSeries && !dryRun)
-                {
-                    PruneSeries(rootName, s);
+                    list.Add(s);
+
+                    if (pruneSeries && !dryRun)
+                        PruneSeries(rootName, s);
                 }
+
+                seriesList = list;
             }
             else
             {
@@ -255,7 +271,7 @@ namespace ShokoRelay.Meta
                 }
 
                 string fileName = isExtra
-                    ? VfsHelper.BuildExtrasFileName(mapping, specialInfo, padForExtra, extension, titles.DisplayTitle, fileId, effectivePartIndex, effectivePartCount, versionIndex)
+                    ? VfsHelper.BuildExtrasFileName(mapping, specialInfo, padForExtra, extension, titles.DisplayTitle, effectivePartIndex, effectivePartCount, versionIndex)
                     : VfsHelper.BuildStandardFileName(mapping, epPad, extension, fileId, effectivePartIndex, effectivePartCount, versionIndex);
 
                 fileName = VfsHelper.SanitizeName(fileName);

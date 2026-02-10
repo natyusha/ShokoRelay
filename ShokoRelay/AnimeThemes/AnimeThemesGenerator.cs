@@ -1,10 +1,11 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using NLog;
+using Shoko.Plugin.Abstractions;
 using Shoko.Plugin.Abstractions.DataModels;
 using Shoko.Plugin.Abstractions.DataModels.Shoko;
 using Shoko.Plugin.Abstractions.Services;
-using ShokoRelay.Helpers;
+using ShokoRelay.Vfs;
 
 namespace ShokoRelay.AnimeThemes;
 
@@ -21,6 +22,7 @@ public record AnimeThemesQuery
     public bool DryRun { get; init; }
     public string? MapPath { get; init; }
     public string? TorrentRoot { get; init; }
+    public string? Filter { get; init; }
 }
 
 public record ThemeOperationResult(
@@ -46,13 +48,14 @@ public class AnimeThemesGenerator
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private static readonly HttpClient Http = new();
-    private readonly FfmpegService _ffmpegService = new();
+    private readonly FfmpegService _ffmpegService;
 
     private readonly IVideoService _videoService;
 
-    public AnimeThemesGenerator(IVideoService videoService)
+    public AnimeThemesGenerator(IVideoService videoService, IApplicationPaths applicationPaths)
     {
         _videoService = videoService;
+        _ffmpegService = new FfmpegService(applicationPaths);
         AnimeThemesConstants.EnsureUserAgent(Http);
     }
 

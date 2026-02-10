@@ -2,7 +2,8 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using NLog;
-using ShokoRelay.Helpers;
+using Shoko.Plugin.Abstractions;
+using ShokoRelay.Config;
 
 namespace ShokoRelay.AnimeThemes;
 
@@ -13,8 +14,14 @@ internal sealed class FfmpegService
     private static bool _ffmpegConfigured;
     private static string _ffmpegPath = "ffmpeg";
     private static string _ffprobePath = "ffprobe";
-    private static readonly string PluginDirectory = PluginPaths.PluginDirectory;
-    private static string _workingDirectory = PluginDirectory;
+    private static string _pluginDirectory = string.Empty;
+    private static string _workingDirectory = string.Empty;
+
+    public FfmpegService(IApplicationPaths applicationPaths)
+    {
+        _pluginDirectory = Path.Combine(applicationPaths.PluginsPath, ConfigConstants.PluginSubfolder);
+        _workingDirectory = _pluginDirectory;
+    }
 
     public async Task<TimeSpan> ProbeDurationAsync(string inputPath, CancellationToken ct)
     {
@@ -85,7 +92,7 @@ internal sealed class FfmpegService
                 return;
 
             string configured = ShokoRelay.Settings.FFmpegPath;
-            string pluginDir = PluginDirectory;
+            string pluginDir = _pluginDirectory;
             string ffmpegName = OperatingSystem.IsWindows() ? "ffmpeg.exe" : "ffmpeg";
             string ffprobeName = OperatingSystem.IsWindows() ? "ffprobe.exe" : "ffprobe";
 
@@ -178,7 +185,7 @@ internal sealed class FfmpegService
         if (Directory.Exists(preferred))
             return preferred;
 
-        return PluginDirectory;
+        return _pluginDirectory;
     }
 
     private static async Task RunProcessAsync(string fileName, IReadOnlyList<string> args, Stream? stdIn, Stream? stdOut, CancellationToken ct)

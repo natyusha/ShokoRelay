@@ -1,7 +1,7 @@
 using Shoko.Plugin.Abstractions.DataModels;
 using Shoko.Plugin.Abstractions.DataModels.Shoko;
 
-namespace ShokoRelay.Meta
+namespace ShokoRelay.Plex
 {
     public static class PlexMapping
     {
@@ -39,7 +39,7 @@ namespace ShokoRelay.Meta
 
         public static PlexCoords GetPlexCoordinates(IEpisode e)
         {
-            if (ShokoRelay.Settings.TMDBStructure && e is IShokoEpisode shokoEpisode)
+            if (ShokoRelay.Settings.TMDBEpNumbering && e is IShokoEpisode shokoEpisode)
             {
                 var tmdbEpisodes = shokoEpisode.TmdbEpisodes.OrderBy(te => te.EpisodeNumber).ToList();
 
@@ -82,7 +82,7 @@ namespace ShokoRelay.Meta
                     EndEpisode = null,
                 };
 
-            if (ShokoRelay.Settings.TMDBStructure)
+            if (ShokoRelay.Settings.TMDBEpNumbering)
             {
                 var tmdbEntries = eps.OfType<IShokoEpisode>()
                     .Where(se => se.TmdbEpisodes != null && se.TmdbEpisodes.Any())

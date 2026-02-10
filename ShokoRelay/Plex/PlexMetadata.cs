@@ -3,17 +3,20 @@ using Shoko.Plugin.Abstractions.DataModels.Shoko;
 using Shoko.Plugin.Abstractions.Enums;
 using Shoko.Plugin.Abstractions.Services;
 using ShokoRelay.Helpers;
-using static ShokoRelay.Meta.PlexMapping;
+using ShokoRelay.Integrations.Shoko;
+using static ShokoRelay.Plex.PlexMapping;
 
-namespace ShokoRelay.Meta
+namespace ShokoRelay.Plex
 {
     public class PlexMetadata
     {
         private readonly IMetadataService _metadataService;
+        private readonly ShokoClient _shokoClient;
 
-        public PlexMetadata(IMetadataService metadataService)
+        public PlexMetadata(IMetadataService metadataService, ShokoClient shokoClient)
         {
             _metadataService = metadataService;
+            _shokoClient = shokoClient;
         }
 
         public string GetRatingKey(string type, int id, int? season = null, int? part = null) =>
@@ -72,7 +75,7 @@ namespace ShokoRelay.Meta
             };
         }
 
-        private string? GetCollectionName(ISeries series)
+        public string? GetCollectionName(ISeries series)
         {
             if (series is not IShokoSeries shokoSeries)
                 return null;
@@ -167,13 +170,42 @@ namespace ShokoRelay.Meta
             // csharpier-ignore-end
         }
 
-        public Dictionary<string, object?> MapSeason(ISeries series, int seasonNum, string seriesTitle)
+        public async Task<Dictionary<string, object?>> MapSeasonAsync(ISeries series, int seasonNum, string seriesTitle, System.Threading.CancellationToken cancellationToken = default)
         {
             var images = (IWithImages)series;
             var poster = images.GetImages(ImageEntityType.Poster).FirstOrDefault();
             var backdrop = images.GetImages(ImageEntityType.Backdrop).FirstOrDefault();
             var seasonTitle = GetSeasonTitle(seasonNum);
             var firstEpisode = series.Episodes.Select(e => new { Ep = e, Map = GetPlexCoordinates(e) }).Where(x => x.Map.Season == seasonNum).OrderBy(x => x.Map.Episode).FirstOrDefault();
+
+            // Only request season posters when there is more than one non-extra season present.
+            // Extras/specials are represented as negative season numbers and should be ignored for this count.
+            var fileData = MapHelper.GetSeriesFileData(series);
+            int nonExtraSeasonCount = fileData.Seasons.Count(s => s >= 0);
+
+            List<string>? seasonPosters = null;
+            if (nonExtraSeasonCount > 1 && _shokoClient != null && seasonNum >= 0)
+            {
+                try
+                {
+                    var map = await _shokoClient.GetSeasonPostersByTmdbAsync(series.ID, cancellationToken).ConfigureAwait(false);
+                    if (map != null && map.TryGetValue(seasonNum, out var posters) && posters != null && posters.Count > 0)
+                        seasonPosters = posters;
+                }
+                catch
+                {
+                    seasonPosters = null; // ignore errors and fall back to series poster
+                }
+            }
+
+            // The thumb should be the first season poster if available, otherwise the series poster if present.
+            string? thumb = null;
+            if (seasonPosters != null && seasonPosters.Count > 0)
+                thumb = seasonPosters[0];
+            else if (poster != null)
+                thumb = ImageHelper.GetImageUrl(poster);
+
+            var coverPosters = ImageHelper.BuildCoverPosterArray(images, seasonTitle, ShokoRelay.Settings.AddEveryImage, seasonPosters).ToList();
             // csharpier-ignore-start
             return new Dictionary<string, object?>
             {
@@ -183,11 +215,9 @@ namespace ShokoRelay.Meta
                 ["type"]                  = "season",
                 ["title"]                 = seasonTitle,
                 ["originallyAvailableAt"] = firstEpisode?.Ep.AirDate?.ToString("yyyy-MM-dd"),
-                ["thumb"]                 = poster != null ? ImageHelper.GetImageUrl(poster) : null, // Season poster from series images until season specific images are exposed
-                //["art"]                 = No Source for this (yet)
+                ["thumb"]                 = thumb, // Season poster from Shoko if available, otherwise fall back to series poster
                 ["contentRating"]         = RatingHelper.GetContentRatingAndAdult(series).Rating,
                 ["year"]                  = firstEpisode?.Ep.AirDate?.Year,
-                //["summary"]             = TMDB has this but it is not exposed
                 ["isAdult"]               = RatingHelper.GetContentRatingAndAdult(series).IsAdult,
 
                 ["parentRatingKey"]       = GetRatingKey("show", series.ID),
@@ -199,11 +229,7 @@ namespace ShokoRelay.Meta
                 ["parentArt"]             = backdrop != null ? ImageHelper.GetImageUrl(backdrop) : null,
                 ["index"]                 = seasonNum,
 
-                ["Image"] = ImageHelper
-                    .GenerateImageArray(images, seasonTitle, ShokoRelay.Settings.AddEveryImage)
-                    .Where(img => img.type == "coverPoster") // Season poster from series images until season specific images are exposed
-                    .ToArray(),
-                //["Guid"]                = Should be able to get TMDB season IDs
+                ["Image"]                 = coverPosters.ToArray(),
             };
             // csharpier-ignore-end
         }

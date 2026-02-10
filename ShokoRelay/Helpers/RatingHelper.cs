@@ -28,7 +28,7 @@ namespace ShokoRelay.Helpers
             if (tagSet.Contains("18 restricted"))
                 return ("X", true);
 
-            if (!ShokoRelay.Settings.ContentRatings)
+            if (!ShokoRelay.Settings.AssumedContentRatings)
                 return (null, false);
 
             // A rough approximation of: http://www.tvguidelines.org/resources/TheRatings.pdf

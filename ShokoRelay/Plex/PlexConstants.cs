@@ -1,4 +1,4 @@
-namespace ShokoRelay.Meta
+namespace ShokoRelay.Plex
 {
     /// <summary>
     /// Centralized Plex constants for type codes, rating key prefixes, and supported features.

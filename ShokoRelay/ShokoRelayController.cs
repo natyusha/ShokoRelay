@@ -4,24 +4,18 @@ using Shoko.Plugin.Abstractions.DataModels.Shoko;
 using Shoko.Plugin.Abstractions.Enums;
 using Shoko.Plugin.Abstractions.Services;
 using ShokoRelay.AnimeThemes;
+using ShokoRelay.Config;
 using ShokoRelay.Helpers;
-using ShokoRelay.Meta;
-using static ShokoRelay.Helpers.MapHelper;
-using static ShokoRelay.Meta.PlexMapping;
+using ShokoRelay.Plex;
+using ShokoRelay.Vfs;
+using static ShokoRelay.Plex.PlexMapping;
 
 namespace ShokoRelay.Controllers
 {
-    # region Models
-    public record PlexMatchBody(string? Filename);
-
-    public record SeriesContext(ISeries Series, string ApiUrl, (string DisplayTitle, string SortTitle, string? OriginalTitle) Titles, string ContentRating, SeriesFileData FileData);
-
-    #endregion
-
     [ApiVersion("3.0")]
     [ApiController]
     [Route("api/v{version:apiVersion}/[controller]")]
-    public class ShokoRelayController : ControllerBase
+    public partial class ShokoRelayController : ControllerBase
     {
         private readonly IVideoService _videoService;
         private readonly IMetadataService _metadataService;
@@ -29,6 +23,12 @@ namespace ShokoRelay.Controllers
         private readonly VfsBuilder _vfsBuilder;
         private readonly AnimeThemesGenerator _animeThemesGenerator;
         private readonly AnimeThemesMapping _animeThemesMapping;
+        private readonly ConfigProvider _configProvider;
+        private readonly PlexAuth _plexAuth;
+        private readonly PlexClient _plexLibrary;
+        private readonly Services.IPlexCollectionManager _collectionManager;
+
+        private const string ControllerPageFileName = "ShokoRelayController.cshtml";
 
         private string BaseUrl => $"{Request.Scheme}://{Request.Host}";
 
@@ -42,7 +42,11 @@ namespace ShokoRelay.Controllers
             PlexMetadata mapper,
             VfsBuilder vfsBuilder,
             AnimeThemesGenerator animeThemeGenerator,
-            AnimeThemesMapping animeThemesMapping
+            AnimeThemesMapping animeThemesMapping,
+            ConfigProvider configProvider,
+            PlexAuth plexAuth,
+            PlexClient plexLibrary,
+            Services.IPlexCollectionManager collectionManager
         )
         {
             _videoService = videoService;
@@ -51,9 +55,13 @@ namespace ShokoRelay.Controllers
             _vfsBuilder = vfsBuilder;
             _animeThemesGenerator = animeThemeGenerator;
             _animeThemesMapping = animeThemesMapping;
+            _configProvider = configProvider;
+            _plexAuth = plexAuth;
+            _plexLibrary = plexLibrary;
+            _collectionManager = collectionManager;
         }
 
-        [Route("match")]
+        [Route("matches")]
         [HttpPost]
         [HttpGet]
         public IActionResult Match([FromQuery] string? name, [FromBody] PlexMatchBody? body = null)
@@ -97,90 +105,17 @@ namespace ShokoRelay.Controllers
             );
         }
 
-        private SeriesContext? GetSeriesContext(string ratingKey)
-        {
-            int seriesId;
-
-            if (ratingKey.StartsWith(EpisodePrefix))
-            {
-                var epPart = ratingKey.Substring(EpisodePrefix.Length);
-                if (epPart.Contains(PartPrefix))
-                    epPart = epPart.Split(PartPrefix)[0];
-
-                var ep = _metadataService.GetShokoEpisodeByID(int.Parse(epPart));
-                if (ep?.Series == null)
-                    return null;
-                seriesId = ep.Series.ID;
-            }
-            else if (ratingKey.Contains(SeasonPrefix))
-            {
-                if (!int.TryParse(ratingKey.Split(SeasonPrefix)[0], out seriesId))
-                    return null;
-            }
-            else
-            {
-                if (!int.TryParse(ratingKey, out seriesId))
-                    return null;
-            }
-
-            var series = _metadataService.GetShokoSeriesByID(seriesId);
-            if (series == null)
-                return null;
-
-            return new SeriesContext(series, BaseUrl, TextHelper.ResolveFullSeriesTitles(series), RatingHelper.GetContentRatingAndAdult(series).Rating ?? "", GetSeriesFileData(series));
-        }
-
-        private IActionResult WrapInContainer(object metadata) =>
-            Ok(
-                new
-                {
-                    MediaContainer = new
-                    {
-                        size = 1,
-                        totalSize = 1,
-                        offset = 0,
-                        identifier = ShokoRelayInfo.AgentScheme,
-                        Metadata = new[] { metadata },
-                    },
-                }
-            );
-
-        private IActionResult EmptyMatch() => Ok(new { MediaContainer = new { size = 0, Metadata = Array.Empty<object>() } });
-
-        private IActionResult WrapInPagedContainer(IEnumerable<object> metadataList)
-        {
-            int start =
-                int.TryParse(Request.Headers["X-Plex-Container-Start"], out var s) ? s
-                : int.TryParse(Request.Query["X-Plex-Container-Start"], out var sq) ? sq
-                : 0;
-
-            int size =
-                int.TryParse(Request.Headers["X-Plex-Container-Size"], out var z) ? z
-                : int.TryParse(Request.Query["X-Plex-Container-Size"], out var zq) ? zq
-                : 50;
-
-            var allItems = metadataList.ToList();
-            var pagedData = allItems.Skip(start).Take(size).ToArray();
-
-            return Ok(
-                new
-                {
-                    MediaContainer = new
-                    {
-                        offset = start,
-                        totalSize = allItems.Count,
-                        identifier = ShokoRelayInfo.AgentScheme,
-                        size = pagedData.Length,
-                        Metadata = pagedData,
-                    },
-                }
-            );
-        }
-
         [HttpGet]
         public IActionResult GetMediaProvider()
         {
-            var supportedTypes = new[] { PlexConstants.TypeShow, PlexConstants.TypeSeason, PlexConstants.TypeEpisode, PlexConstants.TypeCollection };
+            // Temporarily advertise only show/season/episode to avoid unsupported metadata type warnings in Plex.
+            var supportedTypes = new[]
+            {
+                PlexConstants.TypeShow,
+                PlexConstants.TypeSeason,
+                PlexConstants.TypeEpisode,
+                //PlexConstants.TypeCollection
+            };
 
             var typePayload = supportedTypes.Select(t => new { type = t, Scheme = new[] { new { scheme = ShokoRelayInfo.AgentScheme } } });
 
@@ -201,6 +136,408 @@ namespace ShokoRelay.Controllers
             );
         }
 
+        [HttpGet("dashboard")]
+        public IActionResult GetControllerPage()
+        {
+            string configDir = _configProvider.ConfigDirectory;
+            Directory.CreateDirectory(configDir);
+            string pagePath = Path.Combine(configDir, ControllerPageFileName);
+
+            string? template = LoadControllerTemplate();
+            if (!System.IO.File.Exists(pagePath))
+            {
+                if (!string.IsNullOrWhiteSpace(template))
+                    System.IO.File.WriteAllText(pagePath, template);
+            }
+            else if (!string.IsNullOrWhiteSpace(template))
+            {
+                string existing = System.IO.File.ReadAllText(pagePath);
+                if (!string.Equals(existing, template, StringComparison.Ordinal))
+                    System.IO.File.WriteAllText(pagePath, template);
+            }
+
+            string html = System.IO.File.Exists(pagePath) ? System.IO.File.ReadAllText(pagePath) : "Dashboard template not found.";
+            return Content(html, "text/html");
+        }
+
+        [HttpGet("plexauth")]
+        public async Task<IActionResult> StartPlexAuth(CancellationToken cancellationToken = default)
+        {
+            EnsurePlexAuthConfig();
+
+            try
+            {
+                PlexPinResponse pin = await _plexAuth.CreatePinAsync(true, cancellationToken);
+                if (string.IsNullOrWhiteSpace(pin.Id) || string.IsNullOrWhiteSpace(pin.Code))
+                {
+                    return StatusCode(502, new { status = "error", message = "Plex pin response missing id/code." });
+                }
+
+                string statusUrl = $"{BaseUrl}/api/v{ShokoRelayInfo.ApiVersion}/ShokoRelay/plexauth/status?pinId={Uri.EscapeDataString(pin.Id)}";
+                string authUrl = _plexAuth.BuildAuthUrl(pin.Code, ShokoRelayInfo.Name, statusUrl);
+                return Ok(
+                    new
+                    {
+                        status = "ok",
+                        pinId = pin.Id,
+                        code = pin.Code,
+                        authUrl,
+                        statusUrl,
+                    }
+                );
+            }
+            catch (InvalidOperationException ex)
+            {
+                return StatusCode(502, new { status = "error", message = ex.Message });
+            }
+        }
+
+        [HttpGet("plexauth/status")]
+        public async Task<IActionResult> GetPlexAuthStatus([FromQuery] string pinId, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(pinId))
+                return BadRequest(new { status = "error", message = "pinId is required" });
+            try
+            {
+                var pin = await _plexAuth.GetPinAsync(pinId, cancellationToken).ConfigureAwait(false);
+                if (string.IsNullOrWhiteSpace(pin.AuthToken))
+                    return Ok(new { status = "pending" });
+
+                var settings = _configProvider.GetSettings();
+                settings.PlexLibrary.Token = pin.AuthToken;
+
+                try
+                {
+                    // Ensure we have a client identifier and then discover servers/libraries
+                    string clientIdentifier = EnsurePlexClientIdentifier(settings);
+
+                    try
+                    {
+                        var discovery = await _plexAuth.DiscoverShokoLibrariesAsync(settings.PlexLibrary.Token, clientIdentifier, cancellationToken).ConfigureAwait(false);
+
+                        if (discovery.TokenValid && discovery.Servers?.Count > 0)
+                        {
+                            settings.PlexLibrary.DiscoveredServers = discovery
+                                .Servers.Select(s => new PlexAvailableServer
+                                {
+                                    Id = s.Id,
+                                    Name = s.Name,
+                                    PreferredUri = s.PreferredUri ?? string.Empty,
+                                })
+                                .ToList();
+                        }
+
+                        var collected = new List<PlexAvailableLibrary>();
+                        var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                        foreach (var (lib, srv) in discovery.ShokoLibraries ?? new List<(PlexLibraryInfo, PlexServerInfo)>())
+                        {
+                            var key = !string.IsNullOrWhiteSpace(lib.Uuid) ? lib.Uuid : $"{srv.PreferredUri}::{lib.Id}";
+                            if (seenKeys.Contains(key))
+                                continue;
+                            seenKeys.Add(key);
+
+                            var uuidVal = !string.IsNullOrWhiteSpace(lib.Uuid) ? lib.Uuid : key;
+                            collected.Add(
+                                new PlexAvailableLibrary
+                                {
+                                    Id = lib.Id,
+                                    Title = lib.Title,
+                                    Type = lib.Type,
+                                    Agent = lib.Agent,
+                                    Uuid = uuidVal,
+                                    ServerId = srv.Id,
+                                    ServerName = srv.Name,
+                                    ServerUrl = srv.PreferredUri ?? string.Empty,
+                                }
+                            );
+                        }
+
+                        settings.PlexLibrary.DiscoveredLibraries = collected;
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Warn($"Plex discovery failed: {ex.Message}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn($"Plex discovery failed: {ex.Message}");
+                }
+
+                _configProvider.SaveSettings(settings);
+
+                return Ok(new { status = "ok", tokenSaved = true });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return StatusCode(502, new { status = "error", message = ex.Message });
+            }
+        }
+
+        [HttpPost("plex/unlink")]
+        public async Task<IActionResult> UnlinkPlex(CancellationToken cancellationToken = default)
+        {
+            var settings = _configProvider.GetSettings();
+            if (string.IsNullOrWhiteSpace(settings.PlexLibrary.Token))
+                return Ok(new { status = "ok" });
+
+            string clientIdentifier = EnsurePlexClientIdentifier(settings);
+            await _plexAuth.RevokePlexTokenAsync(settings.PlexLibrary.Token, clientIdentifier, cancellationToken).ConfigureAwait(false);
+
+            settings.PlexLibrary.Token = string.Empty;
+            settings.PlexLibrary.ServerUrl = string.Empty;
+            settings.PlexLibrary.ServerIdentifier = string.Empty;
+            settings.PlexLibrary.SelectedLibraries.Clear();
+            settings.PlexLibrary.LibrarySectionId = 0;
+            settings.PlexLibrary.SelectedLibraryName = string.Empty;
+            settings.PlexLibrary.SectionUuid = string.Empty;
+            _configProvider.SaveSettings(settings);
+            // Delete the token file to remove persisted token and discovered data
+            _configProvider.DeleteTokenFile();
+
+            return Ok(new { status = "ok" });
+        }
+
+        [HttpPost("plex/libraries/refresh")]
+        public async Task<IActionResult> RefreshPlexLibraries(CancellationToken cancellationToken = default)
+        {
+            var settings = _configProvider.GetSettings();
+            if (string.IsNullOrWhiteSpace(settings.PlexLibrary.Token))
+                return Unauthorized(new { status = "error", message = "Plex token is missing." });
+
+            string clientIdentifier = EnsurePlexClientIdentifier(settings);
+
+            try
+            {
+                var discovery = await _plexAuth.DiscoverShokoLibrariesAsync(settings.PlexLibrary.Token, clientIdentifier, cancellationToken).ConfigureAwait(false);
+
+                if (discovery.TokenValid && discovery.Servers?.Count > 0)
+                {
+                    settings.PlexLibrary.DiscoveredServers = discovery
+                        .Servers.Select(s => new PlexAvailableServer
+                        {
+                            Id = s.Id,
+                            Name = s.Name,
+                            PreferredUri = s.PreferredUri ?? string.Empty,
+                        })
+                        .ToList();
+                }
+
+                var collected = new List<PlexAvailableLibrary>();
+                var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                foreach (var (lib, srv) in discovery.ShokoLibraries ?? new List<(PlexLibraryInfo, PlexServerInfo)>())
+                {
+                    var key = !string.IsNullOrWhiteSpace(lib.Uuid) ? lib.Uuid : $"{srv.PreferredUri}::{lib.Id}";
+                    if (seenKeys.Contains(key))
+                        continue;
+                    seenKeys.Add(key);
+
+                    var uuidVal = !string.IsNullOrWhiteSpace(lib.Uuid) ? lib.Uuid : key;
+                    collected.Add(
+                        new PlexAvailableLibrary
+                        {
+                            Id = lib.Id,
+                            Title = lib.Title,
+                            Type = lib.Type,
+                            Agent = lib.Agent,
+                            Uuid = uuidVal,
+                            ServerId = srv.Id,
+                            ServerName = srv.Name,
+                            ServerUrl = srv.PreferredUri ?? string.Empty,
+                        }
+                    );
+                }
+
+                settings.PlexLibrary.DiscoveredLibraries = collected;
+                _configProvider.SaveSettings(settings);
+
+                return Ok(new { status = "ok", libraries = collected });
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn($"Failed to refresh Plex libraries: {ex.Message}");
+                return StatusCode(502, new { status = "error", message = "Failed to refresh Plex libraries." });
+            }
+        }
+
+        [HttpGet("config")]
+        public IActionResult GetConfig() => Ok(_configProvider.GetSettings());
+
+        [HttpPost("config")]
+        public IActionResult SaveConfig([FromBody] RelayConfig config)
+        {
+            if (config == null)
+                return BadRequest(new { status = "error", message = "Config payload is required." });
+
+            _configProvider.SaveSettings(config);
+            return Ok(new { status = "ok" });
+        }
+
+        [HttpGet("config/schema")]
+        public IActionResult GetConfigSchema()
+        {
+            var props = BuildConfigSchema(typeof(RelayConfig), "");
+            return Ok(new { properties = props });
+        }
+
+        [HttpGet("plex/collections/build")]
+        public async Task<IActionResult> BuildPlexCollections([FromQuery] int? seriesId = null, [FromQuery] string? filter = null, CancellationToken cancellationToken = default)
+        {
+            if (!_plexLibrary.IsEnabled)
+            {
+                return BadRequest(new { status = "error", message = "Plex server configuration is missing or no library selected." });
+            }
+
+            var filterErrors = new List<string>();
+            var filterIds = ParseFilterIds(filter, out filterErrors);
+            if (filterErrors.Count > 0)
+            {
+                return BadRequest(
+                    new
+                    {
+                        status = "error",
+                        message = "Invalid filter values.",
+                        errors = filterErrors,
+                    }
+                );
+            }
+
+            if (seriesId.HasValue && filterIds.Count > 0)
+            {
+                return BadRequest(new { status = "error", message = "Use either seriesId or filter, not both." });
+            }
+
+            var seriesList = ResolveSeriesList(seriesId, filterIds);
+            int processed;
+            int skipped;
+            int created;
+            int uploaded;
+            int seasonPostersUploaded;
+            int errors;
+            int deletedEmptyCollections;
+
+            var addedSeries = new HashSet<int>();
+            var targets = _plexLibrary.GetConfiguredTargets();
+
+            var createdCollections = new List<object>();
+            var errorsList = new List<string>();
+
+            if (targets == null || targets.Count == 0)
+            {
+                // No targets configured, nothing to do
+                int processedNone = seriesList.Count(s => s != null);
+                return Ok(
+                    new
+                    {
+                        status = "ok",
+                        processed = processedNone,
+                        created = 0,
+                        skipped = processedNone,
+                        errors = 0,
+                        deletedEmptyCollections = 0,
+                    }
+                );
+            }
+
+            // Delegate to PlexCollectionManager for per-target collection building and poster application
+            var managerResult = await _collectionManager.BuildCollectionsAsync(seriesList, cancellationToken).ConfigureAwait(false);
+
+            // Map service result back into controller response variables
+            processed = managerResult.Processed;
+            created = managerResult.Created;
+            uploaded = managerResult.Uploaded;
+            seasonPostersUploaded = managerResult.SeasonPostersUploaded;
+            errors = managerResult.Errors;
+            deletedEmptyCollections = managerResult.DeletedEmptyCollections;
+            createdCollections = managerResult.CreatedCollections;
+            errorsList.AddRange(managerResult.ErrorsList);
+
+            // Use manager-provided skipped count
+            skipped = managerResult.Skipped;
+
+            return Ok(
+                new
+                {
+                    status = "ok",
+                    processed,
+                    created,
+                    uploaded,
+                    seasonPostersUploaded,
+                    skipped,
+                    errors,
+                    deletedEmptyCollections,
+                    createdCollections,
+                    errorsList = errorsList.Take(200).ToList(), // limit output
+                }
+            );
+        }
+
+        [HttpGet("plex/collections/posters")]
+        public async Task<IActionResult> ApplyCollectionPosters([FromQuery] int? seriesId = null, [FromQuery] string? filter = null, CancellationToken cancellationToken = default)
+        {
+            if (!_plexLibrary.IsEnabled)
+            {
+                return BadRequest(new { status = "error", message = "Plex server configuration is missing or no library selected." });
+            }
+
+            var filterErrors = new List<string>();
+            var filterIds = ParseFilterIds(filter, out filterErrors);
+            if (filterErrors.Count > 0)
+            {
+                return BadRequest(
+                    new
+                    {
+                        status = "error",
+                        message = "Invalid filter values.",
+                        errors = filterErrors,
+                    }
+                );
+            }
+
+            if (seriesId.HasValue && filterIds.Count > 0)
+            {
+                return BadRequest(new { status = "error", message = "Use either seriesId or filter, not both." });
+            }
+
+            var seriesList = ResolveSeriesList(seriesId, filterIds);
+            var targets = _plexLibrary.GetConfiguredTargets();
+
+            if (targets == null || targets.Count == 0)
+            {
+                // No targets configured, nothing to do
+                int processedNone = seriesList.Count(s => s != null);
+                return Ok(
+                    new
+                    {
+                        status = "ok",
+                        processed = processedNone,
+                        created = 0,
+                        skipped = processedNone,
+                        errors = 0,
+                        deletedEmptyCollections = 0,
+                    }
+                );
+            }
+
+            var postersResult = await _collectionManager.ApplyCollectionPostersAsync(seriesList, cancellationToken).ConfigureAwait(false);
+
+            return Ok(
+                new
+                {
+                    status = "ok",
+                    processed = postersResult.Processed,
+                    uploaded = postersResult.Uploaded,
+                    skipped = postersResult.Skipped,
+                    errors = postersResult.Errors,
+                    errorsList = postersResult.ErrorsList.Take(200).ToList(),
+                }
+            );
+
+            // Response delegated to PlexCollectionManager earlier.
+        }
+
         [HttpGet("collections/{groupId}")]
         public IActionResult GetCollection(int groupId)
         {
@@ -217,8 +554,40 @@ namespace ShokoRelay.Controllers
             return WrapInContainer(meta);
         }
 
+        [HttpGet("collections/user/{groupId}")]
+        public IActionResult GetCollectionPoster(int groupId)
+        {
+            var group = _metadataService.GetShokoGroupByID(groupId);
+            if (group == null)
+                return NotFound();
+
+            var primarySeries = group.MainSeries ?? group.Series?.FirstOrDefault();
+            if (primarySeries == null)
+                return NotFound();
+
+            // Try to find a collection poster by group id inside any known import root's collection posters folder.
+            // Accept files named by id ("25932.png") or by group title ("My Group.png"). First try exact name, then try a name stripped of invalid Windows filename characters.
+            var posterPath = PlexHelpers.FindCollectionPosterPathByGroup(primarySeries, groupId);
+            if (string.IsNullOrWhiteSpace(posterPath) || !System.IO.File.Exists(posterPath))
+                return NotFound();
+
+            string ext = System.IO.Path.GetExtension(posterPath).ToLowerInvariant();
+            string contentType = ext switch
+            {
+                ".jpg" or ".jpeg" or ".jpe" or ".tbn" => "image/jpeg",
+                ".png" => "image/png",
+                ".webp" => "image/webp",
+                ".gif" => "image/gif",
+                ".bmp" => "image/bmp",
+                ".tif" or ".tiff" => "image/tiff",
+                _ => "application/octet-stream",
+            };
+
+            return PhysicalFile(posterPath, contentType);
+        }
+
         [HttpGet("metadata/{ratingKey}")]
-        public IActionResult GetMetadata(string ratingKey, [FromQuery] int includeChildren = 0)
+        public async Task<IActionResult> GetMetadata(string ratingKey, [FromQuery] int includeChildren = 0, CancellationToken cancellationToken = default)
         {
             var ctx = GetSeriesContext(ratingKey);
             if (ctx == null)
@@ -244,7 +613,7 @@ namespace ShokoRelay.Controllers
                 var coords = GetPlexCoordinates(episode);
                 object? tmdbEpisode = null;
 
-                if (partIndex.HasValue && ShokoRelay.Settings.TMDBStructure && episode is IShokoEpisode shokoEp && shokoEp.TmdbEpisodes?.Any() == true)
+                if (partIndex.HasValue && ShokoRelay.Settings.TMDBEpNumbering && episode is IShokoEpisode shokoEp && shokoEp.TmdbEpisodes?.Any() == true)
                 {
                     var tmdbEps = shokoEp.TmdbEpisodes.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber).ToList();
 
@@ -265,7 +634,7 @@ namespace ShokoRelay.Controllers
             if (ratingKey.Contains(SeasonPrefix))
             {
                 int sNum = int.Parse(ratingKey.Split(SeasonPrefix)[1]);
-                var seasonMeta = _mapper.MapSeason(ctx.Series, sNum, ctx.Titles.DisplayTitle);
+                var seasonMeta = await _mapper.MapSeasonAsync(ctx.Series, sNum, ctx.Titles.DisplayTitle, cancellationToken).ConfigureAwait(false);
 
                 if (includeChildren == 1)
                 {
@@ -281,7 +650,8 @@ namespace ShokoRelay.Controllers
 
             if (includeChildren == 1)
             {
-                var seasons = ctx.FileData.Seasons.Select(s => _mapper.MapSeason(ctx.Series, s, ctx.Titles.DisplayTitle)).ToList();
+                var seasonTasks = ctx.FileData.Seasons.Select(s => _mapper.MapSeasonAsync(ctx.Series, s, ctx.Titles.DisplayTitle, cancellationToken));
+                var seasons = (await Task.WhenAll(seasonTasks).ConfigureAwait(false)).ToList();
 
                 ((IDictionary<string, object?>)showMeta)["Children"] = new { size = seasons.Count, Metadata = seasons };
             }
@@ -290,7 +660,7 @@ namespace ShokoRelay.Controllers
         }
 
         [HttpGet("metadata/{ratingKey}/children")]
-        public IActionResult GetChildren(string ratingKey)
+        public async Task<IActionResult> GetChildren(string ratingKey, CancellationToken cancellationToken = default)
         {
             var ctx = GetSeriesContext(ratingKey);
             if (ctx == null)
@@ -302,7 +672,8 @@ namespace ShokoRelay.Controllers
                 return WrapInPagedContainer(BuildEpisodeList(ctx, sNum));
             }
 
-            var seasons = ctx.FileData.Seasons.Select(s => _mapper.MapSeason(ctx.Series, s, ctx.Titles.DisplayTitle)).ToList();
+            var seasonTasks = ctx.FileData.Seasons.Select(s => _mapper.MapSeasonAsync(ctx.Series, s, ctx.Titles.DisplayTitle, cancellationToken));
+            var seasons = (await Task.WhenAll(seasonTasks).ConfigureAwait(false)).ToList();
 
             return WrapInPagedContainer(seasons);
         }
@@ -328,7 +699,7 @@ namespace ShokoRelay.Controllers
         {
             if (query.Mapping)
             {
-                string defaultBase = !string.IsNullOrWhiteSpace(ShokoRelay.Settings.AnimeThemesBasePath) ? ShokoRelay.Settings.AnimeThemesBasePath : AnimeThemesConstants.BasePath;
+                string defaultBase = !string.IsNullOrWhiteSpace(ShokoRelay.Settings.AnimeThemesPathMapping) ? ShokoRelay.Settings.AnimeThemesPathMapping : AnimeThemesConstants.BasePath;
 
                 string root = query.TorrentRoot ?? query.Path ?? defaultBase;
                 var result = await _animeThemesMapping.BuildMappingFileAsync(root, query.MapPath, cancellationToken);
@@ -337,10 +708,24 @@ namespace ShokoRelay.Controllers
 
             if (query.ApplyMapping)
             {
-                string defaultBase = !string.IsNullOrWhiteSpace(ShokoRelay.Settings.AnimeThemesBasePath) ? ShokoRelay.Settings.AnimeThemesBasePath : AnimeThemesConstants.BasePath;
+                string defaultBase = !string.IsNullOrWhiteSpace(ShokoRelay.Settings.AnimeThemesPathMapping) ? ShokoRelay.Settings.AnimeThemesPathMapping : AnimeThemesConstants.BasePath;
 
                 string? sourceRoot = query.TorrentRoot ?? query.Path ?? defaultBase;
-                var result = await _animeThemesMapping.ApplyMappingAsync(query.MapPath, sourceRoot, query.DryRun, cancellationToken);
+                var filterErrors = new List<string>();
+                var filterIds = ParseFilterIds(query.Filter, out filterErrors);
+                if (filterErrors.Count > 0)
+                {
+                    return BadRequest(
+                        new
+                        {
+                            status = "error",
+                            message = "Invalid filter values.",
+                            errors = filterErrors,
+                        }
+                    );
+                }
+
+                var result = await _animeThemesMapping.ApplyMappingAsync(query.MapPath, sourceRoot, query.DryRun, filterIds, cancellationToken);
                 return Ok(result);
             }
 
@@ -379,9 +764,28 @@ namespace ShokoRelay.Controllers
         }
 
         [HttpGet("vfs")]
-        public IActionResult BuildVfs([FromQuery] int? seriesId = null, [FromQuery] bool clean = true, [FromQuery] bool dryRun = false, [FromQuery] bool run = false)
+        public IActionResult BuildVfs([FromQuery] int? seriesId = null, [FromQuery] bool clean = true, [FromQuery] bool dryRun = false, [FromQuery] bool run = false, [FromQuery] string? filter = null)
         {
-            if (!run)
+            var filterErrors = new List<string>();
+            var filterIds = ParseFilterIds(filter, out filterErrors);
+            if (filterErrors.Count > 0)
+            {
+                return BadRequest(
+                    new
+                    {
+                        status = "error",
+                        message = "Invalid filter values.",
+                        errors = filterErrors,
+                    }
+                );
+            }
+
+            if (seriesId.HasValue && filterIds.Count > 0)
+            {
+                return BadRequest(new { status = "error", message = "Use either seriesId or filter, not both." });
+            }
+
+            if (!run && !dryRun)
             {
                 return Ok(
                     new
@@ -389,13 +793,14 @@ namespace ShokoRelay.Controllers
                         status = "skipped",
                         message = "Set run=true to build the VFS -OR- dryRun=true to simulate without making changes",
                         seriesId,
+                        filter = filterIds.Count > 0 ? string.Join(',', filterIds) : null,
                         clean,
                         dryRun,
                     }
                 );
             }
 
-            var result = _vfsBuilder.Build(seriesId, clean, dryRun);
+            var result = filterIds.Count > 0 ? _vfsBuilder.Build(filterIds, clean, dryRun) : _vfsBuilder.Build(seriesId, clean, dryRun);
             return Ok(
                 new
                 {
@@ -411,30 +816,6 @@ namespace ShokoRelay.Controllers
                     errors = result.Errors,
                 }
             );
-        }
-
-        private List<object> BuildEpisodeList(SeriesContext ctx, int seasonNum)
-        {
-            var items = new List<(PlexCoords Coords, object Meta)>();
-
-            foreach (var m in ctx.FileData.GetForSeason(seasonNum))
-            {
-                if (m.Episodes.Count == 1)
-                {
-                    items.Add((m.Coords, _mapper.MapEpisode(m.PrimaryEpisode, m.Coords, ctx.Series, ctx.Titles, m.PartIndex, m.TmdbEpisode)));
-                    continue;
-                }
-
-                foreach (var ep in m.Episodes)
-                {
-                    var coordsEp = GetPlexCoordinates(ep);
-                    if (coordsEp.Season != seasonNum)
-                        continue;
-                    items.Add((coordsEp, _mapper.MapEpisode(ep, coordsEp, ctx.Series, ctx.Titles)));
-                }
-            }
-
-            return items.OrderBy(x => x.Coords.Episode).Select(x => x.Meta).ToList();
         }
     }
 }

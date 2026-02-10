@@ -1,7 +1,8 @@
 using System.Text;
 using System.Text.RegularExpressions;
+using ShokoRelay.Helpers;
 
-namespace ShokoRelay.Helpers
+namespace ShokoRelay.Vfs
 {
     public static class VfsHelper
     {
@@ -53,7 +54,7 @@ namespace ShokoRelay.Helpers
             string epPart = $"S{mapping.Coords.Season:D2}E{mapping.Coords.Episode.ToString($"D{pad}")}";
             if (mapping.Coords.EndEpisode.HasValue && mapping.Coords.EndEpisode.Value != mapping.Coords.Episode)
             {
-                epPart += $"-{mapping.Coords.EndEpisode.Value.ToString($"D{pad}")}";
+                epPart += $"-E{mapping.Coords.EndEpisode.Value.ToString($"D{pad}")}";
             }
 
             int partCount = partCountOverride ?? mapping.PartCount;
@@ -79,13 +80,21 @@ namespace ShokoRelay.Helpers
             int pad,
             string extension,
             string displaySeriesTitle,
-            int fileId,
             int? partIndexOverride = null,
             int? partCountOverride = null,
             int? versionIndexOverride = null
         )
         {
             string epPart = mapping.Coords.Episode.ToString($"D{pad}");
+            string? prefix = extraInfo.Subtype switch
+            {
+                "trailer" => "T",
+                "sceneOrSample" => "P",
+                "featurette" => "O",
+                _ => null,
+            };
+            if (!string.IsNullOrEmpty(prefix))
+                epPart = $"{prefix}{epPart}";
             int partCount = partCountOverride ?? mapping.PartCount;
             int? partIndex = partIndexOverride ?? mapping.PartIndex;
             int? versionIndex = versionIndexOverride;
@@ -98,9 +107,9 @@ namespace ShokoRelay.Helpers
             string epTitle = TextHelper.ResolveEpisodeTitle(mapping.PrimaryEpisode, displaySeriesTitle);
             epTitle = CleanEpisodeTitleForFilename(epTitle);
             epTitle = SanitizeName(epTitle);
-            string fileIdPart = $"[{fileId}]";
 
-            return $"{epPart}{part} - {epTitle} {fileIdPart}{extension}";
+            string fileName = $"{epPart}{part} - {epTitle}{extension}";
+            return TextHelper.ReplaceFirstHyphenWithArrow(fileName);
         }
 
         // Episode titles for Extras that are generated for the VFS need to be cleaned of invalid filename characters and condensed to prevent issues with Plex's file parsing

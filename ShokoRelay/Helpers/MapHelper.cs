@@ -1,6 +1,6 @@
 using Shoko.Plugin.Abstractions.DataModels;
 using Shoko.Plugin.Abstractions.DataModels.Shoko;
-using static ShokoRelay.Meta.PlexMapping;
+using static ShokoRelay.Plex.PlexMapping;
 
 namespace ShokoRelay.Helpers
 {
@@ -70,9 +70,7 @@ namespace ShokoRelay.Helpers
 
                 foreach (var (ep, epCoords) in sortedEps)
                 {
-                    string epType = GetEpisodeTypeString(ep);
-                    if (filteredEps.Count > 0 && epType != prevType && epType != "ThemeSong" && prevType != "ThemeSong")
-                        continue;
+                    string epType = ep.Type.ToString();
 
                     filteredEps.Add((ep, epCoords));
                     prevType = epType;
@@ -115,7 +113,7 @@ namespace ShokoRelay.Helpers
                 int partCount = allowPartSuffix ? fileCount : 1;
 
                 object? tmdbEpisode = null;
-                if (fileCount > 1 && ShokoRelay.Settings.TMDBStructure && firstEp is IShokoEpisode shokoEp && shokoEp.TmdbEpisodes?.Any() == true)
+                if (fileCount > 1 && ShokoRelay.Settings.TMDBEpNumbering && firstEp is IShokoEpisode shokoEp && shokoEp.TmdbEpisodes?.Any() == true)
                 {
                     var tmdbEps = shokoEp.TmdbEpisodes.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber).ToList();
 
@@ -132,11 +130,6 @@ namespace ShokoRelay.Helpers
         public static bool IsHidden(IEpisode e)
         {
             return e is IShokoEpisode shokoEp && shokoEp.IsHidden;
-        }
-
-        private static string GetEpisodeTypeString(IEpisode ep)
-        {
-            return ep.Type.ToString();
         }
 
         private static bool IsCrossoverOverride(ISeries series, IEpisode episode)
