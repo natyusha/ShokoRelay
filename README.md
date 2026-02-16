@@ -1,7 +1,13 @@
+<!-- prettier-ignore-start -->
+
 ![Shoko Relay Logo](https://github.com/natyusha/ShokoRelay.bundle/assets/985941/23bfd7c2-eb89-46d5-a7cb-558c374393d6 "Shoko Relay")  
 [![Discord](https://img.shields.io/discord/96234011612958720?logo=discord&logoColor=fff&label=Discord&color=5865F2 "Shoko Discord")](https://discord.com/channels/96234011612958720/268484849419943936)
+[![GitHub Latest](https://img.shields.io/github/v/tag/natyusha/ShokoRelay?label=Latest&logo=github&logoColor=fff)](https://github.com/natyusha/ShokoRelay/releases/latest)
+-
 
-This is a plugin for Shoko Server that acts as a [Custom Metadata Provider](https://forums.plex.tv/t/announcement-custom-metadata-providers/934384) for Plex. It is a successor to the [ShokoRelay.bundle](https://github.com/natyusha/ShokoRelay.bundle) legacy agent/scanner and intends to mirror all of its functionality. Scanning is much faster and it will be possible to add many new features in the future as well.
+<!-- prettier-ignore-end -->
+
+This is a plugin for Shoko Server that acts as a [Custom Metadata Provider](https://forums.plex.tv/t/announcement-custom-metadata-providers/934384) for Plex. It is a successor to the [ShokoRelay.bundle](https://github.com/natyusha/ShokoRelay.bundle) legacy agent/scanner and intends to mirror all of its functionality (including the automation scripts). Scanning is much faster and it will be possible to add many new features in the future as well.
 
 Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File System) to ensure that varied folder structures are supported. This means that your anime can be organised with whatever file or folder structure you want. The only caveat is that a folder cannot contain more than one AniDB series at a time if you want it to correctly support [local media assets](https://support.plex.tv/articles/200220717-local-media-assets-tv-shows/) like `Theme.mp3`. The VFS will be automatically updated when a file move or rename is detected by Shoko.
 
@@ -10,23 +16,17 @@ Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File Sy
 ### Shoko
 
 > [!IMPORTANT]
-> The VFS is created inside each Shoko import folder under the folder name configured as `VFS Root Folder` (default `!ShokoRelayVFS`). To stop Shoko from scanning the generated links, add the follwoing regex entries to `settings-server.json` under `Exclude`:
+> The VFS is created inside each Shoko import folder under the folder name configured as `VFS Root Path` (default `!ShokoRelayVFS`). To stop Shoko from scanning the generated links, add the following regex entries to `settings-server.json` under `Exclude`:
 >
 > ```json
->
+> "Exclude": [
+>   "[\\\\\\/]!AnimeThemes[\\\\\\/]",
+>   "[\\\\\\/]!ShokoRelayVFS[\\\\\\/]"
+> ],
 > ```
 
-    "Exclude": [
-      "[\\\\\\/]!AnimeThemes[\\\\\\/]",
-      "[\\\\\\/]!ShokoRelayVFS[\\\\\\/]"
-    ],
-
-> ```
->
-> ```
-
-- Be sure to also exclude the `AnimeThemes Root Folder` (default `!AnimeThemes`) if you plan on utilising AnimeThemes `.webms`
-- After making sure the VFS is excluded in Shoko's settings, extract the plugin into Shoko Server's `plugins` directory
+- Be sure to also exclude the `AnimeThemes Root Path` (default `!AnimeThemes`) if you plan on utilising AnimeThemes `.webms`
+- After making sure the VFS is excluded in Shoko's settings, extract [the latest release](https://github.com/natyusha/ShokoRelay/releases/latest) into Shoko Server's `plugins` directory
 - Restart Shoko Server
 
 #### Setup
@@ -37,7 +37,7 @@ Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File Sy
   - First time generation may take a couple of minutes to complete with a large library.
   - The VFS will automatically update when it detects files have been renamed or moved.
 - Optional
-  - Link the plugin to your Plex account to enable autoscanning, scrobbling (webhooks) and enhanced collection support
+  - Link the plugin to your Plex account to enable auto scanning, scrobbling (webhooks) and enhanced collection support
   - Add a Shoko API Key from `http://{ShokoHost}:{ShokoPort}/webui/settings/api-keys` to enable watch sync and import tasks
 - There are additional options similar to what the legacy agent had at the bottom under "Provider Configuration"
 
@@ -82,7 +82,7 @@ This plugin includes full integration for [AnimeThemes](https://animethemes.moe/
 1. Download anime theme videos and place them in the `!AnimeThemes` folder
    - There is a torrent available with over 19000+ themes
 2. Generate a mapping for the the videos by clicking the `Build Mapping` button:
-   - A mapping for the current torrent is available [here](https://gist.github.com/natyusha/4e29252d939d0f522d38732facf328c7) (mapping the whole torrent takes ~12 hours due to rate limits)
+   - A mapping for the current torrent is available [here](https://gist.github.com/natyusha/4e29252d939d0f522d38732facf328c7) which you can place in the Shoko Relay's plugin directory (mapping the whole torrent takes ~12 hours due to rate limits)
 3. Apply the mapping to the VFS by clicking the `Apply Mapping to VFS` button
 
 > [!IMPORTANT]
@@ -94,9 +94,9 @@ There is also support for generating `Theme.mp3` files as local metadata. This w
 
 This is available under the "AnimeThemes: Theme.mp3" section of the dashboard.
 
-## Auto Scrobble (Plexpass)
+## Auto Scrobble (Plex Pass)
 
-- Enable `Auto Scrobble` in the Shoko Relay dashboard's "Plex: Aatomation" section.
+- Enable `Auto Scrobble` in the Shoko Relay dashboard's "Plex: Automation" section.
 - In the Plex Web App go to `Settings > Webhooks` and add the URL: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/plex/webhook`
 
 ## Information
@@ -117,7 +117,7 @@ Due to this plugin relying on Shoko's plugin abstractions as well as Plex still 
   - Season posters
   - TMDB episode groups (custom seasons/alternate ordering)
   - TMDB series user score
-  - TvdbID [from xrefs] (for default theme songs)
+  - TVDBdbID [from xrefs] (for default theme songs)
 - **AniDB**
   - tag weights
   - episode user rating
