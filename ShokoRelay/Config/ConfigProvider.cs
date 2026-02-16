@@ -22,9 +22,11 @@ namespace ShokoRelay.Config
         public ConfigProvider(IApplicationPaths applicationPaths)
         {
             string pluginDir = Path.Combine(applicationPaths.PluginsPath, ConfigConstants.PluginSubfolder);
-            Directory.CreateDirectory(pluginDir); // Ensure directory exists
-            _filePath = Path.Combine(pluginDir, ConfigConstants.ConfigFileName);
-            _tokenPath = Path.Combine(pluginDir, ConfigConstants.SecretsFileName);
+            string configDir = Path.Combine(pluginDir, ConfigConstants.ConfigSubfolder);
+            Directory.CreateDirectory(pluginDir); // Ensure plugin directory exists
+            Directory.CreateDirectory(configDir); // Ensure config directory exists
+            _filePath = Path.Combine(configDir, ConfigConstants.ConfigFileName);
+            _tokenPath = Path.Combine(configDir, ConfigConstants.SecretsFileName);
             Logger.Info($"Config path: {_filePath}");
             Logger.Info($"Token path: {_tokenPath}");
 
@@ -36,7 +38,7 @@ namespace ShokoRelay.Config
             watcher.Renamed += (_, _) => InvalidateSettings();
             watcher.EnableRaisingEvents = true;
 
-            var tokenWatcher = new FileSystemWatcher(pluginDir, ConfigConstants.SecretsFileName) { NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName };
+            var tokenWatcher = new FileSystemWatcher(Path.GetDirectoryName(_tokenPath)!, ConfigConstants.SecretsFileName) { NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName };
             tokenWatcher.Changed += (_, _) => InvalidateSettings();
             tokenWatcher.Created += (_, _) => InvalidateSettings();
             tokenWatcher.Deleted += (_, _) => InvalidateSettings();
@@ -65,7 +67,44 @@ namespace ShokoRelay.Config
         {
             ValidateSettings(settings);
 
+            // Normalize path mappings prior to persisting so users can enter natural paths in the UI
+            NormalizePathMappings(settings);
+
+            // Normalize comma-separated fields prior to persisting
+            NormalizeCommaSeparatedFields(settings);
+
             var tokenData = ReadTokenFile();
+
+            // Prune secrets for extra users that are no longer configured.
+            // Support entries like "user;1234" where the ";1234" is an optional PIN; tokens are stored keyed by the username only.
+            var normExtra = NormalizeCsvString(settings.ExtraPlexUsers);
+            var configuredExtraUsernames = normExtra
+                .Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(s => s.Trim())
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Select(s =>
+                {
+                    if (s.Contains(';'))
+                    {
+                        var parts = s.Split(';', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                        if (parts.Length > 1 && parts[1].Length == 4 && parts[1].All(char.IsDigit))
+                            return parts[0].Trim(); // canonical username when a valid 4-digit PIN is present
+                    }
+
+                    return s; // otherwise the full entry is the username
+                })
+                .Where(u => !string.IsNullOrWhiteSpace(u))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            if (tokenData.ExtraPlexUserTokens != null)
+            {
+                var removed = tokenData.ExtraPlexUserTokens.Keys.Where(k => !configuredExtraUsernames.Contains(k)).ToList();
+                foreach (var k in removed)
+                    tokenData.ExtraPlexUserTokens.Remove(k);
+                // persist pruning immediately
+                WriteTokenFile(tokenData.Token, tokenData.ClientIdentifier, tokenData.Servers, tokenData.Libraries, tokenData.SelectedLibraryKeys, tokenData.ExtraPlexUserTokens);
+            }
+
             if (string.IsNullOrWhiteSpace(settings.PlexLibrary.Token) && !string.IsNullOrWhiteSpace(tokenData.Token))
                 settings.PlexLibrary.Token = tokenData.Token;
 
@@ -144,12 +183,52 @@ namespace ShokoRelay.Config
             if (EnsureLibraryTargets(settings))
                 needsSave = true;
 
+            // Normalize any path mappings so users can enter natural paths (e.g., "M:\\Anime" or "/mnt/plex/anime/")
+            if (NormalizePathMappings(settings))
+                needsSave = true;
+
+            // Normalize comma-separated fields (TagBlacklist, ExtraPlexUsers)
+            if (NormalizeCommaSeparatedFields(settings))
+                needsSave = true;
+
             ValidateSettings(settings);
 
             if (needsSave)
                 SaveSettings(settings);
 
             return settings;
+        }
+
+        // --- secrets/token-file helpers for extra Plex user tokens ---
+        public string? GetExtraPlexUserToken(string username)
+        {
+            if (string.IsNullOrWhiteSpace(username))
+                return null;
+            var tf = ReadTokenFile();
+            if (tf.ExtraPlexUserTokens == null)
+                return null;
+            return tf.ExtraPlexUserTokens.TryGetValue(username, out var t) ? t : null;
+        }
+
+        public void SetExtraPlexUserToken(string username, string token)
+        {
+            if (string.IsNullOrWhiteSpace(username))
+                return;
+            var tf = ReadTokenFile();
+            tf.ExtraPlexUserTokens ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            tf.ExtraPlexUserTokens[username] = token ?? string.Empty;
+            WriteTokenFile(tf.Token, tf.ClientIdentifier, tf.Servers, tf.Libraries, tf.SelectedLibraryKeys, tf.ExtraPlexUserTokens);
+        }
+
+        public void RemoveExtraPlexUserToken(string username)
+        {
+            if (string.IsNullOrWhiteSpace(username))
+                return;
+            var tf = ReadTokenFile();
+            if (tf.ExtraPlexUserTokens == null || !tf.ExtraPlexUserTokens.ContainsKey(username))
+                return;
+            tf.ExtraPlexUserTokens.Remove(username);
+            WriteTokenFile(tf.Token, tf.ClientIdentifier, tf.Servers, tf.Libraries, tf.SelectedLibraryKeys, tf.ExtraPlexUserTokens);
         }
 
         private void ApplySecrets(RelayConfig settings)
@@ -254,6 +333,7 @@ namespace ShokoRelay.Config
             public List<PlexAvailableServer>? Servers { get; set; }
             public List<PlexAvailableLibrary>? Libraries { get; set; }
             public List<string>? SelectedLibraryKeys { get; set; }
+            public Dictionary<string, string>? ExtraPlexUserTokens { get; set; }
         }
 
         private TokenFile ReadTokenFile()
@@ -266,6 +346,7 @@ namespace ShokoRelay.Config
                         Servers = new List<PlexAvailableServer>(),
                         Libraries = new List<PlexAvailableLibrary>(),
                         SelectedLibraryKeys = new List<string>(),
+                        ExtraPlexUserTokens = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
                     };
 
                 var content = File.ReadAllText(_tokenPath);
@@ -275,6 +356,7 @@ namespace ShokoRelay.Config
                         Servers = new List<PlexAvailableServer>(),
                         Libraries = new List<PlexAvailableLibrary>(),
                         SelectedLibraryKeys = new List<string>(),
+                        ExtraPlexUserTokens = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
                     };
 
                 try
@@ -286,6 +368,7 @@ namespace ShokoRelay.Config
                         parsed.Servers ??= new List<PlexAvailableServer>();
                         parsed.Libraries ??= new List<PlexAvailableLibrary>();
                         parsed.SelectedLibraryKeys ??= new List<string>();
+                        parsed.ExtraPlexUserTokens ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                         return parsed;
                     }
                 }
@@ -300,6 +383,7 @@ namespace ShokoRelay.Config
                         Servers = new List<PlexAvailableServer>(),
                         Libraries = new List<PlexAvailableLibrary>(),
                         SelectedLibraryKeys = new List<string>(),
+                        ExtraPlexUserTokens = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
                     };
                 }
 
@@ -311,6 +395,7 @@ namespace ShokoRelay.Config
                     Servers = new List<PlexAvailableServer>(),
                     Libraries = new List<PlexAvailableLibrary>(),
                     SelectedLibraryKeys = new List<string>(),
+                    ExtraPlexUserTokens = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
                 };
             }
             catch (Exception ex)
@@ -321,6 +406,7 @@ namespace ShokoRelay.Config
                     Servers = new List<PlexAvailableServer>(),
                     Libraries = new List<PlexAvailableLibrary>(),
                     SelectedLibraryKeys = new List<string>(),
+                    ExtraPlexUserTokens = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
                 };
             }
         }
@@ -330,7 +416,8 @@ namespace ShokoRelay.Config
             string? clientIdentifier,
             List<PlexAvailableServer>? servers = null,
             List<PlexAvailableLibrary>? libraries = null,
-            List<string>? selectedLibraryKeys = null
+            List<string>? selectedLibraryKeys = null,
+            Dictionary<string, string>? extraUserTokens = null
         )
         {
             var tokenObj = new TokenFile
@@ -340,6 +427,7 @@ namespace ShokoRelay.Config
                 Servers = servers ?? new List<PlexAvailableServer>(),
                 Libraries = libraries ?? new List<PlexAvailableLibrary>(),
                 SelectedLibraryKeys = selectedLibraryKeys ?? new List<string>(),
+                ExtraPlexUserTokens = extraUserTokens ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
             };
 
             try
@@ -351,6 +439,134 @@ namespace ShokoRelay.Config
             {
                 Logger.Warn($"Failed to write token file {_tokenPath}: {ex.Message}");
             }
+        }
+
+        private bool NormalizePathMappings(RelayConfig settings)
+        {
+            if (settings == null || settings.PathMappings == null || settings.PathMappings.Count == 0)
+                return false;
+
+            var normalized = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var kv in settings.PathMappings)
+            {
+                var rawKey = kv.Key ?? string.Empty;
+                var rawVal = kv.Value ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(rawKey) || string.IsNullOrWhiteSpace(rawVal))
+                    continue;
+
+                string keyNorm = NormalizeShokoKey(rawKey);
+                string valNorm = NormalizePlexBasePath(rawVal);
+
+                if (string.IsNullOrWhiteSpace(keyNorm) || string.IsNullOrWhiteSpace(valNorm))
+                    continue;
+
+                if (!normalized.ContainsKey(keyNorm))
+                    normalized[keyNorm] = valNorm;
+                else if (normalized[keyNorm] != valNorm)
+                    Logger.Warn("Duplicate mapping after normalization for {Key}; overriding with {Val}", keyNorm, valNorm);
+            }
+
+            // Compare serialized form to detect changes
+            var origJson = JsonSerializer.Serialize(settings.PathMappings, Options);
+            var normJson = JsonSerializer.Serialize(normalized, Options);
+            if (origJson != normJson)
+            {
+                settings.PathMappings = normalized;
+                return true;
+            }
+
+            return false;
+        }
+
+        private static string NormalizeCsvString(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+                return string.Empty;
+
+            var parts = raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(s => s.Trim())
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            return string.Join(", ", parts);
+        }
+
+        private bool NormalizeCommaSeparatedFields(RelayConfig settings)
+        {
+            if (settings == null)
+                return false;
+
+            bool changed = false;
+
+            var tagRaw = settings.TagBlacklist ?? string.Empty;
+            var normTag = NormalizeCsvString(tagRaw);
+            if (!string.Equals(normTag, settings.TagBlacklist ?? string.Empty, StringComparison.Ordinal))
+            {
+                settings.TagBlacklist = normTag;
+                changed = true;
+            }
+
+            var extraRaw = settings.ExtraPlexUsers ?? string.Empty;
+            var normExtra = NormalizeCsvString(extraRaw);
+            if (!string.Equals(normExtra, settings.ExtraPlexUsers ?? string.Empty, StringComparison.Ordinal))
+            {
+                settings.ExtraPlexUsers = normExtra;
+                changed = true;
+            }
+
+            return changed;
+        }
+
+        private static string NormalizeShokoKey(string rawKey)
+        {
+            if (string.IsNullOrWhiteSpace(rawKey))
+                return string.Empty;
+
+            // Normalize separators to the local platform and trim
+            var sep = Path.DirectorySeparatorChar;
+            string normalized = rawKey.Trim();
+            normalized = normalized.Replace('/', sep).Replace('\\', sep);
+
+            // Try to produce a full absolute path for rooted inputs
+            try
+            {
+                if (
+                    normalized.Length >= 2 && normalized[1] == ':' /* drive */
+                    || normalized.StartsWith(new string(sep, 2))
+                    || normalized.StartsWith(sep)
+                )
+                {
+                    normalized = Path.GetFullPath(normalized).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                }
+                else
+                {
+                    normalized = normalized.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                }
+            }
+            catch
+            {
+                normalized = normalized.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            }
+
+            return normalized;
+        }
+
+        private static string NormalizePlexBasePath(string rawVal)
+        {
+            if (string.IsNullOrWhiteSpace(rawVal))
+                return string.Empty;
+
+            string val = rawVal.Trim();
+            // Use forward slashes for Plex and remove trailing slashes
+            val = val.Replace('\\', '/');
+            val = val.TrimEnd('/');
+
+            // If not rooted and not a Windows drive, presume a Unix-style path and prefix '/'
+            if (!val.StartsWith("/") && !val.Contains(":") && !val.StartsWith("//"))
+                val = "/" + val;
+
+            return val;
         }
 
         private static string GenerateClientIdentifier() => Guid.NewGuid().ToString("N");

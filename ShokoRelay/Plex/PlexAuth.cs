@@ -230,7 +230,11 @@ namespace ShokoRelay.Plex
                     continue;
 
                 var connections = device.Connections ?? new List<PlexDeviceConnection>();
-                string? preferred = connections.FirstOrDefault(c => !string.IsNullOrWhiteSpace(c?.Uri) && c.Local && !c.Relay && c.Uri.StartsWith("http://", StringComparison.OrdinalIgnoreCase))?.Uri;
+                string? preferred = connections.FirstOrDefault(c => !string.IsNullOrWhiteSpace(c?.Uri) && c.Local && !c.Relay && c.Uri.StartsWith("https://", StringComparison.OrdinalIgnoreCase))?.Uri;
+                if (string.IsNullOrWhiteSpace(preferred))
+                    preferred = connections.FirstOrDefault(c => !string.IsNullOrWhiteSpace(c?.Uri) && c.Local && !c.Relay && c.Uri.StartsWith("http://", StringComparison.OrdinalIgnoreCase))?.Uri;
+                if (string.IsNullOrWhiteSpace(preferred))
+                    preferred = connections.FirstOrDefault(c => !string.IsNullOrWhiteSpace(c?.Uri) && !c.Relay && c.Uri.StartsWith("https://", StringComparison.OrdinalIgnoreCase))?.Uri;
                 if (string.IsNullOrWhiteSpace(preferred))
                     preferred = connections.FirstOrDefault(c => !string.IsNullOrWhiteSpace(c?.Uri) && !c.Relay && c.Uri.StartsWith("http://", StringComparison.OrdinalIgnoreCase))?.Uri;
                 if (string.IsNullOrWhiteSpace(preferred))
@@ -303,6 +307,119 @@ namespace ShokoRelay.Plex
             catch (Exception ex)
             {
                 Logger.Warn($"Exception while revoking Plex token: {ex.Message}");
+            }
+        }
+
+        // --- Plex Home API helpers (managed/home users) ---
+        public sealed record PlexHomeUser(
+            [property: JsonPropertyName("id")] int Id,
+            [property: JsonPropertyName("title")] string? Title,
+            [property: JsonPropertyName("username")] string? Username,
+            [property: JsonPropertyName("uuid")] string? Uuid
+        );
+
+        public async Task<List<PlexHomeUser>> GetHomeUsersAsync(string adminToken, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var url = new Uri($"{BaseUrl}/api/v2/home/users?X-Plex-Client-Identifier={Uri.EscapeDataString(_config.ClientIdentifier)}&X-Plex-Token={Uri.EscapeDataString(adminToken)}");
+                // Use a minimal request (no extra headers) — Plex returns XML for this endpoint even without Accept headers.
+                using var request = new HttpRequestMessage(HttpMethod.Get, url);
+
+                using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+                if (!response.IsSuccessStatusCode)
+                    return new List<PlexHomeUser>();
+
+                var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                if (string.IsNullOrWhiteSpace(content))
+                    return new List<PlexHomeUser>();
+
+                // Expect XML-only responses from Plex Home (/api/v2/home/users). Parse strictly as XML.
+                try
+                {
+                    var xdoc = XDocument.Parse(content);
+                    var users = xdoc.Descendants("user");
+                    var list = new List<PlexHomeUser>();
+
+                    foreach (var u in users)
+                    {
+                        var idAttr = u.Attribute("id")?.Value;
+                        if (!int.TryParse(idAttr, out var id))
+                            continue; // skip malformed entries
+
+                        var title = string.IsNullOrWhiteSpace(u.Attribute("title")?.Value) ? null : u.Attribute("title")?.Value;
+                        var username = string.IsNullOrWhiteSpace(u.Attribute("username")?.Value) ? null : u.Attribute("username")?.Value;
+                        var uuid = string.IsNullOrWhiteSpace(u.Attribute("uuid")?.Value) ? null : u.Attribute("uuid")?.Value;
+
+                        list.Add(new PlexHomeUser(id, title, username, uuid));
+                    }
+
+                    return list;
+                }
+                catch (Exception ex)
+                {
+                    var snippet = content.Length > 512 ? content[..512] + "..." : content;
+                    Logger.Warn($"GetHomeUsersAsync: failed to parse XML response: {ex.Message}. Body starts with: {snippet}");
+                    return new List<PlexHomeUser>();
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn($"GetHomeUsersAsync exception: {ex.Message}");
+                return new List<PlexHomeUser>();
+            }
+        }
+
+        public async Task<string?> SwitchHomeUserAsync(int userId, string adminToken, string? pin = null, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var uriText = $"{BaseUrl}/api/home/users/{userId}/switch?X-Plex-Client-Identifier={Uri.EscapeDataString(_config.ClientIdentifier)}&X-Plex-Token={Uri.EscapeDataString(adminToken)}";
+                if (!string.IsNullOrWhiteSpace(pin))
+                    uriText += $"&pin={Uri.EscapeDataString(pin)}";
+                var url = new Uri(uriText);
+
+                // Use a minimal POST request (no extra headers). Pin is appended only when provided.
+                using var request = new HttpRequestMessage(HttpMethod.Post, url);
+
+                using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+                if (!response.IsSuccessStatusCode)
+                {
+                    Logger.Warn($"SwitchHomeUserAsync failed for user {userId}: status {(int)response.StatusCode}");
+                    return null;
+                }
+
+                var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                if (string.IsNullOrWhiteSpace(content))
+                    return null;
+
+                // Expect XML-only response from Plex for user switch; extract root authToken attribute and return it.
+                try
+                {
+                    var xdoc = XDocument.Parse(content);
+                    var root = xdoc.Root;
+                    if (root != null)
+                    {
+                        var authAttr = root.Attribute("authToken")?.Value;
+                        if (!string.IsNullOrWhiteSpace(authAttr))
+                            return authAttr.Trim();
+                    }
+
+                    var snippet = content.Length > 512 ? content[..512] + "..." : content;
+                    Logger.Warn($"SwitchHomeUserAsync: XML response for user {userId} did not contain an authToken. Body starts with: {snippet}");
+                    return null;
+                }
+                catch (Exception ex)
+                {
+                    var snippet = content.Length > 512 ? content[..512] + "..." : content;
+                    Logger.Warn($"SwitchHomeUserAsync: failed to parse XML response for user {userId}: {ex.Message}. Body starts with: {snippet}");
+                    return null;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn($"SwitchHomeUserAsync exception: {ex.Message}");
+                return null;
             }
         }
 

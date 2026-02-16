@@ -1,0 +1,488 @@
+/* 
+Light Mode: Shoko Grey (Default)
+Dark Mode:  Shoko NN (https://shokoanime.com/downloads/webui-themes/shoko-nn)
+  */
+:root {
+  color-scheme: light dark;
+  --bg-color: light-dark(#282e38, #0f0f0f);
+  --panel-color: light-dark(#2c333e, #1c1c1c);
+  --border-color: light-dark(#21242b, #0f0f0f);
+  --inset-color: light-dark(#1e2027, #151515);
+  --text-color: light-dark(#cfd8e3, #ddd);
+  --highlight-color: light-dark(#44a3ff, #94aad1);
+  --button-color: light-dark(#44a3ff, #a497b0);
+  --hover-color: light-dark(#64b3ff, #ea005e);
+  --danger-color: light-dark(#ff6c6c, #cc0000);
+  --ok-color: light-dark(#10c469, #00ab3f);
+  --plex-color: #ffc826;
+  --animethemes-color: #9f93b8;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg-color: #0f0f0f;
+  --panel-color: #1c1c1c;
+  --border-color: #0f0f0f;
+  --inset-color: #151515;
+  --text-color: #ddd;
+  --highlight-color: #94aad1;
+  --button-color: #a497b0;
+  --hover-color: #ea005e;
+  --danger-color: #cc0000;
+  --ok-color: #00ab3f;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg-color: #282e38;
+  --panel-color: #2c333e;
+  --border-color: #21242b;
+  --inset-color: #1e2027;
+  --text-color: #cfd8e3;
+  --highlight-color: #44a3ff;
+  --button-color: #44a3ff;
+  --hover-color: #64b3ff;
+  --danger-color: #ff6c6c;
+  --ok-color: #10c469;
+}
+
+.brand-header {
+  background-image: url("../img/shoko-relay-header-dark.png");
+  background-repeat: no-repeat;
+  background-position: left center;
+  background-size: contain;
+  filter: drop-shadow(0 0 5px rgb(from var(--hover-color) r g b / 0.25));
+  height: 100px;
+  width: 100%;
+}
+
+:root[data-theme="dark"] .brand-header {
+  background-image: url("../img/shoko-relay-header-dark.png");
+}
+
+:root[data-theme="light"] .brand-header {
+  background-image: url("../img/shoko-relay-header-light.png");
+}
+
+@media (prefers-color-scheme: light) {
+  .brand-header {
+    background-image: url("../img/shoko-relay-header-light.png");
+  }
+}
+
+@font-face {
+  font-display: swap;
+  font-family: "Sora";
+  font-style: normal;
+  font-weight: 400;
+  src: url("../fonts/sora-v17-latin-regular.woff2") format("woff2");
+}
+
+@font-face {
+  font-display: swap;
+  font-family: "Sora";
+  font-style: normal;
+  font-weight: 500;
+  src: url("../fonts/sora-v17-latin-500.woff2") format("woff2");
+}
+
+body {
+  background: var(--bg-color);
+  color: var(--text-color);
+  font-family: "Sora", sans-serif;
+  margin: 20px;
+}
+
+button,
+.plex-login-link {
+  background: var(--button-color);
+  border: 2px solid var(--bg-color);
+  color: var(--bg-color);
+  font-size: 0.9em;
+  font-weight: 500;
+  padding: 12px 16px;
+  text-align: center;
+  transition: all 0.3s ease-in-out;
+}
+
+/* Loading state for action buttons */
+button.loading {
+  opacity: 0.65;
+  pointer-events: none;
+  position: relative;
+}
+
+.button-spinner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.button-spinner svg {
+  width: 100%;
+  height: 100%;
+  fill: var(--bg-color);
+  display: block;
+  transform-origin: center center;
+  animation: spin 900ms linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+button.danger {
+  background: var(--danger-color);
+}
+
+button.danger:hover {
+  background: color-mix(in srgb, var(--danger-color), white 25%);
+}
+
+button:hover,
+.plex-login-link:hover {
+  background: var(--hover-color);
+}
+
+h3 {
+  font-weight: 500;
+  margin: 0 0 8px 0;
+}
+
+h3 .icon-svg {
+  fill: var(--highlight-color);
+}
+
+hr {
+  background: var(--bg);
+  border: none;
+  height: 1px;
+  margin: 2px 0;
+  padding: 0;
+}
+
+img,
+button,
+section,
+.plex-login-link {
+  border-radius: 0.5rem;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+input:not([type="checkbox"]),
+select {
+  height: 2.5em;
+}
+
+input:not([type="checkbox"]),
+select,
+textarea {
+  background: var(--inset-color);
+  border: 1px solid var(--bg-color);
+  border-radius: 0.25em;
+  box-sizing: border-box;
+  color: var(--text-color);
+  margin: 2px 0 6px;
+  padding: 6px;
+  outline: none;
+  transition: all 0.3s ease-in-out;
+  width: 100%;
+}
+
+input:not([type="checkbox"]),
+select,
+textarea,
+button {
+  font-family: "Sora", sans-serif;
+}
+
+input:not([type="checkbox"]):focus,
+select:focus,
+textarea:focus {
+  border-color: var(--highlight-color);
+  box-shadow: 0 0 4px 2px rgba(148, 170, 209, 0.3);
+}
+
+label {
+  display: inline-block;
+  margin: 6px 0 2px;
+  margin-right: 8px;
+}
+
+small {
+  opacity: 0.5;
+}
+
+section {
+  background: var(--panel-color);
+  border: 1px solid var(--border-color);
+  margin: 12px 2px 0 2px;
+  padding: 12px;
+}
+
+select[multiple] {
+  height: auto;
+  max-height: 78px;
+}
+
+select[multiple] option:checked {
+  background: var(--highlight-color);
+}
+
+textarea {
+  height: 6em;
+  resize: none;
+}
+
+#container {
+  margin: 0 auto;
+  max-width: 900px;
+}
+
+/* Toggle Buttons */
+#plex-refresh,
+#vfs-clean,
+#at-force,
+#at-batch {
+  align-items: center;
+  display: inline-flex;
+  font-size: 0.9em;
+  justify-content: center;
+  max-width: 46px;
+  padding: 12px 16px;
+  cursor: pointer;
+  fill: var(--bg-color);
+}
+
+#plex-refresh .icon-svg,
+#vfs-clean .icon-svg,
+#at-force .icon-svg,
+#at-batch .icon-svg {
+  height: 2em;
+  margin: -2em;
+  width: 2em;
+}
+
+#vfs-clean[aria-pressed="true"],
+#at-force[aria-pressed="true"],
+#at-batch[aria-pressed="true"] {
+  background: var(--hover-color);
+}
+
+.animethemes-svg {
+  fill: var(--animethemes-color);
+  height: 0.8em;
+  width: auto;
+}
+
+.full {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.full > * {
+  flex: 1;
+}
+
+.shoko-import-col,
+.shoko-sync-col,
+.shoko-button-col {
+  max-width: 100px;
+}
+
+.shoko-button-col > button {
+  width: 100%;
+}
+
+.at-slug-col,
+.at-offset-col {
+  max-width: 46px;
+}
+
+.toast-container {
+  position: fixed;
+  /* overlay toasts in the viewport bottom-left */
+  left: 12px;
+  bottom: 12px;
+  right: auto;
+  top: auto;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column-reverse; /* newest toast appears nearest the viewport edge */
+  gap: 8px;
+}
+
+.toast {
+  background: var(--panel-color);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  padding: 10px 14px;
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  min-width: 220px;
+  max-width: 420px;
+  opacity: 0;
+  transform: translateX(-18px) translateZ(0);
+  transition:
+    transform 260ms cubic-bezier(0.2, 0.9, 0.2, 1),
+    opacity 220ms ease;
+  font-size: 0.95em;
+}
+
+.toast.visible {
+  opacity: 1;
+  transform: translateX(0) translateZ(0);
+}
+
+.toast.info {
+  border-left: 4px solid var(--highlight-color);
+}
+.toast.success {
+  border-left: 4px solid var(--ok-color);
+}
+.toast.error {
+  border-left: 4px solid var(--danger-color);
+}
+
+.toast[role="status"] {
+  outline: none;
+}
+
+.toast {
+  cursor: pointer;
+}
+
+.toast .toast-message {
+  display: inline-block;
+  margin-right: 0;
+}
+
+.plex::before {
+  color: var(--plex-color);
+  content: "❯";
+  font-weight: 900;
+  margin: 0 12px 0 8px;
+}
+
+.icon-svg {
+  margin: 0 2px -4px 2px;
+  width: 1.3em;
+}
+
+/* ShokoWebUI Styled Checkboxes */
+label.shoko-checkbox {
+  align-items: center;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 0.6rem;
+  height: 2rem;
+  user-select: none;
+}
+
+label.shoko-checkbox input[type="checkbox"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.shoko-checkbox-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  fill: var(--highlight-color);
+  transition: all 0.3s ease-in-out;
+}
+
+label.shoko-checkbox:hover .shoko-checkbox-icon {
+  fill: var(--hover-color);
+}
+
+label.shoko-checkbox input[type="checkbox"]:checked + .shoko-checkbox-icon {
+  fill: var(--hover-color);
+}
+
+.shoko-checkbox-icon .checked {
+  display: none;
+}
+
+label.shoko-checkbox input[type="checkbox"]:checked + .shoko-checkbox-icon .checked {
+  display: block;
+}
+
+label.shoko-checkbox input[type="checkbox"]:checked + .shoko-checkbox-icon .unchecked {
+  display: none;
+}
+
+/* Floating Quick Links */
+.floating-actions {
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: fixed;
+  right: 12px;
+  z-index: 1000;
+}
+
+.floating-actions .icon-svg {
+  fill: currentColor;
+}
+
+.float-link {
+  align-items: center;
+  color: var(--text-color);
+  display: inline-flex;
+  height: 40px;
+  justify-content: center;
+  transition: all 0.3s ease-in-out;
+  width: 40px;
+}
+
+/* Theme Toggle */
+button.float-link {
+  -webkit-appearance: none;
+  align-items: center;
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: var(--text-color);
+  cursor: pointer;
+  display: inline-flex;
+  height: 40px;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  width: 40px;
+}
+
+.float-link:hover {
+  color: var(--hover-color);
+  transform: translateY(-1px);
+}
+
+.float-link.theme-toggle[aria-pressed="false"] {
+  color: var(--highlight-color);
+}

@@ -76,7 +76,7 @@ namespace ShokoRelay.Vfs
 
         public static string BuildExtrasFileName(
             MapHelper.FileMapping mapping,
-            (string Folder, string Prefix, string Subtype) extraInfo,
+            (string Folder, string Subtype) extraInfo,
             int pad,
             string extension,
             string displaySeriesTitle,

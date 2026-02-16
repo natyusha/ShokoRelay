@@ -43,16 +43,21 @@ namespace ShokoRelay.Plex
 
         /// <summary>
         /// Assign a collection to a metadata item (ratingKey) by using the metadata PUT shortcut:
-        /// PUT /library/metadata/{ratingKey}?collection%5B0%5D={collectionName}
+        /// PUT /library/metadata/{ratingKey}?collection%5B0%5D.tag.tag={collectionName}
         /// </summary>
-        public HttpRequestMessage CreateRequest(HttpMethod method, string path, string? baseServerUrl = null)
+        public HttpRequestMessage CreateRequest(HttpMethod method, string path, string? baseServerUrl = null, string? plexUserToken = null)
         {
             var baseUrl = !string.IsNullOrWhiteSpace(baseServerUrl) ? baseServerUrl : Config.ServerUrl;
             var baseUri = new Uri(baseUrl.TrimEnd('/'));
             var url = new Uri(baseUri, path);
 
             var request = new HttpRequestMessage(method, url);
-            request.Headers.TryAddWithoutValidation("X-Plex-Token", Config.Token);
+
+            // Allow per-user token override for requests that need per-account visibility (e.g. watched-state).
+            // If no override supplied, fall back to the configured Plex token.
+            var tokenToUse = !string.IsNullOrWhiteSpace(plexUserToken) ? plexUserToken : Config.Token;
+            if (!string.IsNullOrWhiteSpace(tokenToUse))
+                request.Headers.TryAddWithoutValidation("X-Plex-Token", tokenToUse);
 
             if (!string.IsNullOrWhiteSpace(Config.ClientIdentifier))
                 request.Headers.TryAddWithoutValidation("X-Plex-Client-Identifier", Config.ClientIdentifier);
@@ -63,17 +68,25 @@ namespace ShokoRelay.Plex
 
         private async Task<bool> RefreshSectionPathAsync(string path, PlexLibraryTarget target, CancellationToken cancellationToken)
         {
-            string encodedPath = Uri.EscapeDataString(path);
+            // Map the Shoko path to the Plex path if any mappings are configured
+            string mappedPath = MapShokoPathToPlexPath(path);
+            if (!string.Equals(mappedPath, path, StringComparison.Ordinal))
+            {
+                Logger.Debug("Path mapping applied for Plex refresh: {Original} -> {Mapped}", path, mappedPath);
+            }
+
+            string encodedPath = Uri.EscapeDataString(mappedPath);
             string requestPath = $"/library/sections/{target.SectionId}/refresh?path={encodedPath}";
 
             using var request = CreateRequest(HttpMethod.Get, requestPath);
             using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
-                Logger.Warn("Plex refresh failed with status {Status} for path {Path}", response.StatusCode, path);
+                Logger.Warn("Plex refresh failed with status {Status} for path {Path}", response.StatusCode, mappedPath);
                 return false;
             }
 
+            Logger.Debug("Plex refresh triggered for path {Path} on {Server}:{Section} (status {Status})", mappedPath, target.ServerUrl, target.SectionId, response.StatusCode);
             return true;
         }
 
@@ -96,6 +109,123 @@ namespace ShokoRelay.Plex
                     LibraryType = Config.LibraryType,
                 },
             };
+        }
+
+        private string MapShokoPathToPlexPath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return path;
+
+            var settings = _configProvider.GetSettings();
+            var mappings = settings.PathMappings;
+            if (mappings == null || mappings.Count == 0)
+                return path;
+
+            // Normalize input path for comparison
+            string NormalizeForMatch(string p)
+            {
+                if (string.IsNullOrWhiteSpace(p))
+                    return string.Empty;
+                string normalized = p.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
+                try
+                {
+                    normalized = Path.GetFullPath(normalized).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                }
+                catch
+                {
+                    normalized = normalized.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                }
+                return normalized;
+            }
+
+            var inputNorm = NormalizeForMatch(path);
+            var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+
+            // Prefer longest matching key so more specific mappings take precedence
+            foreach (var kvp in mappings.OrderByDescending(k => k.Key?.Length ?? 0))
+            {
+                string key = kvp.Key ?? string.Empty;
+                string val = kvp.Value ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(val))
+                    continue;
+
+                var keyNorm = NormalizeForMatch(key);
+                if (string.IsNullOrWhiteSpace(keyNorm))
+                    continue;
+
+                if (inputNorm.Equals(keyNorm, comparison) || inputNorm.StartsWith(keyNorm + Path.DirectorySeparatorChar, comparison))
+                {
+                    // Compute remainder after key
+                    var remainder = inputNorm.Length > keyNorm.Length ? inputNorm.Substring(keyNorm.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) : string.Empty;
+                    // Build mapped path using the provided value as base. Use forward slashes for Plex.
+                    string basePart = val.TrimEnd('/', '\\');
+                    string mapped = string.IsNullOrWhiteSpace(remainder) ? basePart : (basePart + "/" + remainder.Replace(Path.DirectorySeparatorChar, '/'));
+                    return mapped;
+                }
+            }
+
+            return path;
+        }
+
+        /// <summary>
+        /// Reverse-map a Plex-style path back to the configured Shoko base path using PathMappings.
+        /// This allows callers (e.g. AnimeThemes endpoints) to accept paths as Plex exposes them and convert
+        /// them to server-local Shoko paths before processing.
+        /// </summary>
+        public string MapPlexPathToShokoPath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return path;
+
+            var settings = _configProvider.GetSettings();
+            var mappings = settings.PathMappings;
+            if (mappings == null || mappings.Count == 0)
+                return path;
+
+            // Normalize input path for comparison (match logic mirrors MapShokoPathToPlexPath)
+            string NormalizeForMatch(string p)
+            {
+                if (string.IsNullOrWhiteSpace(p))
+                    return string.Empty;
+                string normalized = p.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
+                try
+                {
+                    normalized = Path.GetFullPath(normalized).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                }
+                catch
+                {
+                    normalized = normalized.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                }
+                return normalized;
+            }
+
+            var inputNorm = NormalizeForMatch(path);
+            var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+
+            // Prefer longest matching VALUE so more specific Plex-path mappings take precedence
+            foreach (var kvp in mappings.OrderByDescending(k => (k.Value?.Length ?? 0)))
+            {
+                string key = kvp.Key ?? string.Empty; // Shoko base
+                string val = kvp.Value ?? string.Empty; // Plex base
+                if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(val))
+                    continue;
+
+                var valNorm = NormalizeForMatch(val);
+                if (string.IsNullOrWhiteSpace(valNorm))
+                    continue;
+
+                if (inputNorm.Equals(valNorm, comparison) || inputNorm.StartsWith(valNorm + Path.DirectorySeparatorChar, comparison))
+                {
+                    // Compute remainder after value
+                    var remainder = inputNorm.Length > valNorm.Length ? inputNorm.Substring(valNorm.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) : string.Empty;
+                    // Build mapped path using the key (Shoko base). Use OS-native separators for server paths.
+                    string basePart = key.TrimEnd('/', '\\');
+                    string mapped = string.IsNullOrWhiteSpace(remainder) ? basePart : (basePart + Path.DirectorySeparatorChar + remainder);
+                    return mapped;
+                }
+            }
+
+            return path;
         }
 
         /// <summary>
@@ -194,6 +324,44 @@ namespace ShokoRelay.Plex
             {
                 string requestPath = $"/library/sections/{target.SectionId}/all?X-Plex-Container-Start={start}&X-Plex-Container-Size={pageSize}";
                 using var request = CreateRequest(HttpMethod.Get, requestPath, target.ServerUrl);
+                using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+                if (!response.IsSuccessStatusCode)
+                    break;
+
+                var container = await PlexApi.ReadContainerAsync(response, cancellationToken).ConfigureAwait(false);
+                if (container?.Metadata == null || container.Metadata.Count == 0)
+                    break;
+
+                results.AddRange(container.Metadata);
+
+                int fetched = container.Metadata.Count;
+                int? total = container.TotalSize ?? container.Size;
+                if (fetched == 0)
+                    break;
+                if (total.HasValue && start + pageSize >= total.Value)
+                    break;
+
+                start += pageSize;
+            }
+
+            return results;
+        }
+
+        /// <summary>
+        /// List all episodes in the given section. Uses paging to avoid very large responses.
+        /// </summary>
+        public async Task<List<PlexMetadataItem>> GetSectionEpisodesAsync(PlexLibraryTarget target, string? plexUserToken = null, CancellationToken cancellationToken = default)
+        {
+            var results = new List<PlexMetadataItem>();
+            if (!IsEnabled || target == null)
+                return results;
+
+            int start = 0;
+            const int pageSize = 200;
+            while (true)
+            {
+                string requestPath = $"/library/sections/{target.SectionId}/all?type={PlexConstants.TypeEpisode}&unwatched=0&X-Plex-Container-Start={start}&X-Plex-Container-Size={pageSize}";
+                using var request = CreateRequest(HttpMethod.Get, requestPath, target.ServerUrl, plexUserToken);
                 using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
                 if (!response.IsSuccessStatusCode)
                     break;

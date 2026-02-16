@@ -1,7 +1,6 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Reflection;
-using System.Text;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
 using Shoko.Plugin.Abstractions.DataModels;
@@ -211,7 +210,9 @@ namespace ShokoRelay.Controllers
         private static string? LoadControllerTemplate()
         {
             string baseDir = AppContext.BaseDirectory;
-            string candidate = Path.Combine(baseDir, "Config", ControllerPageFileName);
+
+            // Load the dashboard template from the 'dashboard' folder in the application output (lowercase).
+            string candidate = Path.Combine(baseDir, "dashboard", ControllerPageFileName);
             if (!System.IO.File.Exists(candidate))
                 return null;
 
@@ -269,12 +270,172 @@ namespace ShokoRelay.Controllers
                 {
                     var coordsEp = GetPlexCoordinates(ep);
                     if (coordsEp.Season != seasonNum)
-                        continue;
+                    {
+                        // If the episode is originally 'Other' but this file mapping was reassigned into this season,
+                        // apply that season to the episode's coordinates so metadata matches the VFS placement.
+                        if (coordsEp.Season == PlexConstants.SeasonOther && m.Coords.Season == seasonNum)
+                        {
+                            coordsEp = new PlexCoords
+                            {
+                                Season = m.Coords.Season,
+                                Episode = coordsEp.Episode,
+                                EndEpisode = coordsEp.EndEpisode,
+                            };
+                        }
+                        else
+                        {
+                            continue;
+                        }
+                    }
+
                     items.Add((coordsEp, _mapper.MapEpisode(ep, coordsEp, ctx.Series, ctx.Titles)));
                 }
             }
 
             return items.OrderBy(x => x.Coords.Episode).Select(x => x.Meta).ToList();
+        }
+
+        // Plex discovery helpers & network access wrappers
+
+        private static List<PlexAvailableLibrary> CollectDiscoveredLibraries(IEnumerable<(PlexLibraryInfo, PlexServerInfo)>? pairs)
+        {
+            var collected = new List<PlexAvailableLibrary>();
+            if (pairs == null)
+                return collected;
+            var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var (lib, srv) in pairs)
+            {
+                var key = !string.IsNullOrWhiteSpace(lib.Uuid) ? lib.Uuid : $"{srv.PreferredUri}::{lib.Id}";
+                if (seenKeys.Contains(key))
+                    continue;
+                seenKeys.Add(key);
+
+                var uuidVal = !string.IsNullOrWhiteSpace(lib.Uuid) ? lib.Uuid : key;
+                collected.Add(
+                    new PlexAvailableLibrary
+                    {
+                        Id = lib.Id,
+                        Title = lib.Title,
+                        Type = lib.Type,
+                        Agent = lib.Agent,
+                        Uuid = uuidVal,
+                        ServerId = srv.Id,
+                        ServerName = srv.Name,
+                        ServerUrl = srv.PreferredUri ?? string.Empty,
+                    }
+                );
+            }
+
+            return collected;
+        }
+
+        private IActionResult? ValidateFilterOrBadRequest(string? filter, out List<int> ids)
+        {
+            ids = ParseFilterIds(filter, out var errors);
+            if (errors.Count > 0)
+                return BadRequest(
+                    new
+                    {
+                        status = "error",
+                        message = "Invalid filter values.",
+                        errors = errors,
+                    }
+                );
+
+            return null;
+        }
+
+        private IActionResult NoPlexTargetsResponse(IEnumerable<IShokoSeries?> seriesList)
+        {
+            int processedNone = seriesList.Count(s => s != null);
+            return Ok(
+                new
+                {
+                    status = "ok",
+                    processed = processedNone,
+                    created = 0,
+                    skipped = processedNone,
+                    errors = 0,
+                    deletedEmptyCollections = 0,
+                }
+            );
+        }
+
+        // Content types used by the dashboard (only serve the small set of web assets we ship)
+        private static string? GetDashboardContentTypeForExtension(string ext)
+        {
+            if (string.IsNullOrWhiteSpace(ext))
+                return null;
+            return ext.ToLowerInvariant() switch
+            {
+                ".css" => "text/css",
+                ".js" => "application/javascript",
+                ".png" => "image/png",
+                ".svg" => "image/svg+xml",
+                ".woff2" => "font/woff2",
+                _ => null,
+            };
+        }
+
+        // Content types for collection/poster images (broader image set)
+        private static string? GetCollectionContentTypeForExtension(string ext)
+        {
+            if (string.IsNullOrWhiteSpace(ext))
+                return null;
+            return ext.ToLowerInvariant() switch
+            {
+                ".jpg" or ".jpeg" or ".jpe" or ".tbn" => "image/jpeg",
+                ".png" => "image/png",
+                ".webp" => "image/webp",
+                ".gif" => "image/gif",
+                ".bmp" => "image/bmp",
+                ".tif" or ".tiff" => "image/tiff",
+                _ => null,
+            };
+        }
+
+        private Task SchedulePlexRefreshForSeriesAsync(IEnumerable<IShokoSeries> series)
+        {
+            return Task.Run(async () =>
+            {
+                foreach (var s in series)
+                {
+                    try
+                    {
+                        var roots = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+                        string rootName = VfsShared.ResolveRootFolderName();
+
+                        var fileData = GetSeriesFileData(s);
+                        foreach (var mapping in fileData.Mappings)
+                        {
+                            var location = mapping.Video.Locations.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l.Path)) ?? mapping.Video.Locations.FirstOrDefault();
+                            if (location == null)
+                                continue;
+
+                            string? importRoot = VfsShared.ResolveImportRootPath(location);
+                            if (string.IsNullOrWhiteSpace(importRoot))
+                                continue;
+
+                            string seriesPath = Path.Combine(importRoot, rootName, s.ID.ToString());
+                            roots.Add(seriesPath);
+                        }
+
+                        foreach (var path in roots)
+                        {
+                            bool ok = await _plexLibrary.RefreshSectionPathAsync(path).ConfigureAwait(false);
+                            if (ok)
+                                Logger.Info("Triggered Plex refresh for path {Path} (series id {SeriesId})", path, s.ID);
+                            else
+                                Logger.Warn("Plex refresh failed for path {Path} (series id {SeriesId})", path, s.ID);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Warn(ex, "Manual VFS scan trigger failed for series {SeriesId}", s?.ID);
+                    }
+                }
+            });
         }
 
         // Plex discovery types & network access moved to PlexAuth

@@ -12,12 +12,12 @@ namespace ShokoRelay.Plex
             public int? EndEpisode;
         }
 
-        public static bool TryGetExtraSeason(int seasonNumber, out (string Folder, string Prefix, string Subtype) info)
+        public static bool TryGetExtraSeason(int seasonNumber, out (string Folder, string Subtype) info)
         {
             return PlexConstants.ExtraSeasons.TryGetValue(seasonNumber, out info);
         }
 
-        public static string GetSeasonFolderName(int seasonNumber)
+        public static string GetSeasonFolder(int seasonNumber)
         {
             if (TryGetExtraSeason(seasonNumber, out var special))
                 return special.Folder;
@@ -27,19 +27,11 @@ namespace ShokoRelay.Plex
             return $"Season {seasonNumber}";
         }
 
-        public static string GetSeasonTitle(int seasonNumber)
-        {
-            if (TryGetExtraSeason(seasonNumber, out var special))
-                return special.Prefix;
-
-            if (seasonNumber == 0)
-                return "Specials";
-            return $"Season {seasonNumber}";
-        }
-
         public static PlexCoords GetPlexCoordinates(IEpisode e)
         {
-            if (ShokoRelay.Settings.TMDBEpNumbering && e is IShokoEpisode shokoEpisode)
+            // Apply TMDB episode-numbering for any Shoko episode that has TMDB links when enabled.
+            // This allows TMDB to be authoritative after MapHelper has resolved mixed-type files down to a single primary type.
+            if (ShokoRelay.Settings.TMDBEpNumbering && e is IShokoEpisode shokoEpisode && shokoEpisode.TmdbEpisodes != null && shokoEpisode.TmdbEpisodes.Any())
             {
                 var tmdbEpisodes = shokoEpisode.TmdbEpisodes.OrderBy(te => te.EpisodeNumber).ToList();
 
@@ -82,7 +74,10 @@ namespace ShokoRelay.Plex
                     EndEpisode = null,
                 };
 
-            if (ShokoRelay.Settings.TMDBEpNumbering)
+            // If TMDB numbering is enabled and all episodes in the file are the same type (e.g. all Episode, all Special, all Other, etc.),
+            // collect any TMDB entries present among those episodes and apply TMDB-driven coordinates when available.
+            // We do NOT apply TMDB numbering for mixed-type files (MapHelper filters mixed types earlier).
+            if (ShokoRelay.Settings.TMDBEpNumbering && eps.Select(ep => ep.Type).Distinct().Count() == 1)
             {
                 var tmdbEntries = eps.OfType<IShokoEpisode>()
                     .Where(se => se.TmdbEpisodes != null && se.TmdbEpisodes.Any())

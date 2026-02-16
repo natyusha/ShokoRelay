@@ -93,7 +93,7 @@ namespace ShokoRelay.Vfs
 
                     try
                     {
-                        _builder.Build(seriesId, cleanRoot: false, dryRun: false, pruneSeries: true);
+                        _builder.Build(seriesId, cleanRoot: false, pruneSeries: true);
                         Logger.Info("VFS refreshed for series {SeriesId}", seriesId);
                         await TriggerPlexUpdatesAsync(seriesId).ConfigureAwait(false);
                     }

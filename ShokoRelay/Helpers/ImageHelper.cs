@@ -26,7 +26,7 @@ namespace ShokoRelay.Helpers
         }
 
         public static string GetImageUrl(IImageMetadata image, string? imageTypeOverride = null) =>
-            $"{GetBaseUrl()}/api/v{ShokoRelayInfo.ApiVersion}/Image/{image.Source}/{imageTypeOverride ?? image.ImageType.ToString()}/{image.ID}";
+            $"{GetBaseUrl()}/api/v3/Image/{image.Source}/{imageTypeOverride ?? image.ImageType.ToString()}/{image.ID}";
 
         public static ImageInfo[] GenerateImageArray(IWithImages images, string title, bool addEveryImage)
         {
@@ -49,11 +49,11 @@ namespace ShokoRelay.Helpers
                         url = GetImageUrl(i),
                     });
 
-            // backgroundSquare excluded as there is no provider for them yet
             return Project(ImageEntityType.Backdrop, "background")
                 .Concat(Project(ImageEntityType.Logo, "clearLogo"))
                 .Concat(Project(ImageEntityType.Poster, "coverPoster"))
                 .Concat(Project(ImageEntityType.Thumbnail, "snapshot"))
+                //.Concat(Project(ImageEntityType.Square, "backgroundSquare")) // backgroundSquare excluded as there is no provider for them yet
                 .ToArray();
         }
 

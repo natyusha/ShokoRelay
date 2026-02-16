@@ -6,8 +6,8 @@ namespace ShokoRelay.Vfs;
 
 internal static class VfsShared
 {
-    private const string DefaultRootName = "!ShokoRelayVFS";
-    private const string DefaultCollectionPostersName = "!CollectionPosters";
+    private const string DefaultVfsRootName = "!ShokoRelayVFS";
+    private const string DefaultCollectionPostersRootName = "!CollectionPosters";
 
     public static string? ResolveImportRootPath(IVideoFile location)
     {
@@ -44,7 +44,7 @@ internal static class VfsShared
     {
         string configured = ShokoRelay.Settings.VfsRootPath;
         if (string.IsNullOrWhiteSpace(configured))
-            configured = DefaultRootName;
+            configured = DefaultVfsRootName;
 
         configured = configured.Trim().TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
@@ -52,17 +52,17 @@ internal static class VfsShared
             configured = Path.GetFileName(configured);
 
         if (string.IsNullOrWhiteSpace(configured))
-            configured = DefaultRootName;
+            configured = DefaultVfsRootName;
 
         configured = VfsHelper.SanitizeName(configured);
-        return string.IsNullOrWhiteSpace(configured) ? DefaultRootName : configured;
+        return string.IsNullOrWhiteSpace(configured) ? DefaultVfsRootName : configured;
     }
 
     public static string ResolveCollectionPostersFolderName()
     {
-        string configured = ShokoRelay.Settings.CollectionPostersRootFolder;
+        string configured = ShokoRelay.Settings.CollectionPostersRootPath;
         if (string.IsNullOrWhiteSpace(configured))
-            configured = DefaultCollectionPostersName;
+            configured = DefaultCollectionPostersRootName;
 
         configured = configured.Trim().TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
@@ -70,10 +70,10 @@ internal static class VfsShared
             configured = Path.GetFileName(configured);
 
         if (string.IsNullOrWhiteSpace(configured))
-            configured = DefaultCollectionPostersName;
+            configured = DefaultCollectionPostersRootName;
 
         configured = VfsHelper.SanitizeName(configured);
-        return string.IsNullOrWhiteSpace(configured) ? DefaultCollectionPostersName : configured;
+        return string.IsNullOrWhiteSpace(configured) ? DefaultCollectionPostersRootName : configured;
     }
 
     public static bool TryCreateLink(string source, string dest, Logger logger, string? targetOverride = null, bool useRelativeTarget = true)

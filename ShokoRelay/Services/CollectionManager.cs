@@ -3,12 +3,11 @@ using Shoko.Plugin.Abstractions.DataModels.Shoko;
 using Shoko.Plugin.Abstractions.Services;
 using ShokoRelay.Config;
 using ShokoRelay.Helpers;
-using ShokoRelay.Integrations.Shoko;
 using ShokoRelay.Plex;
 
 namespace ShokoRelay.Services
 {
-    public interface IPlexCollectionManager
+    public interface ICollectionManager
     {
         Task<BuildCollectionsResult> BuildCollectionsAsync(IEnumerable<IShokoSeries?> seriesList, CancellationToken cancellationToken = default);
         Task<ApplyPostersResult> ApplyCollectionPostersAsync(IEnumerable<IShokoSeries?> seriesList, CancellationToken cancellationToken = default);
@@ -28,7 +27,7 @@ namespace ShokoRelay.Services
 
     public sealed record ApplyPostersResult(int Processed, int Uploaded, int Skipped, int Errors, List<string> ErrorsList);
 
-    public class PlexCollectionManager : IPlexCollectionManager
+    public class CollectionManager : ICollectionManager
     {
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
@@ -37,23 +36,14 @@ namespace ShokoRelay.Services
         private readonly IMetadataService _metadataService;
         private readonly PlexMetadata _mapper;
         private readonly ConfigProvider _configProvider;
-        private readonly ShokoClient _shokoClient;
 
-        public PlexCollectionManager(
-            PlexClient plexClient,
-            PlexCollections plexCollections,
-            IMetadataService metadataService,
-            PlexMetadata mapper,
-            ConfigProvider configProvider,
-            ShokoClient shokoClient
-        )
+        public CollectionManager(PlexClient plexClient, PlexCollections plexCollections, IMetadataService metadataService, PlexMetadata mapper, ConfigProvider configProvider)
         {
             _plexClient = plexClient;
             _plexCollections = plexCollections;
             _metadataService = metadataService;
             _mapper = mapper;
             _configProvider = configProvider;
-            _shokoClient = shokoClient;
         }
 
         public async Task<BuildCollectionsResult> BuildCollectionsAsync(IEnumerable<IShokoSeries?> seriesList, CancellationToken cancellationToken = default)

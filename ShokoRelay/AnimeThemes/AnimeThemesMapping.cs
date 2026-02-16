@@ -101,7 +101,6 @@ public class AnimeThemesMapping
     public async Task<AnimeThemesMappingApplyResult> ApplyMappingAsync(
         string? mapPath = null,
         string? torrentRoot = null,
-        bool dryRun = false,
         IReadOnlyCollection<int>? seriesFilter = null,
         CancellationToken ct = default
     )
@@ -197,14 +196,9 @@ public class AnimeThemesMapping
 
                     string relativeTarget = BuildThemeRelativeTarget(relativePath);
 
-                    if (dryRun)
-                    {
-                        if (destSeen.Add(destPath))
-                        {
-                            planned.Add($"{destPath} <- {relativeTarget}");
-                        }
-                        continue;
-                    }
+                    // record planned action (avoid duplicates in the planned list)
+                    if (!planned.Any(p => p.StartsWith(destPath, StringComparison.OrdinalIgnoreCase)))
+                        planned.Add($"{destPath} <- {relativeTarget}");
 
                     try
                     {

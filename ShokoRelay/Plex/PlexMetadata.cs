@@ -3,7 +3,6 @@ using Shoko.Plugin.Abstractions.DataModels.Shoko;
 using Shoko.Plugin.Abstractions.Enums;
 using Shoko.Plugin.Abstractions.Services;
 using ShokoRelay.Helpers;
-using ShokoRelay.Integrations.Shoko;
 using static ShokoRelay.Plex.PlexMapping;
 
 namespace ShokoRelay.Plex
@@ -11,12 +10,10 @@ namespace ShokoRelay.Plex
     public class PlexMetadata
     {
         private readonly IMetadataService _metadataService;
-        private readonly ShokoClient _shokoClient;
 
-        public PlexMetadata(IMetadataService metadataService, ShokoClient shokoClient)
+        public PlexMetadata(IMetadataService metadataService)
         {
             _metadataService = metadataService;
-            _shokoClient = shokoClient;
         }
 
         public string GetRatingKey(string type, int id, int? season = null, int? part = null) =>
@@ -170,12 +167,12 @@ namespace ShokoRelay.Plex
             // csharpier-ignore-end
         }
 
-        public async Task<Dictionary<string, object?>> MapSeasonAsync(ISeries series, int seasonNum, string seriesTitle, System.Threading.CancellationToken cancellationToken = default)
+        public Dictionary<string, object?> MapSeason(ISeries series, int seasonNum, string seriesTitle, System.Threading.CancellationToken cancellationToken = default)
         {
             var images = (IWithImages)series;
             var poster = images.GetImages(ImageEntityType.Poster).FirstOrDefault();
             var backdrop = images.GetImages(ImageEntityType.Backdrop).FirstOrDefault();
-            var seasonTitle = GetSeasonTitle(seasonNum);
+            var seasonTitle = GetSeasonFolder(seasonNum);
             var firstEpisode = series.Episodes.Select(e => new { Ep = e, Map = GetPlexCoordinates(e) }).Where(x => x.Map.Season == seasonNum).OrderBy(x => x.Map.Episode).FirstOrDefault();
 
             // Only request season posters when there is more than one non-extra season present.
@@ -183,20 +180,7 @@ namespace ShokoRelay.Plex
             var fileData = MapHelper.GetSeriesFileData(series);
             int nonExtraSeasonCount = fileData.Seasons.Count(s => s >= 0);
 
-            List<string>? seasonPosters = null;
-            if (nonExtraSeasonCount > 1 && _shokoClient != null && seasonNum >= 0)
-            {
-                try
-                {
-                    var map = await _shokoClient.GetSeasonPostersByTmdbAsync(series.ID, cancellationToken).ConfigureAwait(false);
-                    if (map != null && map.TryGetValue(seasonNum, out var posters) && posters != null && posters.Count > 0)
-                        seasonPosters = posters;
-                }
-                catch
-                {
-                    seasonPosters = null; // ignore errors and fall back to series poster
-                }
-            }
+            List<string>? seasonPosters = null; // Shoko v3-based season posters removed; fall back to series poster if present.
 
             // The thumb should be the first season poster if available, otherwise the series poster if present.
             string? thumb = null;
@@ -295,7 +279,7 @@ namespace ShokoRelay.Plex
                 ["parentKey"]             = $"/metadata/{GetRatingKey("season", series.ID, mapped.Season)}",
                 ["parentGuid"]            = GetGuid("season", series.ID, mapped.Season),
                 ["parentType"]            = "season",
-                ["parentTitle"]           = GetSeasonTitle(mapped.Season),
+                ["parentTitle"]           = GetSeasonFolder(mapped.Season),
                 ["parentThumb"]           = seriesPoster != null ? ImageHelper.GetImageUrl(seriesPoster) : null, // Season poster from series images until season specific images are exposed
                 ["parentArt"]             = seriesBackdrop != null ? ImageHelper.GetImageUrl(seriesBackdrop) : null, // Not documented
                 ["index"]                 = mapped.Episode,

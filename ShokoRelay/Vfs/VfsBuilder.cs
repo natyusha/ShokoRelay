@@ -9,7 +9,7 @@ using ShokoRelay.Plex;
 
 namespace ShokoRelay.Vfs
 {
-    public record VfsBuildResult(string RootPath, int SeriesProcessed, int CreatedLinks, int Skipped, List<string> Errors, bool DryRun, int PlannedLinks, string? ReportPath, string? ReportContent);
+    public record VfsBuildResult(string RootPath, int SeriesProcessed, int CreatedLinks, int Skipped, List<string> Errors, int PlannedLinks);
 
     public class VfsBuilder
     {
@@ -29,17 +29,17 @@ namespace ShokoRelay.Vfs
             _programDataPath = applicationPaths.ProgramDataPath;
         }
 
-        public VfsBuildResult Build(int? seriesId = null, bool cleanRoot = true, bool dryRun = false, bool pruneSeries = false)
+        public VfsBuildResult Build(int? seriesId = null, bool cleanRoot = true, bool pruneSeries = false)
         {
-            return BuildInternal(seriesId.HasValue ? new[] { seriesId.Value } : null, cleanRoot, dryRun, pruneSeries);
+            return BuildInternal(seriesId.HasValue ? new[] { seriesId.Value } : null, cleanRoot, pruneSeries);
         }
 
-        public VfsBuildResult Build(IReadOnlyCollection<int> seriesIds, bool cleanRoot = true, bool dryRun = false, bool pruneSeries = false)
+        public VfsBuildResult Build(IReadOnlyCollection<int> seriesIds, bool cleanRoot = true, bool pruneSeries = false)
         {
-            return BuildInternal(seriesIds, cleanRoot, dryRun, pruneSeries);
+            return BuildInternal(seriesIds, cleanRoot, pruneSeries);
         }
 
-        private VfsBuildResult BuildInternal(IReadOnlyCollection<int>? seriesIds, bool cleanRoot, bool dryRun, bool pruneSeries)
+        private VfsBuildResult BuildInternal(IReadOnlyCollection<int>? seriesIds, bool cleanRoot, bool pruneSeries)
         {
             var errors = new List<string>();
             int created = 0;
@@ -47,13 +47,11 @@ namespace ShokoRelay.Vfs
             int seriesProcessed = 0;
             int planned = 0;
 
-            var report = new StringBuilder();
-
             string rootName = VfsShared.ResolveRootFolderName();
             var cleanedRoots = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+            var cleanedSeriesPaths = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
 
-            if (dryRun)
-                cleanRoot = false;
+            bool filterApplied = seriesIds != null && seriesIds.Count > 0;
 
             IEnumerable<IShokoSeries> seriesList;
             if (seriesIds != null && seriesIds.Count > 0)
@@ -70,7 +68,7 @@ namespace ShokoRelay.Vfs
 
                     list.Add(s);
 
-                    if (pruneSeries && !dryRun)
+                    if (pruneSeries)
                         PruneSeries(rootName, s);
                 }
 
@@ -88,7 +86,7 @@ namespace ShokoRelay.Vfs
 
                 try
                 {
-                    var (c, s, e, p) = BuildSeries(series, rootName, cleanRoot, dryRun, cleanedRoots, report);
+                    var (c, s, e, p) = BuildSeries(series, rootName, cleanRoot, cleanedRoots, cleanedSeriesPaths, filterApplied);
                     created += c;
                     skipped += s;
                     planned += p;
@@ -102,31 +100,16 @@ namespace ShokoRelay.Vfs
                 }
             }
 
-            string? reportPath = null;
-            if (dryRun)
-            {
-                reportPath = Path.Combine(_programDataPath, "ShokoRelay-VFS-dryrun.txt");
-                try
-                {
-                    File.WriteAllText(reportPath, report.ToString());
-                }
-                catch (Exception ex)
-                {
-                    errors.Add($"Failed to write dry-run report: {ex.Message}");
-                    Logger.Warn(ex, "Dry-run report write failed at {Path}", reportPath);
-                }
-            }
-
-            return new VfsBuildResult(rootName, seriesProcessed, created, skipped, errors, dryRun, planned, reportPath, dryRun ? report.ToString() : null);
+            return new VfsBuildResult(rootName, seriesProcessed, created, skipped, errors, planned);
         }
 
         private (int Created, int Skipped, List<string> Errors, int Planned) BuildSeries(
             IShokoSeries series,
             string rootFolderName,
             bool cleanRoot,
-            bool dryRun,
             HashSet<string> cleanedRoots,
-            StringBuilder report
+            HashSet<string> cleanedSeriesPaths,
+            bool filterApplied
         )
         {
             int created = 0;
@@ -155,7 +138,7 @@ namespace ShokoRelay.Vfs
 
             foreach (var mapping in fileData.Mappings.OrderBy(m => m.Coords.Season).ThenBy(m => m.Coords.Episode).ThenBy(m => m.PartIndex ?? 0))
             {
-                var location = mapping.Video.Locations.FirstOrDefault(l => File.Exists(l.Path)) ?? mapping.Video.Locations.FirstOrDefault();
+                var location = mapping.Video?.Locations?.FirstOrDefault(l => File.Exists(l.Path)) ?? mapping.Video?.Locations?.FirstOrDefault();
                 if (location == null)
                 {
                     skipped++;
@@ -189,33 +172,66 @@ namespace ShokoRelay.Vfs
                 }
 
                 string rootPath = Path.Combine(importRoot, rootFolderName);
-                if (cleanRoot && !dryRun && cleanedRoots.Add(rootPath))
+                string seriesPath = Path.Combine(rootPath, seriesFolder);
+
+                if (cleanRoot)
                 {
-                    if (Directory.Exists(rootPath))
+                    if (filterApplied)
                     {
-                        if (!IsSafeToDelete(rootPath))
+                        // When a filter is applied, only remove the series-specific VFS folder(s)
+                        // for the filtered series (do not delete the entire root).
+                        if (cleanedSeriesPaths.Add(seriesPath))
                         {
-                            errors.Add($"Refusing to clean VFS root at {rootPath} (path check failed)");
-                        }
-                        else
-                        {
-                            try
+                            if (Directory.Exists(seriesPath))
                             {
-                                Directory.Delete(rootPath, recursive: true);
+                                if (!IsSafeToDelete(seriesPath))
+                                {
+                                    errors.Add($"Refusing to clean VFS series path at {seriesPath} (path check failed)");
+                                }
+                                else
+                                {
+                                    try
+                                    {
+                                        Directory.Delete(seriesPath, recursive: true);
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        errors.Add($"Failed to clean VFS series path {seriesPath}: {ex.Message}");
+                                        Logger.Error(ex, "Failed to clean VFS series path {Path}", seriesPath);
+                                    }
+                                }
                             }
-                            catch (Exception ex)
+                        }
+                    }
+                    else
+                    {
+                        // Legacy behavior: delete the entire VFS root once per import root.
+                        if (cleanedRoots.Add(rootPath))
+                        {
+                            if (Directory.Exists(rootPath))
                             {
-                                errors.Add($"Failed to clean VFS root {rootPath}: {ex.Message}");
-                                Logger.Error(ex, "Failed to clean VFS root {Root}", rootPath);
+                                if (!IsSafeToDelete(rootPath))
+                                {
+                                    errors.Add($"Refusing to clean VFS root at {rootPath} (path check failed)");
+                                }
+                                else
+                                {
+                                    try
+                                    {
+                                        Directory.Delete(rootPath, recursive: true);
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        errors.Add($"Failed to clean VFS root {rootPath}: {ex.Message}");
+                                        Logger.Error(ex, "Failed to clean VFS root {Root}", rootPath);
+                                    }
+                                }
                             }
                         }
                     }
                 }
 
-                if (!dryRun)
-                {
-                    Directory.CreateDirectory(rootPath);
-                }
+                Directory.CreateDirectory(rootPath);
 
                 string? source = ResolveSourcePath(location, importRoot);
 
@@ -226,31 +242,20 @@ namespace ShokoRelay.Vfs
                     continue;
                 }
 
-                int fileId = mapping.Video.ID;
+                int fileId = mapping.Video?.ID ?? 0;
 
-                string seriesPath = Path.Combine(rootPath, seriesFolder);
                 string rootDirKey = $"/{importFolderSafe}/{rootFolderName}";
                 string seriesDirKey = $"/{importFolderSafe}/{rootFolderName}/{seriesFolder}";
-                if (!dryRun)
-                {
-                    Directory.CreateDirectory(seriesPath);
-                }
-                else
-                {
-                    if (reportedDirs.Add(rootDirKey))
-                        report.AppendLine(rootDirKey);
-                    if (reportedDirs.Add(seriesDirKey))
-                        report.AppendLine(seriesDirKey);
-                }
+                Directory.CreateDirectory(seriesPath);
+                // record that we've processed these directories so LinkMetadata/LinkSubtitles can de-duplicate actions
+                reportedDirs.Add(rootDirKey);
+                reportedDirs.Add(seriesDirKey);
 
                 bool isExtra = PlexMapping.TryGetExtraSeason(mapping.Coords.Season, out var specialInfo);
-                string seasonFolder = VfsHelper.SanitizeName(PlexMapping.GetSeasonFolderName(mapping.Coords.Season));
+                string seasonFolder = VfsHelper.SanitizeName(PlexMapping.GetSeasonFolder(mapping.Coords.Season));
                 string seasonPath = Path.Combine(seriesPath, seasonFolder);
                 string seasonDirKey = $"/{importFolderSafe}/{rootFolderName}/{seriesFolder}/{seasonFolder}";
-                if (!dryRun)
-                    Directory.CreateDirectory(seasonPath);
-                else if (reportedDirs.Add(seasonDirKey))
-                    report.AppendLine(seasonDirKey);
+                Directory.CreateDirectory(seasonPath);
 
                 string extension = Path.GetExtension(source) ?? string.Empty;
                 int padForExtra = 1;
@@ -279,27 +284,31 @@ namespace ShokoRelay.Vfs
                 string destBase = Path.GetFileNameWithoutExtension(destPath);
                 string sourceDir = Path.GetDirectoryName(source) ?? string.Empty;
 
-                if (dryRun)
+                // Define a "crossover" as a video that is cross-referenced to episodes in MORE THAN ONE
+                // distinct AniDB/Shoko series. Only when a video's cross-references span multiple series
+                // do we treat it as a crossover and skip copying local metadata/subtitles to avoid
+                // contaminating one series with another series' metadata.
+                var distinctSeriesCount = mapping.Video?.CrossReferences?.Where(cr => cr.ShokoEpisode != null).Select(cr => cr.ShokoEpisode!.SeriesID).Distinct().Count() ?? 0;
+                bool isCrossover = distinctSeriesCount > 1;
+
+                if (VfsShared.TryCreateLink(source, destPath, Logger))
                 {
+                    created++;
                     planned++;
-                    report.AppendLine($"/{importFolderSafe}/{rootFolderName}/{seriesFolder}/{seasonFolder}/{fileName} <- {source}");
-                    LinkMetadata(sourceDir, seriesPath, reportedDirs, dryRun, report);
-                    LinkSubtitles(source, sourceDir, destBase, seasonPath, reportedDirs, dryRun, report, ref planned, ref skipped, errors);
-                }
-                else
-                {
-                    if (VfsShared.TryCreateLink(source, destPath, Logger))
+                    if (!isCrossover)
                     {
-                        created++;
-                        planned++;
-                        LinkMetadata(sourceDir, seriesPath, reportedDirs, dryRun, report);
-                        LinkSubtitles(source, sourceDir, destBase, seasonPath, reportedDirs, dryRun, report, ref planned, ref skipped, errors);
+                        LinkMetadata(sourceDir, seriesPath, reportedDirs);
+                        LinkSubtitles(source, sourceDir, destBase, seasonPath, reportedDirs, ref planned, ref skipped, errors);
                     }
                     else
                     {
-                        skipped++;
-                        errors.Add($"Failed to link {source} -> {destPath}");
+                        Logger.Debug("Skipping local metadata/subtitle linking for crossover video {File} (series {SeriesId})", source, series.ID);
                     }
+                }
+                else
+                {
+                    skipped++;
+                    errors.Add($"Failed to link {source} -> {destPath}");
                 }
             }
 
@@ -323,7 +332,7 @@ namespace ShokoRelay.Vfs
             return null;
         }
 
-        private void LinkMetadata(string sourceDir, string destDir, HashSet<string> reportedDirs, bool dryRun, StringBuilder report)
+        private void LinkMetadata(string sourceDir, string destDir, HashSet<string> reportedDirs)
         {
             if (string.IsNullOrWhiteSpace(sourceDir) || !Directory.Exists(sourceDir))
                 return;
@@ -340,12 +349,6 @@ namespace ShokoRelay.Vfs
 
                 string name = Path.GetFileName(file);
                 string destPath = Path.Combine(destDir, name);
-
-                if (dryRun)
-                {
-                    report.AppendLine($"META {destPath} <- {file}");
-                    continue;
-                }
 
                 VfsShared.TryCreateLink(file, destPath, Logger);
             }
@@ -383,18 +386,7 @@ namespace ShokoRelay.Vfs
             }
         }
 
-        private void LinkSubtitles(
-            string sourceFile,
-            string sourceDir,
-            string destBaseName,
-            string destDir,
-            HashSet<string> reportedDirs,
-            bool dryRun,
-            StringBuilder report,
-            ref int planned,
-            ref int skipped,
-            List<string> errors
-        )
+        private void LinkSubtitles(string sourceFile, string sourceDir, string destBaseName, string destDir, HashSet<string> reportedDirs, ref int planned, ref int skipped, List<string> errors)
         {
             if (string.IsNullOrWhiteSpace(sourceDir) || !Directory.Exists(sourceDir))
                 return;
@@ -413,13 +405,6 @@ namespace ShokoRelay.Vfs
                 string suffix = name.Substring(originalBase.Length);
                 string destName = destBaseName + suffix;
                 string destPath = Path.Combine(destDir, destName);
-
-                if (dryRun)
-                {
-                    planned++;
-                    report.AppendLine($"SUB {destPath} <- {sub}");
-                    continue;
-                }
 
                 if (VfsShared.TryCreateLink(sub, destPath, Logger))
                 {

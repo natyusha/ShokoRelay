@@ -25,8 +25,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="ShokoRelayController.cshtml">
+    <Content Include="Dashboard\**\*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>dashboard\%(RecursiveDir)%(Filename)%(Extension)</Link>
     </Content>
   </ItemGroup>
 </Project>

@@ -1,0 +1,73 @@
+name: Build & Release ShokoRelay
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Build & attach ${{ matrix.rid }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            rid: linux-arm64
+            zip_name: ShokoRelay-linux-arm64.zip
+          - os: ubuntu-latest
+            rid: linux-x64
+            zip_name: ShokoRelay-linux-x64.zip
+          - os: windows-latest
+            rid: win-x64
+            zip_name: ShokoRelay-win-x64.zip
+
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Publish
+        run: dotnet publish ShokoRelay/ShokoRelay.csproj -c Release -r ${{ matrix.rid }} --no-self-contained -o publish
+        env:
+          DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+
+      - name: Package ZIP (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          rm -rf release || true
+          mkdir -p release/ShokoRelay
+          cp -r publish/* release/ShokoRelay/
+          apt-get update && apt-get install -y zip >/dev/null
+          zip -r "${{ matrix.zip_name }}" release/ShokoRelay
+          ls -la "${{ matrix.zip_name }}"
+
+      - name: Package ZIP (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Remove-Item -Recurse -Force release -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path release\ShokoRelay | Out-Null
+          Copy-Item -Path publish\* -Destination release\ShokoRelay -Recurse -Force
+          Compress-Archive -Path release\ShokoRelay -DestinationPath "$env:GITHUB_WORKSPACE\${{ matrix.zip_name }}" -Force
+          Get-ChildItem -Path "$env:GITHUB_WORKSPACE\${{ matrix.zip_name }}"
+
+      - name: Upload asset to GitHub Release
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ${{ matrix.zip_name }}
+          asset_name: ${{ matrix.zip_name }}
+          asset_content_type: application/zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

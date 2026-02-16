@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>❯ Shoko Relay: Dashboard</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+  <div id=container>
+    <div class="brand-header" role="img" aria-label="Shoko Relay Dashboard"></div>
+    <div class="full">
+      <section>
+        <h3 class="plex">Plex: Authentication</h3>
+        <div class="full" id="plex-auth-action">
+          <button id="plex-start">Start Plex Auth</button>
+        </div>
+        <div>
+          <label>Libraries</label>
+          <select id="plex-libraries" multiple disabled></select>
+        </div>
+      </section>
+      <section>
+        <h3 class="plex">Plex: Automation</h3>
+        <div class="full">
+          <button id="col-build">Generate Collections</button>
+        </div>
+        <hr />
+        <label class="shoko-checkbox">
+          <input id="plex-scan-vfs" type="checkbox">
+          <span class="shoko-checkbox-icon" aria-hidden="true">
+            <svg class="unchecked" viewBox="0 0 24 24">
+              <use href="img/icons.svg#checkbox-blank-circle-outline"></use>
+            </svg>
+            <svg class="checked" viewBox="0 0 24 24">
+              <use href="img/icons.svg#checkbox-marked-circle-outline"></use>
+            </svg>
+          </span>
+          <span>Scan on VFS Change</span>
+        </label>
+        <label class="shoko-checkbox">
+          <input id="plex-watched" type="checkbox">
+          <span class="shoko-checkbox-icon" aria-hidden="true">
+            <svg class="unchecked" viewBox="0 0 24 24">
+              <use href="img/icons.svg#checkbox-blank-circle-outline"></use>
+            </svg>
+            <svg class="checked" viewBox="0 0 24 24">
+              <use href="img/icons.svg#checkbox-marked-circle-outline"></use>
+            </svg>
+          </span>
+          <span>Auto Scrobble</span>
+        </label>
+        <div class="full">
+          <div>
+            <label>Extra Plex Users (comma separated)</label>
+            <input id="extra-plex-users" type="text" placeholder="user1;1234, user2;5678 (optional PIN)">
+          </div>
+        </div>
+      </section>
+    </div>
+    <div class="full">
+      <section>
+        <h3>
+          <svg class="icon-svg" viewBox="0 0 24 24">
+            <use href="img/icons.svg#database-refresh-outline"></use>
+          </svg>
+          Shoko: VFS
+        </h3>
+        <div class="full">
+          <div>
+            <label>Filter by ShokoSeriesID</label>
+            <input id="vfs-filter" type="text" placeholder="comma separated">
+          </div>
+        </div>
+        <div class="full">
+          <button id="vfs-exec">Generate</button>
+          <button id="vfs-clean" title="Toggle Clean VFS" aria-pressed="true" type="button">
+            <svg class="icon-svg" viewBox="0 0 24 24">
+              <use href="img/icons.svg#broom"></use>
+            </svg>
+          </button>
+        </div>
+      </section>
+      <section>
+        <h3>
+          <svg class="icon-svg" viewBox="0 0 24 24">
+            <use href="img/icons.svg#auto-fix"></use>
+          </svg>
+          Shoko: Automation
+        </h3>
+        <div class="full">
+          <div>
+            <label>Shoko API Key</label>
+            <input id="shoko-api-key" type="password" placeholder="From Shoko's WebUI">
+          </div>
+          <div class="shoko-import-col">
+            <label>Import Int.</label>
+            <input id="shoko-import-frequency" type="number" min="0" step="1" placeholder="hours">
+          </div>
+          <div class="shoko-sync-col">
+            <label>Sync Int.</label>
+            <input id="shoko-sync-frequency" type="number" min="0" step="1" placeholder="hours">
+          </div>
+        </div>
+        <div class="full">
+          <button id="shoko-remove-missing" class="danger" title="Remove missing files from Shoko">
+            Remove Missing
+          </button>
+          <div class="shoko-button-col"><button id="shoko-import-run">Import</button></div>
+          <div class="shoko-button-col"><button id="shoko-sync-watched">Sync</button></div>
+        </div>
+      </section>
+    </div>
+    <div class="full">
+      <section>
+        <h3>
+          <svg class="animethemes-svg" viewBox="0 0 160 86.6" width="277" height="150">
+            <use href="img/icons.svg#animethemes"></use>
+          </svg>
+          AnimeThemes: VFS
+        </h3>
+        <div class="full">
+          <div>
+            <label>Filter by ShokoSeriesID</label>
+            <input id="at-filter-map" type="text" placeholder="comma separated">
+          </div>
+        </div>
+        <div class="full"></div>
+        <div class="full">
+          <button id="at-apply">Apply Mapping</button>
+          <button id="at-mapping">Build Mapping</button>
+        </div>
+      </section>
+
+      <section>
+        <h3>
+          <svg class="animethemes-svg" viewBox="0 0 160 86.6" width="277" height="150">
+            <use href="img/icons.svg#animethemes"></use>
+          </svg>
+          AnimeThemes: Theme.mp3
+        </h3>
+        <div class="full">
+          <div class="at-path-col">
+            <label>Path</label><input id="at-path" type="text" placeholder="Shoko or Plex relative anime path">
+          </div>
+          <div class="at-slug-col"><label>Slug</label><input id="at-slug" type="text" placeholder="OP2"></div>
+          <div class="at-offset-col"><label>Off.</label><input id="at-offset" type="number" value="" placeholder="0">
+          </div>
+        </div>
+        <div class="full">
+          <button id="at-single">Generate</button>
+          <button id="at-force" title="Force" aria-pressed="false" type="button" aria-label="Force">
+            <svg class="icon-svg" viewBox="0 0 24 24">
+              <use href="img/icons.svg#delete-forever-outline"></use>
+            </svg>
+          </button>
+          <button id="at-batch" title="Batch" aria-pressed="false" type="button" aria-label="Batch">
+            <svg class="icon-svg" viewBox="0 0 24 24">
+              <use href="img/icons.svg#file-tree-outline"></use>
+            </svg>
+          </button>
+        </div>
+      </section>
+    </div>
+    <section>
+      <h3>
+        <svg class="icon-svg" viewBox="0 0 24 24">
+          <use href="img/icons.svg#cog-outline"></use>
+        </svg>
+        Provider Configuration
+      </h3>
+      <div id="config-form"></div>
+      <small>All provider settings are saved automatically.</small>
+    </section>
+  </div>
+  <div id="toast-container" aria-live="polite" aria-atomic="true"></div>
+  <div class="floating-actions" role="navigation" aria-label="Quick links">
+    <button id="theme-toggle" class="float-link theme-toggle" title="Toggle theme" aria-label="Toggle theme"
+            aria-pressed="false">
+      <svg class="icon-svg" viewBox="0 0 24 24">
+        <use href="img/icons.svg#theme-light-dark"></use>
+      </svg>
+    </button>
+
+    <a class="float-link" href="https://discord.gg/shokoanime" target="_blank" rel="noopener noreferrer" title="Discord"
+       aria-label="Shoko Discord">
+      <svg class="icon-svg" viewBox="0 0 24 24">
+        <use href="img/icons.svg#discord"></use>
+      </svg>
+    </a>
+    <a class="float-link" href="https://docs.shokoanime.com/" target="_blank" rel="noopener noreferrer" title="Docs"
+       aria-label="Shoko Docs">
+      <svg class="icon-svg" viewBox="0 0 24 24">
+        <use href="img/icons.svg#docs"></use>
+      </svg>
+    </a>
+    <a class="float-link github-float" href="https://github.com/natyusha/ShokoRelay" target="_blank"
+       rel="noopener noreferrer" title="GitHub" aria-label="Shoko Relay on GitHub">
+      <svg class="icon-svg" viewBox="0 0 24 24">
+        <use href="img/icons.svg#github"></use>
+      </svg>
+    </a>
+  </div>
+  <script src="js/script.js"></script>
+</body>
+
+</html>
