@@ -1,9 +1,9 @@
-using System.Text;
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using NLog;
-using Shoko.Plugin.Abstractions;
-using Shoko.Plugin.Abstractions.DataModels;
-using Shoko.Plugin.Abstractions.DataModels.Shoko;
-using Shoko.Plugin.Abstractions.Services;
+using Shoko.Abstractions.Metadata.Shoko;
+using Shoko.Abstractions.Plugin;
+using Shoko.Abstractions.Services;
 using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
 
@@ -17,6 +17,11 @@ namespace ShokoRelay.Vfs
         private readonly IMetadataService _metadataService;
         private readonly string _programDataPath;
 
+        // Per-build caches (initialized for the duration of BuildInternal and cleared afterwards)
+        private ConcurrentDictionary<int, MapHelper.SeriesFileData>? _seriesFileDataCacheForBuild;
+        private ConcurrentDictionary<string, string[]>? _subtitleFileCacheForBuild;
+        private ConcurrentDictionary<string, string[]>? _metadataFileCacheForBuild;
+
         private static readonly HashSet<string> MetadataExtensions = PlexConstants
             .LocalMediaAssets.Artwork.Union(PlexConstants.LocalMediaAssets.ThemeSongs)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -26,7 +31,7 @@ namespace ShokoRelay.Vfs
         public VfsBuilder(IMetadataService metadataService, IApplicationPaths applicationPaths)
         {
             _metadataService = metadataService;
-            _programDataPath = applicationPaths.ProgramDataPath;
+            _programDataPath = applicationPaths.DataPath;
         }
 
         public VfsBuildResult Build(int? seriesId = null, bool cleanRoot = true, bool pruneSeries = false)
@@ -41,28 +46,36 @@ namespace ShokoRelay.Vfs
 
         private VfsBuildResult BuildInternal(IReadOnlyCollection<int>? seriesIds, bool cleanRoot, bool pruneSeries)
         {
-            var errors = new List<string>();
+            // Initialize per-run caches (cleared before returning)
+            _seriesFileDataCacheForBuild = new ConcurrentDictionary<int, MapHelper.SeriesFileData>();
+            _subtitleFileCacheForBuild = new ConcurrentDictionary<string, string[]>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+            _metadataFileCacheForBuild = new ConcurrentDictionary<string, string[]>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+
+            var sw = Stopwatch.StartNew();
             int created = 0;
             int skipped = 0;
             int seriesProcessed = 0;
             int planned = 0;
 
             string rootName = VfsShared.ResolveRootFolderName();
-            var cleanedRoots = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
-            var cleanedSeriesPaths = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+            var cleanedRoots = new ConcurrentDictionary<string, byte>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+            var cleanedSeriesPaths = new ConcurrentDictionary<string, byte>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
 
             bool filterApplied = seriesIds != null && seriesIds.Count > 0;
 
-            IEnumerable<IShokoSeries> seriesList;
+            // Gather series list (pruneSeries may call PruneSeries which uses cached fileData)
+            var errorsBag = new ConcurrentBag<string>();
+            IEnumerable<IShokoSeries> seriesList = Array.Empty<IShokoSeries>();
             if (seriesIds != null && seriesIds.Count > 0)
             {
                 var list = new List<IShokoSeries>();
                 foreach (var id in seriesIds.Distinct())
                 {
                     var s = _metadataService.GetShokoSeriesByID(id);
+
                     if (s == null)
                     {
-                        errors.Add($"Series {id} not found");
+                        errorsBag.Add($"Series {id} not found");
                         continue;
                     }
 
@@ -76,30 +89,64 @@ namespace ShokoRelay.Vfs
             }
             else
             {
-                seriesList = _metadataService.GetAllShokoSeries();
+                seriesList = _metadataService.GetAllShokoSeries() ?? Array.Empty<IShokoSeries>();
             }
 
-            foreach (var series in seriesList)
-            {
-                if (series == null)
-                    continue;
+            // Bounded parallel processing of series to improve throughput while avoiding excessive IO contention.
+            int maxDop = Math.Max(1, ShokoRelay.Settings.VfsParallelism);
+            var po = new ParallelOptions { MaxDegreeOfParallelism = maxDop };
 
-                try
+            Parallel.ForEach(
+                seriesList ?? Array.Empty<IShokoSeries>(),
+                po,
+                series =>
                 {
-                    var (c, s, e, p) = BuildSeries(series, rootName, cleanRoot, cleanedRoots, cleanedSeriesPaths, filterApplied);
-                    created += c;
-                    skipped += s;
-                    planned += p;
-                    errors.AddRange(e);
-                    seriesProcessed++;
-                }
-                catch (Exception ex)
-                {
-                    errors.Add($"Failed to process series {series.PreferredTitle}: {ex.Message}");
-                    Logger.Error(ex, "VFS build failed for series {SeriesId}", series.ID);
-                }
-            }
+                    if (series == null)
+                        return;
 
+                    try
+                    {
+                        var (c, s, e, p) = BuildSeries(series, rootName, cleanRoot, cleanedRoots, cleanedSeriesPaths, filterApplied);
+                        if (c != 0)
+                            Interlocked.Add(ref created, c);
+                        if (s != 0)
+                            Interlocked.Add(ref skipped, s);
+                        if (p != 0)
+                            Interlocked.Add(ref planned, p);
+                        if (e?.Count > 0)
+                        {
+                            foreach (var err in e)
+                                errorsBag.Add(err);
+                        }
+
+                        Interlocked.Increment(ref seriesProcessed);
+                    }
+                    catch (Exception ex)
+                    {
+                        errorsBag.Add($"Failed to process series {series.PreferredTitle?.Value}: {ex.Message}");
+                        Logger.Error(ex, "VFS build failed for series {SeriesId}", series?.ID);
+                    }
+                }
+            );
+
+            sw.Stop();
+
+            var errors = errorsBag.ToList();
+
+            // Clear per-run caches
+            _seriesFileDataCacheForBuild = null;
+            _subtitleFileCacheForBuild = null;
+            _metadataFileCacheForBuild = null;
+
+            Logger.Info(
+                "VFS BuildInternal completed in {Elapsed}ms: seriesProcessed={SeriesProcessed}, created={Created}, planned={Planned}, skipped={Skipped}, errors={ErrorsCount}",
+                sw.ElapsedMilliseconds,
+                seriesProcessed,
+                created,
+                planned,
+                skipped,
+                errors.Count
+            );
             return new VfsBuildResult(rootName, seriesProcessed, created, skipped, errors, planned);
         }
 
@@ -107,8 +154,8 @@ namespace ShokoRelay.Vfs
             IShokoSeries series,
             string rootFolderName,
             bool cleanRoot,
-            HashSet<string> cleanedRoots,
-            HashSet<string> cleanedSeriesPaths,
+            ConcurrentDictionary<string, byte> cleanedRoots,
+            ConcurrentDictionary<string, byte> cleanedSeriesPaths,
             bool filterApplied
         )
         {
@@ -117,11 +164,12 @@ namespace ShokoRelay.Vfs
             int planned = 0;
             var errors = new List<string>();
             var reportedDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var sw = Stopwatch.StartNew();
 
             var titles = TextHelper.ResolveFullSeriesTitles(series);
             string seriesFolder = series.ID.ToString();
 
-            var fileData = MapHelper.GetSeriesFileData(series);
+            var fileData = GetSeriesFileDataCached(series);
             if (!fileData.Mappings.Any())
             {
                 return (0, 0, errors, 0);
@@ -136,23 +184,30 @@ namespace ShokoRelay.Vfs
 
             var extraPadBySeason = fileData.Mappings.Where(m => m.Coords.Season < 0).GroupBy(m => m.Coords.Season).ToDictionary(g => g.Key, g => g.Count() > 9 ? 2 : 1);
 
+            // Use run-level subtitle cache when available, otherwise fall back to a per-series small cache
+            IDictionary<string, string[]> subtitleFileCache;
+            if (_subtitleFileCacheForBuild != null)
+                subtitleFileCache = _subtitleFileCacheForBuild;
+            else
+                subtitleFileCache = new Dictionary<string, string[]>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+
             foreach (var mapping in fileData.Mappings.OrderBy(m => m.Coords.Season).ThenBy(m => m.Coords.Episode).ThenBy(m => m.PartIndex ?? 0))
             {
-                var location = mapping.Video?.Locations?.FirstOrDefault(l => File.Exists(l.Path)) ?? mapping.Video?.Locations?.FirstOrDefault();
+                var location = mapping.Video?.Files?.FirstOrDefault(l => File.Exists(l.Path)) ?? mapping.Video?.Files?.FirstOrDefault();
                 if (location == null)
                 {
                     skipped++;
-                    errors.Add($"No video locations for mapping {series.PreferredTitle} S{mapping.Coords.Season}E{mapping.Coords.Episode}");
+                    errors.Add($"No video locations for mapping {series.PreferredTitle?.Value} S{mapping.Coords.Season}E{mapping.Coords.Episode}");
                     continue;
                 }
 
-                string importFolderNameRaw = location.ImportFolder?.Name ?? "ImportFolder";
+                string importFolderNameRaw = location.ManagedFolder?.Name ?? "ImportFolder";
                 string importFolderSafe = VfsHelper.SanitizeName(importFolderNameRaw);
 
-                if (location.ImportFolder?.DropFolderType == DropFolderType.Source)
+                if (location.ManagedFolder != null && location.ManagedFolder.DropFolderType.HasFlag(Shoko.Abstractions.Enums.DropFolderType.Source))
                 {
                     skipped++;
-                    errors.Add($"Skipped source-only import folder for {series.PreferredTitle} S{mapping.Coords.Season}E{mapping.Coords.Episode}: {importFolderNameRaw}");
+                    errors.Add($"Skipped source-only import folder for {series.PreferredTitle?.Value} S{mapping.Coords.Season}E{mapping.Coords.Episode}: {importFolderNameRaw}");
                     continue;
                 }
 
@@ -160,14 +215,14 @@ namespace ShokoRelay.Vfs
                 if (string.IsNullOrWhiteSpace(importRoot))
                 {
                     skipped++;
-                    errors.Add($"No import root for mapping {series.PreferredTitle} S{mapping.Coords.Season}E{mapping.Coords.Episode}");
+                    errors.Add($"No import root for mapping {series.PreferredTitle?.Value} S{mapping.Coords.Season}E{mapping.Coords.Episode}");
                     continue;
                 }
 
                 if (!Directory.Exists(importRoot))
                 {
                     skipped++;
-                    errors.Add($"Import root not found for mapping {series.PreferredTitle} S{mapping.Coords.Season}E{mapping.Coords.Episode}: {importRoot}");
+                    errors.Add($"Import root not found for mapping {series.PreferredTitle?.Value} S{mapping.Coords.Season}E{mapping.Coords.Episode}: {importRoot}");
                     continue;
                 }
 
@@ -180,11 +235,11 @@ namespace ShokoRelay.Vfs
                     {
                         // When a filter is applied, only remove the series-specific VFS folder(s)
                         // for the filtered series (do not delete the entire root).
-                        if (cleanedSeriesPaths.Add(seriesPath))
+                        if (cleanedSeriesPaths.TryAdd(seriesPath, 0))
                         {
                             if (Directory.Exists(seriesPath))
                             {
-                                if (!IsSafeToDelete(seriesPath))
+                                if (!VfsShared.IsSafeToDelete(seriesPath))
                                 {
                                     errors.Add($"Refusing to clean VFS series path at {seriesPath} (path check failed)");
                                 }
@@ -206,11 +261,11 @@ namespace ShokoRelay.Vfs
                     else
                     {
                         // Legacy behavior: delete the entire VFS root once per import root.
-                        if (cleanedRoots.Add(rootPath))
+                        if (cleanedRoots.TryAdd(rootPath, 0))
                         {
                             if (Directory.Exists(rootPath))
                             {
-                                if (!IsSafeToDelete(rootPath))
+                                if (!VfsShared.IsSafeToDelete(rootPath))
                                 {
                                     errors.Add($"Refusing to clean VFS root at {rootPath} (path check failed)");
                                 }
@@ -233,12 +288,12 @@ namespace ShokoRelay.Vfs
 
                 Directory.CreateDirectory(rootPath);
 
-                string? source = ResolveSourcePath(location, importRoot);
+                string? source = VfsShared.ResolveSourcePath(location, importRoot);
 
                 if (string.IsNullOrWhiteSpace(source))
                 {
                     skipped++;
-                    errors.Add($"No accessible file for mapping {series.PreferredTitle} S{mapping.Coords.Season}E{mapping.Coords.Episode}");
+                    errors.Add($"No accessible file for mapping {series.PreferredTitle?.Value} S{mapping.Coords.Season}E{mapping.Coords.Episode}");
                     continue;
                 }
 
@@ -298,7 +353,7 @@ namespace ShokoRelay.Vfs
                     if (!isCrossover)
                     {
                         LinkMetadata(sourceDir, seriesPath, reportedDirs);
-                        LinkSubtitles(source, sourceDir, destBase, seasonPath, reportedDirs, ref planned, ref skipped, errors);
+                        LinkSubtitles(source, sourceDir, destBase, seasonPath, reportedDirs, ref planned, ref skipped, errors, subtitleFileCache);
                     }
                     else
                     {
@@ -312,24 +367,18 @@ namespace ShokoRelay.Vfs
                 }
             }
 
+            sw.Stop();
+            Logger.Debug(
+                "BuildSeries {SeriesId} completed in {Elapsed}ms: mappings={Mappings} created={Created} planned={Planned} skipped={Skipped} errors={ErrorsCount}",
+                series.ID,
+                sw.ElapsedMilliseconds,
+                fileData?.Mappings?.Count ?? 0,
+                created,
+                planned,
+                skipped,
+                errors.Count
+            );
             return (created, skipped, errors, planned);
-        }
-
-        private string? ResolveSourcePath(Shoko.Plugin.Abstractions.DataModels.IVideoFile location, string importRoot)
-        {
-            string original = location.Path;
-            if (!string.IsNullOrWhiteSpace(original) && File.Exists(original))
-                return original;
-
-            string relative = location.RelativePath?.TrimStart('/', '\\') ?? string.Empty;
-            if (!string.IsNullOrWhiteSpace(relative))
-            {
-                string candidate = Path.Combine(importRoot, VfsShared.NormalizeSeparators(relative));
-                if (File.Exists(candidate))
-                    return candidate;
-            }
-
-            return null;
         }
 
         private void LinkMetadata(string sourceDir, string destDir, HashSet<string> reportedDirs)
@@ -341,12 +390,20 @@ namespace ShokoRelay.Vfs
             if (!reportedDirs.Add(dirKey))
                 return;
 
-            foreach (var file in Directory.EnumerateFiles(sourceDir))
+            // Prefer run-level metadata file cache (stores only relevant metadata files) to avoid full directory scans
+            string[] candidates;
+            if (_metadataFileCacheForBuild != null && _metadataFileCacheForBuild.TryGetValue(sourceDir, out var cached))
+                candidates = cached;
+            else
             {
-                string ext = Path.GetExtension(file);
-                if (!MetadataExtensions.Contains(ext))
-                    continue;
+                candidates = Directory.Exists(sourceDir) ? Directory.EnumerateFiles(sourceDir).Where(f => MetadataExtensions.Contains(Path.GetExtension(f))).ToArray() : Array.Empty<string>();
 
+                if (_metadataFileCacheForBuild != null)
+                    _metadataFileCacheForBuild[sourceDir] = candidates;
+            }
+
+            foreach (var file in candidates)
+            {
                 string name = Path.GetFileName(file);
                 string destPath = Path.Combine(destDir, name);
 
@@ -358,12 +415,12 @@ namespace ShokoRelay.Vfs
         {
             string seriesFolder = series.ID.ToString();
 
-            var fileData = MapHelper.GetSeriesFileData(series);
+            var fileData = GetSeriesFileDataCached(series);
             var seriesPaths = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
 
             foreach (var mapping in fileData.Mappings)
             {
-                foreach (var location in mapping.Video.Locations)
+                foreach (var location in mapping.Video.Files)
                 {
                     string? importRoot = VfsShared.ResolveImportRootPath(location);
                     if (string.IsNullOrWhiteSpace(importRoot))
@@ -386,13 +443,39 @@ namespace ShokoRelay.Vfs
             }
         }
 
-        private void LinkSubtitles(string sourceFile, string sourceDir, string destBaseName, string destDir, HashSet<string> reportedDirs, ref int planned, ref int skipped, List<string> errors)
+        private void LinkSubtitles(
+            string sourceFile,
+            string sourceDir,
+            string destBaseName,
+            string destDir,
+            HashSet<string> reportedDirs,
+            ref int planned,
+            ref int skipped,
+            List<string> errors,
+            IDictionary<string, string[]>? subFileCache = null
+        )
         {
             if (string.IsNullOrWhiteSpace(sourceDir) || !Directory.Exists(sourceDir))
                 return;
 
             string originalBase = Path.GetFileNameWithoutExtension(sourceFile);
-            foreach (var sub in Directory.EnumerateFiles(sourceDir))
+            // Use cached subtitle file list when available to avoid repeated Directory.EnumerateFiles scans
+            string[] candidates;
+            if (subFileCache != null && subFileCache.TryGetValue(sourceDir, out var cached))
+                candidates = cached;
+            else
+            {
+                var dirSw = Stopwatch.StartNew();
+                // Cache only subtitle files (filter early) to reduce memory and work
+                candidates = Directory.Exists(sourceDir) ? Directory.GetFiles(sourceDir).Where(f => SubtitleExtensions.Contains(Path.GetExtension(f))).ToArray() : Array.Empty<string>();
+                dirSw.Stop();
+                if (dirSw.ElapsedMilliseconds > 50)
+                    Logger.Debug("Directory.GetFiles({SourceDir}) took {Elapsed}ms and returned {Count} entries", sourceDir, dirSw.ElapsedMilliseconds, candidates.Length);
+                if (subFileCache != null)
+                    subFileCache[sourceDir] = candidates;
+            }
+
+            foreach (var sub in candidates)
             {
                 string ext = Path.GetExtension(sub);
                 if (!SubtitleExtensions.Contains(ext))
@@ -418,15 +501,13 @@ namespace ShokoRelay.Vfs
             }
         }
 
-        private static bool IsSafeToDelete(string path)
+        // Helper used by BuildSeries/PruneSeries to reuse MapHelper results for the duration of a VFS build
+        private MapHelper.SeriesFileData GetSeriesFileDataCached(Shoko.Abstractions.Metadata.Shoko.IShokoSeries series)
         {
-            if (string.IsNullOrWhiteSpace(path))
-                return false;
+            if (_seriesFileDataCacheForBuild == null)
+                return MapHelper.GetSeriesFileData(series);
 
-            string full = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            string? root = Path.GetPathRoot(full)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-
-            return !string.Equals(full, root, StringComparison.OrdinalIgnoreCase);
+            return _seriesFileDataCacheForBuild.GetOrAdd(series.ID, _ => MapHelper.GetSeriesFileData(series));
         }
     }
 }

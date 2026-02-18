@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
-using Shoko.Plugin.Abstractions.DataModels;
+using Shoko.Abstractions.Metadata;
+using Shoko.Abstractions.Metadata.Anidb;
 
 namespace ShokoRelay.Helpers
 {
@@ -106,13 +107,42 @@ namespace ShokoRelay.Helpers
 
         public static object[] GetFilteredTags(ISeries series)
         {
-            if (series.Tags == null)
+            var shokoTags = (series as Shoko.Abstractions.Metadata.Shoko.IShokoSeries)?.Tags;
+            if (shokoTags == null)
                 return Array.Empty<object>();
 
             var userBlacklist = ShokoRelay.Settings.TagBlacklist.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
 
-            return series
-                .Tags.Select(t => t.Name)
+            // Respect RelayConfig.MinimumTagWeight for AniDB tags. Only AniDB-tagged names are weight-filtered;
+            // custom/Shoko tags without a corresponding AniDB tag are kept. Apply this filter BEFORE blacklisting.
+            int minWeight = (int)ShokoRelay.Settings.MinimumTagWeight;
+            IReadOnlyDictionary<string, int>? anidbWeights = null;
+            if (minWeight > 0 && series is Shoko.Abstractions.Metadata.Shoko.IShokoSeries shokoSeries && shokoSeries.AnidbAnime?.Tags is IReadOnlyList<IAnidbTagForAnime> anidbTags && anidbTags.Any())
+            {
+                anidbWeights = anidbTags.ToDictionary(t => t.Name ?? string.Empty, t => t.Weight, StringComparer.OrdinalIgnoreCase);
+            }
+
+            return shokoTags
+                // Weight filter (applied before blacklist)
+                .Where(t =>
+                {
+                    if (string.IsNullOrWhiteSpace(t.Name))
+                        return false;
+
+                    // Apply AniDB weight filtering only when weights are available.
+                    if (anidbWeights != null)
+                    {
+                        if (anidbWeights.TryGetValue(t.Name, out var w))
+                            return w >= minWeight;
+
+                        // Tag not present in AniDB weights => treat as custom/Shoko tag and keep it.
+                        return true;
+                    }
+
+                    // No AniDB weights configured => keep the tag.
+                    return true;
+                })
+                .Select(t => t.Name)
                 .Where(tagName => !string.IsNullOrWhiteSpace(tagName) && !TagBlacklistAniDBHelpers.Contains(tagName) && !userBlacklist.Contains(tagName, StringComparer.OrdinalIgnoreCase))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Select(tagName => new { tag = TitleCase(tagName) })

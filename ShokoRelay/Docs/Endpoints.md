@@ -13,7 +13,8 @@ POST /matches                                                 -> Match
 ```
 
 - Purpose: agent discovery & file->series quick-match used by Plex / agent match flows.
-- Match params: `name` query OR POST body `{ Filename: string }` (will attempt PathEndsWith lookup).
+- Match params: `name` query OR POST body `{ Filename: string }`.
+  - The endpoint extracts a Shoko file id from the supplied filename/path (expects the VFS-style `[ShokoFileId]` token in the filename). If a Shoko file id cannot be determined the match response will be empty.
 
 ---
 
@@ -75,16 +76,17 @@ GET|POST /plex/syncwatched[?dryRun={true|false}&sinceHours={int}]
 ```
 
 - Purpose: synchronize watched-state reported by Plex into Shoko user data.
+
 - Query parameters:
   - `dryRun` (optional, bool) — when `true` the endpoint will **not** write any changes to Shoko; instead it returns a detailed audit of every change it would have made (developer/testing only).
 
-Behavior
+Behaviour
 
 - The plugin fetches watched-state for:
   - the configured Plex token (the Plex "admin"/owner account), and
   - any managed Plex usernames listed in `RelayConfig.ExtraPlexUsers`. These are configured in the dashboard UI (comma separated).
 
-- Behavior for managed/home users:
+- Behaviour for managed/home users:
   - Extra Plex usernames may optionally include a 4‑digit PIN using the format `username;1234`. Example: `alice;1234, bob`.
     - If a semicolon is present and the value after it is exactly four digits, that four‑digit value is treated as the user's PIN and will be supplied to the Plex `/switch` call as `&pin=1234`.
     - If the semicolon is present but the part after it is not a 4‑digit integer (for example `user;1`), the entire string is treated as the username (the semicolon is preserved in the username).
@@ -149,6 +151,40 @@ Examples
 
 ---
 
+## Plex: Webhook (Auto‑Scrobble)
+
+```
+POST /plex/webhook                                            -> PluginPlexWebhook
+```
+
+- Purpose: receive Plex "media.scrobble" webhook events and mark the corresponding Shoko episode watched.
+- Body: Plex sends either form-encoded `payload` (string) or raw JSON — the controller accepts both formats.
+- Behaviour:
+  - Only processes `media.scrobble` events.
+  - Ignored unless `RelayConfig.AutoScrobble` is enabled.
+  - Only accepts scrobbles from the configured admin Plex account (token owner) and any usernames configured in `RelayConfig.ExtraPlexUsers`.
+  - Extracts the Shoko episode id from the `Metadata.guid` (agent GUID produced by this plugin). If no Shoko GUID is present the event is ignored (`reason: no_shoko_guid`).
+  - Marks the episode watched for the primary Shoko user and returns `{ status: "ok", marked: <bool> }` on success.
+
+---
+
+## Shoko: Import & Remove‑Missing
+
+```
+POST /shoko/import                                            -> RunShokoImport
+POST /shoko/remove-missing                                    -> RemoveMissingFiles
+```
+
+- `POST /shoko/import` — triggers a server import via Shoko Server v3 API (dashboard exposes this as the **Import** button).
+  - Query: `onlyUnrecognized` (optional, defaults to `true`) — currently unused by the controller but accepted for future filtering.
+  - Response: `{ status: "ok", scanned: [...], scannedCount: n }`.
+
+- `POST /shoko/remove-missing` — calls Shoko v3 "RemoveMissingFiles" action.
+  - Query: `removeFromMyList` (optional, defaults to `true`).
+  - Response: `{ status: "ok", response: <server-response> }`.
+
+---
+
 ## Plex metadata endpoints
 
 ```
@@ -162,7 +198,7 @@ GET  /metadata/{ratingKey}/grandchildren                      -> GetGrandchildre
   - Season: `{ShokoSeriesID}s{SeasonNumber}`
   - Series: `{ShokoSeriesID}`
   - Note: `ratingKey` formats used by the metadata endpoints use the `PlexConstants` prefixes: `s` = season, `e` = episode, `p` = part.
-- `GetMetadata` behavior:
+- `GetMetadata` behaviour:
   - Episode requests return episode metadata (uses TMDB per-episode overrides when available).
   - Season requests return a season metadata object (optionally include episode children).
   - Series requests return series metadata (optionally include all seasons as children).
@@ -177,7 +213,7 @@ GET  /debug/series/{shokoSeriesId}                            -> DebugSeries (re
 ```
 
 - Purpose: inspect the exact inputs, intermediate steps, and outputs that `MapHelper.BuildFileMappings` uses when assigning Plex coordinates (`PlexCoords`), part/index decisions, TMDB overrides, and deduplication.
-- Returns: `FileMappingDebugInfo` / `EpisodeDebugInfo` payloads containing per-file filename/path, `FileIndex`/`FileCount`, `HasPlexSplitTag`, `AllowPartSuffix`, `FileIndexParam`, `FinalCoords`, selected TMDB episode (if any), sorted/filtered/deduped lists, per-episode `CrossRefPercentage` and `CrossRefOrder` (when available), and a **final `FileMapping` summary** (primitive fields only) when available.
+- Returns: `FileMappingDebugInfo` / `EpisodeDebugInfo` payloads containing per-file filename/path, `FileIndex`/`FileCount`, `HasPlexSplitTag`, `AllowPartSuffix`, `FileIndexParam`, `FinalCoords`, selected TMDB episode (if any), `DedupedCoords`, `PrimaryEpisode` (summary), an optional `SkipReason`, and a **final `FileMapping` summary** (primitive fields only) when available.
 - Usage: helpful for debugging why a file is mapped to the season/episode it is, or why it is excluded.
 
 ---
@@ -240,10 +276,11 @@ force (bool)           : overwrite existing 'Theme.mp3' (default 'false').
 
 ---
 
-## Notes & behaviors
+## Notes & Behaviors
 
 - TMDB episode-numbering: when enabled, the controller/mapper prefers per-episode TMDB links (`IShokoEpisode.TmdbEpisodes`) for coordinate assignment.
 - Hidden episodes (`IShokoEpisode.IsHidden`) are excluded from VFS and metadata lists.
+- 'Other' type episodes without a TMDB match will attempt to place themselves into 'Season 1' or 'Season 0' (Specials) if either is empty. Otherwise, they will be placed in 'Featurettes' and display as extras in Plex.
 - `MapHelper` produces `FileMapping` objects consumed by `VfsHelper` and `PlexMetadata` (see `MapHelper.GetSeriesFileData`).
 - Crossover episodes: a crossover is a file/video that is cross-referenced to episodes in more than one distinct AniDB/Shoko series.
   - The VFS build will **not** copy/link local metadata (art, Theme.mp3) or subtitles for crossover files to prevent metadata from one series overwriting another.

@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using NLog;
-using Shoko.Plugin.Abstractions;
+using Shoko.Abstractions.Plugin;
 using ShokoRelay.Config;
 
 namespace ShokoRelay.AnimeThemes;

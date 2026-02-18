@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
-using Shoko.Plugin.Abstractions.DataModels;
-using Shoko.Plugin.Abstractions.DataModels.Shoko;
+using Shoko.Abstractions.Metadata;
+using Shoko.Abstractions.Metadata.Containers;
+using Shoko.Abstractions.Metadata.Shoko;
 using ShokoRelay.Config;
 
 namespace ShokoRelay.Helpers
@@ -39,27 +40,27 @@ namespace ShokoRelay.Helpers
         public static string GetTitleByLanguage(IWithTitles item, string languageSetting)
         {
             if (string.IsNullOrWhiteSpace(languageSetting))
-                return item.PreferredTitle;
+                return item.PreferredTitle?.Value ?? string.Empty;
 
             var languages = languageSetting.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
 
             foreach (var lang in languages)
             {
                 if (lang.Equals("shoko", StringComparison.OrdinalIgnoreCase))
-                    return item.PreferredTitle;
+                    return item.PreferredTitle?.Value ?? string.Empty;
 
                 var titles = item.Titles;
                 for (int i = 0; i < titles.Count; i++)
                 {
                     var t = titles[i];
-                    if (t.LanguageCode.Equals(lang, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(t.Title))
+                    if (t.LanguageCode.Equals(lang, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(t.Value))
                     {
-                        return t.Title;
+                        return t.Value;
                     }
                 }
             }
 
-            return item.PreferredTitle;
+            return item.PreferredTitle?.Value ?? string.Empty;
         }
 
         public static (string DisplayTitle, string SortTitle, string? OriginalTitle) ResolveFullSeriesTitles(ISeries series)
@@ -93,7 +94,7 @@ namespace ShokoRelay.Helpers
             bool hasMultipleTmdbLinks = false;
             if (ep is IShokoEpisode shokoEp)
             {
-                tmdbEpTitle = shokoEp.TmdbEpisodes.FirstOrDefault()?.PreferredTitle;
+                tmdbEpTitle = shokoEp.TmdbEpisodes.FirstOrDefault()?.PreferredTitle?.Value;
                 hasMultipleTmdbLinks = shokoEp.TmdbEpisodes.Count > 1;
             }
 

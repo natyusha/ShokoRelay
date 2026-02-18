@@ -1,9 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Net.Http;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
 using NLog;
 using ShokoRelay.Config;
 
@@ -45,7 +40,7 @@ namespace ShokoRelay.Services
 
             try
             {
-                var importUrl = $"{baseUrl}/api/v3/ImportFolder?apikey={Uri.EscapeDataString(apiKey)}";
+                var importUrl = $"{baseUrl}/api/v3/ManagedFolder?apikey={Uri.EscapeDataString(apiKey)}";
                 Logger.Info("ShokoImportService: fetching import folders from {Url}", importUrl);
 
                 using var res = await http.GetAsync(importUrl, ct).ConfigureAwait(false);

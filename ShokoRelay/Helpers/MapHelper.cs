@@ -1,5 +1,8 @@
-using Shoko.Plugin.Abstractions.DataModels;
-using Shoko.Plugin.Abstractions.DataModels.Shoko;
+using System.Collections.Concurrent;
+using Shoko.Abstractions.Enums;
+using Shoko.Abstractions.Metadata;
+using Shoko.Abstractions.Metadata.Shoko;
+using Shoko.Abstractions.Video;
 using ShokoRelay.Plex;
 using static ShokoRelay.Plex.PlexMapping;
 
@@ -26,37 +29,120 @@ namespace ShokoRelay.Helpers
             var result = new List<FileMapping>();
 
             // Cache VideoList and filter once
-            var seriesEpisodes = series.Episodes.Select(e => (Episode: e, Videos: e.VideoList.ToList())).Where(x => x.Videos.Count > 0 && !IsHidden(x.Episode)).ToList();
+            var seriesEpisodes = new List<(IEpisode Episode, List<IVideo> Videos)>();
+            foreach (var e in series.Episodes)
+            {
+                var videos = e.VideoList.ToList();
+                if (videos.Count > 0 && !IsHidden(e))
+                    seriesEpisodes.Add((e, videos));
+            }
 
             if (seriesEpisodes.Count == 0)
                 return result;
 
-            // Build episode file lists from cached videos
-            var episodeFileLists = seriesEpisodes.ToDictionary(x => x.Episode.ID, x => x.Videos.OrderBy(v => Path.GetFileName(v.Locations.FirstOrDefault()?.Path ?? "")).ToList());
-
-            // Build episode lookup by video ID
-            var videoToEpisodes = new Dictionary<int, List<(IEpisode Episode, PlexCoords Coords)>>();
-            foreach (var (episode, videos) in seriesEpisodes)
+            // Cache the series' TMDB preferred ordering id (used repeatedly when applying TMDB episode-numbering).
+            // Normalize away the default show-ordering (Shoko's API sometimes exposes the show id as the
+            // PreferredOrdering.OrderingID when no alternate ordering is selected). Only keep a non-default
+            // ordering id if it's genuinely an alternate ordering.
+            string? seriesPrefOrderingId = null;
+            if (ShokoRelay.Settings.TMDBEpNumbering)
             {
-                var coords = GetPlexCoordinates(episode); // Compute once per episode
-                foreach (var video in videos)
+                var firstShokoEp = seriesEpisodes.Select(x => x.Episode).OfType<IShokoEpisode>().FirstOrDefault();
+                var tmdbShow = firstShokoEp?.Series?.TmdbShows?.FirstOrDefault();
+                var pref = tmdbShow?.PreferredOrdering?.OrderingID;
+                if (!string.IsNullOrWhiteSpace(pref) && tmdbShow != null)
                 {
-                    if (!videoToEpisodes.TryGetValue(video.ID, out var list))
-                    {
-                        list = [];
-                        videoToEpisodes[video.ID] = list;
-                    }
-                    list.Add((episode, coords));
+                    // If PreferredOrdering.OrderingID equals the show's own ordering id (i.e. the show id string),
+                    // treat it as "no alternate ordering" and ignore.
+                    var showDefaultOrderingId = tmdbShow.ID.ToString();
+                    if (!string.Equals(pref, showDefaultOrderingId, StringComparison.OrdinalIgnoreCase))
+                        seriesPrefOrderingId = pref;
                 }
             }
 
+            // Build episode file lists from cached videos
+            var episodeFileLists = seriesEpisodes.ToDictionary(x => x.Episode.ID, x => x.Videos.OrderBy(v => Path.GetFileName(v.Files.FirstOrDefault()?.Path ?? "")).ToList());
+
+            // Build episode lookup by video ID (also cache which seasons have files so Featurettes fallback can be O(1))
+
+            // Precompute episode coords in parallel to reduce wall-time when GetPlexCoordinates performs lazy loads
+            var coordsByEpisode = new ConcurrentDictionary<int, PlexCoords>();
+            Parallel.ForEach(
+                seriesEpisodes,
+                pair =>
+                {
+                    var episode = pair.Episode;
+                    var coords = GetPlexCoordinates(episode, seriesPrefOrderingId);
+                    coordsByEpisode[episode.ID] = coords;
+                }
+            );
+
+            // Build video->episode mapping in parallel into a concurrent structure, then materialize to a Dictionary
+            var videoToEpisodesConcurrent = new ConcurrentDictionary<int, ConcurrentBag<(IEpisode Episode, PlexCoords Coords)>>();
+            var seasonsSet = new ConcurrentDictionary<int, byte>();
+
+            Parallel.ForEach(
+                seriesEpisodes,
+                pair =>
+                {
+                    var episode = pair.Episode;
+                    var videos = pair.Videos;
+                    var coords = coordsByEpisode[episode.ID];
+
+                    seasonsSet.TryAdd(coords.Season, 0);
+
+                    foreach (var video in videos)
+                    {
+                        var bag = videoToEpisodesConcurrent.GetOrAdd(video.ID, _ => new ConcurrentBag<(IEpisode Episode, PlexCoords Coords)>());
+                        bag.Add((episode, coords));
+                    }
+                }
+            );
+
+            // Materialize concurrent results into the expected Dictionary<int, List<...>> shape
+            var videoToEpisodes = videoToEpisodesConcurrent.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ToList());
+
+            var seasonsWithFiles = new HashSet<int>(seasonsSet.Keys);
+            bool hasSeasonOther = seasonsWithFiles.Contains(PlexConstants.SeasonOther);
+
+            // video->episodes mapping built
+
+            // Only compute season-occupancy flags when we have SeasonOther episodes (Featurettes fallback only matters then)
+            bool cachedSeason1HasFiles = false;
+            bool cachedSeason0HasFiles = false;
+            if (hasSeasonOther)
+            {
+                cachedSeason1HasFiles = seasonsWithFiles.Contains(PlexConstants.SeasonStandard);
+                cachedSeason0HasFiles = seasonsWithFiles.Contains(PlexConstants.SeasonSpecials);
+            }
+
             // Get unique videos sorted by filename
-            var allVideos = seriesEpisodes.SelectMany(x => x.Videos).GroupBy(v => v.ID).Select(g => g.First()).OrderBy(v => Path.GetFileName(v.Locations.FirstOrDefault()?.Path ?? "")).ToList();
+            var allVideos = seriesEpisodes.SelectMany(x => x.Videos).GroupBy(v => v.ID).Select(g => g.First()).OrderBy(v => Path.GetFileName(v.Files.FirstOrDefault()?.Path ?? "")).ToList();
 
             foreach (var video in allVideos)
             {
                 if (!videoToEpisodes.TryGetValue(video.ID, out var epList) || epList.Count == 0)
+                {
                     continue;
+                }
+
+                // If a single file maps to multiple episodes with differing episode types,
+                // the first type listed in the file's cross-reference ordering (EpisodeOrder)
+                // is authoritative — when present we filter to that type and do not apply other tiebreaks.
+                if (epList.Count > 1 && epList.Select(x => x.Episode.Type).Distinct().Count() > 1)
+                {
+                    var epIdSet = epList.Select(x => x.Episode.ID).ToHashSet();
+
+                    // Find the first cross-reference that corresponds to one of the episodes in epList
+                    var firstXref = video.CrossReferences?.FirstOrDefault(cr => cr.ShokoEpisode != null && epIdSet.Contains(cr.ShokoEpisode!.ID));
+                    if (firstXref?.ShokoEpisode != null)
+                    {
+                        var preferredEpisodeId = firstXref.ShokoEpisode.ID;
+                        var primaryType = epList.First(x => x.Episode.ID == preferredEpisodeId).Episode.Type;
+                        epList = epList.Where(x => x.Episode.Type == primaryType).ToList();
+                    }
+                    // If no matching cross-reference found, do not filter by type (preserve all relations)
+                }
 
                 // Sort by pre-computed coords
                 var sortedEps = epList.OrderBy(x => x.Coords.Season).ThenBy(x => x.Coords.Episode).ToList();
@@ -65,34 +151,86 @@ namespace ShokoRelay.Helpers
                 var (filteredEps, deduped) = FilterAndDedupeByPrimaryType(sortedEps, video);
 
                 if (deduped.Count == 0)
+                {
                     continue;
+                }
 
                 var (firstEp, _) = deduped[0];
                 var epId = firstEp.ID;
                 var episodes = deduped.Select(x => x.Episode).ToList();
 
                 int fileIndex = episodeFileLists.TryGetValue(epId, out var files) ? files.FindIndex(x => x.ID == video.ID) : 0;
+
                 int fileCount = files?.Count ?? 1;
 
-                string fileName = Path.GetFileName(video.Locations.FirstOrDefault()?.Path ?? "");
+                // Access the primary file path once (avoid repeated property access that may trigger lazy loads)
+                var firstFile = video.Files?.FirstOrDefault();
+                var firstPath = firstFile?.Path;
+
+                string fileName = Path.GetFileName(firstPath ?? "");
 
                 bool allowPartSuffix = ComputeAllowPartSuffix(deduped, fileCount, fileName);
 
                 int? fileIndexParam = allowPartSuffix && fileCount > 1 ? fileIndex : null;
 
-                var coords = GetPlexCoordinatesForFile(episodes, fileIndexParam);
-                // Apply Featurettes fallback rule: if coords point to SeasonOther, try Season 1 -> Season 0 -> keep Featurettes
-                coords = ApplyFeaturettesSeasonFallback(series, coords);
+                PlexCoords coords;
+
+                if (deduped.Count == 1)
+                {
+                    // Reuse the episode's precomputed coords for the common single-ep case,
+                    // but if this is a multi-part file and TMDB episode-numbering is enabled
+                    // prefer a file-specific TMDB selection (avoids returning episode-level ranges).
+                    var ded0 = deduped[0];
+                    bool preferFileSpecificTmdb = false;
+                    if (fileCount > 1 && ShokoRelay.Settings.TMDBEpNumbering && ded0.Episode is IShokoEpisode shokoEpisodeLocal && shokoEpisodeLocal.TmdbEpisodes?.Any() == true)
+                    {
+                        // Only use the series-level preferred ordering (do not probe per-episode); MapHelper
+                        // computed `seriesPrefOrderingId` once above and normalized default ordering ids away.
+                        string? showPrefId = seriesPrefOrderingId;
+                        var tmdbEps = string.IsNullOrWhiteSpace(showPrefId)
+                            ? shokoEpisodeLocal.TmdbEpisodes.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber).ToList()
+                            : SelectPreferredTmdbOrdering(shokoEpisodeLocal.TmdbEpisodes, showPrefId);
+
+                        if (fileIndex < tmdbEps.Count)
+                            preferFileSpecificTmdb = true;
+                    }
+
+                    if (preferFileSpecificTmdb)
+                        coords = GetPlexCoordinatesForFile(episodes, fileIndexParam);
+                    else
+                        coords = ded0.Coords;
+                }
+                else
+                {
+                    coords = GetPlexCoordinatesForFile(episodes, fileIndexParam);
+                }
+
+                // Apply Featurettes fallback rule only when the file would be placed into Featurettes (SeasonOther)
+                if (coords.Season == PlexConstants.SeasonOther)
+                    coords = ApplyFeaturettesSeasonFallbackCached(coords, cachedSeason1HasFiles, cachedSeason0HasFiles);
+
                 int? partIndex = allowPartSuffix && fileCount > 1 ? fileIndex + 1 : null;
                 int partCount = allowPartSuffix ? fileCount : 1;
 
                 object? tmdbEpisode = null;
                 if (fileCount > 1 && ShokoRelay.Settings.TMDBEpNumbering && firstEp is IShokoEpisode shokoEp && shokoEp.TmdbEpisodes?.Any() == true)
                 {
-                    var tmdbEps = shokoEp.TmdbEpisodes.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber).ToList();
+                    string? showPrefId = seriesPrefOrderingId ?? shokoEp.Series?.TmdbShows?.FirstOrDefault()?.PreferredOrdering?.OrderingID;
+                    var tmdbEps = string.IsNullOrWhiteSpace(showPrefId)
+                        ? shokoEp.TmdbEpisodes.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber).ToList()
+                        : SelectPreferredTmdbOrdering(shokoEp.TmdbEpisodes, showPrefId);
 
                     if (fileIndex < tmdbEps.Count)
-                        tmdbEpisode = tmdbEps[fileIndex];
+                    {
+                        var sel = tmdbEps[fileIndex];
+                        var ord = Plex.PlexMapping.GetOrderingCoords(sel, showPrefId);
+                        tmdbEpisode = new
+                        {
+                            SeasonNumber = ord.Season,
+                            EpisodeNumber = ord.Episode,
+                            PreferredTitle = sel.PreferredTitle?.Value,
+                        };
+                    }
                 }
 
                 result.Add(new FileMapping(video, episodes, firstEp, coords, fileName, partIndex, partCount, tmdbEpisode));
@@ -106,41 +244,75 @@ namespace ShokoRelay.Helpers
             return e is IShokoEpisode shokoEp && shokoEp.IsHidden;
         }
 
-        // Returns a map of ShokoEpisodeId -> summed cross-reference percentage for the given video.
-        // If video is null or has no cross-references, returns an empty dictionary.
-        private static Dictionary<int, int> GetCrossRefMap(IVideo? video)
-        {
-            return video?.CrossReferences?.Where(cr => cr.ShokoEpisode != null).GroupBy(cr => cr.ShokoEpisode!.ID).ToDictionary(g => g.Key, g => g.Sum(cr => cr.Percentage))
-                ?? new Dictionary<int, int>();
-        }
-
-        // Select primary episode type (using cross-ref percentages when available) and deduplicate coordinates.
-        // Returns (filteredEps, dedupedEps). Accepts an optional precomputed crossRefMap to avoid recomputing.
+        // Select primary episode type and deduplicate coordinates.
+        // Returns (filteredEps, dedupedEps).
         private static (List<(IEpisode Episode, PlexCoords Coords)> Filtered, List<(IEpisode Episode, PlexCoords Coords)> Deduped) FilterAndDedupeByPrimaryType(
             List<(IEpisode Episode, PlexCoords Coords)> sortedEps,
-            IVideo? video,
-            Dictionary<int, int>? crossRefMap = null
+            IVideo? video
         )
         {
-            var crMap = crossRefMap ?? GetCrossRefMap(video);
-
-            // episodeId -> minimum cross-ref Order (if present on the video). Lower = higher priority.
-            var orderMap =
-                video?.CrossReferences?.Where(cr => cr.ShokoEpisode != null).GroupBy(cr => cr.ShokoEpisode!.ID).ToDictionary(g => g.Key, g => g.Min(cr => cr.Order)) ?? new Dictionary<int, int>();
+            // If this video maps to multiple episodes of differing AniDB/TMDB types,
+            // the first type listed in the video's cross-reference ordering (EpisodeOrder)
+            // is authoritative — when present we filter to that type and do not apply other tiebreaks.
+            if (sortedEps.Count > 1 && sortedEps.Select(x => x.Episode.Type).Distinct().Count() > 1 && video?.CrossReferences?.Count > 0)
+            {
+                var epIdSet = sortedEps.Select(x => x.Episode.ID).ToHashSet();
+                var firstXref = video.CrossReferences.FirstOrDefault(cr => cr.ShokoEpisode != null && epIdSet.Contains(cr.ShokoEpisode!.ID));
+                if (firstXref?.ShokoEpisode != null)
+                {
+                    var preferredEpisodeId = firstXref.ShokoEpisode.ID;
+                    var primaryType = sortedEps.First(x => x.Episode.ID == preferredEpisodeId).Episode.Type;
+                    sortedEps = sortedEps.Where(x => x.Episode.Type == primaryType).ToList();
+                }
+            }
 
             List<(IEpisode Episode, PlexCoords Coords)> filteredEps;
 
             var distinctTypes = sortedEps.Select(x => x.Episode.Type).Distinct().ToList();
             if (distinctTypes.Count > 1)
             {
-                filteredEps = ChoosePrimaryTypeAndFilter(sortedEps, orderMap, crMap);
+                // Ambiguous multi-type relations — no fallback logic applies (file's first cross-ref is authoritative).
+                // Treat as ambiguous and skip mapping for this file.
+                filteredEps = new List<(IEpisode Episode, PlexCoords Coords)>();
             }
             else
             {
                 filteredEps = new List<(IEpisode Episode, PlexCoords Coords)>(sortedEps);
             }
 
-            var deduped = DeduplicateByCoords(filteredEps);
+            // Compute file cross-reference position map once and reuse for dedupe + primary selection.
+            Dictionary<int, int>? xrefPosMap = null;
+            if (video?.CrossReferences?.Count > 0)
+            {
+                try
+                {
+                    xrefPosMap = video.CrossReferences.Where(cr => cr.ShokoEpisode != null).Select((cr, idx) => (id: cr.ShokoEpisode!.ID, idx)).ToDictionary(t => t.id, t => t.idx);
+                }
+                catch
+                {
+                    xrefPosMap = null;
+                }
+            }
+
+            var deduped = DeduplicateByCoords(filteredEps, video, xrefPosMap);
+
+            // Prefer the episode that appears earliest in the file's cross-reference list
+            // (this matches the behavior consumers see from the server API `/File/{id}/Episode`).
+            // We only reorder the `deduped` list so the primary selection (deduped[0]) will
+            // reflect the file's cross-reference precedence without changing dedupe semantics.
+            if (xrefPosMap != null && deduped.Count > 1)
+            {
+                try
+                {
+                    ReorderListByXref(xrefPosMap, deduped);
+                }
+                catch
+                {
+                    // ignore any ordering failures and fall back to existing deterministic behavior
+                }
+            }
+
+            /* FilterAndDedupeByPrimaryType diagnostics removed */
             return (filteredEps, deduped);
         }
 
@@ -156,74 +328,106 @@ namespace ShokoRelay.Helpers
         }
 
         // Extracted helpers to simplify primary-type selection and deduplication logic.
-        private static List<(IEpisode Episode, PlexCoords Coords)> DeduplicateByCoords(List<(IEpisode Episode, PlexCoords Coords)> filteredEps)
+        private static List<(IEpisode Episode, PlexCoords Coords)> DeduplicateByCoords(
+            List<(IEpisode Episode, PlexCoords Coords)> filteredEps,
+            IVideo? video = null,
+            Dictionary<int, int>? xrefPosMap = null
+        )
         {
+            // Deduplicate by (season, episode). When multiple episodes map to the same coordinates,
+            // prefer episodes based on explicit episode relations where possible.
             var deduped = new List<(IEpisode Episode, PlexCoords Coords)>();
-            var seenCoords = new HashSet<(int Season, int Episode)>();
-            foreach (var entry in filteredEps)
+            var coordIndex = new Dictionary<(int Season, int Episode), int>();
+
+            for (int i = 0; i < filteredEps.Count; i++)
             {
+                var entry = filteredEps[i];
                 var key = (entry.Coords.Season, entry.Coords.Episode);
-                if (!seenCoords.Add(key))
+
+                if (!coordIndex.TryGetValue(key, out var existingIdx))
+                {
+                    coordIndex[key] = deduped.Count;
+                    deduped.Add(entry);
                     continue;
-                deduped.Add(entry);
+                }
+
+                // Tie: decide whether to replace the existing selected episode for this coord.
+                var existing = deduped[existingIdx];
+
+                // Absolute file cross-reference precedence: if the file lists either the existing or the
+                // current entry in its CrossReferences, prefer whichever appears earlier in that list.
+                // This makes the file's cross-reference ordering authoritative (no fallback overrides).
+                Dictionary<int, int>? localPosMap = xrefPosMap;
+                if (localPosMap == null && video?.CrossReferences?.Count > 0)
+                {
+                    try
+                    {
+                        localPosMap = video.CrossReferences.Where(cr => cr.ShokoEpisode != null).Select((cr, idx) => (id: cr.ShokoEpisode!.ID, idx)).ToDictionary(t => t.id, t => t.idx);
+                    }
+                    catch
+                    {
+                        localPosMap = null;
+                    }
+                }
+
+                if (localPosMap != null)
+                {
+                    int existingPos = localPosMap.TryGetValue(existing.Episode.ID, out var epPos) ? epPos : -1;
+                    int entryPos = localPosMap.TryGetValue(entry.Episode.ID, out var enPos) ? enPos : -1;
+
+                    if (existingPos >= 0 || entryPos >= 0)
+                    {
+                        if (existingPos >= 0 && (entryPos == -1 || existingPos <= entryPos))
+                        {
+                            // existing appears earlier (or only existing is referenced) -> keep it
+                            continue;
+                        }
+
+                        if (entryPos >= 0 && (existingPos == -1 || entryPos < existingPos))
+                        {
+                            // entry appears earlier -> replace existing with entry
+                            deduped[existingIdx] = entry;
+                            continue;
+                        }
+                    }
+                }
             }
+
             return deduped;
         }
 
-        private static List<(IEpisode Episode, PlexCoords Coords)> ChoosePrimaryTypeAndFilter(
-            List<(IEpisode Episode, PlexCoords Coords)> sortedEps,
-            Dictionary<int, int> orderMap,
-            Dictionary<int, int> crMap
-        )
+        private static void ReorderListByXref(Dictionary<int, int> xrefPosMap, List<(IEpisode Episode, PlexCoords Coords)> list)
         {
-            // Build type -> list of Order values (if present)
-            var typeOrders = sortedEps
-                .GroupBy(x => x.Episode.Type)
-                .ToDictionary(g => g.Key, g => g.Select(se => orderMap.TryGetValue(se.Episode.ID, out var o) ? (int?)o : null).Where(v => v.HasValue).Select(v => v!.Value).ToList());
-
-            var anyOrderPresent = typeOrders.Any(kv => kv.Value.Count > 0);
-            if (anyOrderPresent)
+            if (xrefPosMap == null || list == null || list.Count <= 1)
+                return;
+            int bestIdx = -1;
+            int bestPos = int.MaxValue;
+            for (int i = 0; i < list.Count; i++)
             {
-                // Order-first logic (use Order; tie-break by percentage sums)
-                var typeMinOrder = typeOrders.ToDictionary(kv => kv.Key, kv => kv.Value.Count > 0 ? kv.Value.Min() : int.MaxValue);
-                var lowestOrder = typeMinOrder.Values.Min();
-                var orderWinners = typeMinOrder.Where(kv => kv.Value == lowestOrder).Select(kv => kv.Key).ToList();
-
-                if (orderWinners.Count == 1)
+                var id = list[i].Episode.ID;
+                if (xrefPosMap.TryGetValue(id, out var pos) && pos < bestPos)
                 {
-                    var primaryType = orderWinners[0];
-                    return sortedEps.Where(x => x.Episode.Type == primaryType).ToList();
+                    bestPos = pos;
+                    bestIdx = i;
                 }
-
-                // tie between types with same best Order -> break tie using percentage sums
-                var typeScores = sortedEps.GroupBy(x => x.Episode.Type).ToDictionary(g => g.Key, g => g.Sum(entry => crMap.TryGetValue(entry.Episode.ID, out var p) ? p : 0));
-                var bestScore = typeScores.Where(kv => orderWinners.Contains(kv.Key)).Max(kv => kv.Value);
-                var winners = typeScores.Where(kv => orderWinners.Contains(kv.Key) && kv.Value == bestScore).Select(kv => kv.Key).ToList();
-                if (winners.Count == 1)
-                    return sortedEps.Where(x => x.Episode.Type == winners[0]).ToList();
-
-                // fallback: prefer earliest coordinate's type
-                var primaryFallback = sortedEps[0].Episode.Type;
-                return sortedEps.Where(x => x.Episode.Type == primaryFallback).ToList();
             }
-
-            // No Order present -> use summed percentage per type (existing behavior)
-            var scores = sortedEps.GroupBy(x => x.Episode.Type).ToDictionary(g => g.Key, g => g.Sum(entry => crMap.TryGetValue(entry.Episode.ID, out var p) ? p : 0));
-            var maxScore = scores.Values.DefaultIfEmpty(0).Max();
-            var winnersByScore = scores.Where(kv => kv.Value == maxScore).Select(kv => kv.Key).ToList();
-
-            if (maxScore > 0 && winnersByScore.Count == 1)
-                return sortedEps.Where(x => x.Episode.Type == winnersByScore[0]).ToList();
-
-            // fallback: earliest coordinate's type
-            var fallbackType = sortedEps[0].Episode.Type;
-            return sortedEps.Where(x => x.Episode.Type == fallbackType).ToList();
+            if (bestIdx > 0)
+            {
+                var preferred = list[bestIdx];
+                list.RemoveAt(bestIdx);
+                list.Insert(0, preferred);
+            }
         }
 
         // If a file would be placed into Featurettes (SeasonOther), prefer to place it into Season 1 if Season 1 is empty;
         // otherwise, if Season 1 has files, prefer Season 0 (Specials) if empty; otherwise leave in Featurettes.
-        private static PlexCoords ApplyFeaturettesSeasonFallback(ISeries series, PlexCoords coords)
+        private static PlexCoords ApplyFeaturettesSeasonFallback(ISeries? series, PlexCoords coords)
         {
+            // Backward-compatible (rare) path kept for debug/endpoints that call this directly.
+            // If we don't have series context, leave coords unchanged.
+            if (series == null)
+                return coords;
+
             if (coords.Season != PlexConstants.SeasonOther)
                 return coords;
 
@@ -246,20 +450,30 @@ namespace ShokoRelay.Helpers
             return coords;
         }
 
+        // Fast variant that uses precomputed per-series occupancy flags to avoid O(N) scans when called repeatedly
+        private static PlexCoords ApplyFeaturettesSeasonFallbackCached(PlexCoords coords, bool season1HasFiles, bool season0HasFiles)
+        {
+            if (coords.Season != PlexConstants.SeasonOther)
+                return coords;
+
+            if (!season1HasFiles)
+            {
+                coords.Season = PlexConstants.SeasonStandard;
+                return coords;
+            }
+
+            if (!season0HasFiles)
+            {
+                coords.Season = PlexConstants.SeasonSpecials;
+                return coords;
+            }
+
+            return coords;
+        }
+
         // Detailed debug information about how a single file is mapped by BuildFileMappings.
-        public record EpisodeDebugInfo(
-            int Id,
-            string Title,
-            EpisodeType Type,
-            int? SeasonNumber,
-            int EpisodeNumber,
-            bool IsHidden,
-            int? CrossRefPercentage,
-            int? CrossRefOrder,
-            PlexCoords EpisodeCoords,
-            object? TmdbEpisodes,
-            List<string> FileNames
-        );
+        // Trimmed: no per-episode link/TMDB dumps (they were redundant after cross-ref authoritative behavior).
+        public record EpisodeDebugInfo(int Id, string Title, EpisodeType Type, int? SeasonNumber, int EpisodeNumber, bool IsHidden, PlexCoords EpisodeCoords, List<string> FileNames);
 
         public record TmdbEpisodeSummary(int? SeasonNumber, int EpisodeNumber, string? PreferredTitle);
 
@@ -289,13 +503,11 @@ namespace ShokoRelay.Helpers
             int PartCount,
             TmdbEpisodeSummary? TmdbEpisodeSelected,
             EpisodeDebugInfo? PrimaryEpisode,
-            List<EpisodeDebugInfo> VideoEpisodes,
-            List<EpisodeDebugInfo> SortedEps,
-            List<EpisodeDebugInfo> FilteredEps,
             List<(int Season, int Episode)> DedupedCoords,
             Dictionary<int, List<string>> EpisodeFileLists,
             FileMappingSummary? FinalMapSummary,
-            bool TmdbEpNumberingSetting
+            bool TmdbEpNumberingSetting,
+            string? SkipReason
         );
 
         public static FileMappingDebugInfo? GetFileMappingDebug(ISeries series, int videoId)
@@ -310,53 +522,22 @@ namespace ShokoRelay.Helpers
             var includedEpisodes = allSeriesEpisodes.Where(x => x.Videos.Count > 0 && !IsHidden(x.Episode)).ToList();
 
             // Per-episode ordered file lists (same ordering used by BuildFileMappings)
-            var episodeFileLists = includedEpisodes.ToDictionary(x => x.Episode.ID, x => x.Videos.OrderBy(v => Path.GetFileName(v.Locations.FirstOrDefault()?.Path ?? "")).ToList());
+            var episodeFileLists = includedEpisodes.ToDictionary(x => x.Episode.ID, x => x.Videos.OrderBy(v => Path.GetFileName(v.Files.FirstOrDefault()?.Path ?? "")).ToList());
 
             // Helper to get episode debug data
-            static EpisodeDebugInfo ToEpDebug(IEpisode ep, int? crossRefPercentage = null, int? crossRefOrder = null)
+            static EpisodeDebugInfo ToEpDebug(IEpisode ep)
             {
                 var coords = GetPlexCoordinates(ep);
-                object? tmdb = null;
-                if (ep is IShokoEpisode sh)
-                    tmdb = sh
-                        .TmdbEpisodes?.Select(te => new
-                        {
-                            te.SeasonNumber,
-                            te.EpisodeNumber,
-                            te.PreferredTitle,
-                        })
-                        .ToList();
+                var files = ep.VideoList.Select(v => Path.GetFileName(v.Files.FirstOrDefault()?.Path ?? "")).ToList();
 
-                var files = ep.VideoList.Select(v => Path.GetFileName(v.Locations.FirstOrDefault()?.Path ?? "")).ToList();
-
-                return new EpisodeDebugInfo(
-                    ep.ID,
-                    ep.PreferredTitle ?? string.Empty,
-                    ep.Type,
-                    ep.SeasonNumber,
-                    ep.EpisodeNumber,
-                    ep is IShokoEpisode s && s.IsHidden,
-                    crossRefPercentage,
-                    crossRefOrder,
-                    coords,
-                    tmdb,
-                    files
-                );
+                return new EpisodeDebugInfo(ep.ID, ep.PreferredTitle?.Value ?? string.Empty, ep.Type, ep.SeasonNumber, ep.EpisodeNumber, ep is IShokoEpisode s && s.IsHidden, coords, files);
             }
 
             // Find the IVideo instance for the requested videoId (if present anywhere in the series)
-            var allVideos = allSeriesEpisodes.SelectMany(x => x.Videos).GroupBy(v => v.ID).Select(g => g.First()).OrderBy(v => Path.GetFileName(v.Locations.FirstOrDefault()?.Path ?? "")).ToList();
+            var allVideos = allSeriesEpisodes.SelectMany(x => x.Videos).GroupBy(v => v.ID).Select(g => g.First()).OrderBy(v => Path.GetFileName(v.Files.FirstOrDefault()?.Path ?? "")).ToList();
             var video = allVideos.FirstOrDefault(v => v.ID == videoId);
             if (video == null)
                 return null;
-
-            // Build a map of ShokoEpisodeId -> summed cross-ref percentage for this video (used for primary-type selection)
-            var crossRefMap =
-                video.CrossReferences?.Where(cr => cr.ShokoEpisode != null).GroupBy(cr => cr.ShokoEpisode!.ID).ToDictionary(g => g.Key, g => g.Sum(cr => cr.Percentage)) ?? new Dictionary<int, int>();
-
-            // Build a map of ShokoEpisodeId -> minimum cross-ref Order for this video (used as a tie-breaker)
-            var crossRefOrderMap =
-                video.CrossReferences?.Where(cr => cr.ShokoEpisode != null).GroupBy(cr => cr.ShokoEpisode!.ID).ToDictionary(g => g.Key, g => g.Min(cr => cr.Order)) ?? new Dictionary<int, int>();
 
             // Build video->episode matches (only from included episodes)
             var videoToEpisodes = new List<(IEpisode Episode, PlexCoords Coords)>();
@@ -370,17 +551,21 @@ namespace ShokoRelay.Helpers
             // Sort / filter / dedupe (mirrors BuildFileMappings)
             var sortedEps = videoToEpisodes.OrderBy(x => x.Coords.Season).ThenBy(x => x.Coords.Episode).ToList();
 
-            // Use shared helper (pass precomputed crossRefMap so it isn't recomputed internally)
-            var (filteredEps, deduped) = FilterAndDedupeByPrimaryType(sortedEps, video, crossRefMap);
+            // Use shared helper
+            var (filteredEps, deduped) = FilterAndDedupeByPrimaryType(sortedEps, video);
 
             if (deduped.Count == 0)
             {
                 // No mapping for this file under current BuildFileMappings rules — still return diagnostics.
+                string? skipReason = null;
+                if (sortedEps.Count > 1 && sortedEps.Select(x => x.Episode.Type).Distinct().Count() > 1)
+                    skipReason = "Multi-episode file with differing episode types (skipped)";
+
                 return new FileMappingDebugInfo(
                     VideoId: video.ID,
-                    FileName: Path.GetFileName(video.Locations.FirstOrDefault()?.Path ?? ""),
-                    FullPath: video.Locations.FirstOrDefault()?.Path,
-                    HasPlexSplitTag: TextHelper.HasPlexSplitTag(Path.GetFileName(video.Locations.FirstOrDefault()?.Path ?? "")),
+                    FileName: Path.GetFileName(video.Files.FirstOrDefault()?.Path ?? ""),
+                    FullPath: video.Files.FirstOrDefault()?.Path,
+                    HasPlexSplitTag: TextHelper.HasPlexSplitTag(Path.GetFileName(video.Files.FirstOrDefault()?.Path ?? "")),
                     FileIndex: 0,
                     FileCount: 0,
                     AllowPartSuffix: false,
@@ -395,13 +580,11 @@ namespace ShokoRelay.Helpers
                     PartCount: 1,
                     TmdbEpisodeSelected: null,
                     PrimaryEpisode: null,
-                    VideoEpisodes: new List<EpisodeDebugInfo>(),
-                    SortedEps: new List<EpisodeDebugInfo>(),
-                    FilteredEps: new List<EpisodeDebugInfo>(),
                     DedupedCoords: new List<(int, int)>(),
-                    EpisodeFileLists: episodeFileLists.ToDictionary(k => k.Key, v => v.Value.Select(x => Path.GetFileName(x.Locations.FirstOrDefault()?.Path ?? "")).ToList()),
+                    EpisodeFileLists: episodeFileLists.ToDictionary(k => k.Key, v => v.Value.Select(x => Path.GetFileName(x.Files.FirstOrDefault()?.Path ?? "")).ToList()),
                     FinalMapSummary: null,
-                    TmdbEpNumberingSetting: ShokoRelay.Settings.TMDBEpNumbering
+                    TmdbEpNumberingSetting: ShokoRelay.Settings.TMDBEpNumbering,
+                    SkipReason: skipReason
                 );
             }
 
@@ -412,7 +595,7 @@ namespace ShokoRelay.Helpers
             int fileIndex = episodeFileLists.TryGetValue(epId, out var filesForEp) ? filesForEp.FindIndex(x => x.ID == video.ID) : 0;
             int fileCount = filesForEp?.Count ?? 1;
 
-            string fileName = Path.GetFileName(video.Locations.FirstOrDefault()?.Path ?? "");
+            string fileName = Path.GetFileName(video.Files.FirstOrDefault()?.Path ?? "");
 
             bool allowPartSuffix = ComputeAllowPartSuffix(deduped, fileCount, fileName);
 
@@ -428,19 +611,24 @@ namespace ShokoRelay.Helpers
             TmdbEpisodeSummary? tmdbEpisodeSelected = null;
             if (fileCount > 1 && ShokoRelay.Settings.TMDBEpNumbering && firstEp is IShokoEpisode shokoEp && shokoEp.TmdbEpisodes?.Any() == true)
             {
-                var tmdbEps = shokoEp.TmdbEpisodes.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber).ToList();
+                string? showPrefId = shokoEp.Series?.TmdbShows?.FirstOrDefault()?.PreferredOrdering?.OrderingID;
+                var tmdbEps = string.IsNullOrWhiteSpace(showPrefId)
+                    ? shokoEp.TmdbEpisodes.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber).ToList()
+                    : SelectPreferredTmdbOrdering(shokoEp.TmdbEpisodes, showPrefId);
                 if (fileIndex < tmdbEps.Count)
-                    tmdbEpisodeSelected = new TmdbEpisodeSummary(tmdbEps[fileIndex].SeasonNumber, tmdbEps[fileIndex].EpisodeNumber, tmdbEps[fileIndex].PreferredTitle);
+                {
+                    var sel = tmdbEps[fileIndex];
+                    var ord = Plex.PlexMapping.GetOrderingCoords(sel, showPrefId);
+                    tmdbEpisodeSelected = new TmdbEpisodeSummary(ord.Season, ord.Episode, sel.PreferredTitle?.Value);
+                }
             }
 
-            // Compose debug payloads (include cross-ref percentage where available)
-            int? pctFor(int id) => crossRefMap.TryGetValue(id, out var p) ? p : (int?)null;
-            int? orderFor(int id) => crossRefOrderMap.TryGetValue(id, out var o) ? o : (int?)null;
-
-            var videoEpisodesDebug = videoToEpisodes.Select(x => ToEpDebug(x.Episode, pctFor(x.Episode.ID), orderFor(x.Episode.ID))).ToList();
-            var sortedDebug = sortedEps.Select(x => ToEpDebug(x.Episode, pctFor(x.Episode.ID), orderFor(x.Episode.ID))).ToList();
-            var filteredDebug = filteredEps.Select(x => ToEpDebug(x.Episode, pctFor(x.Episode.ID), orderFor(x.Episode.ID))).ToList();
             var dedupedCoords = deduped.Select(x => (x.Coords.Season, x.Coords.Episode)).ToList();
+
+            // Indicate in debug output when additional relations were ignored due to differing types
+            string? postFilterSkipReason = null;
+            if (filteredEps.Count < sortedEps.Count)
+                postFilterSkipReason = "Filtered by file's first cross-reference type (authoritative)";
 
             var finalMap = GetSeriesFileData(series).Mappings.FirstOrDefault(m => m.Video.ID == video.ID);
             FileMappingSummary? finalMapSummary = null;
@@ -477,7 +665,7 @@ namespace ShokoRelay.Helpers
                     PartCount: finalMap.PartCount,
                     Coords: finalMap.Coords,
                     PrimaryEpisodeId: finalMap.PrimaryEpisode?.ID,
-                    PrimaryEpisodeTitle: finalMap.PrimaryEpisode?.PreferredTitle,
+                    PrimaryEpisodeTitle: finalMap.PrimaryEpisode?.PreferredTitle?.Value,
                     EpisodeIds: finalMap.Episodes.Select(e => e.ID).ToList(),
                     TmdbEpisode: fmTmdb
                 );
@@ -486,7 +674,7 @@ namespace ShokoRelay.Helpers
             return new FileMappingDebugInfo(
                 VideoId: video.ID,
                 FileName: fileName,
-                FullPath: video.Locations.FirstOrDefault()?.Path,
+                FullPath: video.Files.FirstOrDefault()?.Path,
                 HasPlexSplitTag: TextHelper.HasPlexSplitTag(fileName),
                 FileIndex: fileIndex,
                 FileCount: fileCount,
@@ -496,14 +684,12 @@ namespace ShokoRelay.Helpers
                 PartIndex: partIndex,
                 PartCount: partCount,
                 TmdbEpisodeSelected: tmdbEpisodeSelected,
-                PrimaryEpisode: ToEpDebug(firstEp, pctFor(firstEp.ID), orderFor(firstEp.ID)),
-                VideoEpisodes: videoEpisodesDebug,
-                SortedEps: sortedDebug,
-                FilteredEps: filteredDebug,
+                PrimaryEpisode: ToEpDebug(firstEp),
                 DedupedCoords: dedupedCoords,
-                EpisodeFileLists: episodeFileLists.ToDictionary(k => k.Key, v => v.Value.Select(x => Path.GetFileName(x.Locations.FirstOrDefault()?.Path ?? "")).ToList()),
+                EpisodeFileLists: episodeFileLists.ToDictionary(k => k.Key, v => v.Value.Select(x => Path.GetFileName(x.Files.FirstOrDefault()?.Path ?? "")).ToList()),
                 FinalMapSummary: finalMapSummary,
-                TmdbEpNumberingSetting: ShokoRelay.Settings.TMDBEpNumbering
+                TmdbEpNumberingSetting: ShokoRelay.Settings.TMDBEpNumbering,
+                SkipReason: postFilterSkipReason
             );
         }
     }

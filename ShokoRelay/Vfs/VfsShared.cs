@@ -1,6 +1,6 @@
-using System.Runtime.InteropServices;
+using System.Diagnostics;
 using NLog;
-using Shoko.Plugin.Abstractions.DataModels;
+using Shoko.Abstractions.Video;
 
 namespace ShokoRelay.Vfs;
 
@@ -94,20 +94,8 @@ internal static class VfsShared
         if (targetOverride == null && useRelativeTarget && !string.IsNullOrWhiteSpace(linkDir))
             relativeTarget = Path.GetRelativePath(linkDir, source);
 
-        if (OperatingSystem.IsWindows())
-        {
-            if (TryCreateSymlink(dest, relativeTarget, logger))
-                return true;
-            if (TryCreateHardLink(dest, source, logger))
-                return true;
-        }
-        else
-        {
-            if (TryCreateSymlink(dest, relativeTarget, logger))
-                return true;
-            if (TryCreateHardLink(dest, source, logger))
-                return true;
-        }
+        if (TryCreateSymlink(dest, relativeTarget, logger))
+            return true;
 
         return false;
     }
@@ -116,7 +104,11 @@ internal static class VfsShared
     {
         try
         {
+            var sw = Stopwatch.StartNew();
             var info = File.CreateSymbolicLink(linkPath, target);
+            sw.Stop();
+            if (sw.ElapsedMilliseconds > 20)
+                logger.Debug("Symlink creation for {Link} took {Elapsed}ms", linkPath, sw.ElapsedMilliseconds);
             return info.Exists;
         }
         catch (Exception ex)
@@ -126,30 +118,31 @@ internal static class VfsShared
         }
     }
 
-    private static bool TryCreateHardLink(string linkPath, string target, Logger logger)
+    public static string? ResolveSourcePath(IVideoFile location, string importRoot)
     {
-        try
-        {
-            if (OperatingSystem.IsWindows())
-            {
-                if (CreateHardLinkW(linkPath, target, IntPtr.Zero))
-                    return File.Exists(linkPath);
-                return false;
-            }
+        string original = location.Path;
+        if (!string.IsNullOrWhiteSpace(original) && File.Exists(original))
+            return original;
 
-            int res = link(target, linkPath);
-            return res == 0 && File.Exists(linkPath);
-        }
-        catch (Exception ex)
+        string relative = location.RelativePath?.TrimStart('/', '\\') ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(relative))
         {
-            logger.Debug(ex, "Hardlink creation failed for {Link}", linkPath);
-            return false;
+            string candidate = Path.Combine(importRoot, NormalizeSeparators(relative));
+            if (File.Exists(candidate))
+                return candidate;
         }
+
+        return null;
     }
 
-    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-    private static extern bool CreateHardLinkW(string lpFileName, string lpExistingFileName, IntPtr lpSecurityAttributes);
+    public static bool IsSafeToDelete(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return false;
 
-    [DllImport("libc", SetLastError = true)]
-    private static extern int link(string oldpath, string newpath);
+        string full = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        string? root = Path.GetPathRoot(full)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        return !string.Equals(full, root, StringComparison.OrdinalIgnoreCase);
+    }
 }

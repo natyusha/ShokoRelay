@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>❯ Shoko Relay: Dashboard</title>
+  <title>Shoko Relay Dashboard</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 
@@ -75,7 +75,7 @@
         </div>
         <div class="full">
           <button id="vfs-exec">Generate</button>
-          <button id="vfs-clean" title="Toggle Clean VFS" aria-pressed="true" type="button">
+          <button id="vfs-clean" title="Clean VFS Toggle" aria-pressed="true" type="button">
             <svg class="icon-svg" viewBox="0 0 24 24">
               <use href="img/icons.svg#broom"></use>
             </svg>
@@ -95,20 +95,20 @@
             <input id="shoko-api-key" type="password" placeholder="From Shoko's WebUI">
           </div>
           <div class="shoko-import-col">
-            <label>Import Int.</label>
+            <label title="Automatic Source Import Interval">Import Int.</label>
             <input id="shoko-import-frequency" type="number" min="0" step="1" placeholder="hours">
           </div>
           <div class="shoko-sync-col">
-            <label>Sync Int.</label>
+            <label title="Automatic Watched State Sync Interval">Sync Int.</label>
             <input id="shoko-sync-frequency" type="number" min="0" step="1" placeholder="hours">
           </div>
         </div>
         <div class="full">
-          <button id="shoko-remove-missing" class="danger" title="Remove missing files from Shoko">
+          <button id="shoko-remove-missing" class="danger" title="Remove Missing Files From Shoko & MyList">
             Remove Missing
           </button>
-          <div class="shoko-button-col"><button id="shoko-import-run">Import</button></div>
-          <div class="shoko-button-col"><button id="shoko-sync-watched">Sync</button></div>
+          <div class="shoko-button-col"><button id="shoko-import-run" title="Import From Source folders">Import</button></div>
+          <div class="shoko-button-col"><button id="shoko-sync-watched" title="Sync Watched States From Plex">Sync</button></div>
         </div>
       </section>
     </div>
@@ -150,14 +150,16 @@
         </div>
         <div class="full">
           <button id="at-single">Generate</button>
-          <button id="at-force" title="Force" aria-pressed="false" type="button" aria-label="Force">
+          <button id="at-force" title="Force Overwrite Toggle" aria-pressed="false" type="button"
+                  aria-label="Force Overwrite Toggle">
             <svg class="icon-svg" viewBox="0 0 24 24">
-              <use href="img/icons.svg#delete-forever-outline"></use>
+              <use href="img/icons.svg#chevron-triple-down"></use>
             </svg>
           </button>
-          <button id="at-batch" title="Batch" aria-pressed="false" type="button" aria-label="Batch">
+          <button id="at-batch" title="Recursive Batch Toggle" aria-pressed="false" type="button"
+                  aria-label="Recursive Batch Toggle">
             <svg class="icon-svg" viewBox="0 0 24 24">
-              <use href="img/icons.svg#file-tree-outline"></use>
+              <use href="img/icons.svg#file-tree"></use>
             </svg>
           </button>
         </div>
@@ -176,27 +178,26 @@
   </div>
   <div id="toast-container" aria-live="polite" aria-atomic="true"></div>
   <div class="floating-actions" role="navigation" aria-label="Quick links">
-    <button id="theme-toggle" class="float-link theme-toggle" title="Toggle theme" aria-label="Toggle theme"
-            aria-pressed="false">
+    <button id="theme-toggle" class="float-link theme-toggle" aria-label="Toggle theme" aria-pressed="false">
       <svg class="icon-svg" viewBox="0 0 24 24">
         <use href="img/icons.svg#theme-light-dark"></use>
       </svg>
     </button>
 
-    <a class="float-link" href="https://discord.gg/shokoanime" target="_blank" rel="noopener noreferrer" title="Discord"
+    <a class="float-link" href="https://discord.gg/shokoanime" target="_blank" rel="noopener noreferrer"
        aria-label="Shoko Discord">
       <svg class="icon-svg" viewBox="0 0 24 24">
         <use href="img/icons.svg#discord"></use>
       </svg>
     </a>
-    <a class="float-link" href="https://docs.shokoanime.com/" target="_blank" rel="noopener noreferrer" title="Docs"
+    <a class="float-link" href="https://docs.shokoanime.com/" target="_blank" rel="noopener noreferrer"
        aria-label="Shoko Docs">
       <svg class="icon-svg" viewBox="0 0 24 24">
         <use href="img/icons.svg#docs"></use>
       </svg>
     </a>
     <a class="float-link github-float" href="https://github.com/natyusha/ShokoRelay" target="_blank"
-       rel="noopener noreferrer" title="GitHub" aria-label="Shoko Relay on GitHub">
+       rel="noopener noreferrer" aria-label="Shoko Relay on GitHub">
       <svg class="icon-svg" viewBox="0 0 24 24">
         <use href="img/icons.svg#github"></use>
       </svg>

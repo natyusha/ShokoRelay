@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using NLog;
 using ShokoRelay.Config;
 
@@ -186,7 +187,18 @@ namespace ShokoRelay.Plex
                 string requestPath = $"/library/metadata/{ratingKey}?collection%5B0%5D.tag.tag={Uri.EscapeDataString(collectionName)}&collection%5B0%5D={Uri.EscapeDataString(collectionName)}";
                 Logger.Debug("Assigning collection via metadata PUT: {Server}{Path}", target.ServerUrl, requestPath);
                 using var request = _plexClient.CreateRequest(HttpMethod.Put, requestPath, target.ServerUrl);
+                var sw = Stopwatch.StartNew();
                 using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+                sw.Stop();
+                Logger.Debug(
+                    "AssignCollection PUT completed in {Elapsed}ms for ratingKey {RatingKey} status {Status} on {Server}:{Section}",
+                    sw.ElapsedMilliseconds,
+                    ratingKey,
+                    response.StatusCode,
+                    target.ServerUrl,
+                    target.SectionId
+                );
+
                 if (!response.IsSuccessStatusCode)
                 {
                     var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
@@ -347,6 +359,12 @@ namespace ShokoRelay.Plex
 
                 // No items found for this section.
                 return 0;
+            }
+            catch (OperationCanceledException)
+            {
+                // Timeouts/cancellations are considered transient here; don't spam WARN-level logs with full stacks.
+                Logger.Debug("GetCollectionItemCountAsync canceled/timed out for collection {CollectionId} on {Server}:{Section}", collectionId, target.ServerUrl, target.SectionId);
+                return null;
             }
             catch (Exception ex)
             {

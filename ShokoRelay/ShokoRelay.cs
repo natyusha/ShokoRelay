@@ -1,8 +1,9 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using NLog;
-using Shoko.Plugin.Abstractions;
-using Shoko.Plugin.Abstractions.Services;
+using Shoko.Abstractions.Plugin;
+using Shoko.Abstractions.Services;
 using ShokoRelay.AnimeThemes;
 using ShokoRelay.Config;
 using ShokoRelay.Helpers;
@@ -48,14 +49,25 @@ namespace ShokoRelay
 
             // Shoko v3 import trigger service (calls /api/v3/ImportFolder and Scan)
             serviceCollection.AddSingleton<Services.ShokoImportService>();
+
+            // Run the plugin runtime as a hosted service (starts VFS watcher + automation loop)
+            serviceCollection.AddHostedService<ShokoRelay>();
         }
     }
 
-    public class ShokoRelay : IPlugin
+    // Minimal plugin metadata for new abstractions
+    public class Plugin : IPlugin
+    {
+        public Guid ID => new Guid("2b0f5a7e-3d2b-4f3d-9e6b-7f0a6b2d8c9a");
+        public string Name => ShokoRelayInfo.Name;
+        public string? Description => "A Custom Metadata Provider and Automation Tools for Plex in the form of a Shoko Server plugin";
+        public string? EmbeddedThumbnailResourceName => "ShokoRelay.dashboard.img.shoko-relay-thumbnail.png";
+    }
+
+    // Hosted service that runs the VFS watcher and automation loop
+    public class ShokoRelay : BackgroundService
     {
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
-
-        public string Name => ShokoRelayInfo.Name;
 
         private static ConfigProvider? _configProvider;
         public static RelayConfig Settings => _configProvider?.GetSettings() ?? new RelayConfig();
@@ -63,8 +75,6 @@ namespace ShokoRelay
         private readonly VfsWatcher _watcher;
         private readonly Services.WatchedSyncService? _watchedSyncService;
         private readonly Services.ShokoImportService? _shokoImportService;
-        private CancellationTokenSource? _automationCts;
-        private Task? _automationTask;
         private DateTime? _lastImportRunUtc;
         private DateTime? _lastSyncWatchedUtc;
 
@@ -72,11 +82,12 @@ namespace ShokoRelay
             IApplicationPaths applicationPaths,
             IHttpContextAccessor httpContextAccessor,
             VfsWatcher watcher,
+            ConfigProvider configProvider,
             Services.WatchedSyncService? watchedSyncService = null,
             Services.ShokoImportService? shokoImportService = null
         )
         {
-            _configProvider = new ConfigProvider(applicationPaths);
+            _configProvider = configProvider;
 
             ImageHelper.HttpContextAccessor = httpContextAccessor;
 
@@ -84,17 +95,34 @@ namespace ShokoRelay
             _watchedSyncService = watchedSyncService;
             _shokoImportService = shokoImportService;
 
-            Logger.Info($"ShokoRelay v{ShokoRelayInfo.Version} loaded.");
+            Logger.Info($"ShokoRelay v{ShokoRelayInfo.Version} initialized.");
         }
 
-        public void Load()
+        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            // Start watcher immediately
             _watcher.Start();
-            Logger.Info("Relay loaded with VFS auto-refresh.");
+            Logger.Info("Relay started with VFS auto-refresh.");
 
-            // Start automation scheduler loop (reads RelayConfig.ShokoImportFrequencyHours)
-            _automationCts = new CancellationTokenSource();
-            _automationTask = Task.Run(() => AutomationLoop(_automationCts.Token));
+            // Run automation loop until cancellation
+            await AutomationLoop(stoppingToken).ConfigureAwait(false);
+
+            // Shutdown watcher when stopping
+            try
+            {
+                _watcher.Stop();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "Error while stopping VFS watcher");
+            }
+        }
+
+        public override async Task StopAsync(CancellationToken cancellationToken)
+        {
+            Logger.Info("ShokoRelay stopping...");
+            _watcher.Stop();
+            await base.StopAsync(cancellationToken).ConfigureAwait(false);
         }
 
         private async Task AutomationLoop(CancellationToken ct)
@@ -217,7 +245,5 @@ namespace ShokoRelay
                 Logger.Info("Automation scheduler stopped.");
             }
         }
-
-        public void OnSettingsLoaded(IPluginSettings settings) { }
     }
 }

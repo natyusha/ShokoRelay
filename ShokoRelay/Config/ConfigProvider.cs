@@ -1,8 +1,7 @@
-using System;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using NLog;
-using Shoko.Plugin.Abstractions;
+using Shoko.Abstractions.Plugin;
 
 namespace ShokoRelay.Config
 {
@@ -78,23 +77,7 @@ namespace ShokoRelay.Config
             // Prune secrets for extra users that are no longer configured.
             // Support entries like "user;1234" where the ";1234" is an optional PIN; tokens are stored keyed by the username only.
             var normExtra = NormalizeCsvString(settings.ExtraPlexUsers);
-            var configuredExtraUsernames = normExtra
-                .Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Select(s => s.Trim())
-                .Where(s => !string.IsNullOrWhiteSpace(s))
-                .Select(s =>
-                {
-                    if (s.Contains(';'))
-                    {
-                        var parts = s.Split(';', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                        if (parts.Length > 1 && parts[1].Length == 4 && parts[1].All(char.IsDigit))
-                            return parts[0].Trim(); // canonical username when a valid 4-digit PIN is present
-                    }
-
-                    return s; // otherwise the full entry is the username
-                })
-                .Where(u => !string.IsNullOrWhiteSpace(u))
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var configuredExtraUsernames = ParseExtraPlexUsers(normExtra).Select(e => e.Name).Where(n => !string.IsNullOrWhiteSpace(n)).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             if (tokenData.ExtraPlexUserTokens != null)
             {
@@ -197,6 +180,44 @@ namespace ShokoRelay.Config
                 SaveSettings(settings);
 
             return settings;
+        }
+
+        // --- helpers for ExtraPlexUsers parsing (shared canonical logic) ---
+        public static List<(string Name, string? Pin)> ParseExtraPlexUsers(string? extraRaw)
+        {
+            if (string.IsNullOrWhiteSpace(extraRaw))
+                return new List<(string, string?)>();
+
+            return extraRaw
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(s => s.Trim())
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Select(s =>
+                {
+                    // If the entry contains a semicolon and the part after it is exactly 4 digits, treat that as a PIN.
+                    // Otherwise treat the full entry as the username (semicolons remain part of the username).
+                    if (s.Contains(';'))
+                    {
+                        var parts = s.Split(';', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                        if (parts.Length > 1 && parts[1].Length == 4 && parts[1].All(char.IsDigit))
+                            return (Name: parts[0].Trim(), Pin: parts[1].Trim());
+                    }
+
+                    return (Name: s, Pin: (string?)null);
+                })
+                .Where(t => !string.IsNullOrWhiteSpace(t.Name))
+                .ToList();
+        }
+
+        public List<(string Name, string? Pin)> GetExtraPlexUserEntries()
+        {
+            var extraRaw = GetSettings().ExtraPlexUsers ?? string.Empty;
+            return ParseExtraPlexUsers(extraRaw);
+        }
+
+        public List<string> GetExtraPlexUsernames()
+        {
+            return GetExtraPlexUserEntries().Select(e => e.Name).ToList();
         }
 
         // --- secrets/token-file helpers for extra Plex user tokens ---

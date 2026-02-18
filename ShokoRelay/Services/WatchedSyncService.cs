@@ -1,11 +1,7 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using NLog;
-using Shoko.Plugin.Abstractions.DataModels.Shoko;
-using Shoko.Plugin.Abstractions.Services;
+using Shoko.Abstractions.Metadata.Shoko;
+using Shoko.Abstractions.Services;
+using Shoko.Abstractions.User;
 using ShokoRelay.Config;
 using ShokoRelay.Plex;
 
@@ -104,33 +100,11 @@ namespace ShokoRelay.Services
             }
 
             // Choose a user to apply watched-state to; default to first user if available.
-            IShokoUser? defaultUser = _userService.GetUsers().FirstOrDefault();
+            IUser? defaultUser = _userService.GetUsers().FirstOrDefault();
 
             // prepare Extra Plex usernames from config (may be empty). Support optional PINs: "user;pin, otheruser;pin"
             var cfg = _configProvider.GetSettings();
-            var extraRaw = cfg.ExtraPlexUsers ?? string.Empty;
-            var extraEntries = extraRaw
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Select(s => s.Trim())
-                .Where(s => !string.IsNullOrWhiteSpace(s))
-                .Select(s =>
-                {
-                    // If the entry contains a semicolon and the part after it is exactly 4 digits, treat that as a PIN.
-                    // Otherwise treat the full entry as the username (semicolons remain part of the username).
-                    if (s.Contains(';'))
-                    {
-                        var parts = s.Split(';', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                        if (parts.Length > 1 && parts[1].Length == 4 && parts[1].All(char.IsDigit))
-                        {
-                            return (Name: parts[0].Trim(), Pin: parts[1].Trim());
-                        }
-                    }
-
-                    // no valid pin — username is the full raw entry
-                    return (Name: s, Pin: (string?)null);
-                })
-                .Where(t => !string.IsNullOrWhiteSpace(t.Name))
-                .ToList();
+            var extraEntries = _configProvider.GetExtraPlexUserEntries();
 
             // track which Shoko episodes we've already marked during this sync to avoid duplicate writes
             var appliedShokoEpisodeIds = new HashSet<int>();
@@ -449,7 +423,7 @@ namespace ShokoRelay.Services
                                 var firstVideo = shokoEpisode.VideoList?.FirstOrDefault();
                                 if (firstVideo != null && user != null)
                                 {
-                                    var vud = _userDataService.GetVideoUserData(user.ID, firstVideo.ID);
+                                    var vud = _userDataService.GetVideoUserData(firstVideo, user);
                                     if (vud != null && (vud.LastPlayedAt != null || vud.PlaybackCount > 0))
                                     {
                                         alreadyWatchedInShoko = true;
@@ -488,8 +462,8 @@ namespace ShokoRelay.Services
                                         plexUserName,
                                         finalWouldMark,
                                         shokoEpisode.ID,
-                                        shokoEpisode.Series?.PreferredTitle,
-                                        shokoEpisode.PreferredTitle,
+                                        shokoEpisode.Series?.PreferredTitle?.Value,
+                                        shokoEpisode.PreferredTitle?.Value,
                                         item.Media?.SelectMany(m => m.Part ?? Enumerable.Empty<PlexPart>()).FirstOrDefault()?.File,
                                         watchedAt,
                                         alreadyWatchedInShoko
@@ -498,9 +472,8 @@ namespace ShokoRelay.Services
                                 else
                                 {
                                     // real run: attempt to apply only when wouldMark is true
-                                    updated = await _userDataService
-                                        .SetEpisodeWatchedStatus(user!, shokoEpisode, true, watchedAt, Shoko.Plugin.Abstractions.Enums.UserDataSaveReason.None, true)
-                                        .ConfigureAwait(false);
+                                    var savedResult = await _userDataService.SetEpisodeWatchedStatus(shokoEpisode, user!, true, watchedAt, true).ConfigureAwait(false);
+                                    updated = savedResult != null;
 
                                     if (updated)
                                     {
@@ -534,8 +507,8 @@ namespace ShokoRelay.Services
                             {
                                 PlexUser = plexUserName,
                                 ShokoEpisodeId = shokoEpisode.ID,
-                                SeriesTitle = shokoEpisode.Series?.PreferredTitle,
-                                EpisodeTitle = shokoEpisode.PreferredTitle,
+                                SeriesTitle = shokoEpisode.Series?.PreferredTitle?.Value,
+                                EpisodeTitle = shokoEpisode.PreferredTitle?.Value,
                                 SeasonNumber = shokoEpisode.SeasonNumber,
                                 EpisodeNumber = shokoEpisode.EpisodeNumber,
                                 RatingKey = item.RatingKey,

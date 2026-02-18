@@ -370,6 +370,73 @@ namespace ShokoRelay.Plex
             }
         }
 
+        // Retrieve basic account info (display title and username) for a given Plex token.
+        public sealed record PlexAccountInfo(string? Title, string? Username);
+
+        public async Task<PlexAccountInfo?> GetAccountInfoAsync(string token, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(token))
+                return null;
+
+            try
+            {
+                // Plex exposes account information at /users/account when authenticated with a token.
+                var url = new Uri($"{BaseUrl}/users/account?X-Plex-Token={Uri.EscapeDataString(token)}");
+                using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                request.Headers.TryAddWithoutValidation("Accept", "application/json");
+
+                using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+                if (!response.IsSuccessStatusCode)
+                    return null;
+
+                var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                if (string.IsNullOrWhiteSpace(content))
+                    return null;
+
+                try
+                {
+                    using var doc = JsonDocument.Parse(content);
+                    var root = doc.RootElement;
+
+                    // Attempt to read "title" and "username" fields at top-level or under a nested "user" object.
+                    string? title = null;
+                    string? username = null;
+
+                    if (root.ValueKind == JsonValueKind.Object)
+                    {
+                        if (root.TryGetProperty("title", out var t) && t.ValueKind == JsonValueKind.String)
+                            title = t.GetString();
+
+                        if (root.TryGetProperty("username", out var u) && u.ValueKind == JsonValueKind.String)
+                            username = u.GetString();
+
+                        if (string.IsNullOrWhiteSpace(title) && root.TryGetProperty("user", out var userObj) && userObj.ValueKind == JsonValueKind.Object)
+                        {
+                            if (userObj.TryGetProperty("title", out var ut) && ut.ValueKind == JsonValueKind.String)
+                                title = ut.GetString();
+                            if (userObj.TryGetProperty("username", out var uu) && uu.ValueKind == JsonValueKind.String)
+                                username = uu.GetString();
+                        }
+                    }
+
+                    if (string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(username))
+                        return null;
+
+                    return new PlexAccountInfo(title?.Trim(), username?.Trim());
+                }
+                catch (JsonException ex)
+                {
+                    Logger.Warn($"GetAccountInfoAsync: failed to parse JSON response: {ex.Message}");
+                    return null;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn($"GetAccountInfoAsync exception: {ex.Message}");
+                return null;
+            }
+        }
+
         public async Task<string?> SwitchHomeUserAsync(int userId, string adminToken, string? pin = null, CancellationToken cancellationToken = default)
         {
             try

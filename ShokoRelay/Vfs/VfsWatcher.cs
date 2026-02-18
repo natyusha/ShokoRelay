@@ -1,10 +1,8 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using NLog;
-using Shoko.Plugin.Abstractions;
-using Shoko.Plugin.Abstractions.DataModels;
-using Shoko.Plugin.Abstractions.Enums;
-using Shoko.Plugin.Abstractions.Events;
-using Shoko.Plugin.Abstractions.Services;
+using Shoko.Abstractions.Events;
+using Shoko.Abstractions.Services;
 using ShokoRelay.Config;
 using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
@@ -14,7 +12,7 @@ namespace ShokoRelay.Vfs
     public class VfsWatcher
     {
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
-        private readonly IShokoEventHandler _events;
+        private readonly IVideoService _videoService;
         private readonly VfsBuilder _builder;
         private readonly IMetadataService _metadataService;
         private readonly PlexMetadata _plexMetadata;
@@ -27,7 +25,7 @@ namespace ShokoRelay.Vfs
         private readonly object _gate = new();
 
         public VfsWatcher(
-            IShokoEventHandler events,
+            IVideoService videoService,
             VfsBuilder builder,
             IMetadataService metadataService,
             PlexMetadata plexMetadata,
@@ -36,7 +34,7 @@ namespace ShokoRelay.Vfs
             ConfigProvider configProvider
         )
         {
-            _events = events;
+            _videoService = videoService;
             _builder = builder;
             _metadataService = metadataService;
             _plexMetadata = plexMetadata;
@@ -47,12 +45,24 @@ namespace ShokoRelay.Vfs
 
         public void Start()
         {
-            _events.FileMatched += OnFileChanged;
-            _events.FileMoved += OnFileChanged;
-            _events.FileRenamed += OnFileChanged;
-            _events.FileDeleted += OnFileChanged;
+            _videoService.VideoFileHashed += OnVideoFileHashed;
+            _videoService.VideoFileRelocated += OnVideoFileRelocated;
+            _videoService.VideoFileDeleted += OnVideoFileDeleted;
 
             Logger.Info("VFS watcher started (auto-refresh on file changes).");
+        }
+
+        public void Stop()
+        {
+            try
+            {
+                _videoService.VideoFileHashed -= OnVideoFileHashed;
+                _videoService.VideoFileRelocated -= OnVideoFileRelocated;
+                _videoService.VideoFileDeleted -= OnVideoFileDeleted;
+            }
+            catch { }
+
+            Logger.Info("VFS watcher stopped.");
         }
 
         private void OnFileChanged(object? sender, FileEventArgs e)
@@ -67,6 +77,12 @@ namespace ShokoRelay.Vfs
 
             KickProcessLoop();
         }
+
+        private void OnVideoFileHashed(object? sender, FileHashedEventArgs e) => OnFileChanged(sender, e);
+
+        private void OnVideoFileRelocated(object? sender, FileRelocatedEventArgs e) => OnFileChanged(sender, e);
+
+        private void OnVideoFileDeleted(object? sender, FileEventArgs e) => OnFileChanged(sender, e);
 
         private void KickProcessLoop()
         {
@@ -93,8 +109,19 @@ namespace ShokoRelay.Vfs
 
                     try
                     {
-                        _builder.Build(seriesId, cleanRoot: false, pruneSeries: true);
-                        Logger.Info("VFS refreshed for series {SeriesId}", seriesId);
+                        var sw = Stopwatch.StartNew();
+                        var result = _builder.Build(seriesId, cleanRoot: false, pruneSeries: true);
+                        sw.Stop();
+                        Logger.Info(
+                            "VFS refreshed for series {SeriesId} in {Elapsed}ms — created={Created} planned={Planned} skipped={Skipped} seriesProcessed={SeriesProcessed} errors={ErrorsCount}",
+                            seriesId,
+                            sw.ElapsedMilliseconds,
+                            result.CreatedLinks,
+                            result.PlannedLinks,
+                            result.Skipped,
+                            result.SeriesProcessed,
+                            result.Errors?.Count ?? 0
+                        );
                         await TriggerPlexUpdatesAsync(seriesId).ConfigureAwait(false);
                     }
                     catch (Exception ex)
@@ -175,7 +202,7 @@ namespace ShokoRelay.Vfs
             }
         }
 
-        private IEnumerable<string> ResolveSeriesVfsPaths(Shoko.Plugin.Abstractions.DataModels.Shoko.IShokoSeries series)
+        private IEnumerable<string> ResolveSeriesVfsPaths(Shoko.Abstractions.Metadata.Shoko.IShokoSeries series)
         {
             var roots = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
             string rootName = VfsShared.ResolveRootFolderName();
@@ -183,7 +210,7 @@ namespace ShokoRelay.Vfs
             var fileData = MapHelper.GetSeriesFileData(series);
             foreach (var mapping in fileData.Mappings)
             {
-                var location = mapping.Video.Locations.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l.Path)) ?? mapping.Video.Locations.FirstOrDefault();
+                var location = mapping.Video.Files.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l.Path)) ?? mapping.Video.Files.FirstOrDefault();
                 if (location == null)
                     continue;
 

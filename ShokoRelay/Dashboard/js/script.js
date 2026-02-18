@@ -247,7 +247,7 @@
   }
   function setPlexUnlinkAction() {
     setPlexAction(
-      '<button id="plex-unlink" class="danger">Unlink Plex</button> <button id="plex-refresh" title="Refresh Libraries"><svg class="icon-svg" viewBox="0 0 24 24"><use href="img/icons.svg#refresh"></use></svg></button>',
+      '<button id="plex-unlink" class="danger">Unlink Plex</button> <button id="plex-refresh" title="Refresh Plex Libraries"><svg class="icon-svg" viewBox="0 0 24 24"><use href="img/icons.svg#refresh"></use></svg></button>',
     );
     const unlinkBtn = el("plex-unlink");
     if (unlinkBtn) unlinkBtn.onclick = unlinkPlex;
@@ -582,6 +582,7 @@
   el("col-build").onclick = async () => {
     const btn = el("col-build");
     setButtonLoading(btn, true);
+    showToast("Collection build started", "info", 3000);
     try {
       setColStatus("Checking Plex configuration...", "running");
       const ok = await ensurePlexEnabled();
@@ -622,8 +623,24 @@
     };
   }
 
+  // Ensure the AnimeThemes 'Slug' input resets to a sensible default when cleared
+  const atSlugEl = el("at-slug");
+  if (atSlugEl) {
+    // Restore placeholder/default when user leaves an empty field
+    atSlugEl.addEventListener("blur", () => {
+      if (!String(atSlugEl.value || "").trim()) atSlugEl.value = atSlugEl.placeholder || "OP2";
+    });
+    // If user presses Enter while empty, restore default immediately
+    atSlugEl.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" && !String(atSlugEl.value || "").trim()) atSlugEl.value = atSlugEl.placeholder || "OP2";
+    });
+  }
+
   el("at-single").onclick = async () => {
     const btn = el("at-single");
+    // if slug is empty, restore the default before sending
+    const atSlugEl_local = el("at-slug");
+    if (atSlugEl_local && !String(atSlugEl_local.value || "").trim()) atSlugEl_local.value = atSlugEl_local.placeholder || "OP2";
     setButtonLoading(btn, true);
     try {
       showToast("AnimeThemes: generating mp3...", "info", 3000);
@@ -721,7 +738,17 @@
     schema.forEach((p) => {
       const wrap = document.createElement("div");
       const label = document.createElement("label");
-      label.textContent = (p.Display || p.Path) + (p.Description ? " ❯ " + p.Description : "");
+      // Title + optional description (description wrapped in <small> and stays inline)
+      const titleText = p.Display || p.Path || "";
+      const titleNode = document.createElement("span");
+      titleNode.textContent = titleText;
+      label.appendChild(titleNode);
+      if (p.Description) {
+        const small = document.createElement("small");
+        small.textContent = p.Description;
+        label.appendChild(small);
+      }
+
       let input;
       const value = getValueByPath(config, p.Path);
 
@@ -737,11 +764,27 @@
         icon.innerHTML =
           '<svg class="unchecked" viewBox="0 0 24 24"><use href="img/icons.svg#checkbox-blank-circle-outline"></use></svg>' +
           '<svg class="checked" viewBox="0 0 24 24"><use href="img/icons.svg#checkbox-marked-circle-outline"></use></svg>';
-        const textSpan = document.createElement("span");
-        textSpan.textContent = (p.Display || p.Path) + (p.Description ? " ❯ " + p.Description : "");
+
+        // Create a two-line label: title on first line, description (if present) in a <small> on the second line
+        const textWrap = document.createElement("span");
+        textWrap.className = "shoko-checkbox-text";
+        const titleSpan = document.createElement("span");
+        titleSpan.className = "shoko-checkbox-title";
+        titleSpan.textContent = p.Display || p.Path || "";
+        textWrap.appendChild(titleSpan);
+
+        if (p.Description) {
+          const desc = document.createElement("small");
+          desc.className = "shoko-checkbox-desc";
+          desc.textContent = p.Description;
+          // force description to its own line next to the checkbox
+          desc.style.display = "block";
+          textWrap.appendChild(desc);
+        }
+
         outer.appendChild(input);
         outer.appendChild(icon);
-        outer.appendChild(textSpan);
+        outer.appendChild(textWrap);
         wrap.appendChild(outer);
       } else {
         wrap.appendChild(label);
@@ -808,10 +851,7 @@
           col.appendChild(leftWrap);
           col.appendChild(rightWrap);
           wrap.appendChild(col);
-          const help = document.createElement("div");
-          help.style.fontSize = "0.9em";
-          help.style.marginTop = "6px";
-          help.style.color = "#bbb";
+          const help = document.createElement("small");
           help.textContent = "Enter one mapping per line. Line N in the left textarea maps to line N in the right textarea.";
           wrap.appendChild(help);
         } else if (p.Type === "json") {
@@ -951,5 +991,102 @@
       applyTheme(next);
     };
   }
+  /* Tooltip helper - mirrors Shoko WebUI tooltip styling (uses elements' `title` attributes) */
+  function initTooltips() {
+    if (document.getElementById("shoko-tooltip")) return;
+    const tpl = document.createElement("div");
+    tpl.id = "shoko-tooltip";
+    tpl.className = "tooltip-core tooltip-box tooltip-dark tooltip-place-top";
+    tpl.setAttribute("role", "status");
+    tpl.setAttribute("aria-hidden", "true");
+    tpl.innerHTML = '<div class="tooltip-arrow"></div><div class="rt-content"></div>';
+    document.body.appendChild(tpl);
+    const content = tpl.querySelector(".rt-content");
+
+    let showTimer = null;
+    let hideTimer = null;
+
+    function showForElement(el) {
+      const text = el.dataset.tooltipText || el.getAttribute("data-tooltip") || "";
+      if (!text) return;
+      content.textContent = text;
+      tpl.setAttribute("aria-hidden", "false");
+      tpl.classList.remove("tooltip-closing");
+      tpl.classList.add("tooltip-show");
+      el.setAttribute("aria-describedby", "shoko-tooltip");
+
+      requestAnimationFrame(() => {
+        const rect = el.getBoundingClientRect();
+        const ttRect = tpl.getBoundingClientRect();
+        const margin = 8;
+        let top = rect.top - ttRect.height - margin;
+        let place = "top";
+        if (top < 8) {
+          top = rect.bottom + margin;
+          place = "bottom";
+        }
+        let left = rect.left + (rect.width - ttRect.width) / 2;
+        if (left < 8) left = 8;
+        if (left + ttRect.width > window.innerWidth - 8) left = Math.max(8, window.innerWidth - ttRect.width - 8);
+        tpl.style.left = `${Math.round(left + window.scrollX)}px`;
+        tpl.style.top = `${Math.round(top + window.scrollY)}px`;
+        tpl.classList.remove("tooltip-place-top", "tooltip-place-bottom", "tooltip-place-left", "tooltip-place-right");
+        tpl.classList.add(`tooltip-place-${place}`);
+      });
+    }
+
+    function hideTooltipForElement(el) {
+      tpl.classList.remove("tooltip-show");
+      tpl.classList.add("tooltip-closing");
+      tpl.setAttribute("aria-hidden", "true");
+      if (el) el.removeAttribute("aria-describedby");
+    }
+
+    function attach(el) {
+      if (!el || el.dataset.tooltipInitialized) return;
+      const title = el.getAttribute("title");
+      if (!title) return;
+      el.dataset.tooltipText = title;
+      el.removeAttribute("title");
+      el.dataset.tooltipInitialized = "1";
+
+      el.addEventListener("mouseenter", () => {
+        if (hideTimer) {
+          clearTimeout(hideTimer);
+          hideTimer = null;
+        }
+        showTimer = setTimeout(() => showForElement(el), 75);
+      });
+      el.addEventListener("mouseleave", () => {
+        if (showTimer) {
+          clearTimeout(showTimer);
+          showTimer = null;
+        }
+        hideTimer = setTimeout(() => hideTooltipForElement(el), 100);
+      });
+      el.addEventListener("focus", () => {
+        if (showTimer) clearTimeout(showTimer);
+        showForElement(el);
+      });
+      el.addEventListener("blur", () => hideTooltipForElement(el));
+    }
+
+    document.querySelectorAll("[title]").forEach(attach);
+
+    const mo = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        for (const node of m.addedNodes) {
+          if (node.nodeType !== 1) continue;
+          const nn = node;
+          if (nn.hasAttribute && nn.hasAttribute("title")) attach(nn);
+          nn.querySelectorAll && nn.querySelectorAll("[title]").forEach(attach);
+        }
+      }
+    });
+    mo.observe(document.body, { childList: true, subtree: true });
+  }
+
+  initTooltips();
+
   initTheme();
 })();

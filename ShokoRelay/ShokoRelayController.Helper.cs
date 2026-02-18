@@ -3,8 +3,8 @@ using System.ComponentModel.DataAnnotations;
 using System.Reflection;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
-using Shoko.Plugin.Abstractions.DataModels;
-using Shoko.Plugin.Abstractions.DataModels.Shoko;
+using Shoko.Abstractions.Metadata;
+using Shoko.Abstractions.Metadata.Shoko;
 using ShokoRelay.Config;
 using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
@@ -409,7 +409,7 @@ namespace ShokoRelay.Controllers
                         var fileData = GetSeriesFileData(s);
                         foreach (var mapping in fileData.Mappings)
                         {
-                            var location = mapping.Video.Locations.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l.Path)) ?? mapping.Video.Locations.FirstOrDefault();
+                            var location = mapping.Video.Files.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l.Path)) ?? mapping.Video.Files.FirstOrDefault();
                             if (location == null)
                                 continue;
 

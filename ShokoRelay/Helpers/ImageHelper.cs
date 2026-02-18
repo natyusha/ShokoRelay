@@ -1,7 +1,7 @@
-using System.Linq;
 using Microsoft.AspNetCore.Http;
-using Shoko.Plugin.Abstractions.DataModels;
-using Shoko.Plugin.Abstractions.Enums;
+using Shoko.Abstractions.Enums;
+using Shoko.Abstractions.Metadata;
+using Shoko.Abstractions.Metadata.Containers;
 
 namespace ShokoRelay.Helpers
 {
@@ -25,12 +25,11 @@ namespace ShokoRelay.Helpers
             return "http://localhost:8111";
         }
 
-        public static string GetImageUrl(IImageMetadata image, string? imageTypeOverride = null) =>
-            $"{GetBaseUrl()}/api/v3/Image/{image.Source}/{imageTypeOverride ?? image.ImageType.ToString()}/{image.ID}";
+        public static string GetImageUrl(IImage image, string? imageTypeOverride = null) => $"{GetBaseUrl()}/api/v3/Image/{image.Source}/{imageTypeOverride ?? image.ImageType.ToString()}/{image.ID}";
 
         public static ImageInfo[] GenerateImageArray(IWithImages images, string title, bool addEveryImage)
         {
-            IEnumerable<IImageMetadata> Filter(ImageEntityType type)
+            IEnumerable<IImage> Filter(ImageEntityType type)
             {
                 var all = images.GetImages(type);
                 if (addEveryImage)

@@ -1,10 +1,10 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using NLog;
-using Shoko.Plugin.Abstractions;
-using Shoko.Plugin.Abstractions.DataModels;
-using Shoko.Plugin.Abstractions.DataModels.Shoko;
-using Shoko.Plugin.Abstractions.Services;
+using Shoko.Abstractions.Metadata.Shoko;
+using Shoko.Abstractions.Plugin;
+using Shoko.Abstractions.Services;
+using Shoko.Abstractions.Video;
 using ShokoRelay.Vfs;
 
 namespace ShokoRelay.AnimeThemes;

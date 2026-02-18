@@ -1,9 +1,9 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using NLog;
-using Shoko.Plugin.Abstractions;
-using Shoko.Plugin.Abstractions.DataModels.Shoko;
-using Shoko.Plugin.Abstractions.Services;
+using Shoko.Abstractions.Metadata.Shoko;
+using Shoko.Abstractions.Plugin;
+using Shoko.Abstractions.Services;
 using ShokoRelay.Config;
 using ShokoRelay.Helpers;
 using ShokoRelay.Vfs;
@@ -251,7 +251,7 @@ public class AnimeThemesMapping
         {
             foreach (var video in ep.VideoList)
             {
-                foreach (var loc in video.Locations)
+                foreach (var loc in video.Files)
                 {
                     string? root = VfsShared.ResolveImportRootPath(loc);
                     if (!string.IsNullOrWhiteSpace(root))

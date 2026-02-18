@@ -1,4 +1,5 @@
-using Shoko.Plugin.Abstractions.DataModels;
+using Shoko.Abstractions.Metadata;
+using Shoko.Abstractions.Metadata.Shoko;
 
 namespace ShokoRelay.Helpers
 {
@@ -24,7 +25,24 @@ namespace ShokoRelay.Helpers
         {
             var tagSet = BuildTagSet(series);
 
-            // If 18 restricted is present override the contentRatings setting
+            // Build AniDB weight dictionary for precision-based decisions (defaults to 0 when not present).
+            var anidbWeights = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            if (series is IShokoSeries ss && ss.AnidbAnime?.Tags is IReadOnlyList<Shoko.Abstractions.Metadata.Anidb.IAnidbTagForAnime> atags)
+            {
+                foreach (var t in atags)
+                {
+                    if (t == null)
+                        continue;
+                    var name = t.Name?.Trim();
+                    if (string.IsNullOrWhiteSpace(name))
+                        continue;
+                    if (!RatingTags.Contains(name))
+                        continue; // only track rating-related tags here
+                    anidbWeights[name.ToLowerInvariant()] = t.Weight;
+                }
+            }
+
+            // 18 restricted => X (adult) immediately
             if (tagSet.Contains("18 restricted"))
                 return ("X", true);
 
@@ -33,27 +51,57 @@ namespace ShokoRelay.Helpers
 
             // A rough approximation of: http://www.tvguidelines.org/resources/TheRatings.pdf
             // Uses the content indicators described here: https://wiki.anidb.net/Categories:Content_Indicators
-            var descriptorD = tagSet.Contains("sexual humour") ? "D" : "";
-            var descriptorS = (tagSet.Contains("nudity") || tagSet.Contains("sex")) ? "S" : "";
-            var descriptorV = tagSet.Contains("violence") ? "V" : "";
-            var descriptor = (descriptorD + descriptorS + descriptorV) != "" ? "-" + (descriptorD + descriptorS + descriptorV) : "";
+            // Descriptor characters (Suggestive Dialogue, Sexual Situations, Violence)
+            var descriptorD = tagSet.Contains("sexual humour") ? "D" : string.Empty;
+            var descriptorS = (tagSet.Contains("nudity") || tagSet.Contains("sex")) ? "S" : string.Empty;
+            var descriptorV = tagSet.Contains("violence") ? "V" : string.Empty;
+            var descriptor =
+                (!string.IsNullOrEmpty(descriptorD) || !string.IsNullOrEmpty(descriptorS) || !string.IsNullOrEmpty(descriptorV)) ? "-" + descriptorD + descriptorS + descriptorV : string.Empty;
 
-            // Uses the target audience tags on AniDB: https://anidb.net/tag/2606/animetb
             string? c_rating = null;
-            if (tagSet.Contains("kodomo"))
-                c_rating = "TV-Y";
-            else if (tagSet.Contains("mina"))
-                c_rating = "TV-G";
-            else if (tagSet.Contains("shoujo") || tagSet.Contains("shounen"))
-                c_rating = "TV-PG";
-            else if (tagSet.Contains("josei") || tagSet.Contains("seinen"))
-                c_rating = "TV-14";
 
+            // Consolidated helper: iterate tags in order, check AniDB weight thresholds
+            (string Rating, bool IsAdult)? ApplyWeightedChecks(params (string Key, int Tv14, int TvMa)[] checks)
+            {
+                foreach (var (key, tv14, tvma) in checks)
+                {
+                    if (!tagSet.Contains(key))
+                        continue;
+
+                    var w = anidbWeights.TryGetValue(key, out var ww) ? ww : 0;
+                    if (w >= tvma)
+                        return ("TV-MA" + descriptor, false);
+                    if (w >= tv14 && c_rating != "TV-MA")
+                        c_rating = "TV-14";
+                }
+
+                return null;
+            }
+
+            // Borderline porn forces TV-MA
             if (tagSet.Contains("borderline porn"))
-                c_rating = "TV-MA";
+                return ("TV-MA" + descriptor, false);
 
-            if (!string.IsNullOrEmpty(c_rating))
-                c_rating = c_rating + descriptor;
+            // Run weighted checks in priority order (nudity, violence, sex). Returns immediately on TV-MA.
+            if (ApplyWeightedChecks(("nudity", 400, 500), ("violence", 400, 500), ("sex", 300, 400)) is (var finalRating, var finalAdult))
+                return (finalRating, finalAdult);
+
+            // Uses the AniDB "target audience" tags to select a baseline rating when no weighted content indicators apply: https://anidb.net/tag/2606/animetb
+            // Check higher (more restrictive) ratings first and return immediately when matched.
+            if (string.IsNullOrEmpty(c_rating))
+            {
+                if (tagSet.Contains("josei") || tagSet.Contains("seinen"))
+                    return ("TV-14" + descriptor, false);
+                if (tagSet.Contains("shoujo") || tagSet.Contains("shounen"))
+                    return ("TV-PG" + descriptor, false);
+                if (tagSet.Contains("mina"))
+                    return ("TV-G" + descriptor, false);
+                if (tagSet.Contains("kodomo"))
+                    return ("TV-Y" + descriptor, false);
+            }
+
+            if (!string.IsNullOrEmpty(c_rating) && c_rating != "X")
+                c_rating += descriptor;
 
             return (c_rating, false);
         }
@@ -61,10 +109,11 @@ namespace ShokoRelay.Helpers
         private static HashSet<string> BuildTagSet(ISeries? series)
         {
             var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            if (series?.Tags == null)
+            var tags = (series as IShokoSeries)?.Tags;
+            if (tags == null)
                 return set;
 
-            foreach (var t in series.Tags)
+            foreach (var t in tags)
             {
                 if (t == null)
                     continue;
@@ -84,6 +133,20 @@ namespace ShokoRelay.Helpers
                     continue;
 
                 set.Add(name);
+            }
+
+            // Also include AniDB tags so content-rating can consult them (weights are read separately).
+            if (series is IShokoSeries ss && ss.AnidbAnime?.Tags is IReadOnlyList<Shoko.Abstractions.Metadata.Anidb.IAnidbTagForAnime> anidbTags)
+            {
+                foreach (var at in anidbTags)
+                {
+                    var name = at?.Name?.Trim();
+                    if (string.IsNullOrWhiteSpace(name))
+                        continue;
+                    if (!RatingTags.Contains(name))
+                        continue;
+                    set.Add(name.ToLowerInvariant());
+                }
             }
 
             return set;

@@ -1,6 +1,7 @@
+using System.Diagnostics;
 using NLog;
-using Shoko.Plugin.Abstractions.DataModels.Shoko;
-using Shoko.Plugin.Abstractions.Services;
+using Shoko.Abstractions.Metadata.Shoko;
+using Shoko.Abstractions.Services;
 using ShokoRelay.Config;
 using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
@@ -61,8 +62,13 @@ namespace ShokoRelay.Services
             var allowedIds = new HashSet<int>(seriesList?.Where(s => s != null).Select(s => s!.ID) ?? Enumerable.Empty<int>());
             var targets = _plexClient.GetConfiguredTargets();
 
+            var totalSw = Stopwatch.StartNew();
+            Logger.Info("BuildCollectionsAsync: starting collection build (allowedIds={AllowedCount}, targets={TargetCount})", allowedIds.Count, targets?.Count ?? 0);
+
             if (targets == null || targets.Count == 0)
             {
+                totalSw.Stop();
+                Logger.Info("BuildCollectionsAsync: no Plex targets configured — exiting (elapsed={Elapsed}ms)", totalSw.ElapsedMilliseconds);
                 return new BuildCollectionsResult(Processed: 0, Created: 0, Uploaded: 0, SeasonPostersUploaded: 0, Skipped: 0, Errors: 0, DeletedEmptyCollections: 0, createdCollections, errorsList);
             }
 
@@ -70,10 +76,17 @@ namespace ShokoRelay.Services
 
             foreach (var target in targets)
             {
+                var targetSw = Stopwatch.StartNew();
+                int createdBeforeTarget = created;
+                int uploadedBeforeTarget = uploaded;
+                int errorsBeforeTarget = errors;
+                int processedForTarget = 0;
+
                 List<PlexMetadataItem> items;
                 try
                 {
                     items = await _plexClient.GetSectionShowsAsync(target, cancellationToken).ConfigureAwait(false);
+                    Logger.Info("BuildCollectionsAsync: target {Server}:{Section} returned {Count} shows", target.ServerUrl, target.SectionId, items?.Count ?? 0);
                 }
                 catch (Exception ex)
                 {
@@ -83,10 +96,14 @@ namespace ShokoRelay.Services
                     continue;
                 }
 
+                // defensive: ensure items is never null for the foreach below
+                items ??= new List<PlexMetadataItem>();
+
                 var postedCollections = new HashSet<int>();
 
                 foreach (var item in items)
                 {
+                    processedForTarget++;
                     if (string.IsNullOrWhiteSpace(item.Guid))
                         continue;
 
@@ -122,6 +139,7 @@ namespace ShokoRelay.Services
                     try
                     {
                         bool ok = await _plexCollections.AssignCollectionToItemByMetadataAsync(plexRatingKey, collectionName, target, cancellationToken).ConfigureAwait(false);
+
                         if (ok)
                         {
                             created++;
@@ -139,9 +157,11 @@ namespace ShokoRelay.Services
                             try
                             {
                                 int? collectionId = await _plexCollections.GetOrCreateCollectionIdAsync(collectionName, target, cancellationToken).ConfigureAwait(false);
+
                                 if (collectionId.HasValue && !postedCollections.Contains(collectionId.Value))
                                 {
                                     bool posterApplied = await TryApplyCollectionPosterAsync(series, collectionName, collectionId.Value, target, cancellationToken).ConfigureAwait(false);
+
                                     if (posterApplied)
                                     {
                                         uploaded++;
@@ -167,6 +187,22 @@ namespace ShokoRelay.Services
                         Logger.Warn(ex, "AssignCollection exception for series {Series} ratingKey {RatingKey} on {Section}", shokoId.Value, item.RatingKey, target.SectionId);
                     }
                 }
+
+                // per-target summary
+                targetSw.Stop();
+                var createdInTarget = created - createdBeforeTarget;
+                var uploadedInTarget = uploaded - uploadedBeforeTarget;
+                var errorsInTarget = errors - errorsBeforeTarget;
+                Logger.Info(
+                    "BuildCollectionsAsync: finished target {Server}:{Section} — processed {Processed}, created {Created}, postersUploaded {Uploaded}, errors {Errors}, elapsed={Elapsed}ms",
+                    target.ServerUrl,
+                    target.SectionId,
+                    processedForTarget,
+                    createdInTarget,
+                    uploadedInTarget,
+                    errorsInTarget,
+                    targetSw.ElapsedMilliseconds
+                );
             }
 
             int processed = presentSeriesUnique.Count;
@@ -175,6 +211,18 @@ namespace ShokoRelay.Services
                 Logger.Info("Deleted {Count} empty Plex collections after building.", deletedEmptyCollections);
 
             int skipped = processed - addedSeries.Count;
+
+            totalSw.Stop();
+            Logger.Info(
+                "BuildCollectionsAsync: completed — processed={Processed}, created={Created}, uploaded={Uploaded}, skipped={Skipped}, errors={Errors}, deletedEmptyCollections={Deleted}, elapsedMs={Elapsed}",
+                processed,
+                created,
+                uploaded,
+                skipped,
+                errors,
+                deletedEmptyCollections,
+                totalSw.ElapsedMilliseconds
+            );
 
             return new BuildCollectionsResult(
                 Processed: processed,
@@ -218,6 +266,8 @@ namespace ShokoRelay.Services
                     continue;
                 }
 
+                items ??= new List<PlexMetadataItem>();
+
                 foreach (var item in items)
                 {
                     if (string.IsNullOrWhiteSpace(item.Guid))
@@ -227,7 +277,6 @@ namespace ShokoRelay.Services
                     if (!shokoId.HasValue)
                         continue;
 
-                    // honor allowed
                     if (allowedIds.Count > 0 && !allowedIds.Contains(shokoId.Value))
                         continue;
 

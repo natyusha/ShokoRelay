@@ -1,9 +1,9 @@
 using System.Text;
 using System.Text.RegularExpressions;
-using Shoko.Plugin.Abstractions.DataModels;
-using Shoko.Plugin.Abstractions.DataModels.Shoko;
-using Shoko.Plugin.Abstractions.Enums;
-using Shoko.Plugin.Abstractions.Services;
+using Shoko.Abstractions.Enums;
+using Shoko.Abstractions.Metadata.Containers;
+using Shoko.Abstractions.Metadata.Shoko;
+using Shoko.Abstractions.Services;
 using ShokoRelay.Plex;
 
 namespace ShokoRelay.Helpers
@@ -79,7 +79,7 @@ namespace ShokoRelay.Helpers
             string? groupTitle = null;
             try
             {
-                groupTitle = group?.PreferredTitle ?? group?.DefaultTitle;
+                groupTitle = group?.PreferredTitle?.Value ?? group?.DefaultTitle?.Value;
             }
             catch
             {
@@ -136,7 +136,7 @@ namespace ShokoRelay.Helpers
             var fileData = MapHelper.GetSeriesFileData(series);
             foreach (var mapping in fileData.Mappings)
             {
-                var location = mapping.Video.Locations.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l.Path)) ?? mapping.Video.Locations.FirstOrDefault();
+                var location = mapping.Video.Files.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l.Path)) ?? mapping.Video.Files.FirstOrDefault();
                 if (location == null)
                     continue;
 

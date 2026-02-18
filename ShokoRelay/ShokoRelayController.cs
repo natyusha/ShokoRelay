@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
-using Shoko.Plugin.Abstractions;
-using Shoko.Plugin.Abstractions.DataModels;
-using Shoko.Plugin.Abstractions.DataModels.Shoko;
-using Shoko.Plugin.Abstractions.Enums;
-using Shoko.Plugin.Abstractions.Services;
+using Shoko.Abstractions.Enums;
+using Shoko.Abstractions.Metadata.Containers;
+using Shoko.Abstractions.Metadata.Shoko;
+using Shoko.Abstractions.Plugin;
+using Shoko.Abstractions.Services;
 using ShokoRelay.AnimeThemes;
 using ShokoRelay.Config;
 using ShokoRelay.Helpers;
@@ -156,7 +156,7 @@ namespace ShokoRelay.Controllers
                             new
                             {
                                 guid = _mapper.GetGuid("show", series.ID),
-                                title = series.PreferredTitle,
+                                title = series.PreferredTitle?.Value,
                                 year = series.AirDate?.Year,
                                 score = 100,
                                 thumb = poster != null ? ImageHelper.GetImageUrl(poster) : null,
@@ -182,7 +182,7 @@ namespace ShokoRelay.Controllers
             if (debug == null)
                 return NotFound(new { status = "error", message = "No mapping/debug information available for this file." });
 
-            string fileName = System.IO.Path.GetFileName(video.Locations.FirstOrDefault()?.Path ?? "");
+            string fileName = System.IO.Path.GetFileName(video.Files.FirstOrDefault()?.Path ?? "");
             return Ok(
                 new
                 {
@@ -229,7 +229,7 @@ namespace ShokoRelay.Controllers
                     new
                     {
                         episodeId = ep.ID,
-                        episodeTitle = ep.PreferredTitle,
+                        episodeTitle = ep.PreferredTitle?.Value,
                         files = filesForEpisode,
                     }
                 );
@@ -240,7 +240,7 @@ namespace ShokoRelay.Controllers
                 {
                     status = "ok",
                     seriesId = shokoSeriesId,
-                    seriesTitle = series.PreferredTitle,
+                    seriesTitle = series.PreferredTitle?.Value,
                     episodes = episodeResults,
                     files = uniqueFiles,
                 }
@@ -464,6 +464,42 @@ namespace ShokoRelay.Controllers
             if (evt == null || evt.Metadata == null || !string.Equals(evt.Event, "media.scrobble", System.StringComparison.OrdinalIgnoreCase))
                 return Ok(); // only care about scrobble events
 
+            // --- FILTER: only accept scrobbles from admin (token owner) or configured ExtraPlexUsers ---
+            var plexUserFromPayload = evt.Account?.Title?.Trim();
+            if (string.IsNullOrWhiteSpace(plexUserFromPayload))
+                return Ok(new { status = "ignored", reason = "no_plex_user" });
+
+            // Reuse centralized ExtraPlexUsers parsing from ConfigProvider
+            var extraEntries = _configProvider.GetExtraPlexUserEntries();
+            var allowed = new HashSet<string>(extraEntries.Select(e => e.Name), StringComparer.OrdinalIgnoreCase);
+
+            // Attempt to add admin account title/username (if token present)
+            if (!string.IsNullOrWhiteSpace(cfg.PlexLibrary.Token))
+            {
+                try
+                {
+                    var acct = await _plexAuth.GetAccountInfoAsync(cfg.PlexLibrary.Token).ConfigureAwait(false);
+                    if (acct != null)
+                    {
+                        if (!string.IsNullOrWhiteSpace(acct.Title))
+                            allowed.Add(acct.Title);
+                        if (!string.IsNullOrWhiteSpace(acct.Username))
+                            allowed.Add(acct.Username);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn(ex, "PluginPlexWebhook: failed to resolve admin Plex account info");
+                }
+            }
+
+            // If payload user isn't in allowed list, ignore the scrobble
+            if (!allowed.Contains(plexUserFromPayload))
+            {
+                Logger.Info("Ignored Plex scrobble from user '{User}' (not configured in ExtraPlexUsers nor admin)", plexUserFromPayload);
+                return Ok(new { status = "ignored", reason = "plex_user_not_allowed" });
+            }
+
             // Try to extract Shoko episode id from GUID (agent GUID format used by this plugin)
             int? shokoEpisodeId = TryParseShokoEpisodeIdFromGuid(evt.Metadata.Guid);
 
@@ -488,9 +524,8 @@ namespace ShokoRelay.Controllers
                 catch { }
             }
 
-            bool updated = await _userDataService
-                .SetEpisodeWatchedStatus(user, shokoEpisode, true, watchedAt, Shoko.Plugin.Abstractions.Enums.UserDataSaveReason.PlaybackProgress, true)
-                .ConfigureAwait(false);
+            var saved = await _userDataService.SetEpisodeWatchedStatus(shokoEpisode, user, true, watchedAt, true).ConfigureAwait(false);
+            bool updated = saved != null;
 
             return Ok(new { status = "ok", marked = updated });
         }
@@ -765,15 +800,17 @@ namespace ShokoRelay.Controllers
 
                 if (partIndex.HasValue && ShokoRelay.Settings.TMDBEpNumbering && episode is IShokoEpisode shokoEp && shokoEp.TmdbEpisodes?.Any() == true)
                 {
-                    var tmdbEps = shokoEp.TmdbEpisodes.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber).ToList();
+                    string? showPrefId = (ctx.Series as IShokoSeries)?.TmdbShows?.FirstOrDefault()?.PreferredOrdering?.OrderingID;
+                    var tmdbEps = SelectPreferredTmdbOrdering(shokoEp.TmdbEpisodes, showPrefId);
 
                     int idx = partIndex.Value - 1;
                     if (idx < tmdbEps.Count)
                     {
                         var tmdbEp = tmdbEps[idx];
                         tmdbEpisode = tmdbEp;
-                        if (tmdbEp.SeasonNumber.HasValue)
-                            coords = new PlexCoords { Season = tmdbEp.SeasonNumber.Value, Episode = tmdbEp.EpisodeNumber };
+                        var ord = Plex.PlexMapping.GetOrderingCoords(tmdbEp, showPrefId);
+                        if (ord.Season.HasValue)
+                            coords = new PlexCoords { Season = ord.Season.Value, Episode = ord.Episode };
                     }
                 }
 

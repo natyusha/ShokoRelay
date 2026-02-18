@@ -34,7 +34,7 @@ Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File Sy
 - Once the Server has loaded navigate to Shoko Relay's dashboard: `http://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/dashboard`
 - Mandatory
   - Click the `Generate VFS` button in the "Shoko: VFS" section to initialize your collection
-  - First time generation may take a couple of minutes to complete with a large library.
+  - First time generation may take several minutes to complete with a large library.
   - The VFS will automatically update when it detects files have been renamed or moved.
 - Optional
   - Link the plugin to your Plex account to enable auto scanning, scrobbling (webhooks) and enhanced collection support
@@ -86,7 +86,7 @@ This plugin includes full integration for [AnimeThemes](https://animethemes.moe/
 3. Apply the mapping to the VFS by clicking the `Apply Mapping to VFS` button
 
 > [!IMPORTANT]
-> Similar to the VFS you must exclude the `!AnimeThemes` folder from Shoko using the `Exclude` server option. You must also configure the basepath for where it is located (the default is `/animethemes/`).
+> Similar to the VFS you must exclude the `!AnimeThemes` folder from Shoko using the `Exclude` server option. You must also configure the basepath for where the original files are located (the default is `/animethemes/`).
 
 #### Themes as Series BGM
 
@@ -105,37 +105,23 @@ Due to this plugin relying on Shoko's plugin abstractions as well as Plex still 
 
 #### Missing Info
 
-> mostly things that aren't available in Shoko's plugin abstractions
-
 - **TMDB**
-  - networks
   - taglines (does anyone care?)
-  - episode critic score
-  - country
-  - Season names
-  - Season descriptions
-  - Season posters
-  - TMDB episode groups (custom seasons/alternate ordering)
-  - TMDB series user score
-  - TVDBdbID [from xrefs] (for default theme songs)
+  - country of origin
 - **AniDB**
-  - tag weights
-  - episode user rating
   - similar anime
 
 #### Missing Plex Provider Features
 
 - collections for tv show libraries (currently implemented via plex http api)
-- ratings that aren't from tmdb/imdb/rotten tomatoes
+- rating icons that aren't from tmdb/imdb/rotten tomatoes
 
 ## TODO
 
-- Once available in Shoko plugin abstractions:
-  - Add the missing TMDB info listed above
-  - Add weight based content indicators/ratings logic
+- Fix audience ratings not applying to episodes or series (may be a Plex issue)
 - Once available in Plex metadata providers
   - Switch collection support from Plex HTTP API "Generate Collections" button to the provider
   - Add custom or generic series/episode ratings directly through the provider
 - Dashboard
   - Add a docs page for what everything does
-  - Add Shoko WebUI styled tooltips
+- Refactor and comment code for legibility
