@@ -377,6 +377,67 @@ namespace ShokoRelay.Controllers
             return WrapInPagedContainer(allEpisodes);
         }
 
+        [HttpGet("metadata/{ratingKey}/images")]
+        public IActionResult GetImages(string ratingKey, CancellationToken cancellationToken = default)
+        {
+            var ctx = GetSeriesContext(ratingKey);
+            if (ctx == null)
+                return NotFound();
+
+            object[] images = Array.Empty<object>();
+            if (ratingKey.Contains(PlexConstants.EpisodePrefix))
+            {
+                var epIdPart = ratingKey.Split(PlexConstants.EpisodePrefix)[1];
+                int epId = 0;
+                int? partIdx = null;
+                if (epIdPart.Contains(PlexConstants.PartPrefix))
+                {
+                    var parts = epIdPart.Split(PlexConstants.PartPrefix);
+                    epId = int.Parse(parts[0]);
+                    partIdx = int.Parse(parts[1]);
+                }
+                else
+                {
+                    epId = int.Parse(epIdPart);
+                }
+                var episode = ctx.Series.Episodes.FirstOrDefault(e => e.ID == epId);
+                if (episode != null)
+                {
+                    var coords = GetPlexCoordinates(episode);
+                    var epMeta = _mapper.MapEpisode(episode, coords, ctx.Series, ctx.Titles, partIdx, null);
+                    if (epMeta is IDictionary<string, object?> dict && dict.TryGetValue("Image", out var img) && img is object[] arr)
+                        images = arr;
+                }
+            }
+            else if (ratingKey.Contains(PlexConstants.SeasonPrefix))
+            {
+                int sNum = int.Parse(ratingKey.Split(PlexConstants.SeasonPrefix)[1]);
+                var seasonMeta = _mapper.MapSeason(ctx.Series, sNum, ctx.Titles.DisplayTitle, cancellationToken);
+                if (seasonMeta is IDictionary<string, object?> dict && dict.TryGetValue("Image", out var img) && img is object[] arr)
+                    images = arr;
+            }
+            else
+            {
+                var showMeta = _mapper.MapSeries(ctx.Series, ctx.Titles);
+                if (showMeta is IDictionary<string, object?> dict && dict.TryGetValue("Image", out var img) && img is object[] arr)
+                    images = arr;
+            }
+
+            return Ok(
+                new
+                {
+                    MediaContainer = new
+                    {
+                        offset = 0,
+                        totalSize = images.Length,
+                        identifier = ShokoRelayInfo.AgentScheme,
+                        size = images.Length,
+                        Image = images,
+                    },
+                }
+            );
+        }
+
         #endregion
 
         #region Plex: Authentication

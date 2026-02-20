@@ -42,10 +42,12 @@ GET  /collections/user/{groupId}                               -> GetCollectionP
 GET  /metadata/{ratingKey}?includeChildren=0|1                 -> GetMetadata
 GET  /metadata/{ratingKey}/children                            -> GetChildren
 GET  /metadata/{ratingKey}/grandchildren                       -> GetGrandchildren
+GET  /metadata/{ratingKey}/images                              -> GetImages (all image assets for the item)
 ```
 
 - Purpose: agent discovery, match flows and metadata serving for Plex-compatible GUIDs.
 - `Match` accepts `name` query OR POST body `{ Filename: string }` and extracts a Shoko file id when present (VFS-style `[ShokoFileId]` token).
+- The optional `/metadata/{ratingKey}/images` endpoint returns a `MediaContainer` with an `Image` array of all available assets for the given item.
 - `GetCollection` / `GetCollectionPoster` return collection metadata and poster image for a Shoko group.
 - `GetMetadata` supports `episode`, `season` and `series` ratingKey formats (see notes below).
 

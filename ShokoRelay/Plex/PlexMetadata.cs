@@ -370,15 +370,21 @@ namespace ShokoRelay.Plex
             var backdrop = images.GetImages(ImageEntityType.Backdrop).FirstOrDefault();
             var seasonTitle = GetSeasonFolder(seasonNum);
             string? seasonSummary = null;
-            var seasonObj = series.Seasons?.FirstOrDefault(s => s.SeasonNumber == seasonNum);
-            if (seasonObj is not null)
-            {
-                // Prefer the season's preferred title/summary when available
-                var prefTitle = seasonObj.PreferredTitle?.Value;
-                if (!string.IsNullOrWhiteSpace(prefTitle))
-                    seasonTitle = prefTitle;
 
-                seasonSummary = TextHelper.SummarySanitizer(seasonObj.PreferredDescription?.Value, ShokoRelay.Settings.SummaryMode) ?? seasonObj.PreferredDescription?.Value ?? string.Empty;
+            // TMDB metadata is preferred for season title/summary when available.
+            if (series is IShokoSeries shokoSeriesMetadata)
+            {
+                var tmdbSeason = shokoSeriesMetadata.TmdbSeasons?.FirstOrDefault(ts => ts.SeasonNumber == seasonNum);
+                if (tmdbSeason != null)
+                {
+                    var tmdbTitle = tmdbSeason.PreferredTitle?.Value;
+                    if (!string.IsNullOrWhiteSpace(tmdbTitle))
+                        seasonTitle = tmdbTitle;
+
+                    var tmdbDesc = tmdbSeason.PreferredDescription?.Value;
+                    if (!string.IsNullOrWhiteSpace(tmdbDesc))
+                        seasonSummary = TextHelper.SummarySanitizer(tmdbDesc, ShokoRelay.Settings.SummaryMode) ?? tmdbDesc;
+                }
             }
 
             var firstEpisode = series.Episodes.Select(e => new { Ep = e, Map = GetPlexCoordinates(e) }).Where(x => x.Map.Season == seasonNum).OrderBy(x => x.Map.Episode).FirstOrDefault();

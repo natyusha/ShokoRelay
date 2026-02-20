@@ -51,6 +51,27 @@ Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File Sy
     follow symlinks = yes
 ```
 
+<details>
+<summary><b>Recommended Shoko Server Configuration</b></summary><br>
+
+Enable the following options in Shoko to ensure that Plex has at least one source of metadata for everything:
+
+- `Settings > AniDB > Download Options`
+  - [x] Character Images
+  - [x] Creator Images
+- `Settings > Metadata Sites > TMDB Options`
+  - [x] Auto Link
+  - [x] Auto Link Restricted
+- `Settings > Metadata Sites > TMDB Download Options`
+  - [x] Download Alternate Ordering
+  - [x] Download Backdrops
+  - [x] Download Posters
+- `Settings > Collection > Relation Options`
+  - [x] Auto Group Series
+  - [x] Determine Main Series Using Relation Weighing
+
+</details>
+
 ### Plex
 
 #### Metadata Agent
@@ -64,14 +85,14 @@ Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File Sy
 
 > [!TIP]
 > If you previously used the legacy `ShokoRelay.bundle` you can simply convert your existing libraries to the new agent.
-> This allows you to maintain watched states and video preview thumbnails. This requires a full metadata refresh after the first scan.
+> This allows you to maintain watched states and video preview thumbnails. A full metadata refresh is required after the first scan.
 
 - The Shoko Relay agent requires a `TV Shows` type library to be created (or an existing one to be used)
 - Simply change the Scanner to `Plex TV Series` and the Agent to `Shoko Relay`
 - When adding your import folders to plex be sure to point them to the `!ShokoRelayVFS` directory
 - Under "Advanced" in the Library it is recommended to set these settings:
-  - Use season titles
-  - Use local assets
+  - [x] Use season titles
+  - [x] Use local assets
   - Collections: `Hide items which are in collections`
   - Seasons: `Hide for single-season series`
 
@@ -131,27 +152,112 @@ Most of the options in this section require a Shoko API key to fully function (a
 
 ## Information
 
-Info on controlling this plugin directly is available in [Endpoints.md](./ShokoRelay/Docs/Endpoints.md)
+### Automatic Title Modification
 
-#### Missing Info
+**Common Prefixes for Series**  
+When a series starts with a common title prefix it will optionally be moved to the end of the title (for improved alphabetical sorting). A list of the prefixes considered common by the agent are as follows:
 
-> Due to this plugin relying on Shoko's plugin abstractions as well as Plex still actively developing the metadata provider feature some things may be missing or not work correctly.
+- Gekijouban (plus several variants)
+- Eiga
+- OVA
 
-- **TMDB**
-  - taglines
-- **AniDB**
-  - similar anime
+**Ambiguous Titles for Episodes**  
+In cases where AniDB uses ambiguous episode titles the series title will be used instead (with the original title appended to it as necessary). A list of the titles considered ambiguous by the agent are as follows:
+
+- Complete Movie
+- Music Video
+- OAD
+- OVA
+- Short Movie
+- Special
+- TV Special
+- Web
+
+> [!NOTE]
+> The appended titles will appear after an em dash (**—**) making it easy to search for anything affected by this.
+
+### TMDB Matching
+
+If you have TMDB auto links enabled in Shoko or simply have a link for a given series, it will have access to several features not available otherwise:
+
+- Plex's default theme song support (using the TvDB ID provided by TMDB)
+- Fallback for series/episode descriptions and titles (if AniDB is missing that information)
+- Background/backdrop image support as well as additional main series poster options (if available)
+
+With `TMDB Episode Numbering` enabled in the Provider Configuration the following will also be supported:
+
+- Season support for long running anime including posters, titles and descriptions
+- Combining multiple Shoko series into a single Plex entry
+- Alternate episode ordering for seasons
+
+**Curated TMDB Mappings**  
+If you don't have any TMDB links in Shoko it is recommended that you start off with a curated list before auto linking. [Info Here](https://docs.shokoanime.com/shoko-server/tmdb-features#curated-tmdb-mappings)
+
+**Alternate TMDB Episode Ordering**  
+If you aren't happy with TMDB's default episode/season structure for a series you can change it to an alternate or even make your own. [Info Here](https://docs.shokoanime.com/shoko-server/tmdb-features#alternate-episode-ordering)
+
+> [!NOTE]
+> If you select an alternate order for a series TMDB season posters will no longer be automatically added to Plex as those are only for the default seasons.
+
+**Combining Series**  
+This allows shows which are separated on AniDB to be combined into a single entry inside Plex. To Achieve this simply rename the series in Shoko that you want merged to have the exact same title as each other (making sure none of the episode assignments overlap).
+
+Using Fairy Tail as an example all of the following series can be automatically merged into a single entry in Plex by renaming them all to "Fairy Tail" in Shoko (if they are correctly matched to TMDB):
+
+- Fairy Tail
+- Fairy Tail (2011)
+- Fairy Tail (2014)
+- Fairy Tail (2018)
+
+### Combining Episodes
+
+Sometimes you may encounter a single episode which is split across multiple files. In order to ensure that all of the files are treated as a single entity you can follow Plex's [Naming Conventions](https://support.plex.tv/articles/naming-and-organizing-your-tv-show-files/#toc-6). The VFS will automatically respect this type of file naming in the background. For an ideal playback experience however, it is recommended to merge these types of files together.
+
+### Minimum Tag Weights
+
+Many tags on AniDB use a [3 Star Weight System](https://wiki.anidb.net/Tags#Star-rating_-_the_Weight_system) which represents a value from 0 (no stars) to 600 (3 stars) and determines how relevant the tag is to the series it is applied to. By setting this value in the Agent settings you can filter out tags below a certain star threshold.
+
+### Assumed Content Ratings
+
+If "assumed content ratings" are enabled in the agent settings the [target audience](https://anidb.net/tag/2606/animetb) and [content indicator](https://anidb.net/tag/2604/animetb) tags from AniDB will be used to roughly match the [TV Parental Guidelines](http://www.tvguidelines.org/resources/TheRatings.pdf) system. The target audience tags will conservatively set the initial rating anywhere from TV-Y to TV-14, then the content indicators will be appended. If the tag weights for the content indicators are high enough (> 400 or **\*\***) the rating will be raised to compensate. A general overview is listed in the table below:
+
+| Tag                             | Rating  |
+| :------------------------------ | :------ |
+| Kodomo                          | TV-Y    |
+| Mina                            | TV-G    |
+| Shoujo, Shounen                 | TV-PG   |
+| Josei, Seinen                   | TV-14   |
+| Sexual Humour                   | TV-\*-D |
+| Nudity, Sex                     | TV-\*-S |
+| **\*\*** Violence               | TV-14-V |
+| **\*\*** Nudity, **\*\+** Sex   | TV-14-S |
+| Borderline Porn (override)      | TV-MA   |
+| **\*\*\+** Nudity, **\*\*** Sex | TV-MA-S |
+| **\*\*\+** Violence             | TV-MA-V |
+| 18 Restricted (override)        | X       |
+
+### Plugin API
+Controlling this plugin directly is possible via HTTP GET/POST see [Endpoints.md](./ShokoRelay/Docs/Endpoints.md) for more information.
+
+### Missing Info
+
+Due to this plugin relying Plex's metadata provider feature which is still under development some things may be missing or not work correctly.
+
+#### Missing from Shoko's Abstractions
+- **TMDB**: taglines
+- **AniDB**: Similar Anime `api/v3/Series/{seriesID}/AniDB/Similar`
 
 #### Missing Plex Provider Features
 
-- collections for tv show libraries (currently implemented via plex http api)
-- rating icons that aren't from tmdb/imdb/rotten tomatoes
+- Collections for TV Show libraries (currently implemented via Plex's HTTP API)
+- Custom or generic rating icons
 
 ## TODO
 
 - Fix audience ratings not applying to episodes or series (may be a Plex issue)
+- Fix networks not applying to series (may be a Shoko issue)
+- Populate the similar Array with similar series
 - Once available in Plex metadata providers
   - Switch collection support from Plex HTTP API "Generate Collections" button to the provider
   - Add custom or generic series/episode ratings directly through the provider
 - Refactor and comment code for legibility
-- Expand documentation
