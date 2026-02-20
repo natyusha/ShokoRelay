@@ -2,277 +2,180 @@
 
 All of the endpoints used by the Shoko Relay plugin are available under the plugin base path: `http://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay`
 
----
+## Table of contents
 
-## Provider & Matching
-
-```
-GET  /                                                        -> GetMediaProvider (agent descriptor / supported types)
-GET  /matches?name={name}                                     -> Match (also accepts POST body { Filename })
-POST /matches                                                 -> Match
-```
-
-- Purpose: agent discovery & file->series quick-match used by Plex / agent match flows.
-- Match params: `name` query OR POST body `{ Filename: string }`.
-  - The endpoint extracts a Shoko file id from the supplied filename/path (expects the VFS-style `[ShokoFileId]` token in the filename). If a Shoko file id cannot be determined the match response will be empty.
+- [Dashboard / Config](#dashboard-config)
+- [Metadata Provider](#metadata-provider)
+- [Plex: Authentication](#plex-authentication)
+- [Plex: Webhook](#plex-webhook)
+- [Plex: Collections](#plex-collections)
+- [Virtual File System (VFS)](#virtual-file-system-vfs)
+- [Shoko: Automations](#shoko-automations)
+- [Sync Watched](#sync-watched)
+- [AnimeThemes](#animethemes)
 
 ---
 
-## Dashboard (UI assets)
+## Dashboard / Config
 
 ```
-GET /dashboard/{*path}                                        -> Serve plugin dashboard index and static assets (fonts/images)
+GET  /dashboard/{*path}                                        -> GetControllerPage (serve dashboard index & assets)
+GET  /config                                                   -> GetConfig
+POST /config                                                   -> SaveConfig
+GET  /config/schema                                            -> GetConfigSchema
 ```
 
-- This
-- `{*path}` is an optional catch-all for dashboard assets; the index is served from the plugin `dashboard` folder.
+- Serves the dashboard UI and static assets (fonts, images, JS/CSS) from the plugin `dashboard` folder.
+- `{*path}` is an optional catch-all for dashboard assets.
+- `SaveConfig` persists provider settings (path mappings, tokens handled separately).
 
 ---
 
-## Plex authentication & discovery
+## Metadata Provider
 
 ```
-GET  /plexauth                                                -> StartPlexAuth (returns pin + authUrl + statusUrl)
-GET  /plexauth/status?pinId={id}                              -> GetPlexAuthStatus (poll for pin completion)
-POST /plex/unlink                                             -> UnlinkPlex (revoke & clear saved token)
-POST /plex/libraries/refresh                                  -> RefreshPlexLibraries (re-discover Shoko libraries)
+GET  /                                                         -> GetMediaProvider (agent descriptor / supported types)
+GET  /matches?name={name}                                      -> Match (also accepts POST body `{ Filename }`)
+POST /matches                                                  -> Match
+GET  /collections/{groupId}                                    -> GetCollection
+GET  /collections/user/{groupId}                               -> GetCollectionPoster (image)
+GET  /metadata/{ratingKey}?includeChildren=0|1                 -> GetMetadata
+GET  /metadata/{ratingKey}/children                            -> GetChildren
+GET  /metadata/{ratingKey}/grandchildren                       -> GetGrandchildren
 ```
 
-- `StartPlexAuth` returns a PIN code and an `authUrl` for the user to complete Plex pairing.
-- `GetPlexAuthStatus` saves the token to preferences when pairing completes and discovers Plex servers/libraries.
+- Purpose: agent discovery, match flows and metadata serving for Plex-compatible GUIDs.
+- `Match` accepts `name` query OR POST body `{ Filename: string }` and extracts a Shoko file id when present (VFS-style `[ShokoFileId]` token).
+- `GetCollection` / `GetCollectionPoster` return collection metadata and poster image for a Shoko group.
+- `GetMetadata` supports `episode`, `season` and `series` ratingKey formats (see notes below).
 
 ---
 
-## Configuration
+## Plex: Authentication
 
 ```
-GET  /config                                                  -> GetConfig (returns current RelayConfig)
-POST /config                                                  -> SaveConfig (body: RelayConfig)
-GET  /config/schema                                           -> GetConfigSchema (JSON schema for UI)
+GET  /plexauth                                                 -> StartPlexAuth (returns pin + authUrl + statusUrl)
+GET  /plexauth/status?pinId={id}                               -> GetPlexAuthStatus (poll for pin completion)
+POST /plex/unlink                                              -> UnlinkPlex (revoke & clear saved token)
+POST /plex/libraries/refresh                                   -> RefreshPlexLibraries (re-discover Shoko libraries)
 ```
 
-- `SaveConfig` normalizes and persists settings (path mappings, CSV fields, tokens stored separately).
+- `StartPlexAuth` returns a PIN and `authUrl` to complete Plex pairing.
+- `GetPlexAuthStatus` saves the token and discovers available PMS servers & libraries.
 
 ---
 
-## Plex collections & posters
+## Plex: Webhook
 
 ```
-GET  /plex/collections/build?seriesId={id}&filter={filter}    -> BuildPlexCollections
-GET  /plex/collections/posters?seriesId={id}&filter={filter}  -> ApplyCollectionPosters
-GET  /collections/{groupId}                                   -> GetCollection
-GET  /collections/user/{groupId}                              -> GetCollectionPoster (image)
+POST /plex/webhook                                             -> PluginPlexWebhook
 ```
 
-- `build` and `posters` accept `seriesId` or a `filter` (comma-separated filter) — not both.
-- Responses contain process counts and optional error lists.
+- Receives Plex `media.scrobble` events and marks corresponding Shoko episodes watched (when `RelayConfig.AutoScrobble` is enabled).
+- Accepts either form-encoded `payload` or raw JSON.
+- Only scrobbles from the admin (token owner) and usernames configured in `RelayConfig.ExtraPlexUsers` are processed.
+- Extracts the Shoko episode id from `Metadata.guid` (agent GUID); events without a Shoko GUID are ignored (`reason: no_shoko_guid`).
 
 ---
 
-## Plex: Sync Watched
+## Plex: Collections
 
 ```
-GET|POST /plex/syncwatched[?dryRun={true|false}&sinceHours={int}]
+GET  /plex/collections/build?seriesId={id}&filter={filter}     -> BuildPlexCollections
+GET  /plex/collections/posters?seriesId={id}&filter={filter}   -> ApplyCollectionPosters
 ```
 
-- Purpose: synchronize watched-state reported by Plex into Shoko user data.
-
-- Query parameters:
-  - `dryRun` (optional, bool) — when `true` the endpoint will **not** write any changes to Shoko; instead it returns a detailed audit of every change it would have made (developer/testing only).
-
-Behaviour
-
-- The plugin fetches watched-state for:
-  - the configured Plex token (the Plex "admin"/owner account), and
-  - any managed Plex usernames listed in `RelayConfig.ExtraPlexUsers`. These are configured in the dashboard UI (comma separated).
-
-- Behaviour for managed/home users:
-  - Extra Plex usernames may optionally include a 4‑digit PIN using the format `username;1234`. Example: `alice;1234, bob`.
-    - If a semicolon is present and the value after it is exactly four digits, that four‑digit value is treated as the user's PIN and will be supplied to the Plex `/switch` call as `&pin=1234`.
-    - If the semicolon is present but the part after it is not a 4‑digit integer (for example `user;1`), the entire string is treated as the username (the semicolon is preserved in the username).
-  - If an extra username is configured the plugin will automatically attempt to obtain a transient per-user token from Plex (Plex Home "switch" API) using the configured Admin token. Managed/home user tokens are session-scoped; the plugin fetches them at runtime and does **NOT** persist them.
-
-- Mapping strategy: **GUID-only** — the endpoint requires a Shoko GUID embedded in Plex metadata and will **skip** items without a Shoko GUID (`Reason: no_shoko_guid`).
-- Real runs only write Shoko watched-state for candidates where `WouldMark` would be true; dry-run uses the same eligibility logic and reports `WouldMark` without applying changes.
-- All watched states are applied to the first Shoko user returned by `IUserService` (the "main" Shoko user). The plugin does **not** support separate Shoko users.
-- Duplicate episodes (same Shoko episode reported by multiple Plex users) are de-duplicated so each Shoko episode is written at most once per sync.
-
-Request
-
-- No body required. Use `?dryRun=true` to preview changes. Omitting `dryRun` defaults to a safe dry-run (no writes).
-- Optionally pass `sinceHours` to limit results to recently-viewed items — this is only applied when provided.
-  - The scheduled automation (enabled by `ShokoSyncWatchedFrequencyHours`) automatically applies the same time-window to speed up processing.
-
-Response (JSON)
-
-```
-{
-  status: "ok",
-  processed: <int>,            // total Plex items examined
-  marked: <int>,               // total Shoko episodes marked watched
-  skipped: <int>,
-  scheduled: <int>,            // server jobs scheduled (if any)
-  perUser: {                   // per-Plex-user summary
-    "admin": { processed, markedWatched, skipped, errors },
-    "otherUser": { ... }
-  },
-  perUserChanges: {            // audit list of changes (present in dry-run and real runs)
-    "admin": [
-      { PlexUser, ShokoEpisodeId, SeriesTitle, EpisodeTitle, SeasonNumber, EpisodeNumber, RatingKey, Guid, FilePath, LastViewedAt, WouldMark, AlreadyWatchedInShoko, Reason }
-    ],
-    "otherUser": [ ... ]
-  },
-  errors: <int>,
-  errorsList: ["...", ...]
-}
-```
-
-- `perUserChanges` details every candidate change. Fields:
-  - `PlexUser`: the Plex account whose view produced this record
-  - `ShokoEpisodeId`: the target Shoko episode id
-  - `SeriesTitle` / `EpisodeTitle` / `SeasonNumber` / `EpisodeNumber`: human-readable metadata when available
-  - `RatingKey` / `Guid` / `FilePath`: Plex metadata used for mapping
-  - `LastViewedAt`: Plex's epoch-derived last-view timestamp (UTC)
-  - `WouldMark`: whether this run would mark the episode watched (false in dry-run when already watched or no files)
-  - `AlreadyWatchedInShoko`: whether Shoko already considers the episode watched for the target user
-  - `Reason`: when not applying, a short reason (e.g. `already_watched`, `no_files`, `duplicate`)
-
-Security / usage notes
-
-- `dryRun` is meant for developer/testing use — the dashboard UI does **not** expose a dry-run toggle.
-  - The dashboard's **Sync** button performs a real run (equivalent to calling the API with `?dryRun=false`); call the endpoint directly with `?dryRun=true` to preview changes.
-
-Examples
-
-- Dry run (developer):
-  - `POST /api/plugin/ShokoRelay/plex/syncwatched?dryRun=true`
-- Real run (admin/automation):
-  - `POST /api/plugin/ShokoRelay/plex/syncwatched?dryRun=false`
-
----
-
-## Plex: Webhook (Auto‑Scrobble)
-
-```
-POST /plex/webhook                                            -> PluginPlexWebhook
-```
-
-- Purpose: receive Plex "media.scrobble" webhook events and mark the corresponding Shoko episode watched.
-- Body: Plex sends either form-encoded `payload` (string) or raw JSON — the controller accepts both formats.
-- Behaviour:
-  - Only processes `media.scrobble` events.
-  - Ignored unless `RelayConfig.AutoScrobble` is enabled.
-  - Only accepts scrobbles from the configured admin Plex account (token owner) and any usernames configured in `RelayConfig.ExtraPlexUsers`.
-  - Extracts the Shoko episode id from the `Metadata.guid` (agent GUID produced by this plugin). If no Shoko GUID is present the event is ignored (`reason: no_shoko_guid`).
-  - Marks the episode watched for the primary Shoko user and returns `{ status: "ok", marked: <bool> }` on success.
-
----
-
-## Shoko: Import & Remove‑Missing
-
-```
-POST /shoko/import                                            -> RunShokoImport
-POST /shoko/remove-missing                                    -> RemoveMissingFiles
-```
-
-- `POST /shoko/import` — triggers a server import via Shoko Server v3 API (dashboard exposes this as the **Import** button).
-  - Query: `onlyUnrecognized` (optional, defaults to `true`) — currently unused by the controller but accepted for future filtering.
-  - Response: `{ status: "ok", scanned: [...], scannedCount: n }`.
-
-- `POST /shoko/remove-missing` — calls Shoko v3 "RemoveMissingFiles" action.
-  - Query: `removeFromMyList` (optional, defaults to `true`).
-  - Response: `{ status: "ok", response: <server-response> }`.
-
----
-
-## Plex metadata endpoints
-
-```
-GET  /metadata/{ratingKey}?includeChildren=0|1                -> GetMetadata
-GET  /metadata/{ratingKey}/children                           -> GetChildren
-GET  /metadata/{ratingKey}/grandchildren                      -> GetGrandchildren
-```
-
-- `ratingKey` formats:
-  - Episode: `e{ShokoEpisodeID}` optionally `e{ShokoEpisodeID}p{PartNumber}` for multi-part files
-  - Season: `{ShokoSeriesID}s{SeasonNumber}`
-  - Series: `{ShokoSeriesID}`
-  - Note: `ratingKey` formats used by the metadata endpoints use the `PlexConstants` prefixes: `s` = season, `e` = episode, `p` = part.
-- `GetMetadata` behaviour:
-  - Episode requests return episode metadata (uses TMDB per-episode overrides when available).
-  - Season requests return a season metadata object (optionally include episode children).
-  - Series requests return series metadata (optionally include all seasons as children).
-
----
-
-## Debug endpoints
-
-```
-GET  /debug/file/{shokoFileId}                                -> DebugFile (returns MapHelper diagnostics for a specific Shoko file/video id)
-GET  /debug/series/{shokoSeriesId}                            -> DebugSeries (returns MapHelper diagnostics for every file in the series; `files` array contains the same payloads produced by `/debug/file/{shokoFileId}`)
-```
-
-- Purpose: inspect the exact inputs, intermediate steps, and outputs that `MapHelper.BuildFileMappings` uses when assigning Plex coordinates (`PlexCoords`), part/index decisions, TMDB overrides, and deduplication.
-- Returns: `FileMappingDebugInfo` / `EpisodeDebugInfo` payloads containing per-file filename/path, `FileIndex`/`FileCount`, `HasPlexSplitTag`, `AllowPartSuffix`, `FileIndexParam`, `FinalCoords`, selected TMDB episode (if any), `DedupedCoords`, `PrimaryEpisode` (summary), an optional `SkipReason`, and a **final `FileMapping` summary** (primitive fields only) when available.
-- Usage: helpful for debugging why a file is mapped to the season/episode it is, or why it is excluded.
+- `build` and `posters` accept either `seriesId` or a `filter` (comma-separated list) — not both.
+- Operations run per-configured Plex target; responses include processed/created/uploaded counts and errors.
 
 ---
 
 ## Virtual File System (VFS)
 
 ```
-GET /vfs?run={true|false}&clean={true|false}&filter={filter}
+GET /vfs?run={true|false}&clean={true|false}&filter={filter}   -> BuildVfs
 ```
 
-_Parameters_
+Parameters:
 
-```
-- run (bool)           : actually builds the VFS
-- clean (bool)         : controls whether VFS root is cleaned first (default 'true').
-- filter (string csv)  : comma-separated 'ShokoSeriesID' values to restrict processing. To target a single series pass a single value (e.g. 'filter=123').
-```
+- `run` (bool) : actually builds the VFS
+- `clean` (bool) : remove/clean root first (default: true)
+- `filter` (csv) : comma-separated ShokoSeriesIDs to restrict processing
 
-- If `run=true` and the configured Plex client has `ScanOnVfsRefresh`, the controller automatically triggers Plex scans for affected series paths.
+- When `run=true` and the configured Plex client has `ScanOnVfsRefresh`, the controller will schedule Plex scans for affected series.
 
 ---
 
-## AnimeThemes VFS
+## Sync Watched
 
 ```
-GET /animethemes/vfs?mapping={true|false}&applyMapping={true|false}&mapPath={map.json}&torrentRoot={root}&filter={csv}
+GET  /syncwatched                                              -> SyncPlexWatched (for preview and testing usage)
+POST /syncwatched                                              -> SyncPlexWatched
+     [?dryRun={true|false}&sinceHours={int}&ratings={true|false}&import={true|false}&excludeAdmin={true|false}]
+GET  /syncwatched/start                                        -> StartWatchedSyncNow
 ```
 
-Purpose: build or apply AnimeThemes mapping files `AniDB-AnimeThemes-xrefs.json` which are placed in the plugin's root.
+- Synchronizes watched-state between Plex and Shoko.
+  - Default: **Plex -> Shoko**. Use `import=true` for **Shoko -> Plex**.
+- Parameters:
+  - `dryRun` — omitted => dry-run (no writes). Only `?dryRun=false` performs writes.
+  - `sinceHours` — restrict to recent activity.
+  - `ratings` / `votes` — include user ratings when `true`.
+  - `import` — direction toggle (Shoko→Plex when `true`).
+  - `excludeAdmin` — when exporting, skip applying changes for the admin account (useful with ExtraPlexUsers).
 
-_Parameters_
+- Manual trigger: `GET /syncwatched/start` triggers a one-off watched-state sync and marks the automation's last-run time so the scheduler calculates the next run from "now".
+
+Behavior highlights:
+
+- Mapping strategy: **GUID-only** — items without a Shoko GUID are skipped.
+- The endpoint examines the admin token's user and any `RelayConfig.ExtraPlexUsers` entries; per-user tokens are obtained transiently via Plex Home switch.
+- Export (Shoko→Plex) skips users who don't have access to the target library/section.
+- Results include `perUser` summaries and `perUserChanges` audit lists (candidates where `WouldMark` is true).
+
+Response includes (`PlexWatchedSyncResult`):
 
 ```
-mapping (bool)         : scan a torrent root and generate an AnimeThemes mapping JSON ('AnimeThemesMappingBuildResult')
-applyMapping (bool)    : read mapping file and apply the mappings, creating VFS links ('AnimeThemesMappingApplyResult)
-mapPath (string)       : mapping file path to read/write
-torrentRoot (string)   : optional scan root for mapping/build (overrides configured AnimeThemesPathMapping)
-filter (string csv)    : comma-separated ShokoSeriesIDs to restrict 'applyMapping'
+{ status, direction, processed, marked, skipped, scheduled, votesFound, votesUpdated, votesSkipped, matched, missingMappings, perUser, perUserChanges, errors, errorsList }
 ```
 
 ---
 
-## AnimeThemes MP3
+## Shoko: Automations
 
 ```
-GET /animethemes/mp3?path={path}&slug={slug}&offset={n}&batch={true|false}&force={true|false}
+POST /shoko/remove-missing                                     -> RemoveMissingFiles
+POST /shoko/import                                             -> RunShokoImport
+GET  /shoko/import/start                                       -> StartShokoImportNow
 ```
 
-Purpose: create `Theme.mp3` files for folders. `batch=true` processes every subfolder under `path` and returns a `ThemeMp3BatchResult`.
+- `POST /shoko/import` triggers a Shoko import and returns `{ status: "ok", scanned: [...], scannedCount: n }`.
+- `POST /shoko/remove-missing` calls Shoko's RemoveMissingFiles action; optional `removeFromMyList` query param (default `true`).
 
-_Parameters_
+- Manual trigger: `GET /shoko/import/start` triggers a one-off import and marks the automation's last-run time so the scheduler calculates the next run from "now".
+
+---
+
+## AnimeThemes
+
+### AnimeThemes VFS
 
 ```
-path (string)          : the path to check for a series relative to plex or shoko via 'PathMappings' (required for single and batch operations).
-slug (string)          : theme selector (e.g., 'op', 'ed', 'op1-tv')
-offset (int)           : index into AnimeThemes API results
-batch (bool)           : recursively process all subfolders under 'path' (returns 'ThemeMp3BatchResult')
-force (bool)           : overwrite existing 'Theme.mp3' (default 'false').
+GET /animethemes/vfs?mapping={true|false}&applyMapping={true|false}&mapPath={map.json}&torrentRoot={root}&filter={csv}  -> AnimeThemesVfs
 ```
+
+- `mapping=true` builds mapping JSON from a torrent root.
+- `applyMapping=true` reads a mapping file and applies mappings to create VFS links for series (accepts optional `filter`).
+- If neither `mapping` nor `applyMapping` is provided, the endpoint returns HTTP 400.
+
+### AnimeThemes MP3
+
+```
+GET /animethemes/mp3?path={path}&slug={slug}&offset={n}&batch={true|false}&force={true|false}  -> AnimeThemesMp3
+```
+
+- Creates `Theme.mp3` files for folders. `batch=true` processes all subfolders under `path`.
+- `path` may be a Plex-style path; controller maps it back to Shoko path mappings when necessary.
 
 ---
 
@@ -284,7 +187,7 @@ force (bool)           : overwrite existing 'Theme.mp3' (default 'false').
 - `MapHelper` produces `FileMapping` objects consumed by `VfsHelper` and `PlexMetadata` (see `MapHelper.GetSeriesFileData`).
 - Crossover episodes: a crossover is a file/video that is cross-referenced to episodes in more than one distinct AniDB/Shoko series.
   - The VFS build will **not** copy/link local metadata (art, Theme.mp3) or subtitles for crossover files to prevent metadata from one series overwriting another.
-- Sync Watched automation: controlled by `RelayConfig.SyncPlexWatched` (enable/disable) and `RelayConfig.ShokoSyncWatchedFrequencyHours` (interval).
-  - Use the API `dryRun=true` to preview changes. The `dryRun` query accepts only `true` or `false`; omitting it defaults to `true` (safe dry-run) and invalid values return HTTP 400.
-  - The plugin fetches watched-state for the configured Plex token **and** any usernames configured in `RelayConfig.ExtraPlexUsers` and applies changes to the first Shoko user returned by `IUserService` (the main Shoko user).
+- Sync Watched automation: controlled by `RelayConfig.ShokoSyncWatchedFrequencyHours` (interval) and `RelayConfig.ShokoSyncWatchedIncludeRatings` (whether scheduled runs include ratings). The automation is enabled when the interval is > 0 and disabled when it is 0. The dashboard's **Include Ratings** checkbox persists to `ShokoSyncWatchedIncludeRatings` so scheduled automation follows the dashboard preference.
+  - Use the API `dryRun=true` to preview changes. The `dryRun` query accepts only `true` or `false`; omitting it defaults to a safe dry-run and invalid values return HTTP 400.
+  - The plugin fetches watched states for the configured Plex token **and** any usernames configured in `RelayConfig.ExtraPlexUsers` and applies changes to the first Shoko user returned by `IUserService` (the main Shoko user).
   - Real runs only apply writes for candidates where `WouldMark` is true. Note: the dashboard's Sync button performs a real run (use the API with `?dryRun=true` to preview).

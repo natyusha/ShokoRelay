@@ -53,30 +53,24 @@ namespace ShokoRelay.Plex
         [JsonPropertyName("index")]
         public int? Index { get; set; }
 
-        // Plex watched markers
         [JsonPropertyName("viewCount")]
         public int? ViewCount { get; set; }
 
         [JsonPropertyName("lastViewedAt")]
         public long? LastViewedAt { get; set; }
 
-        // Media/Part information (used for file path lookup fallback)
-        [JsonPropertyName("Media")]
-        public List<PlexMedia>? Media { get; set; }
+        // Per-user information (when requesting with a user token the response may include this)
+        [JsonPropertyName("User")]
+        public PlexMetadataUser? User { get; set; }
+
+        // Per-user numeric rating (when available for the requesting token)
+        [JsonPropertyName("userRating")]
+        public double? UserRating { get; set; }
     }
 
-    public class PlexMedia
+    public class PlexMetadataUser
     {
-        [JsonPropertyName("Part")]
-        public List<PlexPart>? Part { get; set; }
-    }
-
-    public class PlexPart
-    {
-        [JsonPropertyName("file")]
-        public string? File { get; set; }
-
-        [JsonPropertyName("size")]
-        public long? Size { get; set; }
+        [JsonPropertyName("lastViewedAt")]
+        public long? LastViewedAt { get; set; }
     }
 }

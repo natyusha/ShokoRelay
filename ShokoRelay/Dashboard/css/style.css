@@ -96,6 +96,10 @@ body {
   margin: 20px;
 }
 
+html {
+  scrollbar-gutter: stable;
+}
+
 button,
 .plex-login-link {
   background: var(--button-color);
@@ -159,6 +163,15 @@ button.danger {
 
 button.danger:hover {
   background: color-mix(in srgb, var(--danger-color), white 25%);
+}
+
+button.cancel {
+  background: var(--bg-color);
+  color: var(--text-color);
+}
+
+button.cancel:hover {
+  background: color-mix(in srgb, var(--bg-color), white 15%);
 }
 
 button:hover,
@@ -331,7 +344,7 @@ textarea {
   max-width: 46px;
 }
 
-.toast-container {
+#toast-container {
   position: fixed;
   /* overlay toasts in the viewport bottom-left */
   left: 12px;
@@ -416,7 +429,7 @@ label > small::before {
   pointer-events: none;
   opacity: 0;
   will-change: opacity;
-  overflow: visible; /* allow arrow to render outside without cutting text */
+  overflow: visible;
 }
 .tooltip-show {
   opacity: 0.9;
@@ -440,7 +453,6 @@ label > small::before {
   height: 8px;
   pointer-events: none;
 }
-/* position the rotated square just outside the tooltip so it doesn't overlap content */
 .tooltip-place-top > .tooltip-arrow {
   left: 50%;
   bottom: -4px;
@@ -578,4 +590,91 @@ button.float-link {
 
 .float-link.theme-toggle[aria-pressed="false"] {
   color: var(--highlight-color);
+}
+
+/* Modal: Sync Watched States */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1500;
+  padding: 24px;
+}
+.modal-overlay.open {
+  display: flex;
+}
+.modal {
+  background: var(--panel-color);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  width: 390px;
+  max-width: calc(100% - 48px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+.modal-header {
+  align-items: center;
+  background: var(--bg-color);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  font-size: 20px;
+  font-weight: 500;
+  justify-content: space-between;
+  padding: 1rem;
+}
+.modal-body {
+  padding: 14px 16px;
+}
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  justify-content: flex-end;
+}
+.direction-toggle {
+  -webkit-appearance: none;
+  align-items: center;
+  appearance: none;
+  background: var(--inset-color);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 0 4px 2px rgba(148, 170, 209, 0.3);
+  color: var(--text-color);
+  cursor: pointer;
+  display: inline-flex;
+  padding: 10px 6px;
+  user-select: none;
+}
+.direction-toggle:hover {
+  background: color-mix(in srgb, var(--inset-color), white 15%);
+}
+.direction-toggle .dir-label {
+  min-width: 100px;
+  text-align: center;
+  color: var(--text-color);
+  font-size: 1em;
+}
+#sync-direction-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.dir-icon {
+  width: 28px;
+  height: 28px;
+  display: inline-block;
+  fill: var(--highlight-color);
+  position: absolute;
+  transition:
+    opacity 0.4s ease-out,
+    visibility 0.4s steps(2, end);
+  visibility: visible;
+}
+.dir-icon.hidden {
+  opacity: 0;
+  visibility: hidden;
 }

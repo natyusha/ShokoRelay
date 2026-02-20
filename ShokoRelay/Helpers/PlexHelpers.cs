@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Shoko.Abstractions.Enums;
 using Shoko.Abstractions.Metadata.Containers;
@@ -239,6 +240,43 @@ namespace ShokoRelay.Helpers
             }
 
             return null;
+        }
+    }
+
+    // DTO for Plex webhook payloads
+    public class PlexWebhookPayload
+    {
+        [JsonPropertyName("event")]
+        public string? Event { get; set; }
+
+        [JsonPropertyName("Account")]
+        public PlexAccount? Account { get; set; }
+
+        [JsonPropertyName("Metadata")]
+        public PlexMetadata? Metadata { get; set; }
+
+        public class PlexAccount
+        {
+            [JsonPropertyName("title")]
+            public string? Title { get; set; }
+        }
+
+        public class PlexMetadata
+        {
+            [JsonPropertyName("guid")]
+            public string? Guid { get; set; }
+
+            [JsonPropertyName("index")]
+            public int? Index { get; set; }
+
+            [JsonPropertyName("lastViewedAt")]
+            public long? LastViewedAt { get; set; }
+
+            [JsonPropertyName("librarySectionId")]
+            public int? LibrarySectionId { get; set; }
+
+            [JsonPropertyName("type")]
+            public string? Type { get; set; }
         }
     }
 }

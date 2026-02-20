@@ -22,7 +22,7 @@ namespace ShokoRelay.Services
         }
 
         /// <summary>
-        /// Trigger import scans for every ImportFolder with DropFolderType == "Source" using the configured Shoko API key.
+        /// Trigger import scans for every ManagedFolder with DropFolderType == "Source" using the configured Shoko API key.
         /// Returns a list of folder names that were scanned.
         /// </summary>
         public async Task<IReadOnlyList<string>> TriggerImportAsync(CancellationToken ct = default)
@@ -64,7 +64,7 @@ namespace ShokoRelay.Services
                         var id = f.GetProperty("ID").GetInt32();
                         var name = f.GetProperty("Name").GetString() ?? id.ToString();
 
-                        var scanUrl = $"{baseUrl}/api/v3/ImportFolder/{id}/Scan?apikey={Uri.EscapeDataString(apiKey)}";
+                        var scanUrl = $"{baseUrl}/api/v3/ManagedFolder/{id}/Scan?apikey={Uri.EscapeDataString(apiKey)}";
                         Logger.Info("ShokoImportService: scanning import folder {Name} (id={Id}) via {Url}", name, id, scanUrl);
 
                         using var scanRes = await http.GetAsync(scanUrl, ct).ConfigureAwait(false);

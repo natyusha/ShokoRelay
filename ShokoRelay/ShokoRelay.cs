@@ -37,7 +37,7 @@ namespace ShokoRelay
             serviceCollection.AddSingleton<VfsWatcher>();
 
             // Watched-state sync service (Plex -> Shoko)
-            serviceCollection.AddSingleton(provider => new Services.WatchedSyncService(
+            serviceCollection.AddSingleton(provider => new Sync.SyncToShoko(
                 provider.GetRequiredService<PlexClient>(),
                 provider.GetRequiredService<IMetadataService>(),
                 provider.GetRequiredService<IUserDataService>(),
@@ -45,6 +45,15 @@ namespace ShokoRelay
                 provider.GetRequiredService<IVideoService>(),
                 provider.GetRequiredService<ConfigProvider>(),
                 provider.GetRequiredService<PlexAuth>()
+            ));
+
+            // Watched-state export service (Plex <- Shoko)
+            serviceCollection.AddSingleton(provider => new Sync.SyncToPlex(
+                provider.GetRequiredService<PlexClient>(),
+                provider.GetRequiredService<IMetadataService>(),
+                provider.GetRequiredService<IUserDataService>(),
+                provider.GetRequiredService<IUserService>(),
+                provider.GetRequiredService<ConfigProvider>()
             ));
 
             // Shoko v3 import trigger service (calls /api/v3/ImportFolder and Scan)
@@ -73,17 +82,21 @@ namespace ShokoRelay
         public static RelayConfig Settings => _configProvider?.GetSettings() ?? new RelayConfig();
 
         private readonly VfsWatcher _watcher;
-        private readonly Services.WatchedSyncService? _watchedSyncService;
+        private readonly Sync.SyncToShoko? _watchedSyncService;
         private readonly Services.ShokoImportService? _shokoImportService;
-        private DateTime? _lastImportRunUtc;
-        private DateTime? _lastSyncWatchedUtc;
+        private static DateTime? _lastImportRunUtc;
+        private static DateTime? _lastSyncWatchedUtc;
+
+        public static void MarkImportRunNow() => _lastImportRunUtc = DateTime.UtcNow;
+
+        public static void MarkSyncRunNow() => _lastSyncWatchedUtc = DateTime.UtcNow;
 
         public ShokoRelay(
             IApplicationPaths applicationPaths,
             IHttpContextAccessor httpContextAccessor,
             VfsWatcher watcher,
             ConfigProvider configProvider,
-            Services.WatchedSyncService? watchedSyncService = null,
+            Sync.SyncToShoko? watchedSyncService = null,
             Services.ShokoImportService? shokoImportService = null
         )
         {
@@ -134,58 +147,66 @@ namespace ShokoRelay
                     try
                     {
                         var settings = Settings; // RelayConfig
-                        int freqHours = settings?.ShokoImportFrequencyHours ?? 0;
 
-                        if (freqHours <= 0)
-                        {
-                            // disabled — reset last-run marker and sleep
-                            _lastImportRunUtc = null;
-                            await Task.Delay(TimeSpan.FromMinutes(1), ct).ConfigureAwait(false);
-                            continue;
-                        }
+                        // --- scheduled Shoko import (independent of watched-state automation) ---
+                        int importFreqHours = settings?.ShokoImportFrequencyHours ?? 0;
+                        DateTime? nextImportRunUtc = null;
 
                         var now = DateTime.UtcNow;
-                        if (_lastImportRunUtc == null)
+
+                        if (importFreqHours <= 0)
                         {
-                            // First-time: set marker so we run after the configured interval (not immediately)
-                            _lastImportRunUtc = now;
+                            // disabled — clear marker but DO NOT short-circuit the loop (allow other automations to run)
+                            _lastImportRunUtc = null;
                         }
-
-                        var nextRun = _lastImportRunUtc.Value.AddHours(freqHours);
-                        if (now >= nextRun)
+                        else
                         {
-                            Logger.Info("Automation: triggering scheduled Shoko import (frequency {0}h)", freqHours);
-
-                            if (_shokoImportService != null)
+                            if (_lastImportRunUtc == null)
                             {
-                                try
-                                {
-                                    var scanned = await _shokoImportService.TriggerImportAsync(ct).ConfigureAwait(false);
-                                    if (scanned?.Count > 0)
-                                        Logger.Info("Automation: triggered import scans for {Count} folders: {Folders}", scanned.Count, string.Join(", ", scanned));
-                                    else
-                                        Logger.Info("Automation: import scan executed but no source-type import folders were scanned.");
-                                }
-                                catch (Exception ex)
-                                {
-                                    Logger.Warn(ex, "Automation: Shoko import trigger failed");
-                                }
-                            }
-                            else
-                            {
-                                Logger.Warn("Automation: ShokoImportService not available; cannot trigger imports via v3 API");
+                                // First-time after startup: do NOT run immediately — start the interval from startup.
+                                // Set last-run == now so the first scheduled run occurs after the configured interval.
+                                _lastImportRunUtc = now;
                             }
 
-                            _lastImportRunUtc = DateTime.UtcNow;
+                            nextImportRunUtc = _lastImportRunUtc.Value.AddHours(importFreqHours);
+                            if (now >= nextImportRunUtc.Value)
+                            {
+                                Logger.Info("Automation: triggering scheduled Shoko import (frequency {0}h)", importFreqHours);
+
+                                if (_shokoImportService != null)
+                                {
+                                    try
+                                    {
+                                        var scanned = await _shokoImportService.TriggerImportAsync(ct).ConfigureAwait(false);
+                                        if (scanned?.Count > 0)
+                                            Logger.Info("Automation: triggered import scans for {Count} folders: {Folders}", scanned.Count, string.Join(", ", scanned));
+                                        else
+                                            Logger.Info("Automation: import scan executed but no source-type import folders were scanned.");
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Logger.Warn(ex, "Automation: Shoko import trigger failed");
+                                    }
+                                }
+                                else
+                                {
+                                    Logger.Warn("Automation: ShokoImportService not available; cannot trigger imports via v3 API");
+                                }
+
+                                _lastImportRunUtc = DateTime.UtcNow;
+                                nextImportRunUtc = _lastImportRunUtc.Value.AddHours(importFreqHours);
+                            }
                         }
 
                         // --- Sync watched-state automation ---
+                        DateTime? nextWatchedSyncRunUtc = null;
                         try
                         {
                             int syncFreq = settings?.ShokoSyncWatchedFrequencyHours ?? 0;
-                            bool syncEnabled = settings?.SyncPlexWatched ?? false;
 
-                            if (syncFreq <= 0 || !syncEnabled || _watchedSyncService == null)
+                            // Automatic watched-state sync is controlled *only* by the configured interval.
+                            // If interval <= 0 the automation is disabled (same behaviour as Shoko import).
+                            if (syncFreq <= 0 || _watchedSyncService == null)
                             {
                                 // disabled — reset marker
                                 _lastSyncWatchedUtc = null;
@@ -194,18 +215,20 @@ namespace ShokoRelay
                             {
                                 if (_lastSyncWatchedUtc == null)
                                 {
-                                    // First-time: set marker so we run after the configured interval (not immediately)
+                                    // First-time after startup: do NOT run immediately — start the sync interval from startup.
+                                    // Set last-run == now so the first scheduled sync occurs after the configured interval.
                                     _lastSyncWatchedUtc = now;
                                 }
 
-                                var nextSync = _lastSyncWatchedUtc.Value.AddHours(syncFreq);
-                                if (now >= nextSync)
+                                nextWatchedSyncRunUtc = _lastSyncWatchedUtc.Value.AddHours(syncFreq);
+                                if (now >= nextWatchedSyncRunUtc.Value)
                                 {
-                                    Logger.Info("Automation: triggering scheduled Plex->Shoko watched-state sync (frequency {0}h)", syncFreq);
+                                    bool includeRatingsForScheduled = settings?.ShokoSyncWatchedIncludeRatings ?? false;
+                                    Logger.Info("Automation: triggering scheduled Plex->Shoko watched-state sync (frequency {0}h, ratings={1})", syncFreq, includeRatingsForScheduled);
                                     try
                                     {
                                         // Apply lookback equal to the configured frequency (hours) so automation only examines recently-watched items
-                                        var syncTask = _watchedSyncService.SyncWatchedAsync(false, syncFreq, ct);
+                                        var syncTask = _watchedSyncService.SyncWatchedAsync(false, syncFreq, includeRatingsForScheduled, ct);
                                         await syncTask.ConfigureAwait(false);
                                     }
                                     catch (Exception ex)
@@ -214,6 +237,7 @@ namespace ShokoRelay
                                     }
 
                                     _lastSyncWatchedUtc = DateTime.UtcNow;
+                                    nextWatchedSyncRunUtc = _lastSyncWatchedUtc.Value.AddHours(syncFreq);
                                 }
                             }
                         }
@@ -222,12 +246,28 @@ namespace ShokoRelay
                             Logger.Warn(ex, "Automation: error while checking Plex watched-state automation");
                         }
 
-                        // Sleep until next check (wake up sooner if nextRun is near)
-                        var delay = (nextRun - DateTime.UtcNow).TotalMilliseconds;
-                        if (delay < 0)
-                            delay = TimeSpan.FromMinutes(1).TotalMilliseconds; // fallback
-                        var wait = Math.Min(delay, TimeSpan.FromMinutes(5).TotalMilliseconds);
-                        await Task.Delay(TimeSpan.FromMilliseconds(wait), ct).ConfigureAwait(false);
+                        // Sleep until next scheduled automation (pick the nearest of import/watch-sync)
+                        DateTime? earliestNext = null;
+                        if (nextImportRunUtc.HasValue)
+                            earliestNext = nextImportRunUtc;
+                        if (nextWatchedSyncRunUtc.HasValue && (!earliestNext.HasValue || nextWatchedSyncRunUtc.Value < earliestNext.Value))
+                            earliestNext = nextWatchedSyncRunUtc;
+
+                        double delayMs;
+                        if (earliestNext.HasValue)
+                        {
+                            delayMs = (earliestNext.Value - DateTime.UtcNow).TotalMilliseconds;
+                            if (delayMs < 0)
+                                delayMs = TimeSpan.FromMinutes(1).TotalMilliseconds; // fallback
+                        }
+                        else
+                        {
+                            // No scheduled jobs — poll in 1 minute
+                            delayMs = TimeSpan.FromMinutes(1).TotalMilliseconds;
+                        }
+
+                        var waitMs = Math.Min(delayMs, TimeSpan.FromMinutes(5).TotalMilliseconds);
+                        await Task.Delay(TimeSpan.FromMilliseconds(waitMs), ct).ConfigureAwait(false);
                     }
                     catch (OperationCanceledException)
                     {

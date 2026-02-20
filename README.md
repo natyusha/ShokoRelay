@@ -101,13 +101,13 @@ This is available under the "AnimeThemes: Theme.mp3" section of the dashboard.
 
 ## Information
 
-Due to this plugin relying on Shoko's plugin abstractions as well as Plex still actively developing this feature some TMDB/AniDB features are currently missing.
+Info on controlling this plugin directly is available in [Endpoints.md](./ShokoRelay/Docs/Endpoints.md)
 
 #### Missing Info
+> Due to this plugin relying on Shoko's plugin abstractions as well as Plex still actively developing the metadata provider feature some things may be missing or not work correctly.
 
 - **TMDB**
-  - taglines (does anyone care?)
-  - country of origin
+  - taglines
 - **AniDB**
   - similar anime
 

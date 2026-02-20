@@ -2,21 +2,12 @@
   const base = location.pathname.replace(/\/dashboard$/, "");
   const el = (id) => document.getElementById(id);
 
-  /* --- toast notifications (replace inline log panels) --- */
+  /* --- toast notifications --- */
   function ensureToastContainerFixed() {
     const tc = el("toast-container");
     if (!tc) return;
     // ensure it is a direct child of body so position:fixed behaves as expected
     if (tc.parentElement !== document.body) document.body.appendChild(tc);
-    tc.style.position = "fixed";
-    tc.style.left = "12px";
-    tc.style.bottom = "12px";
-    tc.style.right = "auto";
-    tc.style.top = "auto";
-    tc.style.zIndex = "2000";
-    tc.style.display = "flex";
-    tc.style.flexDirection = "column-reverse";
-    tc.style.gap = "8px";
   }
 
   function getErrorCount(res) {
@@ -152,6 +143,33 @@
   const setIfNotEmpty = (ps, k, v) => {
     if (v !== undefined && v !== null && String(v) !== "") ps.set(k, String(v));
   };
+
+  // Initialize a button as an aria-pressed toggle and attach a simple click handler.
+  // btn can be an element or an element id string. defaultState boolean indicates initial pressed state.
+  function initToggle(btn, defaultState = false) {
+    const elBtn = typeof btn === "string" ? document.getElementById(btn) : btn;
+    if (!elBtn) return null;
+    if (!elBtn.hasAttribute("aria-pressed")) elBtn.setAttribute("aria-pressed", defaultState ? "true" : "false");
+    elBtn.onclick = () => {
+      const cur = elBtn.getAttribute("aria-pressed") === "true";
+      elBtn.setAttribute("aria-pressed", cur ? "false" : "true");
+    };
+    return elBtn;
+  }
+
+  // Wrap a button's click handler with loading state management (avoids repeating try/finally)
+  function withButtonAction(btn, handler) {
+    const elBtn = typeof btn === "string" ? document.getElementById(btn) : btn;
+    if (!elBtn) return;
+    elBtn.onclick = async (...args) => {
+      setButtonLoading(elBtn, true);
+      try {
+        await handler.apply(elBtn, args);
+      } finally {
+        setButtonLoading(elBtn, false);
+      }
+    };
+  }
 
   /* --- status helper — important messages now surface via toasts --- */
   function setColStatus(message, level) {
@@ -479,20 +497,11 @@
   }
 
   /* --- event handlers use helpers above to keep code compact --- */
-  const vfsCleanBtn = el("vfs-clean");
-  if (vfsCleanBtn) {
-    // default to enabled (preserves previous checkbox default)
-    if (!vfsCleanBtn.hasAttribute("aria-pressed")) vfsCleanBtn.setAttribute("aria-pressed", "true");
-    vfsCleanBtn.onclick = () => {
-      const cur = vfsCleanBtn.getAttribute("aria-pressed") === "true";
-      vfsCleanBtn.setAttribute("aria-pressed", cur ? "false" : "true");
-    };
-  }
+  initToggle("vfs-clean", true);
 
-  el("vfs-exec").onclick = async () => {
-    const btn = el("vfs-exec");
-    setButtonLoading(btn, true);
-    try {
+  const vfsExecBtn = el("vfs-exec");
+  if (vfsExecBtn) {
+    withButtonAction(vfsExecBtn, async function () {
       const clean = el("vfs-clean")?.getAttribute("aria-pressed") === "true";
       showToast(`VFS generation started (clean=${clean})`, "info", 3000);
       const params = buildVfsParams();
@@ -504,86 +513,172 @@
       } else {
         showToast(`VFS failed (clean=${clean}): ${res.data?.message || JSON.stringify(res.data)}`, "error", 0);
       }
-    } catch (ex) {
-      showToast(`VFS error: ${ex?.message || ex}`, "error", 0);
-    } finally {
-      setButtonLoading(btn, false);
-    }
-  };
+    });
+  }
 
-  // --- Shoko Automation (placeholders) ---
+  // --- Shoko Automation  ---
   const shokoRemoveMissingBtn = el("shoko-remove-missing");
   if (shokoRemoveMissingBtn) {
-    shokoRemoveMissingBtn.onclick = async () => {
-      const btn = shokoRemoveMissingBtn;
-      setButtonLoading(btn, true);
-      try {
-        showToast("Remove missing files: started", "info", 3000);
-        const res = await fetchJson(base + "/shoko/remove-missing", { method: "POST" });
-        if (res.ok) {
-          const summary = summarizeResult(res) || "Remove missing completed";
-          const rmErr = getErrorCount(res);
-          showToast(`Remove missing: ${summary}`, rmErr > 0 ? "error" : "success", rmErr > 0 ? 0 : 6000);
-        } else {
-          showToast(`Remove missing failed: ${res.data?.message || JSON.stringify(res.data)}`, "error", 0);
-        }
-      } catch (ex) {
-        showToast(`Remove missing error: ${ex?.message || ex}`, "error", 0);
-      } finally {
-        setButtonLoading(btn, false);
+    withButtonAction(shokoRemoveMissingBtn, async function () {
+      showToast("Remove missing files: started", "info", 3000);
+      const res = await fetchJson(base + "/shoko/remove-missing", { method: "POST" });
+      if (res.ok) {
+        const summary = summarizeResult(res) || "Remove missing completed";
+        const rmErr = getErrorCount(res);
+        showToast(`Remove missing: ${summary}`, rmErr > 0 ? "error" : "success", rmErr > 0 ? 0 : 6000);
+      } else {
+        showToast(`Remove missing failed: ${res.data?.message || JSON.stringify(res.data)}`, "error", 0);
       }
-    };
+    });
   }
 
   const shokoImportRunBtn = el("shoko-import-run");
   if (shokoImportRunBtn) {
-    shokoImportRunBtn.onclick = async () => {
-      const btn = shokoImportRunBtn;
-      setButtonLoading(btn, true);
-      try {
-        showToast("Shoko import requested", "info", 3000);
-        const res = await fetchJson(base + "/shoko/import", { method: "POST" });
-        if (!res.ok) {
-          showToast(`Shoko import failed: ${res.data?.message || JSON.stringify(res.data)}`, "error", 0);
-          return;
-        }
-        const summary = summarizeResult(res) || `scanned ${res.data?.scannedCount ?? ""}`;
-        const shokoImportErr = getErrorCount(res);
-        showToast(`Shoko import complete: ${summary}`, shokoImportErr > 0 ? "error" : "success", shokoImportErr > 0 ? 0 : 5000);
-      } finally {
-        setButtonLoading(btn, false);
+    withButtonAction(shokoImportRunBtn, async function () {
+      showToast("Shoko import requested", "info", 3000);
+      const res = await fetchJson(base + "/shoko/import", { method: "POST" });
+      if (!res.ok) {
+        showToast(`Shoko import failed: ${res.data?.message || JSON.stringify(res.data)}`, "error", 0);
+        return;
       }
-    };
+      const summary = summarizeResult(res) || `scanned ${res.data?.scannedCount ?? ""}`;
+      const shokoImportErr = getErrorCount(res);
+      showToast(`Shoko import complete: ${summary}`, shokoImportErr > 0 ? "error" : "success", shokoImportErr > 0 ? 0 : 5000);
+    });
   }
 
   const shokoSyncBtn = el("shoko-sync-watched");
   if (shokoSyncBtn) {
-    shokoSyncBtn.onclick = async () => {
-      const btn = shokoSyncBtn;
-      setButtonLoading(btn, true);
-      try {
-        showToast("Sync started (applying changes)...", "info", 3000);
-        const res = await fetchJson(base + "/plex/syncwatched?dryRun=false", { method: "POST" });
-        if (res.ok) {
-          const summary = summarizeResult(res) || `processed ${res.data?.processed ?? 0}`;
-          const syncErr = getErrorCount(res);
-          showToast(`Sync complete: ${summary}`, syncErr > 0 ? "error" : "success", syncErr > 0 ? 0 : 6000);
-        } else {
-          showToast(`Sync failed: ${res.data?.message || JSON.stringify(res.data)}`, "error", 0);
-        }
-      } catch (ex) {
-        showToast(`Sync error: ${ex?.message || ex}`, "error", 0);
-      } finally {
-        setButtonLoading(btn, false);
+    // Open configuration modal instead of an immediate sync
+    shokoSyncBtn.onclick = () => {
+      const modal = el("sync-modal");
+      const startBtn = el("sync-start-button");
+      const cancelBtn = el("sync-cancel-button");
+      const dirToggle = el("sync-direction-toggle");
+      const dirArrow = el("sync-direction-arrow");
+      const ratingsEl = el("sync-ratings");
+      const excludeAdminEl = el("sync-exclude-admin");
+      if (!modal || !startBtn) {
+        // modal unavailable — abort and do nothing
+        return;
       }
+
+      let directionImport = false; // false = Plex → Shoko (default), true = Shoko → Plex
+      function updateDirectionUI() {
+        const iconRight = dirArrow.querySelector('.dir-icon-right');
+        const iconLeft = dirArrow.querySelector('.dir-icon-left');
+
+        // accessibility state
+        if (directionImport) {
+          dirToggle.setAttribute('aria-pressed', 'true');
+          dirToggle.setAttribute('aria-label', 'Direction: Shoko to Plex');
+        } else {
+          dirToggle.setAttribute('aria-pressed', 'false');
+          dirToggle.setAttribute('aria-label', 'Direction: Plex to Shoko');
+        }
+
+        // Fallback glyph if icons missing
+        if (!iconRight || !iconLeft) {
+          dirArrow.textContent = directionImport ? '❮' : '❯';
+          return;
+        }
+
+        // Simple visibility toggle (no animations): show the correct SVG and hide the other
+        if (directionImport) {
+          iconRight.classList.add('hidden');
+          iconLeft.classList.remove('hidden');
+        } else {
+          iconRight.classList.remove('hidden');
+          iconLeft.classList.add('hidden');
+        }
+      }
+
+      // initialize defaults and respect persisted configuration for the ratings checkbox
+      // restore last-used direction (persisted to localStorage); default = Plex -> Shoko
+      try {
+        directionImport = localStorage.getItem("shoko-sync-direction") === "import";
+      } catch (e) {
+        directionImport = false;
+      }
+
+      // Render initial direction state
+      updateDirectionUI();
+
+      // show modal
+      modal.setAttribute("aria-hidden", "false");
+      modal.classList.add("open");
+      document.body.style.overflow = "hidden";
+      startBtn.focus();
+
+      // Handlers
+      const onClose = () => {
+        modal.setAttribute("aria-hidden", "true");
+        modal.classList.remove("open");
+        document.body.style.overflow = "";
+        // remove temporary listeners
+        dirToggle.removeEventListener("click", onToggle);
+        startBtn.removeEventListener("click", onStart);
+        cancelBtn.removeEventListener("click", onClose);
+        modal.removeEventListener("click", onOverlayClick);
+        document.removeEventListener("keydown", onKeydown);
+      };
+      const onToggle = () => {
+        directionImport = !directionImport;
+        updateDirectionUI();
+        try {
+          localStorage.setItem("shoko-sync-direction", directionImport ? "import" : "export");
+        } catch (err) {
+          /* ignore */
+        }
+      };
+      const onOverlayClick = (ev) => {
+        if (ev.target === modal) onClose();
+      };
+      const onKeydown = (ev) => {
+        if (ev.key === "Escape") onClose();
+      };
+
+      const onStart = async () => {
+        setButtonLoading(startBtn, true);
+        try {
+          showToast("Sync started (applying changes)...", "info", 3000);
+          const ps = new URLSearchParams();
+          ps.set("dryRun", "false"); // dashboard always does a real run
+          setBoolParam(ps, "ratings", ratingsEl.checked);
+          setBoolParam(ps, "excludeAdmin", excludeAdminEl.checked);
+          if (directionImport) setBoolParam(ps, "import", true); // Shoko → Plex
+          const url = base + "/syncwatched?" + ps.toString();
+          const res = await fetchJson(url, { method: "POST" });
+          if (res.ok) {
+            const summary = summarizeResult(res) || `processed ${res.data?.processed ?? 0}`;
+            const votesFound = res.data?.votesFound;
+            const votesPart = votesFound !== undefined ? `, votesFound: ${votesFound}` : "";
+            const syncErr = getErrorCount(res);
+            showToast(`Sync complete: ${summary}${votesPart}`, syncErr > 0 ? "error" : "success", syncErr > 0 ? 0 : 6000);
+            onClose();
+          } else {
+            showToast(`Sync failed: ${res.data?.message || JSON.stringify(res.data)}`, "error", 0);
+          }
+        } catch (ex) {
+          showToast(`Sync error: ${ex?.message || ex}`, "error", 0);
+        } finally {
+          setButtonLoading(startBtn, false);
+        }
+      };
+
+      // Attach listeners
+      dirToggle.addEventListener("click", onToggle);
+      startBtn.addEventListener("click", onStart);
+      cancelBtn.addEventListener("click", onClose);
+      modal.addEventListener("click", onOverlayClick);
+      document.addEventListener("keydown", onKeydown);
     };
   }
 
-  el("col-build").onclick = async () => {
-    const btn = el("col-build");
-    setButtonLoading(btn, true);
-    showToast("Collection build started", "info", 3000);
-    try {
+  const colBuildBtn = el("col-build");
+  if (colBuildBtn) {
+    withButtonAction(colBuildBtn, async function () {
+      showToast("Collection build started", "info", 3000);
       setColStatus("Checking Plex configuration...", "running");
       const ok = await ensurePlexEnabled();
       if (!ok) return;
@@ -601,27 +696,12 @@
       } else {
         setColStatus("Error: " + (data?.message || JSON.stringify(data)), "error");
       }
-    } finally {
-      setButtonLoading(btn, false);
-    }
-  };
+    });
+  }
 
-  const atForceBtn = el("at-force");
-  if (atForceBtn) {
-    if (!atForceBtn.hasAttribute("aria-pressed")) atForceBtn.setAttribute("aria-pressed", "false");
-    atForceBtn.onclick = () => {
-      const cur = atForceBtn.getAttribute("aria-pressed") === "true";
-      atForceBtn.setAttribute("aria-pressed", cur ? "false" : "true");
-    };
-  }
-  const atBatchBtn = el("at-batch");
-  if (atBatchBtn) {
-    if (!atBatchBtn.hasAttribute("aria-pressed")) atBatchBtn.setAttribute("aria-pressed", "false");
-    atBatchBtn.onclick = () => {
-      const cur = atBatchBtn.getAttribute("aria-pressed") === "true";
-      atBatchBtn.setAttribute("aria-pressed", cur ? "false" : "true");
-    };
-  }
+  // at-force / at-batch toggles
+  initToggle("at-force", false);
+  initToggle("at-batch", false);
 
   // Ensure the AnimeThemes 'Slug' input resets to a sensible default when cleared
   const atSlugEl = el("at-slug");
@@ -636,13 +716,12 @@
     });
   }
 
-  el("at-single").onclick = async () => {
-    const btn = el("at-single");
-    // if slug is empty, restore the default before sending
-    const atSlugEl_local = el("at-slug");
-    if (atSlugEl_local && !String(atSlugEl_local.value || "").trim()) atSlugEl_local.value = atSlugEl_local.placeholder || "OP2";
-    setButtonLoading(btn, true);
-    try {
+  const atSingleBtn = el("at-single");
+  if (atSingleBtn) {
+    withButtonAction(atSingleBtn, async function () {
+      // if slug is empty, restore the default before sending
+      const atSlugEl_local = el("at-slug");
+      if (atSlugEl_local && !String(atSlugEl_local.value || "").trim()) atSlugEl_local.value = atSlugEl_local.placeholder || "OP2";
       showToast("AnimeThemes: generating mp3...", "info", 3000);
       const params = buildAtParams();
       const res = await fetchJson(base + "/animethemes/mp3?" + params.toString());
@@ -653,15 +732,12 @@
       } else {
         showToast(`AnimeThemes mp3 failed: ${res.data?.message || JSON.stringify(res.data)}`, "error", 0);
       }
-    } finally {
-      setButtonLoading(btn, false);
-    }
-  };
+    });
+  }
 
-  el("at-mapping").onclick = async () => {
-    const btn = el("at-mapping");
-    setButtonLoading(btn, true);
-    try {
+  const atMappingBtn = el("at-mapping");
+  if (atMappingBtn) {
+    withButtonAction(atMappingBtn, async function () {
       showToast("AnimeThemes: building mapping...", "info", 3000);
       const p = buildAtMapParams();
       p.set("mapping", "true");
@@ -673,14 +749,11 @@
       } else {
         showToast(`AnimeThemes mapping failed: ${res.data?.message || JSON.stringify(res.data)}`, "error", 0);
       }
-    } finally {
-      setButtonLoading(btn, false);
-    }
-  };
-  el("at-apply").onclick = async () => {
-    const btn = el("at-apply");
-    setButtonLoading(btn, true);
-    try {
+    });
+  }
+  const atApplyBtn = el("at-apply");
+  if (atApplyBtn) {
+    withButtonAction(atApplyBtn, async function () {
       showToast("AnimeThemes: applying mapping...", "info", 3000);
       const p = buildAtMapParams();
       p.set("applyMapping", "true");
@@ -692,10 +765,8 @@
       } else {
         showToast(`AnimeThemes apply failed: ${res.data?.message || JSON.stringify(res.data)}`, "error", 0);
       }
-    } finally {
-      setButtonLoading(btn, false);
-    }
-  };
+    });
+  }
 
   function getValueByPath(obj, path) {
     return path.split(".").reduce((o, k) => (o ? o[k] : undefined), obj);
@@ -908,7 +979,7 @@
       const apiKeyVal = String(config.ShokoApiKey ?? "");
       const importVal = Number(config.ShokoImportFrequencyHours ?? 0);
       const syncVal = Number(config.ShokoSyncWatchedFrequencyHours ?? 0);
-      const plexWatchedVal = !!config.SyncPlexWatched;
+      const plexWatchedVal = !!config.AutoScrobble;
       const apiKeyEl = el("shoko-api-key");
       const importFreqEl = el("shoko-import-frequency");
       const syncFreqEl = el("shoko-sync-frequency");
@@ -947,6 +1018,24 @@
         };
       }
       if (el("plex-watched")) el("plex-watched").checked = plexWatchedVal;
+
+      // Persist the 'Include Ratings' checkbox from the modal so scheduled automation follows it
+      const syncRatingsEl = el("sync-ratings");
+      if (syncRatingsEl) {
+        try {
+          syncRatingsEl.checked = !!config.ShokoSyncWatchedIncludeRatings;
+        } catch (e) {
+          syncRatingsEl.checked = false;
+        }
+        syncRatingsEl.onchange = async () => {
+          try {
+            setValueByPath(config, "ShokoSyncWatchedIncludeRatings", syncRatingsEl.checked);
+            await persistConfig(config);
+          } catch (err) {
+            showToast(`Failed to save 'Include Ratings' setting: ${err?.message || err}`, "error", 0);
+          }
+        };
+      }
     } catch (e) {
       /* ignore */
     }

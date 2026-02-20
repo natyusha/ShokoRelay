@@ -8,6 +8,7 @@ using ShokoRelay.AnimeThemes;
 using ShokoRelay.Config;
 using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
+using ShokoRelay.Sync;
 using ShokoRelay.Vfs;
 using static ShokoRelay.Plex.PlexMapping;
 
@@ -29,7 +30,8 @@ namespace ShokoRelay.Controllers
         private readonly PlexAuth _plexAuth;
         private readonly PlexClient _plexLibrary;
         private readonly Services.ICollectionManager _collectionManager;
-        private readonly Services.WatchedSyncService _watchedSyncService;
+        private readonly SyncToShoko _watchedSyncService;
+        private readonly SyncToPlex _syncToPlexService;
         private readonly IUserDataService _userDataService;
         private readonly IUserService _userService;
         private readonly Services.ShokoImportService _shokoImportService;
@@ -54,7 +56,8 @@ namespace ShokoRelay.Controllers
             PlexAuth plexAuth,
             PlexClient plexLibrary,
             Services.ICollectionManager collectionManager,
-            Services.WatchedSyncService watchedSyncService,
+            SyncToShoko watchedSyncService,
+            SyncToPlex syncToPlexService,
             IUserDataService userDataService,
             IUserService userService,
             Services.ShokoImportService shokoImportService
@@ -72,10 +75,13 @@ namespace ShokoRelay.Controllers
             _plexLibrary = plexLibrary;
             _collectionManager = collectionManager;
             _watchedSyncService = watchedSyncService;
+            _syncToPlexService = syncToPlexService;
             _userDataService = userDataService;
             _userService = userService;
             _shokoImportService = shokoImportService;
         }
+
+        #region Dashboard / Config
 
         [HttpGet("dashboard/{*path}")]
         public IActionResult GetControllerPage([FromRoute] string? path = null)
@@ -123,6 +129,54 @@ namespace ShokoRelay.Controllers
             return NotFound("Dashboard index not found.");
         }
 
+        [HttpGet("config")]
+        public IActionResult GetConfig() => Ok(_configProvider.GetSettings());
+
+        [HttpPost("config")]
+        public IActionResult SaveConfig([FromBody] RelayConfig config)
+        {
+            if (config == null)
+                return BadRequest(new { status = "error", message = "Config payload is required." });
+
+            _configProvider.SaveSettings(config);
+            return Ok(new { status = "ok" });
+        }
+
+        [HttpGet("config/schema")]
+        public IActionResult GetConfigSchema()
+        {
+            var props = BuildConfigSchema(typeof(RelayConfig), "");
+            return Ok(new { properties = props });
+        }
+
+        #endregion
+
+        #region Metadata Provider
+
+        [HttpGet]
+        public IActionResult GetMediaProvider()
+        {
+            var supportedTypes = new[] { PlexConstants.TypeShow, PlexConstants.TypeSeason, PlexConstants.TypeEpisode };
+
+            var typePayload = supportedTypes.Select(t => new { type = t, Scheme = new[] { new { scheme = ShokoRelayInfo.AgentScheme } } });
+
+            var featurePayload = new[] { new { type = "metadata", key = "/metadata" }, new { type = "match", key = "/matches" }, new { type = "collection", key = "/collections" } };
+
+            return Ok(
+                new
+                {
+                    MediaProvider = new
+                    {
+                        identifier = ShokoRelayInfo.AgentScheme,
+                        title = ShokoRelayInfo.Name,
+                        version = ShokoRelayInfo.Version,
+                        Types = typePayload,
+                        Feature = featurePayload,
+                    },
+                }
+            );
+        }
+
         [Route("matches")]
         [HttpPost]
         [HttpGet]
@@ -167,115 +221,165 @@ namespace ShokoRelay.Controllers
             );
         }
 
-        [HttpGet("debug/file/{fileId:int}")]
-        public IActionResult DebugFileByFileId([FromRoute] int fileId)
+        [HttpGet("collections/{groupId}")]
+        public IActionResult GetCollection(int groupId)
         {
-            var video = _videoService.GetVideoByID(fileId);
-            if (video == null)
-                return NotFound(new { status = "error", message = $"File/video id {fileId} not found." });
+            var group = _metadataService.GetShokoGroupByID(groupId);
+            if (group == null)
+                return NotFound();
 
-            var series = video.Series?.FirstOrDefault();
-            if (series == null)
-                return NotFound(new { status = "error", message = $"Series for file id {fileId} not found." });
+            var primarySeries = group.MainSeries ?? group.Series?.FirstOrDefault();
+            if (primarySeries == null)
+                return NotFound();
 
-            var debug = MapHelper.GetFileMappingDebug(series, video.ID);
-            if (debug == null)
-                return NotFound(new { status = "error", message = "No mapping/debug information available for this file." });
+            var meta = _mapper.MapCollection(group, primarySeries);
 
-            string fileName = System.IO.Path.GetFileName(video.Files.FirstOrDefault()?.Path ?? "");
-            return Ok(
-                new
-                {
-                    status = "ok",
-                    fileId = video.ID,
-                    fileName,
-                    data = debug,
-                }
-            );
+            return WrapInContainer(meta);
         }
 
-        [HttpGet("debug/series/{shokoSeriesId:int}")]
-        public IActionResult DebugSeries([FromRoute] int shokoSeriesId)
+        [HttpGet("collections/user/{groupId}")]
+        public IActionResult GetCollectionPoster(int groupId)
         {
-            var series = _metadataService.GetShokoSeriesByID(shokoSeriesId);
-            if (series == null)
-                return NotFound(new { status = "error", message = $"Series id {shokoSeriesId} not found." });
+            var group = _metadataService.GetShokoGroupByID(groupId);
+            if (group == null)
+                return NotFound();
 
-            // Gather debug for every unique file that belongs to this series, grouped by episode
-            var episodes = series.Episodes.OrderBy(e => e.SeasonNumber ?? 0).ThenBy(e => e.EpisodeNumber).ToList();
-            var seenVideoIds = new HashSet<int>();
-            var episodeResults = new List<object>();
-            var uniqueFiles = new List<object>();
+            var primarySeries = group.MainSeries ?? group.Series?.FirstOrDefault();
+            if (primarySeries == null)
+                return NotFound();
 
-            foreach (var ep in episodes)
+            var posterPath = PlexHelpers.FindCollectionPosterPathByGroup(primarySeries, groupId);
+            if (string.IsNullOrWhiteSpace(posterPath) || !System.IO.File.Exists(posterPath))
+                return NotFound();
+
+            string ext = Path.GetExtension(posterPath).ToLowerInvariant();
+            string contentType = GetCollectionContentTypeForExtension(ext) ?? "application/octet-stream";
+
+            return PhysicalFile(posterPath, contentType);
+        }
+
+        [HttpGet("metadata/{ratingKey}")]
+        public IActionResult GetMetadata(string ratingKey, [FromQuery] int includeChildren = 0, CancellationToken cancellationToken = default)
+        {
+            var ctx = GetSeriesContext(ratingKey);
+            if (ctx == null)
+                return NotFound();
+
+            // --- EPISODE ---
+            if (ratingKey.StartsWith(EpisodePrefix))
             {
-                var filesForEpisode = new List<object>();
-                if (ep.VideoList != null)
-                {
-                    foreach (var v in ep.VideoList)
-                    {
-                        var dbg = MapHelper.GetFileMappingDebug(series, v.ID);
-                        if (dbg != null)
-                        {
-                            filesForEpisode.Add(dbg);
+                var epPart = ratingKey.Substring(EpisodePrefix.Length);
+                int? partIndex = null;
 
-                            if (seenVideoIds.Add(v.ID))
-                                uniqueFiles.Add(dbg);
-                        }
+                if (epPart.Contains(PartPrefix))
+                {
+                    var parts = epPart.Split(PartPrefix);
+                    epPart = parts[0];
+                    partIndex = int.Parse(parts[1]);
+                }
+
+                var episode = _metadataService.GetShokoEpisodeByID(int.Parse(epPart));
+                if (episode == null)
+                    return NotFound();
+
+                var coords = GetPlexCoordinates(episode);
+                var mappingForEpisode = ctx.FileData.Mappings.FirstOrDefault(m => m.Episodes.Any(ep => ep.ID == episode.ID));
+                if (mappingForEpisode != null && coords.Season == PlexConstants.SeasonOther && mappingForEpisode.Coords.Season != PlexConstants.SeasonOther)
+                {
+                    coords = new PlexCoords
+                    {
+                        Season = mappingForEpisode.Coords.Season,
+                        Episode = coords.Episode,
+                        EndEpisode = coords.EndEpisode,
+                    };
+                }
+
+                object? tmdbEpisode = null;
+
+                if (partIndex.HasValue && ShokoRelay.Settings.TMDBEpNumbering && episode is IShokoEpisode shokoEp && shokoEp.TmdbEpisodes?.Any() == true)
+                {
+                    string? showPrefId = (ctx.Series as IShokoSeries)?.TmdbShows?.FirstOrDefault()?.PreferredOrdering?.OrderingID;
+                    var tmdbEps = SelectPreferredTmdbOrdering(shokoEp.TmdbEpisodes, showPrefId);
+
+                    int idx = partIndex.Value - 1;
+                    if (idx < tmdbEps.Count)
+                    {
+                        var tmdbEp = tmdbEps[idx];
+                        tmdbEpisode = tmdbEp;
+                        var ord = Plex.PlexMapping.GetOrderingCoords(tmdbEp, showPrefId);
+                        if (ord.Season.HasValue)
+                            coords = new PlexCoords { Season = ord.Season.Value, Episode = ord.Episode };
                     }
                 }
 
-                episodeResults.Add(
-                    new
-                    {
-                        episodeId = ep.ID,
-                        episodeTitle = ep.PreferredTitle?.Value,
-                        files = filesForEpisode,
-                    }
-                );
+                return WrapInContainer(_mapper.MapEpisode(episode, coords, ctx.Series, ctx.Titles, partIndex, tmdbEpisode));
             }
 
-            return Ok(
-                new
-                {
-                    status = "ok",
-                    seriesId = shokoSeriesId,
-                    seriesTitle = series.PreferredTitle?.Value,
-                    episodes = episodeResults,
-                    files = uniqueFiles,
-                }
-            );
-        }
-
-        [HttpGet]
-        public IActionResult GetMediaProvider()
-        {
-            var supportedTypes = new[]
+            // --- SEASON ---
+            if (ratingKey.Contains(SeasonPrefix))
             {
-                PlexConstants.TypeShow,
-                PlexConstants.TypeSeason,
-                PlexConstants.TypeEpisode,
-                //PlexConstants.TypeCollection // Temporarily advertise only show/season/episode to avoid unsupported metadata type warnings in Plex.
-            };
+                int sNum = int.Parse(ratingKey.Split(SeasonPrefix)[1]);
+                var seasonMeta = _mapper.MapSeason(ctx.Series, sNum, ctx.Titles.DisplayTitle, cancellationToken);
 
-            var typePayload = supportedTypes.Select(t => new { type = t, Scheme = new[] { new { scheme = ShokoRelayInfo.AgentScheme } } });
-
-            var featurePayload = new[] { new { type = "metadata", key = "/metadata" }, new { type = "match", key = "/matches" }, new { type = "collection", key = "/collections" } };
-
-            return Ok(
-                new
+                if (includeChildren == 1)
                 {
-                    MediaProvider = new
-                    {
-                        identifier = ShokoRelayInfo.AgentScheme,
-                        title = ShokoRelayInfo.Name,
-                        version = ShokoRelayInfo.Version,
-                        Types = typePayload,
-                        Feature = featurePayload,
-                    },
+                    var episodes = BuildEpisodeList(ctx, sNum);
+                    ((IDictionary<string, object?>)seasonMeta)["Children"] = new { size = episodes.Count, Metadata = episodes };
                 }
-            );
+
+                return WrapInContainer(seasonMeta);
+            }
+
+            // --- SERIES ---
+            var showMeta = _mapper.MapSeries(ctx.Series, ctx.Titles);
+
+            if (includeChildren == 1)
+            {
+                var seasons = ctx.FileData.Seasons.Select(s => _mapper.MapSeason(ctx.Series, s, ctx.Titles.DisplayTitle, cancellationToken)).ToList();
+
+                ((IDictionary<string, object?>)showMeta)["Children"] = new { size = seasons.Count, Metadata = seasons };
+            }
+
+            return WrapInContainer(showMeta);
         }
+
+        [HttpGet("metadata/{ratingKey}/children")]
+        public IActionResult GetChildren(string ratingKey, CancellationToken cancellationToken = default)
+        {
+            var ctx = GetSeriesContext(ratingKey);
+            if (ctx == null)
+                return NotFound();
+
+            if (ratingKey.Contains(SeasonPrefix))
+            {
+                int sNum = int.Parse(ratingKey.Split(SeasonPrefix)[1]);
+                return WrapInPagedContainer(BuildEpisodeList(ctx, sNum));
+            }
+
+            var seasons = ctx.FileData.Seasons.Select(s => _mapper.MapSeason(ctx.Series, s, ctx.Titles.DisplayTitle, cancellationToken)).ToList();
+
+            return WrapInPagedContainer(seasons);
+        }
+
+        [HttpGet("metadata/{ratingKey}/grandchildren")]
+        public IActionResult GetGrandchildren(string ratingKey)
+        {
+            var ctx = GetSeriesContext(ratingKey);
+            if (ctx == null)
+                return NotFound();
+
+            var allEpisodes = ctx
+                .FileData.Mappings.OrderBy(m => m.Coords.Season)
+                .ThenBy(m => m.Coords.Episode)
+                .Select(m => _mapper.MapEpisode(m.PrimaryEpisode, m.Coords, ctx.Series, ctx.Titles, m.PartIndex, m.TmdbEpisode))
+                .ToList();
+
+            return WrapInPagedContainer(allEpisodes);
+        }
+
+        #endregion
+
+        #region Plex: Authentication
 
         [HttpGet("plexauth")]
         public async Task<IActionResult> StartPlexAuth(CancellationToken cancellationToken = default)
@@ -428,8 +532,11 @@ namespace ShokoRelay.Controllers
             }
         }
 
-        // Plugin-level Plex webhook receiver (Auto Scrobble)
-        // Accepts Plex's form-encoded `payload` (the JSON payload string) or raw JSON body.
+        #endregion
+
+        #region Plex: Webhook
+
+        // Plugin-level Plex webhook receiver: https://support.plex.tv/articles/115002267687-webhooks/
         [HttpPost("plex/webhook")]
         public async Task<IActionResult> PluginPlexWebhook()
         {
@@ -501,7 +608,7 @@ namespace ShokoRelay.Controllers
             }
 
             // Try to extract Shoko episode id from GUID (agent GUID format used by this plugin)
-            int? shokoEpisodeId = TryParseShokoEpisodeIdFromGuid(evt.Metadata.Guid);
+            int? shokoEpisodeId = SyncHelper.TryParseShokoEpisodeIdFromGuid(evt.Metadata.Guid);
 
             if (!shokoEpisodeId.HasValue)
                 return Ok(new { status = "ignored", reason = "no_shoko_guid" });
@@ -530,87 +637,9 @@ namespace ShokoRelay.Controllers
             return Ok(new { status = "ok", marked = updated });
         }
 
-        private static int? TryParseShokoEpisodeIdFromGuid(string? guid)
-        {
-            if (string.IsNullOrWhiteSpace(guid))
-                return null;
+        #endregion
 
-            // Expected form: {agentScheme}://episode/e{episodeId}[p{part}]
-            var agent = ShokoRelayInfo.AgentScheme + "://episode/" + Plex.PlexConstants.EpisodePrefix;
-            int idx = guid.IndexOf(agent, System.StringComparison.OrdinalIgnoreCase);
-            if (idx < 0)
-                return null;
-
-            idx += agent.Length; // position at the first digit of episode id
-            if (idx >= guid.Length)
-                return null;
-
-            int end = idx;
-            while (end < guid.Length && char.IsDigit(guid[end]))
-                end++;
-
-            var idStr = guid.Substring(idx, end - idx);
-            if (int.TryParse(idStr, out int id))
-                return id;
-
-            return null;
-        }
-
-        private class PlexWebhookPayload
-        {
-            [System.Text.Json.Serialization.JsonPropertyName("event")]
-            public string? Event { get; set; }
-
-            [System.Text.Json.Serialization.JsonPropertyName("Account")]
-            public PlexAccount? Account { get; set; }
-
-            [System.Text.Json.Serialization.JsonPropertyName("Metadata")]
-            public PlexMetadata? Metadata { get; set; }
-
-            public class PlexAccount
-            {
-                [System.Text.Json.Serialization.JsonPropertyName("title")]
-                public string? Title { get; set; }
-            }
-
-            public class PlexMetadata
-            {
-                [System.Text.Json.Serialization.JsonPropertyName("guid")]
-                public string? Guid { get; set; }
-
-                [System.Text.Json.Serialization.JsonPropertyName("index")]
-                public int? Index { get; set; }
-
-                [System.Text.Json.Serialization.JsonPropertyName("lastViewedAt")]
-                public long? LastViewedAt { get; set; }
-
-                [System.Text.Json.Serialization.JsonPropertyName("librarySectionId")]
-                public int? LibrarySectionId { get; set; }
-
-                [System.Text.Json.Serialization.JsonPropertyName("type")]
-                public string? Type { get; set; }
-            }
-        }
-
-        [HttpGet("config")]
-        public IActionResult GetConfig() => Ok(_configProvider.GetSettings());
-
-        [HttpPost("config")]
-        public IActionResult SaveConfig([FromBody] RelayConfig config)
-        {
-            if (config == null)
-                return BadRequest(new { status = "error", message = "Config payload is required." });
-
-            _configProvider.SaveSettings(config);
-            return Ok(new { status = "ok" });
-        }
-
-        [HttpGet("config/schema")]
-        public IActionResult GetConfigSchema()
-        {
-            var props = BuildConfigSchema(typeof(RelayConfig), "");
-            return Ok(new { properties = props });
-        }
+        #region Plex: Collections
 
         [HttpGet("plex/collections/build")]
         public async Task<IActionResult> BuildPlexCollections([FromQuery] int? seriesId = null, [FromQuery] string? filter = null, CancellationToken cancellationToken = default)
@@ -720,238 +749,9 @@ namespace ShokoRelay.Controllers
             // Response delegated to CollectionManager earlier.
         }
 
-        [HttpGet("collections/{groupId}")]
-        public IActionResult GetCollection(int groupId)
-        {
-            var group = _metadataService.GetShokoGroupByID(groupId);
-            if (group == null)
-                return NotFound();
+        #endregion
 
-            var primarySeries = group.MainSeries ?? group.Series?.FirstOrDefault();
-            if (primarySeries == null)
-                return NotFound();
-
-            var meta = _mapper.MapCollection(group, primarySeries);
-
-            return WrapInContainer(meta);
-        }
-
-        [HttpGet("collections/user/{groupId}")]
-        public IActionResult GetCollectionPoster(int groupId)
-        {
-            var group = _metadataService.GetShokoGroupByID(groupId);
-            if (group == null)
-                return NotFound();
-
-            var primarySeries = group.MainSeries ?? group.Series?.FirstOrDefault();
-            if (primarySeries == null)
-                return NotFound();
-
-            // Try to find a collection poster by group id inside any known import root's collection posters folder.
-            // Accept files named by id ("25932.png") or by group title ("My Group.png"). First try exact name, then try a name stripped of invalid Windows filename characters.
-            var posterPath = PlexHelpers.FindCollectionPosterPathByGroup(primarySeries, groupId);
-            if (string.IsNullOrWhiteSpace(posterPath) || !System.IO.File.Exists(posterPath))
-                return NotFound();
-
-            string ext = Path.GetExtension(posterPath).ToLowerInvariant();
-            string contentType = GetCollectionContentTypeForExtension(ext) ?? "application/octet-stream";
-
-            return PhysicalFile(posterPath, contentType);
-        }
-
-        [HttpGet("metadata/{ratingKey}")]
-        public IActionResult GetMetadata(string ratingKey, [FromQuery] int includeChildren = 0, CancellationToken cancellationToken = default)
-        {
-            var ctx = GetSeriesContext(ratingKey);
-            if (ctx == null)
-                return NotFound();
-
-            // --- EPISODE ---
-            if (ratingKey.StartsWith(EpisodePrefix))
-            {
-                var epPart = ratingKey.Substring(EpisodePrefix.Length);
-                int? partIndex = null;
-
-                if (epPart.Contains(PartPrefix))
-                {
-                    var parts = epPart.Split(PartPrefix);
-                    epPart = parts[0];
-                    partIndex = int.Parse(parts[1]);
-                }
-
-                var episode = _metadataService.GetShokoEpisodeByID(int.Parse(epPart));
-                if (episode == null)
-                    return NotFound();
-
-                var coords = GetPlexCoordinates(episode);
-                // If this episode's file mapping was reassigned (Other -> S01/S00) use the mapping's effective season so metadata reflects VFS placement.
-                var mappingForEpisode = ctx.FileData.Mappings.FirstOrDefault(m => m.Episodes.Any(ep => ep.ID == episode.ID));
-                if (mappingForEpisode != null && coords.Season == PlexConstants.SeasonOther && mappingForEpisode.Coords.Season != PlexConstants.SeasonOther)
-                {
-                    coords = new PlexCoords
-                    {
-                        Season = mappingForEpisode.Coords.Season,
-                        Episode = coords.Episode,
-                        EndEpisode = coords.EndEpisode,
-                    };
-                }
-
-                object? tmdbEpisode = null;
-
-                if (partIndex.HasValue && ShokoRelay.Settings.TMDBEpNumbering && episode is IShokoEpisode shokoEp && shokoEp.TmdbEpisodes?.Any() == true)
-                {
-                    string? showPrefId = (ctx.Series as IShokoSeries)?.TmdbShows?.FirstOrDefault()?.PreferredOrdering?.OrderingID;
-                    var tmdbEps = SelectPreferredTmdbOrdering(shokoEp.TmdbEpisodes, showPrefId);
-
-                    int idx = partIndex.Value - 1;
-                    if (idx < tmdbEps.Count)
-                    {
-                        var tmdbEp = tmdbEps[idx];
-                        tmdbEpisode = tmdbEp;
-                        var ord = Plex.PlexMapping.GetOrderingCoords(tmdbEp, showPrefId);
-                        if (ord.Season.HasValue)
-                            coords = new PlexCoords { Season = ord.Season.Value, Episode = ord.Episode };
-                    }
-                }
-
-                return WrapInContainer(_mapper.MapEpisode(episode, coords, ctx.Series, ctx.Titles, partIndex, tmdbEpisode));
-            }
-
-            // --- SEASON ---
-            if (ratingKey.Contains(SeasonPrefix))
-            {
-                int sNum = int.Parse(ratingKey.Split(SeasonPrefix)[1]);
-                var seasonMeta = _mapper.MapSeason(ctx.Series, sNum, ctx.Titles.DisplayTitle, cancellationToken);
-
-                if (includeChildren == 1)
-                {
-                    var episodes = BuildEpisodeList(ctx, sNum);
-                    ((IDictionary<string, object?>)seasonMeta)["Children"] = new { size = episodes.Count, Metadata = episodes };
-                }
-
-                return WrapInContainer(seasonMeta);
-            }
-
-            // --- SERIES ---
-            var showMeta = _mapper.MapSeries(ctx.Series, ctx.Titles);
-
-            if (includeChildren == 1)
-            {
-                var seasons = ctx.FileData.Seasons.Select(s => _mapper.MapSeason(ctx.Series, s, ctx.Titles.DisplayTitle, cancellationToken)).ToList();
-
-                ((IDictionary<string, object?>)showMeta)["Children"] = new { size = seasons.Count, Metadata = seasons };
-            }
-
-            return WrapInContainer(showMeta);
-        }
-
-        [HttpGet("metadata/{ratingKey}/children")]
-        public IActionResult GetChildren(string ratingKey, CancellationToken cancellationToken = default)
-        {
-            var ctx = GetSeriesContext(ratingKey);
-            if (ctx == null)
-                return NotFound();
-
-            if (ratingKey.Contains(SeasonPrefix))
-            {
-                int sNum = int.Parse(ratingKey.Split(SeasonPrefix)[1]);
-                return WrapInPagedContainer(BuildEpisodeList(ctx, sNum));
-            }
-
-            var seasons = ctx.FileData.Seasons.Select(s => _mapper.MapSeason(ctx.Series, s, ctx.Titles.DisplayTitle, cancellationToken)).ToList();
-
-            return WrapInPagedContainer(seasons);
-        }
-
-        [HttpGet("metadata/{ratingKey}/grandchildren")]
-        public IActionResult GetGrandchildren(string ratingKey)
-        {
-            var ctx = GetSeriesContext(ratingKey);
-            if (ctx == null)
-                return NotFound();
-
-            var allEpisodes = ctx
-                .FileData.Mappings.OrderBy(m => m.Coords.Season)
-                .ThenBy(m => m.Coords.Episode)
-                .Select(m => _mapper.MapEpisode(m.PrimaryEpisode, m.Coords, ctx.Series, ctx.Titles, m.PartIndex, m.TmdbEpisode))
-                .ToList();
-
-            return WrapInPagedContainer(allEpisodes);
-        }
-
-        [HttpGet("animethemes/mp3")]
-        public async Task<IActionResult> AnimeThemesMp3([FromQuery] AnimeThemesMp3Query query, CancellationToken cancellationToken = default)
-        {
-            if (string.IsNullOrWhiteSpace(query.Path))
-                return BadRequest(new { status = "error", message = "path is required" });
-
-            // If user supplied a Plex-style path (how Plex exposes the library), allow it and reverse-map to the configured Shoko path mappings.
-            // This helps when dashboard users paste paths copied from Plex instead of server-local Shoko paths.
-            if (!string.IsNullOrWhiteSpace(query.Path))
-            {
-                string reverse = _plexLibrary.MapPlexPathToShokoPath(query.Path);
-                if (!string.Equals(reverse, query.Path, StringComparison.Ordinal))
-                {
-                    query = query with { Path = reverse };
-                }
-            }
-
-            if (query.Batch)
-            {
-                var batch = await _animeThemesGenerator.ProcessBatchAsync(query, cancellationToken);
-                return Ok(batch);
-            }
-
-            var single = await _animeThemesGenerator.ProcessSingleAsync(query, cancellationToken);
-            if (single.Status == "error")
-                return BadRequest(single);
-
-            return Ok(single);
-        }
-
-        [HttpGet("animethemes/vfs")]
-        public async Task<IActionResult> AnimeThemesVfs([FromQuery] AnimeThemesVfsQuery query, CancellationToken cancellationToken = default)
-        {
-            // `path` is intentionally NOT supported for the vfs endpoint — reject if provided.
-            if (Request.Query.ContainsKey("path"))
-                return BadRequest(
-                    new { status = "error", message = "The 'path' query parameter is not supported on /animethemes/vfs. Use 'torrentRoot' or the configured AnimeThemesPathMapping instead." }
-                );
-
-            if (query.Mapping)
-            {
-                string defaultBase = !string.IsNullOrWhiteSpace(ShokoRelay.Settings.AnimeThemesPathMapping) ? ShokoRelay.Settings.AnimeThemesPathMapping : AnimeThemesConstants.BasePath;
-
-                string root = query.TorrentRoot ?? defaultBase;
-                var result = await _animeThemesMapping.BuildMappingFileAsync(root, query.MapPath, cancellationToken);
-                return Ok(result);
-            }
-
-            if (query.ApplyMapping)
-            {
-                string defaultBase = !string.IsNullOrWhiteSpace(ShokoRelay.Settings.AnimeThemesPathMapping) ? ShokoRelay.Settings.AnimeThemesPathMapping : AnimeThemesConstants.BasePath;
-
-                string? sourceRoot = query.TorrentRoot ?? defaultBase;
-                var validation = ValidateFilterOrBadRequest(query.Filter, out var filterIds);
-                if (validation != null)
-                    return validation;
-
-                var result = await _animeThemesMapping.ApplyMappingAsync(query.MapPath, sourceRoot, filterIds, cancellationToken);
-
-                // Return sanitized response (omit 'Planned' to reduce log noise)
-                return Ok(
-                    new
-                    {
-                        LinksCreated = result.LinksCreated,
-                        Skipped = result.Skipped,
-                        SeriesMatched = result.SeriesMatched,
-                        Errors = result.Errors,
-                    }
-                );
-            }
-
-            return BadRequest(new { status = "error", message = "missing operation (use mapping/applyMapping on /animethemes/vfs or use /animethemes/mp3 for single/batch)" });
-        }
+        #region Virtual File System
 
         [HttpGet("vfs")]
         public IActionResult BuildVfs([FromQuery] bool clean = true, [FromQuery] bool run = false, [FromQuery] string? filter = null)
@@ -998,7 +798,154 @@ namespace ShokoRelay.Controllers
             );
         }
 
-        // POST /shoko/import -> trigger server import via Shoko v3 API using configured ShokoApiKey
+        #endregion
+
+        #region Sync Watched
+
+        [HttpGet("syncwatched")]
+        [HttpPost("syncwatched")]
+        public async Task<IActionResult> SyncPlexWatched(
+            [FromQuery(Name = "dryRun")] string? dryRun = null,
+            [FromQuery(Name = "sinceHours")] int? sinceHours = null,
+            [FromQuery(Name = "votes")] bool? votes = null,
+            [FromQuery(Name = "ratings")] bool? ratings = null,
+            [FromQuery(Name = "import")] bool? import = null,
+            [FromQuery(Name = "excludeAdmin")] bool? excludeAdmin = null,
+            CancellationToken cancellationToken = default
+        )
+        {
+            if (!_plexLibrary.IsEnabled)
+            {
+                return BadRequest(new { status = "error", message = "Plex server configuration is missing or no library selected." });
+            }
+
+            // default to safe dry-run when the query param is omitted; real writes require explicit dryRun=false
+            bool parsedDryRun = true;
+            if (!string.IsNullOrWhiteSpace(dryRun))
+            {
+                var v = dryRun.Trim();
+                if (string.Equals(v, "true", StringComparison.OrdinalIgnoreCase))
+                {
+                    parsedDryRun = true;
+                }
+                else if (string.Equals(v, "false", StringComparison.OrdinalIgnoreCase))
+                {
+                    parsedDryRun = false;
+                }
+                else
+                {
+                    return BadRequest(new { status = "error", message = "Invalid value for dryRun — expected true or false." });
+                }
+            }
+
+            bool doImport = import.GetValueOrDefault(false);
+            bool includeRatings = ratings.HasValue ? ratings.GetValueOrDefault(false) : votes.GetValueOrDefault(false);
+
+            try
+            {
+                PlexWatchedSyncResult result;
+                string direction;
+
+                if (doImport)
+                {
+                    if (_syncToPlexService == null)
+                        return StatusCode(500, new { status = "error", message = "SyncToPlex service is not available." });
+
+                    direction = "Plex<-Shoko";
+                    result = await _syncToPlexService.SyncWatchedAsync(parsedDryRun, sinceHours, includeRatings, excludeAdmin.GetValueOrDefault(false), cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    if (_watchedSyncService == null)
+                        return StatusCode(500, new { status = "error", message = "WatchedSyncService is not available." });
+
+                    direction = "Plex->Shoko";
+                    result = await _watchedSyncService.SyncWatchedAsync(parsedDryRun, sinceHours, includeRatings, cancellationToken).ConfigureAwait(false);
+                }
+
+                return Ok(
+                    new
+                    {
+                        status = "ok",
+                        direction,
+                        processed = result.Processed,
+                        marked = result.MarkedWatched,
+                        skipped = result.Skipped,
+                        scheduled = result.ScheduledJobs,
+                        votesFound = result.VotesFound,
+                        votesUpdated = result.VotesUpdated,
+                        votesSkipped = result.VotesSkipped,
+                        matched = result.Matched,
+                        missingMappings = result.MissingMappings,
+                        perUser = result.PerUser,
+                        perUserChanges = result.PerUserChanges,
+                        errors = result.Errors,
+                        errorsList = result.ErrorsList,
+                    }
+                );
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "SyncPlexWatched failed");
+                return StatusCode(500, new { status = "error", message = ex.Message });
+            }
+        }
+
+        [HttpGet("syncwatched/start")]
+        public async Task<IActionResult> StartWatchedSyncNow(CancellationToken cancellationToken = default)
+        {
+            var settings = _configProvider.GetSettings();
+            int freqHours = settings?.ShokoSyncWatchedFrequencyHours ?? 0;
+
+            if (_watchedSyncService == null)
+                return StatusCode(501, new { status = "error", message = "Watched sync service not available" });
+
+            try
+            {
+                var result = await _watchedSyncService.SyncWatchedAsync(false, freqHours, settings?.ShokoSyncWatchedIncludeRatings ?? false, cancellationToken).ConfigureAwait(false);
+
+                // Replace schedule: mark last-run == now so automation schedules next run after configured interval
+                ShokoRelay.MarkSyncRunNow();
+
+                return Ok(
+                    new
+                    {
+                        status = "ok",
+                        triggered = true,
+                        scheduled = freqHours > 0,
+                        nextRunInHours = freqHours,
+                        result,
+                    }
+                );
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { status = "error", message = ex.Message });
+            }
+        }
+
+        #endregion
+
+        #region Shoko: Automations
+
+        [HttpPost("shoko/remove-missing")]
+        public async Task<IActionResult> RemoveMissingFiles([FromQuery] bool removeFromMyList = true)
+        {
+            try
+            {
+                if (_shokoImportService == null)
+                    return StatusCode(500, new { status = "error", message = "Import service not available." });
+
+                var body = await _shokoImportService.RemoveMissingFilesAsync(removeFromMyList).ConfigureAwait(false);
+                return Ok(new { status = "ok", response = body });
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "RemoveMissingFiles failed");
+                return StatusCode(500, new { status = "error", message = ex.Message });
+            }
+        }
+
         [HttpPost("shoko/import")]
         public async Task<IActionResult> RunShokoImport([FromQuery] bool onlyUnrecognized = true)
         {
@@ -1024,87 +971,110 @@ namespace ShokoRelay.Controllers
             }
         }
 
-        // POST /shoko/remove-missing -> call Shoko v3 Action/RemoveMissingFiles
-        [HttpPost("shoko/remove-missing")]
-        public async Task<IActionResult> RemoveMissingFiles([FromQuery] bool removeFromMyList = true)
+        [HttpGet("shoko/import/start")]
+        public async Task<IActionResult> StartShokoImportNow(CancellationToken cancellationToken = default)
         {
-            try
-            {
-                if (_shokoImportService == null)
-                    return StatusCode(500, new { status = "error", message = "Import service not available." });
+            var settings = _configProvider.GetSettings();
+            int freqHours = settings?.ShokoImportFrequencyHours ?? 0;
 
-                var body = await _shokoImportService.RemoveMissingFilesAsync(removeFromMyList).ConfigureAwait(false);
-                return Ok(new { status = "ok", response = body });
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(ex, "RemoveMissingFiles failed");
-                return StatusCode(500, new { status = "error", message = ex.Message });
-            }
-        }
-
-        // GET/POST /plex/syncwatched -> sync watched-state from configured Plex libraries into Shoko
-        [HttpGet("plex/syncwatched")]
-        [HttpPost("plex/syncwatched")]
-        public async Task<IActionResult> SyncPlexWatched(
-            [FromQuery(Name = "dryRun")] string? dryRun = null,
-            [FromQuery(Name = "sinceHours")] int? sinceHours = null,
-            CancellationToken cancellationToken = default
-        )
-        {
-            if (!_plexLibrary.IsEnabled)
-            {
-                return BadRequest(new { status = "error", message = "Plex server configuration is missing or no library selected." });
-            }
-
-            if (_watchedSyncService == null)
-            {
-                return StatusCode(500, new { status = "error", message = "WatchedSyncService is not available." });
-            }
-
-            // default to safe dry-run when the query param is omitted; real writes require explicit dryRun=false
-            bool parsedDryRun = true;
-            if (!string.IsNullOrWhiteSpace(dryRun))
-            {
-                var v = dryRun.Trim();
-                if (string.Equals(v, "true", StringComparison.OrdinalIgnoreCase))
-                {
-                    parsedDryRun = true;
-                }
-                else if (string.Equals(v, "false", StringComparison.OrdinalIgnoreCase))
-                {
-                    parsedDryRun = false;
-                }
-                else
-                {
-                    return BadRequest(new { status = "error", message = "Invalid value for dryRun — expected true or false." });
-                }
-            }
+            if (_shokoImportService == null)
+                return StatusCode(501, new { status = "error", message = "ShokoImportService not available" });
 
             try
             {
-                // Allow optional lookback flag for manual invocation: sinceHours (hours)
-                var result = await _watchedSyncService.SyncWatchedAsync(parsedDryRun, sinceHours, cancellationToken).ConfigureAwait(false);
+                var scanned = await _shokoImportService.TriggerImportAsync(cancellationToken).ConfigureAwait(false);
+
+                // Replace schedule: mark last-run == now so automation schedules next run after configured interval
+                ShokoRelay.MarkImportRunNow();
+
                 return Ok(
                     new
                     {
                         status = "ok",
-                        processed = result.Processed,
-                        marked = result.MarkedWatched,
-                        skipped = result.Skipped,
-                        scheduled = result.ScheduledJobs,
-                        perUser = result.PerUser,
-                        perUserChanges = result.PerUserChanges,
-                        errors = result.Errors,
-                        errorsList = result.ErrorsList,
+                        triggered = true,
+                        scheduled = freqHours > 0,
+                        nextRunInHours = freqHours,
+                        scanned,
                     }
                 );
             }
             catch (Exception ex)
             {
-                Logger.Warn(ex, "SyncPlexWatched failed");
                 return StatusCode(500, new { status = "error", message = ex.Message });
             }
         }
+
+        #endregion
+
+        #region AnimeThemes
+
+        [HttpGet("animethemes/mp3")]
+        public async Task<IActionResult> AnimeThemesMp3([FromQuery] AnimeThemesMp3Query query, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(query.Path))
+                return BadRequest(new { status = "error", message = "path is required" });
+
+            // If user supplied a Plex-style path (how Plex exposes the library), allow it and reverse-map to the configured Shoko path mappings.
+            if (!string.IsNullOrWhiteSpace(query.Path))
+            {
+                string reverse = _plexLibrary.MapPlexPathToShokoPath(query.Path);
+                if (!string.Equals(reverse, query.Path, StringComparison.Ordinal))
+                {
+                    query = query with { Path = reverse };
+                }
+            }
+
+            if (query.Batch)
+            {
+                var batch = await _animeThemesGenerator.ProcessBatchAsync(query, cancellationToken);
+                return Ok(batch);
+            }
+
+            var single = await _animeThemesGenerator.ProcessSingleAsync(query, cancellationToken);
+            if (single.Status == "error")
+                return BadRequest(single);
+
+            return Ok(single);
+        }
+
+        [HttpGet("animethemes/vfs")]
+        public async Task<IActionResult> AnimeThemesVfs([FromQuery] AnimeThemesVfsQuery query, CancellationToken cancellationToken = default)
+        {
+            if (query.Mapping)
+            {
+                string defaultBase = !string.IsNullOrWhiteSpace(ShokoRelay.Settings.AnimeThemesPathMapping) ? ShokoRelay.Settings.AnimeThemesPathMapping : AnimeThemesConstants.BasePath;
+
+                string root = query.TorrentRoot ?? defaultBase;
+                var result = await _animeThemesMapping.BuildMappingFileAsync(root, query.MapPath, cancellationToken);
+                return Ok(result);
+            }
+
+            if (query.ApplyMapping)
+            {
+                string defaultBase = !string.IsNullOrWhiteSpace(ShokoRelay.Settings.AnimeThemesPathMapping) ? ShokoRelay.Settings.AnimeThemesPathMapping : AnimeThemesConstants.BasePath;
+
+                string? sourceRoot = query.TorrentRoot ?? defaultBase;
+                var validation = ValidateFilterOrBadRequest(query.Filter, out var filterIds);
+                if (validation != null)
+                    return validation;
+
+                var result = await _animeThemesMapping.ApplyMappingAsync(query.MapPath, sourceRoot, filterIds, cancellationToken);
+
+                // Return sanitized response (omit 'Planned' to reduce log noise)
+                return Ok(
+                    new
+                    {
+                        LinksCreated = result.LinksCreated,
+                        Skipped = result.Skipped,
+                        SeriesMatched = result.SeriesMatched,
+                        Errors = result.Errors,
+                    }
+                );
+            }
+
+            return BadRequest(new { status = "error", message = "missing operation (use mapping/applyMapping on /animethemes/vfs or use /animethemes/mp3 for single/batch)" });
+        }
+
+        #endregion
     }
 }

@@ -348,7 +348,12 @@ namespace ShokoRelay.Plex
         /// <summary>
         /// List all episodes in the given section. Uses paging to avoid very large responses.
         /// </summary>
-        public async Task<List<PlexMetadataItem>> GetSectionEpisodesAsync(PlexLibraryTarget target, string? plexUserToken = null, CancellationToken cancellationToken = default)
+        public async Task<List<PlexMetadataItem>> GetSectionEpisodesAsync(
+            PlexLibraryTarget target,
+            string? plexUserToken = null,
+            CancellationToken cancellationToken = default,
+            bool onlyUnwatched = false
+        )
         {
             var results = new List<PlexMetadataItem>();
             if (!IsEnabled || target == null)
@@ -358,7 +363,9 @@ namespace ShokoRelay.Plex
             const int pageSize = 200;
             while (true)
             {
-                string requestPath = $"/library/sections/{target.SectionId}/all?type={PlexConstants.TypeEpisode}&unwatched=0&X-Plex-Container-Start={start}&X-Plex-Container-Size={pageSize}";
+                var unwatchedFlag = onlyUnwatched ? "1" : "0";
+                string requestPath =
+                    $"/library/sections/{target.SectionId}/all?type={PlexConstants.TypeEpisode}&unwatched={unwatchedFlag}&X-Plex-Container-Start={start}&X-Plex-Container-Size={pageSize}";
                 using var request = CreateRequest(HttpMethod.Get, requestPath, target.ServerUrl, plexUserToken);
                 using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
                 if (!response.IsSuccessStatusCode)

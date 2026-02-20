@@ -121,6 +121,63 @@ namespace ShokoRelay.Plex
             return outList.Count > 0 ? outList.ToArray() : null;
         }
 
+        // Build Country array from TMDB production-country ISO codes.
+        // Use the first linked TMDB *show* for a Shoko series; if none exists,
+        // fall back to the first linked TMDB *movie* for that series.
+        private object[]? BuildCountryArray(ISeries series)
+        {
+            IEnumerable<string>? codes = null;
+
+            if (series is IShokoSeries shokoSeries)
+            {
+                var tmdbShow = shokoSeries.TmdbShows?.FirstOrDefault();
+                if (tmdbShow?.ProductionCountries?.Any() == true)
+                {
+                    codes = tmdbShow.ProductionCountries;
+                }
+                else
+                {
+                    var tmdbMovie = shokoSeries.TmdbMovies?.FirstOrDefault();
+                    if (tmdbMovie?.ProductionCountries?.Any() == true)
+                        codes = tmdbMovie.ProductionCountries;
+                }
+            }
+
+            // If the series itself is a TMDB show, prefer its ProductionCountries (interface returns ISO codes)
+            if (codes == null && series is Shoko.Abstractions.Metadata.Tmdb.ITmdbShow tmdbSelf && tmdbSelf.ProductionCountries?.Any() == true)
+                codes = tmdbSelf.ProductionCountries;
+
+            if (codes == null || !codes.Any())
+                return null;
+
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var outList = new List<object>();
+
+            foreach (var raw in codes)
+            {
+                if (string.IsNullOrWhiteSpace(raw))
+                    continue;
+
+                var code = raw.Trim();
+                string countryName;
+                try
+                {
+                    // RegionInfo accepts ISO-3166 alpha-2 codes (e.g. "JP", "US")
+                    var region = new System.Globalization.RegionInfo(code.ToUpperInvariant());
+                    countryName = region.EnglishName;
+                }
+                catch
+                {
+                    countryName = code;
+                }
+
+                if (!string.IsNullOrWhiteSpace(countryName) && seen.Add(countryName))
+                    outList.Add(new { tag = countryName });
+            }
+
+            return outList.Count > 0 ? outList.ToArray() : null;
+        }
+
         // Core resolver used by both series and episode helpers to avoid duplicated switch logic.
         private double? ResolveAudienceRatingCore(double nativeRating, Func<double?> tmdbFinder)
         {
@@ -291,7 +348,7 @@ namespace ShokoRelay.Plex
                 //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
                 ["Genre"]                 = TagHelper.GetFilteredTags(series),
                 ["Guid"]                  = BuildXrefGuidArray(series).ToArray(),
-                //["Country"]             = TMDB has this but it is not exposed
+                ["Country"]               = BuildCountryArray(series),
                 ["Role"]                  = CastHelper.GetCastAndCrew(series),
                 ["Director"]              = CastHelper.GetDirectors(series),
                 ["Producer"]              = CastHelper.GetProducers(series),
