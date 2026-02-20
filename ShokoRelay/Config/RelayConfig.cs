@@ -127,7 +127,7 @@ namespace ShokoRelay.Config
         [DefaultValue("!AnimeThemes")]
         public string AnimeThemesRootPath { get; set; } = "!AnimeThemes";
 
-        [Display(Name = "AnimeThemes Path Mapping", Description = "The base path for the AnimeThemes .webm files for mapping generation")]
+        [Display(Name = "AnimeThemes Path Mapping", Description = "The base path containing AnimeThemes .webm files for mapping generation")]
         [DefaultValue("/animethemes/")]
         public string AnimeThemesPathMapping { get; set; } = "/animethemes/";
 

@@ -22,6 +22,12 @@ namespace ShokoRelay.Vfs
         private ConcurrentDictionary<string, string[]>? _subtitleFileCacheForBuild;
         private ConcurrentDictionary<string, string[]>? _metadataFileCacheForBuild;
 
+        // Temp storage for run-wide warnings (not returned by Build result)
+        private ConcurrentBag<string>? _warningsForBuild;
+
+        // Tracks directories created during a build (unique keys)
+        private ConcurrentDictionary<string, byte>? _createdDirsForBuild;
+
         private static readonly HashSet<string> MetadataExtensions = PlexConstants
             .LocalMediaAssets.Artwork.Union(PlexConstants.LocalMediaAssets.ThemeSongs)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -51,6 +57,10 @@ namespace ShokoRelay.Vfs
             _subtitleFileCacheForBuild = new ConcurrentDictionary<string, string[]>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
             _metadataFileCacheForBuild = new ConcurrentDictionary<string, string[]>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
 
+            // Initialize run-wide helper structures
+            _warningsForBuild = new ConcurrentBag<string>();
+            _createdDirsForBuild = new ConcurrentDictionary<string, byte>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+
             var sw = Stopwatch.StartNew();
             int created = 0;
             int skipped = 0;
@@ -65,6 +75,7 @@ namespace ShokoRelay.Vfs
 
             // Gather series list (pruneSeries may call PruneSeries which uses cached fileData)
             var errorsBag = new ConcurrentBag<string>();
+            // warningsBag is handled by _warningsForBuild
             IEnumerable<IShokoSeries> seriesList = Array.Empty<IShokoSeries>();
             if (seriesIds != null && seriesIds.Count > 0)
             {
@@ -132,20 +143,61 @@ namespace ShokoRelay.Vfs
             sw.Stop();
 
             var errors = errorsBag.ToList();
+            var warnings = _warningsForBuild?.ToList() ?? new List<string>();
+            int dirsCreated = _createdDirsForBuild?.Count ?? 0;
+
+            // write report file to plugin directory
+            try
+            {
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine($"VFS Build Report - {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                sb.AppendLine($"Elapsed: {sw.Elapsed}");
+                sb.AppendLine($"Series processed: {seriesProcessed}");
+                sb.AppendLine($"Directories created: {dirsCreated}");
+                sb.AppendLine($"Links created: {created}");
+                sb.AppendLine($"Planned links: {planned}");
+                sb.AppendLine($"Links skipped: {skipped}");
+                if (warnings.Count > 0)
+                {
+                    sb.AppendLine();
+                    sb.AppendLine("Warnings:");
+                    foreach (var w in warnings)
+                        sb.AppendLine(w);
+                }
+                if (errors.Count > 0)
+                {
+                    sb.AppendLine();
+                    sb.AppendLine("Errors:");
+                    foreach (var e in errors)
+                        sb.AppendLine(e);
+                }
+
+                string reportPath = Path.Combine(_programDataPath, "vfs-report.log");
+                System.IO.File.WriteAllText(reportPath, sb.ToString());
+                Logger.Info("VFS report written to {Path}", reportPath);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "Failed to write VFS report file");
+                _warningsForBuild?.Add($"Failed to write VFS report file: {ex.Message}");
+            }
 
             // Clear per-run caches
             _seriesFileDataCacheForBuild = null;
             _subtitleFileCacheForBuild = null;
             _metadataFileCacheForBuild = null;
+            _warningsForBuild = null;
+            _createdDirsForBuild = null;
 
             Logger.Info(
-                "VFS BuildInternal completed in {Elapsed}ms: seriesProcessed={SeriesProcessed}, created={Created}, planned={Planned}, skipped={Skipped}, errors={ErrorsCount}",
+                "VFS BuildInternal completed in {Elapsed}ms: seriesProcessed={SeriesProcessed}, created={Created}, planned={Planned}, skipped={Skipped}, errors={ErrorsCount}, dirs={Dirs}",
                 sw.ElapsedMilliseconds,
                 seriesProcessed,
                 created,
                 planned,
                 skipped,
-                errors.Count
+                errors.Count,
+                dirsCreated
             );
             return new VfsBuildResult(rootName, seriesProcessed, created, skipped, errors, planned);
         }
@@ -287,6 +339,9 @@ namespace ShokoRelay.Vfs
                 }
 
                 Directory.CreateDirectory(rootPath);
+                // track directory creation
+                if (_createdDirsForBuild != null)
+                    _createdDirsForBuild.TryAdd(rootPath, 0);
 
                 string? source = VfsShared.ResolveSourcePath(location, importRoot);
 
@@ -302,6 +357,8 @@ namespace ShokoRelay.Vfs
                 string rootDirKey = $"/{importFolderSafe}/{rootFolderName}";
                 string seriesDirKey = $"/{importFolderSafe}/{rootFolderName}/{seriesFolder}";
                 Directory.CreateDirectory(seriesPath);
+                if (_createdDirsForBuild != null)
+                    _createdDirsForBuild.TryAdd(seriesPath, 0);
                 // record that we've processed these directories so LinkMetadata/LinkSubtitles can de-duplicate actions
                 reportedDirs.Add(rootDirKey);
                 reportedDirs.Add(seriesDirKey);
@@ -311,6 +368,8 @@ namespace ShokoRelay.Vfs
                 string seasonPath = Path.Combine(seriesPath, seasonFolder);
                 string seasonDirKey = $"/{importFolderSafe}/{rootFolderName}/{seriesFolder}/{seasonFolder}";
                 Directory.CreateDirectory(seasonPath);
+                if (_createdDirsForBuild != null)
+                    _createdDirsForBuild.TryAdd(seasonPath, 0);
 
                 string extension = Path.GetExtension(source) ?? string.Empty;
                 int padForExtra = 1;
@@ -438,6 +497,7 @@ namespace ShokoRelay.Vfs
                     catch (Exception ex)
                     {
                         Logger.Warn(ex, "Failed to prune series path {Path}", seriesPath);
+                        _warningsForBuild?.Add($"Failed to prune series path {seriesPath}: {ex.Message}");
                     }
                 }
             }

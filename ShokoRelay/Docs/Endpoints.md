@@ -10,8 +10,8 @@ All of the endpoints used by the Shoko Relay plugin are available under the plug
 - [Plex: Webhook](#plex-webhook)
 - [Plex: Collections](#plex-collections)
 - [Virtual File System (VFS)](#virtual-file-system-vfs)
-- [Shoko: Automations](#shoko-automations)
 - [Sync Watched](#sync-watched)
+- [Shoko: Automations](#shoko-automations)
 - [AnimeThemes](#animethemes)
 
 ---
@@ -54,10 +54,10 @@ GET  /metadata/{ratingKey}/grandchildren                       -> GetGrandchildr
 ## Plex: Authentication
 
 ```
-GET  /plexauth                                                 -> StartPlexAuth (returns pin + authUrl + statusUrl)
-GET  /plexauth/status?pinId={id}                               -> GetPlexAuthStatus (poll for pin completion)
-POST /plex/unlink                                              -> UnlinkPlex (revoke & clear saved token)
-POST /plex/libraries/refresh                                   -> RefreshPlexLibraries (re-discover Shoko libraries)
+GET  /plex/auth                                                -> StartPlexAuth (returns pin + authUrl + statusUrl)
+GET  /plex/auth/status?pinId={id}                              -> GetPlexAuthStatus (poll for pin completion)
+POST /plex/auth/unlink                                         -> UnlinkPlex (revoke & clear saved token)
+POST /plex/auth/refresh                                        -> RefreshPlexLibraries (re-discover Shoko libraries)
 ```
 
 - `StartPlexAuth` returns a PIN and `authUrl` to complete Plex pairing.
@@ -94,6 +94,7 @@ GET  /plex/collections/posters?seriesId={id}&filter={filter}   -> ApplyCollectio
 
 ```
 GET /vfs?run={true|false}&clean={true|false}&filter={filter}   -> BuildVfs
+GET /vfs/log                                                   -> GetVfsLog (download last report)
 ```
 
 Parameters:
@@ -103,6 +104,8 @@ Parameters:
 - `filter` (csv) : comma-separated ShokoSeriesIDs to restrict processing
 
 - When `run=true` and the configured Plex client has `ScanOnVfsRefresh`, the controller will schedule Plex scans for affected series.
+- A plain‑text report of each VFS build is saved to `vfs-report.log` in the plugin directory
+- You can download the most recent report via `GET /vfs/log` or the `logUrl` property returned in the JSON response when `run=true`.
 
 ---
 
@@ -161,7 +164,8 @@ GET  /shoko/import/start                                       -> StartShokoImpo
 ### AnimeThemes VFS
 
 ```
-GET /animethemes/vfs?mapping={true|false}&applyMapping={true|false}&mapPath={map.json}&torrentRoot={root}&filter={csv}  -> AnimeThemesVfs
+GET /animethemes/vfs                                           -> AnimeThemesVfs
+    [?mapping={true|false}&applyMapping={true|false}&mapPath={map.json}&torrentRoot={root}&filter={csv}]
 ```
 
 - `mapping=true` builds mapping JSON from a torrent root.
@@ -171,7 +175,8 @@ GET /animethemes/vfs?mapping={true|false}&applyMapping={true|false}&mapPath={map
 ### AnimeThemes MP3
 
 ```
-GET /animethemes/mp3?path={path}&slug={slug}&offset={n}&batch={true|false}&force={true|false}  -> AnimeThemesMp3
+GET /animethemes/mp3                                           -> AnimeThemesMp3
+    [?path={path}&slug={slug}&offset={n}&batch={true|false}&force={true|false}]
 ```
 
 - Creates `Theme.mp3` files for folders. `batch=true` processes all subfolders under `path`.

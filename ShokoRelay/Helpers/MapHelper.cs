@@ -469,8 +469,5 @@ namespace ShokoRelay.Helpers
 
             return coords;
         }
-
-        // Debug helpers removed (Debug endpoints have been removed from the API).
-        // Removed: EpisodeDebugInfo, FileMappingDebugInfo, FileMappingSummary, TmdbEpisodeSummary and GetFileMappingDebug.
     }
 }

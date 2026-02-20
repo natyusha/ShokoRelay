@@ -37,7 +37,7 @@
 
     const msg = document.createElement("span");
     msg.className = "toast-message";
-    msg.textContent = message;
+    msg.innerHTML = message;
     t.appendChild(msg);
 
     container.appendChild(t);
@@ -286,7 +286,7 @@
   async function startPlexAuth() {
     const btn = el("plex-start");
     setButtonLoading(btn, true);
-    const res = await fetchJson(base + "/plexauth");
+    const res = await fetchJson(base + "/plex/auth");
     if (!res.ok) {
       console.error("Plex auth start failed", res.data);
       setButtonLoading(btn, false);
@@ -303,7 +303,7 @@
 
   async function checkPlexAuthStatus() {
     if (!plexPinId) return;
-    const res = await fetchJson(base + "/plexauth/status?pinId=" + encodeURIComponent(plexPinId));
+    const res = await fetchJson(base + "/plex/auth/status?pinId=" + encodeURIComponent(plexPinId));
     if (res.ok && res.data && res.data.status === "ok") {
       plexPinId = "";
       stopPlexPolling();
@@ -316,7 +316,7 @@
     setButtonLoading(btn, true);
     setColStatus("Refreshing libraries...", "running");
     try {
-      const rr = await fetchJson(base + "/plex/libraries/refresh", { method: "POST" });
+      const rr = await fetchJson(base + "/plex/auth/refresh", { method: "POST" });
       if (rr.ok && rr.data) {
         await refreshPlexState();
         setColStatus("Libraries refreshed", "ok");
@@ -420,7 +420,7 @@
     const libraries = (plex.DiscoveredLibraries || []).map((l) => ({ id: l.Id, title: l.Title, type: l.Type, uuid: l.Uuid, serverId: l.ServerId, serverName: l.ServerName, serverUrl: l.ServerUrl }));
     const selectedKeys = (plex.SelectedLibraries || []).map((s) => s.Uuid || (s.ServerId ? s.ServerId + "::" + s.SectionId : String(s.SectionId)));
     if ((!libraries || libraries.length === 0) && plex.DiscoveredServers && plex.DiscoveredServers.length > 0) {
-      const rr = await fetchJson(base + "/plex/libraries/refresh", { method: "POST" });
+      const rr = await fetchJson(base + "/plex/auth/refresh", { method: "POST" });
       if (rr.ok && rr.data && rr.data.libraries) {
         const libs = (rr.data.libraries || []).map((l) => ({ id: l.Id, title: l.Title, type: l.Type, uuid: l.Uuid, serverId: l.ServerId, serverName: l.ServerName, serverUrl: l.ServerUrl }));
         populateLibraries(libs, selectedKeys);
@@ -487,7 +487,7 @@
   }
 
   async function unlinkPlex() {
-    const res = await fetchJson(base + "/plex/unlink", { method: "POST" });
+    const res = await fetchJson(base + "/plex/auth/unlink", { method: "POST" });
     if (!res.ok) {
       console.error("Failed to revoke Plex token.");
       return;
@@ -509,9 +509,14 @@
       if (res.ok) {
         const summary = summarizeResult(res) || "VFS build completed";
         const vfsErrCount = getErrorCount(res);
-        showToast(`VFS (clean=${clean}): ${summary}`, vfsErrCount > 0 ? "error" : "success", vfsErrCount > 0 ? 0 : 6000);
+        // include a direct link to the latest report and keep toast until dismissed
+        const actualLogUrl = res.data?.logUrl || `${base}/vfs/log`;
+        const logLink = `<a href="${actualLogUrl}" target="_blank">report</a>`;
+        showToast(`VFS (clean=${clean}): ${summary} ([download report])`, vfsErrCount > 0 ? "error" : "success", 0);
       } else {
-        showToast(`VFS failed (clean=${clean}): ${res.data?.message || JSON.stringify(res.data)}`, "error", 0);
+        const actualLogUrl = res.data?.logUrl || `${base}/vfs/log`;
+        const logLink = `<a href="${actualLogUrl}" target="_blank">report</a>`;
+        showToast(`VFS failed (clean=${clean}): ${res.data?.message || JSON.stringify(res.data)} ([report])`, "error", 0);
       }
     });
   }
@@ -565,31 +570,31 @@
 
       let directionImport = false; // false = Plex → Shoko (default), true = Shoko → Plex
       function updateDirectionUI() {
-        const iconRight = dirArrow.querySelector('.dir-icon-right');
-        const iconLeft = dirArrow.querySelector('.dir-icon-left');
+        const iconRight = dirArrow.querySelector(".dir-icon-right");
+        const iconLeft = dirArrow.querySelector(".dir-icon-left");
 
         // accessibility state
         if (directionImport) {
-          dirToggle.setAttribute('aria-pressed', 'true');
-          dirToggle.setAttribute('aria-label', 'Direction: Shoko to Plex');
+          dirToggle.setAttribute("aria-pressed", "true");
+          dirToggle.setAttribute("aria-label", "Direction: Shoko to Plex");
         } else {
-          dirToggle.setAttribute('aria-pressed', 'false');
-          dirToggle.setAttribute('aria-label', 'Direction: Plex to Shoko');
+          dirToggle.setAttribute("aria-pressed", "false");
+          dirToggle.setAttribute("aria-label", "Direction: Plex to Shoko");
         }
 
         // Fallback glyph if icons missing
         if (!iconRight || !iconLeft) {
-          dirArrow.textContent = directionImport ? '❮' : '❯';
+          dirArrow.textContent = directionImport ? "❮" : "❯";
           return;
         }
 
         // Simple visibility toggle (no animations): show the correct SVG and hide the other
         if (directionImport) {
-          iconRight.classList.add('hidden');
-          iconLeft.classList.remove('hidden');
+          iconRight.classList.add("hidden");
+          iconLeft.classList.remove("hidden");
         } else {
-          iconRight.classList.remove('hidden');
-          iconLeft.classList.add('hidden');
+          iconRight.classList.remove("hidden");
+          iconLeft.classList.add("hidden");
         }
       }
 

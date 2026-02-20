@@ -107,8 +107,10 @@
           <button id="shoko-remove-missing" class="danger" title="Remove Missing Files From Shoko & MyList">
             Remove Missing
           </button>
-          <div class="shoko-button-col"><button id="shoko-import-run" title="Import From Source folders">Import</button></div>
-          <div class="shoko-button-col"><button id="shoko-sync-watched" title="Sync Watched States Menu">Sync</button></div>
+          <div class="shoko-button-col"><button id="shoko-import-run" title="Import From Source folders">Import</button>
+          </div>
+          <div class="shoko-button-col"><button id="shoko-sync-watched" title="Sync Watched States Menu">Sync</button>
+          </div>
         </div>
       </section>
     </div>
@@ -132,7 +134,6 @@
           <button id="at-mapping">Build Mapping</button>
         </div>
       </section>
-
       <section>
         <h3>
           <svg class="animethemes-svg" viewBox="0 0 160 86.6" width="277" height="150">
@@ -144,8 +145,11 @@
           <div class="at-path-col">
             <label>Path</label><input id="at-path" type="text" placeholder="Shoko or Plex relative anime path">
           </div>
-          <div class="at-slug-col"><label>Slug</label><input id="at-slug" type="text" placeholder="OP2"></div>
-          <div class="at-offset-col"><label>Off.</label><input id="at-offset" type="number" value="" placeholder="0">
+          <div class="at-slug-col">
+            <label title="Preferred Theme">Slug</label><input id="at-slug" type="text" placeholder="OP2">
+          </div>
+          <div class="at-offset-col">
+            <label title="Index Override">Off.</label><input id="at-offset" type="number" value="" placeholder="0">
           </div>
         </div>
         <div class="full">
@@ -177,13 +181,14 @@
     </section>
   </div>
   <div id="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- Floating Links -->
   <div class="floating-actions" role="navigation" aria-label="Quick links">
     <button id="theme-toggle" class="float-link theme-toggle" aria-label="Toggle theme" aria-pressed="false">
       <svg class="icon-svg" viewBox="0 0 24 24">
         <use href="img/icons.svg#theme-light-dark"></use>
       </svg>
     </button>
-
     <a class="float-link" href="https://discord.gg/shokoanime" target="_blank" rel="noopener noreferrer"
        aria-label="Shoko Discord">
       <svg class="icon-svg" viewBox="0 0 24 24">
@@ -204,55 +209,66 @@
     </a>
   </div>
 
-  <!-- Sync Watched modal -->
-  <div id="sync-modal" class="modal-overlay" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="sync-modal-title">
+  <!-- Sync Watched Modal -->
+  <div id="sync-modal" class="modal-overlay" aria-hidden="true" role="dialog" aria-modal="true"
+       aria-labelledby="sync-modal-title">
     <div class="modal" role="document">
       <header class="modal-header">Sync Watched States</header>
       <div class="modal-body">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
           <label style="margin:0">Direction</label>
-          <button id="sync-direction-toggle" class="direction-toggle" aria-pressed="false" title="Toggle direction" aria-label="Direction: Plex to Shoko">
+          <button id="sync-direction-toggle" class="direction-toggle" aria-pressed="false" title="Toggle direction"
+                  aria-label="Direction: Plex to Shoko">
             <span class="dir-label">Plex</span>
             <span id="sync-direction-arrow" class="dir-chevron">
-            <svg id="dir-icon-right" class="dir-icon dir-icon-right" viewBox="0 0 24 24" aria-hidden="true"><use href="img/icons.svg#transfer-right"></use></svg>
-            <svg id="dir-icon-left" class="dir-icon dir-icon-left hidden" viewBox="0 0 24 24" aria-hidden="true"><use href="img/icons.svg#transfer-left"></use></svg>
-          </span>
+              <svg id="dir-icon-right" class="dir-icon dir-icon-right" viewBox="0 0 24 24" aria-hidden="true">
+                <use href="img/icons.svg#transfer-right"></use>
+              </svg>
+              <svg id="dir-icon-left" class="dir-icon dir-icon-left hidden" viewBox="0 0 24 24" aria-hidden="true">
+                <use href="img/icons.svg#transfer-left"></use>
+              </svg>
+            </span>
             <span class="dir-label">Shoko</span>
           </button>
         </div>
-
-
-
         <div style="margin-top:8px;">
           <label class="shoko-checkbox">
             <input id="sync-ratings" type="checkbox">
             <span class="shoko-checkbox-icon" aria-hidden="true">
-              <svg class="unchecked" viewBox="0 0 24 24"><use href="img/icons.svg#checkbox-blank-circle-outline"></use></svg>
-              <svg class="checked" viewBox="0 0 24 24"><use href="img/icons.svg#checkbox-marked-circle-outline"></use></svg>
+              <svg class="unchecked" viewBox="0 0 24 24">
+                <use href="img/icons.svg#checkbox-blank-circle-outline"></use>
+              </svg>
+              <svg class="checked" viewBox="0 0 24 24">
+                <use href="img/icons.svg#checkbox-marked-circle-outline"></use>
+              </svg>
             </span>
-            <span class="shoko-checkbox-text"><span class="shoko-checkbox-title">Include Ratings</span><br><small>Sync user vote/rating values</small></span>
-          </label>
-        </div>
-
-        <div style="margin-top:8px;">
-          <label class="shoko-checkbox">
-            <input id="sync-exclude-admin" type="checkbox">
-            <span class="shoko-checkbox-icon" aria-hidden="true">
-              <svg class="unchecked" viewBox="0 0 24 24"><use href="img/icons.svg#checkbox-blank-circle-outline"></use></svg>
-              <svg class="checked" viewBox="0 0 24 24"><use href="img/icons.svg#checkbox-marked-circle-outline"></use></svg>
-            </span>
-            <span class="shoko-checkbox-text"><span class="shoko-checkbox-title">Exclude Admin</span><br><small>Only sync to extra Plex users</small></span>
-          </label>
+            <span class="shoko-checkbox-text"><span class="shoko-checkbox-title">Include Ratings</span><br><small>Sync
+              user vote/rating values</small></span>
+            </label>
+          </div>
+          <div style="margin-top:8px;">
+            <label class="shoko-checkbox">
+              <input id="sync-exclude-admin" type="checkbox">
+              <span class="shoko-checkbox-icon" aria-hidden="true">
+                <svg class="unchecked" viewBox="0 0 24 24">
+                  <use href="img/icons.svg#checkbox-blank-circle-outline"></use>
+                </svg>
+                <svg class="checked" viewBox="0 0 24 24">
+                  <use href="img/icons.svg#checkbox-marked-circle-outline"></use>
+                </svg>
+              </span>
+              <span class="shoko-checkbox-text"><span class="shoko-checkbox-title">Exclude Admin</span><br><small>Only
+                sync to extra Plex users</small></span>
+              </label>
+            </div>
+          </div>
+          <footer class="modal-actions">
+            <button id="sync-cancel-button" class="cancel">Cancel</button>
+            <button id="sync-start-button">Start Sync</button>
+          </footer>
         </div>
       </div>
-      <footer class="modal-actions">
-        <button id="sync-cancel-button" class="cancel">Cancel</button>
-        <button id="sync-start-button">Start Sync</button>
-      </footer>
-    </div>
-  </div>
+      <script src="js/script.js"></script>
+    </body>
 
-  <script src="js/script.js"></script>
-</body>
-
-</html>
+  </html>

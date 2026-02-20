@@ -381,7 +381,7 @@ namespace ShokoRelay.Controllers
 
         #region Plex: Authentication
 
-        [HttpGet("plexauth")]
+        [HttpGet("plex/auth")]
         public async Task<IActionResult> StartPlexAuth(CancellationToken cancellationToken = default)
         {
             EnsurePlexAuthConfig();
@@ -394,7 +394,7 @@ namespace ShokoRelay.Controllers
                     return StatusCode(502, new { status = "error", message = "Plex pin response missing id/code." });
                 }
 
-                string statusUrl = $"{BaseUrl}/api/plugin/ShokoRelay/plexauth/status?pinId={Uri.EscapeDataString(pin.Id)}";
+                string statusUrl = $"{BaseUrl}/api/plugin/ShokoRelay/plex/auth/status?pinId={Uri.EscapeDataString(pin.Id)}";
                 string authUrl = _plexAuth.BuildAuthUrl(pin.Code, ShokoRelayInfo.Name, statusUrl);
                 return Ok(
                     new
@@ -413,7 +413,7 @@ namespace ShokoRelay.Controllers
             }
         }
 
-        [HttpGet("plexauth/status")]
+        [HttpGet("plex/auth/status")]
         public async Task<IActionResult> GetPlexAuthStatus([FromQuery] string pinId, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(pinId))
@@ -471,7 +471,7 @@ namespace ShokoRelay.Controllers
             }
         }
 
-        [HttpPost("plex/unlink")]
+        [HttpPost("plex/auth/unlink")]
         public async Task<IActionResult> UnlinkPlex(CancellationToken cancellationToken = default)
         {
             var settings = _configProvider.GetSettings();
@@ -494,7 +494,7 @@ namespace ShokoRelay.Controllers
             return Ok(new { status = "ok" });
         }
 
-        [HttpPost("plex/libraries/refresh")]
+        [HttpPost("plex/auth/refresh")]
         public async Task<IActionResult> RefreshPlexLibraries(CancellationToken cancellationToken = default)
         {
             var settings = _configProvider.GetSettings();
@@ -794,8 +794,18 @@ namespace ShokoRelay.Controllers
                     plannedLinks = result.PlannedLinks,
                     skipped = result.Skipped,
                     errors = result.Errors,
+                    logUrl = $"{BaseUrl}/api/plugin/ShokoRelay/vfs/log",
                 }
             );
+        }
+
+        [HttpGet("vfs/log")]
+        public IActionResult GetVfsLog()
+        {
+            string path = Path.Combine(_applicationPaths.DataPath, "vfs-report.log");
+            if (!System.IO.File.Exists(path))
+                return NotFound(new { status = "error", message = "log not found" });
+            return PhysicalFile(path, "text/plain", "vfs-report.log");
         }
 
         #endregion

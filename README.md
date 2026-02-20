@@ -34,8 +34,10 @@ Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File Sy
 - Once the Server has loaded navigate to Shoko Relay's dashboard: `http://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/dashboard`
 - Mandatory
   - Click the `Generate VFS` button in the "Shoko: VFS" section to initialize your collection
-  - First time generation may take several minutes to complete with a large library.
-  - The VFS will automatically update when it detects files have been renamed or moved.
+  - First time generation may take several minutes to complete with a large library
+  - A report of the run will be written to `vfs-report.log` inside the plugin directory
+    - You can download the latest report via the dashboard toast that appears when the process finishes
+  - The VFS will automatically update when it detects files have been renamed or moved
 - Optional
   - Link the plugin to your Plex account to enable auto scanning, scrobbling (webhooks) and enhanced collection support
   - Add a Shoko API Key from `http://{ShokoHost}:{ShokoPort}/webui/settings/api-keys` to enable watch sync and import tasks
@@ -54,7 +56,7 @@ Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File Sy
 #### Metadata Agent
 
 - Navigate to `Settings > Metadata Agents`
-- Click `Add Provider` in the Metadata Providers header and supply the url: `http://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay`
+- Click `Add Provider` in the Metadata Providers header and supply the URL: `http://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay`
 - Click `Add Agent` in the Metadata Agents header, name it `Shoko Relay` and select `Shoko Relay` as the primary provider
 - Under `additional providers` select `Plex Local Media` then click the `+` and `Save`
 
@@ -75,7 +77,7 @@ Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File Sy
 
 ## AnimeThemes Integration
 
-#### Themes as Video Extras
+### Themes as Video Extras
 
 This plugin includes full integration for [AnimeThemes](https://animethemes.moe/). It will look for `.webm` theme files in a folder called `!AnimeThemes` which is located in the root of your anime library. These files must have the same filename as they do on the AnimeThemes website and then a mapping must be generated for them in what is essentially a 3 step process. Simply navigate to the "AnimeThemes: VFS" section of the dashboard page to get started.
 
@@ -88,22 +90,51 @@ This plugin includes full integration for [AnimeThemes](https://animethemes.moe/
 > [!IMPORTANT]
 > Similar to the VFS you must exclude the `!AnimeThemes` folder from Shoko using the `Exclude` server option. You must also configure the basepath for where the original files are located (the default is `/animethemes/`).
 
-#### Themes as Series BGM
+### Themes as Series BGM
 
 There is also support for generating `Theme.mp3` files as local metadata. This will add them to the VFS automatically and can be run for either a single series or as a batch operation. This requires Shoko Server to have access to [FFmpeg](https://ffmpeg.org/download.html) (place system appropriate binaries in the ShokoRelay plugin folder or have it in the system PATH) as AnimeThemes does not provide `.mp3` files.
 
 This is available under the "AnimeThemes: Theme.mp3" section of the dashboard.
 
-## Auto Scrobble (Plex Pass)
+## Plex: Automation
+
+### Collection Generation
+
+- Currently Plex's Provider Framework does not allow collections to be assigned so they have to be assigned separately
+  - This is done by injecting them via Plex's HTTP API which requires authentication to use
+- To do this navigate to the dashboard and authenticate wth Plex
+- Once Authenticated select the libraries you want to apply collections to then click the `Generate Collections` button
+- As a bonus this supports using the primary series poster as the collection poster (if configured under "Provider Configuration")
+- Local collection posters can also be used by placing them in the configured `Collection Posters Root Path` (default `!CollectionPosters`) folder
+- These files are simply named after the Shoko group name (or ID) that you wish them to apply to
+
+### Scan on VFS Change
+
+- When `Scan on VFS Change` is enabled and you are authenticated Plex's HTTP api will be used to instantly scan folder modified by the VFS watcher
+
+### Auto Scrobble (Plex Pass)
 
 - Enable `Auto Scrobble` in the Shoko Relay dashboard's "Plex: Automation" section.
 - In the Plex Web App go to `Settings > Webhooks` and add the URL: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/plex/webhook`
+
+## Shoko: Automation
+
+Most of the options in this section require a Shoko API key to fully function (as mentioned in the setup instructions).
+
+- `Remove Missing`: A button which will remove files that are no longer present from Shoko and your AniDB MyList
+- `Import`: A button which will make shoko rescan "Source" type drop folders
+- `Sync`: A button which opens a modal allowing for watched state syncing from Plex to Shoko or Shoko to Plex
+  - Note: This includes any users configured under "Extra Plex Users" in the "Plex: Automation" section
+- `Import Int.`: An input which will schedule imports from "Source" type drop folders every `N` hours
+- `Sync Int.`: An input which will schedule watched state syncing from Plex to Shoko every `N` hours
+  - Note: this includes ratings/votes if `Include Ratings` is enabled in the `Sync Watched States` modal
 
 ## Information
 
 Info on controlling this plugin directly is available in [Endpoints.md](./ShokoRelay/Docs/Endpoints.md)
 
 #### Missing Info
+
 > Due to this plugin relying on Shoko's plugin abstractions as well as Plex still actively developing the metadata provider feature some things may be missing or not work correctly.
 
 - **TMDB**
@@ -122,6 +153,5 @@ Info on controlling this plugin directly is available in [Endpoints.md](./ShokoR
 - Once available in Plex metadata providers
   - Switch collection support from Plex HTTP API "Generate Collections" button to the provider
   - Add custom or generic series/episode ratings directly through the provider
-- Dashboard
-  - Add a docs page for what everything does
 - Refactor and comment code for legibility
+- Expand documentation

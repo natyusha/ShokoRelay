@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using NLog;
@@ -27,7 +28,7 @@ public class AnimeThemesMapping
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private static readonly HttpClient Http = new();
-    private static readonly TimeSpan RateLimitDelay = TimeSpan.FromMilliseconds(750); // ~80 req/min to stay under 90
+    private static readonly TimeSpan RateLimitDelay = TimeSpan.FromSeconds(0.7); // ~86 req/min to stay under the 90 that is enforced by AnimeThemes
 
     private readonly IMetadataService _metadataService;
     private readonly string _pluginPath;
@@ -53,10 +54,14 @@ public class AnimeThemesMapping
         if (!Directory.Exists(resolvedRoot))
             throw new DirectoryNotFoundException($"AnimeThemes torrent root not found: {resolvedRoot}");
 
+        Logger.Info("AnimeThemes mapping build started (root={Root})", resolvedRoot);
+        var sw = Stopwatch.StartNew();
+
         string mapPath = outputPath ?? Path.Combine(_pluginPath, AnimeThemesConstants.MapFileName);
         var messages = new List<string>();
         var entries = new List<AnimeThemesMappingEntry>();
         int errors = 0;
+        int warns = 0;
 
         var files = Directory.EnumerateFiles(resolvedRoot, "*.webm", SearchOption.AllDirectories).ToList();
 
@@ -94,6 +99,8 @@ public class AnimeThemesMapping
         var json = JsonSerializer.Serialize(entries, _jsonOptions);
         await File.WriteAllTextAsync(mapPath, json, ct);
 
+        sw.Stop();
+        Logger.Info("AnimeThemes mapping build completed in {Elapsed}ms: entries={Count}, errors={Errors}, warnings={Warns}", sw.ElapsedMilliseconds, entries.Count, errors, warns);
         Logger.Info("AnimeThemes mapping written to {Path} with {Count} entries", mapPath, entries.Count);
         return new AnimeThemesMappingBuildResult(mapPath, entries.Count, errors, messages);
     }
@@ -113,6 +120,9 @@ public class AnimeThemesMapping
         var entries = JsonSerializer.Deserialize<List<AnimeThemesMappingEntry>>(json, _jsonOptions) ?? new();
 
         List<IShokoSeries?> seriesList = [];
+        Logger.Info("AnimeThemes apply mapping started (map={MapPath}, root={Root}, filter={FilterCount})", resolvedMap, torrentRoot ?? "", seriesFilter?.Count ?? 0);
+        var sw2 = Stopwatch.StartNew();
+        int warns2 = 0;
         if (seriesFilter != null && seriesFilter.Count > 0)
         {
             seriesList = seriesFilter.Distinct().Select(id => _metadataService.GetShokoSeriesByID(id)).ToList();
@@ -207,6 +217,8 @@ public class AnimeThemesMapping
                     catch (Exception ex)
                     {
                         skipped++;
+                        warns2++;
+                        Logger.Warn(ex, "Failed to create directory {Dir}", shortsDir);
                         errors.Add($"Failed to create directory {shortsDir}: {ex.Message}");
                         continue;
                     }
@@ -214,6 +226,8 @@ public class AnimeThemesMapping
                     if (!destSeen.Add(destPath))
                     {
                         skipped++;
+                        warns2++;
+                        Logger.Warn("Duplicate target path {Dest}", destPath);
                         continue;
                     }
 
@@ -224,12 +238,24 @@ public class AnimeThemesMapping
                     else
                     {
                         skipped++;
+                        warns2++;
+                        Logger.Warn("Failed to link {Src} -> {Dest}", source, destPath);
                         errors.Add($"Failed to link {source} -> {destPath}");
                     }
                 }
             }
         }
 
+        sw2.Stop();
+        Logger.Info(
+            "AnimeThemes apply mapping completed in {Elapsed}ms: created={Created}, skipped={Skipped}, matchedSeries={Matched}, errors={Errors}, warnings={Warns}",
+            sw2.ElapsedMilliseconds,
+            created,
+            skipped,
+            matchedSeries,
+            errors.Count,
+            warns2
+        );
         return new AnimeThemesMappingApplyResult(created, skipped, matchedSeries, errors, planned);
     }
 
