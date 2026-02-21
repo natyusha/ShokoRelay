@@ -4,6 +4,7 @@ using NLog;
 using Shoko.Abstractions.Metadata.Shoko;
 using Shoko.Abstractions.Plugin;
 using Shoko.Abstractions.Services;
+using ShokoRelay.Config;
 using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
 
@@ -15,7 +16,7 @@ namespace ShokoRelay.Vfs
     {
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
         private readonly IMetadataService _metadataService;
-        private readonly string _programDataPath;
+        private readonly string _pluginDataPath;
 
         // Per-build caches (initialized for the duration of BuildInternal and cleared afterwards)
         private ConcurrentDictionary<int, MapHelper.SeriesFileData>? _seriesFileDataCacheForBuild;
@@ -37,20 +38,47 @@ namespace ShokoRelay.Vfs
         public VfsBuilder(IMetadataService metadataService, IApplicationPaths applicationPaths)
         {
             _metadataService = metadataService;
-            _programDataPath = applicationPaths.DataPath;
+            // reports and other plugin-specific files should live inside our plugin
+            // folder rather than the global server data directory.
+            _pluginDataPath = ConfigConstants.GetPluginDirectory(applicationPaths);
+            try
+            {
+                Directory.CreateDirectory(_pluginDataPath);
+            }
+            catch
+            {
+                // ignore - writing later may still fail and will be logged
+            }
         }
 
+        // public build APIs ================================
         public VfsBuildResult Build(int? seriesId = null, bool cleanRoot = true, bool pruneSeries = false)
         {
-            return BuildInternal(seriesId.HasValue ? new[] { seriesId.Value } : null, cleanRoot, pruneSeries);
+            return BuildInternal(seriesId.HasValue ? new[] { seriesId.Value } : null, cleanRoot, pruneSeries, cleanOnly: false);
         }
 
         public VfsBuildResult Build(IReadOnlyCollection<int> seriesIds, bool cleanRoot = true, bool pruneSeries = false)
         {
-            return BuildInternal(seriesIds, cleanRoot, pruneSeries);
+            return BuildInternal(seriesIds, cleanRoot, pruneSeries, cleanOnly: false);
         }
 
-        private VfsBuildResult BuildInternal(IReadOnlyCollection<int>? seriesIds, bool cleanRoot, bool pruneSeries)
+        /// <summary>
+        /// Perform a clean operation without generating any VFS links.  This will
+        /// delete the root or per-series folders exactly the same way that the
+        /// normal build does when <c>cleanRoot</c> is true, but it returns before any
+        /// mapping/creation work begins.
+        /// </summary>
+        public VfsBuildResult Clean(int? seriesId = null)
+        {
+            return BuildInternal(seriesId.HasValue ? new[] { seriesId.Value } : null, cleanRoot: true, pruneSeries: false, cleanOnly: true);
+        }
+
+        public VfsBuildResult Clean(IReadOnlyCollection<int> seriesIds)
+        {
+            return BuildInternal(seriesIds, cleanRoot: true, pruneSeries: false, cleanOnly: true);
+        }
+
+        private VfsBuildResult BuildInternal(IReadOnlyCollection<int>? seriesIds, bool cleanRoot, bool pruneSeries, bool cleanOnly)
         {
             // Initialize per-run caches (cleared before returning)
             _seriesFileDataCacheForBuild = new ConcurrentDictionary<int, MapHelper.SeriesFileData>();
@@ -70,6 +98,9 @@ namespace ShokoRelay.Vfs
             string rootName = VfsShared.ResolveRootFolderName();
             var cleanedRoots = new ConcurrentDictionary<string, byte>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
             var cleanedSeriesPaths = new ConcurrentDictionary<string, byte>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+            // track cleanup tasks so other threads can wait for slow deletions to finish
+            var rootCleanupTasks = new ConcurrentDictionary<string, Task>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+            var seriesCleanupTasks = new ConcurrentDictionary<string, Task>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
 
             bool filterApplied = seriesIds != null && seriesIds.Count > 0;
 
@@ -117,7 +148,7 @@ namespace ShokoRelay.Vfs
 
                     try
                     {
-                        var (c, s, e, p) = BuildSeries(series, rootName, cleanRoot, cleanedRoots, cleanedSeriesPaths, filterApplied);
+                        var (c, s, e, p) = BuildSeries(series, rootName, cleanRoot, cleanedRoots, cleanedSeriesPaths, filterApplied, cleanOnly, rootCleanupTasks, seriesCleanupTasks);
                         if (c != 0)
                             Interlocked.Add(ref created, c);
                         if (s != 0)
@@ -172,7 +203,7 @@ namespace ShokoRelay.Vfs
                         sb.AppendLine(e);
                 }
 
-                string reportPath = Path.Combine(_programDataPath, "vfs-report.log");
+                string reportPath = Path.Combine(_pluginDataPath, "vfs-report.log");
                 System.IO.File.WriteAllText(reportPath, sb.ToString());
                 Logger.Info("VFS report written to {Path}", reportPath);
             }
@@ -208,7 +239,10 @@ namespace ShokoRelay.Vfs
             bool cleanRoot,
             ConcurrentDictionary<string, byte> cleanedRoots,
             ConcurrentDictionary<string, byte> cleanedSeriesPaths,
-            bool filterApplied
+            bool filterApplied,
+            bool cleanOnly,
+            ConcurrentDictionary<string, Task> rootCleanupTasks,
+            ConcurrentDictionary<string, Task> seriesCleanupTasks
         )
         {
             int created = 0;
@@ -285,10 +319,14 @@ namespace ShokoRelay.Vfs
                 {
                     if (filterApplied)
                     {
-                        // When a filter is applied, only remove the series-specific VFS folder(s)
-                        // for the filtered series (do not delete the entire root).
+                        // When a filter is applied, only remove the series-specific VFS folder(s) for the filtered series (do not delete the entire root).
+                        // Because the build is parallel we need to make sure threads that skip the actual deletion still wait until the first thread has finished removing the directory.
+                        // Otherwise a slow filesystem could cause "lost" links)
                         if (cleanedSeriesPaths.TryAdd(seriesPath, 0))
                         {
+                            // this thread is responsible for cleaning
+                            var tcs = new TaskCompletionSource();
+                            seriesCleanupTasks[seriesPath] = tcs.Task;
                             if (Directory.Exists(seriesPath))
                             {
                                 if (!VfsShared.IsSafeToDelete(seriesPath))
@@ -308,13 +346,21 @@ namespace ShokoRelay.Vfs
                                     }
                                 }
                             }
+                            tcs.SetResult();
+                        }
+                        else if (seriesCleanupTasks.TryGetValue(seriesPath, out var waitTask))
+                        {
+                            // wait for the deletion started by another thread
+                            waitTask.Wait();
                         }
                     }
                     else
                     {
-                        // Legacy behavior: delete the entire VFS root once per import root.
+                        // Delete the entire VFS root once per import root (when no filter is applied)
                         if (cleanedRoots.TryAdd(rootPath, 0))
                         {
+                            var tcs = new TaskCompletionSource();
+                            rootCleanupTasks[rootPath] = tcs.Task;
                             if (Directory.Exists(rootPath))
                             {
                                 if (!VfsShared.IsSafeToDelete(rootPath))
@@ -334,9 +380,19 @@ namespace ShokoRelay.Vfs
                                     }
                                 }
                             }
+                            tcs.SetResult();
+                        }
+                        else if (rootCleanupTasks.TryGetValue(rootPath, out var waitTask))
+                        {
+                            waitTask.Wait();
                         }
                     }
                 }
+
+                // when running clean-only we stop here; the loop serves solely to perform
+                // cleanup for every encountered root/series path.
+                if (cleanOnly)
+                    continue;
 
                 Directory.CreateDirectory(rootPath);
                 // track directory creation
@@ -389,19 +445,18 @@ namespace ShokoRelay.Vfs
                     versionCounters[coordKey] = nextVersion + 1;
                 }
 
+                bool omitId = mapping.PartCount > 1 && mapping.PartIndex.HasValue; // multipart files must have the exact same name except for the part index, so the fileId must be removed for them to function in plex
                 string fileName = isExtra
                     ? VfsHelper.BuildExtrasFileName(mapping, specialInfo, padForExtra, extension, titles.DisplayTitle, effectivePartIndex, effectivePartCount, versionIndex)
-                    : VfsHelper.BuildStandardFileName(mapping, epPad, extension, fileId, effectivePartIndex, effectivePartCount, versionIndex);
+                    : VfsHelper.BuildStandardFileName(mapping, epPad, extension, fileId, omitId, effectivePartIndex, effectivePartCount, versionIndex);
 
                 fileName = VfsHelper.SanitizeName(fileName);
                 string destPath = Path.Combine(seasonPath, fileName);
                 string destBase = Path.GetFileNameWithoutExtension(destPath);
                 string sourceDir = Path.GetDirectoryName(source) ?? string.Empty;
 
-                // Define a "crossover" as a video that is cross-referenced to episodes in MORE THAN ONE
-                // distinct AniDB/Shoko series. Only when a video's cross-references span multiple series
-                // do we treat it as a crossover and skip copying local metadata/subtitles to avoid
-                // contaminating one series with another series' metadata.
+                // Define a "crossover" as a video that is cross-referenced to episodes in more than one  distinct AniDB/Shoko series.
+                // This is relevant because local metadata and subtitle linking is only safe when we are sure that the linked video file is not shared by multiple series.
                 var distinctSeriesCount = mapping.Video?.CrossReferences?.Where(cr => cr.ShokoEpisode != null).Select(cr => cr.ShokoEpisode!.SeriesID).Distinct().Count() ?? 0;
                 bool isCrossover = distinctSeriesCount > 1;
 

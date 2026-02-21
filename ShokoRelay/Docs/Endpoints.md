@@ -95,7 +95,8 @@ GET  /plex/collections/posters?seriesId={id}&filter={filter}   -> ApplyCollectio
 ## Virtual File System (VFS)
 
 ```
-GET /vfs?run={true|false}&clean={true|false}&filter={filter}   -> BuildVfs
+GET /vfs                                                       -> BuildVfs (see note below)
+    [?run={true|false}&clean={true|false}&cleanOnly={true|false}&filter={filter}]
 GET /vfs/log                                                   -> GetVfsLog (download last report)
 ```
 
@@ -103,7 +104,8 @@ Parameters:
 
 - `run` (bool) : actually builds the VFS
 - `clean` (bool) : remove/clean root first (default: true)
-- `filter` (csv) : comma-separated ShokoSeriesIDs to restrict processing
+- `cleanOnly` (bool) : perform only the cleanup stage (ignores `run`); returns once deletion is finished
+- `filter` (csv) : comma-separated ShokoSeriesIDs to restrict processing; enter 0 to initiate a cleanOnly
 
 - When `run=true` and the configured Plex client has `ScanOnVfsRefresh`, the controller will schedule Plex scans for affected series.
 - A plain‑text report of each VFS build is saved to `vfs-report.log` in the plugin directory

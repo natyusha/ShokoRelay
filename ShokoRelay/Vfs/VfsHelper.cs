@@ -8,16 +8,16 @@ namespace ShokoRelay.Vfs
     {
         private static readonly Regex _quotedTextRegex = new("\"(.*?)\"", RegexOptions.Compiled);
         private static readonly (string Find, string Replace)[] _styledTitleReplacements = { ("1/2", "½"), ("1/6", "⅙"), ("-->", "→"), ("<--", "←"), ("->", "→"), ("<-", "←") };
-        private static readonly IReadOnlyDictionary<char, char> _filenameCharMap = new Dictionary<char, char>
+        private static readonly IReadOnlyDictionary<char, char> _filenameCharMap = TextHelper.ReplacementCharMap;
+
+        // prefixes to apply to the episode number when generating filenames for extras
+        private static readonly IReadOnlyDictionary<string, string> _extraTypePrefixes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            ['\\'] = '⧵',
-            ['/'] = '⁄',
-            [':'] = '꞉',
-            ['*'] = '＊',
-            ['?'] = '？',
-            ['<'] = '＜',
-            ['>'] = '＞',
-            ['|'] = '｜',
+            ["trailer"] = "T",
+            ["sceneOrSample"] = "P",
+            ["featurette"] = "O",
+            ["short"] = "C",
+            ["other"] = "U",
         };
 
         public static string SanitizeName(string name)
@@ -46,6 +46,7 @@ namespace ShokoRelay.Vfs
             int pad,
             string extension,
             int fileId,
+            bool omitFileId = false,
             int? partIndexOverride = null,
             int? partCountOverride = null,
             int? versionIndexOverride = null
@@ -71,6 +72,8 @@ namespace ShokoRelay.Vfs
             }
 
             string fileIdPart = $"[{fileId}]";
+            if (omitFileId)
+                return $"{epPart}{extension}";
             return $"{epPart} {fileIdPart}{extension}";
         }
 
@@ -86,15 +89,10 @@ namespace ShokoRelay.Vfs
         )
         {
             string epPart = mapping.Coords.Episode.ToString($"D{pad}");
-            string? prefix = extraInfo.Subtype switch
+            if (_extraTypePrefixes.TryGetValue(extraInfo.Subtype, out var pref) && !string.IsNullOrEmpty(pref))
             {
-                "trailer" => "T",
-                "sceneOrSample" => "P",
-                "featurette" => "O",
-                _ => null,
-            };
-            if (!string.IsNullOrEmpty(prefix))
-                epPart = $"{prefix}{epPart}";
+                epPart = pref + epPart;
+            }
             int partCount = partCountOverride ?? mapping.PartCount;
             int? partIndex = partIndexOverride ?? mapping.PartIndex;
             int? versionIndex = versionIndexOverride;
@@ -109,7 +107,7 @@ namespace ShokoRelay.Vfs
             epTitle = SanitizeName(epTitle);
 
             string fileName = $"{epPart}{part} - {epTitle}{extension}";
-            return TextHelper.ReplaceFirstHyphenWithArrow(fileName);
+            return TextHelper.ReplaceFirstHyphenWithChevron(fileName);
         }
 
         // Episode titles for Extras that are generated for the VFS need to be cleaned of invalid filename characters and condensed to prevent issues with Plex's file parsing

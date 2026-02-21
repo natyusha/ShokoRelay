@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using Shoko.Abstractions.Plugin;
 
 namespace ShokoRelay.Config
 {
@@ -10,6 +11,12 @@ namespace ShokoRelay.Config
         public const string PluginSubfolder = "ShokoRelay";
         public const string DashboardSubfolder = "dashboard";
         public const string ConfigSubfolder = "config";
+
+        // Returns the full path to the plugin's installation directory
+        public static string GetPluginDirectory(IApplicationPaths appPaths)
+        {
+            return Path.Combine(appPaths.PluginsPath, PluginSubfolder);
+        }
     }
 
     public enum SummaryMode

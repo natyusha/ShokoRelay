@@ -165,23 +165,7 @@ namespace ShokoRelay.Helpers
 
         private static string StripInvalidWindowsChars(string value)
         {
-            if (string.IsNullOrWhiteSpace(value))
-                return string.Empty;
-
-            var illegal = new HashSet<char> { '\\', '/', ':', '*', '?', '"', '<', '>', '|' };
-            var sb = new StringBuilder(value.Length);
-            foreach (char c in value)
-            {
-                if (illegal.Contains(c))
-                    continue;
-                sb.Append(c);
-            }
-
-            var cleaned = sb.ToString().Trim();
-            while (cleaned.Contains("  "))
-                cleaned = cleaned.Replace("  ", " ");
-
-            return cleaned;
+            return TextHelper.StripInvalidWindowsChars(value);
         }
 
         private static string? NormalizeCollectionKey(string value)

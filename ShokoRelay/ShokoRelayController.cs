@@ -87,7 +87,7 @@ namespace ShokoRelay.Controllers
         public IActionResult GetControllerPage([FromRoute] string? path = null)
         {
             // Serve only from the plugin folder under PluginsPath/<PluginSubfolder>/dashboard
-            string dashboardDir = Path.Combine(_applicationPaths.PluginsPath, ConfigConstants.PluginSubfolder, ConfigConstants.DashboardSubfolder);
+            string dashboardDir = Path.Combine(ConfigConstants.GetPluginDirectory(_applicationPaths), ConfigConstants.DashboardSubfolder);
 
             if (!Directory.Exists(dashboardDir))
                 return NotFound("Dashboard index not found.");
@@ -815,11 +815,36 @@ namespace ShokoRelay.Controllers
         #region Virtual File System
 
         [HttpGet("vfs")]
-        public IActionResult BuildVfs([FromQuery] bool clean = true, [FromQuery] bool run = false, [FromQuery] string? filter = null)
+        public IActionResult BuildVfs([FromQuery] bool clean = true, [FromQuery] bool run = false, [FromQuery] bool cleanOnly = false, [FromQuery] string? filter = null)
         {
             var validation = ValidateFilterOrBadRequest(filter, out var filterIds);
             if (validation != null)
                 return validation;
+
+            // Treat a filter value of "0" as a shorthand for clean-only
+            bool zeroFilter = (filterIds.Count == 1 && filterIds[0] == 0);
+            if (zeroFilter)
+            {
+                cleanOnly = true;
+                filterIds.Clear(); // no actual series filter when performing global clean
+            }
+
+            // If caller only wants to perform a clean, ignore the `run` flag and delegate
+            // to the dedicated clean API on the builder.
+            if (cleanOnly)
+            {
+                var cleanRes = filterIds.Count > 0 ? _vfsBuilder.Clean(filterIds) : _vfsBuilder.Clean((int?)null);
+                return Ok(
+                    new
+                    {
+                        status = "ok",
+                        cleaned = true,
+                        root = cleanRes.RootPath,
+                        errors = cleanRes.Errors,
+                        logUrl = $"{BaseUrl}/api/plugin/ShokoRelay/vfs/log",
+                    }
+                );
+            }
 
             if (!run)
             {
@@ -863,7 +888,7 @@ namespace ShokoRelay.Controllers
         [HttpGet("vfs/log")]
         public IActionResult GetVfsLog()
         {
-            string path = Path.Combine(_applicationPaths.DataPath, "vfs-report.log");
+            string path = Path.Combine(ConfigConstants.GetPluginDirectory(_applicationPaths), "vfs-report.log");
             if (!System.IO.File.Exists(path))
                 return NotFound(new { status = "error", message = "log not found" });
             return PhysicalFile(path, "text/plain", "vfs-report.log");

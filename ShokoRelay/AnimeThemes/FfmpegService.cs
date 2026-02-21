@@ -19,7 +19,7 @@ internal sealed class FfmpegService
 
     public FfmpegService(IApplicationPaths applicationPaths)
     {
-        _pluginDirectory = Path.Combine(applicationPaths.PluginsPath, ConfigConstants.PluginSubfolder);
+        _pluginDirectory = ConfigConstants.GetPluginDirectory(applicationPaths);
         _workingDirectory = _pluginDirectory;
     }
 

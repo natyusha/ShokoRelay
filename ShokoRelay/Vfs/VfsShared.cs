@@ -78,21 +78,34 @@ internal static class VfsShared
 
     public static bool TryCreateLink(string source, string dest, Logger logger, string? targetOverride = null, bool useRelativeTarget = true)
     {
+        string linkDir = Path.GetDirectoryName(dest) ?? string.Empty;
+        string relativeTarget = targetOverride ?? source;
+        if (targetOverride == null && useRelativeTarget && !string.IsNullOrWhiteSpace(linkDir))
+            relativeTarget = Path.GetRelativePath(linkDir, source);
+
+        // if dest already exists and is a symlink pointing to exactly the same target string we intend to use, we can treat it as a success and avoid the expensive delete/recreate cycle.
+        // This helps on slow filesystems where re-creating thousands of unchanged links would waste time.
         try
         {
             if (File.Exists(dest))
+            {
+                var attr = File.GetAttributes(dest);
+                if (attr.HasFlag(FileAttributes.ReparsePoint))
+                {
+                    var fi = new FileInfo(dest);
+                    // LinkTarget returns the string originally supplied when the link was created (relative or absolute).  Compare verbatim so we don't attempt to rewrite an identical link.
+                    if (string.Equals(fi.LinkTarget, relativeTarget, StringComparison.Ordinal))
+                        return true;
+                }
+                // not the same target; fall through to delete below
                 File.Delete(dest);
+            }
         }
         catch (Exception ex)
         {
             logger.Warn(ex, "Unable to remove existing link at {Dest}", dest);
             return false;
         }
-
-        string linkDir = Path.GetDirectoryName(dest) ?? string.Empty;
-        string relativeTarget = targetOverride ?? source;
-        if (targetOverride == null && useRelativeTarget && !string.IsNullOrWhiteSpace(linkDir))
-            relativeTarget = Path.GetRelativePath(linkDir, source);
 
         if (TryCreateSymlink(dest, relativeTarget, logger))
             return true;

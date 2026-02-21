@@ -20,7 +20,7 @@ namespace ShokoRelay.Config
 
         public ConfigProvider(IApplicationPaths applicationPaths)
         {
-            string pluginDir = Path.Combine(applicationPaths.PluginsPath, ConfigConstants.PluginSubfolder);
+            string pluginDir = ConfigConstants.GetPluginDirectory(applicationPaths);
             string configDir = Path.Combine(pluginDir, ConfigConstants.ConfigSubfolder);
             Directory.CreateDirectory(pluginDir); // Ensure plugin directory exists
             Directory.CreateDirectory(configDir); // Ensure config directory exists

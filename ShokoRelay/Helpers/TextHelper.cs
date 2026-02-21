@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text.RegularExpressions;
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Containers;
@@ -36,6 +37,41 @@ namespace ShokoRelay.Helpers
             ["Complete Movie", "Music Video", "OAD", "OVA", "Short Movie", "Special", "TV Special", "Web"],
             StringComparer.OrdinalIgnoreCase
         );
+
+        // Windows filename sanitization helpers - Invalid windows characters are defined as the keys of the ReplacementCharMap
+        public static readonly IReadOnlyDictionary<char, char> ReplacementCharMap = new Dictionary<char, char>
+        {
+            ['\\'] = '⧵',
+            ['/'] = '⁄',
+            [':'] = '꞉',
+            ['*'] = '＊',
+            ['?'] = '？',
+            ['<'] = '＜',
+            ['>'] = '＞',
+            ['|'] = '｜',
+        };
+
+        public static readonly char[] InvalidWindowsChars = ReplacementCharMap.Keys.ToArray();
+
+        public static string StripInvalidWindowsChars(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return string.Empty;
+
+            var sb = new System.Text.StringBuilder(value.Length);
+            foreach (char c in value)
+            {
+                if (Array.IndexOf(InvalidWindowsChars, c) >= 0)
+                    continue;
+                sb.Append(c);
+            }
+
+            var cleaned = sb.ToString().Trim();
+            while (cleaned.Contains("  "))
+                cleaned = cleaned.Replace("  ", " ");
+
+            return cleaned;
+        }
 
         public static string GetTitleByLanguage(IWithTitles item, string languageSetting)
         {
@@ -244,7 +280,7 @@ namespace ShokoRelay.Helpers
         }
 
         // Purely for aesthetic reasons, replace the first hyphen in extras filenames as they don't show an episode number
-        public static string ReplaceFirstHyphenWithArrow(string? name)
+        public static string ReplaceFirstHyphenWithChevron(string? name)
         {
             if (string.IsNullOrWhiteSpace(name))
                 return string.Empty;
@@ -253,7 +289,7 @@ namespace ShokoRelay.Helpers
             if (index < 0)
                 return name;
 
-            return string.Concat(name.AsSpan(0, index), "\u276F", name.AsSpan(index + 1));
+            return string.Concat(name.AsSpan(0, index), "\u276F", name.AsSpan(index + 1)); // Unicode Character "❯" (U+276F) - Heavy Right-Pointing Angle Quotation Mark Ornament
         }
     }
 }

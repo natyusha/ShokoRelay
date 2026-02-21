@@ -40,8 +40,7 @@ public class AnimeThemesMapping
     public AnimeThemesMapping(IMetadataService metadataService, IApplicationPaths applicationPaths)
     {
         _metadataService = metadataService;
-        _pluginPath = Path.Combine(applicationPaths.PluginsPath, ConfigConstants.PluginSubfolder);
-        AnimeThemesConstants.EnsureUserAgent(Http);
+        _pluginPath = ConfigConstants.GetPluginDirectory(applicationPaths);
     }
 
     public async Task<AnimeThemesMappingBuildResult> BuildMappingFileAsync(string torrentRoot, string? outputPath = null, CancellationToken ct = default)
@@ -200,7 +199,7 @@ public class AnimeThemesMapping
                     string shortsDir = Path.Combine(importRoot, rootName, series.ID.ToString(), "Shorts");
                     string destName = VfsHelper.CleanEpisodeTitleForFilename(entry.NewFileName);
                     destName = TextHelper.AnimeThemesPlexFileNames(destName);
-                    destName = TextHelper.ReplaceFirstHyphenWithArrow(destName);
+                    destName = TextHelper.ReplaceFirstHyphenWithChevron(destName);
                     destName = EnsureExtension(destName, Path.GetExtension(source));
                     string destPath = Path.Combine(shortsDir, destName);
 

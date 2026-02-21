@@ -506,17 +506,17 @@
       showToast(`VFS generation started (clean=${clean})`, "info", 3000);
       const params = buildVfsParams();
       const res = await fetchJson(base + "/vfs?" + params.toString());
+      const actualLogUrl = res.data?.logUrl || `${base}/vfs/log`;
+      const logLink = `<a href="${actualLogUrl}" target="_blank">vfs-report.log</a>`;
+      const filterValue = el("vfs-filter")?.value || "";
+      const hasFilter = String(filterValue).trim() !== "";
       if (res.ok) {
         const summary = summarizeResult(res) || "VFS build completed";
         const vfsErrCount = getErrorCount(res);
-        // include a direct link to the latest report and keep toast until dismissed
-        const actualLogUrl = res.data?.logUrl || `${base}/vfs/log`;
-        const logLink = `<a href="${actualLogUrl}" target="_blank">report</a>`;
-        showToast(`VFS (clean=${clean}): ${summary} ([download report])`, vfsErrCount > 0 ? "error" : "success", 0);
+        const toastTimeout = vfsErrCount > 0 ? 0 : hasFilter ? 5000 : 0;
+        showToast(`VFS (clean=${clean}): ${summary} ${logLink}`, vfsErrCount > 0 ? "error" : "success", toastTimeout);
       } else {
-        const actualLogUrl = res.data?.logUrl || `${base}/vfs/log`;
-        const logLink = `<a href="${actualLogUrl}" target="_blank">report</a>`;
-        showToast(`VFS failed (clean=${clean}): ${res.data?.message || JSON.stringify(res.data)} ([report])`, "error", 0);
+        showToast(`VFS failed (clean=${clean}): ${res.data?.message || JSON.stringify(res.data)} ${logLink}`, "error", 0);
       }
     });
   }
