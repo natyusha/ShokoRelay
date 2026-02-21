@@ -35,8 +35,9 @@ GET  /config/schema                                            -> GetConfigSchem
 
 ```
 GET  /                                                         -> GetMediaProvider (agent descriptor / supported types)
-GET  /matches?name={name}                                      -> Match (also accepts POST body `{ Filename }`)
-POST /matches                                                  -> Match
+GET  /matches?name={name}&title={id}?manual=1                  -> Match (title may be numeric series ID)
+POST /matches                                                  -> Match (body may include `{ Filename, Title, Manual }` for manual searches)
+
 GET  /collections/{groupId}                                    -> GetCollection
 GET  /collections/user/{groupId}                               -> GetCollectionPoster (image)
 GET  /metadata/{ratingKey}?includeChildren=0|1                 -> GetMetadata
@@ -46,7 +47,8 @@ GET  /metadata/{ratingKey}/images                              -> GetImages (all
 ```
 
 - Purpose: agent discovery, match flows and metadata serving for Plex-compatible GUIDs.
-- `Match` accepts `name` query OR POST body `{ Filename: string }` and extracts a Shoko file id when present (VFS-style `[ShokoFileId]` token).
+- `Match` accepts either the `name` query (file path) or a JSON body. For manual searches Plex sends `title` (either in query or body) and `manual=1`;
+  - when `title` is numeric it is treated as a Shoko series ID. The filename fallback uses the same path-based series extraction as the VFS builder.
 - The optional `/metadata/{ratingKey}/images` endpoint returns a `MediaContainer` with an `Image` array of all available assets for the given item.
 - `GetCollection` / `GetCollectionPoster` return collection metadata and poster image for a Shoko group.
 - `GetMetadata` supports `episode`, `season` and `series` ratingKey formats (see notes below).

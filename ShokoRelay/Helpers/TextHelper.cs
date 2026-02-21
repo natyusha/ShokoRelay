@@ -29,7 +29,6 @@ namespace ShokoRelay.Helpers
         private static readonly Regex _condenseLinesRegex = new(@"(\r?\n\s*){2,}", RegexOptions.Compiled);
         private static readonly Regex _condenseSpacesRegex = new(@"\s{2,}", RegexOptions.Compiled);
         private static readonly Regex _plexSplitTagRegex = new(@"(?ix)(?:^|[\s._-])(cd|disc|disk|dvd|part|pt)[\s._-]*([1-8])(?!\d)", RegexOptions.Compiled);
-        private static readonly Regex _fileIdRegex = new(@"\[(\d+)\](?=\.[^.]+$)", RegexOptions.Compiled);
         private static readonly Regex _animeThemesTagRegex = new(@"\[([^\]]+)\](?=\.webm$)", RegexOptions.Compiled);
         private static readonly Regex _bdDvdRegex = new(@"BD|DVD", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly Regex _numbersRegex = new(@"\d+", RegexOptions.Compiled);
@@ -217,16 +216,20 @@ namespace ShokoRelay.Helpers
             return _plexSplitTagRegex.IsMatch(name);
         }
 
-        public static int? ExtractFileId(string rawPath)
+        public static int? ExtractSeriesId(string rawPath)
         {
-            string name = Path.GetFileName(rawPath);
-            if (string.IsNullOrWhiteSpace(name))
+            if (string.IsNullOrWhiteSpace(rawPath))
                 return null;
 
-            // VFS files always have [ShokoFileId] right before the extension
-            var match = _fileIdRegex.Match(name);
-            if (match.Success && int.TryParse(match.Groups[1].Value, out var id))
-                return id;
+            // Files are always placed inside a subfolder which itself lives directly under the numeric series ID folder.
+            string? dir = Path.GetDirectoryName(rawPath);
+            for (int depth = 0; depth < 2 && !string.IsNullOrEmpty(dir); depth++)
+            {
+                string folder = Path.GetFileName(dir);
+                if (int.TryParse(folder, out var id))
+                    return id;
+                dir = Path.GetDirectoryName(dir);
+            }
 
             return null;
         }

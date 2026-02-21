@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Shoko.Abstractions.Enums;
+using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Shoko;
 using Shoko.Abstractions.Plugin;
@@ -180,19 +181,36 @@ namespace ShokoRelay.Controllers
         [Route("matches")]
         [HttpPost]
         [HttpGet]
-        public IActionResult Match([FromQuery] string? name, [FromBody] PlexMatchBody? body = null)
+        public IActionResult Match([FromQuery] string? name, [FromQuery] string? title, [FromBody] PlexMatchBody? body = null)
         {
+            // rawPath is normally the full file path provided by Plex during auto matching.
+            // When a manual search occurs Plex may supply the series folder ID in the request body (`title` + `manual` flag) or as a query parameter.  Treat any numeric title as the target series ID.
             string? rawPath = name ?? body?.Filename;
-            if (string.IsNullOrWhiteSpace(rawPath))
+
+            int? seriesId = null;
+
+            // body override has highest priority, but only if manual is set
+            if (body?.Manual == 1 && !string.IsNullOrWhiteSpace(body.Title) && int.TryParse(body.Title, out var bId))
+            {
+                seriesId = bId;
+            }
+
+            // query string title next
+            if (!seriesId.HasValue && !string.IsNullOrWhiteSpace(title) && int.TryParse(title, out var qId))
+            {
+                seriesId = qId;
+            }
+
+            // fallback to path-based extraction
+            if (!seriesId.HasValue && !string.IsNullOrWhiteSpace(rawPath))
+            {
+                seriesId = TextHelper.ExtractSeriesId(rawPath);
+            }
+
+            if (!seriesId.HasValue)
                 return EmptyMatch();
 
-            int? fileId = TextHelper.ExtractFileId(rawPath);
-            if (!fileId.HasValue)
-                return EmptyMatch();
-
-            var video = _videoService.GetVideoByID(fileId.Value);
-            var series = video?.Series?.FirstOrDefault();
-
+            var series = _metadataService.GetShokoSeriesByID(seriesId.Value);
             if (series == null)
                 return EmptyMatch();
 

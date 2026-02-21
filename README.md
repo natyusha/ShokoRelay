@@ -155,9 +155,9 @@ Most of the options in this section require a Shoko API key to fully function (a
 
 ### VFS Mapping
 
-When building the VFS files are placed into folders which are named according to their Shoko SeriesID. Within those folders they will be split into subfolders depending on the type of episode. For regular episodes or specials this means placement into a `Season #` or `Specials` folder. Files placed into those folders are named with the following pattern: `S##E##(-pt#)(-v#) [{ShokoFileID}].ext` (the parts in parenthesis are conditional). Files with `-pt#` in their name will also have `[{ShokoFileID}]` stripped to fully follow the format described in [Combining Episodes](#combining-episodes).
+When building the VFS files are placed into folders which are named according to their Shoko SeriesID. Within those folders they will be split into subfolders depending on the type of episode. For regular episodes or specials this means placement into a `Season #` or `Specials` folder. Files placed into those folders are named with the following pattern: `S##E##(-pt#)(-v#) [{ShokoFileID}].ext` (the parts in parenthesis are conditional). Files with `-pt#` in their name will also have `[{ShokoFileID}]` stripped to fully follow the format described in [Combining Episodes](#combining-episodes). The ShokoFileID is unused by Plex and is there purely to help users visualise the file mappings.
 
-Non standard episodes, on the other hand are placed into a local series level Extra folder. Due to Plex not having individual episode pages or metadata for files placed in said folders they will be named according to the episode name (with a prefix) `X# ❯ Title.ext`. More info on local extras is available [here](https://support.plex.tv/articles/local-files-for-tv-show-trailers-and-extras/) and the following table showcases the assignments.
+Non standard episodes on the other hand, are placed into a local series level Extra folder. Due to Plex not having individual episode pages or metadata for files placed in said folders they will be named according to the episode name (with a prefix) `X# ❯ Title.ext`. More info on local extras is available [here](https://support.plex.tv/articles/local-files-for-tv-show-trailers-and-extras/) and the following table showcases the assignments.
 
 | Prefix | Type     | Subfolder   |
 | :----- | :------- | :---------- |
@@ -170,7 +170,7 @@ Non standard episodes, on the other hand are placed into a local series level Ex
 | U# ❯   | Unknown  | Other       |
 
 > [!NOTE]
-> `Other` type episodes also have a special rule where they will attempt to place themselves in `Season 1` or `Season 0` (Specials) if either is empty. Only then will they fallback to being put into `Featurettes`.
+> `Other` type episodes have a special rule where they will attempt to place themselves in `Season 1` or `Season 0` (Specials) if either is empty. Otherwise, they will be placed in `Featurettes` and display as extras in Plex.
 > This is done since these episodes are generally parts of a Movie and have full metadata which would not appear if they were in Plex's local Extras.
 
 ### Automatic Title Modification

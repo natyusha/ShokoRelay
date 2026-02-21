@@ -14,7 +14,7 @@ using static ShokoRelay.Plex.PlexMapping;
 
 namespace ShokoRelay.Controllers
 {
-    public record PlexMatchBody(string? Filename);
+    public record PlexMatchBody(string? Filename, string? Title = null, int? Manual = null);
 
     public record SeriesContext(ISeries Series, string ApiUrl, (string DisplayTitle, string SortTitle, string? OriginalTitle) Titles, string ContentRating, MapHelper.SeriesFileData FileData);
 
