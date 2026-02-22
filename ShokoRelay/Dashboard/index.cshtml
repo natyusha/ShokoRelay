@@ -16,9 +16,11 @@
         <div class="full" id="plex-auth-action">
           <button id="plex-start">Start Plex Auth</button>
         </div>
-        <div>
-          <label>Libraries</label>
-          <select id="plex-libraries" multiple disabled></select>
+        <div class="full">
+          <div>
+            <label>Extra Plex Users (<span id="plex-libraries-count">0</span> Libraries)</label>
+            <input id="extra-plex-users" type="text" placeholder="user1;1234, user2;5678 (optional PIN)">
+          </div>
         </div>
       </section>
       <section>
@@ -26,36 +28,36 @@
         <div class="full">
           <button id="col-build">Generate Collections</button>
         </div>
-        <hr />
-        <label class="shoko-checkbox">
-          <input id="plex-scan-vfs" type="checkbox">
-          <span class="shoko-checkbox-icon" aria-hidden="true">
-            <svg class="unchecked" viewBox="0 0 24 24">
-              <use href="img/icons.svg#checkbox-blank-circle-outline"></use>
-            </svg>
-            <svg class="checked" viewBox="0 0 24 24">
-              <use href="img/icons.svg#checkbox-marked-circle-outline"></use>
-            </svg>
-          </span>
-          <span>Scan on VFS Change</span>
-        </label>
-        <label class="shoko-checkbox">
-          <input id="plex-watched" type="checkbox">
-          <span class="shoko-checkbox-icon" aria-hidden="true">
-            <svg class="unchecked" viewBox="0 0 24 24">
-              <use href="img/icons.svg#checkbox-blank-circle-outline"></use>
-            </svg>
-            <svg class="checked" viewBox="0 0 24 24">
-              <use href="img/icons.svg#checkbox-marked-circle-outline"></use>
-            </svg>
-          </span>
-          <span>Auto Scrobble</span>
-        </label>
+        <hr>
         <div class="full">
-          <div>
-            <label>Extra Plex Users (comma separated)</label>
-            <input id="extra-plex-users" type="text" placeholder="user1;1234, user2;5678 (optional PIN)">
-          </div>
+          <label class="shoko-checkbox">
+            <input id="plex-scan-vfs" type="checkbox">
+            <span class="shoko-checkbox-icon" aria-hidden="true">
+              <svg class="unchecked" viewBox="0 0 24 24">
+                <use href="img/icons.svg#checkbox-blank-circle-outline"></use>
+              </svg>
+              <svg class="checked" viewBox="0 0 24 24">
+                <use href="img/icons.svg#checkbox-marked-circle-outline"></use>
+              </svg>
+            </span>
+            <span class="shoko-checkbox-text"><span class="shoko-checkbox-title">Force Partial Scans</span><br>
+              <small>Trigger on VFS Change</small>
+            </span>
+          </label>
+          <label class="shoko-checkbox">
+            <input id="plex-watched" type="checkbox">
+            <span class="shoko-checkbox-icon" aria-hidden="true">
+              <svg class="unchecked" viewBox="0 0 24 24">
+                <use href="img/icons.svg#checkbox-blank-circle-outline"></use>
+              </svg>
+              <svg class="checked" viewBox="0 0 24 24">
+                <use href="img/icons.svg#checkbox-marked-circle-outline"></use>
+              </svg>
+            </span>
+            <span class="shoko-checkbox-text"><span class="shoko-checkbox-title">Auto Scrobble</span><br>
+              <small>Plex Pass Webhook</small>
+            </span>
+          </label>
         </div>
       </section>
     </div>
@@ -75,7 +77,7 @@
         </div>
         <div class="full">
           <button id="vfs-exec">Generate</button>
-          <button id="vfs-clean" title="Clean VFS Toggle" aria-pressed="true" type="button">
+          <button id="vfs-clean" class="w46-button toggle" title="Clean VFS Toggle" aria-pressed="true" type="button">
             <svg class="icon-svg" viewBox="0 0 24 24">
               <use href="img/icons.svg#broom"></use>
             </svg>
@@ -94,11 +96,11 @@
             <label>Shoko API Key</label>
             <input id="shoko-api-key" type="password" placeholder="From Shoko's WebUI">
           </div>
-          <div class="shoko-import-col">
+          <div class="w100">
             <label title="Automatic Source Import Interval">Import Int.</label>
             <input id="shoko-import-frequency" type="number" min="0" step="1" placeholder="hours">
           </div>
-          <div class="shoko-sync-col">
+          <div class="w100">
             <label title="Automatic Watched State Sync Interval">Sync Int.</label>
             <input id="shoko-sync-frequency" type="number" min="0" step="1" placeholder="hours">
           </div>
@@ -107,9 +109,9 @@
           <button id="shoko-remove-missing" class="danger" title="Remove Missing Files From Shoko & MyList">
             Remove Missing
           </button>
-          <div class="shoko-button-col"><button id="shoko-import-run" title="Import From Source folders">Import</button>
+          <div class="w100"><button id="shoko-import-run" title="Import From Source folders">Import</button>
           </div>
-          <div class="shoko-button-col"><button id="shoko-sync-watched" title="Sync Watched States Menu">Sync</button>
+          <div class="w100"><button id="shoko-sync-watched" title="Sync Watched States Menu">Sync</button>
           </div>
         </div>
       </section>
@@ -130,8 +132,9 @@
         </div>
         <div class="full"></div>
         <div class="full">
-          <button id="at-apply">Apply Mapping</button>
-          <button id="at-mapping">Build Mapping</button>
+          <button id="at-apply">Generate</button>
+          <button id="at-mapping" class="w100" title="Build Mapping File">Build</button>
+          <button id="at-import" class="w100" title="Import Curated Mapping File">Import</button>
         </div>
       </section>
       <section>
@@ -145,23 +148,23 @@
           <div class="at-path-col">
             <label>Path</label><input id="at-path" type="text" placeholder="Shoko or Plex relative anime path">
           </div>
-          <div class="at-slug-col">
+          <div class="w46">
             <label title="Preferred Theme">Slug</label><input id="at-slug" type="text" placeholder="OP2">
           </div>
-          <div class="at-offset-col">
+          <div class="w46">
             <label title="Index Override">Off.</label><input id="at-offset" type="number" value="" placeholder="0">
           </div>
         </div>
         <div class="full">
           <button id="at-single">Generate</button>
-          <button id="at-force" title="Force Overwrite Toggle" aria-pressed="false" type="button"
-                  aria-label="Force Overwrite Toggle">
+          <button id="at-force" class="w46-button toggle" title="Force Overwrite Toggle" aria-pressed="false"
+                  type="button" aria-label="Force Overwrite Toggle">
             <svg class="icon-svg" viewBox="0 0 24 24">
               <use href="img/icons.svg#chevron-triple-down"></use>
             </svg>
           </button>
-          <button id="at-batch" title="Recursive Batch Toggle" aria-pressed="false" type="button"
-                  aria-label="Recursive Batch Toggle">
+          <button id="at-batch" class="w46-button toggle" title="Recursive Batch Toggle" aria-pressed="false"
+                  type="button" aria-label="Recursive Batch Toggle">
             <svg class="icon-svg" viewBox="0 0 24 24">
               <use href="img/icons.svg#file-tree"></use>
             </svg>
@@ -242,33 +245,35 @@
                 <use href="img/icons.svg#checkbox-marked-circle-outline"></use>
               </svg>
             </span>
-            <span class="shoko-checkbox-text"><span class="shoko-checkbox-title">Include Ratings</span><br><small>Sync
-              user vote/rating values</small></span>
-            </label>
-          </div>
-          <div style="margin-top:8px;">
-            <label class="shoko-checkbox">
-              <input id="sync-exclude-admin" type="checkbox">
-              <span class="shoko-checkbox-icon" aria-hidden="true">
-                <svg class="unchecked" viewBox="0 0 24 24">
-                  <use href="img/icons.svg#checkbox-blank-circle-outline"></use>
-                </svg>
-                <svg class="checked" viewBox="0 0 24 24">
-                  <use href="img/icons.svg#checkbox-marked-circle-outline"></use>
-                </svg>
-              </span>
-              <span class="shoko-checkbox-text"><span class="shoko-checkbox-title">Exclude Admin</span><br><small>Only
-                sync to extra Plex users</small></span>
-              </label>
-            </div>
-          </div>
-          <footer class="modal-actions">
-            <button id="sync-cancel-button" class="cancel">Cancel</button>
-            <button id="sync-start-button">Start Sync</button>
-          </footer>
+            <span class="shoko-checkbox-text"><span class="shoko-checkbox-title">Include Ratings</span><br>
+              <small>Sync user vote/rating values</small>
+            </span>
+          </label>
+        </div>
+        <div style="margin-top:8px;">
+          <label class="shoko-checkbox">
+            <input id="sync-exclude-admin" type="checkbox">
+            <span class="shoko-checkbox-icon" aria-hidden="true">
+              <svg class="unchecked" viewBox="0 0 24 24">
+                <use href="img/icons.svg#checkbox-blank-circle-outline"></use>
+              </svg>
+              <svg class="checked" viewBox="0 0 24 24">
+                <use href="img/icons.svg#checkbox-marked-circle-outline"></use>
+              </svg>
+            </span>
+            <span class="shoko-checkbox-text"><span class="shoko-checkbox-title">Exclude Admin</span><br>
+              <small>Only sync to extra Plex users</small>
+            </span>
+          </label>
         </div>
       </div>
-      <script src="js/script.js"></script>
-    </body>
+      <footer class="modal-actions">
+        <button id="sync-cancel-button" class="cancel">Cancel</button>
+        <button id="sync-start-button">Start Sync</button>
+      </footer>
+    </div>
+  </div>
+  <script src="js/script.js"></script>
+</body>
 
-  </html>
+</html>

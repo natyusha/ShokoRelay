@@ -80,6 +80,11 @@
     return t;
   }
 
+  function makeLogLink(logUrl) {
+    if (!logUrl) return "";
+    return `[<a href="${logUrl}" target="_blank" class="log-link">view log</a>]`;
+  }
+
   function summarizeResult(res) {
     if (!res || !res.data) return "";
     const d = res.data;
@@ -265,7 +270,7 @@
   }
   function setPlexUnlinkAction() {
     setPlexAction(
-      '<button id="plex-unlink" class="danger">Unlink Plex</button> <button id="plex-refresh" title="Refresh Plex Libraries"><svg class="icon-svg" viewBox="0 0 24 24"><use href="img/icons.svg#refresh"></use></svg></button>',
+      '<button id="plex-unlink" class="danger">Unlink Plex</button> <button id="plex-refresh" class="w46-button" title="Refresh Plex Libraries"><svg class="icon-svg" viewBox="0 0 24 24"><use href="img/icons.svg#refresh"></use></svg></button>',
     );
     const unlinkBtn = el("plex-unlink");
     if (unlinkBtn) unlinkBtn.onclick = unlinkPlex;
@@ -333,30 +338,17 @@
   }
 
   function clearPlexLibraries() {
-    const libs = el("plex-libraries");
-    if (libs) {
-      libs.innerHTML = "";
-      libs.disabled = true;
+    const countEl = el("plex-libraries-count");
+    if (countEl) {
+      countEl.textContent = "0";
     }
   }
 
-  function populateLibraries(libraries, selectedKeys) {
-    const libs = el("plex-libraries");
-    if (!libs) return;
-    libs.innerHTML = "";
-    const selected = new Set((selectedKeys || []).map(String));
-    (libraries || []).forEach((lib) => {
-      if (!lib) return;
-      const key = lib.uuid || (lib.serverId ? lib.serverId + "::" + lib.id : String(lib.id));
-      const serverName = lib.serverName || lib.ServerName || lib.serverUrl || lib.ServerUrl || "";
-      const opt = document.createElement("option");
-      opt.value = String(key);
-      opt.textContent = (serverName ? serverName + " ❯ " : "") + (lib.title || "");
-      if (selected.has(String(key))) opt.selected = true;
-      libs.appendChild(opt);
-    });
-    libs.disabled = (libraries || []).length === 0;
-    libs.onchange = onLibrariesChange;
+  function populateLibraries(libraries) {
+    const countEl = el("plex-libraries-count");
+    if (!countEl) return;
+    const count = (libraries || []).length;
+    countEl.textContent = String(count);
   }
 
   async function ensurePlexEnabled() {
@@ -371,9 +363,9 @@
         setColStatus("Plex server or token missing. Link Plex in Plex Auth.", "error");
         return false;
       }
-      const hasSelected = (plex.SelectedLibraries && plex.SelectedLibraries.length > 0) || (plex.LibrarySectionId && plex.LibrarySectionId > 0);
-      if (!hasSelected) {
-        setColStatus("No Plex library selected. Select a library in Plex Auth.", "error");
+      // library selection is automatic; just ensure at least one detected
+      if (!plex.DiscoveredLibraries || plex.DiscoveredLibraries.length === 0) {
+        setColStatus("No Plex libraries detected. Refresh Plex libraries.", "error");
         return false;
       }
       return true;
@@ -418,44 +410,15 @@
     }
     setPlexUnlinkAction();
     const libraries = (plex.DiscoveredLibraries || []).map((l) => ({ id: l.Id, title: l.Title, type: l.Type, uuid: l.Uuid, serverId: l.ServerId, serverName: l.ServerName, serverUrl: l.ServerUrl }));
-    const selectedKeys = (plex.SelectedLibraries || []).map((s) => s.Uuid || (s.ServerId ? s.ServerId + "::" + s.SectionId : String(s.SectionId)));
     if ((!libraries || libraries.length === 0) && plex.DiscoveredServers && plex.DiscoveredServers.length > 0) {
       const rr = await fetchJson(base + "/plex/auth/refresh", { method: "POST" });
       if (rr.ok && rr.data && rr.data.libraries) {
         const libs = (rr.data.libraries || []).map((l) => ({ id: l.Id, title: l.Title, type: l.Type, uuid: l.Uuid, serverId: l.ServerId, serverName: l.ServerName, serverUrl: l.ServerUrl }));
-        populateLibraries(libs, selectedKeys);
+        populateLibraries(libs);
         return;
       }
     }
-    populateLibraries(libraries, selectedKeys);
-  }
-
-  async function onLibrariesChange() {
-    const libs = el("plex-libraries");
-    if (!libs) return;
-    const selected = Array.from(libs.selectedOptions).map((o) => o.value);
-    const cfgRes = await fetchJson(base + "/config");
-    if (!cfgRes.ok || !cfgRes.data) {
-      return;
-    }
-    const cfg = cfgRes.data;
-    const discovered = cfg.PlexLibrary?.DiscoveredLibraries || [];
-    const newSelected = (discovered || [])
-      .filter((d) => {
-        const key = d.Uuid || (d.ServerId ? d.ServerId + "::" + d.Id : String(d.Id));
-        return selected.includes(key);
-      })
-      .map((d) => ({ SectionId: d.Id, Title: d.Title, Type: d.Type, Uuid: d.Uuid, ServerId: d.ServerId, ServerName: d.ServerName, ServerUrl: d.ServerUrl }));
-    cfg.PlexLibrary.SelectedLibraries = newSelected;
-    cfg.PlexLibrary.LibrarySectionId = newSelected[0]?.SectionId || 0;
-    cfg.PlexLibrary.SelectedLibraryName = newSelected[0]?.Title || "";
-    cfg.PlexLibrary.SectionUuid = newSelected[0]?.Uuid || "";
-    cfg.PlexLibrary.ServerIdentifier = newSelected[0]?.ServerId || "";
-    cfg.PlexLibrary.ServerUrl = newSelected[0]?.ServerUrl || cfg.PlexLibrary.ServerUrl || "";
-    const saveRes = await fetchJson(base + "/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cfg) });
-    if (!saveRes.ok) {
-      return;
-    }
+    populateLibraries(libraries);
   }
 
   async function savePlexSettings() {
@@ -506,8 +469,8 @@
       showToast(`VFS generation started (clean=${clean})`, "info", 3000);
       const params = buildVfsParams();
       const res = await fetchJson(base + "/vfs?" + params.toString());
-      const actualLogUrl = res.data?.logUrl || `${base}/vfs/log`;
-      const logLink = `<a href="${actualLogUrl}" target="_blank">vfs-report.log</a>`;
+      const actualLogUrl = res.data?.logUrl;
+      const logLink = makeLogLink(actualLogUrl);
       const filterValue = el("vfs-filter")?.value || "";
       const hasFilter = String(filterValue).trim() !== "";
       if (res.ok) {
@@ -659,7 +622,9 @@
             const votesFound = res.data?.votesFound;
             const votesPart = votesFound !== undefined ? `, votesFound: ${votesFound}` : "";
             const syncErr = getErrorCount(res);
-            showToast(`Sync complete: ${summary}${votesPart}`, syncErr > 0 ? "error" : "success", syncErr > 0 ? 0 : 6000);
+            const actualLogUrl = res.data?.logUrl;
+            const logLink = makeLogLink(actualLogUrl);
+            showToast(`Sync complete: ${summary}${votesPart} ${logLink}`, syncErr > 0 ? "error" : "success", syncErr > 0 ? 0 : 6000);
             onClose();
           } else {
             showToast(`Sync failed: ${res.data?.message || JSON.stringify(res.data)}`, "error", 0);
@@ -686,19 +651,28 @@
       showToast("Collection build started", "info", 3000);
       setColStatus("Checking Plex configuration...", "running");
       const ok = await ensurePlexEnabled();
-      if (!ok) return;
+      if (!ok) {
+        setButtonLoading(colBuildBtn, false);
+        return;
+      }
       setColStatus("Running collection build...", "running");
       const res = await fetchJson(base + "/plex/collections/build");
+      const logUrl = res.data?.logUrl;
+      const logLink = makeLogLink(logUrl);
       if (!res.ok) {
         setColStatus("Error: " + (res.data?.message || "Request failed"), "error");
         console.error(res.data);
+        setButtonLoading(colBuildBtn, false);
         return;
       }
       const data = res.data;
       if (data?.status === "ok") {
         const uploadedText = data?.uploaded !== undefined ? `, uploaded ${data.uploaded}` : "";
+        // collections always persist toast because there is no filter input
+        showToast(`OK: processed ${data.processed}, created ${data.created}${uploadedText}, skipped ${data.skipped}, errors ${data.errors} ${logLink}`, "success", 0);
         setColStatus(`OK: processed ${data.processed}, created ${data.created}${uploadedText}, skipped ${data.skipped}, errors ${data.errors}`, "ok");
       } else {
+        showToast(`Error: " + (data?.message || JSON.stringify(data)) + " ${logLink}`, "error", 0);
         setColStatus("Error: " + (data?.message || JSON.stringify(data)), "error");
       }
     });
@@ -708,34 +682,45 @@
   initToggle("at-force", false);
   initToggle("at-batch", false);
 
-  // Ensure the AnimeThemes 'Slug' input resets to a sensible default when cleared
-  const atSlugEl = el("at-slug");
-  if (atSlugEl) {
-    // Restore placeholder/default when user leaves an empty field
-    atSlugEl.addEventListener("blur", () => {
-      if (!String(atSlugEl.value || "").trim()) atSlugEl.value = atSlugEl.placeholder || "OP2";
-    });
-    // If user presses Enter while empty, restore default immediately
-    atSlugEl.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter" && !String(atSlugEl.value || "").trim()) atSlugEl.value = atSlugEl.placeholder || "OP2";
-    });
-  }
-
   const atSingleBtn = el("at-single");
   if (atSingleBtn) {
     withButtonAction(atSingleBtn, async function () {
-      // if slug is empty, restore the default before sending
-      const atSlugEl_local = el("at-slug");
-      if (atSlugEl_local && !String(atSlugEl_local.value || "").trim()) atSlugEl_local.value = atSlugEl_local.placeholder || "OP2";
       showToast("AnimeThemes: generating mp3...", "info", 3000);
       const params = buildAtParams();
       const res = await fetchJson(base + "/animethemes/mp3?" + params.toString());
+      const logUrl = res.data?.logUrl;
+      const logLink = makeLogLink(logUrl);
       if (res.ok) {
-        const summary = summarizeResult(res) || res.data?.status || "Done";
+        // prefer a computed summary, then look for the Status field (casing as sent by API)
+        const summary = summarizeResult(res) || res.data?.Status || res.data?.status || "Done";
         const atMp3Err = getErrorCount(res);
-        showToast(`AnimeThemes mp3: ${summary}`, atMp3Err > 0 ? "error" : "success", atMp3Err > 0 ? 0 : 5000);
+        let toastType = "success";
+        if (atMp3Err > 0) {
+          toastType = "error";
+        } else if ((res.data?.Status || res.data?.status) === "skipped") {
+          // missing entry or similar non-fatal skip
+          toastType = "warning";
+        }
+        const toastTimeout = toastType === "error" ? 0 : 5000;
+        // include message text for skips (e.g. slug not found)
+        const msgPart = (res.data?.Status === "skipped" || res.data?.status === "skipped") && res.data?.message ? ` (${res.data.message})` : "";
+        showToast(`AnimeThemes mp3: ${summary}${msgPart} ${logLink}`, toastType, toastTimeout);
       } else {
-        showToast(`AnimeThemes mp3 failed: ${res.data?.message || JSON.stringify(res.data)}`, "error", 0);
+        showToast(`AnimeThemes mp3 failed: ${res.data?.message || JSON.stringify(res.data)} ${logLink}`, "error", 0);
+      }
+    });
+  }
+
+  const atImportBtn = el("at-import");
+  if (atImportBtn) {
+    withButtonAction(atImportBtn, async function () {
+      showToast("Importing AnimeThemes mapping from gist...", "info", 3000);
+      const res = await fetchJson(base + "/animethemes/vfs/import", { method: "POST" });
+      if (res.ok) {
+        const count = res.data?.count ?? 0;
+        showToast(`Mapping imported (${count} entries)`, "success", 6000);
+      } else {
+        showToast(`Import failed: ${res.data?.message || JSON.stringify(res.data)}`, "error", 0);
       }
     });
   }
@@ -745,14 +730,19 @@
     withButtonAction(atMappingBtn, async function () {
       showToast("AnimeThemes: building mapping...", "info", 3000);
       const p = buildAtMapParams();
-      p.set("mapping", "true");
-      const res = await fetchJson(base + "/animethemes/vfs?" + p.toString());
+      // mapping endpoint ignores filter param but we include it for parity
+      const res = await fetchJson(base + "/animethemes/vfs/map" + (p.toString() ? "?" + p.toString() : ""));
+      const logUrl = res.data?.logUrl;
+      const logLink = makeLogLink(logUrl);
+      const filterVal = el("at-filter-map")?.value || "";
+      const hasFilter = String(filterVal).trim() !== "";
       if (res.ok) {
         const summary = summarizeResult(res) || "Mapping complete";
         const atMapErr = getErrorCount(res);
-        showToast(`AnimeThemes mapping: ${summary}`, atMapErr > 0 ? "error" : "success", atMapErr > 0 ? 0 : 5000);
+        const toastTimeout = atMapErr > 0 ? 0 : hasFilter ? 5000 : 0;
+        showToast(`AnimeThemes mapping: ${summary} ${logLink}`, atMapErr > 0 ? "error" : "success", toastTimeout);
       } else {
-        showToast(`AnimeThemes mapping failed: ${res.data?.message || JSON.stringify(res.data)}`, "error", 0);
+        showToast(`AnimeThemes mapping failed: ${res.data?.message || JSON.stringify(res.data)} ${logLink}`, "error", 0);
       }
     });
   }
@@ -761,14 +751,19 @@
     withButtonAction(atApplyBtn, async function () {
       showToast("AnimeThemes: applying mapping...", "info", 3000);
       const p = buildAtMapParams();
-      p.set("applyMapping", "true");
-      const res = await fetchJson(base + "/animethemes/vfs?" + p.toString());
+      // use filter parameter as the mapping filter
+      const res = await fetchJson(base + "/animethemes/vfs/build" + (p.toString() ? "?" + p.toString() : ""));
+      const logUrl = res.data?.logUrl;
+      const logLink = makeLogLink(logUrl);
+      const filterVal = el("at-filter-map")?.value || ""; // mapping filter field
+      const hasFilter = String(filterVal).trim() !== "";
       if (res.ok) {
         const summary = summarizeResult(res) || "Applied mapping";
         const atApplyErr = getErrorCount(res);
-        showToast(`AnimeThemes apply: ${summary}`, atApplyErr > 0 ? "error" : "success", atApplyErr > 0 ? 0 : 5000);
+        const toastTimeout = atApplyErr > 0 ? 0 : hasFilter ? 5000 : 0;
+        showToast(`AnimeThemes apply: ${summary} ${logLink}`, atApplyErr > 0 ? "error" : "success", toastTimeout);
       } else {
-        showToast(`AnimeThemes apply failed: ${res.data?.message || JSON.stringify(res.data)}`, "error", 0);
+        showToast(`AnimeThemes apply failed: ${res.data?.message || JSON.stringify(res.data)} ${logLink}`, "error", 0);
       }
     });
   }
@@ -976,8 +971,6 @@
       }
       container.appendChild(wrap);
     });
-
-    // Manual config save removed — provider inputs auto-save via onchange handlers.
 
     // Populate Shoko Automation custom inputs from the loaded config (keeps UI in sync)
     try {

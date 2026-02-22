@@ -18,10 +18,9 @@ namespace ShokoRelay
         {
             serviceCollection.AddHttpContextAccessor();
             serviceCollection.AddControllers().AddApplicationPart(typeof(ServiceRegistration).Assembly);
-            serviceCollection.AddSingleton(applicationPaths);
             serviceCollection.AddSingleton(new ConfigProvider(applicationPaths));
-            serviceCollection.AddSingleton(provider => new AnimeThemesGenerator(provider.GetRequiredService<IVideoService>(), applicationPaths));
-            serviceCollection.AddSingleton(provider => new AnimeThemesMapping(provider.GetRequiredService<IMetadataService>(), applicationPaths));
+            serviceCollection.AddSingleton(provider => new AnimeThemesGenerator(provider.GetRequiredService<IVideoService>(), provider.GetRequiredService<ConfigProvider>()));
+            serviceCollection.AddSingleton(provider => new AnimeThemesMapping(provider.GetRequiredService<IMetadataService>(), provider.GetRequiredService<ConfigProvider>()));
             serviceCollection.AddSingleton(provider => new PlexMetadata(provider.GetRequiredService<IMetadataService>()));
             // Use HttpClient instances with CookieContainer so Plex /myplex switch flows that set cookies work correctly.
             var handlerWithCookies = new HttpClientHandler { UseCookies = true, CookieContainer = new System.Net.CookieContainer() };
@@ -227,8 +226,8 @@ namespace ShokoRelay
                                     Logger.Info("Automation: triggering scheduled Plex->Shoko watched-state sync (frequency {0}h, ratings={1})", syncFreq, includeRatingsForScheduled);
                                     try
                                     {
-                                        // Apply lookback equal to the configured frequency (hours) so automation only examines recently-watched items
-                                        var syncTask = _watchedSyncService.SyncWatchedAsync(false, syncFreq, includeRatingsForScheduled, ct);
+                                        // Apply lookback equal to the configured frequency plus one extra hour to cover brief server downtime/restarts.
+                                        var syncTask = _watchedSyncService.SyncWatchedAsync(false, syncFreq + 1, includeRatingsForScheduled, ct);
                                         await syncTask.ConfigureAwait(false);
                                     }
                                     catch (Exception ex)

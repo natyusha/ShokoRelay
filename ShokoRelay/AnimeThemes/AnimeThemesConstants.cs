@@ -13,6 +13,8 @@ internal static class AnimeThemesConstants
 
     internal const string MapFileName = "AniDB-AnimeThemes-xrefs.json";
 
+    internal const string RawMapUrl = "https://gist.githubusercontent.com/natyusha/4e29252d939d0f522d38732facf328c7/raw/AniDB-AnimeThemes-xrefs.json";
+
     internal static readonly string[] VideoFileExtensions = { ".mkv", ".avi", ".mp4", ".mov", ".ogm", ".wmv", ".mpg", ".mpeg", ".mk3d", ".m4v" };
 
     internal static readonly Regex SlugRegex = new("^(?:op|ed)(?!0)[0-9]{0,2}(?:-(?:bd|web|tv|original))?$", RegexOptions.IgnoreCase | RegexOptions.Compiled);

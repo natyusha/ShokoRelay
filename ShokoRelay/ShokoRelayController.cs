@@ -1,9 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Shoko.Abstractions.Enums;
-using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Shoko;
-using Shoko.Abstractions.Plugin;
 using Shoko.Abstractions.Services;
 using ShokoRelay.AnimeThemes;
 using ShokoRelay.Config;
@@ -26,7 +24,6 @@ namespace ShokoRelay.Controllers
         private readonly VfsBuilder _vfsBuilder;
         private readonly AnimeThemesGenerator _animeThemesGenerator;
         private readonly AnimeThemesMapping _animeThemesMapping;
-        private readonly IApplicationPaths _applicationPaths;
         private readonly ConfigProvider _configProvider;
         private readonly PlexAuth _plexAuth;
         private readonly PlexClient _plexLibrary;
@@ -52,7 +49,6 @@ namespace ShokoRelay.Controllers
             VfsBuilder vfsBuilder,
             AnimeThemesGenerator animeThemeGenerator,
             AnimeThemesMapping animeThemesMapping,
-            IApplicationPaths applicationPaths,
             ConfigProvider configProvider,
             PlexAuth plexAuth,
             PlexClient plexLibrary,
@@ -70,7 +66,6 @@ namespace ShokoRelay.Controllers
             _vfsBuilder = vfsBuilder;
             _animeThemesGenerator = animeThemeGenerator;
             _animeThemesMapping = animeThemesMapping;
-            _applicationPaths = applicationPaths;
             _configProvider = configProvider;
             _plexAuth = plexAuth;
             _plexLibrary = plexLibrary;
@@ -88,7 +83,7 @@ namespace ShokoRelay.Controllers
         public IActionResult GetControllerPage([FromRoute] string? path = null)
         {
             // Serve only from the plugin folder under PluginsPath/<PluginSubfolder>/dashboard
-            string dashboardDir = Path.Combine(ConfigConstants.GetPluginDirectory(_applicationPaths), ConfigConstants.DashboardSubfolder);
+            string dashboardDir = Path.Combine(_configProvider.PluginDirectory, ConfigConstants.DashboardSubfolder);
 
             if (!Directory.Exists(dashboardDir))
                 return NotFound("Dashboard index not found.");
@@ -148,6 +143,19 @@ namespace ShokoRelay.Controllers
         {
             var props = BuildConfigSchema(typeof(RelayConfig), "");
             return Ok(new { properties = props });
+        }
+
+        [HttpGet("logs/{fileName}")]
+        public IActionResult GetLog(string fileName)
+        {
+            if (string.IsNullOrWhiteSpace(fileName))
+                return BadRequest(new { status = "error", message = "fileName is required" });
+
+            string logsDir = Path.Combine(_configProvider.PluginDirectory, "logs");
+            string path = Path.Combine(logsDir, fileName);
+            if (!System.IO.File.Exists(path))
+                return NotFound(new { status = "error", message = "log not found" });
+            return PhysicalFile(path, "text/plain", fileName);
         }
 
         #endregion
@@ -771,6 +779,32 @@ namespace ShokoRelay.Controllers
             // Use manager-provided skipped count
             skipped = managerResult.Skipped;
 
+            // write collection report log
+            try
+            {
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine($"Collection Build Report - {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                sb.AppendLine($"Processed: {processed}");
+                sb.AppendLine($"Created: {created}");
+                sb.AppendLine($"Uploaded: {uploaded}");
+                sb.AppendLine($"SeasonPostersUploaded: {seasonPostersUploaded}");
+                sb.AppendLine($"Skipped: {skipped}");
+                sb.AppendLine($"Errors: {errors}");
+                sb.AppendLine($"DeletedEmptyCollections: {deletedEmptyCollections}");
+                if (errorsList.Count > 0)
+                {
+                    sb.AppendLine();
+                    sb.AppendLine("Errors List:");
+                    foreach (var e in errorsList)
+                        sb.AppendLine(e);
+                }
+                LogHelper.WriteLog(_configProvider.PluginDirectory, "collection-report.log", sb.ToString());
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "Failed to write collection report log");
+            }
+
             return Ok(
                 new
                 {
@@ -784,6 +818,7 @@ namespace ShokoRelay.Controllers
                     deletedEmptyCollections,
                     createdCollections,
                     errorsList = errorsList.Take(200).ToList(), // limit output
+                    logUrl = $"{BaseUrl}/api/plugin/ShokoRelay/logs/collection-report.log",
                 }
             );
         }
@@ -859,7 +894,7 @@ namespace ShokoRelay.Controllers
                         cleaned = true,
                         root = cleanRes.RootPath,
                         errors = cleanRes.Errors,
-                        logUrl = $"{BaseUrl}/api/plugin/ShokoRelay/vfs/log",
+                        logUrl = $"{BaseUrl}/api/plugin/ShokoRelay/logs/vfs-report.log",
                     }
                 );
             }
@@ -898,18 +933,9 @@ namespace ShokoRelay.Controllers
                     plannedLinks = result.PlannedLinks,
                     skipped = result.Skipped,
                     errors = result.Errors,
-                    logUrl = $"{BaseUrl}/api/plugin/ShokoRelay/vfs/log",
+                    logUrl = $"{BaseUrl}/api/plugin/ShokoRelay/logs/vfs-report.log",
                 }
             );
-        }
-
-        [HttpGet("vfs/log")]
-        public IActionResult GetVfsLog()
-        {
-            string path = Path.Combine(ConfigConstants.GetPluginDirectory(_applicationPaths), "vfs-report.log");
-            if (!System.IO.File.Exists(path))
-                return NotFound(new { status = "error", message = "log not found" });
-            return PhysicalFile(path, "text/plain", "vfs-report.log");
         }
 
         #endregion
@@ -977,6 +1003,45 @@ namespace ShokoRelay.Controllers
                     result = await _watchedSyncService.SyncWatchedAsync(parsedDryRun, sinceHours, includeRatings, cancellationToken).ConfigureAwait(false);
                 }
 
+                // write sync report log if not a dry-run (manual/real sync)
+                if (!parsedDryRun)
+                {
+                    try
+                    {
+                        var sb = new System.Text.StringBuilder();
+                        sb.AppendLine($"Sync Watched Report - {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                        sb.AppendLine($"Direction: {direction}");
+                        sb.AppendLine($"Processed: {result.Processed}");
+                        sb.AppendLine($"Marked: {result.MarkedWatched}");
+                        sb.AppendLine($"Skipped: {result.Skipped}");
+                        sb.AppendLine($"Scheduled: {result.ScheduledJobs}");
+                        sb.AppendLine($"VotesFound: {result.VotesFound}");
+                        sb.AppendLine($"VotesUpdated: {result.VotesUpdated}");
+                        sb.AppendLine($"VotesSkipped: {result.VotesSkipped}");
+                        sb.AppendLine($"Matched: {result.Matched}");
+                        // write a summary of missing mapping ids rather than the List type name
+                        var missingList = result.MissingMappings ?? new List<int>();
+                        int missingCount = missingList.Count;
+                        sb.AppendLine($"MissingMappings: {missingCount}");
+                        if (missingCount > 0)
+                        {
+                            sb.AppendLine("MissingIds: " + string.Join(',', missingList));
+                        }
+                        if (result.ErrorsList?.Count > 0)
+                        {
+                            sb.AppendLine();
+                            sb.AppendLine("Errors:");
+                            foreach (var e in result.ErrorsList)
+                                sb.AppendLine(e);
+                        }
+                        LogHelper.WriteLog(_configProvider.PluginDirectory, "sync.log", sb.ToString());
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Warn(ex, "Failed to write sync log");
+                    }
+                }
+
                 return Ok(
                     new
                     {
@@ -995,6 +1060,7 @@ namespace ShokoRelay.Controllers
                         perUserChanges = result.PerUserChanges,
                         errors = result.Errors,
                         errorsList = result.ErrorsList,
+                        logUrl = $"{BaseUrl}/api/plugin/ShokoRelay/logs/sync.log",
                     }
                 );
             }
@@ -1073,7 +1139,7 @@ namespace ShokoRelay.Controllers
                     new
                     {
                         status = "ok",
-                        scanned = scanned,
+                        scanned,
                         scannedCount = scanned?.Count ?? 0,
                     }
                 );
@@ -1122,6 +1188,93 @@ namespace ShokoRelay.Controllers
 
         #region AnimeThemes
 
+        [HttpGet("animethemes/vfs/build")]
+        public async Task<IActionResult> AnimeThemesVfsBuild(
+            [FromQuery] string? mapPath = null,
+            [FromQuery] string? torrentRoot = null,
+            [FromQuery] string? filter = null,
+            CancellationToken cancellationToken = default
+        )
+        {
+            string defaultBase = !string.IsNullOrWhiteSpace(ShokoRelay.Settings.AnimeThemesPathMapping) ? ShokoRelay.Settings.AnimeThemesPathMapping : AnimeThemesConstants.BasePath;
+            string sourceRoot = torrentRoot ?? defaultBase;
+            var validation = ValidateFilterOrBadRequest(filter, out var filterIds);
+            if (validation != null)
+                return validation;
+
+            var result = await _animeThemesMapping.ApplyMappingAsync(mapPath, sourceRoot, filterIds, cancellationToken).ConfigureAwait(false);
+
+            try
+            {
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine($"AnimeThemes: VFS Build Report - {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                sb.AppendLine($"LinksCreated: {result.LinksCreated}");
+                sb.AppendLine($"Skipped: {result.Skipped}");
+                sb.AppendLine($"SeriesMatched: {result.SeriesMatched}");
+                if (result.Errors?.Count > 0)
+                {
+                    sb.AppendLine();
+                    sb.AppendLine("Errors:");
+                    foreach (var e in result.Errors)
+                        sb.AppendLine(e);
+                }
+                LogHelper.WriteLog(_configProvider.PluginDirectory, "at-vfs-report.log", sb.ToString());
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "Failed to write animethemes apply log");
+            }
+
+            return Ok(
+                new
+                {
+                    result.LinksCreated,
+                    result.Skipped,
+                    result.SeriesMatched,
+                    result.Errors,
+                    logUrl = $"{BaseUrl}/api/plugin/ShokoRelay/logs/at-vfs-report.log",
+                }
+            );
+        }
+
+        [HttpGet("animethemes/vfs/map")]
+        public async Task<IActionResult> AnimeThemesVfsMap([FromQuery] string? mapPath = null, [FromQuery] string? torrentRoot = null, CancellationToken cancellationToken = default)
+        {
+            string defaultBase = !string.IsNullOrWhiteSpace(ShokoRelay.Settings.AnimeThemesPathMapping) ? ShokoRelay.Settings.AnimeThemesPathMapping : AnimeThemesConstants.BasePath;
+            string root = torrentRoot ?? defaultBase;
+
+            var result = await _animeThemesMapping.BuildMappingFileAsync(root, mapPath, cancellationToken).ConfigureAwait(false);
+            try
+            {
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine($"AnimeThemes: Mapping Build Report - {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                sb.AppendLine($"EntriesWritten: {result.EntriesWritten}");
+                sb.AppendLine($"Errors: {result.Errors}");
+                if (result.Messages?.Count > 0)
+                {
+                    sb.AppendLine();
+                    sb.AppendLine("Messages:");
+                    foreach (var m in result.Messages)
+                        sb.AppendLine(m);
+                }
+                LogHelper.WriteLog(_configProvider.PluginDirectory, "at-mapping.log", sb.ToString());
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "Failed to write animethemes mapping log");
+            }
+            return Ok(new { result, logUrl = $"{BaseUrl}/api/plugin/ShokoRelay/logs/at-mapping.log" });
+        }
+
+        [HttpPost("animethemes/vfs/import")]
+        public async Task<IActionResult> ImportAnimeThemesMapping(CancellationToken cancellationToken = default)
+        {
+            // use the raw URL directly; avoid the GitHub API which truncates large files
+            const string rawUrl = AnimeThemesConstants.RawMapUrl;
+            var (count, log) = await _animeThemesMapping.ImportMappingFromUrlAsync(rawUrl, cancellationToken).ConfigureAwait(false);
+            return Ok(new { status = "ok", count });
+        }
+
         [HttpGet("animethemes/mp3")]
         public async Task<IActionResult> AnimeThemesMp3([FromQuery] AnimeThemesMp3Query query, CancellationToken cancellationToken = default)
         {
@@ -1141,7 +1294,27 @@ namespace ShokoRelay.Controllers
             if (query.Batch)
             {
                 var batch = await _animeThemesGenerator.ProcessBatchAsync(query, cancellationToken);
-                return Ok(batch);
+
+                // write theme-report log summarizing batch result
+                try
+                {
+                    var sb = new System.Text.StringBuilder();
+                    sb.AppendLine($"AnimeThemes: MP3 Batch Report - {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                    sb.AppendLine($"Processed: {batch.Processed}");
+                    sb.AppendLine($"Skipped: {batch.Skipped}");
+                    sb.AppendLine($"Errors: {batch.Errors}");
+                    foreach (var item in batch.Items)
+                    {
+                        sb.AppendLine($"{item.Folder} -> {item.Status}{(item.Message != null ? ": " + item.Message : "")} ");
+                    }
+                    LogHelper.WriteLog(_configProvider.PluginDirectory, "theme-report.log", sb.ToString());
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn(ex, "Failed to write anime themes mp3 report log");
+                }
+
+                return Ok(new { batch, logUrl = $"{BaseUrl}/api/plugin/ShokoRelay/logs/theme-report.log" });
             }
 
             var single = await _animeThemesGenerator.ProcessSingleAsync(query, cancellationToken);
@@ -1149,44 +1322,6 @@ namespace ShokoRelay.Controllers
                 return BadRequest(single);
 
             return Ok(single);
-        }
-
-        [HttpGet("animethemes/vfs")]
-        public async Task<IActionResult> AnimeThemesVfs([FromQuery] AnimeThemesVfsQuery query, CancellationToken cancellationToken = default)
-        {
-            if (query.Mapping)
-            {
-                string defaultBase = !string.IsNullOrWhiteSpace(ShokoRelay.Settings.AnimeThemesPathMapping) ? ShokoRelay.Settings.AnimeThemesPathMapping : AnimeThemesConstants.BasePath;
-
-                string root = query.TorrentRoot ?? defaultBase;
-                var result = await _animeThemesMapping.BuildMappingFileAsync(root, query.MapPath, cancellationToken);
-                return Ok(result);
-            }
-
-            if (query.ApplyMapping)
-            {
-                string defaultBase = !string.IsNullOrWhiteSpace(ShokoRelay.Settings.AnimeThemesPathMapping) ? ShokoRelay.Settings.AnimeThemesPathMapping : AnimeThemesConstants.BasePath;
-
-                string? sourceRoot = query.TorrentRoot ?? defaultBase;
-                var validation = ValidateFilterOrBadRequest(query.Filter, out var filterIds);
-                if (validation != null)
-                    return validation;
-
-                var result = await _animeThemesMapping.ApplyMappingAsync(query.MapPath, sourceRoot, filterIds, cancellationToken);
-
-                // Return sanitized response (omit 'Planned' to reduce log noise)
-                return Ok(
-                    new
-                    {
-                        LinksCreated = result.LinksCreated,
-                        Skipped = result.Skipped,
-                        SeriesMatched = result.SeriesMatched,
-                        Errors = result.Errors,
-                    }
-                );
-            }
-
-            return BadRequest(new { status = "error", message = "missing operation (use mapping/applyMapping on /animethemes/vfs or use /animethemes/mp3 for single/batch)" });
         }
 
         #endregion

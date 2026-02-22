@@ -1,8 +1,5 @@
-using System;
-using System.Collections.Concurrent;
 using Shoko.Abstractions.Enums;
 using Shoko.Abstractions.Metadata;
-using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Shoko;
 using Shoko.Abstractions.Metadata.Tmdb;
 

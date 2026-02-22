@@ -3,7 +3,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using NLog;
 using Shoko.Abstractions.Metadata.Shoko;
-using Shoko.Abstractions.Plugin;
 using Shoko.Abstractions.Services;
 using ShokoRelay.Config;
 using ShokoRelay.Helpers;
@@ -18,7 +17,7 @@ public sealed record AnimeThemesMappingEntry(
     [property: JsonPropertyName("newFilename")] string NewFileName
 );
 
-public sealed record AnimeThemesMappingBuildResult(string MapPath, int EntriesWritten, int Errors, IReadOnlyList<string> Messages);
+public sealed record AnimeThemesMappingBuildResult(string MapPath, int EntriesWritten, int Reused, int Errors, IReadOnlyList<string> Messages);
 
 public sealed record AnimeThemesMappingApplyResult(int LinksCreated, int Skipped, int SeriesMatched, IReadOnlyList<string> Errors, IReadOnlyList<string> Planned);
 
@@ -37,10 +36,56 @@ public class AnimeThemesMapping
     private readonly SemaphoreSlim _rateLock = new(1, 1);
     private DateTimeOffset _lastRequest = DateTimeOffset.MinValue;
 
-    public AnimeThemesMapping(IMetadataService metadataService, IApplicationPaths applicationPaths)
+    public AnimeThemesMapping(IMetadataService metadataService, ConfigProvider configProvider)
     {
         _metadataService = metadataService;
-        _pluginPath = ConfigConstants.GetPluginDirectory(applicationPaths);
+        _pluginPath = configProvider.PluginDirectory;
+    }
+
+    /// <summary>
+    /// Download the mapping file from a direct raw URL (e.g. gist raw link) and save it.
+    /// Returns the number of entries parsed and a log message for the import report.
+    /// </summary>
+    public async Task<(int Count, string Log)> ImportMappingFromUrlAsync(string rawUrl, CancellationToken ct = default)
+    {
+        int count = 0;
+        string logMsg;
+
+        try
+        {
+            using var client = new HttpClient();
+            AnimeThemesConstants.EnsureUserAgent(client);
+            var content = await client.GetStringAsync(rawUrl, ct).ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                logMsg = "Downloaded content empty";
+                return (0, logMsg);
+            }
+
+            string mapPath = Path.Combine(_pluginPath, AnimeThemesConstants.MapFileName);
+            await File.WriteAllTextAsync(mapPath, content, ct).ConfigureAwait(false);
+
+            try
+            {
+                var list = JsonSerializer.Deserialize<List<AnimeThemesMappingEntry>>(content, _jsonOptions);
+                if (list != null)
+                    count = list.Count;
+            }
+            catch { }
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"AnimeThemes mapping import - {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+            sb.AppendLine($"Url: {rawUrl}");
+            sb.AppendLine($"Entries: {count}");
+            logMsg = sb.ToString();
+            return (count, logMsg);
+        }
+        catch (Exception ex)
+        {
+            logMsg = "Import failed: " + ex.Message;
+            Logger.Warn(ex, "Failed to import mapping from URL");
+            return (0, logMsg);
+        }
     }
 
     public async Task<AnimeThemesMappingBuildResult> BuildMappingFileAsync(string torrentRoot, string? outputPath = null, CancellationToken ct = default)
@@ -61,8 +106,42 @@ public class AnimeThemesMapping
         var entries = new List<AnimeThemesMappingEntry>();
         int errors = 0;
         int warns = 0;
+        int reusedCount = 0; // number of files already present in existing map
 
-        var files = Directory.EnumerateFiles(resolvedRoot, "*.webm", SearchOption.AllDirectories).ToList();
+        // load existing map to avoid re-querying the API for entries we already have
+        var existing = new Dictionary<string, AnimeThemesMappingEntry>(StringComparer.OrdinalIgnoreCase);
+        if (File.Exists(mapPath))
+        {
+            try
+            {
+                string oldJson = await File.ReadAllTextAsync(mapPath, ct).ConfigureAwait(false);
+                var oldList = JsonSerializer.Deserialize<List<AnimeThemesMappingEntry>>(oldJson, _jsonOptions);
+                if (oldList != null)
+                {
+                    foreach (var e in oldList)
+                    {
+                        if (!existing.ContainsKey(e.FilePath))
+                            existing[e.FilePath] = e;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "Failed to read existing AnimeThemes mapping; regenerating all entries");
+            }
+        }
+
+        // gather all webm files, but ignore any that live inside a "misc" subfolder
+        var files = Directory
+            .EnumerateFiles(resolvedRoot, "*.webm", SearchOption.AllDirectories)
+            .Where(f =>
+            {
+                var rel = Path.GetRelativePath(resolvedRoot, f);
+                // split on both separators to support inconsistent paths
+                var parts = rel.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                return !parts.Any(p => string.Equals(p, "misc", StringComparison.OrdinalIgnoreCase));
+            })
+            .ToList();
 
         foreach (string file in files)
         {
@@ -71,9 +150,24 @@ public class AnimeThemesMapping
             string rel = Path.GetRelativePath(resolvedRoot, file).Replace('\\', '/').TrimStart('/');
             rel = "/" + rel;
 
+            // if we already have a mapping for this relative path, reuse it and skip the API call
+            if (existing.TryGetValue(rel, out var oldEntry))
+            {
+                entries.Add(oldEntry);
+                reusedCount++;
+                continue;
+            }
+
             try
             {
                 string baseName = Path.GetFileName(file);
+                // look for a version marker following an OP/ED number (e.g. OP1v2 or ED1v3)  and capture the "v#" portion
+                string versionSuffix = "";
+                var nameNoExt = Path.GetFileNameWithoutExtension(baseName) ?? "";
+                var verMatch = System.Text.RegularExpressions.Regex.Match(nameNoExt, "(?:OP|ED)\\d+(v\\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                if (verMatch.Success)
+                    versionSuffix = verMatch.Groups[1].Value; // group contains only the v#
+
                 var lookup = await FetchMetadataAsync(baseName, ct);
                 if (lookup == null)
                 {
@@ -83,7 +177,7 @@ public class AnimeThemesMapping
                 }
 
                 string ext = Path.GetExtension(baseName) ?? string.Empty;
-                string cleanName = BuildNewFileName(lookup, ext);
+                string cleanName = BuildNewFileName(lookup, ext, versionSuffix);
 
                 entries.Add(new AnimeThemesMappingEntry(rel, lookup.VideoId, lookup.AniDbId, cleanName));
             }
@@ -99,9 +193,16 @@ public class AnimeThemesMapping
         await File.WriteAllTextAsync(mapPath, json, ct);
 
         sw.Stop();
-        Logger.Info("AnimeThemes mapping build completed in {Elapsed}ms: entries={Count}, errors={Errors}, warnings={Warns}", sw.ElapsedMilliseconds, entries.Count, errors, warns);
+        Logger.Info(
+            "AnimeThemes mapping build completed in {Elapsed}ms: entries={Count}, reused={Reused}, errors={Errors}, warnings={Warns}",
+            sw.ElapsedMilliseconds,
+            entries.Count,
+            reusedCount,
+            errors,
+            warns
+        );
         Logger.Info("AnimeThemes mapping written to {Path} with {Count} entries", mapPath, entries.Count);
-        return new AnimeThemesMappingBuildResult(mapPath, entries.Count, errors, messages);
+        return new AnimeThemesMappingBuildResult(mapPath, entries.Count, reusedCount, errors, messages);
     }
 
     public async Task<AnimeThemesMappingApplyResult> ApplyMappingAsync(
@@ -155,6 +256,16 @@ public class AnimeThemesMapping
         foreach (var entry in entries)
         {
             ct.ThrowIfCancellationRequested();
+
+            // skip files that belong to the misc folder – they are not part of the
+            // official released mapping and should never be linked into the VFS.
+            var normalized = entry.FilePath.TrimStart('/', '\\');
+            var segments = normalized.Split('/', '\\');
+            if (segments.Any(s => string.Equals(s, "misc", StringComparison.OrdinalIgnoreCase)))
+            {
+                skipped++;
+                continue;
+            }
 
             if (!byAniDb.TryGetValue(entry.AniDbId, out var matches) || matches.Count == 0)
             {
@@ -222,12 +333,21 @@ public class AnimeThemesMapping
                         continue;
                     }
 
-                    if (!destSeen.Add(destPath))
+                    // ensure destPath is unique; if already seen, append numeric suffix until free
+                    string originalDest = destPath;
+                    int dupIdx = 1;
+                    while (!destSeen.Add(destPath))
                     {
-                        skipped++;
-                        warns2++;
-                        Logger.Warn("Duplicate target path {Dest}", destPath);
-                        continue;
+                        dupIdx++;
+                        string baseNoExt = Path.GetFileNameWithoutExtension(originalDest);
+                        string ext = Path.GetExtension(originalDest);
+                        destPath = Path.Combine(shortsDir, $"{baseNoExt} ({dupIdx}){ext}");
+                        // update planned list entry if present
+                        for (int pi = 0; pi < planned.Count; pi++)
+                        {
+                            if (planned[pi].StartsWith(originalDest, StringComparison.OrdinalIgnoreCase))
+                                planned[pi] = planned[pi].Replace(originalDest, destPath);
+                        }
                     }
 
                     if (VfsShared.TryCreateLink(source, destPath, Logger, targetOverride: relativeTarget))
@@ -320,11 +440,20 @@ public class AnimeThemesMapping
         return new AnimeThemesVideoLookup(videoId, themeId.Value, anidbId, slug, songTitle, tags);
     }
 
-    private static string BuildNewFileName(AnimeThemesVideoLookup lookup, string extension)
+    // versionSuffix may contain something like "v2" or "v3" pulled from the
+    // original filename.  It is appended to the slug part of the name before the
+    // song title so that differences are preserved without relying on the later
+    // dedupe pass.
+
+    private static string BuildNewFileName(AnimeThemesVideoLookup lookup, string extension, string versionSuffix = "")
     {
-        string baseName = string.IsNullOrWhiteSpace(lookup.Slug) ? "Theme" : lookup.Slug;
+        string slug = string.IsNullOrWhiteSpace(lookup.Slug) ? "Theme" : lookup.Slug;
+        if (!string.IsNullOrWhiteSpace(versionSuffix))
+            slug += versionSuffix;
+
+        string baseName = slug;
         if (!string.IsNullOrWhiteSpace(lookup.SongTitle))
-            baseName = $"{lookup.Slug} - {lookup.SongTitle}";
+            baseName = $"{slug} - {lookup.SongTitle}";
 
         if (!string.IsNullOrWhiteSpace(lookup.Tags))
             baseName += $" [{lookup.Tags}]";

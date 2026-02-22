@@ -13,6 +13,9 @@ namespace ShokoRelay.Config
 
         private readonly string _filePath;
         private readonly string _tokenPath;
+
+        // expose plugin directory for convenient access
+        public string PluginDirectory { get; }
         private readonly object _settingsLock = new();
         private RelayConfig? _settings;
 
@@ -21,6 +24,7 @@ namespace ShokoRelay.Config
         public ConfigProvider(IApplicationPaths applicationPaths)
         {
             string pluginDir = ConfigConstants.GetPluginDirectory(applicationPaths);
+            PluginDirectory = pluginDir;
             string configDir = Path.Combine(pluginDir, ConfigConstants.ConfigSubfolder);
             Directory.CreateDirectory(pluginDir); // Ensure plugin directory exists
             Directory.CreateDirectory(configDir); // Ensure config directory exists

@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using NLog;
 using Shoko.Abstractions.Metadata.Shoko;
-using Shoko.Abstractions.Plugin;
 using Shoko.Abstractions.Services;
 using ShokoRelay.Config;
 using ShokoRelay.Helpers;
@@ -35,12 +34,12 @@ namespace ShokoRelay.Vfs
 
         private static readonly HashSet<string> SubtitleExtensions = PlexConstants.LocalMediaAssets.Subtitles;
 
-        public VfsBuilder(IMetadataService metadataService, IApplicationPaths applicationPaths)
+        public VfsBuilder(IMetadataService metadataService, ConfigProvider configProvider)
         {
             _metadataService = metadataService;
             // reports and other plugin-specific files should live inside our plugin
             // folder rather than the global server data directory.
-            _pluginDataPath = ConfigConstants.GetPluginDirectory(applicationPaths);
+            _pluginDataPath = configProvider.PluginDirectory;
             try
             {
                 Directory.CreateDirectory(_pluginDataPath);
@@ -181,7 +180,7 @@ namespace ShokoRelay.Vfs
             try
             {
                 var sb = new System.Text.StringBuilder();
-                sb.AppendLine($"VFS Build Report - {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                sb.AppendLine($"VFS Generation Report - {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
                 sb.AppendLine($"Elapsed: {sw.Elapsed}");
                 sb.AppendLine($"Series processed: {seriesProcessed}");
                 sb.AppendLine($"Directories created: {dirsCreated}");
@@ -203,9 +202,15 @@ namespace ShokoRelay.Vfs
                         sb.AppendLine(e);
                 }
 
-                string reportPath = Path.Combine(_pluginDataPath, "vfs-report.log");
-                System.IO.File.WriteAllText(reportPath, sb.ToString());
-                Logger.Info("VFS report written to {Path}", reportPath);
+                try
+                {
+                    LogHelper.WriteLog(_pluginDataPath, "vfs-report.log", sb.ToString());
+                    Logger.Info("VFS report written");
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn(ex, "Failed to write VFS report file");
+                }
             }
             catch (Exception ex)
             {
@@ -467,7 +472,7 @@ namespace ShokoRelay.Vfs
                     if (!isCrossover)
                     {
                         LinkMetadata(sourceDir, seriesPath, reportedDirs);
-                        LinkSubtitles(source, sourceDir, destBase, seasonPath, reportedDirs, ref planned, ref skipped, errors, subtitleFileCache);
+                        LinkSubtitles(source, sourceDir, destBase, seasonPath, reportedDirs, ref planned, ref skipped, errors, ref created, subtitleFileCache);
                     }
                     else
                     {
@@ -482,6 +487,7 @@ namespace ShokoRelay.Vfs
             }
 
             sw.Stop();
+
             Logger.Debug(
                 "BuildSeries {SeriesId} completed in {Elapsed}ms: mappings={Mappings} created={Created} planned={Planned} skipped={Skipped} errors={ErrorsCount}",
                 series.ID,
@@ -567,6 +573,7 @@ namespace ShokoRelay.Vfs
             ref int planned,
             ref int skipped,
             List<string> errors,
+            ref int created,
             IDictionary<string, string[]>? subFileCache = null
         )
         {
@@ -607,6 +614,7 @@ namespace ShokoRelay.Vfs
                 if (VfsShared.TryCreateLink(sub, destPath, Logger))
                 {
                     planned++;
+                    created++;
                 }
                 else
                 {

@@ -35,7 +35,7 @@ Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File Sy
 - Mandatory
   - Click the `Generate VFS` button in the "Shoko: VFS" section to initialize your collection
   - First time generation may take several minutes to complete with a large library
-  - A report of the run will be written to `vfs-report.log` inside the plugin directory
+  - A report of the run will be written to `logs/vfs-report.log` inside the plugin directory (accessible via dashboard toasts).
     - You can download the latest report via the dashboard toast that appears when the process finishes
   - The VFS will automatically update when it detects files have been renamed or moved
 - Optional
@@ -106,7 +106,8 @@ This plugin includes full integration for [AnimeThemes](https://animethemes.moe/
 1. Download anime theme videos and place them in the `!AnimeThemes` folder
    - There is a torrent available with over 19000+ themes
 2. Generate a mapping for the the videos by clicking the `Build Mapping` button:
-   - A mapping for the current torrent is available [here](https://gist.github.com/natyusha/4e29252d939d0f522d38732facf328c7) which you can place in the Shoko Relay's plugin directory (mapping the whole torrent takes ~12 hours due to rate limits)
+   - Click the Import button on the dashboard the download the [current torrent mapping](https://gist.github.com/natyusha/4e29252d939d0f522d38732facf328c7)
+   - Mapping the whole torrent takes ~12 hours due to rate limits
 3. Apply the mapping to the VFS by clicking the `Apply Mapping to VFS` button
 
 > [!IMPORTANT]
@@ -114,9 +115,9 @@ This plugin includes full integration for [AnimeThemes](https://animethemes.moe/
 
 ### Themes as Series BGM
 
-There is also support for generating `Theme.mp3` files as local metadata. This will add them to the VFS automatically and can be run for either a single series or as a batch operation. This requires Shoko Server to have access to [FFmpeg](https://ffmpeg.org/download.html) (place system appropriate binaries in the ShokoRelay plugin folder or have it in the system PATH) as AnimeThemes does not provide `.mp3` files.
+There is also support for generating `Theme.mp3` files as local metadata. This will add them to the VFS automatically and can be run for either a single series or as a batch operation. This process requires Shoko Server to have access to [FFmpeg](https://ffmpeg.org/download.html) (place system appropriate binaries in the ShokoRelay plugin folder or system PATH) as AnimeThemes does not provide `.mp3` files.
 
-This is available under the "AnimeThemes: Theme.mp3" section of the dashboard.
+This is available under the "AnimeThemes: Theme.mp3" section of the dashboard. The batch option will automatically ignore any subfolder named after the configured `VFS Root Path`, `Collection Posters Root Path`, or `AnimeThemes Root Path` as those directories are used internally and never contain series data.
 
 ## Plex: Automation
 
@@ -130,13 +131,13 @@ This is available under the "AnimeThemes: Theme.mp3" section of the dashboard.
 - Local collection posters can also be used by placing them in the configured `Collection Posters Root Path` (default `!CollectionPosters`) folder
 - These files are simply named after the Shoko group name (or ID) that you wish them to apply to
 
-### Scan on VFS Change
+### Force Partial Scans
 
-- When `Scan on VFS Change` is enabled and you are authenticated Plex's HTTP api will be used to instantly scan folder modified by the VFS watcher
+- When `Force Partial Scans` is enabled and you are authenticated Plex's HTTP API will be used to instantly scan folders modified by the VFS watcher
 
 ### Auto Scrobble (Plex Pass)
 
-- Enable `Auto Scrobble` in the Shoko Relay dashboard's "Plex: Automation" section.
+- Enable `Auto Scrobble` in Shoko Relay dashboard's "Plex: Automation" section.
 - In the Plex Web App go to `Settings > Webhooks` and add the URL: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/plex/webhook`
 
 ## Shoko: Automation
@@ -146,7 +147,7 @@ Most of the options in this section require a Shoko API key to fully function (a
 - `Remove Missing`: A button which will remove files that are no longer present from Shoko and your AniDB MyList
 - `Import`: A button which will make shoko rescan "Source" type drop folders
 - `Sync`: A button which opens a modal allowing for watched state syncing from Plex to Shoko or Shoko to Plex
-  - Note: This includes any users configured under "Extra Plex Users" in the "Plex: Automation" section
+  - Note: This includes any users configured under "Extra Plex Users" in the "Plex: Authentication" section
 - `Import Int.`: An input which will schedule imports from "Source" type drop folders every `N` hours
 - `Sync Int.`: An input which will schedule watched state syncing from Plex to Shoko every `N` hours
   - Note: this includes ratings/votes if `Include Ratings` is enabled in the `Sync Watched States` modal
@@ -240,7 +241,7 @@ Many tags on AniDB use a [3 Star Weight System](https://wiki.anidb.net/Tags#Star
 
 ### Assumed Content Ratings
 
-If "assumed content ratings" are enabled in the agent settings the [target audience](https://anidb.net/tag/2606/animetb) and [content indicator](https://anidb.net/tag/2604/animetb) tags from AniDB will be used to roughly match the [TV Parental Guidelines](http://www.tvguidelines.org/resources/TheRatings.pdf) system. The target audience tags will conservatively set the initial rating anywhere from TV-Y to TV-14, then the content indicators will be appended. If the tag weights for the content indicators are high enough (> 400 or **\*\***) the rating will be raised to compensate. A general overview is listed in the table below:
+If "assumed content ratings" are enabled in the agent settings the [target audience](https://anidb.net/tag/2606/animetb) and [content indicator](https://anidb.net/tag/2604/animetb) tags from AniDB will be used to roughly match the [TV Parental Guidelines](http://www.tvguidelines.org/resources/TheRatings.pdf) system. The target audience tags will be checked for ratings from most restrictive to least, then the content indicators will be appended. If the tag weights for the content indicators are high enough (> 400 or **\*\***) the rating will be raised to compensate. A general overview is listed in the table below:
 
 | Tag                             | Rating  |
 | :------------------------------ | :------ |

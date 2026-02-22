@@ -2,9 +2,9 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using NLog;
 using Shoko.Abstractions.Metadata.Shoko;
-using Shoko.Abstractions.Plugin;
 using Shoko.Abstractions.Services;
 using Shoko.Abstractions.Video;
+using ShokoRelay.Config;
 using ShokoRelay.Vfs;
 
 namespace ShokoRelay.AnimeThemes;
@@ -16,15 +16,6 @@ public record AnimeThemesMp3Query
     public int Offset { get; init; } = 0;
     public bool Batch { get; init; }
     public bool Force { get; init; }
-}
-
-public record AnimeThemesVfsQuery
-{
-    public bool Mapping { get; init; }
-    public bool ApplyMapping { get; init; }
-    public string? MapPath { get; init; }
-    public string? TorrentRoot { get; init; }
-    public string? Filter { get; init; }
 }
 
 public record ThemeMp3OperationResult(
@@ -54,10 +45,10 @@ public class AnimeThemesGenerator
 
     private readonly IVideoService _videoService;
 
-    public AnimeThemesGenerator(IVideoService videoService, IApplicationPaths applicationPaths)
+    public AnimeThemesGenerator(IVideoService videoService, ConfigProvider configProvider)
     {
         _videoService = videoService;
-        _ffmpegService = new FfmpegService(applicationPaths);
+        _ffmpegService = new FfmpegService(configProvider.PluginDirectory);
         AnimeThemesConstants.EnsureUserAgent(Http);
     }
 
@@ -80,16 +71,31 @@ public class AnimeThemesGenerator
             ct.ThrowIfCancellationRequested();
             string folderName = Path.GetFileName(folder);
             string vfsRoot = ShokoRelay.Settings.VfsRootPath ?? "!ShokoRelayVFS";
+            string collectionRoot = ShokoRelay.Settings.CollectionPostersRootPath ?? "!CollectionPosters";
             string animeThemesRoot = ShokoRelay.Settings.AnimeThemesRootPath ?? "!AnimeThemes";
-            if (string.Equals(folderName, vfsRoot, StringComparison.OrdinalIgnoreCase) || string.Equals(folderName, animeThemesRoot, StringComparison.OrdinalIgnoreCase))
+
+            // log start of work on this folder
+            Logger.Info("AnimeThemes MP3 batch: processing folder {Folder}", folder);
+
+            if (
+                string.Equals(folderName, vfsRoot, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(folderName, collectionRoot, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(folderName, animeThemesRoot, StringComparison.OrdinalIgnoreCase)
+            )
             {
                 skipped++;
                 results.Add(new ThemeMp3OperationResult(folder, "skipped", "Excluded system folder."));
+                Logger.Info("AnimeThemes MP3 batch: skipped system folder {Folder}", folder);
                 continue;
             }
+
             var singleQuery = query with { Path = folder, Batch = false };
             var result = await ProcessSingleAsync(singleQuery, ct);
             results.Add(result);
+
+            // log outcome
+            Logger.Info("AnimeThemes MP3 batch: folder {Folder} => {Status}{Message}", folder, result.Status, string.IsNullOrWhiteSpace(result.Message) ? "" : ": " + result.Message);
+
             switch (result.Status)
             {
                 case "ok":
@@ -121,7 +127,14 @@ public class AnimeThemesGenerator
         {
             selection = await FetchThemeAsync(series.AnidbAnimeID, query.Slug, query.Offset, ct);
             if (selection == null)
-                return Error(folder, "AnimeThemes entry not found for this series.");
+            {
+                string reason;
+                if (!string.IsNullOrWhiteSpace(query.Slug))
+                    reason = $"AnimeThemes entry not found for slug '{query.Slug}'.";
+                else
+                    reason = "AnimeThemes entry not found for this series.";
+                return new ThemeMp3OperationResult(folder, "skipped", reason);
+            }
 
             tempPath = await DownloadAudioAsync(selection.AudioUrl, ct);
             var duration = await _ffmpegService.ProbeDurationAsync(tempPath, ct);
@@ -218,7 +231,9 @@ public class AnimeThemesGenerator
         if (videoFile?.Video == null)
             return Task.FromResult<(ThemeMp3OperationResult?, (string, string, IVideoFile, IShokoSeries)?)>((Error(folder, "Video not recognized by Shoko."), null));
 
-        var series = videoFile.Video.Series?.FirstOrDefault() as IShokoSeries;
+        // Derive the series via the first linked episode since videos are linked at the episode level.
+        // This means that if there are multiple episodes from different series in the same folder, the result may be non-deterministic.
+        var series = videoFile.Video.Episodes?.FirstOrDefault()?.Series;
         if (series == null)
             return Task.FromResult<(ThemeMp3OperationResult?, (string, string, IVideoFile, IShokoSeries)?)>((Error(folder, "Series lookup failed."), null));
 

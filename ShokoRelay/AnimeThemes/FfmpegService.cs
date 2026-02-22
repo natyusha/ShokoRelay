@@ -2,8 +2,6 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using NLog;
-using Shoko.Abstractions.Plugin;
-using ShokoRelay.Config;
 
 namespace ShokoRelay.AnimeThemes;
 
@@ -17,9 +15,9 @@ internal sealed class FfmpegService
     private static string _pluginDirectory = string.Empty;
     private static string _workingDirectory = string.Empty;
 
-    public FfmpegService(IApplicationPaths applicationPaths)
+    public FfmpegService(string pluginDirectory)
     {
-        _pluginDirectory = ConfigConstants.GetPluginDirectory(applicationPaths);
+        _pluginDirectory = pluginDirectory;
         _workingDirectory = _pluginDirectory;
     }
 
