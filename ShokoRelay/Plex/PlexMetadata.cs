@@ -216,7 +216,7 @@ namespace ShokoRelay.Plex
                 ep.Rating,
                 () =>
                 {
-                    if (ep is Shoko.Abstractions.Metadata.Shoko.IShokoEpisode shokoEp)
+                    if (ep is IShokoEpisode shokoEp)
                     {
                         var tmdbEp = shokoEp.TmdbEpisodes?.FirstOrDefault();
                         if (tmdbEp?.Rating > 0)
@@ -398,7 +398,7 @@ namespace ShokoRelay.Plex
 
             // Populate TMDB season posters when enabled, the series has >1 normal seasons,
             // and TMDB season metadata is available on the Shoko series.
-            if (ShokoRelay.Settings.TMDBSeasonPosters && nonExtraSeasonCount > 1 && series is IShokoSeries shokoSeries)
+            if (ShokoRelay.Settings.TmdbSeasonPosters && nonExtraSeasonCount > 1 && series is IShokoSeries shokoSeries)
             {
                 var tmdbSeason = shokoSeries.TmdbSeasons?.FirstOrDefault(ts => ts.SeasonNumber == seasonNum);
                 var orderedUrls = tmdbSeason
@@ -472,7 +472,7 @@ namespace ShokoRelay.Plex
         {
             var images = (IWithImages)ep;
             var seriesImages = (IWithImages)series;
-            var thumb = ShokoRelay.Settings.TMDBThumbnails ? images.GetImages(ImageEntityType.Thumbnail).FirstOrDefault() : null;
+            var thumb = ShokoRelay.Settings.TmdbThumbnails ? images.GetImages(ImageEntityType.Thumbnail).FirstOrDefault() : null;
             var seriesBackdrop = seriesImages.GetImages(ImageEntityType.Backdrop).FirstOrDefault();
             var seriesPoster = seriesImages.GetImages(ImageEntityType.Poster).FirstOrDefault();
 
@@ -490,7 +490,7 @@ namespace ShokoRelay.Plex
 
             // Respect the TMDBThumbnails setting
             ImageInfo[] imageArray = Array.Empty<ImageInfo>();
-            if (ShokoRelay.Settings.TMDBThumbnails)
+            if (ShokoRelay.Settings.TmdbThumbnails)
             {
                 imageArray = ImageHelper.GenerateImageArray(images, epTitle, ShokoRelay.Settings.AddEveryImage).Where(img => img.type == "snapshot").ToArray();
             }
@@ -501,7 +501,7 @@ namespace ShokoRelay.Plex
 
             // Prefer a season-specific poster for the parent thumb when available (fallback to series poster)
             string? parentThumb = null;
-            if (ShokoRelay.Settings.TMDBSeasonPosters && mapped.Season >= 0 && series is IShokoSeries shokoSeries)
+            if (ShokoRelay.Settings.TmdbSeasonPosters && mapped.Season >= 0 && series is IShokoSeries shokoSeries)
             {
                 var tmdbSeason = shokoSeries.TmdbSeasons?.FirstOrDefault(ts => ts.SeasonNumber == mapped.Season);
                 var orderedUrls = tmdbSeason

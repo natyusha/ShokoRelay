@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
-using Shoko.Abstractions.Plugin;
 
 namespace ShokoRelay.Config
 {
@@ -9,21 +8,21 @@ namespace ShokoRelay.Config
         public const string ConfigFileName = "preferences.json";
         public const string SecretsFileName = "plex.token";
         public const string PluginSubfolder = "ShokoRelay";
-        public const string DashboardSubfolder = "dashboard";
         public const string ConfigSubfolder = "config";
-
-        // Returns the full path to the plugin's installation directory
-        public static string GetPluginDirectory(IApplicationPaths appPaths)
-        {
-            return Path.Combine(appPaths.PluginsPath, PluginSubfolder);
-        }
     }
 
     public enum SummaryMode
     {
+        [Display(Name = "Fully Sanitize")]
         FullySanitize = 0,
+
+        [Display(Name = "Allow Info Lines")]
         AllowInfoLines = 1,
+
+        [Display(Name = "Allow Misc. Lines")]
         AllowMiscLines = 2,
+
+        [Display(Name = "Allow Both")]
         AllowBoth = 3,
     }
 
@@ -34,19 +33,83 @@ namespace ShokoRelay.Config
         None = 2,
     }
 
+    public enum TagSources
+    {
+        Combined = 0,
+        AniDB = 1,
+        TMDB = 2,
+
+        [Display(Name = "User Only")]
+        UserOnly = 3,
+    }
+
     public enum MinimumTagWeight
     {
+        [Display(Name = "000 ❯ ☆☆☆")]
         Zero = 0,
+
+        [Display(Name = "100 ❯ ⯪☆☆")]
         OneHundred = 100,
+
+        [Display(Name = "200 ❯ ★☆☆")]
         TwoHundred = 200,
+
+        [Display(Name = "300 ❯ ★⯪☆")]
         ThreeHundred = 300,
+
+        [Display(Name = "400 ❯ ★★☆")]
         FourHundred = 400,
+
+        [Display(Name = "500 ❯ ★★⯪")]
         FiveHundred = 500,
+
+        [Display(Name = "600 ❯ ★★★")]
         SixHundred = 600,
     }
 
     public class RelayConfig
     {
+        #region Automation Config
+
+        [Display(Name = "Extra Plex Users", Description = "Comma-separated Plex usernames (stored in preferences.json)")]
+        [Browsable(false)]
+        [DefaultValue("")]
+        public string ExtraPlexUsers { get; set; } = "";
+
+        [Browsable(false)]
+        [Display(Name = "Scan On VFS Refresh", Description = "Trigger Plex library scans when the VFS is refreshed.")]
+        [DefaultValue(false)]
+        public bool ScanOnVfsRefresh { get; set; } = false;
+
+        [Display(Name = "Auto Scrobble", Description = "Enable instant scrobble handling from Plex webhooks (media.scrobble)")]
+        [Browsable(false)]
+        [DefaultValue(false)]
+        public bool AutoScrobble { get; set; } = false;
+
+        [Display(Name = "Shoko API Key", Description = "API key for Shoko Server v3 API (used for scheduled/manual imports). Stored in preferences.json")]
+        [Browsable(false)]
+        [DefaultValue("")]
+        public string ShokoApiKey { get; set; } = string.Empty;
+
+        [Display(Name = "Auto Import Frequency (hours)", Description = "Run Shoko import detection every N hours. Set to 0 to disable")]
+        [Browsable(false)]
+        [DefaultValue(0)]
+        public int ShokoImportFrequencyHours { get; set; } = 0;
+
+        [Display(Name = "Auto Sync Watched Frequency (hours)", Description = "Run watched-state sync every N hours. Set to 0 to disable")]
+        [Browsable(false)]
+        [DefaultValue(0)]
+        public int ShokoSyncWatchedFrequencyHours { get; set; } = 0;
+
+        [Display(Name = "Include Ratings for Scheduled Sync", Description = "When enabled, scheduled Plex->Shoko sync will also include user ratings/votes")]
+        [Browsable(false)]
+        [DefaultValue(false)]
+        public bool ShokoSyncWatchedIncludeRatings { get; set; } = false;
+
+        #endregion
+
+        #region Provider Config
+
         [Display(Name = "Series Title Language", Description = "Priority, comma separated")]
         [DefaultValue("SHOKO, X-JAT, EN")]
         public string SeriesTitleLanguage { get; set; } = "SHOKO, X-JAT, EN";
@@ -81,19 +144,19 @@ namespace ShokoRelay.Config
 
         [Display(Name = "TMDB Episode Numbering", Description = "Enable to prefer TMDB episode numbering when available (recommended)")]
         [DefaultValue(true)]
-        public bool TMDBEpNumbering { get; set; } = true;
+        public bool TmdbEpNumbering { get; set; } = true;
 
         [Display(Name = "TMDB Episode Group Names", Description = "Enable to prefer TMDB titles for grouped episodes (fixes duped titles)")]
         [DefaultValue(true)]
-        public bool TMDBEpGroupNames { get; set; } = true;
+        public bool TmdbEpGroupNames { get; set; } = true;
 
         [Display(Name = "TMDB Season Posters", Description = "Enable to use TMDB season posters for multi-season series")]
         [DefaultValue(true)]
-        public bool TMDBSeasonPosters { get; set; } = true;
+        public bool TmdbSeasonPosters { get; set; } = true;
 
         [Display(Name = "TMDB Thumbnails", Description = "Enable to use TMDB episode thumbnails instead of the ones generated by Plex")]
         [DefaultValue(false)]
-        public bool TMDBThumbnails { get; set; } = false;
+        public bool TmdbThumbnails { get; set; } = false;
 
         [Display(Name = "Add Every Image", Description = "Enable to add all images instead of Shoko's preferred one (seasons always do)")]
         [DefaultValue(false)]
@@ -107,6 +170,10 @@ namespace ShokoRelay.Config
         [DefaultValue(AudienceRatingMode.AniDB)]
         public AudienceRatingMode AudienceRatingMode { get; set; } = AudienceRatingMode.AniDB;
 
+        [Display(Name = "Tag Sources", Description = "Select the preferred source(s) for genres in Plex")]
+        [DefaultValue(TagSources.Combined)]
+        public TagSources TagSources { get; set; } = TagSources.Combined;
+
         [Display(Name = "Minimum Tag Weight", Description = "Select the minimum AniDB tag weight to apply to a series in Plex")]
         [DefaultValue(MinimumTagWeight.Zero)]
         public MinimumTagWeight MinimumTagWeight { get; set; } = MinimumTagWeight.Zero;
@@ -118,9 +185,9 @@ namespace ShokoRelay.Config
         [Display(Name = "Path Mappings", Description = "Mappings for Shoko base paths to Plex base paths")]
         public Dictionary<string, string> PathMappings { get; set; } = new();
 
-        [Display(Name = "VFS Parallelism", Description = "The maximum concurrent series to process during VFS builds")]
+        [Display(Name = "Parallelism", Description = "The maximum number of concurrent operations (used by VFS builds and AnimeThemes batch operations)")]
         [DefaultValue(4)]
-        public int VfsParallelism { get; set; } = 4;
+        public int Parallelism { get; set; } = 4;
 
         [Display(Name = "VFS Root Path", Description = "The location of the virtual links inside each import root")]
         [DefaultValue("!ShokoRelayVFS")]
@@ -142,43 +209,7 @@ namespace ShokoRelay.Config
         [DefaultValue("")]
         public string FFmpegPath { get; set; } = "";
 
-        [Display(Name = "Plex Auth", Description = "Plex device registration settings for Plex authentication")]
-        [Browsable(false)]
-        public PlexAuthConfig PlexAuth { get; set; } = new();
-
-        [Display(Name = "Plex Library", Description = "Plex server connection settings for refresh and collections")]
-        [Browsable(false)]
-        public PlexLibraryConfig PlexLibrary { get; set; } = new();
-
-        [Display(Name = "Extra Plex Users", Description = "Comma-separated Plex usernames (stored in preferences.json)")]
-        [Browsable(false)]
-        [DefaultValue("")]
-        public string ExtraPlexUsers { get; set; } = "";
-
-        [Display(Name = "Shoko API Key", Description = "API key for Shoko Server v3 API (used for scheduled/manual imports). Stored in preferences.json")]
-        [Browsable(false)]
-        [DefaultValue("")]
-        public string ShokoApiKey { get; set; } = string.Empty;
-
-        [Display(Name = "Auto Import Frequency (hours)", Description = "Run Shoko import detection every N hours. Set to 0 to disable")]
-        [Browsable(false)]
-        [DefaultValue(0)]
-        public int ShokoImportFrequencyHours { get; set; } = 0;
-
-        [Display(Name = "Auto Sync Watched Frequency (hours)", Description = "Run watched-state sync every N hours. Set to 0 to disable")]
-        [Browsable(false)]
-        [DefaultValue(0)]
-        public int ShokoSyncWatchedFrequencyHours { get; set; } = 0;
-
-        [Display(Name = "Include Ratings for Scheduled Sync", Description = "When enabled, scheduled Plex->Shoko sync will also include user ratings/votes")]
-        [Browsable(false)]
-        [DefaultValue(false)]
-        public bool ShokoSyncWatchedIncludeRatings { get; set; } = false;
-
-        [Display(Name = "Auto Scrobble", Description = "Enable instant scrobble handling from Plex webhooks (media.scrobble)")]
-        [Browsable(false)]
-        [DefaultValue(false)]
-        public bool AutoScrobble { get; set; } = false;
+        #endregion
     }
 
     public class RelaySecrets

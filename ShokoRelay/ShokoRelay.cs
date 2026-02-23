@@ -24,7 +24,12 @@ namespace ShokoRelay
             serviceCollection.AddSingleton(provider => new PlexMetadata(provider.GetRequiredService<IMetadataService>()));
             // Use HttpClient instances with CookieContainer so Plex /myplex switch flows that set cookies work correctly.
             var handlerWithCookies = new HttpClientHandler { UseCookies = true, CookieContainer = new System.Net.CookieContainer() };
-            serviceCollection.AddSingleton(provider => new PlexAuth(new HttpClient(handlerWithCookies, disposeHandler: false), provider.GetRequiredService<ConfigProvider>().GetSettings().PlexAuth));
+            serviceCollection.AddSingleton(provider =>
+            {
+                var cp = provider.GetRequiredService<ConfigProvider>();
+                var plexAuthConfig = new PlexAuthConfig { ClientIdentifier = cp.GetPlexClientIdentifier() };
+                return new PlexAuth(new HttpClient(handlerWithCookies, disposeHandler: false), plexAuthConfig);
+            });
             serviceCollection.AddSingleton(provider => new PlexClient(new HttpClient(handlerWithCookies, disposeHandler: false), provider.GetRequiredService<ConfigProvider>()));
             serviceCollection.AddSingleton(provider => new PlexCollections(
                 new HttpClient(handlerWithCookies, disposeHandler: false),
@@ -52,7 +57,8 @@ namespace ShokoRelay
                 provider.GetRequiredService<IMetadataService>(),
                 provider.GetRequiredService<IUserDataService>(),
                 provider.GetRequiredService<IUserService>(),
-                provider.GetRequiredService<ConfigProvider>()
+                provider.GetRequiredService<ConfigProvider>(),
+                provider.GetRequiredService<PlexAuth>()
             ));
 
             // Shoko v3 import trigger service (calls /api/v3/ImportFolder and Scan)

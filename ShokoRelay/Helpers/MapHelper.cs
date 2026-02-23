@@ -44,7 +44,7 @@ namespace ShokoRelay.Helpers
             // PreferredOrdering.OrderingID when no alternate ordering is selected). Only keep a non-default
             // ordering id if it's genuinely an alternate ordering.
             string? seriesPrefOrderingId = null;
-            if (ShokoRelay.Settings.TMDBEpNumbering)
+            if (ShokoRelay.Settings.TmdbEpNumbering)
             {
                 var firstShokoEp = seriesEpisodes.Select(x => x.Episode).OfType<IShokoEpisode>().FirstOrDefault();
                 var tmdbShow = firstShokoEp?.Series?.TmdbShows?.FirstOrDefault();
@@ -181,7 +181,7 @@ namespace ShokoRelay.Helpers
                     // prefer a file-specific TMDB selection (avoids returning episode-level ranges).
                     var ded0 = deduped[0];
                     bool preferFileSpecificTmdb = false;
-                    if (fileCount > 1 && ShokoRelay.Settings.TMDBEpNumbering && ded0.Episode is IShokoEpisode shokoEpisodeLocal && shokoEpisodeLocal.TmdbEpisodes?.Any() == true)
+                    if (fileCount > 1 && ShokoRelay.Settings.TmdbEpNumbering && ded0.Episode is IShokoEpisode shokoEpisodeLocal && shokoEpisodeLocal.TmdbEpisodes?.Any() == true)
                     {
                         // Only use the series-level preferred ordering (do not probe per-episode); MapHelper
                         // computed `seriesPrefOrderingId` once above and normalized default ordering ids away.
@@ -212,7 +212,7 @@ namespace ShokoRelay.Helpers
                 int partCount = allowPartSuffix ? fileCount : 1;
 
                 object? tmdbEpisode = null;
-                if (fileCount > 1 && ShokoRelay.Settings.TMDBEpNumbering && firstEp is IShokoEpisode shokoEp && shokoEp.TmdbEpisodes?.Any() == true)
+                if (fileCount > 1 && ShokoRelay.Settings.TmdbEpNumbering && firstEp is IShokoEpisode shokoEp && shokoEp.TmdbEpisodes?.Any() == true)
                 {
                     string? showPrefId = seriesPrefOrderingId ?? shokoEp.Series?.TmdbShows?.FirstOrDefault()?.PreferredOrdering?.OrderingID;
                     var tmdbEps = string.IsNullOrWhiteSpace(showPrefId)

@@ -43,7 +43,7 @@ namespace ShokoRelay.Plex
             PlexCoords result;
 
             // Apply TMDB episode-numbering for any Shoko episode that has TMDB links when enabled.
-            if (ShokoRelay.Settings.TMDBEpNumbering && e is IShokoEpisode shokoEpisode && shokoEpisode.TmdbEpisodes != null && shokoEpisode.TmdbEpisodes.Any())
+            if (ShokoRelay.Settings.TmdbEpNumbering && e is IShokoEpisode shokoEpisode && shokoEpisode.TmdbEpisodes != null && shokoEpisode.TmdbEpisodes.Any())
             {
                 // Only evaluate alternate-ordering logic when a series-level preferred ordering id is present.
                 // Otherwise use the fast default ordering (season -> episode) to avoid touching AllOrderings.
@@ -106,7 +106,7 @@ namespace ShokoRelay.Plex
             // If TMDB numbering is enabled and all episodes in the file are the same type (e.g. all Episode, all Special, all Other, etc.),
             // collect any TMDB entries present among those episodes and apply TMDB-driven coordinates when available.
             // We do NOT apply TMDB numbering for mixed-type files (MapHelper filters mixed types earlier).
-            if (ShokoRelay.Settings.TMDBEpNumbering && eps.Select(ep => ep.Type).Distinct().Count() == 1)
+            if (ShokoRelay.Settings.TmdbEpNumbering && eps.Select(ep => ep.Type).Distinct().Count() == 1)
             {
                 var tmdbEntriesRaw = eps.OfType<IShokoEpisode>().Where(se => se.TmdbEpisodes != null && se.TmdbEpisodes.Any()).SelectMany(se => se.TmdbEpisodes).ToList();
 

@@ -10,7 +10,10 @@ namespace ShokoRelay.Plex
         private readonly HttpClient _httpClient;
         private readonly ConfigProvider _configProvider;
 
-        private PlexLibraryConfig Config => _configProvider.GetSettings().PlexLibrary;
+        // helper to retrieve current plex token/config from the token file
+        private string Token => _configProvider.GetPlexToken();
+        private string ClientIdentifier => _configProvider.GetPlexClientIdentifier();
+        private IReadOnlyList<PlexAvailableLibrary> DiscoveredLibraries => _configProvider.GetPlexDiscoveredLibraries();
 
         public PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         {
@@ -18,8 +21,10 @@ namespace ShokoRelay.Plex
             _configProvider = configProvider;
         }
 
-        public bool IsEnabled => !string.IsNullOrWhiteSpace(Config.ServerUrl) && !string.IsNullOrWhiteSpace(Config.Token) && GetTargets().Count > 0;
-        public bool ScanOnVfsRefresh => Config.ScanOnVfsRefresh;
+        // A Plex client is considered enabled if we have a token and at least one discovered
+        // library target. ServerUrl is stored per-target now and is not required globally.
+        public bool IsEnabled => !string.IsNullOrWhiteSpace(Token) && GetTargets().Count > 0;
+        public bool ScanOnVfsRefresh => _configProvider.GetSettings().ScanOnVfsRefresh;
 
         public async Task<bool> RefreshSectionPathAsync(string path, CancellationToken cancellationToken = default)
         {
@@ -45,20 +50,21 @@ namespace ShokoRelay.Plex
         /// </summary>
         public HttpRequestMessage CreateRequest(HttpMethod method, string path, string? baseServerUrl = null, string? plexUserToken = null)
         {
-            var baseUrl = !string.IsNullOrWhiteSpace(baseServerUrl) ? baseServerUrl : Config.ServerUrl;
-            var baseUri = new Uri(baseUrl.TrimEnd('/'));
+            if (string.IsNullOrWhiteSpace(baseServerUrl))
+                throw new ArgumentException("Base server URL must be supplied", nameof(baseServerUrl));
+            var baseUri = new Uri(baseServerUrl.TrimEnd('/'));
             var url = new Uri(baseUri, path);
 
             var request = new HttpRequestMessage(method, url);
 
             // Allow per-user token override for requests that need per-account visibility (e.g. watched-state).
             // If no override supplied, fall back to the configured Plex token.
-            var tokenToUse = !string.IsNullOrWhiteSpace(plexUserToken) ? plexUserToken : Config.Token;
+            var tokenToUse = !string.IsNullOrWhiteSpace(plexUserToken) ? plexUserToken : Token;
             if (!string.IsNullOrWhiteSpace(tokenToUse))
                 request.Headers.TryAddWithoutValidation("X-Plex-Token", tokenToUse);
 
-            if (!string.IsNullOrWhiteSpace(Config.ClientIdentifier))
-                request.Headers.TryAddWithoutValidation("X-Plex-Client-Identifier", Config.ClientIdentifier);
+            if (!string.IsNullOrWhiteSpace(ClientIdentifier))
+                request.Headers.TryAddWithoutValidation("X-Plex-Client-Identifier", ClientIdentifier);
 
             request.Headers.TryAddWithoutValidation("Accept", "application/json");
             return request;
@@ -76,7 +82,7 @@ namespace ShokoRelay.Plex
             string encodedPath = Uri.EscapeDataString(mappedPath);
             string requestPath = $"/library/sections/{target.SectionId}/refresh?path={encodedPath}";
 
-            using var request = CreateRequest(HttpMethod.Get, requestPath);
+            using var request = CreateRequest(HttpMethod.Get, requestPath, target.ServerUrl);
             using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
@@ -90,23 +96,31 @@ namespace ShokoRelay.Plex
 
         private IReadOnlyList<PlexLibraryTarget> GetTargets()
         {
-            if (Config.SelectedLibraries != null && Config.SelectedLibraries.Count > 0)
-                return Config.SelectedLibraries;
-
-            if (Config.LibrarySectionId <= 0)
-                return Array.Empty<PlexLibraryTarget>();
-
-            return new[]
+            if (DiscoveredLibraries != null && DiscoveredLibraries.Count > 0)
             {
-                new PlexLibraryTarget
-                {
-                    SectionId = Config.LibrarySectionId,
-                    Title = Config.SelectedLibraryName,
-                    Type = Config.LibraryType.ToString(),
-                    Uuid = Config.SectionUuid,
-                    LibraryType = Config.LibraryType,
-                },
-            };
+                // map available libraries to the simpler target type
+                return DiscoveredLibraries
+                    .Select(lib => new PlexLibraryTarget
+                    {
+                        SectionId = lib.Id,
+                        Title = lib.Title,
+                        Type = lib.Type,
+                        Uuid = lib.Uuid,
+                        ServerId = lib.ServerId,
+                        ServerName = lib.ServerName,
+                        ServerUrl = lib.ServerUrl,
+                        LibraryType = (lib.Type ?? string.Empty).Trim().ToLowerInvariant() switch
+                        {
+                            "movie" => PlexLibraryType.Movie,
+                            "show" => PlexLibraryType.Show,
+                            "artist" => PlexLibraryType.Music,
+                            "photo" => PlexLibraryType.Photo,
+                            _ => PlexLibraryType.Show,
+                        },
+                    })
+                    .ToList();
+            }
+            return Array.Empty<PlexLibraryTarget>();
         }
 
         private string MapShokoPathToPlexPath(string path)

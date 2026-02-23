@@ -18,7 +18,6 @@ namespace ShokoRelay.Controllers
     [Route("/api/plugin/ShokoRelay")]
     public partial class ShokoRelayController : ControllerBase
     {
-        private readonly IVideoService _videoService;
         private readonly IMetadataService _metadataService;
         private readonly PlexMetadata _mapper;
         private readonly VfsBuilder _vfsBuilder;
@@ -43,7 +42,6 @@ namespace ShokoRelay.Controllers
         private const string PartPrefix = PlexConstants.PartPrefix;
 
         public ShokoRelayController(
-            IVideoService videoService,
             IMetadataService metadataService,
             PlexMetadata mapper,
             VfsBuilder vfsBuilder,
@@ -60,7 +58,6 @@ namespace ShokoRelay.Controllers
             Services.ShokoImportService shokoImportService
         )
         {
-            _videoService = videoService;
             _metadataService = metadataService;
             _mapper = mapper;
             _vfsBuilder = vfsBuilder;
@@ -82,8 +79,8 @@ namespace ShokoRelay.Controllers
         [HttpGet("dashboard/{*path}")]
         public IActionResult GetControllerPage([FromRoute] string? path = null)
         {
-            // Serve only from the plugin folder under PluginsPath/<PluginSubfolder>/dashboard
-            string dashboardDir = Path.Combine(_configProvider.PluginDirectory, ConfigConstants.DashboardSubfolder);
+            // Serve only from the plugin folder under PluginsPath/…/dashboard
+            string dashboardDir = Path.Combine(_configProvider.PluginDirectory, "dashboard");
 
             if (!Directory.Exists(dashboardDir))
                 return NotFound("Dashboard index not found.");
@@ -126,7 +123,12 @@ namespace ShokoRelay.Controllers
         }
 
         [HttpGet("config")]
-        public IActionResult GetConfig() => Ok(_configProvider.GetSettings());
+        public IActionResult GetConfig()
+        {
+            // provider handles serialization, augmentation and sanitization
+            var payload = _configProvider.GetDashboardConfig();
+            return Ok(payload);
+        }
 
         [HttpPost("config")]
         public IActionResult SaveConfig([FromBody] RelayConfig config)
@@ -322,7 +324,7 @@ namespace ShokoRelay.Controllers
 
                 object? tmdbEpisode = null;
 
-                if (partIndex.HasValue && ShokoRelay.Settings.TMDBEpNumbering && episode is IShokoEpisode shokoEp && shokoEp.TmdbEpisodes?.Any() == true)
+                if (partIndex.HasValue && ShokoRelay.Settings.TmdbEpNumbering && episode is IShokoEpisode shokoEp && shokoEp.TmdbEpisodes?.Any() == true)
                 {
                     string? showPrefId = (ctx.Series as IShokoSeries)?.TmdbShows?.FirstOrDefault()?.PreferredOrdering?.OrderingID;
                     var tmdbEps = SelectPreferredTmdbOrdering(shokoEp.TmdbEpisodes, showPrefId);
@@ -471,8 +473,6 @@ namespace ShokoRelay.Controllers
         [HttpGet("plex/auth")]
         public async Task<IActionResult> StartPlexAuth(CancellationToken cancellationToken = default)
         {
-            EnsurePlexAuthConfig();
-
             try
             {
                 PlexPinResponse pin = await _plexAuth.CreatePinAsync(true, cancellationToken);
@@ -481,8 +481,7 @@ namespace ShokoRelay.Controllers
                     return StatusCode(502, new { status = "error", message = "Plex pin response missing id/code." });
                 }
 
-                string statusUrl = $"{BaseUrl}/api/plugin/ShokoRelay/plex/auth/status?pinId={Uri.EscapeDataString(pin.Id)}";
-                string authUrl = _plexAuth.BuildAuthUrl(pin.Code, ShokoRelayInfo.Name, statusUrl);
+                string authUrl = _plexAuth.BuildAuthUrl(pin.Code, ShokoRelayInfo.Name);
                 return Ok(
                     new
                     {
@@ -490,7 +489,6 @@ namespace ShokoRelay.Controllers
                         pinId = pin.Id,
                         code = pin.Code,
                         authUrl,
-                        statusUrl,
                     }
                 );
             }
@@ -505,27 +503,28 @@ namespace ShokoRelay.Controllers
         {
             if (string.IsNullOrWhiteSpace(pinId))
                 return BadRequest(new { status = "error", message = "pinId is required" });
+
             try
             {
                 var pin = await _plexAuth.GetPinAsync(pinId, cancellationToken).ConfigureAwait(false);
                 if (string.IsNullOrWhiteSpace(pin.AuthToken))
                     return Ok(new { status = "pending" });
 
-                var settings = _configProvider.GetSettings();
-                settings.PlexLibrary.Token = pin.AuthToken;
+                // persist token and discovery information in the token file
+                _configProvider.UpdatePlexTokenInfo(token: pin.AuthToken);
 
                 try
                 {
-                    // Ensure we have a client identifier and then discover servers/libraries
-                    string clientIdentifier = EnsurePlexClientIdentifier(settings);
+                    // ensure client id exists (write/token file if needed)
+                    string clientIdentifier = _configProvider.GetPlexClientIdentifier();
 
                     try
                     {
-                        var discovery = await _plexAuth.DiscoverShokoLibrariesAsync(settings.PlexLibrary.Token, clientIdentifier, cancellationToken).ConfigureAwait(false);
+                        var discovery = await _plexAuth.DiscoverShokoLibrariesAsync(pin.AuthToken, clientIdentifier, cancellationToken).ConfigureAwait(false);
 
                         if (discovery.TokenValid && discovery.Servers?.Count > 0)
                         {
-                            settings.PlexLibrary.DiscoveredServers = discovery
+                            var servers = discovery
                                 .Servers.Select(s => new PlexAvailableServer
                                 {
                                     Id = s.Id,
@@ -533,10 +532,13 @@ namespace ShokoRelay.Controllers
                                     PreferredUri = s.PreferredUri ?? string.Empty,
                                 })
                                 .ToList();
+
+                            _configProvider.UpdatePlexTokenInfo(servers: servers);
                         }
 
                         // Deduplicate & map discovered libraries via helper
-                        settings.PlexLibrary.DiscoveredLibraries = CollectDiscoveredLibraries(discovery.ShokoLibraries);
+                        var libs = CollectDiscoveredLibraries(discovery.ShokoLibraries);
+                        _configProvider.UpdatePlexTokenInfo(libraries: libs);
                     }
                     catch (Exception ex)
                     {
@@ -547,8 +549,6 @@ namespace ShokoRelay.Controllers
                 {
                     Logger.Warn($"Plex discovery failed: {ex.Message}");
                 }
-
-                _configProvider.SaveSettings(settings);
 
                 return Ok(new { status = "ok", tokenSaved = true });
             }
@@ -561,22 +561,15 @@ namespace ShokoRelay.Controllers
         [HttpPost("plex/auth/unlink")]
         public async Task<IActionResult> UnlinkPlex(CancellationToken cancellationToken = default)
         {
-            var settings = _configProvider.GetSettings();
-            if (string.IsNullOrWhiteSpace(settings.PlexLibrary.Token))
+            var token = _configProvider.GetPlexToken();
+            if (string.IsNullOrWhiteSpace(token))
                 return Ok(new { status = "ok" });
 
-            string clientIdentifier = EnsurePlexClientIdentifier(settings);
-            await _plexAuth.RevokePlexTokenAsync(settings.PlexLibrary.Token, clientIdentifier, cancellationToken).ConfigureAwait(false);
+            string clientIdentifier = _configProvider.GetPlexClientIdentifier();
+            await _plexAuth.RevokePlexTokenAsync(token, clientIdentifier, cancellationToken).ConfigureAwait(false);
 
-            settings.PlexLibrary.Token = string.Empty;
-            settings.PlexLibrary.ServerUrl = string.Empty;
-            settings.PlexLibrary.ServerIdentifier = string.Empty;
-            settings.PlexLibrary.SelectedLibraries.Clear();
-            settings.PlexLibrary.LibrarySectionId = 0;
-            settings.PlexLibrary.SelectedLibraryName = string.Empty;
-            settings.PlexLibrary.SectionUuid = string.Empty;
-            _configProvider.SaveSettings(settings);
-            _configProvider.DeleteTokenFile(); // Delete the token file to remove persisted token and discovered data
+            // remove persisted data completely
+            _configProvider.DeleteTokenFile();
 
             return Ok(new { status = "ok" });
         }
@@ -584,19 +577,19 @@ namespace ShokoRelay.Controllers
         [HttpPost("plex/auth/refresh")]
         public async Task<IActionResult> RefreshPlexLibraries(CancellationToken cancellationToken = default)
         {
-            var settings = _configProvider.GetSettings();
-            if (string.IsNullOrWhiteSpace(settings.PlexLibrary.Token))
+            var token = _configProvider.GetPlexToken();
+            if (string.IsNullOrWhiteSpace(token))
                 return Unauthorized(new { status = "error", message = "Plex token is missing." });
 
-            string clientIdentifier = EnsurePlexClientIdentifier(settings);
+            string clientIdentifier = _configProvider.GetPlexClientIdentifier();
 
             try
             {
-                var discovery = await _plexAuth.DiscoverShokoLibrariesAsync(settings.PlexLibrary.Token, clientIdentifier, cancellationToken).ConfigureAwait(false);
+                var discovery = await _plexAuth.DiscoverShokoLibrariesAsync(token, clientIdentifier, cancellationToken).ConfigureAwait(false);
 
                 if (discovery.TokenValid && discovery.Servers?.Count > 0)
                 {
-                    settings.PlexLibrary.DiscoveredServers = discovery
+                    var servers = discovery
                         .Servers.Select(s => new PlexAvailableServer
                         {
                             Id = s.Id,
@@ -604,13 +597,14 @@ namespace ShokoRelay.Controllers
                             PreferredUri = s.PreferredUri ?? string.Empty,
                         })
                         .ToList();
+                    _configProvider.UpdatePlexTokenInfo(servers: servers);
                 }
 
                 // Deduplicate & map discovered libraries via helper
-                settings.PlexLibrary.DiscoveredLibraries = CollectDiscoveredLibraries(discovery.ShokoLibraries);
-                _configProvider.SaveSettings(settings);
+                var libs = CollectDiscoveredLibraries(discovery.ShokoLibraries);
+                _configProvider.UpdatePlexTokenInfo(libraries: libs);
 
-                return Ok(new { status = "ok", libraries = settings.PlexLibrary.DiscoveredLibraries });
+                return Ok(new { status = "ok", libraries = libs });
             }
             catch (Exception ex)
             {
@@ -668,11 +662,12 @@ namespace ShokoRelay.Controllers
             var allowed = new HashSet<string>(extraEntries.Select(e => e.Name), StringComparer.OrdinalIgnoreCase);
 
             // Attempt to add admin account title/username (if token present)
-            if (!string.IsNullOrWhiteSpace(cfg.PlexLibrary.Token))
+            var adminToken = _configProvider.GetPlexToken();
+            if (!string.IsNullOrWhiteSpace(adminToken))
             {
                 try
                 {
-                    var acct = await _plexAuth.GetAccountInfoAsync(cfg.PlexLibrary.Token).ConfigureAwait(false);
+                    var acct = await _plexAuth.GetAccountInfoAsync(adminToken).ConfigureAwait(false);
                     if (acct != null)
                     {
                         if (!string.IsNullOrWhiteSpace(acct.Title))

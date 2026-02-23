@@ -278,8 +278,8 @@ Due to this plugin relying on Plex's metadata provider feature (which is still u
 
 ## TODO
 
-- Fix audience ratings not applying to episodes or series (may be a Plex issue)
-- Fix networks not applying to series (may be a Shoko issue)
+- Fix audience ratings not appearing in Plex Web/Desktop for episodes or series (they work in new experience apps)
+- ~~Fix networks not applying to series (may be a Shoko issue)~~ Network metadata is missing
 - Populate the similar Array with similar series
 - Once available in Plex metadata providers
   - Switch collection support from Plex HTTP API "Generate Collections" button to the provider

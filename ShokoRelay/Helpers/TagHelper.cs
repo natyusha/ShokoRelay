@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Anidb;
+using ShokoRelay.Config;
 
 namespace ShokoRelay.Helpers
 {
@@ -107,42 +108,65 @@ namespace ShokoRelay.Helpers
 
         public static object[] GetFilteredTags(ISeries series)
         {
-            var shokoTags = (series as Shoko.Abstractions.Metadata.Shoko.IShokoSeries)?.Tags;
+            var shokoSeries = series as Shoko.Abstractions.Metadata.Shoko.IShokoSeries;
+            var shokoTags = shokoSeries?.Tags;
             if (shokoTags == null)
                 return Array.Empty<object>();
 
             var userBlacklist = ShokoRelay.Settings.TagBlacklist.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            var sourceSetting = ShokoRelay.Settings.TagSources;
 
-            // Respect RelayConfig.MinimumTagWeight for AniDB tags. Only AniDB-tagged names are weight-filtered;
-            // custom/Shoko tags without a corresponding AniDB tag are kept. Apply this filter BEFORE blacklisting.
-            int minWeight = (int)ShokoRelay.Settings.MinimumTagWeight;
-            IReadOnlyDictionary<string, int>? anidbWeights = null;
-            if (minWeight > 0 && series is Shoko.Abstractions.Metadata.Shoko.IShokoSeries shokoSeries && shokoSeries.AnidbAnime?.Tags is IReadOnlyList<IAnidbTagForAnime> anidbTags && anidbTags.Any())
+            // compute list of custom shoko tag names once for reuse
+            var shokoNames = shokoTags.Select(t => t.Name).Where(n => !string.IsNullOrWhiteSpace(n)).Cast<string>().ToList();
+
+            // if user-only, skip all external sources
+            if (sourceSetting == TagSources.UserOnly)
             {
-                anidbWeights = anidbTags.ToDictionary(t => t.Name ?? string.Empty, t => t.Weight, StringComparer.OrdinalIgnoreCase);
+                return shokoNames
+                    .Where(tagName => !TagBlacklistAniDBHelpers.Contains(tagName) && !userBlacklist.Contains(tagName, StringComparer.OrdinalIgnoreCase))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Select(tagName => new { tag = TitleCase(tagName) })
+                    .ToArray<object>();
             }
 
-            return shokoTags
-                // Weight filter (applied before blacklist)
-                .Where(t =>
+            // build AniDB names list if source permits
+            var anidbNames = new List<string>();
+            int minWeight = (int)ShokoRelay.Settings.MinimumTagWeight;
+            if (
+                (sourceSetting == TagSources.Combined || sourceSetting == TagSources.AniDB)
+                && shokoSeries != null
+                && shokoSeries.AnidbAnime?.Tags is IReadOnlyList<IAnidbTagForAnime> anidbTags
+                && anidbTags.Count > 0
+            )
+            {
+                foreach (var t in anidbTags)
                 {
                     if (string.IsNullOrWhiteSpace(t.Name))
-                        return false;
+                        continue;
+                    if (minWeight > 0 && t.Weight < minWeight)
+                        continue;
+                    anidbNames.Add(t.Name!);
+                }
+            }
 
-                    // Apply AniDB weight filtering only when weights are available.
-                    if (anidbWeights != null)
-                    {
-                        if (anidbWeights.TryGetValue(t.Name, out var w))
-                            return w >= minWeight;
+            // build TMDB names list if requested
+            var tmdbNames = new List<string>();
+            if ((sourceSetting == TagSources.Combined || sourceSetting == TagSources.TMDB) && shokoSeries != null)
+            {
+                var tmdb = shokoSeries.TmdbShows?.FirstOrDefault();
+                if (tmdb != null)
+                {
+                    if (tmdb.Keywords != null)
+                        tmdbNames.AddRange(tmdb.Keywords.Where(k => !string.IsNullOrWhiteSpace(k)));
+                    if (tmdb.Genres != null)
+                        tmdbNames.AddRange(tmdb.Genres.Where(g => !string.IsNullOrWhiteSpace(g)));
+                }
+            }
 
-                        // Tag not present in AniDB weights => treat as custom/Shoko tag and keep it.
-                        return true;
-                    }
+            // always include Shoko custom tags (already computed)
+            var combined = anidbNames.Concat(tmdbNames).Concat(shokoNames);
 
-                    // No AniDB weights configured => keep the tag.
-                    return true;
-                })
-                .Select(t => t.Name)
+            return combined
                 .Where(tagName => !string.IsNullOrWhiteSpace(tagName) && !TagBlacklistAniDBHelpers.Contains(tagName) && !userBlacklist.Contains(tagName, StringComparer.OrdinalIgnoreCase))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Select(tagName => new { tag = TitleCase(tagName) })

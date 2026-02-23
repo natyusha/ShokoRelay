@@ -238,6 +238,57 @@ namespace ShokoRelay.Sync
             return result;
         }
 
+        // Fetch a transient Plex auth token for a managed/home user (uses Plex Home switch). The token is not persisted.
+        public static async Task<string?> FetchManagedUserTokenAsync(PlexAuth plexAuth, ConfigProvider configProvider, string userName, string? pin, CancellationToken cancellationToken = default)
+        {
+            var logger = LogManager.GetCurrentClassLogger();
+            string? userToken = null;
+
+            var adminToken = configProvider.GetPlexToken();
+            if (!string.IsNullOrWhiteSpace(adminToken))
+            {
+                try
+                {
+                    var homeUsers = await plexAuth.GetHomeUsersAsync(adminToken, cancellationToken).ConfigureAwait(false);
+                    var matched = homeUsers.FirstOrDefault(u =>
+                        (!string.IsNullOrWhiteSpace(u.Title) && string.Equals(u.Title.Trim(), userName, StringComparison.OrdinalIgnoreCase))
+                        || (!string.IsNullOrWhiteSpace(u.Title) && u.Title.IndexOf(userName, StringComparison.OrdinalIgnoreCase) >= 0)
+                        || (!string.IsNullOrWhiteSpace(u.Username) && string.Equals(u.Username.Trim(), userName, StringComparison.OrdinalIgnoreCase))
+                        || (int.TryParse(userName, out var exId) && u.Id == exId)
+                        || (!string.IsNullOrWhiteSpace(u.Uuid) && string.Equals(u.Uuid, userName, StringComparison.OrdinalIgnoreCase))
+                    );
+
+                    if (matched != null)
+                    {
+                        var fetched = await plexAuth.SwitchHomeUserAsync(matched.Id, adminToken, pin, cancellationToken).ConfigureAwait(false);
+                        if (!string.IsNullOrWhiteSpace(fetched))
+                        {
+                            userToken = fetched; // transient
+                            logger.Info("WatchedSyncService: fetched transient token for managed Plex user '{User}' (id={Id}); not persisted", userName, matched.Id);
+                        }
+                        else
+                        {
+                            logger.Info("WatchedSyncService: SwitchHomeUser returned no token for managed user '{User}' (id={Id})", userName, matched.Id);
+                        }
+                    }
+                    else
+                    {
+                        logger.Debug("WatchedSyncService: no matching managed/home user found for '{User}'", userName);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logger.Warn(ex, "WatchedSyncService: failed to auto-fetch token for managed Plex user '{User}'", userName);
+                }
+            }
+            else
+            {
+                logger.Info("WatchedSyncService: admin Plex token missing; cannot auto-fetch managed-user token for '{User}'", userName);
+            }
+
+            return userToken;
+        }
+
         // Fetch episodes for a configured managed/home Plex user (returns episodes + optional error message)
         public static async Task<(List<PlexMetadataItem> Episodes, string? ErrorMessage)> FetchManagedUserSectionEpisodesAsync(
             PlexAuth plexAuth,
@@ -254,10 +305,9 @@ namespace ShokoRelay.Sync
 
             try
             {
-                var cfg = configProvider.GetSettings();
                 string? userToken = null;
 
-                var adminToken = cfg.PlexLibrary.Token;
+                var adminToken = configProvider.GetPlexToken();
                 if (!string.IsNullOrWhiteSpace(adminToken))
                 {
                     try
@@ -307,7 +357,7 @@ namespace ShokoRelay.Sync
                 string? serverAccessToken = null;
                 try
                 {
-                    var clientIdentifier = cfg.PlexLibrary.ClientIdentifier ?? cfg.PlexAuth.ClientIdentifier ?? string.Empty;
+                    var clientIdentifier = configProvider.GetPlexClientIdentifier();
                     var plexServerList = await plexAuth.GetPlexServerListAsync(userToken!, clientIdentifier, cancellationToken).ConfigureAwait(false);
                     var devices = plexServerList.Devices ?? new List<PlexDevice>();
 

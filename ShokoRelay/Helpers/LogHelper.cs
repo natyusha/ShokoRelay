@@ -2,7 +2,7 @@ namespace ShokoRelay.Helpers
 {
     public static class LogHelper
     {
-        /// Ensure the log directory exists and return its path using a pre-resolved plugin directory. All callers should pass the plugin directory obtained via <see cref="ConfigConstants.GetPluginDirectory"/>.
+        // Ensure the log directory exists and return its path using a pre-resolved plugin directory.
         public static string GetLogsDir(string pluginDir)
         {
             if (string.IsNullOrWhiteSpace(pluginDir))

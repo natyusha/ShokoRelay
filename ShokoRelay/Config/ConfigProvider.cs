@@ -13,20 +13,21 @@ namespace ShokoRelay.Config
 
         private readonly string _filePath;
         private readonly string _tokenPath;
-
-        // expose plugin directory for convenient access
-        public string PluginDirectory { get; }
         private readonly object _settingsLock = new();
         private RelayConfig? _settings;
 
         private static readonly JsonSerializerOptions Options = new() { AllowTrailingCommas = true, WriteIndented = true };
 
+        // expose plugin directory for convenient access (populated during construction)
+        public string PluginDirectory { get; }
+
         public ConfigProvider(IApplicationPaths applicationPaths)
         {
-            string pluginDir = ConfigConstants.GetPluginDirectory(applicationPaths);
-            PluginDirectory = pluginDir;
-            string configDir = Path.Combine(pluginDir, ConfigConstants.ConfigSubfolder);
-            Directory.CreateDirectory(pluginDir); // Ensure plugin directory exists
+            if (applicationPaths is null)
+                throw new ArgumentNullException(nameof(applicationPaths));
+            PluginDirectory = Path.Combine(applicationPaths.PluginsPath, ConfigConstants.PluginSubfolder);
+            string configDir = Path.Combine(PluginDirectory, ConfigConstants.ConfigSubfolder);
+            Directory.CreateDirectory(PluginDirectory); // Ensure plugin directory exists
             Directory.CreateDirectory(configDir); // Ensure config directory exists
             _filePath = Path.Combine(configDir, ConfigConstants.ConfigFileName);
             _tokenPath = Path.Combine(configDir, ConfigConstants.SecretsFileName);
@@ -58,10 +59,83 @@ namespace ShokoRelay.Config
             Logger.Info("Config file changed externally, settings invalidated.");
         }
 
-        public RelayConfig GetSettings()
+        // convert any JsonElement trees into plain CLR values so the dashboard code never has to deal with them.
+        public object SanitizeConfigObject(object obj)
         {
-            _settings ??= GetSettingsFromFile();
-            return _settings;
+            if (obj is JsonElement je)
+                return SanitizeConfigElement(je);
+            if (obj == null)
+                return obj!;
+
+            try
+            {
+                var json = JsonSerializer.Serialize(obj, Options);
+                var result = JsonSerializer.Deserialize<object>(json, Options) ?? string.Empty;
+                return result is JsonElement je2 ? SanitizeConfigElement(je2) : result;
+            }
+            catch
+            {
+                return obj;
+            }
+        }
+
+        private object SanitizeConfigElement(JsonElement je)
+        {
+            switch (je.ValueKind)
+            {
+                case JsonValueKind.String:
+                    return je.GetString() ?? string.Empty;
+                case JsonValueKind.Number:
+                    if (je.TryGetInt32(out var i))
+                        return i;
+                    if (je.TryGetInt64(out var l))
+                        return l;
+                    if (je.TryGetDouble(out var d))
+                        return d;
+                    return 0;
+                case JsonValueKind.True:
+                    return true;
+                case JsonValueKind.False:
+                    return false;
+                case JsonValueKind.Object:
+                    var dict = new Dictionary<string, object>();
+                    foreach (var prop in je.EnumerateObject())
+                        dict[prop.Name] = SanitizeConfigObject(prop.Value);
+                    return dict;
+                case JsonValueKind.Array:
+                    var list = new List<object>();
+                    foreach (var el in je.EnumerateArray())
+                        list.Add(SanitizeConfigObject(el));
+                    return list;
+                case JsonValueKind.Null:
+                case JsonValueKind.Undefined:
+                    return null!;
+                default:
+                    return je.ToString();
+            }
+        }
+
+        public RelayConfig GetSettings() => _settings ??= GetSettingsFromFile();
+
+        // Dashboard payload: settings + minimal Plex info, sanitized for JS
+        public object GetDashboardConfig()
+        {
+            var settings = GetSettings();
+            var serOpts = new JsonSerializerOptions { AllowTrailingCommas = true, WriteIndented = true };
+            var baseDict = JsonSerializer.Deserialize<Dictionary<string, object>>(JsonSerializer.Serialize(settings, serOpts)) ?? new Dictionary<string, object>();
+
+            var plexLib = new
+            {
+                HasToken = !string.IsNullOrWhiteSpace(GetPlexToken()),
+                ClientIdentifier = GetPlexClientIdentifier(),
+                DiscoveredServers = GetPlexDiscoveredServers(),
+                DiscoveredLibraries = GetPlexDiscoveredLibraries(),
+            };
+            baseDict["PlexLibrary"] = plexLib;
+            baseDict["PlexAuth"] = new PlexAuthConfig { ClientIdentifier = plexLib.ClientIdentifier };
+
+            var cleaned = SanitizeConfigObject(baseDict);
+            return cleaned is Dictionary<string, object> d ? d : cleaned;
         }
 
         public string ConfigDirectory => Path.GetDirectoryName(_filePath)!;
@@ -76,43 +150,10 @@ namespace ShokoRelay.Config
             // Normalize comma-separated fields prior to persisting
             NormalizeCommaSeparatedFields(settings);
 
-            var tokenData = ReadTokenFile();
-
-            // Prune secrets for extra users that are no longer configured.
-            // Support entries like "user;1234" where the ";1234" is an optional PIN; tokens are stored keyed by the username only.
-            var normExtra = NormalizeCsvString(settings.ExtraPlexUsers);
-            var configuredExtraUsernames = ParseExtraPlexUsers(normExtra).Select(e => e.Name).Where(n => !string.IsNullOrWhiteSpace(n)).ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            if (tokenData.ExtraPlexUserTokens != null)
-            {
-                var removed = tokenData.ExtraPlexUserTokens.Keys.Where(k => !configuredExtraUsernames.Contains(k)).ToList();
-                foreach (var k in removed)
-                    tokenData.ExtraPlexUserTokens.Remove(k);
-                // persist pruning immediately
-                WriteTokenFile(tokenData.Token, tokenData.ClientIdentifier, tokenData.Servers, tokenData.Libraries, tokenData.SelectedLibraryKeys, tokenData.ExtraPlexUserTokens);
-            }
-
-            if (string.IsNullOrWhiteSpace(settings.PlexLibrary.Token) && !string.IsNullOrWhiteSpace(tokenData.Token))
-                settings.PlexLibrary.Token = tokenData.Token;
-
-            if (string.IsNullOrWhiteSpace(settings.PlexAuth.ClientIdentifier))
-                settings.PlexAuth.ClientIdentifier = !string.IsNullOrWhiteSpace(tokenData.ClientIdentifier) ? tokenData.ClientIdentifier : GenerateClientIdentifier();
-
-            settings.PlexLibrary.ClientIdentifier = settings.PlexAuth.ClientIdentifier;
-
-            var sanitized = StripSecrets(settings);
-
-            var json = JsonSerializer.Serialize(sanitized, Options);
+            var json = JsonSerializer.Serialize(settings, Options);
             lock (_settingsLock)
             {
                 File.WriteAllText(_filePath, json);
-                var selectedKeys = settings
-                    .PlexLibrary.SelectedLibraries.Select(s =>
-                        !string.IsNullOrWhiteSpace(s.Uuid) ? s.Uuid : (!string.IsNullOrWhiteSpace(s.ServerId) ? s.ServerId + "::" + s.SectionId : s.SectionId.ToString())
-                    )
-                    .ToList();
-
-                WriteTokenFile(settings.PlexLibrary.Token, settings.PlexAuth.ClientIdentifier, settings.PlexLibrary.DiscoveredServers, settings.PlexLibrary.DiscoveredLibraries, selectedKeys);
             }
 
             _settings = settings;
@@ -136,10 +177,11 @@ namespace ShokoRelay.Config
         {
             RelayConfig settings;
             var needsSave = false;
+            string contents = string.Empty;
 
             try
             {
-                var contents = File.ReadAllText(_filePath);
+                contents = File.ReadAllText(_filePath);
                 settings = JsonSerializer.Deserialize<RelayConfig>(contents, Options)!;
 
                 if (settings is null)
@@ -165,10 +207,6 @@ namespace ShokoRelay.Config
                 needsSave = true;
                 Logger.Warn($"Invalid config file, using defaults: {ex.Message}");
             }
-
-            ApplySecrets(settings);
-            if (EnsureLibraryTargets(settings))
-                needsSave = true;
 
             // Normalize any path mappings so users can enter natural paths (e.g., "M:\\Anime" or "/mnt/plex/anime/")
             if (NormalizePathMappings(settings))
@@ -224,141 +262,12 @@ namespace ShokoRelay.Config
             return GetExtraPlexUserEntries().Select(e => e.Name).ToList();
         }
 
-        // --- secrets/token-file helpers for extra Plex user tokens ---
-        public string? GetExtraPlexUserToken(string username)
-        {
-            if (string.IsNullOrWhiteSpace(username))
-                return null;
-            var tf = ReadTokenFile();
-            if (tf.ExtraPlexUserTokens == null)
-                return null;
-            return tf.ExtraPlexUserTokens.TryGetValue(username, out var t) ? t : null;
-        }
-
-        public void SetExtraPlexUserToken(string username, string token)
-        {
-            if (string.IsNullOrWhiteSpace(username))
-                return;
-            var tf = ReadTokenFile();
-            tf.ExtraPlexUserTokens ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            tf.ExtraPlexUserTokens[username] = token ?? string.Empty;
-            WriteTokenFile(tf.Token, tf.ClientIdentifier, tf.Servers, tf.Libraries, tf.SelectedLibraryKeys, tf.ExtraPlexUserTokens);
-        }
-
-        public void RemoveExtraPlexUserToken(string username)
-        {
-            if (string.IsNullOrWhiteSpace(username))
-                return;
-            var tf = ReadTokenFile();
-            if (tf.ExtraPlexUserTokens == null || !tf.ExtraPlexUserTokens.ContainsKey(username))
-                return;
-            tf.ExtraPlexUserTokens.Remove(username);
-            WriteTokenFile(tf.Token, tf.ClientIdentifier, tf.Servers, tf.Libraries, tf.SelectedLibraryKeys, tf.ExtraPlexUserTokens);
-        }
-
-        private void ApplySecrets(RelayConfig settings)
-        {
-            var tokenData = ReadTokenFile();
-
-            if (!string.IsNullOrWhiteSpace(tokenData.Token))
-                settings.PlexLibrary.Token = tokenData.Token;
-
-            string clientId = tokenData.ClientIdentifier ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(clientId))
-                clientId = !string.IsNullOrWhiteSpace(settings.PlexAuth.ClientIdentifier) ? settings.PlexAuth.ClientIdentifier : GenerateClientIdentifier();
-
-            settings.PlexAuth.ClientIdentifier = clientId;
-            settings.PlexLibrary.ClientIdentifier = clientId;
-
-            // Apply discovered servers and libraries from token file if present
-            if (tokenData.Servers != null && tokenData.Servers.Count > 0)
-            {
-                settings.PlexLibrary.DiscoveredServers = tokenData.Servers;
-            }
-
-            if (tokenData.Libraries != null && tokenData.Libraries.Count > 0)
-            {
-                settings.PlexLibrary.DiscoveredLibraries = tokenData.Libraries;
-            }
-
-            // Apply selected library keys from token file (uuid or serverId::sectionId)
-            if (tokenData.SelectedLibraryKeys != null && tokenData.SelectedLibraryKeys.Count > 0)
-            {
-                var selected = new List<PlexLibraryTarget>();
-                foreach (var key in tokenData.SelectedLibraryKeys)
-                {
-                    if (string.IsNullOrWhiteSpace(key))
-                        continue;
-
-                    PlexAvailableLibrary? found = null;
-
-                    // Try match by UUID
-                    found = settings.PlexLibrary.DiscoveredLibraries.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l.Uuid) && string.Equals(l.Uuid, key, StringComparison.OrdinalIgnoreCase));
-
-                    // Try serverId::id
-                    if (found == null && key.Contains("::"))
-                    {
-                        var parts = key.Split(new[] { "::" }, StringSplitOptions.None);
-                        if (parts.Length >= 2)
-                        {
-                            var serverId = parts[0];
-                            if (int.TryParse(parts[1], out int sid))
-                                found = settings.PlexLibrary.DiscoveredLibraries.FirstOrDefault(l => l.Id == sid && string.Equals(l.ServerId, serverId, StringComparison.OrdinalIgnoreCase));
-                        }
-                    }
-
-                    // Try plain numeric id fallback
-                    if (found == null && int.TryParse(key, out int nid))
-                    {
-                        found = settings.PlexLibrary.DiscoveredLibraries.FirstOrDefault(l => l.Id == nid);
-                    }
-
-                    if (found != null)
-                    {
-                        selected.Add(
-                            new PlexLibraryTarget
-                            {
-                                SectionId = found.Id,
-                                Title = found.Title,
-                                Type = found.Type,
-                                Uuid = found.Uuid,
-                                ServerId = found.ServerId,
-                                ServerName = found.ServerName,
-                                ServerUrl = found.ServerUrl,
-                                LibraryType = (found.Type ?? string.Empty).Trim().ToLowerInvariant() switch
-                                {
-                                    "movie" => PlexLibraryType.Movie,
-                                    "show" => PlexLibraryType.Show,
-                                    "artist" => PlexLibraryType.Music,
-                                    "photo" => PlexLibraryType.Photo,
-                                    _ => PlexLibraryType.Show,
-                                },
-                            }
-                        );
-                    }
-                }
-
-                if (selected.Count > 0)
-                    settings.PlexLibrary.SelectedLibraries = selected;
-            }
-
-            // Ensure we write back a normalized token file
-            var selectedKeys = settings
-                .PlexLibrary.SelectedLibraries.Select(s =>
-                    !string.IsNullOrWhiteSpace(s.Uuid) ? s.Uuid : (!string.IsNullOrWhiteSpace(s.ServerId) ? s.ServerId + "::" + s.SectionId : s.SectionId.ToString())
-                )
-                .ToList();
-            WriteTokenFile(settings.PlexLibrary.Token, clientId, settings.PlexLibrary.DiscoveredServers, settings.PlexLibrary.DiscoveredLibraries, selectedKeys);
-        }
-
         private sealed class TokenFile
         {
             public string? Token { get; set; }
             public string? ClientIdentifier { get; set; }
             public List<PlexAvailableServer>? Servers { get; set; }
             public List<PlexAvailableLibrary>? Libraries { get; set; }
-            public List<string>? SelectedLibraryKeys { get; set; }
-            public Dictionary<string, string>? ExtraPlexUserTokens { get; set; }
         }
 
         private TokenFile ReadTokenFile()
@@ -366,23 +275,11 @@ namespace ShokoRelay.Config
             try
             {
                 if (!File.Exists(_tokenPath))
-                    return new TokenFile
-                    {
-                        Servers = new List<PlexAvailableServer>(),
-                        Libraries = new List<PlexAvailableLibrary>(),
-                        SelectedLibraryKeys = new List<string>(),
-                        ExtraPlexUserTokens = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
-                    };
+                    return new TokenFile { Servers = new List<PlexAvailableServer>(), Libraries = new List<PlexAvailableLibrary>() };
 
                 var content = File.ReadAllText(_tokenPath);
                 if (string.IsNullOrWhiteSpace(content))
-                    return new TokenFile
-                    {
-                        Servers = new List<PlexAvailableServer>(),
-                        Libraries = new List<PlexAvailableLibrary>(),
-                        SelectedLibraryKeys = new List<string>(),
-                        ExtraPlexUserTokens = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
-                    };
+                    return new TokenFile { Servers = new List<PlexAvailableServer>(), Libraries = new List<PlexAvailableLibrary>() };
 
                 try
                 {
@@ -392,14 +289,12 @@ namespace ShokoRelay.Config
                     {
                         parsed.Servers ??= new List<PlexAvailableServer>();
                         parsed.Libraries ??= new List<PlexAvailableLibrary>();
-                        parsed.SelectedLibraryKeys ??= new List<string>();
-                        parsed.ExtraPlexUserTokens ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                         return parsed;
                     }
                 }
                 catch (JsonException ex)
                 {
-                    // Token file is invalid JSON — refuse to parse legacy two-line format and return an empty token object.
+                    // Token file is invalid JSON; return empty token object.
                     Logger.Warn($"Invalid token file format at {_tokenPath}: {ex.Message}");
                     return new TokenFile
                     {
@@ -407,8 +302,6 @@ namespace ShokoRelay.Config
                         ClientIdentifier = null,
                         Servers = new List<PlexAvailableServer>(),
                         Libraries = new List<PlexAvailableLibrary>(),
-                        SelectedLibraryKeys = new List<string>(),
-                        ExtraPlexUserTokens = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
                     };
                 }
 
@@ -419,31 +312,16 @@ namespace ShokoRelay.Config
                     ClientIdentifier = null,
                     Servers = new List<PlexAvailableServer>(),
                     Libraries = new List<PlexAvailableLibrary>(),
-                    SelectedLibraryKeys = new List<string>(),
-                    ExtraPlexUserTokens = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
                 };
             }
             catch (Exception ex)
             {
                 Logger.Warn($"Failed to read token file {_tokenPath}: {ex.Message}");
-                return new TokenFile
-                {
-                    Servers = new List<PlexAvailableServer>(),
-                    Libraries = new List<PlexAvailableLibrary>(),
-                    SelectedLibraryKeys = new List<string>(),
-                    ExtraPlexUserTokens = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
-                };
+                return new TokenFile { Servers = new List<PlexAvailableServer>(), Libraries = new List<PlexAvailableLibrary>() };
             }
         }
 
-        private void WriteTokenFile(
-            string? token,
-            string? clientIdentifier,
-            List<PlexAvailableServer>? servers = null,
-            List<PlexAvailableLibrary>? libraries = null,
-            List<string>? selectedLibraryKeys = null,
-            Dictionary<string, string>? extraUserTokens = null
-        )
+        private void WriteTokenFile(string? token, string? clientIdentifier, List<PlexAvailableServer>? servers = null, List<PlexAvailableLibrary>? libraries = null)
         {
             var tokenObj = new TokenFile
             {
@@ -451,8 +329,6 @@ namespace ShokoRelay.Config
                 ClientIdentifier = clientIdentifier ?? string.Empty,
                 Servers = servers ?? new List<PlexAvailableServer>(),
                 Libraries = libraries ?? new List<PlexAvailableLibrary>(),
-                SelectedLibraryKeys = selectedLibraryKeys ?? new List<string>(),
-                ExtraPlexUserTokens = extraUserTokens ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
             };
 
             try
@@ -464,6 +340,43 @@ namespace ShokoRelay.Config
             {
                 Logger.Warn($"Failed to write token file {_tokenPath}: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// Retrieve the stored Plex token (from plex.token file).
+        /// </summary>
+        public string GetPlexToken() => ReadTokenFile().Token ?? string.Empty;
+
+        /// <summary>
+        /// Retrieve the Plex client identifier, generating one if missing.
+        /// </summary>
+        public string GetPlexClientIdentifier()
+        {
+            var tf = ReadTokenFile();
+            if (string.IsNullOrWhiteSpace(tf.ClientIdentifier))
+            {
+                tf.ClientIdentifier = GenerateClientIdentifier();
+                WriteTokenFile(tf.Token, tf.ClientIdentifier, tf.Servers, tf.Libraries);
+            }
+            return tf.ClientIdentifier ?? string.Empty;
+        }
+
+        public List<PlexAvailableServer> GetPlexDiscoveredServers() => ReadTokenFile().Servers ?? new List<PlexAvailableServer>();
+
+        public List<PlexAvailableLibrary> GetPlexDiscoveredLibraries() => ReadTokenFile().Libraries ?? new List<PlexAvailableLibrary>();
+
+        /// <summary>
+        /// Update the token file with the provided values. Any null parameter will leave the
+        /// existing value in place (except token/clientIdentifier which may be overwritten by empty string).
+        /// </summary>
+        public void UpdatePlexTokenInfo(string? token = null, string? clientIdentifier = null, List<PlexAvailableServer>? servers = null, List<PlexAvailableLibrary>? libraries = null)
+        {
+            var existing = ReadTokenFile();
+            string newToken = token ?? existing.Token ?? string.Empty;
+            string newCid = clientIdentifier ?? existing.ClientIdentifier ?? string.Empty;
+            var newServers = servers ?? existing.Servers;
+            var newLibs = libraries ?? existing.Libraries;
+            WriteTokenFile(newToken, newCid, newServers, newLibs);
         }
 
         private bool NormalizePathMappings(RelayConfig settings)
@@ -595,37 +508,6 @@ namespace ShokoRelay.Config
         }
 
         private static string GenerateClientIdentifier() => Guid.NewGuid().ToString("N");
-
-        private static RelayConfig StripSecrets(RelayConfig settings)
-        {
-            var cloned = JsonSerializer.Deserialize<RelayConfig>(JsonSerializer.Serialize(settings, Options), Options) ?? new RelayConfig();
-            cloned.PlexAuth.ClientIdentifier = "";
-            cloned.PlexLibrary.Token = "";
-            cloned.PlexLibrary.ClientIdentifier = "";
-            return cloned;
-        }
-
-        private static bool EnsureLibraryTargets(RelayConfig settings)
-        {
-            if (settings.PlexLibrary.SelectedLibraries.Count > 0)
-                return false;
-
-            if (settings.PlexLibrary.LibrarySectionId <= 0)
-                return false;
-
-            settings.PlexLibrary.SelectedLibraries.Add(
-                new PlexLibraryTarget
-                {
-                    SectionId = settings.PlexLibrary.LibrarySectionId,
-                    Title = settings.PlexLibrary.SelectedLibraryName,
-                    Type = settings.PlexLibrary.LibraryType.ToString(),
-                    Uuid = settings.PlexLibrary.SectionUuid,
-                    LibraryType = settings.PlexLibrary.LibraryType,
-                }
-            );
-
-            return true;
-        }
 
         private static void ValidateSettings(RelayConfig settings)
         {

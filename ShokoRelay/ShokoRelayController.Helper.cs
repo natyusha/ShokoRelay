@@ -154,7 +154,20 @@ namespace ShokoRelay.Controllers
 
                 if (propType.IsEnum)
                 {
-                    var values = Enum.GetValues(propType).Cast<object>().Select(v => new { name = Enum.GetName(propType, v) ?? v.ToString(), value = Convert.ToInt32(v) }).ToArray();
+                    var values = Enum.GetValues(propType)
+                        .Cast<object>()
+                        .Select(v =>
+                        {
+                            int iv = Convert.ToInt32(v);
+                            string memberName = Enum.GetName(propType, v) ?? iv.ToString();
+                            // attempt to read a custom DisplayAttribute from the enum field
+                            var field = propType.GetField(memberName);
+                            string? custom = field?.GetCustomAttribute<DisplayAttribute>()?.Name;
+                            string nm = custom ?? memberName;
+
+                            return new { name = nm, value = iv };
+                        })
+                        .ToArray();
 
                     props.Add(new ConfigPropertySchema(path, "enum", display?.Name, display?.Description, defaultValue, values));
                     continue;
@@ -217,41 +230,6 @@ namespace ShokoRelay.Controllers
                 return null;
 
             return System.IO.File.ReadAllText(candidate);
-        }
-
-        private RelayConfig EnsurePlexAuthConfig()
-        {
-            var settings = _configProvider.GetSettings();
-            var plexAuth = settings.PlexAuth;
-            bool changed = false;
-
-            if (string.IsNullOrWhiteSpace(plexAuth.ClientIdentifier))
-            {
-                plexAuth.ClientIdentifier = Guid.NewGuid().ToString("N");
-                changed = true;
-            }
-
-            if (changed)
-                _configProvider.SaveSettings(settings);
-
-            return settings;
-        }
-
-        private string EnsurePlexClientIdentifier(RelayConfig settings)
-        {
-            string clientIdentifier = settings.PlexLibrary.ClientIdentifier;
-            if (string.IsNullOrWhiteSpace(clientIdentifier))
-                clientIdentifier = settings.PlexAuth.ClientIdentifier;
-
-            if (string.IsNullOrWhiteSpace(clientIdentifier))
-            {
-                clientIdentifier = Guid.NewGuid().ToString("N");
-                settings.PlexAuth.ClientIdentifier = clientIdentifier;
-                settings.PlexLibrary.ClientIdentifier = clientIdentifier;
-                _configProvider.SaveSettings(settings);
-            }
-
-            return clientIdentifier;
         }
 
         private List<object> BuildEpisodeList(SeriesContext ctx, int seasonNum)

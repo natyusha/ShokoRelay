@@ -20,16 +20,22 @@ All of the endpoints used by the Shoko Relay plugin are available under the plug
 
 ```
 GET  /dashboard/{*path}                                        -> GetControllerPage (serve dashboard index & assets)
+
 GET  /config                                                   -> GetConfig
 POST /config                                                   -> SaveConfig
 GET  /config/schema                                            -> GetConfigSchema
+
 GET  /logs/{fileName}                                          -> GetLog (download any report from logs folder)
 ```
 
-- Serves the dashboard UI and static assets (fonts, images, JS/CSS) from the plugin `dashboard` folder.
-- `{*path}` is an optional catch-all for dashboard assets.
-- `SaveConfig` persists provider settings (path mappings, tokens handled separately).
-- Many manual actions also produce plain-text reports saved under a `logs` subfolder
+- `GetControllerPage` Serves the dashboard UI and static assets (fonts, images, JS/CSS) from the plugin `dashboard` folder.
+  - `{*path}` is an optional catch-all for dashboard assets.
+
+- `SaveConfig` persists automation/provider settings (tokens handled separately).
+  - `/config` does not expose the Plex token. Instead the response includes `PlexLibrary.HasToken` which indicates whether a valid token is present.
+  - The actual secret lives only in `plex.token`.
+
+- `GetLog` many manual actions also produce plain-text reports saved under a `logs` subfolder
   - download them via the `logUrl` property or the generic `/logs/{fileName}` endpoint.
 
 ---
@@ -43,28 +49,30 @@ POST /matches                                                  -> Match (body ma
 
 GET  /collections/{groupId}                                    -> GetCollection
 GET  /collections/user/{groupId}                               -> GetCollectionPoster (image)
+
 GET  /metadata/{ratingKey}?includeChildren=0|1                 -> GetMetadata
 GET  /metadata/{ratingKey}/children                            -> GetChildren
 GET  /metadata/{ratingKey}/grandchildren                       -> GetGrandchildren
 GET  /metadata/{ratingKey}/images                              -> GetImages (all image assets for the item)
 ```
 
-- Purpose: agent discovery, match flows and metadata serving for Plex-compatible GUIDs.
-- TMDB episode-numbering: when enabled, the controller/mapper prefers per-episode TMDB links (`IShokoEpisode.TmdbEpisodes`) for coordinate assignment.
-- Hidden episodes (`IShokoEpisode.IsHidden`) are excluded from VFS and metadata lists.
-- 'Other' type episodes without a TMDB match will attempt to place themselves into 'Season 1' or 'Season 0' (Specials) if either is empty; otherwise they land in Featurettes as extras.
 - `Match` accepts either the `name` query (file path) or a JSON body. For manual searches Plex sends `title` (either in query or body) and `manual=1`;
   - when `title` is numeric it is treated as a Shoko series ID. The filename fallback uses the same path-based series extraction as the VFS builder.
-- The optional `/metadata/{ratingKey}/images` endpoint returns a `MediaContainer` with an `Image` array of all available assets for the given item.
-- `GetCollection` / `GetCollectionPoster` return collection metadata and poster image for a Shoko group.
-- `GetMetadata` supports `episode`, `season` and `series` ratingKey formats (see notes below).
+
+- `GetCollection` / `GetCollectionPoster` return collection metadata and the poster image for a Shoko group.
+
+- The `/metadata/{ratingKey}/images` endpoint returns a `MediaContainer` with an `Image` array of all available assets for the given item.
+  - TMDB episode-numbering: when enabled, the controller/mapper prefers per-episode TMDB links (`IShokoEpisode.TmdbEpisodes`) for coordinate assignment.
+  - Hidden episodes (`IShokoEpisode.IsHidden`) are excluded from VFS and metadata lists.
+  - 'Other' type episodes without a TMDB match will attempt to place themselves into 'Season 1' or 'Season 0' (Specials) if either is empty; otherwise they land in Featurettes as extras.
+  - `GetMetadata` supports `series`, `season`, and `episode` ratingKey formats ({ShokoSeriesID} / {ShokoSeriesID}s{SeasonNumber} / e{ShokoEpisodeID}).
 
 ---
 
 ## Plex: Authentication
 
 ```
-GET  /plex/auth                                                -> StartPlexAuth (returns pin + authUrl + statusUrl)
+GET  /plex/auth                                                -> StartPlexAuth (returns pin + authUrl)
 GET  /plex/auth/status?pinId={id}                              -> GetPlexAuthStatus (poll for pin completion)
 POST /plex/auth/unlink                                         -> UnlinkPlex (revoke & clear saved token)
 POST /plex/auth/refresh                                        -> RefreshPlexLibraries (re-discover Shoko libraries)

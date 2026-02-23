@@ -134,7 +134,7 @@ namespace ShokoRelay.Vfs
             }
 
             // Bounded parallel processing of series to improve throughput while avoiding excessive IO contention.
-            int maxDop = Math.Max(1, ShokoRelay.Settings.VfsParallelism);
+            int maxDop = Math.Max(1, ShokoRelay.Settings.Parallelism);
             var po = new ParallelOptions { MaxDegreeOfParallelism = maxDop };
 
             Parallel.ForEach(

@@ -359,8 +359,8 @@
         return false;
       }
       const plex = cfgRes.data.PlexLibrary || {};
-      if (!plex.ServerUrl || !plex.Token) {
-        setColStatus("Plex server or token missing. Link Plex in Plex Auth.", "error");
+      if (!plex.Token) {
+        setColStatus("Plex token missing. Link Plex in Plex Auth.", "error");
         return false;
       }
       // library selection is automatic; just ensure at least one detected
@@ -383,28 +383,32 @@
       setPlexStartAction();
       return;
     }
-    const cfgAll = res.data || {};
-    const plex = cfgAll.PlexLibrary || {};
+    const settings = res.data || {};
+    // normalize ExtraPlexUsers to a string (avoid malicious objects)
+    if (settings.ExtraPlexUsers && typeof settings.ExtraPlexUsers !== "string") {
+      settings.ExtraPlexUsers = "";
+    }
+    const plex = settings.PlexLibrary || {};
 
     const extraEl = el("extra-plex-users");
     if (extraEl) {
-      extraEl.value = cfgAll.ExtraPlexUsers || "";
+      extraEl.value = settings.ExtraPlexUsers || "";
       extraEl.onchange = savePlexSettings;
     }
     const scanEl = el("plex-scan-vfs");
     if (scanEl) {
-      scanEl.checked = !!plex.ScanOnVfsRefresh;
+      scanEl.checked = !!settings.ScanOnVfsRefresh;
       scanEl.onchange = savePlexSettings;
     }
 
     const plexWatchedEl = el("plex-watched");
     if (plexWatchedEl) {
       // 'Auto Scrobble' is separate from periodic SyncWatched
-      plexWatchedEl.checked = !!cfgAll.AutoScrobble;
+      plexWatchedEl.checked = !!settings.AutoScrobble;
       plexWatchedEl.onchange = savePlexSettings;
     }
 
-    if (!plex.Token) {
+    if (!plex.HasToken) {
       setPlexStartAction();
       return;
     }
@@ -429,11 +433,15 @@
         return false;
       }
       const cfg = cfgRes.data;
-      cfg.PlexLibrary = cfg.PlexLibrary || {};
-      cfg.PlexLibrary.ScanOnVfsRefresh = !!el("plex-scan-vfs")?.checked;
+      // enforce string type for extra users in case the server returned something else
+      if (cfg.ExtraPlexUsers && typeof cfg.ExtraPlexUsers !== "string") cfg.ExtraPlexUsers = "";
+      cfg.ScanOnVfsRefresh = !!el("plex-scan-vfs")?.checked;
       cfg.ExtraPlexUsers = el("extra-plex-users")?.value || "";
       // 'Auto Scrobble' is handled independently via webhook
       cfg.AutoScrobble = !!el("plex-watched")?.checked;
+      // remove any plex-related keys inherited from GET response
+      delete cfg.PlexLibrary;
+      delete cfg.PlexAuth;
       const saveRes = await fetchJson(base + "/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cfg) });
       if (!saveRes.ok) {
         setColStatus("Error saving Plex settings", "error");
@@ -527,11 +535,10 @@
       const ratingsEl = el("sync-ratings");
       const excludeAdminEl = el("sync-exclude-admin");
       if (!modal || !startBtn) {
-        // modal unavailable — abort and do nothing
         return;
       }
 
-      let directionImport = false; // false = Plex → Shoko (default), true = Shoko → Plex
+      let directionImport = false; // false = Plex -> Shoko (default), true = Plex <- Shoko
       function updateDirectionUI() {
         const iconRight = dirArrow.querySelector(".dir-icon-right");
         const iconLeft = dirArrow.querySelector(".dir-icon-left");
@@ -701,7 +708,9 @@
           // missing entry or similar non-fatal skip
           toastType = "warning";
         }
-        const toastTimeout = toastType === "error" ? 0 : 5000;
+        // if batch mode requested, keep toast until dismissed so user can click the log link
+        const isBatch = params.get("batch") === "true";
+        const toastTimeout = toastType === "error" || isBatch ? 0 : 5000;
         // include message text for skips (e.g. slug not found)
         const msgPart = (res.data?.Status === "skipped" || res.data?.status === "skipped") && res.data?.message ? ` (${res.data.message})` : "";
         showToast(`AnimeThemes mp3: ${summary}${msgPart} ${logLink}`, toastType, toastTimeout);
@@ -821,7 +830,7 @@
       }
 
       let input;
-      const value = getValueByPath(config, p.Path);
+      let value = getValueByPath(config, p.Path);
 
       if (p.Type === "bool") {
         input = document.createElement("input");

@@ -159,7 +159,7 @@ namespace ShokoRelay.Helpers
             }
 
             // If TMDB episode group names are enabled and a group is present override the title
-            if (ShokoRelay.Settings.TMDBEpGroupNames && hasMultipleTmdbLinks && !string.IsNullOrEmpty(tmdbEpTitle))
+            if (ShokoRelay.Settings.TmdbEpGroupNames && hasMultipleTmdbLinks && !string.IsNullOrEmpty(tmdbEpTitle))
                 rawEpTitle = tmdbEpTitle;
 
             // TMDB episode title override if the episode title is ambiguous and enumerated on AniDB (excluding number 0) and there is a TMDB match

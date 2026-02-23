@@ -11,6 +11,7 @@ namespace ShokoRelay.Sync
     /// <summary>
     /// Synchronize watched-state (and optional votes) from Shoko -> Plex.
     /// Matches are performed only by GUID (Shoko episode/series IDs).
+    /// Extra Plex user tokens are acquired transiently via Plex Home and not persisted.
     /// </summary>
     public class SyncToPlex
     {
@@ -22,14 +23,16 @@ namespace ShokoRelay.Sync
         private readonly IUserDataService _userDataService;
         private readonly IUserService _userService;
         private readonly ConfigProvider _configProvider;
+        private readonly PlexAuth _plexAuth;
 
-        public SyncToPlex(PlexClient plexClient, IMetadataService metadataService, IUserDataService userDataService, IUserService userService, ConfigProvider configProvider)
+        public SyncToPlex(PlexClient plexClient, IMetadataService metadataService, IUserDataService userDataService, IUserService userService, ConfigProvider configProvider, PlexAuth plexAuth)
         {
             _plexClient = plexClient;
             _metadataService = metadataService;
             _userDataService = userDataService;
             _userService = userService;
             _configProvider = configProvider;
+            _plexAuth = plexAuth;
         }
 
         /// <summary>
@@ -94,7 +97,13 @@ namespace ShokoRelay.Sync
                 plexUserTargets.Add(("admin", null));
             foreach (var ex in extraEntries)
             {
-                var token = _configProvider.GetExtraPlexUserToken(ex.Name);
+                // fetch a transient token via Plex Home switch; do not persist
+                var token = await SyncHelper.FetchManagedUserTokenAsync(_plexAuth, _configProvider, ex.Name, ex.Pin, cancellationToken).ConfigureAwait(false);
+                if (string.IsNullOrWhiteSpace(token))
+                {
+                    Logger.Info("SyncToPlex: no transient token available for extra Plex user '{User}', skipping", ex.Name);
+                    continue;
+                }
                 plexUserTargets.Add((ex.Name, token));
             }
 

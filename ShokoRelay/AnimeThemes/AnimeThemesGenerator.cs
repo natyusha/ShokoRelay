@@ -66,49 +66,90 @@ public class AnimeThemesGenerator
         int skipped = 0;
         int errors = 0;
 
-        foreach (var folder in Directory.EnumerateDirectories(root))
+        // build initial folder list and optionally filter out those that already
+        // contain Theme.mp3 when we're not forcing regeneration.  This avoids
+        // touching the Shoko database at all for the vast majority of folders on
+        // a library that has already been processed.
+        var folders = Directory.EnumerateDirectories(root);
+        if (!query.Force)
         {
-            ct.ThrowIfCancellationRequested();
-            string folderName = Path.GetFileName(folder);
-            string vfsRoot = ShokoRelay.Settings.VfsRootPath ?? "!ShokoRelayVFS";
-            string collectionRoot = ShokoRelay.Settings.CollectionPostersRootPath ?? "!CollectionPosters";
-            string animeThemesRoot = ShokoRelay.Settings.AnimeThemesRootPath ?? "!AnimeThemes";
-
-            // log start of work on this folder
-            Logger.Info("AnimeThemes MP3 batch: processing folder {Folder}", folder);
-
-            if (
-                string.Equals(folderName, vfsRoot, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(folderName, collectionRoot, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(folderName, animeThemesRoot, StringComparison.OrdinalIgnoreCase)
-            )
-            {
-                skipped++;
-                results.Add(new ThemeMp3OperationResult(folder, "skipped", "Excluded system folder."));
-                Logger.Info("AnimeThemes MP3 batch: skipped system folder {Folder}", folder);
-                continue;
-            }
-
-            var singleQuery = query with { Path = folder, Batch = false };
-            var result = await ProcessSingleAsync(singleQuery, ct);
-            results.Add(result);
-
-            // log outcome
-            Logger.Info("AnimeThemes MP3 batch: folder {Folder} => {Status}{Message}", folder, result.Status, string.IsNullOrWhiteSpace(result.Message) ? "" : ": " + result.Message);
-
-            switch (result.Status)
-            {
-                case "ok":
-                    processed++;
-                    break;
-                case "skipped":
-                    skipped++;
-                    break;
-                default:
-                    errors++;
-                    break;
-            }
+            folders = folders.Where(f => !File.Exists(Path.Combine(f, "Theme.mp3")));
         }
+
+        // process in parallel using the configured parallelism setting. the heavy work
+        // (HTTP download + ffmpeg) is async anyway so limiting concurrency helps when
+        // there are hundreds or thousands of folders.
+        int maxDop = Math.Max(1, ShokoRelay.Settings.Parallelism);
+        var semaphore = new SemaphoreSlim(maxDop);
+        var tasks = new List<Task>();
+
+        foreach (var folder in folders)
+        {
+            await semaphore.WaitAsync(ct).ConfigureAwait(false);
+            tasks.Add(
+                Task.Run(
+                    async () =>
+                    {
+                        try
+                        {
+                            ct.ThrowIfCancellationRequested();
+                            string folderName = Path.GetFileName(folder);
+                            string vfsRoot = ShokoRelay.Settings.VfsRootPath ?? "!ShokoRelayVFS";
+                            string collectionRoot = ShokoRelay.Settings.CollectionPostersRootPath ?? "!CollectionPosters";
+                            string animeThemesRoot = ShokoRelay.Settings.AnimeThemesRootPath ?? "!AnimeThemes";
+
+                            // log start of work on this folder
+                            Logger.Info("AnimeThemes MP3 batch: processing folder {Folder}", folder);
+
+                            if (
+                                string.Equals(folderName, vfsRoot, StringComparison.OrdinalIgnoreCase)
+                                || string.Equals(folderName, collectionRoot, StringComparison.OrdinalIgnoreCase)
+                                || string.Equals(folderName, animeThemesRoot, StringComparison.OrdinalIgnoreCase)
+                            )
+                            {
+                                lock (results)
+                                {
+                                    skipped++;
+                                    results.Add(new ThemeMp3OperationResult(folder, "skipped", "Excluded system folder."));
+                                }
+                                Logger.Info("AnimeThemes MP3 batch: skipped system folder {Folder}", folder);
+                                return;
+                            }
+
+                            var singleQuery = query with { Path = folder, Batch = false };
+                            var result = await ProcessSingleAsync(singleQuery, ct).ConfigureAwait(false);
+                            lock (results)
+                            {
+                                results.Add(result);
+                            }
+
+                            // log outcome
+                            Logger.Info("AnimeThemes MP3 batch: folder {Folder} => {Status}{Message}", folder, result.Status, string.IsNullOrWhiteSpace(result.Message) ? "" : ": " + result.Message);
+
+                            switch (result.Status)
+                            {
+                                case "ok":
+                                    Interlocked.Increment(ref processed);
+                                    break;
+                                case "skipped":
+                                    Interlocked.Increment(ref skipped);
+                                    break;
+                                default:
+                                    Interlocked.Increment(ref errors);
+                                    break;
+                            }
+                        }
+                        finally
+                        {
+                            semaphore.Release();
+                        }
+                    },
+                    ct
+                )
+            );
+        }
+
+        await Task.WhenAll(tasks).ConfigureAwait(false);
 
         return new ThemeMp3BatchResult(root, results, processed, skipped, errors);
     }
@@ -220,7 +261,7 @@ public class AnimeThemesGenerator
 
         string themePath = Path.Combine(folder, "Theme.mp3");
         if (!allowPreview && !query.Force && File.Exists(themePath))
-            return Task.FromResult<(ThemeMp3OperationResult?, (string, string, IVideoFile, IShokoSeries)?)>((Error(folder, "Theme.mp3 already exists; set force=true to overwrite.", "skipped"), null));
+            return Task.FromResult<(ThemeMp3OperationResult?, (string, string, IVideoFile, IShokoSeries)?)>((Error(folder, "Theme.mp3 already exists.", "skipped"), null));
 
         string? videoPath = Directory.EnumerateFiles(folder).FirstOrDefault(f => AnimeThemesConstants.VideoFileExtensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase));
 
