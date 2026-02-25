@@ -10,6 +10,8 @@
 <body>
   <div id=container>
     <div class="brand-header" role="img" aria-label="Shoko Relay Dashboard"></div>
+    <!-- #region MARK: Plex
+    -->
     <div class="full">
       <section>
         <h3 class="plex">Plex: Authentication</h3>
@@ -70,6 +72,10 @@
         </div>
       </section>
     </div>
+    <!-- #endregion -->
+
+    <!-- #region MARK: Shoko
+    -->
     <div class="full">
       <section>
         <h3>
@@ -125,6 +131,10 @@
         </div>
       </section>
     </div>
+    <!-- #endregion -->
+
+    <!-- #region MARK: AnimeThemes
+    -->
     <div class="full">
       <section>
         <h3>
@@ -181,6 +191,10 @@
         </div>
       </section>
     </div>
+    <!-- #endregion -->
+
+    <!-- #region MARK: Provider Settings
+    -->
     <section>
       <h3>
         <svg class="icon-svg" viewBox="0 0 24 24">
@@ -191,10 +205,12 @@
       <div id="config-form"></div>
       <small>All provider settings are saved automatically.</small>
     </section>
+    <!-- #endregion -->
   </div>
   <div id="toast-container" aria-live="polite" aria-atomic="true"></div>
 
-  <!-- Floating Links -->
+  <!--#region MARK: Floating Links
+  -->
   <div class="floating-actions" role="navigation" aria-label="Quick links">
     <button id="theme-toggle" class="float-link theme-toggle" aria-label="Toggle theme" aria-pressed="false">
       <svg class="icon-svg" viewBox="0 0 24 24">
@@ -220,8 +236,10 @@
       </svg>
     </a>
   </div>
+  <!--#endregion -->
 
-  <!-- Sync Watched Modal -->
+  <!--#region MARK: Sync Watched Modal
+  -->
   <div id="sync-modal" class="modal-overlay" aria-hidden="true" role="dialog" aria-modal="true"
        aria-labelledby="sync-modal-title">
     <div class="modal" role="document">
@@ -282,6 +300,8 @@
       </footer>
     </div>
   </div>
+  <!--#endregion -->
+
   <script src="js/script.js"></script>
 </body>
 

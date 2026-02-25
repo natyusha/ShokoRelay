@@ -49,7 +49,7 @@ namespace ShokoRelay.Helpers
             if (!ShokoRelay.Settings.AssumedContentRatings)
                 return (null, false);
 
-            // A rough approximation of: http://www.tvguidelines.org/resources/TheRatings.pdf
+            // A rough approximation of: https://www.tvguidelines.org/resources/TheRatings.pdf
             // Uses the content indicators described here: https://wiki.anidb.net/Categories:Content_Indicators
             // Descriptor characters (Suggestive Dialogue, Sexual Situations, Violence)
             var descriptorD = tagSet.Contains("sexual humour") ? "D" : string.Empty;

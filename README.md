@@ -1,7 +1,8 @@
 <!-- prettier-ignore-start -->
 
 ![Shoko Relay Logo](https://github.com/natyusha/ShokoRelay.bundle/assets/985941/23bfd7c2-eb89-46d5-a7cb-558c374393d6 "Shoko Relay")  
-[![Discord](https://img.shields.io/discord/96234011612958720?logo=discord&logoColor=fff&label=Discord&color=5865F2 "Shoko Discord")](https://discord.com/channels/96234011612958720/268484849419943936)
+[![Discord](https://img.shields.io/discord/96234011612958720?logo=discord&logoColor=fff&label=Discord&color=5865F2 "Shoko Discord")](https://discord.gg/shokoanime)
+[![Shoko Docs](https://img.shields.io/badge/VitePress-Shoko_Docs-4E7CF5?logo=vitepress&logoColor=fff)](https://docs.shokoanime.com/)
 [![GitHub Latest](https://img.shields.io/github/v/tag/natyusha/ShokoRelay?label=Latest&logo=github&logoColor=fff)](https://github.com/natyusha/ShokoRelay/releases/latest)
 -
 
@@ -9,7 +10,7 @@
 
 This is a plugin for Shoko Server that acts as a [Custom Metadata Provider](https://forums.plex.tv/t/announcement-custom-metadata-providers/934384) for Plex. It is a successor to the [ShokoRelay.bundle](https://github.com/natyusha/ShokoRelay.bundle) legacy agent/scanner and intends to mirror all of its functionality (including the automation scripts). Scanning is much faster and it will be possible to add many new features in the future as well.
 
-Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File System) to ensure that varied folder structures are supported. This means that your anime can be organised with whatever file or folder structure you want. The only caveat is that a folder cannot contain more than one AniDB series at a time if you want it to correctly support [local media assets](https://support.plex.tv/articles/200220717-local-media-assets-tv-shows/) like `Theme.mp3`. The VFS will be automatically updated when a file move or rename is detected by Shoko.
+Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File System) to ensure that varied folder structures are supported. This means that your anime can be organised with whatever file or folder structure you want. The only caveat is that a folder cannot contain more than one AniDB series at a time if you want it to correctly support [local media assets](https://support.plex.tv/articles/200220717-local-media-assets-tv-shows/) like posters or theme songs. The VFS will be automatically updated when a file move or rename is detected by Shoko.
 
 ## Installation
 
@@ -31,20 +32,21 @@ Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File Sy
 
 #### Setup
 
-- Once the Server has loaded navigate to Shoko Relay's dashboard: `http://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/dashboard`
+- Once the Server has loaded navigate to Shoko Relay's dashboard: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/dashboard`
 - **Mandatory:**
   - Click the `Generate VFS` button in the "Shoko: VFS" section to initialize your collection
   - First time generation may take several minutes to complete with a large library
-  - A report of the run will be written to `logs/vfs-report.log` inside the plugin directory (accessible via dashboard toasts).
-    - You can download the latest report via the dashboard toast that appears when the process finishes
+  - A report of the run will be written to `logs/vfs-report.log` inside the plugin directory
+    - You can download the latest report via the dashboard toast that appears when the process completes
   - The VFS will automatically update when it detects files have been renamed or moved
 - **Optional:**
-  - Link the plugin to your Plex account to enable auto scanning, scrobbling (webhooks) and enhanced collection/ratings support
-  - Add a Shoko API Key from `http://{ShokoHost}:{ShokoPort}/webui/settings/api-keys` to enable watch sync and import tasks
+  - Link the plugin to your Plex account to enable: auto scanning, scrobbling (webhooks) and enhanced collection/ratings support
+  - Add a Shoko API Key from `http(s)://{ShokoHost}:{ShokoPort}/webui/settings/api-keys` to enable watch sync and import tasks
 - There are additional options similar to what the legacy agent had at the bottom under "Provider Settings"
 
 > [!TIP]
-> If you are sharing the symlinks over an SMB share they may not appear depending on the [Samba Configuration](https://www.samba.org/samba/docs/current/man-html/smb.conf.5.html). An example entry for `smb.conf` that may help is listed below:
+> If you are sharing the symlinks over an SMB share they may not appear depending on the [Samba Configuration](https://www.samba.org/samba/docs/current/man-html/smb.conf.5.html).\
+> An example entry for `smb.conf` that may help to mitigate this is listed below:
 
 ```ini
 [global]
@@ -78,20 +80,20 @@ Enable the following options in Shoko to ensure that Plex has at least one sourc
 #### Metadata Agent
 
 - Navigate to `Settings > Metadata Agents`
-- Click `Add Provider` in the Metadata Providers header and supply the URL: `http://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay`
+- Click `Add Provider` in the Metadata Providers header and supply the URL: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay`
 - Click `Add Agent` in the Metadata Agents header, name it `Shoko Relay` and select `Shoko Relay` as the primary provider
 - Under `additional providers` select `Plex Local Media` then click the `+` and `Save`
 
 #### Library
 
 > [!TIP]
-> If you previously used the legacy `ShokoRelay.bundle` you can simply convert your existing libraries to the new agent.
-> This allows you to maintain watched states and video preview thumbnails. A full metadata refresh is required after the first scan.
+> If you previously used the legacy `ShokoRelay.bundle` you can simply convert your existing libraries to the new agent.\
+> This allows you to maintain watched states and video preview thumbnails. _A full metadata refresh is required after the first scan._
 
 - The Shoko Relay agent requires a `TV Shows` type library to be created (or an existing one to be used)
-- Simply change the Scanner to `Plex TV Series` and the Agent to `Shoko Relay`
-- When adding your import folders to plex be sure to point them to the `!ShokoRelayVFS` directory
-- Under "Advanced" in the Library it is highly recommended to set the following settings:
+- Under `Add Folders` be sure to only enter a `!ShokoRelayVFS` (or the configured `VFS Root Path`) as the directory
+- Under `Advanced` simply change the Scanner of the library to `Plex TV Series` and the Agent to `Shoko Relay`
+- Additionally it is highly recommended to set the following Advanced settings:
   - [x] Use season titles
   - [x] Use local assets
   - Collections: `Hide items which are in collections`
@@ -100,7 +102,7 @@ Enable the following options in Shoko to ensure that Plex has at least one sourc
 <details>
 <summary><b>Legacy Agent Cleanup</b></summary><br>
 
-Once you are happy with the new metadata provider you can safely delete all of the old data left behind from any legacy agents you may have used. To do so simply navigate to your [Plex Media Server data directory](https://support.plex.tv/articles/202915258-where-is-the-plex-media-server-data-directory-located/) and search for the full agent name. You can then delete all of the files and folders found that match the search result. Some example search terms are listed below:
+Once you are happy with your new libraries you can safely delete all of the old data left behind from any anime related legacy agents you may have used. To do so simply navigate to your [Plex Media Server data directory](https://support.plex.tv/articles/202915258-where-is-the-plex-media-server-data-directory-located/) and search for the full agent name. You can then delete all of the files and folders found that match the search result. Some example search terms are listed below:
 
 ```
 com.plexapp.agents.hama
@@ -110,144 +112,154 @@ com.plexapp.agents.shokorelay
 
 </details>
 
-## AnimeThemes Integration
-
-### Themes as Video Extras
-
-This plugin includes full integration for [AnimeThemes](https://animethemes.moe/). It will look for `.webm` theme files in a folder called `!AnimeThemes` which is located in the root of your anime library (this works for any "destination" type folder managed by Shoko). These files must have the same filename as they do on the AnimeThemes website and then a mapping must be generated for them in what is essentially a 3 step process. Simply navigate to the "AnimeThemes: VFS" section of the dashboard page to get started.
-
-1. Download anime theme videos and place them in the `!AnimeThemes` folder
-   - There is a torrent available with over 19000+ themes
-2. Generate a mapping for the the videos by clicking the `Build Mapping` button:
-   - Click the Import button on the dashboard the download the [current torrent mapping](https://gist.github.com/natyusha/4e29252d939d0f522d38732facf328c7)
-   - Mapping the whole torrent takes ~12 hours due to rate limits
-3. Apply the mapping to the VFS by clicking the `Apply Mapping to VFS` button
-
-> [!IMPORTANT]
-> Similar to the VFS you must exclude the `!AnimeThemes` folder from Shoko using the `Exclude` server option. The plugin will automatically detect any `!AnimeThemes` directory found under your Shoko import roots.
-
-### Themes as Series BGM
-
-There is also support for generating `Theme.mp3` files as local metadata. This will add them to the VFS automatically and can be run for either a single series or as a batch operation. This process requires Shoko Server to have access to [FFmpeg](https://ffmpeg.org/download.html) (place system appropriate binaries in the ShokoRelay plugin folder or system PATH) as AnimeThemes does not provide `.mp3` files.
-
-This is available under the "AnimeThemes: MP3" section of the dashboard. The batch option will automatically ignore any subfolder named after the configured `VFS Root Path`, `Collection Posters Root Path`, or `AnimeThemes Root Path` as those directories are used internally and never contain series data.
-
 ## Plex: Automation
 
-> ![TIP]
-> The Plex automation interval or `Auto Int.` input (listed under the "Plex: Authentication" section) can be configured to control how often collection generation and critic application runs. An interval of 24-hours or above is recommended for this.
+> [!NOTE]
+> The Plex automation interval or "Int." (listed under the "Plex: Authentication" section) can be configured to control how often [Generate Collections](#collection-generation) and [Apply Critic Ratings](#critic-rating-application) runs. _An interval of 24-hours or above is recommended as Shoko rarely updates this information._
 
 ### Collection Generation
 
-- Currently Plex's Provider Framework does not allow collections to be assigned so they have to be assigned separately
-  - This is done by injecting them via Plex's HTTP API which requires authentication to use
-- To do this navigate to the dashboard and authenticate wth Plex
-- Once Authenticated select the libraries you want to apply collections to then click the `Generate Collections` button
+- Currently Plex's Provider Framework does not allow collections to be automatically assigned so they have to be assigned separately
+  - This is done by injecting them via Plex's HTTP API _which requires authentication to use_
+- Navigate to the dashboard and authenticate wth Plex by clicking the `Start Plex Auth` button in the "Plex: Authentication" section
+- Once authenticated click the `Generate Collections` button in the "Plex: Automation" section
+
+**Notes:**
+
 - As a bonus this supports using the primary series poster as the collection poster (if configured under "Provider Settings")
-- Local collection posters can also be used by placing them in the configured `Collection Posters Root Path` (default `!CollectionPosters`) folder
+- Local posters can also be used by placing them in the configured `Collection Posters Root Path` (default `!CollectionPosters`) folder
 - These files are simply named after the Shoko group name (or ID) that you wish them to apply to
 
 ### Critic Rating Application
 
-- The Provider Framework only supplies TMDB ratings right now and they are not visible in apps that are not a part of the "New Plex Experience"
-- To mitigate this and make Plex for Web/Desktop show ratings in the same style as legacy agents; the `Apply Critic Ratings` button on the dashboard is available
-  - It functions in the same way as the aforementioned Generate Collections button
-- The rating source for this can be configured (or disabled) under `Critic Rating Mode` in the provider settings
+- The Provider Framework supports TMDB ratings but they are not visible in apps that are not a part of the "New Plex Experience"
+- To mitigate this the `Apply Critic Ratings` button on the dashboard is available _which requires authentication to use_
+  - This makes Plex for Web/Desktop show ratings in the same style as legacy agents (next to a generic grey star in the UI)
+- The rating source for this can be configured (or disabled) under `Critic Rating Mode` in the Provider Settings
 
-### Force Partial Scans
+#### Force Partial Scans
 
-- When `Force Partial Scans` is enabled and you are authenticated Plex's HTTP API will be used to instantly scan folders modified by the VFS watcher
+- When `Force Partial Scans` is enabled Plex's HTTP API will be used to instantly scan folders modified by the VFS watcher
+  - _requires authentication_
 
-### Auto Scrobble (Plex Pass)
+#### Auto Scrobble
 
-- Enable `Auto Scrobble` in Shoko Relay dashboard's "Plex: Automation" section.
-- In the Plex Web App go to `Settings > Webhooks` and add the URL: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/plex/webhook`
+- When `Auto Scrobble` is enabled Plex's webhook will be used to forward scrobble events to shoko
+- This requires a Plex Pass subscription and can be enabled in the Plex Web/Desktop App under `Settings > Webhooks`
+  - Click `Add Webhook` and enter the URL: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/plex/webhook`
 
 ## Shoko: Automation
 
 Most of the options in this section require a Shoko API key to fully function (as mentioned in the setup instructions).
 
-- `Remove Missing`: A button which will remove files that are no longer present from Shoko and your AniDB MyList
-- `Import`: A button which will make shoko rescan "Source" type drop folders
-- `Sync`: A button which opens a modal allowing for watched state syncing from Plex to Shoko or Shoko to Plex
-  - Note: This includes any users configured under "Extra Plex Users" in the "Plex: Authentication" section
-- `Import Int.`: An input which will schedule imports from "Source" type drop folders every `N` hours
-- `Sync Int.`: An input which will schedule watched state syncing from Plex to Shoko every `N` hours
-  - Note: this includes ratings/votes if `Include Ratings` is enabled in the `Sync Watched States` modal
+- `Remove Missing` A button which will remove files that are no longer present from Shoko and your AniDB MyList
+- `Import` A button which will make shoko rescan "Source" type drop folders
+- `Sync` A button which opens a modal allowing for watched state syncing from Plex to Shoko or Shoko to Plex
+  - This includes any users configured under `Extra Plex Users` in the "Plex: Authentication" section
+- `Import Int.` An input which will schedule imports from "Source" type drop folders every `N` hours
+- `Sync Int.` An input which will schedule watched state syncing from Plex to Shoko every `N` hours
+  - This includes ratings/votes if `Include Ratings` is enabled in the `Sync Watched States` modal
+
+## AnimeThemes Integration
+
+### Themes as Video Extras
+
+This plugin includes full integration for [AnimeThemes](https://animethemes.moe/). It will look for '.webm' theme files in a folder called `!AnimeThemes` (or the configured `AnimeThemes Root Path`) which is located in the root of your anime library (this works for any "destination" type folder managed by Shoko). These files must have the same name as they do on the AnimeThemes website and then a mapping must be generated for them, in what is essentially a 3 step process. Simply navigate to the "AnimeThemes: VFS" section of the dashboard page to get started.
+
+1. Download anime theme videos and place them in the `!AnimeThemes` folder
+   - There is a torrent available with over 19000+ themes
+2. Generate a mapping for the the videos by clicking the `Build` button:
+   - Click the Import button on the dashboard to download the [current torrent mapping](https://gist.github.com/natyusha/4e29252d939d0f522d38732facf328c7)
+   - Manually mapping the whole torrent takes ~12 hours due to rate limits
+3. Apply the mapping to the VFS by clicking the `Generate` button
+
+> [!IMPORTANT]
+> Similar to the VFS you must exclude the `!AnimeThemes` folder from Shoko using the `Exclude` server option. An example is shown [here](#shoko).
+
+### Themes as Series BGM
+
+There is also support for generating `Theme.mp3` files as local metadata. This will add them to the VFS automatically and can be run for either a single series or as a batch operation. This process requires Shoko Server to have access to [FFmpeg/FFprobe](https://ffmpeg.org/download.html) (place system appropriate binaries in the ShokoRelay plugin folder or system PATH) as AnimeThemes does not provide the '.mp3' files that plex requires for this feature.
+
+- This is available under the "AnimeThemes: MP3" section of the dashboard
+- Input the path (relative to Plex or Shoko) to a folder containing an anime series and then click the `Generate` button
+- The `Force Overwrite Toggle` will overwrite any `Theme.mp3` files found in the configured path (or during a batch)
+- The `Recursive Batch Toggle` will enable batch operations on every subfolder of the configured path
+
+**Notes:**
+
+Any subfolder named after the configured `VFS Root Path`, `Collection Posters Root Path`, or `AnimeThemes Root Path` are ignored during batch operations as those directories are used internally and never contain series data.
 
 ## Information
 
 ### VFS Mapping
 
-When building the VFS files are placed into folders which are named according to their Shoko SeriesID. Within those folders they will be split into subfolders depending on the type of episode. For regular episodes or specials this means placement into a `Season #` or `Specials` folder. Files placed into those folders are named with the following pattern: `S##E##(-pt#)(-v#) [{ShokoFileID}].ext` (the parts in parenthesis are conditional). Files with `-pt#` in their name will also have `[{ShokoFileID}]` stripped to fully follow the format described in [Combining Episodes](#combining-episodes). The ShokoFileID is unused by Plex and is there purely to help users visualise the file mappings.
+When building the VFS files are placed into folders which are named according to their Shoko SeriesID. Within those folders they will be split into subfolders depending on the type of episode. For regular episodes or specials this means placement into a `Season #` or `Specials` folder. Files placed into those folders are named with the following pattern: `S##E##(-pt#)(-v#) [{ShokoFileID}].ext` (the parts in parenthesis are conditional). Files with `-pt#` in their name will also have `[{ShokoFileID}]` stripped to fully follow the format described in [Combining Episodes](#combining-episodes).\
+_The ShokoFileID is unused by Plex and is there purely to help users visualise the file mappings._
 
 Non standard episodes on the other hand, are placed into a local series level Extra folder. Due to Plex not having individual episode pages or metadata for files placed in said folders they will be named according to the episode name (with a prefix) `X# ❯ Title.ext`. More info on local extras is available [here](https://support.plex.tv/articles/local-files-for-tv-show-trailers-and-extras/) and the following table showcases the assignments.
 
-| Prefix | Type     | Subfolder   |
-| :----- | :------- | :---------- |
-| S##E## | Episodes | Season #    |
-| S##E## | Specials | Specials    |
-| C# ❯   | Credits  | Shorts      |
-| T# ❯   | Trailers | Trailers    |
-| P# ❯   | Parody   | Scenes      |
-| O# ❯   | Other    | Featurettes |
-| U# ❯   | Unknown  | Other       |
+| Prefix | Type    | Subfolder   |
+| :----- | :------ | :---------- |
+| S##E## | Episode | Season #    |
+| S##E## | Special | Specials    |
+| C# ❯   | Credits | Shorts      |
+| T# ❯   | Trailer | Trailers    |
+| P# ❯   | Parody  | Scenes      |
+| O# ❯   | Other   | Featurettes |
+| U# ❯   | Unknown | Other       |
 
 > [!NOTE]
-> `Other` type episodes have a special rule where they will attempt to place themselves in `Season 1` or `Season 0` (Specials) if either is empty. Otherwise, they will be placed in `Featurettes` and display as extras in Plex.
-> This is done since these episodes are generally parts of a Movie and have full metadata which would not appear if they were in Plex's local Extras.
+> `Other` type episodes have a special rule where they will attempt to place themselves in `Season 1` or `Specials` if either is empty. Otherwise, they will be placed in `Featurettes` and display as extras in Plex. This was implemented because these episodes are generally parts of a Movie and have a full set of metadata which would not appear if they were in Plex's local extras.
 
 ### Automatic Title Modification
 
 **Common Prefixes for Series**  
-When a series starts with a common title prefix it will optionally be moved to the end of the title (for improved alphabetical sorting). A list of the prefixes considered common by the agent are as follows:
+When a series starts with a common title prefix (and `Move Common Series Title Prefixes` is enabled in the Provider Settings) it will be moved to the end of the title. The prefixes considered common by the provider are governed by the following regex:
 
-- Gekijouban (plus several variants)
-- Eiga
-- OVA
+```regex
+^(Gekijou ?(?:ban(?: 3D)?|Tanpen|Remix Ban|Henshuuban|Soushuuhen)|Eiga|OVA) (.*$)
+```
 
 **Ambiguous Titles for Episodes**  
-In cases where AniDB uses ambiguous episode titles the series title will be used instead (with the original title appended to it as necessary). A list of the titles considered ambiguous by the agent are as follows:
+In cases where AniDB uses ambiguous episode titles the series title will be used instead (with the original title appended to it as necessary).\
+The titles considered ambiguous by the provider are governed by the following regex:
 
-- Complete Movie
-- Music Video
-- OAD
-- OVA
-- Short Movie
-- Special
-- TV Special
-- Web
+```regex
+^(Episode|Volume|Special|Short|(Short )?Movie) [S0]?[1-9][0-9]*$
+```
 
 > [!NOTE]
-> The appended titles will appear after an em dash (**—**) making it easy to search for anything affected by this.
+> The appended titles for both series and episodes will appear after an em dash (**—**) making it easy to search for anything affected by this.
 
 ### TMDB Matching
 
-If you have TMDB auto links enabled in Shoko or simply have a link for a given series, it will have access to several features not available otherwise:
+If you have a TMDB link for a given series in Shoko, it will have access to several features not available otherwise:
 
-- Plex's default theme song support (using the TvDB ID provided by TMDB)
+- Plex's default theme song support (using the TheTVDB ID provided by TMDB cross references)
 - Fallback for series/episode descriptions and titles (if AniDB is missing that information)
-- Background/backdrop image support as well as additional main series poster options (if available)
+- Background/backdrop/logo image support as well as additional main series poster options (if available)
 
 With `TMDB Episode Numbering` enabled in the Provider Settings the following will also be supported:
 
-- Season support for long running anime including posters, titles and descriptions
+- Season support for long running anime including names, posters, titles and descriptions
 - Combining multiple Shoko series into a single Plex entry
 - Alternate episode ordering for seasons
 
 **Curated TMDB Mappings**  
-If you don't have any TMDB links in Shoko it is recommended that you start off with a curated list before auto linking. [Info Here](https://docs.shokoanime.com/shoko-server/tmdb-features#curated-tmdb-mappings)
+If you don't have any TMDB links in Shoko it is recommended that you start off with a curated list before auto linking.\
+[Additional Info Here](https://docs.shokoanime.com/shoko-server/tmdb-features#curated-tmdb-mappings)
 
 **Alternate TMDB Episode Ordering**  
-If you aren't happy with TMDB's default episode/season structure for a series you can change it to an alternate or even make your own. [Info Here](https://docs.shokoanime.com/shoko-server/tmdb-features#alternate-episode-ordering)
+If you aren't happy with TMDB's default episode/season structure for a series, you can change it to an alternate or even make your own.\
+[Additional Info Here](https://docs.shokoanime.com/shoko-server/tmdb-features#alternate-episode-ordering)
 
 > [!NOTE]
-> If you select an alternate order for a series TMDB season posters will no longer be automatically added to Plex as those are only for the default seasons.
+> If you select an alternate order for a series TMDB season posters will no longer be automatically added to Plex.
 
 **Combining Series**  
-This allows shows which are separated on AniDB to be combined into a single entry inside Plex. To Achieve this simply rename the series in Shoko that you want merged to have the exact same title as each other (making sure none of the episode assignments overlap).
+This allows shows which are separated on AniDB to be combined into a single entry inside Plex. To Achieve this simply multi-select (with the primary series as the first selection) the series in your Plex library which you know are part of a single TMDB entry then select `Merge`.
 
-Using Fairy Tail as an example all of the following series can be automatically merged into a single entry in Plex by renaming them all to "Fairy Tail" in Shoko (if they are correctly matched to TMDB):
+Using Fairy Tail as an example all of the following series can be safely merged into a single entry in Plex if they are correctly matched to TMDB in Shoko:
 
 - Fairy Tail
 - Fairy Tail (2011)
@@ -260,11 +272,11 @@ Sometimes you may encounter a single episode which is split across multiple file
 
 ### Minimum Tag Weights
 
-Many tags on AniDB use a [3 Star Weight System](https://wiki.anidb.net/Tags#Star-rating_-_the_Weight_system) which represents a value from 0 (no stars) to 600 (3 stars) and determines how relevant the tag is to the series it is applied to. By setting this value in the Agent settings you can filter out tags below a certain star threshold.
+Many tags on AniDB use a [3 Star Weight System](https://wiki.anidb.net/Tags#Star-rating_-_the_Weight_system) which represents a value from 0 (no stars) to 600 (3 stars) and determines how relevant the tag is to the series it is applied to. By setting this value under `Minimum Tag Weight` in the Provider Settings you can filter out tags below a certain star threshold.
 
 ### Assumed Content Ratings
 
-If "assumed content ratings" are enabled in the agent settings the [target audience](https://anidb.net/tag/2606/animetb) and [content indicator](https://anidb.net/tag/2604/animetb) tags from AniDB will be used to roughly match the [TV Parental Guidelines](http://www.tvguidelines.org/resources/TheRatings.pdf) system. The target audience tags will be checked for ratings from most restrictive to least, then the content indicators will be appended. If the tag weights for the content indicators are high enough (> 400 or **\*\***) the rating will be raised to compensate. A general overview is listed in the table below:
+If `Assumed Content Ratings` are enabled in the Provider Settings the [target audience](https://anidb.net/tag/2606/animetb) and [content indicator](https://anidb.net/tag/2604/animetb) tags from AniDB will be used to roughly match the [TV Parental Guidelines](https://www.tvguidelines.org/resources/TheRatings.pdf) system. The target audience tags will be checked for ratings from most restrictive to least, then the content indicators will be appended. If the tag weights for the content indicators are high enough (> 400 or **\*\***) the rating will be raised to compensate. A general overview is listed in the table below:
 
 | Tag                        | Rating  |
 | :------------------------- | :------ |
@@ -302,9 +314,9 @@ Due to this plugin relying on Plex's metadata provider feature (which is still u
 ## TODO
 
 - ~~Fix networks not applying to series (may be a Shoko issue)~~ TMDB Network metadata is missing
-- Populate the similar Array with similar series
-- Once available in Plex metadata providers
-  - Switch collection support from Plex HTTP API "Generate Collections" button to the provider
+- Populate the provider's similar Array with similar AniDB series
+- Once available in Plex metadata providers:
+  - Switch collection support from the Plex HTTP API "Generate Collections" button to the provider
   - Add custom or generic series/episode ratings directly through the provider
-  - Add rich cast info (bio) for cast and crew
+  - Add rich cast info (bios) for cast and crew
   - Include generic ratings for "old experience" Plex clients without using the HTTP API

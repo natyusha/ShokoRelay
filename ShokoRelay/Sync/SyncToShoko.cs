@@ -341,7 +341,7 @@ namespace ShokoRelay.Sync
 
                             SyncHelper.AddPerUserChange(result.PerUserChanges, plexUserName, changeFinal);
 
-                            // ——— Vote/rating sync (optional, attach after audit entry) ———
+                            // Vote/rating sync (optional, attach after audit entry)
                             if (includeVotes && item.UserRating.HasValue)
                             {
                                 try

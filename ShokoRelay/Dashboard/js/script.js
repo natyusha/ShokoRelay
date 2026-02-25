@@ -1001,7 +1001,7 @@
           // store the default so blanking the input reverts to it
           input.dataset.default = JSON.stringify(p.DefaultValue);
         }
-        // auto-save this provider configuration field on change
+        // auto-save this provider settings field on change
         input.onchange = async () => {
           try {
             let val;
