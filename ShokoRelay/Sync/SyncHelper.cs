@@ -73,7 +73,7 @@ namespace ShokoRelay.Sync
             if (string.IsNullOrWhiteSpace(guid))
                 return null;
 
-            var agent = ShokoRelayInfo.AgentScheme + "://episode/" + Plex.PlexConstants.EpisodePrefix;
+            var agent = ShokoRelayInfo.AgentScheme + "://episode/" + PlexConstants.EpisodePrefix;
             int idx = guid.IndexOf(agent, StringComparison.OrdinalIgnoreCase);
             if (idx < 0)
                 return null;
@@ -402,16 +402,16 @@ namespace ShokoRelay.Sync
 
                 var effectiveToken = !string.IsNullOrWhiteSpace(serverAccessToken) ? serverAccessToken : userToken;
 
-                var list = await plexClient.GetSectionEpisodesAsync(target, effectiveToken, cancellationToken).ConfigureAwait(false);
-
+                // managed‑user views: fetch all episodes, optionally limited by lookback.
+                long? minLast = null;
                 if (sinceHours.HasValue && sinceHours.Value > 0)
-                {
-                    var cutoff = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - (sinceHours.Value * 3600);
-                    list = list.Where(i => i.LastViewedAt.HasValue && i.LastViewedAt.Value >= cutoff).ToList();
-                    logger.Info("WatchedSyncService: filtered user {User} episodes to last {Hours}h -> {Count}", userName, sinceHours.Value, list.Count);
-                }
+                    minLast = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - (sinceHours.Value * 3600);
 
-                return (list, null);
+                // likewise request only watched items for managed users. this keeps the  payload small and mirrors the admin query above.
+                var list = await plexClient.GetSectionEpisodesAsync(target, effectiveToken, cancellationToken, onlyUnwatched: false, guidFilter: null, minLastViewed: minLast).ConfigureAwait(false);
+                logger.Info("WatchedSyncService: fetched {Count} watched episodes for user {User} (since={Since})", list?.Count ?? 0, userName, minLast);
+
+                return (list ?? new List<PlexMetadataItem>(), null);
             }
             catch (Exception ex)
             {
@@ -472,7 +472,7 @@ namespace ShokoRelay.Sync
             }
         }
 
-        public static string MakeEpisodeGuid(int episodeId) => $"{ShokoRelayInfo.AgentScheme}://episode/{Plex.PlexConstants.EpisodePrefix}{episodeId}";
+        public static string MakeEpisodeGuid(int episodeId) => $"{ShokoRelayInfo.AgentScheme}://episode/{PlexConstants.EpisodePrefix}{episodeId}";
 
         public static string MakeShowGuid(int seriesId) => $"{ShokoRelayInfo.AgentScheme}://show/{seriesId}";
     }

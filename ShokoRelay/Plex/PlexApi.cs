@@ -59,11 +59,15 @@ namespace ShokoRelay.Plex
         [JsonPropertyName("lastViewedAt")]
         public long? LastViewedAt { get; set; }
 
-        // Per-user information (when requesting with a user token the response may include this)
+        [JsonPropertyName("childCount")]
+        public int? ChildCount { get; set; }
+
         [JsonPropertyName("User")]
         public PlexMetadataUser? User { get; set; }
 
-        // Per-user numeric rating (when available for the requesting token)
+        [JsonPropertyName("rating")]
+        public double? Rating { get; set; }
+
         [JsonPropertyName("userRating")]
         public double? UserRating { get; set; }
     }

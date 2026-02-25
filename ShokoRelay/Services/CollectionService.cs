@@ -8,7 +8,7 @@ using ShokoRelay.Plex;
 
 namespace ShokoRelay.Services
 {
-    public interface ICollectionManager
+    public interface ICollectionService
     {
         Task<BuildCollectionsResult> BuildCollectionsAsync(IEnumerable<IShokoSeries?> seriesList, CancellationToken cancellationToken = default);
         Task<ApplyPostersResult> ApplyCollectionPostersAsync(IEnumerable<IShokoSeries?> seriesList, CancellationToken cancellationToken = default);
@@ -28,7 +28,7 @@ namespace ShokoRelay.Services
 
     public sealed record ApplyPostersResult(int Processed, int Uploaded, int Skipped, int Errors, List<string> ErrorsList);
 
-    public class CollectionManager : ICollectionManager
+    public class CollectionService : ICollectionService
     {
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
@@ -38,7 +38,7 @@ namespace ShokoRelay.Services
         private readonly PlexMetadata _mapper;
         private readonly ConfigProvider _configProvider;
 
-        public CollectionManager(PlexClient plexClient, PlexCollections plexCollections, IMetadataService metadataService, PlexMetadata mapper, ConfigProvider configProvider)
+        public CollectionService(PlexClient plexClient, PlexCollections plexCollections, IMetadataService metadataService, PlexMetadata mapper, ConfigProvider configProvider)
         {
             _plexClient = plexClient;
             _plexCollections = plexCollections;

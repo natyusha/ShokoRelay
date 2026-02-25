@@ -31,6 +31,7 @@ namespace ShokoRelay.Helpers
         private static readonly Regex _animeThemesTagRegex = new(@"\[([^\]]+)\](?=\.webm$)", RegexOptions.Compiled);
         private static readonly Regex _bdDvdRegex = new(@"BD|DVD", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly Regex _numbersRegex = new(@"\d+", RegexOptions.Compiled);
+        private static readonly Regex _opEdHyphenRegex = new(@"^((?:OP|ED)\d+(?:v\d+)?)-(\w+)", RegexOptions.Compiled);
         private static readonly IReadOnlySet<string> _ambiguousTitles = new HashSet<string>(
             ["Complete Movie", "Music Video", "OAD", "OVA", "Short Movie", "Special", "TV Special", "Web"],
             StringComparer.OrdinalIgnoreCase
@@ -239,6 +240,9 @@ namespace ShokoRelay.Helpers
                 return string.Empty;
 
             string result = name;
+
+            // change hyphen following OP/ED number into middle dot per regex
+            result = _opEdHyphenRegex.Replace(result, "$1·$2");
 
             // Handle OP/ED at the start
             const string zws = "\u200B"; // Zero-width space to prevent Plex from renaming files with OP/ED tags

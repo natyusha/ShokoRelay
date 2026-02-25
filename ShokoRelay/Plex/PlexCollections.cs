@@ -183,8 +183,7 @@ namespace ShokoRelay.Plex
             try
             {
                 // Use Plex's 'collection[0].tag.tag' parameter which sets the collection tag properly.
-                // Include a simple fallback 'collection[0]' param too for compatibility with variants of Plex.
-                string requestPath = $"/library/metadata/{ratingKey}?collection%5B0%5D.tag.tag={Uri.EscapeDataString(collectionName)}&collection%5B0%5D={Uri.EscapeDataString(collectionName)}";
+                string requestPath = $"/library/metadata/{ratingKey}?collection%5B0%5D.tag.tag={Uri.EscapeDataString(collectionName)}";
                 Logger.Debug("Assigning collection via metadata PUT: {Server}{Path}", target.ServerUrl, requestPath);
                 using var request = _plexClient.CreateRequest(HttpMethod.Put, requestPath, target.ServerUrl);
                 var sw = Stopwatch.StartNew();
@@ -249,25 +248,19 @@ namespace ShokoRelay.Plex
                         if (!int.TryParse(m.RatingKey, out int collId))
                             continue;
 
-                        int? count = await GetCollectionItemCountAsync(collId, target, cancellationToken).ConfigureAwait(false);
-                        if (count.HasValue && count.Value == 0)
+                        if (m.ChildCount.HasValue)
                         {
-                            bool ok = await DeleteCollectionAsync(collId, target, cancellationToken).ConfigureAwait(false);
-                            if (ok)
+                            if (m.ChildCount.Value == 0)
                             {
-                                Logger.Info("Deleted empty collection {CollectionId} in section {SectionId}", collId, target.SectionId);
-                                deleted++;
+                                bool ok = await DeleteCollectionAsync(collId, target, cancellationToken).ConfigureAwait(false);
+                                if (ok)
+                                {
+                                    Logger.Info("Deleted empty collection {CollectionId} in section {SectionId}", collId, target.SectionId);
+                                    deleted++;
+                                }
                             }
-                        }
-                        else if (count.HasValue && count.Value > 0)
-                        {
-                            // Ensure the collection's titleSort matches the provided title so Plex sorts correctly
-                            if (!string.IsNullOrWhiteSpace(m.Title))
-                            {
-                                bool ok = await UpdateCollectionTitleSortAsync(collId, m.Title, target, cancellationToken).ConfigureAwait(false);
-                                if (!ok)
-                                    Logger.Debug("Failed to update titleSort for collection {CollectionId} in section {SectionId}", collId, target.SectionId);
-                            }
+
+                            continue;
                         }
                     }
                 }
@@ -287,10 +280,16 @@ namespace ShokoRelay.Plex
 
             try
             {
-                var count = await GetCollectionItemCountAsync(collectionId, target, cancellationToken).ConfigureAwait(false);
-                if (count.HasValue && count.Value == 0)
+                string childPath = $"/library/collections/{collectionId}/children?X-Plex-Container-Size=1";
+                using var childReq = _plexClient.CreateRequest(HttpMethod.Get, childPath, target.ServerUrl);
+                using var childResp = await _httpClient.SendAsync(childReq, cancellationToken).ConfigureAwait(false);
+                if (childResp.IsSuccessStatusCode)
                 {
-                    return await DeleteCollectionAsync(collectionId, target, cancellationToken).ConfigureAwait(false);
+                    var childCont = await PlexApi.ReadContainerAsync(childResp, cancellationToken).ConfigureAwait(false);
+                    if (childCont?.Metadata == null || childCont.Metadata.Count == 0)
+                    {
+                        return await DeleteCollectionAsync(collectionId, target, cancellationToken).ConfigureAwait(false);
+                    }
                 }
 
                 return false;
@@ -299,77 +298,6 @@ namespace ShokoRelay.Plex
             {
                 Logger.Warn(ex, "DeleteCollectionIfEmptyAsync failed for collection {CollectionId} on {Server}:{Section}", collectionId, target.ServerUrl, target.SectionId);
                 return false;
-            }
-        }
-
-        private async Task<int?> GetCollectionItemCountAsync(int collectionId, PlexLibraryTarget target, CancellationToken cancellationToken = default)
-        {
-            try
-            {
-                // We need to count items *in the context of the target section* so that
-                // collections that are empty for this library/section can be removed even
-                // if they contain items in other libraries.
-                int start = 0;
-                const int pageSize = 200;
-
-                while (true)
-                {
-                    string requestPath = $"/library/collections/{collectionId}/items?X-Plex-Container-Start={start}&X-Plex-Container-Size={pageSize}";
-                    using var request = _plexClient.CreateRequest(HttpMethod.Get, requestPath, target.ServerUrl);
-                    using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-                    if (!response.IsSuccessStatusCode)
-                        return null;
-
-                    var container = await PlexApi.ReadContainerAsync(response, cancellationToken).ConfigureAwait(false);
-                    if (container == null)
-                        return null;
-
-                    // If any metadata explicitly belongs to our section, consider the collection non-empty.
-                    if (container.Metadata != null)
-                    {
-                        foreach (var item in container.Metadata)
-                        {
-                            if (item.LibrarySectionId.HasValue)
-                            {
-                                if (item.LibrarySectionId.Value == target.SectionId)
-                                    return 1; // non-empty in this section
-                            }
-                            else if (!string.IsNullOrWhiteSpace(item.RatingKey) && int.TryParse(item.RatingKey, out int ratingKey))
-                            {
-                                // Fallback: query the specific item's metadata to determine its section
-                                bool existsInSection = await _plexClient.ItemExistsInSectionAsync(ratingKey, target, cancellationToken).ConfigureAwait(false);
-                                if (existsInSection)
-                                    return 1;
-                            }
-                        }
-                    }
-
-                    // Determine pagination bounds
-                    int fetched = container.Metadata?.Count ?? 0;
-                    int total = container.TotalSize ?? container.Size ?? -1;
-
-                    if (fetched == 0)
-                        break;
-
-                    if (total >= 0 && start + pageSize >= total)
-                        break;
-
-                    start += pageSize;
-                }
-
-                // No items found for this section.
-                return 0;
-            }
-            catch (OperationCanceledException)
-            {
-                // Timeouts/cancellations are considered transient here; don't spam WARN-level logs with full stacks.
-                Logger.Debug("GetCollectionItemCountAsync canceled/timed out for collection {CollectionId} on {Server}:{Section}", collectionId, target.ServerUrl, target.SectionId);
-                return null;
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(ex, "GetCollectionItemCountAsync failed for collection {CollectionId} on {Server}:{Section}", collectionId, target.ServerUrl, target.SectionId);
-                return null;
             }
         }
 

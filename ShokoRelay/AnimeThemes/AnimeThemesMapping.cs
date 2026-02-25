@@ -26,19 +26,28 @@ internal sealed record AnimeThemesVideoLookup(int VideoId, int ThemeId, int AniD
 public class AnimeThemesMapping
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
-    private static readonly HttpClient Http = new();
+    private static readonly HttpClient Http = new HttpClient();
     private static readonly TimeSpan RateLimitDelay = TimeSpan.FromSeconds(0.7); // ~86 req/min to stay under the 90 that is enforced by AnimeThemes
 
+    // static constructor used to configure shared HttpClient (setting UA etc.)
+    static AnimeThemesMapping()
+    {
+        // some API endpoints now reject requests without a custom User-Agent header
+        AnimeThemesConstants.EnsureUserAgent(Http);
+    }
+
     private readonly IMetadataService _metadataService;
+    private readonly IVideoService _videoService;
     private readonly string _pluginPath;
     private readonly JsonSerializerOptions _jsonOptions = new() { PropertyNameCaseInsensitive = true, WriteIndented = true };
 
     private readonly SemaphoreSlim _rateLock = new(1, 1);
     private DateTimeOffset _lastRequest = DateTimeOffset.MinValue;
 
-    public AnimeThemesMapping(IMetadataService metadataService, ConfigProvider configProvider)
+    public AnimeThemesMapping(IMetadataService metadataService, IVideoService videoService, ConfigProvider configProvider)
     {
         _metadataService = metadataService;
+        _videoService = videoService;
         _pluginPath = configProvider.PluginDirectory;
     }
 
@@ -88,17 +97,34 @@ public class AnimeThemesMapping
         }
     }
 
-    public async Task<AnimeThemesMappingBuildResult> BuildMappingFileAsync(string torrentRoot, string? outputPath = null, CancellationToken ct = default)
+    public async Task<AnimeThemesMappingBuildResult> BuildMappingFileAsync(string? outputPath = null, CancellationToken ct = default)
     {
-        string basePath = !string.IsNullOrWhiteSpace(torrentRoot)
-            ? torrentRoot
-            : (!string.IsNullOrWhiteSpace(ShokoRelay.Settings.AnimeThemesPathMapping) ? ShokoRelay.Settings.AnimeThemesPathMapping : AnimeThemesConstants.BasePath);
+        // build list of candidate root folders containing the AnimeThemes files
+        var rootPaths = new List<string>();
 
-        string resolvedRoot = Path.GetFullPath(string.IsNullOrWhiteSpace(basePath) ? "." : basePath);
-        if (!Directory.Exists(resolvedRoot))
-            throw new DirectoryNotFoundException($"AnimeThemes torrent root not found: {resolvedRoot}");
+        // auto-detect by looking for the configured root folder under every destination import root
+        {
+            var themeFolder = GetThemeRootFolderName();
+            var candidates = _videoService
+                .GetAllVideoFiles()
+                .Select(v => v.ManagedFolder?.Path)
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Select(p => Path.Combine(p!, themeFolder))
+                .Where(Directory.Exists)
+                .Select(Path.GetFullPath)
+                .ToList();
 
-        Logger.Info("AnimeThemes mapping build started (root={Root})", resolvedRoot);
+            if (candidates.Count > 0)
+                rootPaths.AddRange(candidates);
+        }
+
+        // discard any paths that no longer exist
+        rootPaths = rootPaths.Where(Directory.Exists).ToList();
+        if (rootPaths.Count == 0)
+            throw new DirectoryNotFoundException("AnimeThemes root folder not found (no valid root paths)");
+
+        Logger.Info("AnimeThemes mapping build started (roots={RootList})", string.Join(';', rootPaths));
         var sw = Stopwatch.StartNew();
 
         string mapPath = outputPath ?? Path.Combine(_pluginPath, AnimeThemesConstants.MapFileName);
@@ -131,23 +157,35 @@ public class AnimeThemesMapping
             }
         }
 
-        // gather all webm files, but ignore any that live inside a "misc" subfolder
-        var files = Directory
-            .EnumerateFiles(resolvedRoot, "*.webm", SearchOption.AllDirectories)
-            .Where(f =>
-            {
-                var rel = Path.GetRelativePath(resolvedRoot, f);
-                // split on both separators to support inconsistent paths
-                var parts = rel.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-                return !parts.Any(p => string.Equals(p, "misc", StringComparison.OrdinalIgnoreCase));
-            })
+        // gather all webm files from every detected root, but ignore any that live inside a "misc" subfolder
+        var files = rootPaths
+            .Where(Directory.Exists)
+            .SelectMany(root =>
+                Directory
+                    .EnumerateFiles(root, "*.webm", SearchOption.AllDirectories)
+                    .Where(f =>
+                    {
+                        var rel = Path.GetRelativePath(root, f);
+                        // split on both separators to support inconsistent paths
+                        var parts = rel.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                        return !parts.Any(p => string.Equals(p, "misc", StringComparison.OrdinalIgnoreCase));
+                    })
+            )
             .ToList();
 
         foreach (string file in files)
         {
             ct.ThrowIfCancellationRequested();
 
-            string rel = Path.GetRelativePath(resolvedRoot, file).Replace('\\', '/').TrimStart('/');
+            // determine which root this file belongs to so we can get a relative path to it
+            string? root = rootPaths.FirstOrDefault(r =>
+                file.StartsWith(r + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) || file.StartsWith(r + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+            );
+            string rel;
+            if (root != null)
+                rel = Path.GetRelativePath(root, file).Replace('\\', '/').TrimStart('/');
+            else
+                rel = file; // fallback if we somehow can't match
             rel = "/" + rel;
 
             // if we already have a mapping for this relative path, reuse it and skip the API call
@@ -168,11 +206,14 @@ public class AnimeThemesMapping
                 if (verMatch.Success)
                     versionSuffix = verMatch.Groups[1].Value; // group contains only the v#
 
-                var lookup = await FetchMetadataAsync(baseName, ct);
+                var (lookup, idMissing) = await FetchMetadataAsync(baseName, ct);
                 if (lookup == null)
                 {
                     errors++;
-                    messages.Add($"Missing metadata for {rel}");
+                    if (idMissing)
+                        messages.Add($"AniDB ID missing for {rel}");
+                    else
+                        messages.Add($"Missing metadata for {rel}");
                     continue;
                 }
 
@@ -205,12 +246,7 @@ public class AnimeThemesMapping
         return new AnimeThemesMappingBuildResult(mapPath, entries.Count, reusedCount, errors, messages);
     }
 
-    public async Task<AnimeThemesMappingApplyResult> ApplyMappingAsync(
-        string? mapPath = null,
-        string? torrentRoot = null,
-        IReadOnlyCollection<int>? seriesFilter = null,
-        CancellationToken ct = default
-    )
+    public async Task<AnimeThemesMappingApplyResult> ApplyMappingAsync(string? mapPath = null, IReadOnlyCollection<int>? seriesFilter = null, CancellationToken ct = default)
     {
         string resolvedMap = mapPath ?? Path.Combine(_pluginPath, AnimeThemesConstants.MapFileName);
         if (!File.Exists(resolvedMap))
@@ -220,7 +256,7 @@ public class AnimeThemesMapping
         var entries = JsonSerializer.Deserialize<List<AnimeThemesMappingEntry>>(json, _jsonOptions) ?? new();
 
         List<IShokoSeries?> seriesList = [];
-        Logger.Info("AnimeThemes apply mapping started (map={MapPath}, root={Root}, filter={FilterCount})", resolvedMap, torrentRoot ?? "", seriesFilter?.Count ?? 0);
+        Logger.Info("AnimeThemes apply mapping started (map={MapPath}, filter={FilterCount})", resolvedMap, seriesFilter?.Count ?? 0);
         var sw2 = Stopwatch.StartNew();
         int warns2 = 0;
         if (seriesFilter != null && seriesFilter.Count > 0)
@@ -299,7 +335,7 @@ public class AnimeThemesMapping
                 matchedSeries++;
                 foreach (string importRoot in roots)
                 {
-                    string? source = ResolveThemeSourcePath(relativePath, importRoot, torrentRoot);
+                    string? source = ResolveThemeSourcePath(relativePath, importRoot);
                     if (string.IsNullOrWhiteSpace(source) || !File.Exists(source))
                     {
                         skipped++;
@@ -408,24 +444,30 @@ public class AnimeThemesMapping
         return set.ToList();
     }
 
-    private async Task<AnimeThemesVideoLookup?> FetchMetadataAsync(string baseName, CancellationToken ct)
+    // returns tuple containing lookup and flag if AniDB id was missing
+    private async Task<(AnimeThemesVideoLookup? lookup, bool idMissing)> FetchMetadataAsync(string baseName, CancellationToken ct)
     {
+        bool idMissing = false;
         string videoUrl = $"{AnimeThemesConstants.ApiBase}/video/{Uri.EscapeDataString(baseName)}?include=animethemeentries.animetheme";
         var videoResp = await GetJsonAsync<VideoLookupResponse>(videoUrl, ct);
         if (videoResp?.Video == null)
-            return null;
+            return (null, idMissing);
 
         int videoId = videoResp.Video.Id;
         int? themeId = videoResp.Video.Animethemeentries?.FirstOrDefault()?.Animetheme?.Id;
         if (!themeId.HasValue)
-            return null;
+            return (null, idMissing);
 
         string animeUrl =
             $"{AnimeThemesConstants.ApiBase}/anime?filter[has]=animethemes.animethemeentries.videos,animethemes&include=resources&filter[resource][site]=AniDB&filter[video][id]={videoId}";
         var animeResp = await GetJsonAsync<AnimeLookupResponse>(animeUrl, ct);
-        int anidbId = animeResp?.Anime?.FirstOrDefault()?.Resources?.FirstOrDefault(r => string.Equals(r.Site, "AniDB", StringComparison.OrdinalIgnoreCase))?.ExternalId ?? 0;
+        int anidbId = animeResp?.Anime?.FirstOrDefault()?.Resources?.FirstOrDefault(r => string.Equals(r.Site, "AniDB", StringComparison.OrdinalIgnoreCase) && r.ExternalId.HasValue)?.ExternalId ?? 0;
         if (anidbId == 0)
-            return null;
+        {
+            // video exists but the AniDB id was absent/nullable
+            idMissing = true;
+            return (null, idMissing);
+        }
 
         string themeUrl = $"{AnimeThemesConstants.ApiBase}/animetheme/{themeId.Value}?include=animethemeentries.videos,song.artists";
         var themeResp = await GetJsonAsync<ThemeLookupResponse>(themeUrl, ct);
@@ -437,7 +479,7 @@ public class AnimeThemesMapping
         if (matchingVideo != null && !string.IsNullOrWhiteSpace(matchingVideo.Tags))
             tags = matchingVideo.Tags!;
 
-        return new AnimeThemesVideoLookup(videoId, themeId.Value, anidbId, slug, songTitle, tags);
+        return (new AnimeThemesVideoLookup(videoId, themeId.Value, anidbId, slug, songTitle, tags), idMissing);
     }
 
     // versionSuffix may contain something like "v2" or "v3" pulled from the
@@ -471,24 +513,14 @@ public class AnimeThemesMapping
         return configured.Trim().Trim('/', '\\');
     }
 
-    private static string? ResolveThemeSourcePath(string relativeFilePath, string importRoot, string? overrideRoot)
+    private static string? ResolveThemeSourcePath(string relativeFilePath, string importRoot)
     {
         string rel = relativeFilePath.TrimStart('/', '\\');
         if (string.IsNullOrWhiteSpace(rel))
             return null;
 
-        string basePath;
-        if (!string.IsNullOrWhiteSpace(overrideRoot))
-        {
-            basePath = overrideRoot;
-            if (!Path.IsPathRooted(basePath))
-                basePath = Path.Combine(importRoot, basePath);
-        }
-        else
-        {
-            string folderName = GetThemeRootFolderName();
-            basePath = Path.Combine(importRoot, folderName);
-        }
+        string folderName = GetThemeRootFolderName();
+        string basePath = Path.Combine(importRoot, folderName);
 
         string normalizedBase = Path.GetFullPath(basePath);
         string relativePart = rel.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
@@ -513,10 +545,19 @@ public class AnimeThemesMapping
     private async Task<T?> GetJsonAsync<T>(string url, CancellationToken ct)
     {
         await RateLimitAsync(ct);
+        // ensure UA is configured before every request in case the static ctor wasn't
+        AnimeThemesConstants.EnsureUserAgent(Http);
         using var response = await Http.GetAsync(url, ct);
         if (!response.IsSuccessStatusCode)
         {
-            Logger.Warn("AnimeThemes API returned {Status} for {Url}", response.StatusCode, url);
+            if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            {
+                Logger.Warn("AnimeThemes API returned Forbidden for {Url} (check user-agent/config)", url);
+            }
+            else
+            {
+                Logger.Warn("AnimeThemes API returned {Status} for {Url}", response.StatusCode, url);
+            }
             return default;
         }
 
@@ -553,7 +594,7 @@ public class AnimeThemesMapping
 
     private sealed record AnimeEntry(List<AnimeResource>? Resources);
 
-    private sealed record AnimeResource([property: JsonPropertyName("external_id")] int ExternalId, string Site);
+    private sealed record AnimeResource([property: JsonPropertyName("external_id")] int? ExternalId, string Site);
 
     private sealed record ThemeLookupResponse(ThemeFull? Animetheme);
 

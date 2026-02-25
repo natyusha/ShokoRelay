@@ -66,14 +66,12 @@ public class AnimeThemesGenerator
         int skipped = 0;
         int errors = 0;
 
-        // build initial folder list and optionally filter out those that already
-        // contain Theme.mp3 when we're not forcing regeneration.  This avoids
-        // touching the Shoko database at all for the vast majority of folders on
-        // a library that has already been processed.
-        var folders = Directory.EnumerateDirectories(root);
+        // build initial folder list. Include the root itself since batch mode should still operate on the folder passed to it directly
+        var folders = new List<string> { root };
+        folders.AddRange(Directory.EnumerateDirectories(root));
         if (!query.Force)
         {
-            folders = folders.Where(f => !File.Exists(Path.Combine(f, "Theme.mp3")));
+            folders = folders.Where(f => !File.Exists(Path.Combine(f, "Theme.mp3"))).ToList();
         }
 
         // process in parallel using the configured parallelism setting. the heavy work
@@ -379,17 +377,8 @@ public class AnimeThemesGenerator
 
     private static string ResolvePath(string path)
     {
-        string resolved = path;
-        string basePath = AnimeThemesConstants.BasePath;
-        if (!string.IsNullOrWhiteSpace(basePath))
-        {
-            if (!Path.IsPathRooted(path))
-            {
-                resolved = Path.Combine(basePath, path);
-            }
-        }
-
-        return Path.GetFullPath(resolved);
+        // no basepath support any more; return full path directly
+        return Path.GetFullPath(path);
     }
 
     private static string? TryLinkIntoVfs(IVideoFile location, int seriesId, string source)

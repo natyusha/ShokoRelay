@@ -305,103 +305,15 @@ namespace ShokoRelay.Plex
         {
             try
             {
-                string requestPath = $"/library/sections/{target.SectionId}/search?guid={Uri.EscapeDataString(guid)}";
-                using var request = CreateRequest(HttpMethod.Get, requestPath, target.ServerUrl);
-                using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-                if (!response.IsSuccessStatusCode)
-                    return false;
-
-                var container = await PlexApi.ReadContainerAsync(response, cancellationToken).ConfigureAwait(false);
-                return container?.Metadata?.Count > 0;
+                // we only care whether *any* metadata matches the GUID; using the generic enumerator with a type=show filter is sufficient and avoids duplicating query string logic.
+                var list = await GetSectionItemsAsync(target, null, cancellationToken, onlyUnwatched: null, guidFilter: guid, mediaType: null).ConfigureAwait(false);
+                return list != null && list.Count > 0;
             }
             catch (Exception ex)
             {
                 Logger.Warn(ex, "SearchSectionForGuidAsync failed for guid {Guid} on {Server}:{Section}", guid, target.ServerUrl, target.SectionId);
                 return false;
             }
-        }
-
-        /// <summary>
-        /// List all items (series) in the given section. Uses paging to avoid very large responses.
-        /// </summary>
-        public async Task<List<PlexMetadataItem>> GetSectionShowsAsync(PlexLibraryTarget target, CancellationToken cancellationToken = default)
-        {
-            var results = new List<PlexMetadataItem>();
-            if (!IsEnabled || target == null)
-                return results;
-
-            int start = 0;
-            const int pageSize = 200;
-            while (true)
-            {
-                string requestPath = $"/library/sections/{target.SectionId}/all?X-Plex-Container-Start={start}&X-Plex-Container-Size={pageSize}";
-                using var request = CreateRequest(HttpMethod.Get, requestPath, target.ServerUrl);
-                using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-                if (!response.IsSuccessStatusCode)
-                    break;
-
-                var container = await PlexApi.ReadContainerAsync(response, cancellationToken).ConfigureAwait(false);
-                if (container?.Metadata == null || container.Metadata.Count == 0)
-                    break;
-
-                results.AddRange(container.Metadata);
-
-                int fetched = container.Metadata.Count;
-                int? total = container.TotalSize ?? container.Size;
-                if (fetched == 0)
-                    break;
-                if (total.HasValue && start + pageSize >= total.Value)
-                    break;
-
-                start += pageSize;
-            }
-
-            return results;
-        }
-
-        /// <summary>
-        /// List all episodes in the given section. Uses paging to avoid very large responses.
-        /// </summary>
-        public async Task<List<PlexMetadataItem>> GetSectionEpisodesAsync(
-            PlexLibraryTarget target,
-            string? plexUserToken = null,
-            CancellationToken cancellationToken = default,
-            bool onlyUnwatched = false
-        )
-        {
-            var results = new List<PlexMetadataItem>();
-            if (!IsEnabled || target == null)
-                return results;
-
-            int start = 0;
-            const int pageSize = 200;
-            while (true)
-            {
-                var unwatchedFlag = onlyUnwatched ? "1" : "0";
-                string requestPath =
-                    $"/library/sections/{target.SectionId}/all?type={PlexConstants.TypeEpisode}&unwatched={unwatchedFlag}&X-Plex-Container-Start={start}&X-Plex-Container-Size={pageSize}";
-                using var request = CreateRequest(HttpMethod.Get, requestPath, target.ServerUrl, plexUserToken);
-                using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-                if (!response.IsSuccessStatusCode)
-                    break;
-
-                var container = await PlexApi.ReadContainerAsync(response, cancellationToken).ConfigureAwait(false);
-                if (container?.Metadata == null || container.Metadata.Count == 0)
-                    break;
-
-                results.AddRange(container.Metadata);
-
-                int fetched = container.Metadata.Count;
-                int? total = container.TotalSize ?? container.Size;
-                if (fetched == 0)
-                    break;
-                if (total.HasValue && start + pageSize >= total.Value)
-                    break;
-
-                start += pageSize;
-            }
-
-            return results;
         }
 
         /// <summary>
@@ -437,6 +349,100 @@ namespace ShokoRelay.Plex
                 Logger.Warn(ex, "FindRatingKeyForShokoSeriesInSectionAsync failed for series {Series} on {Server}:{Section}", shokoSeriesId, target.ServerUrl, target.SectionId);
                 return null;
             }
+        }
+
+        /// <summary>
+        /// List items in the given section. Uses paging and supports optional watch-state, GUID and media-type filters.
+        /// </summary>
+        public async Task<List<PlexMetadataItem>> GetSectionItemsAsync(
+            PlexLibraryTarget target,
+            string? plexUserToken = null,
+            CancellationToken cancellationToken = default,
+            bool? onlyUnwatched = null,
+            string? guidFilter = null,
+            long? minLastViewed = null,
+            int? mediaType = null
+        )
+        {
+            var results = new List<PlexMetadataItem>();
+            if (!IsEnabled || target == null)
+                return results;
+
+            int start = 0;
+            const int pageSize = 200;
+            while (true)
+            {
+                // build query parameters cleanly to avoid stray leading '&' characters
+                var queryParts = new List<string>();
+                if (mediaType.HasValue)
+                    queryParts.Add($"type={mediaType.Value}");
+
+                if (onlyUnwatched == true)
+                    queryParts.Add("unwatched=1");
+                else if (onlyUnwatched == false)
+                    queryParts.Add("unwatched=0");
+
+                if (!string.IsNullOrWhiteSpace(guidFilter))
+                    queryParts.Add($"guid={Uri.EscapeDataString(guidFilter)}");
+
+                if (minLastViewed.HasValue)
+                    queryParts.Add($"lastViewedAt>={minLastViewed.Value}");
+
+                // paging parameters are always present
+                queryParts.Add($"X-Plex-Container-Start={start}");
+                queryParts.Add($"X-Plex-Container-Size={pageSize}");
+
+                string query = string.Join("&", queryParts);
+                string requestPath = $"/library/sections/{target.SectionId}/all" + (string.IsNullOrEmpty(query) ? string.Empty : "?" + query);
+                using var request = CreateRequest(HttpMethod.Get, requestPath, target.ServerUrl, plexUserToken);
+
+                using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+                if (!response.IsSuccessStatusCode)
+                {
+                    break;
+                }
+
+                var container = await PlexApi.ReadContainerAsync(response, cancellationToken).ConfigureAwait(false);
+                if (container?.Metadata == null || container.Metadata.Count == 0)
+                    break;
+
+                results.AddRange(container.Metadata);
+
+                int fetched = container.Metadata.Count;
+                int? total = container.TotalSize ?? container.Size;
+                if (fetched == 0)
+                    break;
+                if (total.HasValue && start + pageSize >= total.Value)
+                    break;
+
+                start += pageSize;
+            }
+
+            return results;
+        }
+
+        /// <summary>
+        /// List all series (shows) in the given section by delegating to the generic item enumeration helper with a show-type filter.
+        /// </summary>
+        public Task<List<PlexMetadataItem>> GetSectionShowsAsync(PlexLibraryTarget target, CancellationToken cancellationToken = default)
+        {
+            // reuse the more flexible helper; passing null for onlyUnwatched/guidFilter yields a complete list of items of the requested type.
+            return GetSectionItemsAsync(target, null, cancellationToken, onlyUnwatched: null, guidFilter: null, mediaType: PlexConstants.TypeShow);
+        }
+
+        /// <summary>
+        /// List all episodes in the given section by delegating to the generic item enumeration helper with an episode-type filter.
+        /// </summary>
+        public Task<List<PlexMetadataItem>> GetSectionEpisodesAsync(
+            PlexLibraryTarget target,
+            string? plexUserToken = null,
+            CancellationToken cancellationToken = default,
+            bool? onlyUnwatched = null,
+            string? guidFilter = null,
+            long? minLastViewed = null
+        )
+        {
+            return GetSectionItemsAsync(target, plexUserToken, cancellationToken, onlyUnwatched, guidFilter, minLastViewed, mediaType: PlexConstants.TypeEpisode);
         }
     }
 }

@@ -16,7 +16,7 @@ namespace ShokoRelay.Controllers
 {
     public record PlexMatchBody(string? Filename, string? Title = null, int? Manual = null);
 
-    public record SeriesContext(ISeries Series, string ApiUrl, (string DisplayTitle, string SortTitle, string? OriginalTitle) Titles, string ContentRating, MapHelper.SeriesFileData FileData);
+    public record SeriesContext(ISeries Series, string ApiUrl, (string DisplayTitle, string SortTitle, string? OriginalTitle) Titles, string ContentRating, SeriesFileData FileData);
 
     public partial class ShokoRelayController
     {
@@ -52,7 +52,7 @@ namespace ShokoRelay.Controllers
             if (series == null)
                 return null;
 
-            return new SeriesContext(series, BaseUrl, TextHelper.ResolveFullSeriesTitles(series), RatingHelper.GetContentRatingAndAdult(series).Rating ?? "", GetSeriesFileData(series));
+            return new SeriesContext(series, ApiBase, TextHelper.ResolveFullSeriesTitles(series), RatingHelper.GetContentRatingAndAdult(series).Rating ?? "", GetSeriesFileData(series));
         }
 
         private IActionResult WrapInContainer(object metadata) =>
@@ -418,7 +418,6 @@ namespace ShokoRelay.Controllers
 
         // Plex discovery types & network access moved to PlexAuth
         // Wrapper methods below forward to PlexAuth for discovery and library fetching.
-
         private async Task<(bool TokenValid, List<PlexServerInfo> Servers, List<PlexDevice> Devices)> GetPlexServerListAsync(string token, string clientIdentifier, CancellationToken cancellationToken)
         {
             try

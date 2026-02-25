@@ -207,7 +207,7 @@ namespace ShokoRelay.Helpers
             {
                 string b = string.IsNullOrWhiteSpace(baseUrl) ? ImageHelper.GetBaseUrl() : baseUrl?.TrimEnd('/') ?? string.Empty;
                 // Prefer the plugin-style provider base for generated collection poster URLs
-                return $"{b}/api/plugin/ShokoRelay/collections/user/{series.TopLevelGroupID}";
+                return $"{b}{ShokoRelayInfo.BasePath}/collections/user/{series.TopLevelGroupID}";
             }
 
             // 2) Fallback to the primary series poster if allowed

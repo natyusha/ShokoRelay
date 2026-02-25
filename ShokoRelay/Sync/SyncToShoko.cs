@@ -15,34 +15,18 @@ namespace ShokoRelay.Sync
         private readonly IMetadataService _metadataService;
         private readonly IUserDataService _userDataService;
         private readonly IUserService _userService;
-        private readonly IVideoService _videoService;
         private readonly ConfigProvider _configProvider;
         private readonly PlexAuth _plexAuth;
 
-        public SyncToShoko(
-            PlexClient plexClient,
-            IMetadataService metadataService,
-            IUserDataService userDataService,
-            IUserService userService,
-            IVideoService videoService,
-            ConfigProvider configProvider,
-            PlexAuth plexAuth
-        )
+        public SyncToShoko(PlexClient plexClient, IMetadataService metadataService, IUserDataService userDataService, IUserService userService, ConfigProvider configProvider, PlexAuth plexAuth)
         {
             _plexClient = plexClient;
             _metadataService = metadataService;
             _userDataService = userDataService;
             _userService = userService;
-            _videoService = videoService;
             _configProvider = configProvider;
             _plexAuth = plexAuth;
         }
-
-        /// <summary>
-        /// Backwards-compatible public entry (no votes).
-        /// </summary>
-        public Task<PlexWatchedSyncResult> SyncWatchedAsync(bool dryRun = false, int? sinceHours = null, CancellationToken cancellationToken = default) =>
-            SyncWatchedInternalAsync(dryRun, sinceHours, false, cancellationToken);
 
         /// <summary>
         /// Public entry supporting optional vote/rating sync in addition to watched-state.
@@ -90,15 +74,23 @@ namespace ShokoRelay.Sync
                 List<PlexMetadataItem> adminEpisodes;
                 try
                 {
-                    adminEpisodes = await _plexClient.GetSectionEpisodesAsync(target, null, cancellationToken).ConfigureAwait(false);
-
-                    // Apply lookback filter (if requested) to limit to recently-watched items only
+                    // compute optional min-last-viewed timestamp so the Plex query itself can restrict results (saves bandwidth on large libraries)
+                    long? minLast = null;
                     if (sinceHours.HasValue && sinceHours.Value > 0)
                     {
-                        var cutoff = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - (sinceHours.Value * 3600);
-                        adminEpisodes = adminEpisodes.Where(i => i.LastViewedAt.HasValue && i.LastViewedAt.Value >= cutoff).ToList();
-                        Logger.Info("WatchedSyncService: filtered admin episodes to last {Hours} hours -> {Count} items", sinceHours.Value, adminEpisodes.Count);
+                        minLast = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - (sinceHours.Value * 3600);
                     }
+
+                    // request watched episodes only (unwatched=0)
+                    adminEpisodes = await _plexClient.GetSectionEpisodesAsync(target, null, cancellationToken, onlyUnwatched: false, guidFilter: null, minLastViewed: minLast).ConfigureAwait(false);
+
+                    Logger.Info(
+                        "WatchedSyncService: fetched {Count} watched episodes (since={Since}) from Plex target {Server}:{Section}",
+                        adminEpisodes?.Count ?? 0,
+                        minLast,
+                        target.ServerUrl,
+                        target.SectionId
+                    );
                 }
                 catch (Exception ex)
                 {
@@ -135,7 +127,7 @@ namespace ShokoRelay.Sync
                 }
 
                 // Process admin and extra users separately so per-user stats are recorded
-                var userBuckets = new List<(string UserName, IEnumerable<PlexMetadataItem> Items)>() { ("admin", adminEpisodes) };
+                var userBuckets = new List<(string UserName, IEnumerable<PlexMetadataItem> Items)>() { ("admin", adminEpisodes ?? new List<PlexMetadataItem>()) };
                 userBuckets.AddRange(extraUserEpisodes.Select(kv => (kv.Key, (IEnumerable<PlexMetadataItem>)kv.Value)));
 
                 foreach (var (plexUserName, items) in userBuckets)

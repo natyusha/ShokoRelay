@@ -32,16 +32,16 @@ Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File Sy
 #### Setup
 
 - Once the Server has loaded navigate to Shoko Relay's dashboard: `http://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/dashboard`
-- Mandatory
+- **Mandatory:**
   - Click the `Generate VFS` button in the "Shoko: VFS" section to initialize your collection
   - First time generation may take several minutes to complete with a large library
   - A report of the run will be written to `logs/vfs-report.log` inside the plugin directory (accessible via dashboard toasts).
     - You can download the latest report via the dashboard toast that appears when the process finishes
   - The VFS will automatically update when it detects files have been renamed or moved
-- Optional
-  - Link the plugin to your Plex account to enable auto scanning, scrobbling (webhooks) and enhanced collection support
+- **Optional:**
+  - Link the plugin to your Plex account to enable auto scanning, scrobbling (webhooks) and enhanced collection/ratings support
   - Add a Shoko API Key from `http://{ShokoHost}:{ShokoPort}/webui/settings/api-keys` to enable watch sync and import tasks
-- There are additional options similar to what the legacy agent had at the bottom under "Provider Configuration"
+- There are additional options similar to what the legacy agent had at the bottom under "Provider Settings"
 
 > [!TIP]
 > If you are sharing the symlinks over an SMB share they may not appear depending on the [Samba Configuration](https://www.samba.org/samba/docs/current/man-html/smb.conf.5.html). An example entry for `smb.conf` that may help is listed below:
@@ -91,17 +91,30 @@ Enable the following options in Shoko to ensure that Plex has at least one sourc
 - The Shoko Relay agent requires a `TV Shows` type library to be created (or an existing one to be used)
 - Simply change the Scanner to `Plex TV Series` and the Agent to `Shoko Relay`
 - When adding your import folders to plex be sure to point them to the `!ShokoRelayVFS` directory
-- Under "Advanced" in the Library it is recommended to set these settings:
+- Under "Advanced" in the Library it is highly recommended to set the following settings:
   - [x] Use season titles
   - [x] Use local assets
   - Collections: `Hide items which are in collections`
   - Seasons: `Hide for single-season series`
 
+<details>
+<summary><b>Legacy Agent Cleanup</b></summary><br>
+
+Once you are happy with the new metadata provider you can safely delete all of the old data left behind from any legacy agents you may have used. To do so simply navigate to your [Plex Media Server data directory](https://support.plex.tv/articles/202915258-where-is-the-plex-media-server-data-directory-located/) and search for the full agent name. You can then delete all of the files and folders found that match the search result. Some example search terms are listed below:
+
+```
+com.plexapp.agents.hama
+com.plexapp.agents.shoko
+com.plexapp.agents.shokorelay
+```
+
+</details>
+
 ## AnimeThemes Integration
 
 ### Themes as Video Extras
 
-This plugin includes full integration for [AnimeThemes](https://animethemes.moe/). It will look for `.webm` theme files in a folder called `!AnimeThemes` which is located in the root of your anime library. These files must have the same filename as they do on the AnimeThemes website and then a mapping must be generated for them in what is essentially a 3 step process. Simply navigate to the "AnimeThemes: VFS" section of the dashboard page to get started.
+This plugin includes full integration for [AnimeThemes](https://animethemes.moe/). It will look for `.webm` theme files in a folder called `!AnimeThemes` which is located in the root of your anime library (this works for any "destination" type folder managed by Shoko). These files must have the same filename as they do on the AnimeThemes website and then a mapping must be generated for them in what is essentially a 3 step process. Simply navigate to the "AnimeThemes: VFS" section of the dashboard page to get started.
 
 1. Download anime theme videos and place them in the `!AnimeThemes` folder
    - There is a torrent available with over 19000+ themes
@@ -111,15 +124,18 @@ This plugin includes full integration for [AnimeThemes](https://animethemes.moe/
 3. Apply the mapping to the VFS by clicking the `Apply Mapping to VFS` button
 
 > [!IMPORTANT]
-> Similar to the VFS you must exclude the `!AnimeThemes` folder from Shoko using the `Exclude` server option. You must also configure the basepath for where the original files are located (the default is `/animethemes/`).
+> Similar to the VFS you must exclude the `!AnimeThemes` folder from Shoko using the `Exclude` server option. The plugin will automatically detect any `!AnimeThemes` directory found under your Shoko import roots.
 
 ### Themes as Series BGM
 
 There is also support for generating `Theme.mp3` files as local metadata. This will add them to the VFS automatically and can be run for either a single series or as a batch operation. This process requires Shoko Server to have access to [FFmpeg](https://ffmpeg.org/download.html) (place system appropriate binaries in the ShokoRelay plugin folder or system PATH) as AnimeThemes does not provide `.mp3` files.
 
-This is available under the "AnimeThemes: Theme.mp3" section of the dashboard. The batch option will automatically ignore any subfolder named after the configured `VFS Root Path`, `Collection Posters Root Path`, or `AnimeThemes Root Path` as those directories are used internally and never contain series data.
+This is available under the "AnimeThemes: MP3" section of the dashboard. The batch option will automatically ignore any subfolder named after the configured `VFS Root Path`, `Collection Posters Root Path`, or `AnimeThemes Root Path` as those directories are used internally and never contain series data.
 
 ## Plex: Automation
+
+> ![TIP]
+> The Plex automation interval or `Auto Int.` input (listed under the "Plex: Authentication" section) can be configured to control how often collection generation and critic application runs. An interval of 24-hours or above is recommended for this.
 
 ### Collection Generation
 
@@ -127,9 +143,16 @@ This is available under the "AnimeThemes: Theme.mp3" section of the dashboard. T
   - This is done by injecting them via Plex's HTTP API which requires authentication to use
 - To do this navigate to the dashboard and authenticate wth Plex
 - Once Authenticated select the libraries you want to apply collections to then click the `Generate Collections` button
-- As a bonus this supports using the primary series poster as the collection poster (if configured under "Provider Configuration")
+- As a bonus this supports using the primary series poster as the collection poster (if configured under "Provider Settings")
 - Local collection posters can also be used by placing them in the configured `Collection Posters Root Path` (default `!CollectionPosters`) folder
 - These files are simply named after the Shoko group name (or ID) that you wish them to apply to
+
+### Critic Rating Application
+
+- The Provider Framework only supplies TMDB ratings right now and they are not visible in apps that are not a part of the "New Plex Experience"
+- To mitigate this and make Plex for Web/Desktop show ratings in the same style as legacy agents; the `Apply Critic Ratings` button on the dashboard is available
+  - It functions in the same way as the aforementioned Generate Collections button
+- The rating source for this can be configured (or disabled) under `Critic Rating Mode` in the provider settings
 
 ### Force Partial Scans
 
@@ -206,7 +229,7 @@ If you have TMDB auto links enabled in Shoko or simply have a link for a given s
 - Fallback for series/episode descriptions and titles (if AniDB is missing that information)
 - Background/backdrop image support as well as additional main series poster options (if available)
 
-With `TMDB Episode Numbering` enabled in the Provider Configuration the following will also be supported:
+With `TMDB Episode Numbering` enabled in the Provider Settings the following will also be supported:
 
 - Season support for long running anime including posters, titles and descriptions
 - Combining multiple Shoko series into a single Plex entry
@@ -243,24 +266,24 @@ Many tags on AniDB use a [3 Star Weight System](https://wiki.anidb.net/Tags#Star
 
 If "assumed content ratings" are enabled in the agent settings the [target audience](https://anidb.net/tag/2606/animetb) and [content indicator](https://anidb.net/tag/2604/animetb) tags from AniDB will be used to roughly match the [TV Parental Guidelines](http://www.tvguidelines.org/resources/TheRatings.pdf) system. The target audience tags will be checked for ratings from most restrictive to least, then the content indicators will be appended. If the tag weights for the content indicators are high enough (> 400 or **\*\***) the rating will be raised to compensate. A general overview is listed in the table below:
 
-| Tag                             | Rating  |
-| :------------------------------ | :------ |
-| Kodomo                          | TV-Y    |
-| Mina                            | TV-G    |
-| Shoujo, Shounen                 | TV-PG   |
-| Josei, Seinen                   | TV-14   |
-| Sexual Humour                   | TV-\*-D |
-| Nudity, Sex                     | TV-\*-S |
-| **\*\*** Violence               | TV-14-V |
-| **\*\*** Nudity, **\*\+** Sex   | TV-14-S |
-| Borderline Porn (override)      | TV-MA   |
-| **\*\*\+** Nudity, **\*\*** Sex | TV-MA-S |
-| **\*\*\+** Violence             | TV-MA-V |
-| 18 Restricted (override)        | X       |
+| Tag                        | Rating  |
+| :------------------------- | :------ |
+| Kodomo                     | TV-Y    |
+| Mina                       | TV-G    |
+| Shoujo, Shounen            | TV-PG   |
+| Josei, Seinen              | TV-14   |
+| Sexual Humour              | TV-\*-D |
+| Nudity, Sex                | TV-\*-S |
+| ★★☆ Violence               | TV-14-V |
+| ★★☆ Nudity, ★⯪☆ Sex        | TV-14-S |
+| Borderline Porn (override) | TV-MA   |
+| ★★⯪ Nudity, ★★☆ Sex        | TV-MA-S |
+| ★★⯪ Violence               | TV-MA-V |
+| 18 Restricted (override)   | X       |
 
 ### Plugin API
 
-Controlling this plugin directly is possible via HTTP GET/POST see [Endpoints.md](./ShokoRelay/Docs/Endpoints.md) for more information.
+Controlling this plugin directly is possible via HTTP GET/POST see [Controller.md](./Docs/Controller.md) for more information.
 
 ### Missing Info
 
@@ -278,10 +301,10 @@ Due to this plugin relying on Plex's metadata provider feature (which is still u
 
 ## TODO
 
-- Fix audience ratings not appearing in Plex Web/Desktop for episodes or series (they work in new experience apps)
-- ~~Fix networks not applying to series (may be a Shoko issue)~~ Network metadata is missing
+- ~~Fix networks not applying to series (may be a Shoko issue)~~ TMDB Network metadata is missing
 - Populate the similar Array with similar series
 - Once available in Plex metadata providers
   - Switch collection support from Plex HTTP API "Generate Collections" button to the provider
   - Add custom or generic series/episode ratings directly through the provider
-- Refactor and comment code for legibility
+  - Add rich cast info (bio) for cast and crew
+  - Include generic ratings for "old experience" Plex clients without using the HTTP API

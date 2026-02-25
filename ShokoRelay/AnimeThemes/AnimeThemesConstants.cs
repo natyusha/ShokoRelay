@@ -7,13 +7,11 @@ internal static class AnimeThemesConstants
 {
     internal const string ApiBase = "https://api.animethemes.moe";
 
-    internal const string BasePath = "/animethemes/";
-
     internal const string DefaultRootFolder = "!AnimeThemes";
 
-    internal const string MapFileName = "AniDB-AnimeThemes-xrefs.json";
+    internal const string MapFileName = "anidb_animethemes_xrefs.json";
 
-    internal const string RawMapUrl = "https://gist.githubusercontent.com/natyusha/4e29252d939d0f522d38732facf328c7/raw/AniDB-AnimeThemes-xrefs.json";
+    internal const string RawMapUrl = "https://gist.githubusercontent.com/natyusha/4e29252d939d0f522d38732facf328c7/raw/anidb_animethemes_xrefs.json";
 
     internal static readonly string[] VideoFileExtensions = { ".mkv", ".avi", ".mp4", ".mov", ".ogm", ".wmv", ".mpg", ".mpeg", ".mk3d", ".m4v" };
 

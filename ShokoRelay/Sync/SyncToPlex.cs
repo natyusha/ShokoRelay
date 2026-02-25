@@ -74,10 +74,12 @@ namespace ShokoRelay.Sync
 
             // gather watched episodes from Shoko user
             var epUserData = _userDataService.GetEpisodeUserDataForUser(shokoUser).Where(e => e.IsWatched).ToList();
+            Logger.Info("SyncToPlex: retrieved {Count} watched episode records from Shoko", epUserData.Count);
             if (sinceHours.HasValue && sinceHours.Value > 0)
             {
                 var cutoff = DateTime.UtcNow.AddHours(-sinceHours.Value);
                 epUserData = epUserData.Where(e => (e.LastPlayedAt ?? DateTime.MinValue) >= cutoff).ToList();
+                Logger.Info("SyncToPlex: filtered to {Count} episodes since {Hours} hours", epUserData.Count, sinceHours.Value);
             }
 
             // Track which Shoko episodes exist in at least one configured Plex target. Episodes not found
@@ -106,6 +108,7 @@ namespace ShokoRelay.Sync
                 }
                 plexUserTargets.Add((ex.Name, token));
             }
+            Logger.Info("SyncToPlex: will iterate Plex users: {Count}", plexUserTargets.Count);
 
             // process each Plex target (section/server)
             foreach (var target in targets)
@@ -153,167 +156,202 @@ namespace ShokoRelay.Sync
                     return resp.IsSuccessStatusCode;
                 }
 
-                foreach (var ep in epUserData)
+                // iterate per-plex-user rather than per-episode to avoid switching tokens every loop
+                foreach (var (plexUserName, plexToken) in plexUserTargets)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
 
-                    if (ep.EpisodeID <= 0)
-                        continue;
-
-                    // build the Shoko GUID for this episode
-                    string guid = SyncHelper.MakeEpisodeGuid(ep.EpisodeID);
-
-                    // apply to each configured Plex user (admin + extras)
-                    foreach (var (plexUserName, plexToken) in plexUserTargets)
+                    // skip extra users without a token (count them all as skipped up front)
+                    if (!string.Equals(plexUserName, "admin", StringComparison.OrdinalIgnoreCase) && string.IsNullOrWhiteSpace(plexToken))
                     {
-                        cancellationToken.ThrowIfCancellationRequested();
-
-                        // skip extra users without a token
-                        if (!string.Equals(plexUserName, "admin", StringComparison.OrdinalIgnoreCase) && string.IsNullOrWhiteSpace(plexToken))
+                        // increment global and per‑user skipped counters by the number of candidate episodes
+                        result = result with
                         {
-                            perUserResults[plexUserName] = perUserResults[plexUserName] with { Skipped = perUserResults[plexUserName].Skipped + 1 };
+                            Skipped = result.Skipped + epUserData.Count,
+                        };
+                        if (perUserResults.TryGetValue(plexUserName, out var pu))
+                            perUserResults[plexUserName] = pu with { Skipped = pu.Skipped + epUserData.Count };
+                        continue;
+                    }
+
+                    // ensure extra user has access to this library/section once per-target
+                    bool hasAccess = true;
+                    if (!string.Equals(plexUserName, "admin", StringComparison.OrdinalIgnoreCase))
+                    {
+                        hasAccess = await SyncHelper.UserHasAccessToSectionAsync(_plexClient, target, plexUserName, plexToken, userAccessCache, cancellationToken).ConfigureAwait(false);
+                        if (!hasAccess)
+                        {
+                            // no access to this section – treat every episode as skipped
+                            result = result with
+                            {
+                                Skipped = result.Skipped + epUserData.Count,
+                            };
+                            if (perUserResults.TryGetValue(plexUserName, out var pu))
+                                perUserResults[plexUserName] = pu with { Skipped = pu.Skipped + epUserData.Count };
                             continue;
-                        }
-
-                        // ensure extra user has access to this library/section
-                        if (!string.Equals(plexUserName, "admin", StringComparison.OrdinalIgnoreCase))
-                        {
-                            var hasAccess = await SyncHelper.UserHasAccessToSectionAsync(_plexClient, target, plexUserName, plexToken, userAccessCache, cancellationToken).ConfigureAwait(false);
-                            if (!hasAccess)
-                            {
-                                result = SyncHelper.IncSkipped(result, perUserResults, plexUserName);
-                                continue;
-                            }
-                        }
-
-                        // Search this section for the Shoko GUID as the requesting user and only include unwatched items
-                        try
-                        {
-                            string requestPath = $"/library/sections/{target.SectionId}/all?type={Plex.PlexConstants.TypeEpisode}&unwatched=1&guid={Uri.EscapeDataString(guid)}";
-                            using var searchReq = _plexClient.CreateRequest(HttpMethod.Get, requestPath, target.ServerUrl, plexToken);
-                            using var searchResp = await Http.SendAsync(searchReq, cancellationToken).ConfigureAwait(false);
-
-                            if (!searchResp.IsSuccessStatusCode)
-                            {
-                                // treat as not found for this user/section
-                                result = SyncHelper.IncSkipped(result, perUserResults, plexUserName);
-                                continue;
-                            }
-
-                            var container = await Plex.PlexApi.ReadContainerAsync(searchResp, cancellationToken).ConfigureAwait(false);
-                            var item = container?.Metadata?.FirstOrDefault();
-                            if (item == null || string.IsNullOrWhiteSpace(item.RatingKey))
-                            {
-                                // nothing unwatched for this user/section with that GUID
-                                result = SyncHelper.IncSkipped(result, perUserResults, plexUserName);
-                                continue;
-                            }
-
-                            // We found an unwatched item for this user in this section.
-                            episodesFoundInAnyTarget.Add(ep.EpisodeID);
-
-                            // Dry-run: simulate the scrobble
-                            if (dryRun)
-                            {
-                                result = SyncHelper.IncMarkedWatched(result, perUserResults, plexUserName);
-
-                                var change = SyncHelper.MakeChange(
-                                    plexUser: plexUserName,
-                                    shokoEpisodeId: ep.EpisodeID,
-                                    seriesTitle: ep.Series?.PreferredTitle?.Value,
-                                    episodeTitle: ep.Episode?.PreferredTitle?.Value,
-                                    seasonNumber: ep.Episode?.SeasonNumber,
-                                    episodeNumber: ep.Episode?.EpisodeNumber,
-                                    ratingKey: item.RatingKey,
-                                    guid: guid,
-                                    filePath: null,
-                                    lastViewedAt: ep.LastPlayedAt,
-                                    wouldMark: true,
-                                    alreadyWatchedInShoko: true
-                                );
-                                SyncHelper.AddPerUserChange(result.PerUserChanges, plexUserName, change);
-
-                                if (includeVotes && ep.HasUserRating)
-                                {
-                                    result = SyncHelper.IncVotesFound(result);
-                                    result = SyncHelper.IncVotesUpdated(result);
-                                    result.PerUserChanges[plexUserName][^1] = result.PerUserChanges[plexUserName][^1] with { PlexUserRating = ep.UserRating, ShokoUserRating = ep.UserRating };
-                                }
-
-                                continue;
-                            }
-
-                            // Real run: scrobble using ratingKey on behalf of the requesting user
-                            if (!int.TryParse(item.RatingKey, out var ratingKey))
-                            {
-                                result = SyncHelper.IncSkipped(result, perUserResults, plexUserName);
-                                continue;
-                            }
-
-                            string scrobblePath = $"/:/scrobble?identifier=com.plexapp.plugins.library&key={ratingKey}";
-                            using var scrobbleReq = _plexClient.CreateRequest(HttpMethod.Get, scrobblePath, target.ServerUrl, plexToken);
-                            var scrobbleOk = await SendPlexGetAsync(scrobbleReq).ConfigureAwait(false);
-                            if (scrobbleOk)
-                            {
-                                result = SyncHelper.IncMarkedWatched(result, perUserResults, plexUserName);
-
-                                var changeReal = SyncHelper.MakeChange(
-                                    plexUser: plexUserName,
-                                    shokoEpisodeId: ep.EpisodeID,
-                                    seriesTitle: ep.Series?.PreferredTitle?.Value,
-                                    episodeTitle: ep.Episode?.PreferredTitle?.Value,
-                                    seasonNumber: ep.Episode?.SeasonNumber,
-                                    episodeNumber: ep.Episode?.EpisodeNumber,
-                                    ratingKey: item.RatingKey,
-                                    guid: guid,
-                                    filePath: null,
-                                    lastViewedAt: ep.LastPlayedAt,
-                                    wouldMark: true,
-                                    alreadyWatchedInShoko: true
-                                );
-                                SyncHelper.AddPerUserChange(result.PerUserChanges, plexUserName, changeReal);
-
-                                // optional: apply rating to Plex episode when includeVotes==true and Shoko has a rating
-                                if (includeVotes && ep.HasUserRating)
-                                {
-                                    try
-                                    {
-                                        result = SyncHelper.IncVotesFound(result);
-
-                                        var rating = ep.UserRating!.Value;
-                                        string ratePath = $"/:/rate?identifier=com.plexapp.plugins.library&key={ratingKey}&rating={rating.ToString(CultureInfo.InvariantCulture)}";
-                                        using var rateReq = _plexClient.CreateRequest(HttpMethod.Get, ratePath, target.ServerUrl, plexToken);
-                                        var okRate = await SendPlexGetAsync(rateReq).ConfigureAwait(false);
-                                        if (okRate)
-                                        {
-                                            result = SyncHelper.IncVotesUpdated(result);
-                                            result.PerUserChanges[plexUserName][^1] = result.PerUserChanges[plexUserName][^1] with { PlexUserRating = rating, ShokoUserRating = ep.UserRating };
-                                        }
-                                        else
-                                        {
-                                            result = SyncHelper.IncVotesSkipped(result);
-                                        }
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        Logger.Warn(ex, "SyncToPlex: failed to apply episode rating for ep {Ep}", ep.EpisodeID);
-                                        result = result with { Errors = result.Errors + 1 };
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                result = SyncHelper.IncSkipped(result, perUserResults, plexUserName);
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Logger.Warn(ex, "SyncToPlex: failed to search/scrobble for ep {Ep} on {Server}:{Section}", ep.EpisodeID, target.ServerUrl, target.SectionId);
-                            result = SyncHelper.RecordError(result, null, null, $"Failed search/scrobble ep {ep.EpisodeID} on {target.ServerUrl}:{target.SectionId} -> {ex.Message}");
                         }
                     }
 
-                    // continue to next episode (we still need to process all targets/users)
+                    // fetch the complete list of unwatched episodes for this user/section in one shot
+                    var unwatched = await _plexClient.GetSectionEpisodesAsync(target, plexToken, cancellationToken, onlyUnwatched: true, guidFilter: null).ConfigureAwait(false);
+                    int unwatchedCount = unwatched?.Count ?? 0;
+                    Logger.Info("SyncToPlex: user {User} retrieved {Count} unwatched episodes from Plex", plexUserName, unwatchedCount);
+                    var plexMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    if (unwatched != null)
+                    {
+                        foreach (var item in unwatched)
+                        {
+                            if (!string.IsNullOrWhiteSpace(item.Guid) && !string.IsNullOrWhiteSpace(item.RatingKey))
+                            {
+                                if (!plexMap.ContainsKey(item.Guid))
+                                    plexMap[item.Guid] = item.RatingKey;
+                            }
+                        }
+                    }
+
+                    int epCountUser = 0;
+                    foreach (var ep in epUserData)
+                    {
+                        epCountUser++;
+                        if (epCountUser % 500 == 0)
+                        {
+                            Logger.Info("SyncToPlex: user {User} processing episode {Index}/{Total}", plexUserName, epCountUser, epUserData.Count);
+                        }
+                        cancellationToken.ThrowIfCancellationRequested();
+
+                        if (ep.EpisodeID <= 0)
+                            continue;
+
+                        string guid = SyncHelper.MakeEpisodeGuid(ep.EpisodeID);
+
+                        if (!plexMap.TryGetValue(guid, out var ratingKeyStr))
+                        {
+                            result = SyncHelper.IncSkipped(result, perUserResults, plexUserName);
+                            continue;
+                        }
+
+                        // we have a ratingKey available
+                        episodesFoundInAnyTarget.Add(ep.EpisodeID);
+
+                        // Dry-run or actual scrobble
+                        if (dryRun)
+                        {
+                            result = SyncHelper.IncMarkedWatched(result, perUserResults, plexUserName);
+                            // ep.Series getter can throw if the underlying SeriesID is 0; access safely
+                            string? seriesTitle = null;
+                            int? seasonNum = null;
+                            int? episodeNum = null;
+                            try
+                            {
+                                var s = ep.Series; // may throw
+                                if (s != null)
+                                {
+                                    seriesTitle = s.PreferredTitle?.Value;
+                                    seasonNum = ep.Episode?.SeasonNumber;
+                                    episodeNum = ep.Episode?.EpisodeNumber;
+                                }
+                            }
+                            catch
+                            { /* ignore invalid state */
+                            }
+
+                            var change = SyncHelper.MakeChange(
+                                plexUser: plexUserName,
+                                shokoEpisodeId: ep.EpisodeID,
+                                seriesTitle: seriesTitle,
+                                episodeTitle: ep.Episode?.PreferredTitle?.Value,
+                                seasonNumber: seasonNum,
+                                episodeNumber: episodeNum,
+                                ratingKey: ratingKeyStr,
+                                guid: guid,
+                                filePath: null,
+                                lastViewedAt: ep.LastPlayedAt,
+                                wouldMark: true,
+                                alreadyWatchedInShoko: true
+                            );
+                            SyncHelper.AddPerUserChange(result.PerUserChanges, plexUserName, change);
+                            if (includeVotes && ep.HasUserRating)
+                            {
+                                result = SyncHelper.IncVotesFound(result);
+                                result = SyncHelper.IncVotesUpdated(result);
+                                result.PerUserChanges[plexUserName][^1] = result.PerUserChanges[plexUserName][^1] with { PlexUserRating = ep.UserRating, ShokoUserRating = ep.UserRating };
+                            }
+                            continue;
+                        }
+
+                        if (!int.TryParse(ratingKeyStr, out var ratingKey))
+                        {
+                            result = SyncHelper.IncSkipped(result, perUserResults, plexUserName);
+                            continue;
+                        }
+
+                        string scrobblePath = $"/:/scrobble?identifier=com.plexapp.plugins.library&key={ratingKey}";
+                        using var scrobbleReq = _plexClient.CreateRequest(HttpMethod.Get, scrobblePath, target.ServerUrl, plexToken);
+                        var scrobbleOk = await SendPlexGetAsync(scrobbleReq).ConfigureAwait(false);
+                        if (scrobbleOk)
+                        {
+                            result = SyncHelper.IncMarkedWatched(result, perUserResults, plexUserName);
+                            // as above, guard series access
+                            string? seriesTitleReal = null;
+                            int? seasonNumReal = null;
+                            int? episodeNumReal = null;
+                            try
+                            {
+                                var s = ep.Series;
+                                if (s != null)
+                                {
+                                    seriesTitleReal = s.PreferredTitle?.Value;
+                                    seasonNumReal = ep.Episode?.SeasonNumber;
+                                    episodeNumReal = ep.Episode?.EpisodeNumber;
+                                }
+                            }
+                            catch { }
+                            var changeReal = SyncHelper.MakeChange(
+                                plexUser: plexUserName,
+                                shokoEpisodeId: ep.EpisodeID,
+                                seriesTitle: seriesTitleReal,
+                                episodeTitle: ep.Episode?.PreferredTitle?.Value,
+                                seasonNumber: seasonNumReal,
+                                episodeNumber: episodeNumReal,
+                                ratingKey: ratingKeyStr,
+                                guid: guid,
+                                filePath: null,
+                                lastViewedAt: ep.LastPlayedAt,
+                                wouldMark: true,
+                                alreadyWatchedInShoko: true
+                            );
+                            SyncHelper.AddPerUserChange(result.PerUserChanges, plexUserName, changeReal);
+                            if (includeVotes && ep.HasUserRating)
+                            {
+                                try
+                                {
+                                    result = SyncHelper.IncVotesFound(result);
+                                    var rating = ep.UserRating!.Value;
+                                    string ratePath = $"/:/rate?identifier=com.plexapp.plugins.library&key={ratingKey}&rating={rating.ToString(CultureInfo.InvariantCulture)}";
+                                    using var rateReq = _plexClient.CreateRequest(HttpMethod.Get, ratePath, target.ServerUrl, plexToken);
+                                    var okRate = await SendPlexGetAsync(rateReq).ConfigureAwait(false);
+                                    if (okRate)
+                                    {
+                                        result = SyncHelper.IncVotesUpdated(result);
+                                        result.PerUserChanges[plexUserName][^1] = result.PerUserChanges[plexUserName][^1] with { PlexUserRating = rating, ShokoUserRating = ep.UserRating };
+                                    }
+                                    else
+                                    {
+                                        result = SyncHelper.IncVotesSkipped(result);
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    Logger.Warn(ex, "SyncToPlex: failed to apply episode rating for ep {Ep}", ep.EpisodeID);
+                                    result = result with { Errors = result.Errors + 1 };
+                                }
+                            }
+                        }
+                        else
+                        {
+                            result = SyncHelper.IncSkipped(result, perUserResults, plexUserName);
+                        }
+                    }
                 }
 
                 // Sync series-level votes when requested

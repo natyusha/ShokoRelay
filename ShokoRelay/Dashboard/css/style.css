@@ -1,7 +1,5 @@
-/* 
-Light Mode: Shoko Grey (Default)
-Dark Mode:  Shoko NN (https://shokoanime.com/downloads/webui-themes/shoko-nn)
-  */
+/* #region MARK: Themes
+*/
 :root {
   color-scheme: light dark;
   --bg-color: light-dark(#282e38, #0f0f0f);
@@ -19,7 +17,7 @@ Dark Mode:  Shoko NN (https://shokoanime.com/downloads/webui-themes/shoko-nn)
   --animethemes-color: #9f93b8;
   --plex-color: #ffc826;
 }
-
+/* Dark Mode:  Shoko NN (https://shokoanime.com/downloads/webui-themes/shoko-nn) */
 :root[data-theme="dark"] {
   color-scheme: dark;
   --bg-color: #0f0f0f;
@@ -33,7 +31,7 @@ Dark Mode:  Shoko NN (https://shokoanime.com/downloads/webui-themes/shoko-nn)
   --danger-color: #cc0000;
   --ok-color: #00ab3f;
 }
-
+/* Light Mode: Shoko Grey (Default) */
 :root[data-theme="light"] {
   color-scheme: light;
   --bg-color: #282e38;
@@ -47,7 +45,6 @@ Dark Mode:  Shoko NN (https://shokoanime.com/downloads/webui-themes/shoko-nn)
   --danger-color: #ff6c6c;
   --ok-color: #10c469;
 }
-
 .brand-header {
   background-image: url("../img/shoko-relay-header-dark.png");
   background-repeat: no-repeat;
@@ -57,21 +54,21 @@ Dark Mode:  Shoko NN (https://shokoanime.com/downloads/webui-themes/shoko-nn)
   height: 100px;
   width: 100%;
 }
-
 :root[data-theme="dark"] .brand-header {
   background-image: url("../img/shoko-relay-header-dark.png");
 }
-
 :root[data-theme="light"] .brand-header {
   background-image: url("../img/shoko-relay-header-light.png");
 }
-
 @media (prefers-color-scheme: light) {
   .brand-header {
     background-image: url("../img/shoko-relay-header-light.png");
   }
 }
+/* #endregion */
 
+/* #region MARK: Base Styles
+*/
 @font-face {
   font-display: swap;
   font-family: "Sora";
@@ -79,7 +76,6 @@ Dark Mode:  Shoko NN (https://shokoanime.com/downloads/webui-themes/shoko-nn)
   font-weight: 400;
   src: url("../fonts/sora-v17-latin-regular.woff2") format("woff2");
 }
-
 @font-face {
   font-display: swap;
   font-family: "Sora";
@@ -87,18 +83,40 @@ Dark Mode:  Shoko NN (https://shokoanime.com/downloads/webui-themes/shoko-nn)
   font-weight: 500;
   src: url("../fonts/sora-v17-latin-500.woff2") format("woff2");
 }
-
+html {
+  scrollbar-gutter: stable;
+}
 body {
   background: var(--bg-color);
   color: var(--text-color);
   font-family: "Sora", sans-serif;
   margin: 20px;
 }
-
-html {
-  scrollbar-gutter: stable;
+section {
+  background: var(--panel-color);
+  border: 1px solid var(--border-color);
+  margin: 12px 2px 0 2px;
+  padding: 12px;
 }
-
+h3 {
+  font-weight: 500;
+  margin: 0 0 8px 0;
+}
+h3 .icon-svg {
+  fill: var(--highlight-color);
+}
+hr {
+  background: var(--inset-color);
+  border: none;
+  height: 1px;
+  margin: 17px 0 5px 0;
+  padding: 0;
+}
+button,
+section,
+.plex-login-link {
+  border-radius: 0.5rem;
+}
 button,
 .plex-login-link {
   background: var(--button-color);
@@ -111,104 +129,31 @@ button,
   text-align: center;
   transition: all 0.3s ease-in-out;
 }
-
-/* Loading state for action buttons */
-button.loading {
-  opacity: 0.65;
-  pointer-events: none;
-  position: relative;
-}
-
-.button-spinner {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 20px;
-  height: 20px;
-  transform: translate(-50%, -50%);
-  z-index: 2;
-  pointer-events: none;
-}
-
-.button-spinner svg {
-  width: 100%;
-  height: 100%;
-  fill: var(--bg-color);
-  display: block;
-  transform-origin: center center;
-  animation: spin 900ms linear infinite;
-}
-
-/* Fix for small buttons with negative margin */
-.w46-button .button-spinner {
-  margin: 24px 0 0 24px;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 button.danger {
   background: var(--danger-color);
 }
-
 button.danger:hover {
   background: color-mix(in srgb, var(--danger-color), white 25%);
 }
-
 button.cancel {
   background: var(--bg-color);
   color: var(--text-color);
 }
-
 button.cancel:hover {
   background: color-mix(in srgb, var(--bg-color), white 15%);
 }
-
 button:hover,
 .plex-login-link:hover {
   background: var(--hover-color);
 }
-
-h3 {
-  font-weight: 500;
-  margin: 0 0 8px 0;
-}
-
-h3 .icon-svg {
-  fill: var(--highlight-color);
-}
-
-hr {
-  background: var(--inset-color);
-  border: none;
-  height: 1px;
-  margin: 17px 0 5px 0;
-  padding: 0;
-}
-
-img,
-button,
-section,
-.plex-login-link {
-  border-radius: 0.5rem;
-}
-
 input[type="number"] {
   -moz-appearance: textfield;
   appearance: textfield;
 }
-
 input:not([type="checkbox"]),
 select {
   height: 2.5em;
 }
-
 input:not([type="checkbox"]),
 select,
 textarea {
@@ -223,49 +168,76 @@ textarea {
   transition: all 0.3s ease-in-out;
   width: 100%;
 }
-
 input:not([type="checkbox"]),
 select,
 textarea,
 button {
   font-family: "Sora", sans-serif;
 }
-
 input:not([type="checkbox"]):focus,
 select:focus,
 textarea:focus {
   border-color: var(--highlight-color);
   box-shadow: 0 0 4px 2px rgba(148, 170, 209, 0.3);
 }
-
+textarea {
+  height: 6em;
+  resize: none;
+}
 label {
   display: inline-block;
   margin: 6px 0 2px;
   margin-right: 8px;
 }
-
 small {
   opacity: 0.6;
 }
-
-section {
-  background: var(--panel-color);
-  border: 1px solid var(--border-color);
-  margin: 12px 2px 0 2px;
-  padding: 12px;
-}
-
-textarea {
-  height: 6em;
-  resize: none;
-}
-
 #container {
   margin: 0 auto;
   max-width: 900px;
 }
+.full {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.full > * {
+  flex: 1;
+}
+.w46 {
+  max-width: 46px;
+}
+.w100 {
+  max-width: 100px;
+}
+.w100 > button {
+  width: 100%;
+}
+.plex::before {
+  color: var(--plex-color);
+  content: "❯";
+  font-weight: 900;
+  margin: 0 12px 0 8px;
+}
+.animethemes-svg {
+  fill: var(--animethemes-color);
+  height: 0.8em;
+  width: auto;
+}
+.icon-svg {
+  margin: 0 2px -4px 2px;
+  width: 1.3em;
+}
+label > small::before {
+  color: var(--highlight-color);
+  content: "❯";
+  margin: 0 0.6rem;
+  font-weight: 900;
+}
+/* #endregion */
 
-/* Toggle Buttons */
+/* #region MARK: Toggle Buttons
+*/
 .w46-button {
   align-items: center;
   display: inline-flex;
@@ -275,124 +247,162 @@ textarea {
   padding: 12px 16px;
   fill: var(--bg-color);
 }
-
 .w46-button .icon-svg {
   height: 2em;
   margin: -2em;
   width: 2em;
 }
-
 .w46-button.toggle[aria-pressed="true"] {
   background: hsl(from var(--hover-color) h 60% l);
 }
-
 .w46-button.toggle[aria-pressed="true"]:hover {
   background: var(--hover-color);
 }
+/* #endregion */
 
-.animethemes-svg {
-  fill: var(--animethemes-color);
-  height: 0.8em;
-  width: auto;
+/* #region MARK: Loading Buttons
+*/
+button.loading {
+  opacity: 0.65;
+  pointer-events: none;
+  position: relative;
 }
-
-.full {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+.button-spinner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  pointer-events: none;
 }
-
-.full > * {
-  flex: 1;
-}
-
-.w100 {
-  max-width: 100px;
-}
-
-.w100 > button {
+.button-spinner svg {
   width: 100%;
+  height: 100%;
+  fill: var(--bg-color);
+  display: block;
+  transform-origin: center center;
+  animation: spin 900ms linear infinite;
 }
+/* Fix for small buttons with negative margin */
+.w46-button .button-spinner {
+  margin: 24px 0 0 24px;
+}
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* #endregion */
 
-.w46 {
-  max-width: 46px;
-}
-
-.plex::before {
-  color: var(--plex-color);
-  content: "❯";
-  font-weight: 900;
-  margin: 0 12px 0 8px;
-}
-
-label > small::before {
-  color: var(--highlight-color);
-  content: "❯";
-  margin: 0 0.6rem;
-  font-weight: 900;
-}
-
-.icon-svg {
-  margin: 0 2px -4px 2px;
-  width: 1.3em;
-}
-
-/* toasts */
-#toast-container {
-  position: fixed;
-  left: 12px;
-  bottom: 12px;
-  right: auto;
-  top: auto;
-  z-index: 2000;
-  display: flex;
-  flex-direction: column-reverse;
-  gap: 8px;
-}
-.toast {
-  background: var(--panel-color);
-  color: var(--text-color);
-  border: 1px solid var(--border-color);
-  padding: 10px 14px;
-  border-radius: 6px;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
-  min-width: 220px;
-  max-width: 420px;
-  opacity: 0;
-  transform: translateX(-18px) translateZ(0);
-  transition:
-    transform 260ms cubic-bezier(0.2, 0.9, 0.2, 1),
-    opacity 220ms ease;
-  font-size: 0.95em;
-}
-.toast.visible {
-  opacity: 1;
-  transform: translateX(0) translateZ(0);
-}
-.toast.info {
-  border-left: 4px solid var(--highlight-color);
-}
-.toast.success {
-  border-left: 4px solid var(--ok-color);
-}
-.toast.error {
-  border-left: 4px solid var(--danger-color);
-}
-.toast.warning {
-  border-left: 4px solid var(--warning-color);
-}
-.toast[role="status"] {
-  outline: none;
-}
-.toast {
+/* #region MARK: Styled Checkboxes
+*/
+label.shoko-checkbox {
+  align-items: flex-start;
   cursor: pointer;
+  display: inline-flex;
+  gap: 0.6rem;
+  padding: 0.25rem 0;
+  user-select: none;
 }
-.toast .toast-message {
+label.shoko-checkbox input[type="checkbox"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.shoko-checkbox-text {
   display: inline-block;
-  margin-right: 0;
+  line-height: 1em;
+  margin-top: -2px;
 }
+.shoko-checkbox-title {
+  font-weight: 500;
+}
+.shoko-checkbox-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  fill: var(--highlight-color);
+  transition: all 0.3s ease-in-out;
+}
+label.shoko-checkbox:hover .shoko-checkbox-icon {
+  fill: var(--hover-color);
+}
+label.shoko-checkbox input[type="checkbox"]:checked + .shoko-checkbox-icon {
+  fill: var(--hover-color);
+}
+.shoko-checkbox-icon .checked {
+  display: none;
+}
+label.shoko-checkbox input[type="checkbox"]:checked + .shoko-checkbox-icon .checked {
+  display: block;
+}
+label.shoko-checkbox input[type="checkbox"]:checked + .shoko-checkbox-icon .unchecked {
+  display: none;
+}
+/* #endregion */
 
-/* Tooltips */
+/* #region MARK: Floating Links
+*/
+.floating-actions {
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: fixed;
+  right: 12px;
+  z-index: 1000;
+}
+.floating-actions .icon-svg {
+  fill: currentColor;
+}
+.float-link {
+  align-items: center;
+  color: var(--text-color);
+  display: inline-flex;
+  height: 40px;
+  justify-content: center;
+  transition: all 0.3s ease-in-out;
+  width: 40px;
+}
+button.float-link {
+  /* Theme Toggle */
+  -webkit-appearance: none;
+  align-items: center;
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: var(--text-color);
+  display: inline-flex;
+  height: 40px;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  width: 40px;
+}
+.float-link:hover {
+  color: var(--hover-color);
+  transform: translateY(-1px);
+}
+.float-link.theme-toggle[aria-pressed="false"] {
+  color: var(--highlight-color);
+}
+/* #endregion */
+
+/* #region MARK: Tooltips
+*/
 .tooltip-core {
   position: absolute;
   top: 0;
@@ -447,106 +457,67 @@ label > small::before {
   background: var(--tooltip-color);
   color: var(--text-color);
 }
+/* #endregion */
 
-/* ShokoWebUI Styled Checkboxes */
-label.shoko-checkbox {
-  align-items: flex-start;
-  cursor: pointer;
-  display: inline-flex;
-  gap: 0.6rem;
-  padding: 0.25rem 0;
-  user-select: none;
-}
-label.shoko-checkbox input[type="checkbox"] {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-  border: 0;
-}
-.shoko-checkbox-text {
-  display: inline-block;
-  line-height: 1em;
-  margin-top: -2px;
-}
-.shoko-checkbox-title {
-  font-weight: 500;
-}
-.shoko-checkbox-icon {
-  width: 1.5rem;
-  height: 1.5rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  fill: var(--highlight-color);
-  transition: all 0.3s ease-in-out;
-}
-label.shoko-checkbox:hover .shoko-checkbox-icon {
-  fill: var(--hover-color);
-}
-label.shoko-checkbox input[type="checkbox"]:checked + .shoko-checkbox-icon {
-  fill: var(--hover-color);
-}
-.shoko-checkbox-icon .checked {
-  display: none;
-}
-label.shoko-checkbox input[type="checkbox"]:checked + .shoko-checkbox-icon .checked {
-  display: block;
-}
-label.shoko-checkbox input[type="checkbox"]:checked + .shoko-checkbox-icon .unchecked {
-  display: none;
-}
-
-/* Floating Quick Links */
-.floating-actions {
-  bottom: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+/* #region MARK: Toasts
+*/
+#toast-container {
   position: fixed;
-  right: 12px;
-  z-index: 1000;
+  left: 12px;
+  bottom: 12px;
+  right: auto;
+  top: auto;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
 }
-.floating-actions .icon-svg {
-  fill: currentColor;
-}
-.float-link {
-  align-items: center;
+.toast {
+  background: var(--panel-color);
   color: var(--text-color);
-  display: inline-flex;
-  height: 40px;
-  justify-content: center;
-  transition: all 0.3s ease-in-out;
-  width: 40px;
+  border: 1px solid var(--border-color);
+  padding: 10px 14px;
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  min-width: 220px;
+  max-width: 420px;
+  opacity: 0;
+  transform: translateX(-18px) translateZ(0);
+  transition:
+    transform 260ms cubic-bezier(0.2, 0.9, 0.2, 1),
+    opacity 220ms ease;
+  font-size: 0.95em;
 }
-button.float-link {
-  /* Theme Toggle */
-  -webkit-appearance: none;
-  align-items: center;
-  appearance: none;
-  background: transparent;
-  border: none;
-  color: var(--text-color);
-  display: inline-flex;
-  height: 40px;
-  justify-content: center;
-  margin: 0;
-  padding: 0;
-  width: 40px;
+.toast.visible {
+  opacity: 1;
+  transform: translateX(0) translateZ(0);
 }
-.float-link:hover {
-  color: var(--hover-color);
-  transform: translateY(-1px);
+.toast.info {
+  border-left: 4px solid var(--highlight-color);
 }
-.float-link.theme-toggle[aria-pressed="false"] {
-  color: var(--highlight-color);
+.toast.success {
+  border-left: 4px solid var(--ok-color);
 }
+.toast.error {
+  border-left: 4px solid var(--danger-color);
+}
+.toast.warning {
+  border-left: 4px solid var(--warning-color);
+}
+.toast[role="status"] {
+  outline: none;
+}
+.toast {
+  cursor: pointer;
+}
+.toast .toast-message {
+  display: inline-block;
+  margin-right: 0;
+}
+/* #endregion */
 
-/* Modal: Sync Watched States */
+/* #region MARK: Sync Modal
+*/
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -632,3 +603,4 @@ button.float-link {
   opacity: 0;
   visibility: hidden;
 }
+/* #endregion */

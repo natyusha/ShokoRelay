@@ -26,7 +26,7 @@ namespace ShokoRelay.Config
         AllowBoth = 3,
     }
 
-    public enum AudienceRatingMode
+    public enum CriticRatingMode
     {
         AniDB = 0,
         TMDB = 1,
@@ -36,7 +36,11 @@ namespace ShokoRelay.Config
     public enum TagSources
     {
         Combined = 0,
+
+        [Display(Name = "AniDB Only")]
         AniDB = 1,
+
+        [Display(Name = "TMDB Only")]
         TMDB = 2,
 
         [Display(Name = "User Only")]
@@ -75,6 +79,17 @@ namespace ShokoRelay.Config
         [Browsable(false)]
         [DefaultValue("")]
         public string ExtraPlexUsers { get; set; } = "";
+
+        [Display(Name = "UTC Offset Hours", Description = "Offset from UTC midnight used as the anchor for scheduling (–12 to +14)")]
+        [Browsable(false)]
+        [Range(-12, 14, ErrorMessage = "UTC Offset must be between -12 and +14")]
+        [DefaultValue(0)]
+        public int UtcOffsetHours { get; set; } = 0;
+
+        [Display(Name = "Plex Automation Frequency (hours)", Description = "Run Plex automation tasks every N hours. Set to 0 to disable")]
+        [Browsable(false)]
+        [DefaultValue(0)]
+        public int PlexAutomationFrequencyHours { get; set; } = 0;
 
         [Browsable(false)]
         [Display(Name = "Scan On VFS Refresh", Description = "Trigger Plex library scans when the VFS is refreshed.")]
@@ -122,31 +137,31 @@ namespace ShokoRelay.Config
         [DefaultValue("SHOKO, EN, X-JAT")]
         public string EpisodeTitleLanguage { get; set; } = "SHOKO, EN, X-JAT";
 
-        [Display(Name = "Move Common Series Title Prefixes", Description = "Enable to put 'Gekijouban', 'OVA', etc. at the end of the series title")]
+        [Display(Name = "Move Common Series Title Prefixes", Description = "Enable to append 'Gekijouban', 'OVA', etc. to the end of the series title, after em dash '—'")]
         [DefaultValue(true)]
         public bool MoveCommonSeriesTitlePrefixes { get; set; } = true;
 
-        [Display(Name = "Assumed Content Ratings", Description = "Enable to use content ratings and descriptors derived from AniDB tags")]
+        [Display(Name = "Assumed Content Ratings", Description = "Enable to use content ratings and descriptors that are derived from AniDB tags")]
         [DefaultValue(true)]
         public bool AssumedContentRatings { get; set; } = true;
 
-        [Display(Name = "Crew Listings", Description = "Enable staff listings in Plex's Cast & Crew section")]
+        [Display(Name = "Crew Listings", Description = "Enable to include staff listings in Plex's Cast & Crew section")]
         [DefaultValue(true)]
         public bool CrewListings { get; set; } = true;
 
-        [Display(Name = "Collection Posters", Description = "Enable to use the primary series poster in a Shoko group for the collection poster")]
+        [Display(Name = "Collection Posters", Description = "Enable to set the primary series poster in a Shoko group as the collection poster")]
         [DefaultValue(true)]
         public bool CollectionPosters { get; set; } = true;
 
-        [Display(Name = "Plex Theme Music", Description = "Enable to grab theme music files from Plex (uses TVDB IDs)")]
+        [Display(Name = "Plex Theme Music", Description = "Enable to grab theme music files from Plex using TheTVDB IDs")]
         [DefaultValue(true)]
         public bool PlexThemeMusic { get; set; } = true;
 
-        [Display(Name = "TMDB Episode Numbering", Description = "Enable to prefer TMDB episode numbering when available (recommended)")]
+        [Display(Name = "TMDB Episode Numbering", Description = "Enable to apply TMDB episode numbering to the provider and VFS *requires a VFS rebuild to change")]
         [DefaultValue(true)]
         public bool TmdbEpNumbering { get; set; } = true;
 
-        [Display(Name = "TMDB Episode Group Names", Description = "Enable to prefer TMDB titles for grouped episodes (fixes duped titles)")]
+        [Display(Name = "TMDB Episode Group Names", Description = "Enable to prefer TMDB titles for grouped episodes, which often fixes duped titles")]
         [DefaultValue(true)]
         public bool TmdbEpGroupNames { get; set; } = true;
 
@@ -158,7 +173,7 @@ namespace ShokoRelay.Config
         [DefaultValue(false)]
         public bool TmdbThumbnails { get; set; } = false;
 
-        [Display(Name = "Add Every Image", Description = "Enable to add all images instead of Shoko's preferred one (seasons always do)")]
+        [Display(Name = "Add Every Image", Description = "Enable to add all images instead of Shoko's preferred one (seasons always do this)")]
         [DefaultValue(false)]
         public bool AddEveryImage { get; set; } = false;
 
@@ -166,9 +181,9 @@ namespace ShokoRelay.Config
         [DefaultValue(SummaryMode.FullySanitize)]
         public SummaryMode SummaryMode { get; set; } = SummaryMode.FullySanitize;
 
-        [Display(Name = "Audience Rating Mode", Description = "Select the preferred source for audience ratings in Plex")]
-        [DefaultValue(AudienceRatingMode.AniDB)]
-        public AudienceRatingMode AudienceRatingMode { get; set; } = AudienceRatingMode.AniDB;
+        [Display(Name = "Critic Rating Mode", Description = "Select the preferred source for generic critic ratings in Plex *used by 'Apply Critic Ratings'")]
+        [DefaultValue(CriticRatingMode.AniDB)]
+        public CriticRatingMode CriticRatingMode { get; set; } = CriticRatingMode.AniDB;
 
         [Display(Name = "Tag Sources", Description = "Select the preferred source(s) for genres in Plex")]
         [DefaultValue(TagSources.Combined)]
@@ -182,7 +197,7 @@ namespace ShokoRelay.Config
         [DefaultValue("")]
         public string TagBlacklist { get; set; } = "";
 
-        [Display(Name = "Path Mappings", Description = "Mappings for Shoko base paths to Plex base paths")]
+        [Display(Name = "Path Mappings", Description = "Mappings for Plex base paths to Shoko base paths")]
         public Dictionary<string, string> PathMappings { get; set; } = new();
 
         [Display(Name = "Parallelism", Description = "The maximum number of concurrent operations (used by VFS builds and AnimeThemes batch operations)")]
@@ -200,10 +215,6 @@ namespace ShokoRelay.Config
         [Display(Name = "AnimeThemes Root Path", Description = "The location of AnimeThemes .webm files inside each import root")]
         [DefaultValue("!AnimeThemes")]
         public string AnimeThemesRootPath { get; set; } = "!AnimeThemes";
-
-        [Display(Name = "AnimeThemes Path Mapping", Description = "The base path containing AnimeThemes .webm files for mapping generation")]
-        [DefaultValue("/animethemes/")]
-        public string AnimeThemesPathMapping { get; set; } = "/animethemes/";
 
         [Display(Name = "FFmpeg Path", Description = "An optional folder containing FFmpeg/FFprobe. Leave empty to use the plugin root or PATH")]
         [DefaultValue("")]

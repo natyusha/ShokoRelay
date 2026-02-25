@@ -525,7 +525,19 @@ namespace ShokoRelay.Vfs
             foreach (var file in candidates)
             {
                 string name = Path.GetFileName(file);
-                string destPath = Path.Combine(destDir, name);
+                string destName = name;
+
+                // special-case: rename a metadata image called "Specials". extensions are already filtered by MetadataExtensions so we only need to check the basename.
+                if (string.Equals(Path.GetFileNameWithoutExtension(name), "Specials", StringComparison.OrdinalIgnoreCase))
+                {
+                    var ext = Path.GetExtension(name);
+                    if (MetadataExtensions.Contains(ext))
+                    {
+                        destName = "Season-Specials-Poster" + ext;
+                    }
+                }
+
+                string destPath = Path.Combine(destDir, destName);
 
                 VfsShared.TryCreateLink(file, destPath, Logger);
             }

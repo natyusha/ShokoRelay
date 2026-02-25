@@ -2,6 +2,7 @@ using Shoko.Abstractions.Enums;
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Shoko;
+using Shoko.Abstractions.Metadata.Tmdb;
 using Shoko.Abstractions.Services;
 using ShokoRelay.Helpers;
 using static ShokoRelay.Plex.PlexMapping;
@@ -63,7 +64,7 @@ namespace ShokoRelay.Plex
             }
 
             // If the series itself is a TMDB object include its TVDB mapping as well
-            if (series is Shoko.Abstractions.Metadata.Tmdb.ITmdbShow tmdbSelf)
+            if (series is ITmdbShow tmdbSelf)
             {
                 if (tmdbSelf.TvdbShowID is int tvdbSelf && tvdbSelf > 0)
                     addGuid($"tvdb://{tvdbSelf}");
@@ -90,7 +91,7 @@ namespace ShokoRelay.Plex
             }
 
             // If the series itself is a TMDB show, inspect it directly
-            if (networksSource == null && series is Shoko.Abstractions.Metadata.Tmdb.ITmdbShow)
+            if (networksSource == null && series is ITmdbShow)
             {
                 networksSource = series.GetType().GetProperty("TmdbNetworks")?.GetValue(series);
             }
@@ -104,7 +105,7 @@ namespace ShokoRelay.Plex
                 if (n == null)
                     continue;
 
-                if (n is Shoko.Abstractions.Metadata.Tmdb.ITmdbNetwork net)
+                if (n is ITmdbNetwork net)
                 {
                     if (!string.IsNullOrWhiteSpace(net.Name))
                         outList.Add(new { tag = net.Name });
@@ -144,7 +145,7 @@ namespace ShokoRelay.Plex
             }
 
             // If the series itself is a TMDB show, prefer its ProductionCountries (interface returns ISO codes)
-            if (codes == null && series is Shoko.Abstractions.Metadata.Tmdb.ITmdbShow tmdbSelf && tmdbSelf.ProductionCountries?.Any() == true)
+            if (codes == null && series is ITmdbShow tmdbSelf && tmdbSelf.ProductionCountries?.Any() == true)
                 codes = tmdbSelf.ProductionCountries;
 
             if (codes == null || !codes.Any())
@@ -178,61 +179,9 @@ namespace ShokoRelay.Plex
             return outList.Count > 0 ? outList.ToArray() : null;
         }
 
-        // Core resolver used by both series and episode helpers to avoid duplicated switch logic.
-        private double? ResolveAudienceRatingCore(double nativeRating, Func<double?> tmdbFinder)
+        // helper which builds a Plex-style rating array from a numeric value
+        private object? BuildRatingArray(double? rating)
         {
-            return ShokoRelay.Settings.AudienceRatingMode switch
-            {
-                Config.AudienceRatingMode.TMDB => tmdbFinder() is double v && v > 0 ? v : null, // TMDB only, no fallback
-                Config.AudienceRatingMode.AniDB => nativeRating > 0 ? nativeRating : null,
-                _ => null,
-            };
-        }
-
-        // Thin wrapper for series that supplies the native rating and a TMDB lookup delegate.
-        private double? ResolveAudienceRating(ISeries series) =>
-            ResolveAudienceRatingCore(
-                series.Rating,
-                () =>
-                {
-                    if (series is Shoko.Abstractions.Metadata.Shoko.IShokoSeries shokoSeries)
-                    {
-                        var tmdb = shokoSeries.TmdbShows?.FirstOrDefault();
-                        if (tmdb?.Rating > 0)
-                            return tmdb.Rating;
-                    }
-
-                    // If the series *is* a TMDB object, prefer its rating too.
-                    if (series is Shoko.Abstractions.Metadata.Tmdb.ITmdbShow && series.Rating > 0)
-                        return series.Rating;
-
-                    return null;
-                }
-            );
-
-        // Thin wrapper for episode that supplies the native rating and a TMDB lookup delegate.
-        private double? ResolveAudienceRating(IEpisode ep) =>
-            ResolveAudienceRatingCore(
-                ep.Rating,
-                () =>
-                {
-                    if (ep is IShokoEpisode shokoEp)
-                    {
-                        var tmdbEp = shokoEp.TmdbEpisodes?.FirstOrDefault();
-                        if (tmdbEp?.Rating > 0)
-                            return tmdbEp.Rating;
-                    }
-
-                    if (ep is Shoko.Abstractions.Metadata.Tmdb.ITmdbEpisode && ep.Rating > 0)
-                        return ep.Rating;
-
-                    return null;
-                }
-            );
-
-        private object? BuildRatingArray(ISeries series)
-        {
-            var rating = ResolveAudienceRating(series);
             if (!rating.HasValue)
                 return null;
 
@@ -245,23 +194,31 @@ namespace ShokoRelay.Plex
                     value = (float)rating.Value,
                 },
             };
+        }
+
+        // convenience overloads that compute the TMDB rating before delegating
+        private object? BuildRatingArray(ISeries series)
+        {
+            double? tmdb = null;
+            if (series is IShokoSeries shokoSeries)
+            {
+                tmdb = shokoSeries.TmdbShows?.FirstOrDefault()?.Rating;
+            }
+            if (tmdb == null && series is ITmdbShow && series.Rating > 0)
+                tmdb = series.Rating;
+            return BuildRatingArray(tmdb);
         }
 
         private object? BuildRatingArray(IEpisode ep)
         {
-            var rating = ResolveAudienceRating(ep);
-            if (!rating.HasValue)
-                return null;
-
-            return new[]
+            double? tmdb = null;
+            if (ep is IShokoEpisode shokoEp)
             {
-                new
-                {
-                    image = "themoviedb://image.rating",
-                    type = "audience",
-                    value = (float)rating.Value,
-                },
-            };
+                tmdb = shokoEp.TmdbEpisodes?.FirstOrDefault()?.Rating;
+            }
+            if (tmdb == null && ep is ITmdbEpisode && ep.Rating > 0)
+                tmdb = ep.Rating;
+            return BuildRatingArray(tmdb);
         }
 
         public string? GetCollectionName(ISeries series)

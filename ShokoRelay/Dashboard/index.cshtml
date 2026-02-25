@@ -21,12 +21,21 @@
             <label>Extra Plex Users (<span id="plex-libraries-count">0</span> Libraries)</label>
             <input id="extra-plex-users" type="text" placeholder="user1;1234, user2;5678 (optional PIN)">
           </div>
+          <div class="w46">
+            <label title="UTC Offset (-12…+14)">UTC</label>
+            <input id="shoko-utc-offset" type="number" min="-12" max="14" step="1" placeholder="hours">
+          </div>
+          <div class="w46">
+            <label title="Plex Automation Interval">Int.</label>
+            <input id="plex-auto-frequency" type="number" min="0" step="1" placeholder="hours">
+          </div>
         </div>
       </section>
       <section>
         <h3 class="plex">Plex: Automation</h3>
         <div class="full">
           <button id="col-build">Generate Collections</button>
+          <button id="rtg-build">Apply Critic Ratings</button>
         </div>
         <hr>
         <div class="full">
@@ -142,7 +151,7 @@
           <svg class="animethemes-svg" viewBox="0 0 160 86.6" width="277" height="150">
             <use href="img/icons.svg#animethemes"></use>
           </svg>
-          AnimeThemes: Theme.mp3
+          AnimeThemes: MP3
         </h3>
         <div class="full">
           <div class="at-path-col">
@@ -177,7 +186,7 @@
         <svg class="icon-svg" viewBox="0 0 24 24">
           <use href="img/icons.svg#cog-outline"></use>
         </svg>
-        Provider Configuration
+        Provider Settings
       </h3>
       <div id="config-form"></div>
       <small>All provider settings are saved automatically.</small>

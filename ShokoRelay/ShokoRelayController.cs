@@ -15,7 +15,7 @@ namespace ShokoRelay.Controllers
 {
     [ApiVersionNeutral]
     [ApiController]
-    [Route("/api/plugin/ShokoRelay")]
+    [Route(ShokoRelayInfo.BasePath)]
     public partial class ShokoRelayController : ControllerBase
     {
         private readonly IMetadataService _metadataService;
@@ -26,7 +26,8 @@ namespace ShokoRelay.Controllers
         private readonly ConfigProvider _configProvider;
         private readonly PlexAuth _plexAuth;
         private readonly PlexClient _plexLibrary;
-        private readonly Services.ICollectionManager _collectionManager;
+        private readonly Services.ICollectionService _collectionService;
+        private readonly Services.ICriticRatingService _criticRatingService;
         private readonly SyncToShoko _watchedSyncService;
         private readonly SyncToPlex _syncToPlexService;
         private readonly IUserDataService _userDataService;
@@ -35,7 +36,7 @@ namespace ShokoRelay.Controllers
 
         private const string ControllerPageFileName = "index.cshtml";
 
-        private string BaseUrl => $"{Request.Scheme}://{Request.Host}";
+        private string ApiBase => $"{Request.Scheme}://{Request.Host}{ShokoRelayInfo.BasePath}";
 
         private const string SeasonPrefix = PlexConstants.SeasonPrefix;
         private const string EpisodePrefix = PlexConstants.EpisodePrefix;
@@ -50,7 +51,8 @@ namespace ShokoRelay.Controllers
             ConfigProvider configProvider,
             PlexAuth plexAuth,
             PlexClient plexLibrary,
-            Services.ICollectionManager collectionManager,
+            Services.ICollectionService collectionService,
+            Services.ICriticRatingService criticRatingService,
             SyncToShoko watchedSyncService,
             SyncToPlex syncToPlexService,
             IUserDataService userDataService,
@@ -66,7 +68,8 @@ namespace ShokoRelay.Controllers
             _configProvider = configProvider;
             _plexAuth = plexAuth;
             _plexLibrary = plexLibrary;
-            _collectionManager = collectionManager;
+            _collectionService = collectionService;
+            _criticRatingService = criticRatingService;
             _watchedSyncService = watchedSyncService;
             _syncToPlexService = syncToPlexService;
             _userDataService = userDataService;
@@ -191,30 +194,22 @@ namespace ShokoRelay.Controllers
         [Route("matches")]
         [HttpPost]
         [HttpGet]
-        public IActionResult Match([FromQuery] string? name, [FromQuery] string? title, [FromBody] PlexMatchBody? body = null)
+        public IActionResult Match([FromQuery] string? name, [FromBody] PlexMatchBody? body = null)
         {
-            // rawPath is normally the full file path provided by Plex during auto matching.
-            // When a manual search occurs Plex may supply the series folder ID in the request body (`title` + `manual` flag) or as a query parameter.  Treat any numeric title as the target series ID.
-            string? rawPath = name ?? body?.Filename;
+            int? seriesId = null; // compute below
+            string? rawPath = body?.Filename; // the path is always provided in the request body as "filename"
 
-            int? seriesId = null;
-
-            // body override has highest priority, but only if manual is set
-            if (body?.Manual == 1 && !string.IsNullOrWhiteSpace(body.Title) && int.TryParse(body.Title, out var bId))
+            if (string.IsNullOrWhiteSpace(rawPath))
+                if (body?.Manual == 1 && int.TryParse(body.Title, out var manualId))
+                    seriesId = manualId;
+                else
+                    return EmptyMatch();
+            else
             {
-                seriesId = bId;
-            }
-
-            // query string title next
-            if (!seriesId.HasValue && !string.IsNullOrWhiteSpace(title) && int.TryParse(title, out var qId))
-            {
-                seriesId = qId;
-            }
-
-            // fallback to path-based extraction
-            if (!seriesId.HasValue && !string.IsNullOrWhiteSpace(rawPath))
-            {
-                seriesId = TextHelper.ExtractSeriesId(rawPath);
+                // grab first numeric sequence from rawPath as the Shoko series ID
+                var m = System.Text.RegularExpressions.Regex.Match(rawPath, "\\d+");
+                if (m.Success && int.TryParse(m.Value, out var sid))
+                    seriesId = sid;
             }
 
             if (!seriesId.HasValue)
@@ -222,7 +217,10 @@ namespace ShokoRelay.Controllers
 
             var series = _metadataService.GetShokoSeriesByID(seriesId.Value);
             if (series == null)
+            {
+                Logger.Info("Match: no Shoko series found for id {SeriesId}", seriesId.Value);
                 return EmptyMatch();
+            }
 
             var poster = (series as IWithImages)?.GetImages(ImageEntityType.Poster).FirstOrDefault();
 
@@ -615,6 +613,237 @@ namespace ShokoRelay.Controllers
 
         #endregion
 
+        #region Plex: Automation
+
+        [HttpGet("plex/collections/build")]
+        public async Task<IActionResult> BuildPlexCollections([FromQuery] int? seriesId = null, [FromQuery] string? filter = null, CancellationToken cancellationToken = default)
+        {
+            if (!_plexLibrary.IsEnabled)
+            {
+                return BadRequest(new { status = "error", message = "Plex server configuration is missing or no library selected." });
+            }
+
+            var validation = ValidateFilterOrBadRequest(filter, out var filterIds);
+            if (validation != null)
+                return validation;
+
+            if (seriesId.HasValue && filterIds.Count > 0)
+            {
+                return BadRequest(new { status = "error", message = "Use either seriesId or filter, not both." });
+            }
+
+            var seriesList = ResolveSeriesList(seriesId, filterIds);
+            int processed;
+            int skipped;
+            int created;
+            int uploaded;
+            int seasonPostersUploaded;
+            int errors;
+            int deletedEmptyCollections;
+
+            var addedSeries = new HashSet<int>();
+            var targets = _plexLibrary.GetConfiguredTargets();
+
+            var createdCollections = new List<object>();
+            var errorsList = new List<string>();
+
+            if (targets == null || targets.Count == 0)
+                return NoPlexTargetsResponse(seriesList);
+
+            // Delegate to CollectionService for per-target collection building and poster application
+            var managerResult = await _collectionService.BuildCollectionsAsync(seriesList, cancellationToken).ConfigureAwait(false);
+
+            // Map service result back into controller response variables
+            processed = managerResult.Processed;
+            created = managerResult.Created;
+            uploaded = managerResult.Uploaded;
+            seasonPostersUploaded = managerResult.SeasonPostersUploaded;
+            errors = managerResult.Errors;
+            deletedEmptyCollections = managerResult.DeletedEmptyCollections;
+            createdCollections = managerResult.CreatedCollections;
+            errorsList.AddRange(managerResult.ErrorsList);
+
+            // Use manager-provided skipped count
+            skipped = managerResult.Skipped;
+
+            // write collection report log
+            try
+            {
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine($"Collection Build Report - {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                sb.AppendLine($"Processed: {processed}");
+                sb.AppendLine($"Created: {created}");
+                sb.AppendLine($"Uploaded: {uploaded}");
+                sb.AppendLine($"SeasonPostersUploaded: {seasonPostersUploaded}");
+                sb.AppendLine($"Skipped: {skipped}");
+                sb.AppendLine($"Errors: {errors}");
+                sb.AppendLine($"DeletedEmptyCollections: {deletedEmptyCollections}");
+                if (errorsList.Count > 0)
+                {
+                    sb.AppendLine();
+                    sb.AppendLine("Errors List:");
+                    foreach (var e in errorsList)
+                        sb.AppendLine(e);
+                }
+                LogHelper.WriteLog(_configProvider.PluginDirectory, "collection-report.log", sb.ToString());
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "Failed to write collection report log");
+            }
+
+            return Ok(
+                new
+                {
+                    status = "ok",
+                    processed,
+                    created,
+                    uploaded,
+                    seasonPostersUploaded,
+                    skipped,
+                    errors,
+                    deletedEmptyCollections,
+                    createdCollections,
+                    errorsList = errorsList.Take(200).ToList(), // limit output
+                    logUrl = $"{ApiBase}/logs/collection-report.log",
+                }
+            );
+        }
+
+        [HttpGet("plex/collections/posters")]
+        public async Task<IActionResult> ApplyCollectionPosters([FromQuery] int? seriesId = null, [FromQuery] string? filter = null, CancellationToken cancellationToken = default)
+        {
+            if (!_plexLibrary.IsEnabled)
+            {
+                return BadRequest(new { status = "error", message = "Plex server configuration is missing or no library selected." });
+            }
+
+            var validation = ValidateFilterOrBadRequest(filter, out var filterIds);
+            if (validation != null)
+                return validation;
+
+            if (seriesId.HasValue && filterIds.Count > 0)
+            {
+                return BadRequest(new { status = "error", message = "Use either seriesId or filter, not both." });
+            }
+
+            var seriesList = ResolveSeriesList(seriesId, filterIds);
+            var targets = _plexLibrary.GetConfiguredTargets();
+
+            if (targets == null || targets.Count == 0)
+                return NoPlexTargetsResponse(seriesList);
+
+            var postersResult = await _collectionService.ApplyCollectionPostersAsync(seriesList, cancellationToken).ConfigureAwait(false);
+
+            return Ok(
+                new
+                {
+                    status = "ok",
+                    processed = postersResult.Processed,
+                    uploaded = postersResult.Uploaded,
+                    skipped = postersResult.Skipped,
+                    errors = postersResult.Errors,
+                    errorsList = postersResult.ErrorsList.Take(200).ToList(),
+                }
+            );
+
+            // Response delegated to CollectionManager earlier.
+        }
+
+        [HttpGet("plex/ratings/apply")]
+        public async Task<IActionResult> ApplyAudienceRatings([FromQuery] int? seriesId = null, [FromQuery] string? filter = null, CancellationToken cancellationToken = default)
+        {
+            if (!_plexLibrary.IsEnabled)
+            {
+                return BadRequest(new { status = "error", message = "Plex server configuration is missing or no library selected." });
+            }
+
+            var validation = ValidateFilterOrBadRequest(filter, out var filterIds);
+            if (validation != null)
+                return validation;
+
+            if (seriesId.HasValue && filterIds.Count > 0)
+            {
+                return BadRequest(new { status = "error", message = "Use either seriesId or filter, not both." });
+            }
+
+            var seriesList = ResolveSeriesList(seriesId, filterIds);
+            var allowedIds = new HashSet<int>(seriesList.Select(s => s?.ID ?? 0));
+
+            var result = await _criticRatingService.ApplyRatingsAsync(allowedIds, cancellationToken).ConfigureAwait(false);
+
+            // write rating report log
+            try
+            {
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine($"Audience Rating Report - {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                sb.AppendLine($"ProcessedSeries: {result.ProcessedShows}");
+                sb.AppendLine($"UpdatedSeries: {result.UpdatedShows}");
+                sb.AppendLine($"ProcessedEpisodes: {result.ProcessedEpisodes}");
+                sb.AppendLine($"UpdatedEpisodes: {result.UpdatedEpisodes}");
+                sb.AppendLine($"Errors: {result.Errors}");
+                if (result.ErrorsList?.Count > 0)
+                {
+                    sb.AppendLine();
+                    sb.AppendLine("Errors List:");
+                    foreach (var e in result.ErrorsList)
+                        sb.AppendLine(e);
+                }
+                LogHelper.WriteLog(_configProvider.PluginDirectory, "rating-report.log", sb.ToString());
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "Failed to write rating report log");
+            }
+
+            return Ok(
+                new
+                {
+                    status = "ok",
+                    processedShows = result.ProcessedShows,
+                    updatedShows = result.UpdatedShows,
+                    processedEpisodes = result.ProcessedEpisodes,
+                    updatedEpisodes = result.UpdatedEpisodes,
+                    errors = result.Errors,
+                    errorsList = (result.ErrorsList ?? Enumerable.Empty<string>()).Take(200).ToList(),
+                    logUrl = $"{ApiBase}/logs/rating-report.log",
+                }
+            );
+        }
+
+        [HttpGet("plex/automation/run")]
+        public async Task<IActionResult> RunPlexAutomationNow(CancellationToken cancellationToken = default)
+        {
+            if (!_plexLibrary.IsEnabled)
+            {
+                return BadRequest(new { status = "error", message = "Plex server configuration is missing or no library selected." });
+            }
+
+            if (_collectionService == null && _criticRatingService == null)
+                return StatusCode(501, new { status = "error", message = "Automation services not available" });
+
+            try
+            {
+                var allSeries = _metadataService.GetAllShokoSeries()?.Cast<Shoko.Abstractions.Metadata.Shoko.IShokoSeries?>().ToList() ?? new List<Shoko.Abstractions.Metadata.Shoko.IShokoSeries?>();
+                if (_collectionService != null)
+                    await _collectionService.BuildCollectionsAsync(allSeries, cancellationToken).ConfigureAwait(false);
+                if (_criticRatingService != null)
+                    await _criticRatingService.ApplyRatingsAsync(null, cancellationToken).ConfigureAwait(false);
+
+                // mark schedule
+                ShokoRelay.MarkPlexAutomationRunNow();
+
+                return Ok(new { status = "ok" });
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "Manual Plex automation run failed");
+                return StatusCode(500, new { status = "error", message = ex.Message });
+            }
+        }
+
+        #endregion
+
         #region Plex: Webhook
 
         // Plugin-level Plex webhook receiver: https://support.plex.tv/articles/115002267687-webhooks/
@@ -721,145 +950,6 @@ namespace ShokoRelay.Controllers
 
         #endregion
 
-        #region Plex: Collections
-
-        [HttpGet("plex/collections/build")]
-        public async Task<IActionResult> BuildPlexCollections([FromQuery] int? seriesId = null, [FromQuery] string? filter = null, CancellationToken cancellationToken = default)
-        {
-            if (!_plexLibrary.IsEnabled)
-            {
-                return BadRequest(new { status = "error", message = "Plex server configuration is missing or no library selected." });
-            }
-
-            var validation = ValidateFilterOrBadRequest(filter, out var filterIds);
-            if (validation != null)
-                return validation;
-
-            if (seriesId.HasValue && filterIds.Count > 0)
-            {
-                return BadRequest(new { status = "error", message = "Use either seriesId or filter, not both." });
-            }
-
-            var seriesList = ResolveSeriesList(seriesId, filterIds);
-            int processed;
-            int skipped;
-            int created;
-            int uploaded;
-            int seasonPostersUploaded;
-            int errors;
-            int deletedEmptyCollections;
-
-            var addedSeries = new HashSet<int>();
-            var targets = _plexLibrary.GetConfiguredTargets();
-
-            var createdCollections = new List<object>();
-            var errorsList = new List<string>();
-
-            if (targets == null || targets.Count == 0)
-                return NoPlexTargetsResponse(seriesList);
-
-            // Delegate to CollectionManager for per-target collection building and poster application
-            var managerResult = await _collectionManager.BuildCollectionsAsync(seriesList, cancellationToken).ConfigureAwait(false);
-
-            // Map service result back into controller response variables
-            processed = managerResult.Processed;
-            created = managerResult.Created;
-            uploaded = managerResult.Uploaded;
-            seasonPostersUploaded = managerResult.SeasonPostersUploaded;
-            errors = managerResult.Errors;
-            deletedEmptyCollections = managerResult.DeletedEmptyCollections;
-            createdCollections = managerResult.CreatedCollections;
-            errorsList.AddRange(managerResult.ErrorsList);
-
-            // Use manager-provided skipped count
-            skipped = managerResult.Skipped;
-
-            // write collection report log
-            try
-            {
-                var sb = new System.Text.StringBuilder();
-                sb.AppendLine($"Collection Build Report - {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-                sb.AppendLine($"Processed: {processed}");
-                sb.AppendLine($"Created: {created}");
-                sb.AppendLine($"Uploaded: {uploaded}");
-                sb.AppendLine($"SeasonPostersUploaded: {seasonPostersUploaded}");
-                sb.AppendLine($"Skipped: {skipped}");
-                sb.AppendLine($"Errors: {errors}");
-                sb.AppendLine($"DeletedEmptyCollections: {deletedEmptyCollections}");
-                if (errorsList.Count > 0)
-                {
-                    sb.AppendLine();
-                    sb.AppendLine("Errors List:");
-                    foreach (var e in errorsList)
-                        sb.AppendLine(e);
-                }
-                LogHelper.WriteLog(_configProvider.PluginDirectory, "collection-report.log", sb.ToString());
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(ex, "Failed to write collection report log");
-            }
-
-            return Ok(
-                new
-                {
-                    status = "ok",
-                    processed,
-                    created,
-                    uploaded,
-                    seasonPostersUploaded,
-                    skipped,
-                    errors,
-                    deletedEmptyCollections,
-                    createdCollections,
-                    errorsList = errorsList.Take(200).ToList(), // limit output
-                    logUrl = $"{BaseUrl}/api/plugin/ShokoRelay/logs/collection-report.log",
-                }
-            );
-        }
-
-        [HttpGet("plex/collections/posters")]
-        public async Task<IActionResult> ApplyCollectionPosters([FromQuery] int? seriesId = null, [FromQuery] string? filter = null, CancellationToken cancellationToken = default)
-        {
-            if (!_plexLibrary.IsEnabled)
-            {
-                return BadRequest(new { status = "error", message = "Plex server configuration is missing or no library selected." });
-            }
-
-            var validation = ValidateFilterOrBadRequest(filter, out var filterIds);
-            if (validation != null)
-                return validation;
-
-            if (seriesId.HasValue && filterIds.Count > 0)
-            {
-                return BadRequest(new { status = "error", message = "Use either seriesId or filter, not both." });
-            }
-
-            var seriesList = ResolveSeriesList(seriesId, filterIds);
-            var targets = _plexLibrary.GetConfiguredTargets();
-
-            if (targets == null || targets.Count == 0)
-                return NoPlexTargetsResponse(seriesList);
-
-            var postersResult = await _collectionManager.ApplyCollectionPostersAsync(seriesList, cancellationToken).ConfigureAwait(false);
-
-            return Ok(
-                new
-                {
-                    status = "ok",
-                    processed = postersResult.Processed,
-                    uploaded = postersResult.Uploaded,
-                    skipped = postersResult.Skipped,
-                    errors = postersResult.Errors,
-                    errorsList = postersResult.ErrorsList.Take(200).ToList(),
-                }
-            );
-
-            // Response delegated to CollectionManager earlier.
-        }
-
-        #endregion
-
         #region Virtual File System
 
         [HttpGet("vfs")]
@@ -889,7 +979,7 @@ namespace ShokoRelay.Controllers
                         cleaned = true,
                         root = cleanRes.RootPath,
                         errors = cleanRes.Errors,
-                        logUrl = $"{BaseUrl}/api/plugin/ShokoRelay/logs/vfs-report.log",
+                        logUrl = $"{ApiBase}/logs/vfs-report.log",
                     }
                 );
             }
@@ -928,9 +1018,89 @@ namespace ShokoRelay.Controllers
                     plannedLinks = result.PlannedLinks,
                     skipped = result.Skipped,
                     errors = result.Errors,
-                    logUrl = $"{BaseUrl}/api/plugin/ShokoRelay/logs/vfs-report.log",
+                    logUrl = $"{ApiBase}/logs/vfs-report.log",
                 }
             );
+        }
+
+        #endregion
+
+        #region Shoko: Automation
+
+        [HttpPost("shoko/remove-missing")]
+        public async Task<IActionResult> RemoveMissingFiles([FromQuery] bool removeFromMyList = true)
+        {
+            try
+            {
+                if (_shokoImportService == null)
+                    return StatusCode(500, new { status = "error", message = "Import service not available." });
+
+                var body = await _shokoImportService.RemoveMissingFilesAsync(removeFromMyList).ConfigureAwait(false);
+                return Ok(new { status = "ok", response = body });
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "RemoveMissingFiles failed");
+                return StatusCode(500, new { status = "error", message = ex.Message });
+            }
+        }
+
+        [HttpPost("shoko/import")]
+        public async Task<IActionResult> RunShokoImport([FromQuery] bool onlyUnrecognized = true)
+        {
+            try
+            {
+                if (_shokoImportService == null)
+                    return StatusCode(500, new { status = "error", message = "Import service not available." });
+
+                var scanned = await _shokoImportService.TriggerImportAsync().ConfigureAwait(false);
+                return Ok(
+                    new
+                    {
+                        status = "ok",
+                        scanned,
+                        scannedCount = scanned?.Count ?? 0,
+                    }
+                );
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "RunShokoImport failed");
+                return StatusCode(500, new { status = "error", message = ex.Message });
+            }
+        }
+
+        [HttpGet("shoko/import/start")]
+        public async Task<IActionResult> StartShokoImportNow(CancellationToken cancellationToken = default)
+        {
+            var settings = _configProvider.GetSettings();
+            int freqHours = settings?.ShokoImportFrequencyHours ?? 0;
+
+            if (_shokoImportService == null)
+                return StatusCode(501, new { status = "error", message = "ShokoImportService not available" });
+
+            try
+            {
+                var scanned = await _shokoImportService.TriggerImportAsync(cancellationToken).ConfigureAwait(false);
+
+                // Replace schedule: mark last-run == now so automation schedules next run after configured interval
+                ShokoRelay.MarkImportRunNow();
+
+                return Ok(
+                    new
+                    {
+                        status = "ok",
+                        triggered = true,
+                        scheduled = freqHours > 0,
+                        nextRunInHours = freqHours,
+                        scanned,
+                    }
+                );
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { status = "error", message = ex.Message });
+            }
         }
 
         #endregion
@@ -942,7 +1112,6 @@ namespace ShokoRelay.Controllers
         public async Task<IActionResult> SyncPlexWatched(
             [FromQuery(Name = "dryRun")] string? dryRun = null,
             [FromQuery(Name = "sinceHours")] int? sinceHours = null,
-            [FromQuery(Name = "votes")] bool? votes = null,
             [FromQuery(Name = "ratings")] bool? ratings = null,
             [FromQuery(Name = "import")] bool? import = null,
             [FromQuery(Name = "excludeAdmin")] bool? excludeAdmin = null,
@@ -974,7 +1143,7 @@ namespace ShokoRelay.Controllers
             }
 
             bool doImport = import.GetValueOrDefault(false);
-            bool includeRatings = ratings.HasValue ? ratings.GetValueOrDefault(false) : votes.GetValueOrDefault(false);
+            bool includeRatings = ratings.GetValueOrDefault(false);
 
             try
             {
@@ -1055,7 +1224,7 @@ namespace ShokoRelay.Controllers
                         perUserChanges = result.PerUserChanges,
                         errors = result.Errors,
                         errorsList = result.ErrorsList,
-                        logUrl = $"{BaseUrl}/api/plugin/ShokoRelay/logs/sync.log",
+                        logUrl = $"{ApiBase}/logs/sync.log",
                     }
                 );
             }
@@ -1101,103 +1270,23 @@ namespace ShokoRelay.Controllers
 
         #endregion
 
-        #region Shoko: Automations
-
-        [HttpPost("shoko/remove-missing")]
-        public async Task<IActionResult> RemoveMissingFiles([FromQuery] bool removeFromMyList = true)
-        {
-            try
-            {
-                if (_shokoImportService == null)
-                    return StatusCode(500, new { status = "error", message = "Import service not available." });
-
-                var body = await _shokoImportService.RemoveMissingFilesAsync(removeFromMyList).ConfigureAwait(false);
-                return Ok(new { status = "ok", response = body });
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(ex, "RemoveMissingFiles failed");
-                return StatusCode(500, new { status = "error", message = ex.Message });
-            }
-        }
-
-        [HttpPost("shoko/import")]
-        public async Task<IActionResult> RunShokoImport([FromQuery] bool onlyUnrecognized = true)
-        {
-            try
-            {
-                if (_shokoImportService == null)
-                    return StatusCode(500, new { status = "error", message = "Import service not available." });
-
-                var scanned = await _shokoImportService.TriggerImportAsync().ConfigureAwait(false);
-                return Ok(
-                    new
-                    {
-                        status = "ok",
-                        scanned,
-                        scannedCount = scanned?.Count ?? 0,
-                    }
-                );
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(ex, "RunShokoImport failed");
-                return StatusCode(500, new { status = "error", message = ex.Message });
-            }
-        }
-
-        [HttpGet("shoko/import/start")]
-        public async Task<IActionResult> StartShokoImportNow(CancellationToken cancellationToken = default)
-        {
-            var settings = _configProvider.GetSettings();
-            int freqHours = settings?.ShokoImportFrequencyHours ?? 0;
-
-            if (_shokoImportService == null)
-                return StatusCode(501, new { status = "error", message = "ShokoImportService not available" });
-
-            try
-            {
-                var scanned = await _shokoImportService.TriggerImportAsync(cancellationToken).ConfigureAwait(false);
-
-                // Replace schedule: mark last-run == now so automation schedules next run after configured interval
-                ShokoRelay.MarkImportRunNow();
-
-                return Ok(
-                    new
-                    {
-                        status = "ok",
-                        triggered = true,
-                        scheduled = freqHours > 0,
-                        nextRunInHours = freqHours,
-                        scanned,
-                    }
-                );
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { status = "error", message = ex.Message });
-            }
-        }
-
-        #endregion
-
         #region AnimeThemes
 
         [HttpGet("animethemes/vfs/build")]
-        public async Task<IActionResult> AnimeThemesVfsBuild(
-            [FromQuery] string? mapPath = null,
-            [FromQuery] string? torrentRoot = null,
-            [FromQuery] string? filter = null,
-            CancellationToken cancellationToken = default
-        )
+        public async Task<IActionResult> AnimeThemesVfsBuild([FromQuery] string? mapPath = null, [FromQuery] string? filter = null, CancellationToken cancellationToken = default)
         {
-            string defaultBase = !string.IsNullOrWhiteSpace(ShokoRelay.Settings.AnimeThemesPathMapping) ? ShokoRelay.Settings.AnimeThemesPathMapping : AnimeThemesConstants.BasePath;
-            string sourceRoot = torrentRoot ?? defaultBase;
             var validation = ValidateFilterOrBadRequest(filter, out var filterIds);
             if (validation != null)
                 return validation;
 
-            var result = await _animeThemesMapping.ApplyMappingAsync(mapPath, sourceRoot, filterIds, cancellationToken).ConfigureAwait(false);
+            // if the mapping file doesn't exist we return a user-friendly error rather than allowing a 500
+            string resolvedMapPath = mapPath ?? Path.Combine(_configProvider.PluginDirectory, AnimeThemesConstants.MapFileName);
+            if (!System.IO.File.Exists(resolvedMapPath))
+            {
+                return BadRequest(new { status = "error", message = "Mapping file not found" });
+            }
+
+            var result = await _animeThemesMapping.ApplyMappingAsync(mapPath, filterIds, cancellationToken).ConfigureAwait(false);
 
             try
             {
@@ -1227,18 +1316,15 @@ namespace ShokoRelay.Controllers
                     result.Skipped,
                     result.SeriesMatched,
                     result.Errors,
-                    logUrl = $"{BaseUrl}/api/plugin/ShokoRelay/logs/at-vfs-report.log",
+                    logUrl = $"{ApiBase}/logs/at-vfs-report.log",
                 }
             );
         }
 
         [HttpGet("animethemes/vfs/map")]
-        public async Task<IActionResult> AnimeThemesVfsMap([FromQuery] string? mapPath = null, [FromQuery] string? torrentRoot = null, CancellationToken cancellationToken = default)
+        public async Task<IActionResult> AnimeThemesVfsMap([FromQuery] string? mapPath = null, CancellationToken cancellationToken = default)
         {
-            string defaultBase = !string.IsNullOrWhiteSpace(ShokoRelay.Settings.AnimeThemesPathMapping) ? ShokoRelay.Settings.AnimeThemesPathMapping : AnimeThemesConstants.BasePath;
-            string root = torrentRoot ?? defaultBase;
-
-            var result = await _animeThemesMapping.BuildMappingFileAsync(root, mapPath, cancellationToken).ConfigureAwait(false);
+            var result = await _animeThemesMapping.BuildMappingFileAsync(mapPath, cancellationToken).ConfigureAwait(false);
             try
             {
                 var sb = new System.Text.StringBuilder();
@@ -1258,7 +1344,7 @@ namespace ShokoRelay.Controllers
             {
                 Logger.Warn(ex, "Failed to write animethemes mapping log");
             }
-            return Ok(new { result, logUrl = $"{BaseUrl}/api/plugin/ShokoRelay/logs/at-mapping.log" });
+            return Ok(new { result, logUrl = $"{ApiBase}/logs/at-mapping.log" });
         }
 
         [HttpPost("animethemes/vfs/import")]
@@ -1309,7 +1395,7 @@ namespace ShokoRelay.Controllers
                     Logger.Warn(ex, "Failed to write anime themes mp3 report log");
                 }
 
-                return Ok(new { batch, logUrl = $"{BaseUrl}/api/plugin/ShokoRelay/logs/theme-report.log" });
+                return Ok(new { batch, logUrl = $"{ApiBase}/logs/theme-report.log" });
             }
 
             var single = await _animeThemesGenerator.ProcessSingleAsync(query, cancellationToken);

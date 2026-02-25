@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Reflection;
 using System.Text.Json;
 using NLog;
 using Shoko.Abstractions.Plugin;
@@ -142,6 +143,8 @@ namespace ShokoRelay.Config
 
         public void SaveSettings(RelayConfig settings)
         {
+            ApplyDefaultValues(settings);
+
             ValidateSettings(settings);
 
             // Normalize path mappings prior to persisting so users can enter natural paths in the UI
@@ -158,6 +161,30 @@ namespace ShokoRelay.Config
 
             _settings = settings;
             Logger.Info("Config saved.");
+        }
+
+        // Ensure settings object contains sensible defaults for any string property that was left empty/whitespace
+        private static void ApplyDefaultValues(RelayConfig settings)
+        {
+            if (settings == null)
+                return;
+
+            var defaults = new RelayConfig();
+            foreach (var prop in typeof(RelayConfig).GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            {
+                if (!prop.CanRead || !prop.CanWrite)
+                    continue;
+                if (prop.PropertyType != typeof(string))
+                    continue;
+
+                var cur = (string?)prop.GetValue(settings);
+                if (string.IsNullOrWhiteSpace(cur))
+                {
+                    var def = (string?)prop.GetValue(defaults);
+                    if (!string.IsNullOrWhiteSpace(def))
+                        prop.SetValue(settings, def);
+                }
+            }
         }
 
         public void DeleteTokenFile()
