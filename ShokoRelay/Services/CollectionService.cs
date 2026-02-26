@@ -3,7 +3,6 @@ using NLog;
 using Shoko.Abstractions.Metadata.Shoko;
 using Shoko.Abstractions.Services;
 using ShokoRelay.Config;
-using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
 
 namespace ShokoRelay.Services
@@ -107,7 +106,7 @@ namespace ShokoRelay.Services
                     if (string.IsNullOrWhiteSpace(item.Guid))
                         continue;
 
-                    var shokoId = Helpers.PlexHelpers.ExtractShokoSeriesIdFromGuid(item.Guid);
+                    var shokoId = PlexHelper.ExtractShokoSeriesIdFromGuid(item.Guid);
                     if (!shokoId.HasValue)
                         continue;
 
@@ -273,7 +272,7 @@ namespace ShokoRelay.Services
                     if (string.IsNullOrWhiteSpace(item.Guid))
                         continue;
 
-                    var shokoId = Helpers.PlexHelpers.ExtractShokoSeriesIdFromGuid(item.Guid);
+                    var shokoId = PlexHelper.ExtractShokoSeriesIdFromGuid(item.Guid);
                     if (!shokoId.HasValue)
                         continue;
 
@@ -315,7 +314,7 @@ namespace ShokoRelay.Services
                         continue;
                     }
 
-                    string? posterUrl = PlexHelpers.GetCollectionPosterUrl(series, collectionName, collectionId.Value, _metadataService, _configProvider.GetSettings().CollectionPosters);
+                    string? posterUrl = PlexHelper.GetCollectionPosterUrl(series, collectionName, collectionId.Value, _metadataService, _configProvider.GetSettings().CollectionPosters);
 
                     if (string.IsNullOrWhiteSpace(posterUrl))
                     {
@@ -349,7 +348,7 @@ namespace ShokoRelay.Services
 
         private async Task<bool> TryApplyCollectionPosterAsync(IShokoSeries series, string collectionName, int collectionId, PlexLibraryTarget target, CancellationToken cancellationToken)
         {
-            string? posterUrl = PlexHelpers.GetCollectionPosterUrl(series, collectionName, collectionId, _metadataService, _configProvider.GetSettings().CollectionPosters);
+            string? posterUrl = PlexHelper.GetCollectionPosterUrl(series, collectionName, collectionId, _metadataService, _configProvider.GetSettings().CollectionPosters);
             if (string.IsNullOrWhiteSpace(posterUrl))
                 return false;
 

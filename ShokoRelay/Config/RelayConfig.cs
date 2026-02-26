@@ -80,12 +80,6 @@ namespace ShokoRelay.Config
         [DefaultValue("")]
         public string ExtraPlexUsers { get; set; } = "";
 
-        [Display(Name = "UTC Offset Hours", Description = "Offset from UTC midnight used as the anchor for scheduling (–12 to +14)")]
-        [Browsable(false)]
-        [Range(-12, 14, ErrorMessage = "UTC Offset must be between -12 and +14")]
-        [DefaultValue(0)]
-        public int UtcOffsetHours { get; set; } = 0;
-
         [Display(Name = "Plex Automation Frequency (hours)", Description = "Run Plex automation tasks every N hours. Set to 0 to disable")]
         [Browsable(false)]
         [DefaultValue(0)]
@@ -101,10 +95,11 @@ namespace ShokoRelay.Config
         [DefaultValue(false)]
         public bool AutoScrobble { get; set; } = false;
 
-        [Display(Name = "Shoko API Key", Description = "API key for Shoko Server v3 API (used for scheduled/manual imports). Stored in preferences.json")]
+        [Display(Name = "UTC Offset Hours", Description = "Offset from UTC midnight used as the anchor for scheduling (-12 to +14)")]
         [Browsable(false)]
-        [DefaultValue("")]
-        public string ShokoApiKey { get; set; } = string.Empty;
+        [Range(-12, 14, ErrorMessage = "UTC Offset must be between -12 and +14")]
+        [DefaultValue(0)]
+        public int UtcOffsetHours { get; set; } = 0;
 
         [Display(Name = "Auto Import Frequency (hours)", Description = "Run Shoko import detection every N hours. Set to 0 to disable")]
         [Browsable(false)]
@@ -137,7 +132,7 @@ namespace ShokoRelay.Config
         [DefaultValue("SHOKO, EN, X-JAT")]
         public string EpisodeTitleLanguage { get; set; } = "SHOKO, EN, X-JAT";
 
-        [Display(Name = "Move Common Series Title Prefixes", Description = "Enable to append 'Gekijouban', 'OVA', etc. to the end of the series title, after em dash '—'")]
+        [Display(Name = "Move Common Series Title Prefixes", Description = "Enable to append 'Gekijouban', 'OVA', etc. to the end of the series title, after an em dash '—'")]
         [DefaultValue(true)]
         public bool MoveCommonSeriesTitlePrefixes { get; set; } = true;
 
@@ -149,7 +144,7 @@ namespace ShokoRelay.Config
         [DefaultValue(true)]
         public bool CrewListings { get; set; } = true;
 
-        [Display(Name = "Collection Posters", Description = "Enable to set the primary series poster in a Shoko group as the collection poster")]
+        [Display(Name = "Collection Posters", Description = "Enable to set the primary series poster in a Shoko group as Plex's collection poster")]
         [DefaultValue(true)]
         public bool CollectionPosters { get; set; } = true;
 
@@ -200,7 +195,7 @@ namespace ShokoRelay.Config
         [Display(Name = "Path Mappings", Description = "Mappings for Plex base paths to Shoko base paths")]
         public Dictionary<string, string> PathMappings { get; set; } = new();
 
-        [Display(Name = "Parallelism", Description = "The maximum number of concurrent operations (used by VFS builds and AnimeThemes batch operations)")]
+        [Display(Name = "Parallelism", Description = "The maximum number of concurrent operations *used by VFS and AnimeThemes batch operations")]
         [DefaultValue(4)]
         public int Parallelism { get; set; } = 4;
 
@@ -208,13 +203,13 @@ namespace ShokoRelay.Config
         [DefaultValue("!ShokoRelayVFS")]
         public string VfsRootPath { get; set; } = "!ShokoRelayVFS";
 
-        [Display(Name = "Collection Posters Root Path", Description = "The location of custom local collection posters inside each import root")]
-        [DefaultValue("!CollectionPosters")]
-        public string CollectionPostersRootPath { get; set; } = "!CollectionPosters";
-
         [Display(Name = "AnimeThemes Root Path", Description = "The location of AnimeThemes .webm files inside each import root")]
         [DefaultValue("!AnimeThemes")]
         public string AnimeThemesRootPath { get; set; } = "!AnimeThemes";
+
+        [Display(Name = "Collection Posters Root Path", Description = "The location of custom local collection posters inside each import root")]
+        [DefaultValue("!CollectionPosters")]
+        public string CollectionPostersRootPath { get; set; } = "!CollectionPosters";
 
         [Display(Name = "FFmpeg Path", Description = "An optional folder containing FFmpeg/FFprobe. Leave empty to use the plugin root or PATH")]
         [DefaultValue("")]

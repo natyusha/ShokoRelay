@@ -14,7 +14,7 @@
   --ok-color: light-dark(#10c469, #00ab3f);
   --tooltip-color: #222;
   --warning-color: #f9c851;
-  --animethemes-color: #9f93b8;
+  --at-color: #9f93b8;
   --plex-color: #ffc826;
 }
 /* Dark Mode:  Shoko NN (https://shokoanime.com/downloads/webui-themes/shoko-nn) */
@@ -102,9 +102,6 @@ h3 {
   font-weight: 500;
   margin: 0 0 8px 0;
 }
-h3 .icon-svg {
-  fill: var(--highlight-color);
-}
 hr {
   background: var(--inset-color);
   border: none;
@@ -168,7 +165,7 @@ textarea {
   transition: all 0.3s ease-in-out;
   width: 100%;
 }
-input:not([type="checkbox"]),
+input,
 select,
 textarea,
 button {
@@ -213,26 +210,44 @@ small {
 .w100 > button {
   width: 100%;
 }
-.plex::before {
-  color: var(--plex-color);
-  content: "❯";
-  font-weight: 900;
-  margin: 0 12px 0 8px;
+.plex-auth:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
-.animethemes-svg {
-  fill: var(--animethemes-color);
-  height: 0.8em;
-  width: auto;
+button.plex-auth:disabled:hover {
+  background: var(--button-color);
+}
+/* #endregion */
+
+/* #region MARK: Icons
+*/
+svg {
+  height: 1.282em;
+  width: 1.282em;
+}
+h3 .icon-svg {
+  fill: var(--highlight-color);
 }
 .icon-svg {
   margin: 0 2px -4px 2px;
-  width: 1.3em;
+}
+.at-svg {
+  fill: var(--at-color);
+  margin-bottom: -4px;
+  width: 1.6em;
+}
+label > small::before,
+.plex::before {
+  content: "❯";
+  font-weight: 900;
+}
+.plex::before {
+  color: var(--plex-color);
+  margin: 0 12px 0 8px;
 }
 label > small::before {
   color: var(--highlight-color);
-  content: "❯";
   margin: 0 0.6rem;
-  font-weight: 900;
 }
 /* #endregion */
 
@@ -285,7 +300,6 @@ button.loading {
   transform-origin: center center;
   animation: spin 900ms linear infinite;
 }
-/* Fix for small buttons with negative margin */
 .w46-button .button-spinner {
   margin: 24px 0 0 24px;
 }
@@ -329,13 +343,15 @@ label.shoko-checkbox input[type="checkbox"] {
   font-weight: 500;
 }
 .shoko-checkbox-icon {
-  width: 1.5rem;
-  height: 1.5rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   fill: var(--highlight-color);
   transition: all 0.3s ease-in-out;
+}
+.shoko-checkbox-icon svg {
+  width: 1.5rem;
+  height: 1.5rem;
 }
 label.shoko-checkbox:hover .shoko-checkbox-icon {
   fill: var(--hover-color);
@@ -352,6 +368,12 @@ label.shoko-checkbox input[type="checkbox"]:checked + .shoko-checkbox-icon .chec
 label.shoko-checkbox input[type="checkbox"]:checked + .shoko-checkbox-icon .unchecked {
   display: none;
 }
+label.plex-auth.shoko-checkbox input:disabled,
+label.plex-auth.shoko-checkbox input:disabled + .shoko-checkbox-icon,
+label.plex-auth.shoko-checkbox input:disabled ~ .shoko-checkbox-text {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 /* #endregion */
 
 /* #region MARK: Floating Links
@@ -365,7 +387,8 @@ label.shoko-checkbox input[type="checkbox"]:checked + .shoko-checkbox-icon .unch
   right: 12px;
   z-index: 1000;
 }
-.floating-actions .icon-svg {
+.floating-actions .icon-svg,
+.floating-actions .at-svg {
   fill: currentColor;
 }
 .float-link {
@@ -378,7 +401,6 @@ label.shoko-checkbox input[type="checkbox"]:checked + .shoko-checkbox-icon .unch
   width: 40px;
 }
 button.float-link {
-  /* Theme Toggle */
   -webkit-appearance: none;
   align-items: center;
   appearance: none;
@@ -574,7 +596,7 @@ button.float-link {
   user-select: none;
 }
 .direction-toggle:hover {
-  background: color-mix(in srgb, var(--inset-color), white 15%);
+  background: color-mix(in srgb, var(--inset-color), white 5%);
 }
 .direction-toggle .dir-label {
   min-width: 100px;

@@ -5,11 +5,11 @@ using Shoko.Abstractions.Enums;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Shoko;
 using Shoko.Abstractions.Services;
-using ShokoRelay.Plex;
+using ShokoRelay.Helpers;
 
-namespace ShokoRelay.Helpers
+namespace ShokoRelay.Plex
 {
-    public static class PlexHelpers
+    public static class PlexHelper
     {
         public static int? ExtractShokoSeriesIdFromGuid(string? guid)
         {

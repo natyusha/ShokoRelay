@@ -65,8 +65,8 @@ namespace ShokoRelay
                 provider.GetRequiredService<PlexAuth>()
             ));
 
-            // Shoko v3 import trigger service (calls /api/v3/ImportFolder and Scan)
-            serviceCollection.AddSingleton<Services.ShokoImportService>();
+            // Shoko import helper service
+            serviceCollection.AddSingleton(provider => new Services.ShokoImportService(provider.GetRequiredService<IVideoService>()));
 
             // Run the plugin runtime as a hosted service (starts VFS watcher + automation loop)
             serviceCollection.AddHostedService<ShokoRelay>();

@@ -274,7 +274,7 @@ namespace ShokoRelay.Controllers
             if (primarySeries == null)
                 return NotFound();
 
-            var posterPath = PlexHelpers.FindCollectionPosterPathByGroup(primarySeries, groupId);
+            var posterPath = PlexHelper.FindCollectionPosterPathByGroup(primarySeries, groupId);
             if (string.IsNullOrWhiteSpace(posterPath) || !System.IO.File.Exists(posterPath))
                 return NotFound();
 
@@ -666,7 +666,6 @@ namespace ShokoRelay.Controllers
             // Use manager-provided skipped count
             skipped = managerResult.Skipped;
 
-            // write collection report log
             try
             {
                 var sb = new System.Text.StringBuilder();
@@ -685,7 +684,7 @@ namespace ShokoRelay.Controllers
                     foreach (var e in errorsList)
                         sb.AppendLine(e);
                 }
-                LogHelper.WriteLog(_configProvider.PluginDirectory, "collection-report.log", sb.ToString());
+                LogHelper.WriteLog(_configProvider.PluginDirectory, "collections-report.log", sb.ToString());
             }
             catch (Exception ex)
             {
@@ -705,7 +704,7 @@ namespace ShokoRelay.Controllers
                     deletedEmptyCollections,
                     createdCollections,
                     errorsList = errorsList.Take(200).ToList(), // limit output
-                    logUrl = $"{ApiBase}/logs/collection-report.log",
+                    logUrl = $"{ApiBase}/logs/collections-report.log",
                 }
             );
         }
@@ -772,7 +771,6 @@ namespace ShokoRelay.Controllers
 
             var result = await _criticRatingService.ApplyRatingsAsync(allowedIds, cancellationToken).ConfigureAwait(false);
 
-            // write rating report log
             try
             {
                 var sb = new System.Text.StringBuilder();
@@ -789,7 +787,7 @@ namespace ShokoRelay.Controllers
                     foreach (var e in result.ErrorsList)
                         sb.AppendLine(e);
                 }
-                LogHelper.WriteLog(_configProvider.PluginDirectory, "rating-report.log", sb.ToString());
+                LogHelper.WriteLog(_configProvider.PluginDirectory, "ratings-report.log", sb.ToString());
             }
             catch (Exception ex)
             {
@@ -806,7 +804,7 @@ namespace ShokoRelay.Controllers
                     updatedEpisodes = result.UpdatedEpisodes,
                     errors = result.Errors,
                     errorsList = (result.ErrorsList ?? Enumerable.Empty<string>()).Take(200).ToList(),
-                    logUrl = $"{ApiBase}/logs/rating-report.log",
+                    logUrl = $"{ApiBase}/logs/ratings-report.log",
                 }
             );
         }
@@ -1027,16 +1025,47 @@ namespace ShokoRelay.Controllers
 
         #region Shoko: Automation
 
+        [HttpGet("shoko/remove-missing")]
         [HttpPost("shoko/remove-missing")]
-        public async Task<IActionResult> RemoveMissingFiles([FromQuery] bool removeFromMyList = true)
+        public async Task<IActionResult> RemoveMissingFiles([FromQuery] bool? dryRun = null)
         {
             try
             {
                 if (_shokoImportService == null)
                     return StatusCode(500, new { status = "error", message = "Import service not available." });
 
-                var body = await _shokoImportService.RemoveMissingFilesAsync(removeFromMyList).ConfigureAwait(false);
-                return Ok(new { status = "ok", response = body });
+                bool doDry = dryRun ?? true;
+                var removed = await _shokoImportService.RemoveMissingFilesAsync(true, doDry).ConfigureAwait(false);
+
+                try
+                {
+                    var sb = new System.Text.StringBuilder();
+                    sb.AppendLine($"RemoveMissing Report - {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                    sb.AppendLine($"DryRun: {doDry}");
+                    sb.AppendLine($"Count: {removed?.Count ?? 0}");
+                    if (removed != null && removed.Count > 0)
+                    {
+                        sb.AppendLine();
+                        foreach (var path in removed)
+                            sb.AppendLine(path);
+                    }
+                    LogHelper.WriteLog(_configProvider.PluginDirectory, "remove-missing-report.log", sb.ToString());
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn(ex, "Failed to write remove-missing log");
+                }
+
+                return Ok(
+                    new
+                    {
+                        status = "ok",
+                        dryRun = doDry,
+                        removed,
+                        count = removed?.Count ?? 0,
+                        logUrl = $"{ApiBase}/logs/remove-missing-report.log",
+                    }
+                );
             }
             catch (Exception ex)
             {
@@ -1107,8 +1136,8 @@ namespace ShokoRelay.Controllers
 
         #region Sync Watched
 
-        [HttpGet("syncwatched")]
-        [HttpPost("syncwatched")]
+        [HttpGet("sync-watched")]
+        [HttpPost("sync-watched")]
         public async Task<IActionResult> SyncPlexWatched(
             [FromQuery(Name = "dryRun")] string? dryRun = null,
             [FromQuery(Name = "sinceHours")] int? sinceHours = null,
@@ -1167,43 +1196,40 @@ namespace ShokoRelay.Controllers
                     result = await _watchedSyncService.SyncWatchedAsync(parsedDryRun, sinceHours, includeRatings, cancellationToken).ConfigureAwait(false);
                 }
 
-                // write sync report log if not a dry-run (manual/real sync)
-                if (!parsedDryRun)
+                try
                 {
-                    try
+                    var sb = new System.Text.StringBuilder();
+                    sb.AppendLine($"Sync Watched Report - {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                    sb.AppendLine($"DryRun: {parsedDryRun}");
+                    sb.AppendLine($"Direction: {direction}");
+                    sb.AppendLine($"Processed: {result.Processed}");
+                    sb.AppendLine($"Marked: {result.MarkedWatched}");
+                    sb.AppendLine($"Skipped: {result.Skipped}");
+                    sb.AppendLine($"Scheduled: {result.ScheduledJobs}");
+                    sb.AppendLine($"VotesFound: {result.VotesFound}");
+                    sb.AppendLine($"VotesUpdated: {result.VotesUpdated}");
+                    sb.AppendLine($"VotesSkipped: {result.VotesSkipped}");
+                    sb.AppendLine($"Matched: {result.Matched}");
+                    // write a summary of missing mapping ids rather than the List type name
+                    var missingList = result.MissingMappings ?? new List<int>();
+                    int missingCount = missingList.Count;
+                    sb.AppendLine($"MissingMappings: {missingCount}");
+                    if (missingCount > 0)
                     {
-                        var sb = new System.Text.StringBuilder();
-                        sb.AppendLine($"Sync Watched Report - {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-                        sb.AppendLine($"Direction: {direction}");
-                        sb.AppendLine($"Processed: {result.Processed}");
-                        sb.AppendLine($"Marked: {result.MarkedWatched}");
-                        sb.AppendLine($"Skipped: {result.Skipped}");
-                        sb.AppendLine($"Scheduled: {result.ScheduledJobs}");
-                        sb.AppendLine($"VotesFound: {result.VotesFound}");
-                        sb.AppendLine($"VotesUpdated: {result.VotesUpdated}");
-                        sb.AppendLine($"VotesSkipped: {result.VotesSkipped}");
-                        sb.AppendLine($"Matched: {result.Matched}");
-                        // write a summary of missing mapping ids rather than the List type name
-                        var missingList = result.MissingMappings ?? new List<int>();
-                        int missingCount = missingList.Count;
-                        sb.AppendLine($"MissingMappings: {missingCount}");
-                        if (missingCount > 0)
-                        {
-                            sb.AppendLine("MissingIds: " + string.Join(',', missingList));
-                        }
-                        if (result.ErrorsList?.Count > 0)
-                        {
-                            sb.AppendLine();
-                            sb.AppendLine("Errors:");
-                            foreach (var e in result.ErrorsList)
-                                sb.AppendLine(e);
-                        }
-                        LogHelper.WriteLog(_configProvider.PluginDirectory, "sync.log", sb.ToString());
+                        sb.AppendLine("MissingIds: " + string.Join(',', missingList));
                     }
-                    catch (Exception ex)
+                    if (result.ErrorsList?.Count > 0)
                     {
-                        Logger.Warn(ex, "Failed to write sync log");
+                        sb.AppendLine();
+                        sb.AppendLine("Errors:");
+                        foreach (var e in result.ErrorsList)
+                            sb.AppendLine(e);
                     }
+                    LogHelper.WriteLog(_configProvider.PluginDirectory, "sync-watched-report.log", sb.ToString());
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn(ex, "Failed to write sync log");
                 }
 
                 return Ok(
@@ -1224,7 +1250,7 @@ namespace ShokoRelay.Controllers
                         perUserChanges = result.PerUserChanges,
                         errors = result.Errors,
                         errorsList = result.ErrorsList,
-                        logUrl = $"{ApiBase}/logs/sync.log",
+                        logUrl = $"{ApiBase}/logs/sync-watched-report.log",
                     }
                 );
             }
@@ -1235,7 +1261,7 @@ namespace ShokoRelay.Controllers
             }
         }
 
-        [HttpGet("syncwatched/start")]
+        [HttpGet("sync-watched/start")]
         public async Task<IActionResult> StartWatchedSyncNow(CancellationToken cancellationToken = default)
         {
             var settings = _configProvider.GetSettings();
@@ -1302,7 +1328,7 @@ namespace ShokoRelay.Controllers
                     foreach (var e in result.Errors)
                         sb.AppendLine(e);
                 }
-                LogHelper.WriteLog(_configProvider.PluginDirectory, "at-vfs-report.log", sb.ToString());
+                LogHelper.WriteLog(_configProvider.PluginDirectory, "at-vfs-build-report.log", sb.ToString());
             }
             catch (Exception ex)
             {
@@ -1316,7 +1342,7 @@ namespace ShokoRelay.Controllers
                     result.Skipped,
                     result.SeriesMatched,
                     result.Errors,
-                    logUrl = $"{ApiBase}/logs/at-vfs-report.log",
+                    logUrl = $"{ApiBase}/logs/at-vfs-build-report.log",
                 }
             );
         }
@@ -1338,13 +1364,13 @@ namespace ShokoRelay.Controllers
                     foreach (var m in result.Messages)
                         sb.AppendLine(m);
                 }
-                LogHelper.WriteLog(_configProvider.PluginDirectory, "at-mapping.log", sb.ToString());
+                LogHelper.WriteLog(_configProvider.PluginDirectory, "at-vfs-map-report.log", sb.ToString());
             }
             catch (Exception ex)
             {
                 Logger.Warn(ex, "Failed to write animethemes mapping log");
             }
-            return Ok(new { result, logUrl = $"{ApiBase}/logs/at-mapping.log" });
+            return Ok(new { result, logUrl = $"{ApiBase}/logs/at-vfs-map-report.log" });
         }
 
         [HttpPost("animethemes/vfs/import")]
@@ -1376,7 +1402,6 @@ namespace ShokoRelay.Controllers
             {
                 var batch = await _animeThemesGenerator.ProcessBatchAsync(query, cancellationToken);
 
-                // write theme-report log summarizing batch result
                 try
                 {
                     var sb = new System.Text.StringBuilder();
@@ -1388,14 +1413,14 @@ namespace ShokoRelay.Controllers
                     {
                         sb.AppendLine($"{item.Folder} -> {item.Status}{(item.Message != null ? ": " + item.Message : "")} ");
                     }
-                    LogHelper.WriteLog(_configProvider.PluginDirectory, "theme-report.log", sb.ToString());
+                    LogHelper.WriteLog(_configProvider.PluginDirectory, "at-mp3-report.log", sb.ToString());
                 }
                 catch (Exception ex)
                 {
                     Logger.Warn(ex, "Failed to write anime themes mp3 report log");
                 }
 
-                return Ok(new { batch, logUrl = $"{ApiBase}/logs/theme-report.log" });
+                return Ok(new { batch, logUrl = $"{ApiBase}/logs/at-mp3-report.log" });
             }
 
             var single = await _animeThemesGenerator.ProcessSingleAsync(query, cancellationToken);

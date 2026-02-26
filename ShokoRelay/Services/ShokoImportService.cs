@@ -1,123 +1,59 @@
-using System.Text.Json;
 using NLog;
-using ShokoRelay.Config;
+using Shoko.Abstractions.Enums;
+using Shoko.Abstractions.Services;
 
 namespace ShokoRelay.Services
 {
     /// <summary>
-    /// Calls the Shoko Server v3 HTTP API to trigger import scans.
-    /// Used by both the dashboard "Run Import" action and the automation scheduler.
+    /// Helper for triggering server-side import and housekeeping actions using
+    /// Shoko's internal service abstractions.  No API key or HTTP calls are required
+    /// when running as a plugin.
     /// </summary>
     public class ShokoImportService
     {
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
-        private readonly ConfigProvider _configProvider;
+        private readonly IVideoService _videoService;
 
-        // Default to localhost:8111 (Shoko's default). This can be changed in future if needed.
-        private const string DefaultBase = "http://127.0.0.1:8111";
-
-        public ShokoImportService(ConfigProvider configProvider)
+        public ShokoImportService(IVideoService videoService)
         {
-            _configProvider = configProvider ?? throw new ArgumentNullException(nameof(configProvider));
+            _videoService = videoService ?? throw new ArgumentNullException(nameof(videoService));
         }
 
         /// <summary>
-        /// Trigger import scans for every ManagedFolder with DropFolderType == "Source" using the configured Shoko API key.
-        /// Returns a list of folder names that were scanned.
+        /// Trigger import scans for every managed folder marked as a "Source".
+        /// Returns the names of folders that were scheduled for scanning, which is
+        /// useful for UI feedback.
         /// </summary>
         public async Task<IReadOnlyList<string>> TriggerImportAsync(CancellationToken ct = default)
         {
-            var cfg = _configProvider.GetSettings();
-            var apiKey = (cfg?.ShokoApiKey ?? string.Empty).Trim();
-            if (string.IsNullOrWhiteSpace(apiKey))
-                throw new InvalidOperationException("Shoko API key is not configured (ShokoApiKey).");
+            var folders = _videoService
+                .GetAllManagedFolders()
+                .Where(f => f.DropFolderType.HasFlag(DropFolderType.Source))
+                .Select(f => f.Name ?? f.Path ?? string.Empty)
+                .Where(s => !string.IsNullOrEmpty(s))
+                .ToList();
 
-            var baseUrl = DefaultBase; // intentionally conservative default
-
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
-
-            var scanned = new List<string>();
-
-            try
-            {
-                var importUrl = $"{baseUrl}/api/v3/ManagedFolder?apikey={Uri.EscapeDataString(apiKey)}";
-                Logger.Info("ShokoImportService: fetching import folders from {Url}", importUrl);
-
-                using var res = await http.GetAsync(importUrl, ct).ConfigureAwait(false);
-                if (!res.IsSuccessStatusCode)
-                {
-                    var txt = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-                    throw new HttpRequestException($"Failed to list import folders: {res.StatusCode} - {txt}");
-                }
-
-                var body = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-                var folders = JsonSerializer.Deserialize<List<JsonElement>>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<JsonElement>();
-
-                foreach (var f in folders)
-                {
-                    try
-                    {
-                        var dropType = f.GetProperty("DropFolderType").GetString();
-                        if (!string.Equals(dropType, "Source", StringComparison.OrdinalIgnoreCase))
-                            continue;
-
-                        var id = f.GetProperty("ID").GetInt32();
-                        var name = f.GetProperty("Name").GetString() ?? id.ToString();
-
-                        var scanUrl = $"{baseUrl}/api/v3/ManagedFolder/{id}/Scan?apikey={Uri.EscapeDataString(apiKey)}";
-                        Logger.Info("ShokoImportService: scanning import folder {Name} (id={Id}) via {Url}", name, id, scanUrl);
-
-                        using var scanRes = await http.GetAsync(scanUrl, ct).ConfigureAwait(false);
-                        if (scanRes.IsSuccessStatusCode)
-                        {
-                            scanned.Add(name);
-                        }
-                        else
-                        {
-                            var sTxt = await scanRes.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-                            Logger.Warn("ShokoImportService: scan request failed for folder {Name} (id={Id}): {Status} {Body}", name, id, scanRes.StatusCode, sTxt);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.Warn(ex, "ShokoImportService: error while scanning a folder");
-                    }
-                }
-
-                return scanned;
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(ex, "ShokoImportService: TriggerImportAsync failed");
-                throw;
-            }
+            // schedule the scan; the work executes asynchronously inside Shoko
+            await _videoService.ScheduleScanForManagedFolders(onlyDropSources: true).ConfigureAwait(false);
+            return folders;
         }
 
         /// <summary>
-        /// Call Shoko v3 Action/RemoveMissingFiles and return the server response body (string).
+        /// Scan for video file entries whose physical file has disappeared and
+        /// optionally remove those records from the database.  The <paramref name="dryRun"/>
+        /// flag controls whether deletion occurs; in either case the list of missing
+        /// paths is returned.  Database deletions never touch disk files.
         /// </summary>
-        public async Task<string?> RemoveMissingFilesAsync(bool removeFromMyList = true, CancellationToken ct = default)
+        public async Task<IReadOnlyList<string>> RemoveMissingFilesAsync(bool removeFromMyList = false, bool dryRun = false, CancellationToken ct = default)
         {
-            var cfg = _configProvider.GetSettings();
-            var apiKey = (cfg?.ShokoApiKey ?? string.Empty).Trim();
-            if (string.IsNullOrWhiteSpace(apiKey))
-                throw new InvalidOperationException("Shoko API key is not configured (ShokoApiKey).");
-
-            var baseUrl = DefaultBase;
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
-
-            var url = $"{baseUrl}/api/v3/Action/RemoveMissingFiles/{(removeFromMyList ? "true" : "false")}?apikey={Uri.EscapeDataString(apiKey)}";
-            Logger.Info("ShokoImportService: calling RemoveMissingFiles via {Url}", url);
-
-            using var res = await http.GetAsync(url, ct).ConfigureAwait(false);
-            var body = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            if (!res.IsSuccessStatusCode)
+            var all = _videoService.GetAllVideoFiles() ?? Array.Empty<Shoko.Abstractions.Video.IVideoFile>();
+            var missing = all.Where(f => !File.Exists(f.Path)).Select(f => f.Path).ToList();
+            if (!dryRun && missing.Count > 0)
             {
-                Logger.Warn("ShokoImportService: RemoveMissingFiles failed: {Status} {Body}", res.StatusCode, body);
-                throw new HttpRequestException($"RemoveMissingFiles failed: {res.StatusCode} - {body}");
+                var toDelete = all.Where(f => missing.Contains(f.Path)).ToList();
+                await _videoService.DeleteVideoFiles(toDelete, removeFiles: false, removeFolders: false).ConfigureAwait(false);
             }
-
-            return body;
+            return missing;
         }
     }
 }

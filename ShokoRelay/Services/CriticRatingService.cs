@@ -3,7 +3,6 @@ using NLog;
 using Shoko.Abstractions.Metadata.Shoko;
 using Shoko.Abstractions.Services;
 using ShokoRelay.Config;
-using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
 
 namespace ShokoRelay.Services
@@ -75,7 +74,7 @@ namespace ShokoRelay.Services
                     if (string.IsNullOrWhiteSpace(item.Guid))
                         continue;
 
-                    var shokoId = PlexHelpers.ExtractShokoSeriesIdFromGuid(item.Guid);
+                    var shokoId = PlexHelper.ExtractShokoSeriesIdFromGuid(item.Guid);
                     if (!shokoId.HasValue)
                         continue;
 

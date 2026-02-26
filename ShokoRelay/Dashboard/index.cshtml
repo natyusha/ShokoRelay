@@ -21,33 +21,30 @@
         <div class="full">
           <div>
             <label>Extra Plex Users (<span id="plex-libraries-count">0</span> Libraries)</label>
-            <input id="extra-plex-users" type="text" placeholder="user1;1234, user2;5678 (optional PIN)">
-          </div>
-          <div class="w46">
-            <label title="UTC Offset (-12…+14)">UTC</label>
-            <input id="shoko-utc-offset" type="number" min="-12" max="14" step="1" placeholder="hours">
+            <input id="extra-plex-users" class="plex-auth" type="text"
+                   placeholder="user1;1234 (comma separated, optional PIN)">
           </div>
           <div class="w46">
             <label title="Plex Automation Interval">Int.</label>
-            <input id="plex-auto-frequency" type="number" min="0" step="1" placeholder="hours">
+            <input id="plex-auto-frequency" class="plex-auth" type="number" min="0" step="1" placeholder="hrs">
           </div>
         </div>
       </section>
       <section>
         <h3 class="plex">Plex: Automation</h3>
         <div class="full">
-          <button id="col-build">Generate Collections</button>
-          <button id="rtg-build">Apply Critic Ratings</button>
+          <button id="col-build" class="plex-auth">Generate Collections</button>
+          <button id="rtg-build" class="plex-auth">Apply Critic Ratings</button>
         </div>
         <hr>
         <div class="full">
-          <label class="shoko-checkbox">
-            <input id="plex-scan-vfs" type="checkbox">
+          <label class="shoko-checkbox plex-auth">
+            <input id="plex-scan-vfs" class="plex-auth" type="checkbox">
             <span class="shoko-checkbox-icon" aria-hidden="true">
-              <svg class="unchecked" viewBox="0 0 24 24">
+              <svg class="unchecked">
                 <use href="img/icons.svg#checkbox-blank-circle-outline"></use>
               </svg>
-              <svg class="checked" viewBox="0 0 24 24">
+              <svg class="checked">
                 <use href="img/icons.svg#checkbox-marked-circle-outline"></use>
               </svg>
             </span>
@@ -58,10 +55,10 @@
           <label class="shoko-checkbox">
             <input id="plex-watched" type="checkbox">
             <span class="shoko-checkbox-icon" aria-hidden="true">
-              <svg class="unchecked" viewBox="0 0 24 24">
+              <svg class="unchecked">
                 <use href="img/icons.svg#checkbox-blank-circle-outline"></use>
               </svg>
-              <svg class="checked" viewBox="0 0 24 24">
+              <svg class="checked">
                 <use href="img/icons.svg#checkbox-marked-circle-outline"></use>
               </svg>
             </span>
@@ -79,7 +76,7 @@
     <div class="full">
       <section>
         <h3>
-          <svg class="icon-svg" viewBox="0 0 24 24">
+          <svg class="icon-svg">
             <use href="img/icons.svg#database-refresh-outline"></use>
           </svg>
           Shoko: VFS
@@ -93,7 +90,7 @@
         <div class="full">
           <button id="vfs-exec">Generate</button>
           <button id="vfs-clean" class="w46-button toggle" title="Clean VFS Toggle" aria-pressed="true" type="button">
-            <svg class="icon-svg" viewBox="0 0 24 24">
+            <svg class="icon-svg">
               <use href="img/icons.svg#broom"></use>
             </svg>
           </button>
@@ -101,15 +98,15 @@
       </section>
       <section>
         <h3>
-          <svg class="icon-svg" viewBox="0 0 24 24">
+          <svg class="icon-svg">
             <use href="img/icons.svg#auto-fix"></use>
           </svg>
           Shoko: Automation
         </h3>
         <div class="full">
           <div>
-            <label>Shoko API Key</label>
-            <input id="shoko-api-key" type="password" placeholder="From Shoko's WebUI">
+            <label>Schedule Offset</label>
+            <input id="shoko-utc-offset" type="number" min="-12" max="14" step="1" placeholder="UTC (-12...+14)">
           </div>
           <div class="w100">
             <label title="Automatic Source Import Interval">Import Int.</label>
@@ -117,16 +114,18 @@
           </div>
           <div class="w100">
             <label title="Automatic Watched State Sync Interval">Sync Int.</label>
-            <input id="shoko-sync-frequency" type="number" min="0" step="1" placeholder="hours">
+            <input id="shoko-sync-frequency" class="plex-auth" type="number" min="0" step="1" placeholder="hours">
           </div>
         </div>
         <div class="full">
-          <button id="shoko-remove-missing" class="danger" title="Remove Missing Files From Shoko & MyList">
+          <button id="shoko-remove-missing" class="danger" title="Removes Missing Files From Shoko and MyList">
             Remove Missing
           </button>
-          <div class="w100"><button id="shoko-import-run" title="Import From Source folders">Import</button>
+          <div class="w100">
+            <button id="shoko-import-run" title="Import From Source folders">Import</button>
           </div>
-          <div class="w100"><button id="shoko-sync-watched" title="Sync Watched States Menu">Sync</button>
+          <div class="w100">
+            <button id="shoko-sync-watched" class="plex-auth" title="Sync Watched States Menu">Sync</button>
           </div>
         </div>
       </section>
@@ -138,7 +137,7 @@
     <div class="full">
       <section>
         <h3>
-          <svg class="animethemes-svg" viewBox="0 0 160 86.6" width="277" height="150">
+          <svg class="at-svg">
             <use href="img/icons.svg#animethemes"></use>
           </svg>
           AnimeThemes: VFS
@@ -158,7 +157,7 @@
       </section>
       <section>
         <h3>
-          <svg class="animethemes-svg" viewBox="0 0 160 86.6" width="277" height="150">
+          <svg class="at-svg">
             <use href="img/icons.svg#animethemes"></use>
           </svg>
           AnimeThemes: MP3
@@ -178,13 +177,13 @@
           <button id="at-single">Generate</button>
           <button id="at-force" class="w46-button toggle" title="Force Overwrite Toggle" aria-pressed="false"
                   type="button" aria-label="Force Overwrite Toggle">
-            <svg class="icon-svg" viewBox="0 0 24 24">
+            <svg class="icon-svg">
               <use href="img/icons.svg#chevron-triple-down"></use>
             </svg>
           </button>
           <button id="at-batch" class="w46-button toggle" title="Recursive Batch Toggle" aria-pressed="false"
                   type="button" aria-label="Recursive Batch Toggle">
-            <svg class="icon-svg" viewBox="0 0 24 24">
+            <svg class="icon-svg">
               <use href="img/icons.svg#file-tree"></use>
             </svg>
           </button>
@@ -197,7 +196,7 @@
     -->
     <section>
       <h3>
-        <svg class="icon-svg" viewBox="0 0 24 24">
+        <svg class="icon-svg">
           <use href="img/icons.svg#cog-outline"></use>
         </svg>
         Provider Settings
@@ -209,34 +208,40 @@
   </div>
   <div id="toast-container" aria-live="polite" aria-atomic="true"></div>
 
-  <!--#region MARK: Floating Links
+  <!-- #region MARK: Floating Links
   -->
   <div class="floating-actions" role="navigation" aria-label="Quick links">
     <button id="theme-toggle" class="float-link theme-toggle" aria-label="Toggle theme" aria-pressed="false">
-      <svg class="icon-svg" viewBox="0 0 24 24">
+      <svg class="icon-svg">
         <use href="img/icons.svg#theme-light-dark"></use>
       </svg>
     </button>
     <a class="float-link" href="https://discord.gg/shokoanime" target="_blank" rel="noopener noreferrer"
        aria-label="Shoko Discord">
-      <svg class="icon-svg" viewBox="0 0 24 24">
+      <svg class="icon-svg">
         <use href="img/icons.svg#discord"></use>
+      </svg>
+    </a>
+    <a class="float-link" href="https://animethemes.moe/" target="_blank" rel="noopener noreferrer"
+       aria-label="AnimeThemes">
+      <svg class="at-svg">
+        <use href="img/icons.svg#animethemes"></use>
       </svg>
     </a>
     <a class="float-link" href="https://docs.shokoanime.com/" target="_blank" rel="noopener noreferrer"
        aria-label="Shoko Docs">
-      <svg class="icon-svg" viewBox="0 0 24 24">
+      <svg class="icon-svg">
         <use href="img/icons.svg#docs"></use>
       </svg>
     </a>
     <a class="float-link github-float" href="https://github.com/natyusha/ShokoRelay" target="_blank"
        rel="noopener noreferrer" aria-label="Shoko Relay on GitHub">
-      <svg class="icon-svg" viewBox="0 0 24 24">
+      <svg class="icon-svg">
         <use href="img/icons.svg#github"></use>
       </svg>
     </a>
   </div>
-  <!--#endregion -->
+  <!-- #endregion -->
 
   <!--#region MARK: Sync Watched Modal
   -->
@@ -251,10 +256,10 @@
                   aria-label="Direction: Plex to Shoko">
             <span class="dir-label">Plex</span>
             <span id="sync-direction-arrow" class="dir-chevron">
-              <svg id="dir-icon-right" class="dir-icon dir-icon-right" viewBox="0 0 24 24" aria-hidden="true">
+              <svg id="dir-icon-right" class="dir-icon dir-icon-right" aria-hidden="true">
                 <use href="img/icons.svg#transfer-right"></use>
               </svg>
-              <svg id="dir-icon-left" class="dir-icon dir-icon-left hidden" viewBox="0 0 24 24" aria-hidden="true">
+              <svg id="dir-icon-left" class="dir-icon dir-icon-left hidden" aria-hidden="true">
                 <use href="img/icons.svg#transfer-left"></use>
               </svg>
             </span>
@@ -265,10 +270,10 @@
           <label class="shoko-checkbox">
             <input id="sync-ratings" type="checkbox">
             <span class="shoko-checkbox-icon" aria-hidden="true">
-              <svg class="unchecked" viewBox="0 0 24 24">
+              <svg class="unchecked">
                 <use href="img/icons.svg#checkbox-blank-circle-outline"></use>
               </svg>
-              <svg class="checked" viewBox="0 0 24 24">
+              <svg class="checked">
                 <use href="img/icons.svg#checkbox-marked-circle-outline"></use>
               </svg>
             </span>
@@ -281,10 +286,10 @@
           <label class="shoko-checkbox">
             <input id="sync-exclude-admin" type="checkbox">
             <span class="shoko-checkbox-icon" aria-hidden="true">
-              <svg class="unchecked" viewBox="0 0 24 24">
+              <svg class="unchecked">
                 <use href="img/icons.svg#checkbox-blank-circle-outline"></use>
               </svg>
-              <svg class="checked" viewBox="0 0 24 24">
+              <svg class="checked">
                 <use href="img/icons.svg#checkbox-marked-circle-outline"></use>
               </svg>
             </span>
@@ -300,7 +305,7 @@
       </footer>
     </div>
   </div>
-  <!--#endregion -->
+  <!-- #endregion -->
 
   <script src="js/script.js"></script>
 </body>

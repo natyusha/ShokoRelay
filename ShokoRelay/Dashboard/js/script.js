@@ -165,7 +165,7 @@
       if (!btn.querySelector(".button-spinner")) {
         const span = document.createElement("span");
         span.className = "button-spinner";
-        span.innerHTML = '<svg viewBox="0 0 24 24" class="icon-svg"><use href="img/icons.svg#loading"></use></svg>';
+        span.innerHTML = '<svg class="icon-svg"><use href="img/icons.svg#loading"></use></svg>';
         btn.appendChild(span);
       }
     } else {
@@ -216,6 +216,14 @@
     }
     cur[parts[parts.length - 1]] = value;
   }
+
+  // Helper used throughout the dashboard to enable/disable controls that depend on Plex Auth.
+  function setPlexAutomationControls(enabled) {
+    // everything marked with this class is controlled by Plex auth state
+    document.querySelectorAll(".plex-auth").forEach((elmt) => {
+      elmt.disabled = !enabled;
+    });
+  }
   // #endregion
 
   // #region Plex: Authentication
@@ -236,7 +244,7 @@
   }
   function setPlexUnlinkAction() {
     setPlexAction(
-      '<button id="plex-unlink" class="danger">Unlink Plex</button> <button id="plex-refresh" class="w46-button" title="Refresh Plex Libraries"><svg class="icon-svg" viewBox="0 0 24 24"><use href="img/icons.svg#refresh"></use></svg></button>',
+      '<button id="plex-unlink" class="danger">Unlink Plex</button> <button id="plex-refresh" class="w46-button" title="Refresh Plex Libraries"><svg class="icon-svg"><use href="img/icons.svg#refresh"></use></svg></button>',
     );
     const unlinkBtn = el("plex-unlink");
     if (unlinkBtn) unlinkBtn.onclick = unlinkPlex;
@@ -322,22 +330,27 @@
       const cfgRes = await fetchJson(base + "/config");
       if (!cfgRes.ok || !cfgRes.data) {
         setColStatus("Error loading config", "error");
+        setPlexAutomationControls(false);
         return false;
       }
       const plex = cfgRes.data.PlexLibrary || {};
       if (!plex.HasToken) {
         setColStatus("Plex token missing. Link Plex in Plex Auth.", "error");
+        setPlexAutomationControls(false);
         return false;
       }
       // library selection is automatic; just ensure at least one detected
       if (!plex.DiscoveredLibraries || plex.DiscoveredLibraries.length === 0) {
         setColStatus("No Plex libraries detected. Refresh Plex libraries.", "error");
+        setPlexAutomationControls(false);
         return false;
       }
+      setPlexAutomationControls(true);
       return true;
     } catch (ex) {
       setColStatus("Error checking Plex config", "error");
       console.error(ex);
+      setPlexAutomationControls(false);
       return false;
     }
   }
@@ -346,6 +359,8 @@
     clearPlexLibraries();
     const res = await fetchJson(base + "/config");
     if (!res.ok || !res.data) {
+      // if we can't even get the config, ensure the automation UI is disabled
+      setPlexAutomationControls(false);
       setPlexStartAction();
       return;
     }
@@ -355,6 +370,9 @@
       settings.ExtraPlexUsers = "";
     }
     const plex = settings.PlexLibrary || {};
+
+    // enable/disable the automation controls based on whether a token exists
+    setPlexAutomationControls(!!plex.HasToken);
 
     const extraEl = el("extra-plex-users");
     if (extraEl) {
@@ -393,8 +411,9 @@
 
   async function unlinkPlex() {
     const res = await fetchJson(base + "/plex/auth/unlink", { method: "POST" });
+    // refresh state so UI updates (controls disabled, start button shown)
+    await refreshPlexState();
   }
-
   // #endregion
 
   // #region Plex: Automation
@@ -533,8 +552,9 @@
   if (shokoRemoveMissingBtn) {
     withButtonAction(shokoRemoveMissingBtn, async function () {
       showToast("Remove Missing Files: Started", "info", 5000);
-      const res = await fetchJson(base + "/shoko/remove-missing", { method: "POST" });
-      toastOperation(res, "Remove missing");
+      const res = await fetchJson(base + "/shoko/remove-missing?dryRun=false", { method: "POST" });
+      const summary = res.data && typeof res.data.count === "number" ? `removed ${res.data.count}` : undefined;
+      toastOperation(res, "Remove missing", { summary });
     });
   }
 
@@ -659,7 +679,7 @@
           setBoolParam(ps, "ratings", ratingsEl.checked);
           setBoolParam(ps, "excludeAdmin", excludeAdminEl.checked);
           if (directionImport) setBoolParam(ps, "import", true); // Shoko → Plex
-          const url = base + "/syncwatched?" + ps.toString();
+          const url = base + "/sync-watched?" + ps.toString();
           const res = await fetchJson(url, { method: "POST" });
           if (res.ok) {
             if (startToast && startToast.parentElement) startToast.remove();
@@ -693,8 +713,8 @@
       document.addEventListener("keydown", onKeydown);
     };
   }
-
   // #endregion
+
   // #region AnimeThemes: VFS
   const atImportBtn = el("at-import");
   if (atImportBtn) {
@@ -859,8 +879,7 @@
         icon.className = "shoko-checkbox-icon";
         icon.setAttribute("aria-hidden", "true");
         icon.innerHTML =
-          '<svg class="unchecked" viewBox="0 0 24 24"><use href="img/icons.svg#checkbox-blank-circle-outline"></use></svg>' +
-          '<svg class="checked" viewBox="0 0 24 24"><use href="img/icons.svg#checkbox-marked-circle-outline"></use></svg>';
+          '<svg class="unchecked"><use href="img/icons.svg#checkbox-blank-circle-outline"></use></svg>' + '<svg class="checked"><use href="img/icons.svg#checkbox-marked-circle-outline"></use></svg>';
 
         // Create a two-line label: title on first line, description (if present) in a <small> on the second line
         const textWrap = document.createElement("span");
@@ -1058,25 +1077,27 @@
 
     // Populate Shoko Automation custom inputs from the loaded config (keeps UI in sync)
     try {
-      const apiKeyVal = String(config.ShokoApiKey ?? "");
       const importVal = Number(config.ShokoImportFrequencyHours ?? 0);
       const syncVal = Number(config.ShokoSyncWatchedFrequencyHours ?? 0);
       const utcOffsetVal = Number(config.UtcOffsetHours ?? 0);
       const plexAutoVal = Number(config.PlexAutomationFrequencyHours ?? 0);
       const plexWatchedVal = !!config.AutoScrobble;
-      const apiKeyEl = el("shoko-api-key");
       const importFreqEl = el("shoko-import-frequency");
       const syncFreqEl = el("shoko-sync-frequency");
       const utcOffsetEl = el("shoko-utc-offset");
       const plexAutoFreqEl = el("plex-auto-frequency");
-      if (apiKeyEl) {
-        apiKeyEl.value = apiKeyVal;
-        apiKeyEl.onchange = async () => {
+      if (utcOffsetEl) {
+        utcOffsetEl.value = utcOffsetVal === 0 ? "" : String(utcOffsetVal);
+        utcOffsetEl.onchange = async () => {
           try {
-            setValueByPath(config, "ShokoApiKey", String(apiKeyEl.value || ""));
+            let newVal = Number(utcOffsetEl.value) || 0;
+            if (newVal < -12) newVal = -12;
+            if (newVal > 14) newVal = 14;
+            utcOffsetEl.value = String(newVal);
+            setValueByPath(config, "UtcOffsetHours", newVal);
             await persistConfig(config);
           } catch (e) {
-            showToast(`Auto-save Shoko API key error: ${e?.message || e}`, "error", 0);
+            showToast(`Auto-save UTC offset error: ${e?.message || e}`, "error", 0);
           }
         };
       }
@@ -1100,21 +1121,6 @@
             await persistConfig(config);
           } catch (e) {
             showToast(`Auto-save sync frequency error: ${e?.message || e}`, "error", 0);
-          }
-        };
-      }
-      if (utcOffsetEl) {
-        utcOffsetEl.value = String(utcOffsetVal);
-        utcOffsetEl.onchange = async () => {
-          try {
-            let newVal = Number(utcOffsetEl.value) || 0;
-            if (newVal < -12) newVal = -12;
-            if (newVal > 14) newVal = 14;
-            utcOffsetEl.value = String(newVal);
-            setValueByPath(config, "UtcOffsetHours", newVal);
-            await persistConfig(config);
-          } catch (e) {
-            showToast(`Auto-save UTC offset error: ${e?.message || e}`, "error", 0);
           }
         };
       }
@@ -1154,6 +1160,8 @@
   }
 
   setPlexStartAction();
+  // until we know whether Plex is linked, disable automation fields/buttons
+  setPlexAutomationControls(false);
   refreshPlexState();
   loadConfig();
   // #endregion
@@ -1213,6 +1221,7 @@
     let hideTimer = null;
 
     function showForElement(el) {
+      if (el.disabled) return;
       const text = el.dataset.tooltipText || el.getAttribute("data-tooltip") || "";
       if (!text) return;
       content.textContent = text;
@@ -1291,7 +1300,6 @@
     });
     mo.observe(document.body, { childList: true, subtree: true });
   }
-
   // #endregion
 
   // #region Toasts
@@ -1371,7 +1379,6 @@
 
     return t;
   }
-
   // #endregion
 
   initTooltips();

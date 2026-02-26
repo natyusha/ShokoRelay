@@ -1,6 +1,8 @@
 # Controller
 
-All of the endpoints below are available under the plugin base path: `http://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay`
+All of the endpoints below are available under the plugin base path: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay`
+
+They can be interacted with easily using **/swagger/** at: `http(s)://{ShokoHost}:{ShokoPort}/swagger`
 
 ## Table of Contents
 
@@ -11,7 +13,6 @@ All of the endpoints below are available under the plugin base path: `http://{Sh
 - [Plex: Webhook](#plex-webhook)
 - [Virtual File System (VFS)](#virtual-file-system-vfs)
 - [Shoko: Automation](#shoko-automation)
-- [Sync Watched](#sync-watched)
 - [AnimeThemes](#animethemes)
 
 ---
@@ -31,6 +32,8 @@ GET  /logs/{fileName}                                          -> GetLog (downlo
 - `GetControllerPage` Serves the dashboard UI and static assets (fonts, images, JS/CSS) from the plugin `dashboard` folder.
   - `{*path}` is an optional catch-all for dashboard assets.
 
+---
+
 - `GetConfig` returns the current plugin configuration payload (JSON) used by the dashboard page.
   - The `ConfigProvider` handles serialization, sanitization and omits any sensitive fields.
 - `SaveConfig` persists automation/provider settings (tokens handled separately).
@@ -39,8 +42,24 @@ GET  /logs/{fileName}                                          -> GetLog (downlo
 - `GetConfigSchema` returns a JSON schema representation of `RelayConfig` properties.
   - Used by the dashboard to dynamically render the settings form with correct field names/types.
 
-- `GetLog` many manual actions also produce plain-text reports saved under a `logs` subfolder
-  - download them via the `logUrl` property or the generic `/logs/{fileName}` endpoint.
+---
+
+- `GetLog` serves any report file created under the plugin's `logs` directory.
+- Request `/logs/{fileName}` to download the desired report, operations which generate logs are listed below:
+
+```
+/plex/collections/build                                        -> collections-report.log
+/plex/ratings/apply                                            -> ratings-report.log
+
+/vfs                                                           -> vfs-report.log
+
+/shoko/remove-missing                                          -> remove-missing-report.log
+/sync-watched                                                  -> sync-watched-report.log
+
+/animethemes/vfs/build                                         -> at-vfs-build-report.log
+/animethemes/vfs/map                                           -> at-vfs-map-report.log
+/animethemes/mp3?batch=true                                    -> at-mp3-report.log
+```
 
 ---
 
@@ -65,14 +84,20 @@ GET  /metadata/{ratingKey}/images                              -> GetImages (all
   - Plex uses `title` + `manual=1` for manual matches and all titles are treated as ShokoSeriesIDs.
   - When invoked directly you may also POST a JSON body with `Filename`, `Title`, and `Manual` properties.
 
+---
+
 - `GetCollection` retrieves collection metadata for a given group ID.
 - `GetCollectionPoster` returns the poster image.
+
+---
 
 - `GetMetadata` returns full metadata for a ratingKey (series/season/episode).
   - `includeChildren` (optional, 0/1) controls whether nested items are included.
 - `GetChildren` / `GetGrandchildren` return only the immediate or second-level child items respectively.
 - `GetImages` returns a `MediaContainer` with an `Image` array.
   - Used by Plex when fetching all artwork for an item.
+
+---
 
 **Notes:**
 
@@ -114,11 +139,17 @@ GET  /plex/automation/run                                      -> RunPlexAutomat
 - `BuildPlexCollections` generate Plex collections for the specified series or filter.
 - `ApplyCollectionPosters` upload or refresh posters for the same series set.
 
+---
+
 - `ApplyCriticRatings` update series/episode ratings based on the configured source (TMDB/AniDB).
+
+---
 
 - `RunPlexAutomationNow` triggers the two operations above back-to-back.
   - Useful if you want to force automation without waiting for the scheduled interval.
   - The scheduler itself is governed by `RelayConfig.PlexAutomationFrequencyHours` (0 disables it).
+
+---
 
 **Notes:**
 
@@ -144,8 +175,8 @@ POST /plex/webhook                                             -> PluginPlexWebh
 ## Virtual File System (VFS)
 
 ```
-GET /vfs                                                       -> BuildVfs
-    [?run={true|false}&clean={true|false}&cleanOnly={true|false}&filter={filter}]
+GET  /vfs                                                      -> BuildVfs
+     [?run={true|false}&clean={true|false}&cleanOnly={true|false}&filter={filter}]
 ```
 
 - `BuildVfs` (all query parameters are optional)
@@ -153,6 +184,8 @@ GET /vfs                                                       -> BuildVfs
   - `clean` (default true) clear the existing root before building.
   - `cleanOnly` (default false) perform only the cleanup stage (ignores `run`).
   - `filter` comma-separated Shoko series IDs to restrict processing (the value `0` forces `cleanOnly`).
+
+---
 
 **Notes:**
 
@@ -168,35 +201,29 @@ GET /vfs                                                       -> BuildVfs
 ## Shoko: Automation
 
 ```
-POST /shoko/remove-missing?removeFromMyList={true|false}       -> RemoveMissingFiles
+GET  /shoko/remove-missing?dryRun={true|false}                 -> RemoveMissingFiles (for preview/testing)
+POST /shoko/remove-missing?dryRun={true|false}                 -> RemoveMissingFiles
 
 POST /shoko/import                                             -> RunShokoImport
 GET  /shoko/import/start                                       -> StartShokoImportNow
+
+GET  /sync-watched                                              -> SyncPlexWatched (for preview/testing)
+POST /sync-watched                                              -> SyncPlexWatched
+     [?dryRun={true|false}&sinceHours={int}&ratings={true|false}&import={true|false}&excludeAdmin={true|false}]
+
+GET  /sync-watched/start                                        -> StartWatchedSyncNow
 ```
 
-- `RemoveMissingFiles` calls Shoko's RemoveMissingFiles action.
-  - `removeFromMyList` (default=true) controls whether items are also removed from MyList.
+- `RemoveMissingFiles` removes missing files from Shoko and the AniDB MyList.
+  - by default (no query parameter) the endpoint performs a dry run and returns the list of would-be deletions
+  - specify `dryRun=false` explicitly to actually execute the removals.
+
+---
 
 - `RunShokoImport` triggers a Shoko source import and replies with `{ status:"ok", scanned:[...], scannedCount:n }`.
 - `StartShokoImportNow` forces an immediate import and updates the scheduler's last-run time.
 
-**Notes:**
-
-- Scheduled imports/syncs are anchored to UTC midnight (with an optional offset) rather than relying on the previous run time.
-- This means a 24‑hour interval will always fire at midnight (plus offset) and server restarts do not reset the schedule.
-- Missed runs are executed on the next interval.
-
 ---
-
-## Sync Watched
-
-```
-GET  /syncwatched                                              -> SyncPlexWatched (for preview/testing)
-POST /syncwatched                                              -> SyncPlexWatched
-     [?dryRun={true|false}&sinceHours={int}&ratings={true|false}&import={true|false}&excludeAdmin={true|false}]
-
-GET  /syncwatched/start                                        -> StartWatchedSyncNow
-```
 
 - `SyncPlexWatched` (all query parameters are optional)
   - `dryRun` (default true) perform a dry run (no writes). Specify `false` to make actual changes.
@@ -207,11 +234,16 @@ GET  /syncwatched/start                                        -> StartWatchedSy
 
 - `StartWatchedSyncNow` triggers a one-off sync and marks the last-run time for scheduling.
 
+---
+
 **Notes:**
 
 - Synchronizes watched state between Plex and Shoko.
 - Default direction is **Plex→Shoko**. Set `import=true` for **Plex←Shoko**.
 - Scheduled automations use `RelayConfig.ShokoSyncWatchedFrequencyHours` and `RelayConfig.ShokoSyncWatchedIncludeRatings`.
+- Scheduled imports/syncs are anchored to UTC midnight (with an optional offset) rather than relying on the previous run time.
+- This means a 24‑hour interval will always fire at midnight (plus offset) and server restarts do not reset the schedule.
+- Missed runs are executed on the next interval.
 - An interval of 0 disables the scheduler (the dashboard checkbox persists the ratings choice).
 - Matching is GUID-based, items lacking a Shoko GUID are skipped.
 - The service considers the admin token's user plus any configured ExtraPlexUsers, it obtains per-user tokens via Plex Home switching.
@@ -222,12 +254,12 @@ GET  /syncwatched/start                                        -> StartWatchedSy
 
 ## AnimeThemes
 
-### AnimeThemes VFS
+### VFS
 
 ```
-GET /animethemes/vfs/build?mapPath={map.json}&filter={csv}     -> AnimeThemesVfsBuild
+GET  /animethemes/vfs/build?mapPath={map.json}&filter={csv}    -> AnimeThemesVfsBuild
 
-GET /animethemes/vfs/map?mapPath={map.json}                    -> AnimeThemesVfsMap
+GET  /animethemes/vfs/map?mapPath={map.json}                   -> AnimeThemesVfsMap
 
 POST /animethemes/vfs/import                                   -> ImportAnimeThemesMapping
 ```
@@ -242,11 +274,13 @@ POST /animethemes/vfs/import                                   -> ImportAnimeThe
 - `ImportAnimeThemesMapping` downloads the latest mapping JSON from the hardcoded Gist URL.
   - This is written to `anidb_animethemes_xrefs.json` in the plugin folder.
 
-### AnimeThemes MP3
+---
+
+### MP3
 
 ```
-GET /animethemes/mp3                                           -> AnimeThemesMp3
-    [?path={path}&slug={slug}&offset={n}&batch={true|false}&force={true|false}]
+GET  /animethemes/mp3                                          -> AnimeThemesMp3
+     [?path={path}&slug={slug}&offset={n}&batch={true|false}&force={true|false}]
 ```
 
 - `AnimeThemesMp3` generates or batches MP3 files for theme folders.

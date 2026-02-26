@@ -183,7 +183,7 @@ namespace ShokoRelay.Vfs
                     if (collectionId == null)
                         continue;
 
-                    string? posterUrl = PlexHelpers.GetCollectionPosterUrl(series, collectionName, collectionId.Value, _metadataService, _configProvider.GetSettings().CollectionPosters);
+                    string? posterUrl = PlexHelper.GetCollectionPosterUrl(series, collectionName, collectionId.Value, _metadataService, _configProvider.GetSettings().CollectionPosters);
 
                     if (!string.IsNullOrWhiteSpace(posterUrl))
                     {
