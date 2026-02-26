@@ -150,7 +150,7 @@ namespace ShokoRelay.Config
             // Normalize path mappings prior to persisting so users can enter natural paths in the UI
             NormalizePathMappings(settings);
 
-            // Normalize comma-separated fields prior to persisting
+            // Normalize comma separated fields prior to persisting
             NormalizeCommaSeparatedFields(settings);
 
             var json = JsonSerializer.Serialize(settings, Options);
@@ -239,7 +239,7 @@ namespace ShokoRelay.Config
             if (NormalizePathMappings(settings))
                 needsSave = true;
 
-            // Normalize comma-separated fields (TagBlacklist, ExtraPlexUsers)
+            // Normalize comma separated fields (TagBlacklist, ExtraPlexUsers)
             if (NormalizeCommaSeparatedFields(settings))
                 needsSave = true;
 

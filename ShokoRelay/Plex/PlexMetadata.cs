@@ -322,50 +322,81 @@ namespace ShokoRelay.Plex
 
         public Dictionary<string, object?> MapSeason(ISeries series, int seasonNum, string seriesTitle, System.Threading.CancellationToken cancellationToken = default)
         {
-            var images = (IWithImages)series;
+            // resolve overrides up front so that all lookups below use the
+            // canonical (primary) series and any related extras
+            OverrideHelper.EnsureLoaded();
+            int primaryId = OverrideHelper.GetPrimary(series.ID, _metadataService);
+            var primarySeries = series;
+            if (primaryId != series.ID)
+            {
+                var s = _metadataService.GetShokoSeriesByID(primaryId);
+                if (s != null)
+                    primarySeries = s;
+            }
+
+            // build list of group series for combined metadata lookups
+            var groupList = new List<IShokoSeries>();
+            if (primarySeries is IShokoSeries ps)
+                groupList.Add(ps);
+            if (ShokoRelay.Settings.TmdbEpNumbering)
+            {
+                var group = OverrideHelper.GetGroup(primaryId, _metadataService);
+                foreach (var id in group.Skip(1))
+                {
+                    var s = _metadataService.GetShokoSeriesByID(id) as IShokoSeries;
+                    if (s != null)
+                        groupList.Add(s);
+                }
+            }
+
+            var images = (IWithImages)primarySeries;
             var poster = images.GetImages(ImageEntityType.Poster).FirstOrDefault();
             var backdrop = images.GetImages(ImageEntityType.Backdrop).FirstOrDefault();
             var seasonTitle = GetSeasonFolder(seasonNum);
             string? seasonSummary = null;
 
             // TMDB metadata is preferred for season title/summary when available.
-            if (series is IShokoSeries shokoSeriesMetadata)
+            ITmdbSeason? tmdbSeason = null;
+            foreach (var s in groupList)
             {
-                var tmdbSeason = shokoSeriesMetadata.TmdbSeasons?.FirstOrDefault(ts => ts.SeasonNumber == seasonNum);
+                tmdbSeason = s.TmdbSeasons?.FirstOrDefault(ts => ts.SeasonNumber == seasonNum);
                 if (tmdbSeason != null)
-                {
-                    var tmdbTitle = tmdbSeason.PreferredTitle?.Value;
-                    if (!string.IsNullOrWhiteSpace(tmdbTitle))
-                        seasonTitle = tmdbTitle;
+                    break;
+            }
+            if (tmdbSeason != null)
+            {
+                var tmdbTitle = tmdbSeason.PreferredTitle?.Value;
+                if (!string.IsNullOrWhiteSpace(tmdbTitle))
+                    seasonTitle = tmdbTitle;
 
-                    var tmdbDesc = tmdbSeason.PreferredDescription?.Value;
-                    if (!string.IsNullOrWhiteSpace(tmdbDesc))
-                        seasonSummary = TextHelper.SummarySanitizer(tmdbDesc, ShokoRelay.Settings.SummaryMode) ?? tmdbDesc;
-                }
+                var tmdbDesc = tmdbSeason.PreferredDescription?.Value;
+                if (!string.IsNullOrWhiteSpace(tmdbDesc))
+                    seasonSummary = TextHelper.SummarySanitizer(tmdbDesc, ShokoRelay.Settings.SummaryMode) ?? tmdbDesc;
             }
 
-            var firstEpisode = series.Episodes.Select(e => new { Ep = e, Map = GetPlexCoordinates(e) }).Where(x => x.Map.Season == seasonNum).OrderBy(x => x.Map.Episode).FirstOrDefault();
+            // first episode should consider all series in the group as well
+            var firstEpisode = groupList
+                .SelectMany(s => s.Episodes)
+                .Select(e => new { Ep = e, Map = GetPlexCoordinates(e) })
+                .Where(x => x.Map.Season == seasonNum)
+                .OrderBy(x => x.Map.Episode)
+                .FirstOrDefault();
 
             // Only request season posters when there is more than one non-extra season present.
             // Extras/specials are represented as negative season numbers and should be ignored for this count.
-            var fileData = MapHelper.GetSeriesFileData(series);
+            var extras = groupList.Skip(1).Cast<ISeries>().ToList();
+            var fileData = extras.Count > 0 ? MapHelper.GetSeriesFileDataMerged(primarySeries, extras) : MapHelper.GetSeriesFileData(primarySeries);
             int nonExtraSeasonCount = fileData.Seasons.Count(s => s >= 0);
 
             List<string>? seasonPosters = null; // Default: no season-specific posters
 
             // Populate TMDB season posters when enabled, the series has >1 normal seasons,
             // and TMDB season metadata is available on the Shoko series.
-            if (ShokoRelay.Settings.TmdbSeasonPosters && nonExtraSeasonCount > 1 && series is IShokoSeries shokoSeries)
+            if (ShokoRelay.Settings.TmdbSeasonPosters && nonExtraSeasonCount > 1 && tmdbSeason != null)
             {
-                var tmdbSeason = shokoSeries.TmdbSeasons?.FirstOrDefault(ts => ts.SeasonNumber == seasonNum);
-                var orderedUrls = tmdbSeason
-                    ?.GetImages(ImageEntityType.Poster)
-                    .OrderByDescending(i => i.IsPreferred)
-                    .ThenByDescending(i => i.IsLocked)
-                    .Select(i => ImageHelper.GetImageUrl(i))
-                    .ToList();
+                var orderedUrls = tmdbSeason.GetImages(ImageEntityType.Poster).OrderByDescending(i => i.IsPreferred).ThenByDescending(i => i.IsLocked).Select(i => ImageHelper.GetImageUrl(i)).ToList();
 
-                if (tmdbSeason?.DefaultPoster is not null)
+                if (tmdbSeason.DefaultPoster is not null)
                 {
                     var defaultUrl = ImageHelper.GetImageUrl(tmdbSeason.DefaultPoster);
                     seasonPosters = new List<string> { defaultUrl };
@@ -458,23 +489,44 @@ namespace ShokoRelay.Plex
 
             // Prefer a season-specific poster for the parent thumb when available (fallback to series poster)
             string? parentThumb = null;
-            if (ShokoRelay.Settings.TmdbSeasonPosters && mapped.Season >= 0 && series is IShokoSeries shokoSeries)
+            if (ShokoRelay.Settings.TmdbSeasonPosters && mapped.Season >= 0)
             {
-                var tmdbSeason = shokoSeries.TmdbSeasons?.FirstOrDefault(ts => ts.SeasonNumber == mapped.Season);
-                var orderedUrls = tmdbSeason
-                    ?.GetImages(ImageEntityType.Poster)
-                    .OrderByDescending(i => i.IsPreferred)
-                    .ThenByDescending(i => i.IsLocked)
-                    .Select(i => ImageHelper.GetImageUrl(i))
-                    .ToList();
-
-                if (tmdbSeason?.DefaultPoster is not null)
+                // find tmdbSeason across override group
+                ITmdbSeason? seasonObj = null;
+                if (series is IShokoSeries baseSeries)
                 {
-                    parentThumb = ImageHelper.GetImageUrl(tmdbSeason.DefaultPoster);
+                    // search primary + overrides
+                    OverrideHelper.EnsureLoaded();
+                    int pId = OverrideHelper.GetPrimary(series.ID, _metadataService);
+                    var grp = OverrideHelper.GetGroup(pId, _metadataService);
+                    foreach (var id in grp)
+                    {
+                        var s = _metadataService.GetShokoSeriesByID(id) as IShokoSeries;
+                        if (s != null)
+                        {
+                            seasonObj = s.TmdbSeasons?.FirstOrDefault(ts => ts.SeasonNumber == mapped.Season);
+                            if (seasonObj != null)
+                                break;
+                        }
+                    }
                 }
-                else if (orderedUrls?.Any() == true)
+                if (seasonObj != null)
                 {
-                    parentThumb = orderedUrls[0];
+                    var orderedUrls = seasonObj
+                        .GetImages(ImageEntityType.Poster)
+                        .OrderByDescending(i => i.IsPreferred)
+                        .ThenByDescending(i => i.IsLocked)
+                        .Select(i => ImageHelper.GetImageUrl(i))
+                        .ToList();
+
+                    if (seasonObj.DefaultPoster is not null)
+                    {
+                        parentThumb = ImageHelper.GetImageUrl(seasonObj.DefaultPoster);
+                    }
+                    else if (orderedUrls?.Any() == true)
+                    {
+                        parentThumb = orderedUrls[0];
+                    }
                 }
             }
 

@@ -5,6 +5,7 @@ using Shoko.Abstractions.Metadata.Shoko;
 using Shoko.Abstractions.Services;
 using Shoko.Abstractions.Video;
 using ShokoRelay.Config;
+using ShokoRelay.Helpers;
 using ShokoRelay.Vfs;
 
 namespace ShokoRelay.AnimeThemes;
@@ -44,9 +45,11 @@ public class AnimeThemesGenerator
     private readonly FfmpegService _ffmpegService;
 
     private readonly IVideoService _videoService;
+    private readonly IMetadataService _metadataService;
 
-    public AnimeThemesGenerator(IVideoService videoService, ConfigProvider configProvider)
+    public AnimeThemesGenerator(IMetadataService metadataService, IVideoService videoService, ConfigProvider configProvider)
     {
+        _metadataService = metadataService;
         _videoService = videoService;
         _ffmpegService = new FfmpegService(configProvider.PluginDirectory);
         AnimeThemesConstants.EnsureUserAgent(Http);
@@ -182,7 +185,9 @@ public class AnimeThemesGenerator
                 title = selection.SongTitle + " (TV Size)";
 
             await _ffmpegService.ConvertToMp3FileAsync(tempPath, themePath, title, selection.SlugDisplay, selection.Artist, selection.AnimeTitle, ct);
-            string? vfsLink = TryLinkIntoVfs(videoFile, series.ID, themePath);
+            // determine correct series folder considering any merge overrides
+            int linkSeriesId = OverrideHelper.GetPrimary(series.ID, _metadataService);
+            string? vfsLink = TryLinkIntoVfs(videoFile, linkSeriesId, themePath);
 
             return new ThemeMp3OperationResult(folder, "ok", null, themePath, vfsLink, selection.AnimeTitle, selection.AnimeSlug, series.ID, selection.SlugDisplay, duration.TotalSeconds);
         }
@@ -381,13 +386,17 @@ public class AnimeThemesGenerator
         return Path.GetFullPath(path);
     }
 
-    private static string? TryLinkIntoVfs(IVideoFile location, int seriesId, string source)
+    private string? TryLinkIntoVfs(IVideoFile location, int seriesId, string source)
     {
         string? importRoot = VfsShared.ResolveImportRootPath(location);
         if (string.IsNullOrWhiteSpace(importRoot))
             return null;
 
-        string seriesFolder = Path.Combine(importRoot, VfsShared.ResolveRootFolderName(), seriesId.ToString());
+        // seriesId should already be the primary for any override group, but do an
+        // extra lookup just in case caller passed original id.
+        int primaryId = OverrideHelper.GetPrimary(seriesId, _metadataService);
+
+        string seriesFolder = Path.Combine(importRoot, VfsShared.ResolveRootFolderName(), primaryId.ToString());
         try
         {
             Directory.CreateDirectory(seriesFolder);

@@ -19,7 +19,11 @@ namespace ShokoRelay
             serviceCollection.AddHttpContextAccessor();
             serviceCollection.AddControllers().AddApplicationPart(typeof(ServiceRegistration).Assembly);
             serviceCollection.AddSingleton(new ConfigProvider(applicationPaths));
-            serviceCollection.AddSingleton(provider => new AnimeThemesGenerator(provider.GetRequiredService<IVideoService>(), provider.GetRequiredService<ConfigProvider>()));
+            serviceCollection.AddSingleton(provider => new AnimeThemesGenerator(
+                provider.GetRequiredService<IMetadataService>(),
+                provider.GetRequiredService<IVideoService>(),
+                provider.GetRequiredService<ConfigProvider>()
+            ));
             serviceCollection.AddSingleton(provider => new AnimeThemesMapping(
                 provider.GetRequiredService<IMetadataService>(),
                 provider.GetRequiredService<IVideoService>(),

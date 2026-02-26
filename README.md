@@ -10,7 +10,7 @@
 
 This is a plugin for Shoko Server that acts as a [Custom Metadata Provider](https://forums.plex.tv/t/announcement-custom-metadata-providers/934384) for Plex. It is a successor to the [ShokoRelay.bundle](https://github.com/natyusha/ShokoRelay.bundle) legacy agent/scanner and intends to mirror all of its functionality (including the automation scripts). Scanning is much faster and it will be possible to add many new features in the future as well.
 
-Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File System) to ensure that varied folder structures are supported. This means that your anime can be organised with whatever file or folder structure you want. The only caveat is that a folder cannot contain more than one AniDB series at a time if you want it to correctly support [local media assets](https://support.plex.tv/articles/200220717-local-media-assets-tv-shows/) like posters or theme songs. The VFS will be automatically updated when a file move or rename is detected by Shoko.
+Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File System) to ensure that varied folder structures are supported. This means that your anime can be organised with whatever file or folder structure you want. There is one caveat though. A folder cannot contain more than one AniDB series at a time if you want it to correctly support [local media assets](https://support.plex.tv/articles/200220717-local-media-assets-tv-shows/) (like posters or theme songs). The VFS will be automatically updated when a file move or rename is detected by Shoko.
 
 ## Installation
 
@@ -218,14 +218,16 @@ Non standard episodes on the other hand, are placed into a local series level Ex
 
 ### Automatic Title Modification
 
-**Common Prefixes for Series**  
+**Common Prefixes for Series**
+
 When a series starts with a common title prefix (and `Move Common Series Title Prefixes` is enabled in the Provider Settings) it will be moved to the end of the title. The prefixes considered common by the provider are governed by the following regex:
 
 ```regex
 ^(Gekijou ?(?:ban(?: 3D)?|Tanpen|Remix Ban|Henshuuban|Soushuuhen)|Eiga|OVA) (.*$)
 ```
 
-**Ambiguous Titles for Episodes**  
+**Ambiguous Titles for Episodes**
+
 In cases where AniDB uses ambiguous episode titles the series title will be used instead (with the original title appended to it as necessary). The titles considered ambiguous by the provider are governed by the following regex:
 
 ```regex
@@ -249,26 +251,24 @@ With `TMDB Episode Numbering` enabled in the Provider Settings the following wil
 - Combining multiple Shoko series into a single Plex entry
 - Alternate episode ordering for seasons
 
-**Curated TMDB Mappings**  
+**Curated TMDB Mappings**
+
 If you don't have any TMDB links in Shoko it is recommended that you start off with a curated list before auto linking.\
 [**Additional Info Here**](https://docs.shokoanime.com/shoko-server/tmdb-features#curated-tmdb-mappings)
 
-**Alternate TMDB Episode Ordering**  
+**Alternate TMDB Episode Ordering**
+
 If you aren't happy with TMDB's default episode/season structure for a series, you can change it to an alternate.\
 [**Additional Info Here**](https://docs.shokoanime.com/shoko-server/tmdb-features#alternate-episode-ordering)
 
 > [!NOTE]
 > If you select an alternate order for a series TMDB season posters will no longer be automatically added to Plex.
 
-**Combining Series**  
-This allows shows which are separated on AniDB to be combined into a single entry inside Plex. To Achieve this simply multi-select (with the primary series as the first selection) the series in your Plex library which you know are part of a single TMDB entry then select `Merge`.
+**Combining Series**
 
-Using Fairy Tail as an example all of the following series can be safely merged into a single entry in Plex if they are correctly matched to TMDB in Shoko:
+This allows shows which are separated on AniDB but part of the same TMDB listing to be combined into a single entry in Plex. To achieve this create an `anidb_vfs_overrides.txt` file in the plugin directory. Each line should contain a comma separated list of AniDB IDs. The first ID is the _primary series_ and the others will be merged into it (for both VFS builds and metadata lookups). Blank lines and lines starting with `#` are ignored.
 
-- Fairy Tail
-- Fairy Tail (2011)
-- Fairy Tail (2014)
-- Fairy Tail (2018)
+An example `anidb_vfs_overrides.txt` is available [here](https://gist.github.com/natyusha/a9ad00a5c16276cfbe2553346c745f1c).
 
 ### Combining Episodes
 
@@ -324,3 +324,4 @@ Due to this plugin relying on Plex's metadata provider feature (which is still u
   - Add custom or generic series/episode ratings directly through the provider
   - Add rich cast info (bios) for cast and crew
   - Include generic ratings for "old experience" Plex clients without using the HTTP API
+- Add a basic UI to the dashboard for editing `anidb_vfs_overrides.txt`

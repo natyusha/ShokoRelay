@@ -951,36 +951,11 @@ namespace ShokoRelay.Controllers
         #region Virtual File System
 
         [HttpGet("vfs")]
-        public IActionResult BuildVfs([FromQuery] bool clean = true, [FromQuery] bool run = false, [FromQuery] bool cleanOnly = false, [FromQuery] string? filter = null)
+        public IActionResult BuildVfs([FromQuery] bool clean = true, [FromQuery] bool run = false, [FromQuery] string? filter = null)
         {
             var validation = ValidateFilterOrBadRequest(filter, out var filterIds);
             if (validation != null)
                 return validation;
-
-            // Treat a filter value of "0" as a shorthand for clean-only
-            bool zeroFilter = (filterIds.Count == 1 && filterIds[0] == 0);
-            if (zeroFilter)
-            {
-                cleanOnly = true;
-                filterIds.Clear(); // no actual series filter when performing global clean
-            }
-
-            // If caller only wants to perform a clean, ignore the `run` flag and delegate
-            // to the dedicated clean API on the builder.
-            if (cleanOnly)
-            {
-                var cleanRes = filterIds.Count > 0 ? _vfsBuilder.Clean(filterIds) : _vfsBuilder.Clean((int?)null);
-                return Ok(
-                    new
-                    {
-                        status = "ok",
-                        cleaned = true,
-                        root = cleanRes.RootPath,
-                        errors = cleanRes.Errors,
-                        logUrl = $"{ApiBase}/logs/vfs-report.log",
-                    }
-                );
-            }
 
             if (!run)
             {

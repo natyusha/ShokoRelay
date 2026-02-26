@@ -52,7 +52,16 @@ namespace ShokoRelay.Controllers
             if (series == null)
                 return null;
 
-            return new SeriesContext(series, ApiBase, TextHelper.ResolveFullSeriesTitles(series), RatingHelper.GetContentRatingAndAdult(series).Rating ?? "", GetSeriesFileData(series));
+            // apply overrides: use primary metadata but merge file data for the entire group
+            OverrideHelper.EnsureLoaded(_configProvider.PluginDirectory);
+            int primaryId = OverrideHelper.GetPrimary(series.ID, _metadataService);
+            var primarySeries = _metadataService.GetShokoSeriesByID(primaryId) ?? series;
+            var group = OverrideHelper.GetGroup(primaryId, _metadataService);
+            List<ISeries> extras = group.Skip(1).Select(id => _metadataService.GetShokoSeriesByID(id)).Where(s => s != null).Cast<ISeries>().ToList();
+
+            var fileData = extras.Count > 0 ? MapHelper.GetSeriesFileDataMerged(primarySeries, extras) : MapHelper.GetSeriesFileData(primarySeries);
+
+            return new SeriesContext(primarySeries, ApiBase, TextHelper.ResolveFullSeriesTitles(primarySeries), RatingHelper.GetContentRatingAndAdult(primarySeries).Rating ?? "", fileData);
         }
 
         private IActionResult WrapInContainer(object metadata) =>
@@ -320,6 +329,13 @@ namespace ShokoRelay.Controllers
                         errors = errors,
                     }
                 );
+
+            // convert any secondary ids to their primary equivalents based on overrides
+            OverrideHelper.EnsureLoaded(_configProvider.PluginDirectory);
+            if (ShokoRelay.Settings.TmdbEpNumbering)
+            {
+                ids = ids.Select(i => OverrideHelper.GetPrimary(i, _metadataService)).Distinct().ToList();
+            }
 
             return null;
         }

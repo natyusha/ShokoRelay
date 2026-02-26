@@ -325,6 +325,9 @@ public class AnimeThemesMapping
                     continue;
                 }
 
+                // determine primary group series id for destination folder
+                int primaryId = OverrideHelper.GetPrimary(series.ID, _metadataService);
+
                 var roots = GetImportRoots(series);
                 if (roots.Count == 0)
                 {
@@ -343,7 +346,7 @@ public class AnimeThemesMapping
                         continue;
                     }
 
-                    string shortsDir = Path.Combine(importRoot, rootName, series.ID.ToString(), "Shorts");
+                    string shortsDir = Path.Combine(importRoot, rootName, primaryId.ToString(), "Shorts");
                     string destName = VfsHelper.CleanEpisodeTitleForFilename(entry.NewFileName);
                     destName = TextHelper.AnimeThemesPlexFileNames(destName);
                     destName = TextHelper.ReplaceFirstHyphenWithChevron(destName);

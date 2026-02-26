@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using NLog;
+using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Shoko;
 using Shoko.Abstractions.Services;
 using ShokoRelay.Config;
@@ -48,6 +49,8 @@ namespace ShokoRelay.Vfs
             {
                 // ignore - writing later may still fail and will be logged
             }
+            // load merge overrides now so they are available during builds/filters
+            OverrideHelper.EnsureLoaded(_pluginDataPath);
         }
 
         // public build APIs ================================
@@ -131,6 +134,13 @@ namespace ShokoRelay.Vfs
             else
             {
                 seriesList = _metadataService.GetAllShokoSeries() ?? Array.Empty<IShokoSeries>();
+            }
+
+            // apply overrides by grouping series under a primary id
+            OverrideHelper.EnsureLoaded(_pluginDataPath);
+            if (ShokoRelay.Settings.TmdbEpNumbering)
+            {
+                seriesList = seriesList.GroupBy(s => OverrideHelper.GetPrimary(s.ID, _metadataService)).Select(g => g.First()).ToList();
             }
 
             // Bounded parallel processing of series to improve throughput while avoiding excessive IO contention.
@@ -642,7 +652,29 @@ namespace ShokoRelay.Vfs
             if (_seriesFileDataCacheForBuild == null)
                 return MapHelper.GetSeriesFileData(series);
 
-            return _seriesFileDataCacheForBuild.GetOrAdd(series.ID, _ => MapHelper.GetSeriesFileData(series));
+            // ensure overrides are loaded so mapping decisions are up to date
+            OverrideHelper.EnsureLoaded(_pluginDataPath);
+            int primaryId = OverrideHelper.GetPrimary(series.ID, _metadataService);
+
+            return _seriesFileDataCacheForBuild.GetOrAdd(
+                primaryId,
+                _ =>
+                {
+                    var group = OverrideHelper.GetGroup(primaryId, _metadataService);
+                    var seriesObjs = new List<Shoko.Abstractions.Metadata.Shoko.IShokoSeries?>();
+                    foreach (var id in group)
+                    {
+                        var s = _metadataService.GetShokoSeriesByID(id);
+                        if (s != null)
+                            seriesObjs.Add(s);
+                    }
+                    if (seriesObjs.Count <= 1)
+                        return MapHelper.GetSeriesFileData(seriesObjs.FirstOrDefault() ?? series);
+                    var primarySeries = seriesObjs[0]!;
+                    var extras = seriesObjs.Skip(1).Where(s => s != null).Cast<Shoko.Abstractions.Metadata.ISeries>();
+                    return MapHelper.GetSeriesFileDataMerged(primarySeries, extras);
+                }
+            );
         }
     }
 }

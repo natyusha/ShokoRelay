@@ -23,6 +23,27 @@ namespace ShokoRelay.Helpers
             return new SeriesFileData(mappings, seasons);
         }
 
+        /// <summary>
+        /// Return merged file data for a primary series and any additional series that
+        /// should be considered part of the same logical show.  The metadata for the
+        /// primary is kept, but the file mappings/seasons from the extras are included
+        /// so that children/grandchildren enumerations will surface episodes from all
+        /// series in the group.
+        /// </summary>
+        public static SeriesFileData GetSeriesFileDataMerged(ISeries primary, IEnumerable<ISeries> extras)
+        {
+            var allMappings = new List<FileMapping>();
+            allMappings.AddRange(BuildFileMappings(primary));
+            foreach (var s in extras ?? Array.Empty<ISeries>())
+            {
+                if (s == null)
+                    continue;
+                allMappings.AddRange(BuildFileMappings(s));
+            }
+            var seasons = allMappings.Select(m => m.Coords.Season).Distinct().OrderBy(s => s).ToList();
+            return new SeriesFileData(allMappings, seasons);
+        }
+
         private static List<FileMapping> BuildFileMappings(ISeries series)
         {
             var result = new List<FileMapping>();

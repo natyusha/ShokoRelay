@@ -26,7 +26,7 @@ namespace ShokoRelay.Plex
             return null;
         }
 
-        public static string? FindCollectionPosterPath(IShokoSeries series, string collectionName, int collectionId)
+        public static string? FindCollectionPosterPath(IShokoSeries series, string collectionName, int collectionId, IMetadataService? metadataService = null, string? pluginDir = null)
         {
             if (series == null)
                 return null;
@@ -39,7 +39,7 @@ namespace ShokoRelay.Plex
             if (string.IsNullOrWhiteSpace(normalizedTitle))
                 return null;
 
-            var roots = ResolveImportRoots(series);
+            var roots = ResolveImportRoots(series, metadataService, pluginDir);
             if (roots.Count == 0)
                 return null;
 
@@ -131,21 +131,43 @@ namespace ShokoRelay.Plex
             return null;
         }
 
-        public static HashSet<string> ResolveImportRoots(IShokoSeries series)
+        public static HashSet<string> ResolveImportRoots(IShokoSeries series, IMetadataService? metadataService = null, string? pluginDir = null)
         {
             var roots = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
-            var fileData = MapHelper.GetSeriesFileData(series);
-            foreach (var mapping in fileData.Mappings)
+
+            // make sure overrides are loaded if we know the plugin directory
+            if (!string.IsNullOrWhiteSpace(pluginDir))
+                OverrideHelper.EnsureLoaded(pluginDir);
+
+            // gather list of series to consider (primary + extras)
+            var seriesList = new List<IShokoSeries> { series };
+            if (metadataService != null && ShokoRelay.Settings.TmdbEpNumbering)
             {
-                var location = mapping.Video.Files.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l.Path)) ?? mapping.Video.Files.FirstOrDefault();
-                if (location == null)
-                    continue;
+                int primaryId = OverrideHelper.GetPrimary(series.ID, metadataService!);
+                var group = OverrideHelper.GetGroup(primaryId, metadataService!);
+                foreach (var id in group.Skip(1))
+                {
+                    var s = metadataService.GetShokoSeriesByID(id);
+                    if (s != null)
+                        seriesList.Add(s);
+                }
+            }
 
-                string? importRoot = Vfs.VfsShared.ResolveImportRootPath(location);
-                if (string.IsNullOrWhiteSpace(importRoot))
-                    continue;
+            foreach (var s in seriesList)
+            {
+                var fileData = MapHelper.GetSeriesFileData(s);
+                foreach (var mapping in fileData.Mappings)
+                {
+                    var location = mapping.Video.Files.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l.Path)) ?? mapping.Video.Files.FirstOrDefault();
+                    if (location == null)
+                        continue;
 
-                roots.Add(importRoot);
+                    string? importRoot = Vfs.VfsShared.ResolveImportRootPath(location);
+                    if (string.IsNullOrWhiteSpace(importRoot))
+                        continue;
+
+                    roots.Add(importRoot);
+                }
             }
 
             return roots;
@@ -194,6 +216,7 @@ namespace ShokoRelay.Plex
             string collectionName,
             int collectionId,
             IMetadataService? metadataService = null,
+            string? pluginDir = null,
             bool allowPrimarySeriesFallback = true,
             string? baseUrl = null
         )
@@ -202,7 +225,7 @@ namespace ShokoRelay.Plex
                 return null;
 
             // 1) Check for local poster file for the collection
-            var posterPath = FindCollectionPosterPath(series, collectionName, collectionId);
+            var posterPath = FindCollectionPosterPath(series, collectionName, collectionId, metadataService, pluginDir);
             if (!string.IsNullOrWhiteSpace(posterPath))
             {
                 string b = string.IsNullOrWhiteSpace(baseUrl) ? ImageHelper.GetBaseUrl() : baseUrl?.TrimEnd('/') ?? string.Empty;

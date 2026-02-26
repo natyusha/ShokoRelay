@@ -153,7 +153,7 @@ GET  /plex/automation/run                                      -> RunPlexAutomat
 
 **Notes:**
 
-- Each of the above (other than `RunPlexAutomationNow`) accepts either `seriesId` _or_ a comma-separated `filter`; not both.
+- Each of the above (other than `RunPlexAutomationNow`) accepts either `seriesId` _or_ a comma separated `filter`; not both.
   - All work is performed per-configured Plex target and return counts/summary information.
 
 ---
@@ -175,15 +175,13 @@ POST /plex/webhook                                             -> PluginPlexWebh
 ## Virtual File System (VFS)
 
 ```
-GET  /vfs                                                      -> BuildVfs
-     [?run={true|false}&clean={true|false}&cleanOnly={true|false}&filter={filter}]
+GET  /vfs?run={true|false}&clean={true|false}&filter={filter}  -> BuildVfs
 ```
 
 - `BuildVfs` (all query parameters are optional)
   - `run` (default false) if true the VFS is constructed; when false the call just returns metadata.
   - `clean` (default true) clear the existing root before building.
-  - `cleanOnly` (default false) perform only the cleanup stage (ignores `run`).
-  - `filter` comma-separated Shoko series IDs to restrict processing (the value `0` forces `cleanOnly`).
+  - `filter` comma separated Shoko series IDs to restrict processing.
 
 ---
 
@@ -195,6 +193,10 @@ GET  /vfs                                                      -> BuildVfs
 - Each build writes a plain-text report to `vfs-report.log` in the plugin directory; the UI exposes a `logUrl` property to download it.
 - When importing local metadata images, files named `Specials.<ext>` will be renamed to `Season-Specials-Poster.<ext>` in the VFS
   - This is purely for the aesthetics of the original file structure (where `<ext>` is one of the supported image extensions)
+- A `anidb_vfs_overrides.txt` file may be placed in the plugin directory to group multiple Shoko series IDs under a single primary series.
+  - When present the first ID on each line becomes the canonical series and VFS/metadata operations merge the children of all listed IDs.
+  - This requires all series that are being merged to have the same TMDB series match.
+  - Blank lines and lines starting with `#` are ignored.
 
 ---
 
@@ -207,11 +209,11 @@ POST /shoko/remove-missing?dryRun={true|false}                 -> RemoveMissingF
 POST /shoko/import                                             -> RunShokoImport
 GET  /shoko/import/start                                       -> StartShokoImportNow
 
-GET  /sync-watched                                              -> SyncPlexWatched (for preview/testing)
-POST /sync-watched                                              -> SyncPlexWatched
+GET  /sync-watched                                             -> SyncPlexWatched (for preview/testing)
+POST /sync-watched                                             -> SyncPlexWatched
      [?dryRun={true|false}&sinceHours={int}&ratings={true|false}&import={true|false}&excludeAdmin={true|false}]
 
-GET  /sync-watched/start                                        -> StartWatchedSyncNow
+GET  /sync-watched/start                                       -> StartWatchedSyncNow
 ```
 
 - `RemoveMissingFiles` removes missing files from Shoko and the AniDB MyList.
@@ -265,8 +267,9 @@ POST /animethemes/vfs/import                                   -> ImportAnimeThe
 ```
 
 - `AnimeThemesVfsBuild` applies the mapping file to the AnimeThemes directory structure.
+  - When a `anidb_vfs_overrides.txt` is present, all links for grouped series will be routed into the primary series folder.
   - `mapPath` (optional) lets you specify a custom JSON file instead of the default `anidb_animethemes_xrefs.json`.
-  - `filter` restricts the mapping to the given comma-separated AniDB IDs.
+  - `filter` restricts the mapping to the given comma separated AniDB IDs.
 
 - `AnimeThemesVfsMap` generates the mapping JSON from the current raw source.
   - `mapPath` (optional) overrides the default output file path.
