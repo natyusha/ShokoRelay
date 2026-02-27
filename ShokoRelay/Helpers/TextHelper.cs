@@ -234,6 +234,26 @@ namespace ShokoRelay.Helpers
             return null;
         }
 
+        /// <summary>
+        /// Splits a CSV line on commas.  Caller must escape commas inside values using <see cref="EscapeCsvCommas"/> when generating.
+        /// </summary>
+        public static string[] SplitCsvLine(string line)
+        {
+            if (line == null)
+                return Array.Empty<string>();
+            return line.Split(',');
+        }
+
+        /// <summary>
+        /// Replace literal commas with the unicode escape \u002C so that values containing commas can be stored in a simple comma-separated file.
+        /// </summary>
+        public static string EscapeCsvCommas(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return string.Empty;
+            return value.Replace(",", "\\u002C");
+        }
+
         public static string AnimeThemesPlexFileNames(string? name)
         {
             if (string.IsNullOrWhiteSpace(name))

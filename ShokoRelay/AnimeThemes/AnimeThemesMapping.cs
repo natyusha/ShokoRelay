@@ -25,6 +25,56 @@ internal sealed record AnimeThemesVideoLookup(int VideoId, int ThemeId, int AniD
 
 public class AnimeThemesMapping
 {
+    // helpers for reading/writing the mapping file in CSV form.  The format
+    // uses simple comma-separated rows; commas inside values are escaped as
+    // "\u002C" by the generators.
+
+    private static List<AnimeThemesMappingEntry> ParseMappingContent(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+            return new List<AnimeThemesMappingEntry>();
+
+        var result = new List<AnimeThemesMappingEntry>();
+        using var reader = new StringReader(content);
+        string? line;
+        while ((line = reader.ReadLine()) != null)
+        {
+            line = line.Trim();
+            if (line.Length == 0 || line.StartsWith("#"))
+                continue;
+
+            var fields = TextHelper.SplitCsvLine(line);
+            if (fields.Length < 4)
+                continue;
+
+            string filepath = fields[0];
+            if (!int.TryParse(fields[1], out int vid))
+                continue;
+            if (!int.TryParse(fields[2], out int aid))
+                continue;
+            string newFilename = fields[3];
+
+            result.Add(new AnimeThemesMappingEntry(filepath, vid, aid, newFilename));
+        }
+        return result;
+    }
+
+    private static string SerializeMapping(List<AnimeThemesMappingEntry> entries)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("## Shoko Relay AniDB AnimeThemes Xrefs ##");
+        sb.AppendLine();
+        sb.AppendLine("# filepath, videoId, anidbId, newFilename");
+        foreach (var e in entries)
+        {
+            sb.Append(TextHelper.EscapeCsvCommas(e.FilePath)).Append(',');
+            sb.Append(e.VideoId).Append(',');
+            sb.Append(e.AniDbId).Append(',');
+            sb.Append(TextHelper.EscapeCsvCommas(e.NewFileName)).AppendLine();
+        }
+        return sb.ToString();
+    }
+
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private static readonly HttpClient Http = new HttpClient();
     private static readonly TimeSpan RateLimitDelay = TimeSpan.FromSeconds(0.7); // ~86 req/min to stay under the 90 that is enforced by AnimeThemes
@@ -76,7 +126,7 @@ public class AnimeThemesMapping
 
             try
             {
-                var list = JsonSerializer.Deserialize<List<AnimeThemesMappingEntry>>(content, _jsonOptions);
+                var list = ParseMappingContent(content);
                 if (list != null)
                     count = list.Count;
             }
@@ -128,6 +178,8 @@ public class AnimeThemesMapping
         var sw = Stopwatch.StartNew();
 
         string mapPath = outputPath ?? Path.Combine(_pluginPath, AnimeThemesConstants.MapFileName);
+        // map file path (CSV) for output.  existing CSV contents will be read when
+        // performing incremental updates.
         var messages = new List<string>();
         var entries = new List<AnimeThemesMappingEntry>();
         int errors = 0;
@@ -140,8 +192,8 @@ public class AnimeThemesMapping
         {
             try
             {
-                string oldJson = await File.ReadAllTextAsync(mapPath, ct).ConfigureAwait(false);
-                var oldList = JsonSerializer.Deserialize<List<AnimeThemesMappingEntry>>(oldJson, _jsonOptions);
+                string oldContent = await File.ReadAllTextAsync(mapPath, ct).ConfigureAwait(false);
+                var oldList = ParseMappingContent(oldContent);
                 if (oldList != null)
                 {
                     foreach (var e in oldList)
@@ -230,8 +282,8 @@ public class AnimeThemesMapping
             }
         }
 
-        var json = JsonSerializer.Serialize(entries, _jsonOptions);
-        await File.WriteAllTextAsync(mapPath, json, ct);
+        var fileContent = SerializeMapping(entries);
+        await File.WriteAllTextAsync(mapPath, fileContent, ct);
 
         sw.Stop();
         Logger.Info(
@@ -252,8 +304,8 @@ public class AnimeThemesMapping
         if (!File.Exists(resolvedMap))
             throw new FileNotFoundException("Mapping file not found", resolvedMap);
 
-        string json = await File.ReadAllTextAsync(resolvedMap, ct);
-        var entries = JsonSerializer.Deserialize<List<AnimeThemesMappingEntry>>(json, _jsonOptions) ?? new();
+        string content = await File.ReadAllTextAsync(resolvedMap, ct);
+        var entries = ParseMappingContent(content) ?? new();
 
         List<IShokoSeries?> seriesList = [];
         Logger.Info("AnimeThemes apply mapping started (map={MapPath}, filter={FilterCount})", resolvedMap, seriesFilter?.Count ?? 0);

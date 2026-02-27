@@ -193,7 +193,7 @@ GET  /vfs?run={true|false}&clean={true|false}&filter={filter}  -> BuildVfs
 - Each build writes a plain-text report to `vfs-report.log` in the plugin directory; the UI exposes a `logUrl` property to download it.
 - When importing local metadata images, files named `Specials.<ext>` will be renamed to `Season-Specials-Poster.<ext>` in the VFS
   - This is purely for the aesthetics of the original file structure (where `<ext>` is one of the supported image extensions)
-- A `anidb_vfs_overrides.txt` file may be placed in the plugin directory to group multiple Shoko series IDs under a single primary series.
+- A `anidb_vfs_overrides.csv` file may be placed in the plugin directory to group multiple Shoko series IDs under a single primary series.
   - When present the first ID on each line becomes the canonical series and VFS/metadata operations merge the children of all listed IDs.
   - This requires all series that are being merged to have the same TMDB series match.
   - Blank lines and lines starting with `#` are ignored.
@@ -259,23 +259,34 @@ GET  /sync-watched/start                                       -> StartWatchedSy
 ### VFS
 
 ```
-GET  /animethemes/vfs/build?mapPath={map.json}&filter={csv}    -> AnimeThemesVfsBuild
+GET  /animethemes/vfs/build?mapPath={map.csv}&filter={csv}     -> AnimeThemesVfsBuild
 
-GET  /animethemes/vfs/map?mapPath={map.json}                   -> AnimeThemesVfsMap
+GET  /animethemes/vfs/map?mapPath={map.csv}                    -> AnimeThemesVfsMap
 
 POST /animethemes/vfs/import                                   -> ImportAnimeThemesMapping
 ```
 
 - `AnimeThemesVfsBuild` applies the mapping file to the AnimeThemes directory structure.
-  - When a `anidb_vfs_overrides.txt` is present, all links for grouped series will be routed into the primary series folder.
-  - `mapPath` (optional) lets you specify a custom JSON file instead of the default `anidb_animethemes_xrefs.json`.
+  - When `anidb_vfs_overrides.csv` is present, all links for grouped series will be routed into the primary series folder.
+  - `mapPath` (optional) lets you specify a custom mapping file instead of the default `anidb_animethemes_xrefs.csv`.
   - `filter` restricts the mapping to the given comma separated AniDB IDs.
 
-- `AnimeThemesVfsMap` generates the mapping JSON from the current raw source.
+- `AnimeThemesVfsMap` generates the mapping csv from the current raw source.
   - `mapPath` (optional) overrides the default output file path.
 
-- `ImportAnimeThemesMapping` downloads the latest mapping JSON from the hardcoded Gist URL.
-  - This is written to `anidb_animethemes_xrefs.json` in the plugin folder.
+- `ImportAnimeThemesMapping` downloads the latest mapping csv from the hardcoded Gist URL.
+
+---
+
+**Notes:**
+
+- `anidb_animethemes_xrefs.csv` is meant to be placed in the plugin folder (CSV format with optional comments).
+- Example contents (note commas in filenames are encoded as `\u002C`):
+
+```csv
+# filepath, videoId, anidbId, newFilename
+/60s/ExampleSeries-OP1.webm,12345,6789,OP1 - Hello\u002C World.webm
+```
 
 ---
 
@@ -292,6 +303,8 @@ GET  /animethemes/mp3                                          -> AnimeThemesMp3
   - `offset` (optional) when AnimeThemes matches to multiple anime, start at this index (1‑based).
   - `batch` (optional) if true the service will recurse down the directory tree and process every valid subfolder in sequence.
   - `force` (optional) regenerate an MP3 even if one already exists.
+
+---
 
 **Notes:**
 

@@ -136,11 +136,24 @@ namespace ShokoRelay.Vfs
                 seriesList = _metadataService.GetAllShokoSeries() ?? Array.Empty<IShokoSeries>();
             }
 
-            // apply overrides by grouping series under a primary id
+            // apply overrides by grouping series under a primary id.  The previous
+            // implementation used g.First() as the representative which could end up
+            // being a secondary series ID if the list happened to enumerate it first.
+            // That caused builds to clean/write the wrong folder while mappings were
+            // derived from the primary.  Always pick the actual primary series object
+            // when available.
             OverrideHelper.EnsureLoaded(_pluginDataPath);
             if (ShokoRelay.Settings.TmdbEpNumbering)
             {
-                seriesList = seriesList.GroupBy(s => OverrideHelper.GetPrimary(s.ID, _metadataService)).Select(g => g.First()).ToList();
+                seriesList = seriesList
+                    .GroupBy(s => OverrideHelper.GetPrimary(s.ID, _metadataService))
+                    .Select(g =>
+                    {
+                        int primaryId = g.Key;
+                        var primaryObj = g.FirstOrDefault(s => s.ID == primaryId);
+                        return primaryObj ?? g.First();
+                    })
+                    .ToList();
             }
 
             // Bounded parallel processing of series to improve throughput while avoiding excessive IO contention.
@@ -268,7 +281,16 @@ namespace ShokoRelay.Vfs
             var sw = Stopwatch.StartNew();
 
             var titles = TextHelper.ResolveFullSeriesTitles(series);
-            string seriesFolder = series.ID.ToString();
+            // determine which folder we will actually populate; if episode numbering is
+            // enabled this should always be the primary series id (overrides may cause
+            // the passed-in `series` object to be a secondary).
+            int folderId = series.ID;
+            if (ShokoRelay.Settings.TmdbEpNumbering)
+            {
+                OverrideHelper.EnsureLoaded(_pluginDataPath);
+                folderId = OverrideHelper.GetPrimary(series.ID, _metadataService);
+            }
+            string seriesFolder = folderId.ToString();
 
             var fileData = GetSeriesFileDataCached(series);
             if (!fileData.Mappings.Any())
@@ -651,6 +673,15 @@ namespace ShokoRelay.Vfs
         {
             if (_seriesFileDataCacheForBuild == null)
                 return MapHelper.GetSeriesFileData(series);
+
+            // if TMDB episode numbering is disabled we should ignore any override
+            // groups entirely; that keeps the behavior consistent with BuildInternal's
+            // seriesList grouping and avoids any possibility of "cleaning" a folder
+            // for a secondary while another thread still plans to copy into it.
+            if (!ShokoRelay.Settings.TmdbEpNumbering)
+            {
+                return _seriesFileDataCacheForBuild.GetOrAdd(series.ID, _ => MapHelper.GetSeriesFileData(series));
+            }
 
             // ensure overrides are loaded so mapping decisions are up to date
             OverrideHelper.EnsureLoaded(_pluginDataPath);

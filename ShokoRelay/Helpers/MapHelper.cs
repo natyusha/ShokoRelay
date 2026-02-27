@@ -24,6 +24,36 @@ namespace ShokoRelay.Helpers
         }
 
         /// <summary>
+        /// Returns the TMDB ordering ID that should be used for episode numbering,
+        /// or <c>null</c> if none applies.  This encapsulates the logic of detecting
+        /// when an alternate ordering is active and also respects the global
+        /// <c>TmdbEpNumbering</c> setting.
+        /// </summary>
+        public static string? GetPreferredTmdbOrderingId(ISeries series)
+        {
+            if (!ShokoRelay.Settings.TmdbEpNumbering)
+                return null;
+
+            // Look for the first Shoko episode that has a TMDB show reference.
+            var firstShokoEp = series.Episodes.OfType<IShokoEpisode>().FirstOrDefault();
+            var tmdbShow = firstShokoEp?.Series?.TmdbShows?.FirstOrDefault();
+            if (tmdbShow == null)
+                return null;
+
+            var pref = tmdbShow.PreferredOrdering?.OrderingID;
+            if (string.IsNullOrWhiteSpace(pref))
+                return null;
+
+            // If the preferred ordering id equals the show's own id string then no
+            // alternate ordering is selected; treat that as "no alternate ordering".
+            var showDefaultOrderingId = tmdbShow.ID.ToString();
+            if (string.Equals(pref, showDefaultOrderingId, StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            return pref;
+        }
+
+        /// <summary>
         /// Return merged file data for a primary series and any additional series that
         /// should be considered part of the same logical show.  The metadata for the
         /// primary is kept, but the file mappings/seasons from the extras are included
@@ -64,21 +94,11 @@ namespace ShokoRelay.Helpers
             // Normalize away the default show-ordering (Shoko's API sometimes exposes the show id as the
             // PreferredOrdering.OrderingID when no alternate ordering is selected). Only keep a non-default
             // ordering id if it's genuinely an alternate ordering.
-            string? seriesPrefOrderingId = null;
-            if (ShokoRelay.Settings.TmdbEpNumbering)
-            {
-                var firstShokoEp = seriesEpisodes.Select(x => x.Episode).OfType<IShokoEpisode>().FirstOrDefault();
-                var tmdbShow = firstShokoEp?.Series?.TmdbShows?.FirstOrDefault();
-                var pref = tmdbShow?.PreferredOrdering?.OrderingID;
-                if (!string.IsNullOrWhiteSpace(pref) && tmdbShow != null)
-                {
-                    // If PreferredOrdering.OrderingID equals the show's own ordering id (i.e. the show id string),
-                    // treat it as "no alternate ordering" and ignore.
-                    var showDefaultOrderingId = tmdbShow.ID.ToString();
-                    if (!string.Equals(pref, showDefaultOrderingId, StringComparison.OrdinalIgnoreCase))
-                        seriesPrefOrderingId = pref;
-                }
-            }
+            // Acquire the preferred TMDB ordering ID (if any).  the helper already
+            // normalizes away the default ordering, so callers simply need to pass the
+            // value through to mapping functions.
+
+            string? seriesPrefOrderingId = GetPreferredTmdbOrderingId(series);
 
             // Build episode file lists from cached videos
             var episodeFileLists = seriesEpisodes.ToDictionary(x => x.Episode.ID, x => x.Videos.OrderBy(v => Path.GetFileName(v.Files.FirstOrDefault()?.Path ?? "")).ToList());

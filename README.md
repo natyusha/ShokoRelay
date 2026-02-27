@@ -174,7 +174,7 @@ This plugin includes full [AnimeThemes](https://animethemes.moe/) integration. I
 1. Download anime theme videos and place them in the `!AnimeThemes` folder
    - There is a torrent available with over 19000+ themes
 2. Generate a mapping for the the videos by clicking the `Build` button:
-   - If you have the torrent click the `Import` button to download the [current torrent mapping](https://gist.github.com/natyusha/4e29252d939d0f522d38732facf328c7)
+   - If you have the torrent click the `Import` button to download the [current torrent mapping](https://gist.github.com/natyusha/bb33a3b3bc95bc7a3869633e23d522bb)
    - Mapping the torrent takes ~12 hours (due to rate limits) and generated mappings will be appended to it
 3. Apply the mapping to the VFS by clicking the `Generate` button
 
@@ -266,9 +266,9 @@ If you aren't happy with TMDB's default episode/season structure for a series, y
 
 **Combining Series**
 
-This allows shows which are separated on AniDB but part of the same TMDB listing to be combined into a single entry in Plex. To achieve this create an `anidb_vfs_overrides.txt` file in the plugin directory. Each line should contain a comma separated list of AniDB IDs. The first ID is the _primary series_ and the others will be merged into it (for both VFS builds and metadata lookups). Blank lines and lines starting with `#` are ignored.
+This allows shows which are separated on AniDB but part of the same TMDB listing to be combined into a single entry in Plex. To achieve this create an `anidb_vfs_overrides.csv` file in the plugin directory. Each line should contain a comma separated list of AniDB IDs. The first ID is the _primary series_ and the others will be merged into it (for both VFS builds and metadata lookups). Blank lines and lines starting with `#` are ignored.
 
-An example `anidb_vfs_overrides.txt` is available [here](https://gist.github.com/natyusha/a9ad00a5c16276cfbe2553346c745f1c).
+An example `anidb_vfs_overrides.csv` is available [here](https://gist.github.com/natyusha/a9ad00a5c16276cfbe2553346c745f1c).
 
 ### Combining Episodes
 
@@ -324,4 +324,3 @@ Due to this plugin relying on Plex's metadata provider feature (which is still u
   - Add custom or generic series/episode ratings directly through the provider
   - Add rich cast info (bios) for cast and crew
   - Include generic ratings for "old experience" Plex clients without using the HTTP API
-- Add a basic UI to the dashboard for editing `anidb_vfs_overrides.txt`

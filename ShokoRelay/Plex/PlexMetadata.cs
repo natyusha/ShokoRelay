@@ -334,7 +334,11 @@ namespace ShokoRelay.Plex
                     primarySeries = s;
             }
 
-            // build list of group series for combined metadata lookups
+            // build list of group series for combined metadata lookups.  This will
+            // include the primary series plus any additional series defined via the
+            // `anidb_vfs_overrides.csv` helper.  Override entries are only meaningful
+            // when TMDB episode numbering is enabled; when the feature is off the
+            // overrides are ignored so we keep the list to just the primary.
             var groupList = new List<IShokoSeries>();
             if (primarySeries is IShokoSeries ps)
                 groupList.Add(ps);
@@ -355,14 +359,24 @@ namespace ShokoRelay.Plex
             var seasonTitle = GetSeasonFolder(seasonNum);
             string? seasonSummary = null;
 
+            // Determine whether we should ignore TMDB season metadata because the series
+            // is running under a TMDB alternate ordering.  Season titles/descriptions and
+            // posters are taken from the default ordering and will not align with the
+            // adjusted episode numbers, so they must be skipped in that scenario.
+            bool ignoreTmdbSeasonInfo = !string.IsNullOrEmpty(MapHelper.GetPreferredTmdbOrderingId(primarySeries));
+
             // TMDB metadata is preferred for season title/summary when available.
             ITmdbSeason? tmdbSeason = null;
-            foreach (var s in groupList)
+            if (!ignoreTmdbSeasonInfo)
             {
-                tmdbSeason = s.TmdbSeasons?.FirstOrDefault(ts => ts.SeasonNumber == seasonNum);
-                if (tmdbSeason != null)
-                    break;
+                foreach (var s in groupList)
+                {
+                    tmdbSeason = s.TmdbSeasons?.FirstOrDefault(ts => ts.SeasonNumber == seasonNum);
+                    if (tmdbSeason != null)
+                        break;
+                }
             }
+
             if (tmdbSeason != null)
             {
                 var tmdbTitle = tmdbSeason.PreferredTitle?.Value;
@@ -382,6 +396,22 @@ namespace ShokoRelay.Plex
                 .OrderBy(x => x.Map.Episode)
                 .FirstOrDefault();
 
+            // if the season itself has no release date, fall back to the earliest
+            // airdate of any episode contained within it.  this is particularly useful
+            // for specials/season0 entries which often lack their own metadata date.
+            // additionally we want episodes from any VFS override group members (see
+            // above) to count toward this fallback.
+            DateOnly? seasonDate = firstEpisode?.Ep.AirDate;
+            if (!seasonDate.HasValue)
+            {
+                seasonDate = groupList
+                    .SelectMany(s => s.Episodes)
+                    .Where(e => e.AirDate.HasValue && GetPlexCoordinates(e).Season == seasonNum)
+                    .Select(e => e.AirDate!.Value)
+                    .OrderBy(d => d)
+                    .FirstOrDefault();
+            }
+
             // Only request season posters when there is more than one non-extra season present.
             // Extras/specials are represented as negative season numbers and should be ignored for this count.
             var extras = groupList.Skip(1).Cast<ISeries>().ToList();
@@ -391,8 +421,9 @@ namespace ShokoRelay.Plex
             List<string>? seasonPosters = null; // Default: no season-specific posters
 
             // Populate TMDB season posters when enabled, the series has >1 normal seasons,
-            // and TMDB season metadata is available on the Shoko series.
-            if (ShokoRelay.Settings.TmdbSeasonPosters && nonExtraSeasonCount > 1 && tmdbSeason != null)
+            // and TMDB season metadata is available on the Shoko series.  Skip posters if we
+            // are ignoring TMDB season info due to alternate ordering.
+            if (ShokoRelay.Settings.TmdbSeasonPosters && nonExtraSeasonCount > 1 && tmdbSeason != null && !ignoreTmdbSeasonInfo)
             {
                 var orderedUrls = tmdbSeason.GetImages(ImageEntityType.Poster).OrderByDescending(i => i.IsPreferred).ThenByDescending(i => i.IsLocked).Select(i => ImageHelper.GetImageUrl(i)).ToList();
 
@@ -425,12 +456,12 @@ namespace ShokoRelay.Plex
                 ["guid"]                  = GetGuid("season", series.ID, seasonNum),
                 ["type"]                  = "season",
                 ["title"]                 = seasonTitle,
-                ["originallyAvailableAt"] = firstEpisode?.Ep.AirDate?.ToString("yyyy-MM-dd"),
+                ["originallyAvailableAt"] = seasonDate?.ToString("yyyy-MM-dd"),
                 ["thumb"]                 = thumb,
                 ["contentRating"]         = RatingHelper.GetContentRatingAndAdult(series).Rating,
                 //['originalTitle']       =
                 ["titleSort"]             = !string.IsNullOrWhiteSpace(seasonTitle) ? seasonTitle : null,
-                ["year"]                  = firstEpisode?.Ep.AirDate?.Year,
+                ["year"]                  = seasonDate?.Year,
                 ["summary"]               = seasonSummary ?? string.Empty,
                 ["isAdult"]               = RatingHelper.GetContentRatingAndAdult(series).IsAdult,
 
@@ -487,9 +518,12 @@ namespace ShokoRelay.Plex
             if (mapped.Season < 0 && TryGetExtraSeason(mapped.Season, out var exInfo))
                 extraSubtype = exInfo.Subtype;
 
-            // Prefer a season-specific poster for the parent thumb when available (fallback to series poster)
+            // Prefer a season-specific poster for the parent thumb when available (fallback to series poster).
+            // Ignore season posters too when alternate ordering is active since they will be sourced
+            // from the default TMDB ordering and likely don't correspond to the adjusted episode numbers.
             string? parentThumb = null;
-            if (ShokoRelay.Settings.TmdbSeasonPosters && mapped.Season >= 0)
+            bool ignoreSeasonInfo = !string.IsNullOrEmpty(MapHelper.GetPreferredTmdbOrderingId(series));
+            if (ShokoRelay.Settings.TmdbSeasonPosters && mapped.Season >= 0 && !ignoreSeasonInfo)
             {
                 // find tmdbSeason across override group
                 ITmdbSeason? seasonObj = null;

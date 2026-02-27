@@ -1,10 +1,11 @@
 using System.Globalization;
 using Shoko.Abstractions.Services;
+using ShokoRelay.Helpers; // for CsvHelper
 
 namespace ShokoRelay.Helpers
 {
     /// <summary>
-    /// Parses an optional "anidb_vfs_overrides.txt" file placed in the plugin directory.
+    /// Parses an optional "anidb_vfs_overrides.csv" file placed in the plugin directory.
     /// The file allows a user to group multiple Shoko series IDs together so that
     /// one primary ID is treated as the canonical series and the rest are merged
     /// for VFS and metadata operations.
@@ -39,7 +40,7 @@ namespace ShokoRelay.Helpers
             if (string.IsNullOrWhiteSpace(pluginDir))
                 return;
 
-            string path = Path.Combine(pluginDir, "anidb_vfs_overrides.txt");
+            string path = Path.Combine(pluginDir, "anidb_vfs_overrides.csv");
             if (_loadedPath == path)
             {
                 if (File.Exists(path))
@@ -69,7 +70,10 @@ namespace ShokoRelay.Helpers
                     var line = raw.Trim();
                     if (line.Length == 0 || line.StartsWith("#"))
                         continue;
-                    var parts = line.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    var csvFields = TextHelper.SplitCsvLine(line);
+                    var parts = csvFields
+                        .Select(s => s.Trim())
+                        .Where(s => s.Length > 0)
                         .Select(s => int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) ? id : 0)
                         .Where(id => id > 0)
                         .Distinct()
