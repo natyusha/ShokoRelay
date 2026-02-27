@@ -3,6 +3,9 @@ using System.ComponentModel.DataAnnotations;
 
 namespace ShokoRelay.Config
 {
+    /// <summary>
+    /// Constants describing default file and folder names used by the configuration provider.
+    /// </summary>
     public static class ConfigConstants
     {
         public const string ConfigFileName = "preferences.json";
@@ -11,6 +14,9 @@ namespace ShokoRelay.Config
         public const string ConfigSubfolder = "config";
     }
 
+    /// <summary>
+    /// Levels of sanitization to apply when transferring the series summary to Plex.
+    /// </summary>
     public enum SummaryMode
     {
         [Display(Name = "Fully Sanitize")]
@@ -26,6 +32,9 @@ namespace ShokoRelay.Config
         AllowBoth = 3,
     }
 
+    /// <summary>
+    /// Source to use for generic critic ratings applied to Plex metadata.
+    /// </summary>
     public enum CriticRatingMode
     {
         AniDB = 0,
@@ -33,6 +42,9 @@ namespace ShokoRelay.Config
         None = 2,
     }
 
+    /// <summary>
+    /// Preferred source(s) for genre/tag information when populating Plex.
+    /// </summary>
     public enum TagSources
     {
         Combined = 0,
@@ -47,6 +59,9 @@ namespace ShokoRelay.Config
         UserOnly = 3,
     }
 
+    /// <summary>
+    /// AniDB tag weight thresholds used to filter which tags are exposed to Plex.
+    /// </summary>
     public enum MinimumTagWeight
     {
         [Display(Name = "000 ❯ ☆☆☆")]
@@ -71,6 +86,9 @@ namespace ShokoRelay.Config
         SixHundred = 600,
     }
 
+    /// <summary>
+    /// Strongly typed representation of the user's configuration options that are persisted in <c>preferences.json</c>.
+    /// </summary>
     public class RelayConfig
     {
         #region Automation Config
@@ -218,6 +236,9 @@ namespace ShokoRelay.Config
         #endregion
     }
 
+    /// <summary>
+    /// Container for any secrets required by the plugin (currently only Plex auth info).
+    /// </summary>
     public class RelaySecrets
     {
         public PlexAuthSecrets PlexAuth { get; set; } = new();
@@ -225,6 +246,9 @@ namespace ShokoRelay.Config
         public bool IsEmpty => PlexAuth.IsEmpty;
     }
 
+    /// <summary>
+    /// Plex-specific authentication secrets stored separately from user-visible preferences. Presently only the client identifier is required.
+    /// </summary>
     public class PlexAuthSecrets
     {
         public string ClientIdentifier { get; set; } = "";

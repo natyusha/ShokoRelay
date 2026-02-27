@@ -14,14 +14,26 @@ using static ShokoRelay.Plex.PlexMapping;
 
 namespace ShokoRelay.Controllers
 {
+    /// <summary>
+    /// Represents the body of a Plex matching request. Fields are optional; <see cref="Manual"/> can be used to force a particular series ID.
+    /// </summary>
     public record PlexMatchBody(string? Filename, string? Title = null, int? Manual = null);
 
+    /// <summary>
+    /// Aggregates relevant information about a Shoko series for controller responses.
+    /// Includes the series metadata, API base URL, resolved titles, content rating string, and file data used when building VFS links.
+    /// </summary>
     public record SeriesContext(ISeries Series, string ApiUrl, (string DisplayTitle, string SortTitle, string? OriginalTitle) Titles, string ContentRating, SeriesFileData FileData);
 
     public partial class ShokoRelayController
     {
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
+        /// <summary>
+        /// Convert a Plex-style <paramref name="ratingKey"/> into a <see cref="SeriesContext"/>.
+        /// This resolves the underlying Shoko series, applies any merge overrides, and gathers file data and titles. Returns <c>null</c> if the key cannot be parsed or the series is missing.
+        /// </summary>
+        /// <param name="ratingKey">Plex rating key representing show, season or episode.</param>
         private SeriesContext? GetSeriesContext(string ratingKey)
         {
             int seriesId;
@@ -64,6 +76,10 @@ namespace ShokoRelay.Controllers
             return new SeriesContext(primarySeries, ApiBase, TextHelper.ResolveFullSeriesTitles(primarySeries), RatingHelper.GetContentRatingAndAdult(primarySeries).Rating ?? "", fileData);
         }
 
+        /// <summary>
+        /// Wrap a single metadata object in the standard Plex <c>MediaContainer</c> envelope used throughout controller responses.
+        /// </summary>
+        /// <param name="metadata">The object to embed.</param>
         private IActionResult WrapInContainer(object metadata) =>
             Ok(
                 new
@@ -79,8 +95,15 @@ namespace ShokoRelay.Controllers
                 }
             );
 
+        /// <summary>
+        /// Return an empty Plex match response (zero results) using the standard <c>MediaContainer</c> format.
+        /// </summary>
         private IActionResult EmptyMatch() => Ok(new { MediaContainer = new { size = 0, Metadata = Array.Empty<object>() } });
 
+        /// <summary>
+        /// Wrap a list of metadata objects in a paged <c>MediaContainer</c>, honouring Plex pagination headers or query parameters.
+        /// </summary>
+        /// <param name="metadataList">Collection of metadata items to page.</param>
         private IActionResult WrapInPagedContainer(IEnumerable<object> metadataList)
         {
             int start =
@@ -111,6 +134,11 @@ namespace ShokoRelay.Controllers
             );
         }
 
+        /// <summary>
+        /// Parse a comma-separated filter string into a list of valid positive integers; invalid entries are reported via the output <paramref name="errors"/> list.
+        /// </summary>
+        /// <param name="filter">Raw filter string from query parameter.</param>
+        /// <param name="errors">Collected parse error messages.</param>
         private static List<int> ParseFilterIds(string? filter, out List<string> errors)
         {
             errors = new List<string>();
@@ -133,6 +161,12 @@ namespace ShokoRelay.Controllers
             return ids.ToList();
         }
 
+        /// <summary>
+        /// Given an optional <paramref name="seriesId"/> or a set of <paramref name="filterIds"/>, return the corresponding list of series objects.
+        /// If neither is provided the full series catalog is returned.
+        /// </summary>
+        /// <param name="seriesId">Single series override.</param>
+        /// <param name="filterIds">Collection of series ids from a filter.</param>
         private List<IShokoSeries?> ResolveSeriesList(int? seriesId, IReadOnlyCollection<int> filterIds)
         {
             if (seriesId.HasValue)
@@ -258,8 +292,7 @@ namespace ShokoRelay.Controllers
                     var coordsEp = GetPlexCoordinates(ep);
                     if (coordsEp.Season != seasonNum)
                     {
-                        // If the episode is originally 'Other' but this file mapping was reassigned into this season,
-                        // apply that season to the episode's coordinates so metadata matches the VFS placement.
+                        // If the episode is originally 'Other' but this file mapping was reassigned into this season, apply that season to the episode so metadata matches the VFS placement.
                         if (coordsEp.Season == PlexConstants.SeasonOther && m.Coords.Season == seasonNum)
                         {
                             coordsEp = new PlexCoords
@@ -283,7 +316,6 @@ namespace ShokoRelay.Controllers
         }
 
         // Plex discovery helpers & network access wrappers
-
         private static List<PlexAvailableLibrary> CollectDiscoveredLibraries(IEnumerable<(PlexLibraryInfo, PlexServerInfo)>? pairs)
         {
             var collected = new List<PlexAvailableLibrary>();

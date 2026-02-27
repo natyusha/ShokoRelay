@@ -5,9 +5,7 @@ using Shoko.Abstractions.Services;
 namespace ShokoRelay.Services
 {
     /// <summary>
-    /// Helper for triggering server-side import and housekeeping actions using
-    /// Shoko's internal service abstractions.  No API key or HTTP calls are required
-    /// when running as a plugin.
+    /// Helper for triggering server-side import and housekeeping actions using Shoko's internal service abstractions. No API key or HTTP calls are required when running as a plugin.
     /// </summary>
     public class ShokoImportService
     {
@@ -20,9 +18,7 @@ namespace ShokoRelay.Services
         }
 
         /// <summary>
-        /// Trigger import scans for every managed folder marked as a "Source".
-        /// Returns the names of folders that were scheduled for scanning, which is
-        /// useful for UI feedback.
+        /// Trigger import scans for every managed folder marked as a "Source". Returns the names of folders that were scheduled for scanning, which is useful for UI feedback.
         /// </summary>
         public async Task<IReadOnlyList<string>> TriggerImportAsync(CancellationToken ct = default)
         {
@@ -39,10 +35,8 @@ namespace ShokoRelay.Services
         }
 
         /// <summary>
-        /// Scan for video file entries whose physical file has disappeared and
-        /// optionally remove those records from the database.  The <paramref name="dryRun"/>
-        /// flag controls whether deletion occurs; in either case the list of missing
-        /// paths is returned.  Database deletions never touch disk files.
+        /// Scan for video file entries whose physical file has disappeared and optionally remove those records from the database.
+        /// The <paramref name="dryRun"/> flag controls whether deletion occurs; in either case the list of missing paths is returned. Database deletions never touch disk files.
         /// </summary>
         public async Task<IReadOnlyList<string>> RemoveMissingFilesAsync(bool removeFromMyList = false, bool dryRun = false, CancellationToken ct = default)
         {

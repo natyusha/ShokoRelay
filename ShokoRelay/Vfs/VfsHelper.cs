@@ -4,6 +4,9 @@ using ShokoRelay.Helpers;
 
 namespace ShokoRelay.Vfs
 {
+    /// <summary>
+    /// Utilities used during virtual filesystem (VFS) generation, including filename sanitization and naming helpers.
+    /// </summary>
     public static class VfsHelper
     {
         private static readonly Regex _quotedTextRegex = new("\"(.*?)\"", RegexOptions.Compiled);
@@ -20,6 +23,10 @@ namespace ShokoRelay.Vfs
             ["other"] = "U",
         };
 
+        /// <summary>
+        /// Remove invalid filename characters from <paramref name="name"/>, condense whitespace and trim trailing dots. Returns "Unknown" when the result is empty.
+        /// </summary>
+        /// <param name="name">Input string to sanitize.</param>
         public static string SanitizeName(string name)
         {
             if (string.IsNullOrWhiteSpace(name))
@@ -41,6 +48,17 @@ namespace ShokoRelay.Vfs
             return cleaned.Length == 0 ? "Unknown" : cleaned;
         }
 
+        /// <summary>
+        /// Construct a standard episode filename using season/episode coordinates, zero-padding, file ID and optional part/version overrides.
+        /// </summary>
+        /// <param name="mapping">Mapping information for the episode.</param>
+        /// <param name="pad">Zero‑padding width for episode numbers.</param>
+        /// <param name="extension">File extension including the dot.</param>
+        /// <param name="fileId">Numeric identifier to append to the filename.</param>
+        /// <param name="omitFileId">If true, do not include the file ID bracket.</param>
+        /// <param name="partIndexOverride">Optional manual part index.</param>
+        /// <param name="partCountOverride">Optional total part count.</param>
+        /// <param name="versionIndexOverride">Optional version index.</param>
         public static string BuildStandardFileName(
             MapHelper.FileMapping mapping,
             int pad,
@@ -77,6 +95,17 @@ namespace ShokoRelay.Vfs
             return $"{epPart} {fileIdPart}{extension}";
         }
 
+        /// <summary>
+        /// Build a filename for extras (trailers, featurettes, etc.) using the provided mapping and subtype information. Applies special prefixes and sanitizes the episode title.
+        /// </summary>
+        /// <param name="mapping">File mapping data.</param>
+        /// <param name="extraInfo">Folder/subtype information for the extra.</param>
+        /// <param name="pad">Zero‑pad width for the episode portion.</param>
+        /// <param name="extension">File extension including dot.</param>
+        /// <param name="displaySeriesTitle">Series title used for fallback when cleaning episode title.</param>
+        /// <param name="partIndexOverride">Optional override for part index.</param>
+        /// <param name="partCountOverride">Optional override for part count.</param>
+        /// <param name="versionIndexOverride">Optional override for version index.</param>
         public static string BuildExtrasFileName(
             MapHelper.FileMapping mapping,
             (string Folder, string Subtype) extraInfo,
@@ -110,7 +139,11 @@ namespace ShokoRelay.Vfs
             return TextHelper.ReplaceFirstHyphenWithChevron(fileName);
         }
 
-        // Episode titles for Extras that are generated for the VFS need to be cleaned of invalid filename characters and condensed to prevent issues with Plex's file parsing
+        /// <summary>
+        /// Clean an episode title for use in a filename by replacing styled
+        /// substrings, mapping invalid characters and condensing whitespace.
+        /// </summary>
+        /// <param name="title">Original episode title.</param>
         public static string CleanEpisodeTitleForFilename(string? title)
         {
             if (string.IsNullOrWhiteSpace(title))

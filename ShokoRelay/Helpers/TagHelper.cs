@@ -5,6 +5,9 @@ using ShokoRelay.Config;
 
 namespace ShokoRelay.Helpers
 {
+    /// <summary>
+    /// Utilities for filtering and formatting tag strings obtained from Shoko series metadata. Includes logic for blacklists and title-casing.
+    /// </summary>
     public static class TagHelper
     {
         // https://github.com/ShokoAnime/ShokoServer/blob/9c0ae9208479420dea3b766156435d364794e809/Shoko.Server/Utilities/TagFilter.cs#L37
@@ -106,6 +109,10 @@ namespace ShokoRelay.Helpers
             { "noitamina", "noitaminA" },
         };
 
+        /// <summary>
+        /// Return an array of tag objects derived from the provided <paramref name="series"/>, applying blacklist rules and combining sources (Shoko, AniDB, TMDB) based on configuration.
+        /// </summary>
+        /// <param name="series">Series to extract tags from.</param>
         public static object[] GetFilteredTags(ISeries series)
         {
             var shokoSeries = series as Shoko.Abstractions.Metadata.Shoko.IShokoSeries;
@@ -173,6 +180,11 @@ namespace ShokoRelay.Helpers
                 .ToArray<object>();
         }
 
+        /// <summary>
+        /// Convert the given <paramref name="text"/> to title case, honoring special words that should always be upper- or lowercase according to AniDB rules.
+        /// </summary>
+        /// <param name="text">Text to convert.</param>
+        /// <returns>Title‑cased string; original input returned if null/whitespace.</returns>
         public static string TitleCase(string text)
         {
             if (string.IsNullOrWhiteSpace(text))

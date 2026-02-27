@@ -14,6 +14,11 @@ namespace ShokoRelay
 {
     public class ServiceRegistration : IPluginServiceRegistration
     {
+        /// <summary>
+        /// Configure all services required by the plugin, including helpers, HTTP clients, and hosted services.
+        /// </summary>
+        /// <param name="serviceCollection">DI service collection.</param>
+        /// <param name="applicationPaths">Paths provided by host for configuration and plugin directories.</param>
         public void RegisterServices(IServiceCollection serviceCollection, IApplicationPaths applicationPaths)
         {
             serviceCollection.AddHttpContextAccessor();
@@ -92,6 +97,10 @@ namespace ShokoRelay
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
         private static ConfigProvider? _configProvider;
+
+        /// <summary>
+        /// Shortcut to the current plugin settings; returns a default instance if the provider is not yet initialized.
+        /// </summary>
         public static RelayConfig Settings => _configProvider?.GetSettings() ?? new RelayConfig();
 
         private readonly VfsWatcher _watcher;
@@ -104,12 +113,33 @@ namespace ShokoRelay
         private static DateTime? _lastPlexAutomationUtc;
         private static DateTime? _lastSyncWatchedUtc;
 
+        /// <summary>
+        /// Record that a Shoko import operation was triggered at the current time.
+        /// </summary>
         public static void MarkImportRunNow() => _lastImportRunUtc = DateTime.UtcNow;
 
+        /// <summary>
+        /// Record that the Plex automation loop ran at the current time.
+        /// </summary>
         public static void MarkPlexAutomationRunNow() => _lastPlexAutomationUtc = DateTime.UtcNow;
 
+        /// <summary>
+        /// Record that a watched-state sync cycle was executed just now.
+        /// </summary>
         public static void MarkSyncRunNow() => _lastSyncWatchedUtc = DateTime.UtcNow;
 
+        /// <summary>
+        /// Construct the hosted plugin service, wiring in required dependencies such as the VFS watcher, sync services, and configuration provider.
+        /// </summary>
+        /// <param name="applicationPaths">Host-provided paths (used for plugin directory).</param>
+        /// <param name="httpContextAccessor">Accessor used by <see cref="ImageHelper"/>.</param>
+        /// <param name="watcher">VFS watcher service.</param>
+        /// <param name="configProvider">Configuration provider.</param>
+        /// <param name="watchedSyncService">Optional watched-sync service (Plex→Shoko).</param>
+        /// <param name="shokoImportService">Optional service to trigger Shoko imports.</param>
+        /// <param name="collectionService">Optional collection management service.</param>
+        /// <param name="criticRatingService">Optional critic-rating service.</param>
+        /// <param name="metadataService">Mandatory metadata service; throws if null.</param>
         public ShokoRelay(
             IApplicationPaths applicationPaths,
             IHttpContextAccessor httpContextAccessor,
@@ -138,6 +168,10 @@ namespace ShokoRelay
             Logger.Info($"ShokoRelay v{ShokoRelayInfo.Version} initialized.");
         }
 
+        /// <summary>
+        /// Main execution loop for the hosted service. Starts the VFS watcher and then enters the automation loop until cancellation is requested.
+        /// </summary>
+        /// <param name="stoppingToken">Cancellation token.</param>
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             // Start watcher immediately
@@ -158,6 +192,10 @@ namespace ShokoRelay
             }
         }
 
+        /// <summary>
+        /// Cleanly stop the hosted service by stopping the watcher and then performing base shutdown logic.
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token.</param>
         public override async Task StopAsync(CancellationToken cancellationToken)
         {
             Logger.Info("ShokoRelay stopping...");
@@ -297,8 +335,7 @@ namespace ShokoRelay
                                     try
                                     {
                                         var allSeries =
-                                            _metadataService.GetAllShokoSeries()?.Cast<Shoko.Abstractions.Metadata.Shoko.IShokoSeries?>().ToList()
-                                            ?? new List<Shoko.Abstractions.Metadata.Shoko.IShokoSeries?>();
+                                            _metadataService.GetAllShokoSeries()?.Cast<Shoko.Abstractions.Metadata.Shoko.IShokoSeries?>().ToList() ?? new List<Shoko.Abstractions.Metadata.Shoko.IShokoSeries?>();
                                         if (_collectionService != null)
                                         {
                                             await _collectionService.BuildCollectionsAsync(allSeries, ct).ConfigureAwait(false);

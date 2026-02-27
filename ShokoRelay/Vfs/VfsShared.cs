@@ -9,6 +9,9 @@ internal static class VfsShared
     private const string DefaultVfsRootName = "!ShokoRelayVFS";
     private const string DefaultCollectionPostersRootName = "!CollectionPosters";
 
+    /// <summary>
+    /// Determine the root import path for a video file based on its absolute and relative paths, falling back to the containing directory.
+    /// </summary>
     public static string? ResolveImportRootPath(IVideoFile location)
     {
         string path = location.Path;
@@ -35,11 +38,17 @@ internal static class VfsShared
         return dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
     }
 
+    /// <summary>
+    /// Normalize all directory separators in <paramref name="path"/> to the current platform's <see cref="Path.DirectorySeparatorChar"/>.
+    /// </summary>
     public static string NormalizeSeparators(string path)
     {
         return path.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
     }
 
+    /// <summary>
+    /// Determine the name to use for the top‑level VFS root folder. Reads the <c>VfsRootPath</c> setting and sanitizes it; falls back to a default string if the configured value is empty or invalid.
+    /// </summary>
     public static string ResolveRootFolderName()
     {
         string configured = ShokoRelay.Settings.VfsRootPath;
@@ -58,6 +67,9 @@ internal static class VfsShared
         return string.IsNullOrWhiteSpace(configured) ? DefaultVfsRootName : configured;
     }
 
+    /// <summary>
+    /// Compute the folder name used for collection poster assets in the VFS. Sanitizes the <c>CollectionPostersRootPath</c> setting and falls back to a default if necessary.
+    /// </summary>
     public static string ResolveCollectionPostersFolderName()
     {
         string configured = ShokoRelay.Settings.CollectionPostersRootPath;
@@ -76,6 +88,10 @@ internal static class VfsShared
         return string.IsNullOrWhiteSpace(configured) ? DefaultCollectionPostersRootName : configured;
     }
 
+    /// <summary>
+    /// Attempt to create or update a symlink at <paramref name="dest"/> pointing to <paramref name="source"/>; an explicit <paramref name="targetOverride"/> may be supplied or a relative target calculated.
+    /// Returns <c>true</c> on success.
+    /// </summary>
     public static bool TryCreateLink(string source, string dest, Logger logger, string? targetOverride = null, bool useRelativeTarget = true)
     {
         string linkDir = Path.GetDirectoryName(dest) ?? string.Empty;
@@ -93,7 +109,7 @@ internal static class VfsShared
                 if (attr.HasFlag(FileAttributes.ReparsePoint))
                 {
                     var fi = new FileInfo(dest);
-                    // LinkTarget returns the string originally supplied when the link was created (relative or absolute).  Compare verbatim so we don't attempt to rewrite an identical link.
+                    // LinkTarget returns the string originally supplied when the link was created (relative or absolute). Compare verbatim so we don't attempt to rewrite an identical link.
                     if (string.Equals(fi.LinkTarget, relativeTarget, StringComparison.Ordinal))
                         return true;
                 }
@@ -131,6 +147,9 @@ internal static class VfsShared
         }
     }
 
+    /// <summary>
+    /// Given a video <paramref name="location"/> and an <paramref name="importRoot"/>, attempt to resolve the existing source path if the original is missing.
+    /// </summary>
     public static string? ResolveSourcePath(IVideoFile location, string importRoot)
     {
         string original = location.Path;
@@ -148,6 +167,9 @@ internal static class VfsShared
         return null;
     }
 
+    /// <summary>
+    /// Determine whether deleting <paramref name="path"/> is safe, i.e. it is not a root directory. Helper used during clean operations to avoid removing the filesystem root by mistake.
+    /// </summary>
     public static bool IsSafeToDelete(string path)
     {
         if (string.IsNullOrWhiteSpace(path))

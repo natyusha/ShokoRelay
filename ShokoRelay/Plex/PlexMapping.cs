@@ -7,6 +7,9 @@ namespace ShokoRelay.Plex
 {
     public static class PlexMapping
     {
+        /// <summary>
+        /// Simple struct representing season/episode coordinates (and optional end episode) used throughout Plex mapping routines.
+        /// </summary>
         public struct PlexCoords
         {
             public int Season;
@@ -14,11 +17,22 @@ namespace ShokoRelay.Plex
             public int? EndEpisode;
         }
 
+        /// <summary>
+        /// Look up information for an "extra" season number (special, credits, etc.) defined in <see cref="PlexConstants.ExtraSeasons"/>.
+        /// </summary>
+        /// <param name="seasonNumber">Season number to query.</param>
+        /// <param name="info">Output tuple containing folder name and subtype.</param>
+        /// <returns><c>true</c> if the season is special; otherwise <c>false</c>.</returns>
         public static bool TryGetExtraSeason(int seasonNumber, out (string Folder, string Subtype) info)
         {
             return PlexConstants.ExtraSeasons.TryGetValue(seasonNumber, out info);
         }
 
+        /// <summary>
+        /// Obtain the Plex folder name corresponding to <paramref name="seasonNumber"/>.
+        /// Handles special seasons via <see cref="TryGetExtraSeason"/>, otherwise returns "Season N" or "Specials" for season 0.
+        /// </summary>
+        /// <param name="seasonNumber">Season number.</param>
         public static string GetSeasonFolder(int seasonNumber)
         {
             if (TryGetExtraSeason(seasonNumber, out var special))
@@ -29,6 +43,11 @@ namespace ShokoRelay.Plex
             return $"Season {seasonNumber}";
         }
 
+        /// <summary>
+        /// Calculate Plex-style season/episode coordinates for an <paramref name="e"/> episode. Takes into account TMDB numbering overrides when enabled.
+        /// </summary>
+        /// <param name="e">Episode metadata.</param>
+        /// <param name="seriesPreferredOrderingId">Optional TMDB ordering id to avoid repeated lookups.</param>
         public static PlexCoords GetPlexCoordinates(IEpisode e, string? seriesPreferredOrderingId = null)
         {
             if (e == null)
@@ -92,6 +111,11 @@ namespace ShokoRelay.Plex
             return result;
         }
 
+        /// <summary>
+        /// Determine Plex coordinates for a collection of episodes that share a single file. Optionally specify the file index within the episode list for multi-episode files.
+        /// </summary>
+        /// <param name="episodes">List of episodes contained in the file.</param>
+        /// <param name="fileIndexWithinEpisode">Zero-based index of this file when multiple files map to the same episode.</param>
         public static PlexCoords GetPlexCoordinatesForFile(IEnumerable<IEpisode> episodes, int? fileIndexWithinEpisode = null)
         {
             var eps = (episodes ?? Enumerable.Empty<IEpisode>()).ToList();
@@ -172,11 +196,18 @@ namespace ShokoRelay.Plex
 
         // Determine if a TMDB Alternate ordering is preferred for the show
         // Lightweight caches to avoid repeated expensive access to TMDB alternate-ordering data (AllOrderings)
-        private static readonly System.Collections.Concurrent.ConcurrentDictionary<(int EpId, string? OrderingId), bool> _tmdbAllOrderingsContainsCache =
-            new System.Collections.Concurrent.ConcurrentDictionary<(int, string?), bool>();
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<(int EpId, string? OrderingId), bool> _tmdbAllOrderingsContainsCache = new System.Collections.Concurrent.ConcurrentDictionary<
+            (int, string?),
+            bool
+        >();
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<(int EpId, string? OrderingId), (int? Season, int Episode)> _orderingCoordsCache =
             new System.Collections.Concurrent.ConcurrentDictionary<(int, string?), (int?, int)>();
 
+        /// <summary>
+        /// Filter a list of TMDB episode entries to the ordering preferred by the show, if any. Used when TMDB alternate numbering is enabled.
+        /// </summary>
+        /// <param name="entries">TMDB episode entries.</param>
+        /// <param name="showPreferredOrderingId">Optional show-level ordering id.</param>
         public static List<ITmdbEpisode> SelectPreferredTmdbOrdering(IEnumerable<ITmdbEpisode>? entries, string? showPreferredOrderingId = null)
         {
             if (entries == null)
@@ -229,7 +260,11 @@ namespace ShokoRelay.Plex
             return list.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber).ToList();
         }
 
-        // If a TMDB Alternate ordering is preferred for the show, prioritize episodes that include that ordering id in their AllOrderings list.
+        /// <summary>
+        /// Convert a TMDB episode entry into season/episode coordinates, taking into account any show-level preferred (alternate) ordering.
+        /// </summary>
+        /// <param name="ep">TMDB episode.</param>
+        /// <param name="showPreferredOrderingId">Optional preferred ordering id.</param>
         public static (int? Season, int Episode) GetOrderingCoords(ITmdbEpisode ep, string? showPreferredOrderingId = null)
         {
             if (ep == null)

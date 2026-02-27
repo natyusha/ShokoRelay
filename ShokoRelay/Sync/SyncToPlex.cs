@@ -25,6 +25,9 @@ namespace ShokoRelay.Sync
         private readonly ConfigProvider _configProvider;
         private readonly PlexAuth _plexAuth;
 
+        /// <summary>
+        /// Initialize a <see cref="SyncToPlex"/> instance with necessary services.
+        /// </summary>
         public SyncToPlex(PlexClient plexClient, IMetadataService metadataService, IUserDataService userDataService, IUserService userService, ConfigProvider configProvider, PlexAuth plexAuth)
         {
             _plexClient = plexClient;
@@ -40,13 +43,7 @@ namespace ShokoRelay.Sync
         /// - Only applies matches by GUID (no filepath heuristics).
         /// - Optionally syncs votes/ratings when includeVotes=true.
         /// </summary>
-        public async Task<PlexWatchedSyncResult> SyncWatchedAsync(
-            bool dryRun = true,
-            int? sinceHours = null,
-            bool includeVotes = false,
-            bool excludeAdmin = false,
-            CancellationToken cancellationToken = default
-        )
+        public async Task<PlexWatchedSyncResult> SyncWatchedAsync(bool dryRun = true, int? sinceHours = null, bool includeVotes = false, bool excludeAdmin = false, CancellationToken cancellationToken = default)
         {
             var result = new PlexWatchedSyncResult();
             Logger.Info("SyncToPlex: starting (dryRun={Dry}, sinceHours={Since}, votes={Votes})", dryRun, sinceHours, includeVotes);

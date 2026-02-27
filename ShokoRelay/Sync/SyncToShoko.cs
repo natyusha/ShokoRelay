@@ -18,6 +18,9 @@ namespace ShokoRelay.Sync
         private readonly ConfigProvider _configProvider;
         private readonly PlexAuth _plexAuth;
 
+        /// <summary>
+        /// Create a new <see cref="SyncToShoko"/> instance with required dependencies.
+        /// </summary>
         public SyncToShoko(PlexClient plexClient, IMetadataService metadataService, IUserDataService userDataService, IUserService userService, ConfigProvider configProvider, PlexAuth plexAuth)
         {
             _plexClient = plexClient;

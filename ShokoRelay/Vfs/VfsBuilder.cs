@@ -10,6 +10,10 @@ using ShokoRelay.Plex;
 
 namespace ShokoRelay.Vfs
 {
+    /// <summary>
+    /// Result returned by <see cref="VfsBuilder"/> after a build or clean operation.
+    /// Contains counts of processed series, created links, skipped entries, any errors encountered, and the root path used.
+    /// </summary>
     public record VfsBuildResult(string RootPath, int SeriesProcessed, int CreatedLinks, int Skipped, List<string> Errors, int PlannedLinks);
 
     public class VfsBuilder
@@ -29,12 +33,13 @@ namespace ShokoRelay.Vfs
         // Tracks directories created during a build (unique keys)
         private ConcurrentDictionary<string, byte>? _createdDirsForBuild;
 
-        private static readonly HashSet<string> MetadataExtensions = PlexConstants
-            .LocalMediaAssets.Artwork.Union(PlexConstants.LocalMediaAssets.ThemeSongs)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        private static readonly HashSet<string> MetadataExtensions = PlexConstants.LocalMediaAssets.Artwork.Union(PlexConstants.LocalMediaAssets.ThemeSongs).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         private static readonly HashSet<string> SubtitleExtensions = PlexConstants.LocalMediaAssets.Subtitles;
 
+        /// <summary>
+        /// Construct a <see cref="VfsBuilder"/> with the given metadata service and configuration provider.
+        /// </summary>
         public VfsBuilder(IMetadataService metadataService, ConfigProvider configProvider)
         {
             _metadataService = metadataService;
@@ -53,22 +58,31 @@ namespace ShokoRelay.Vfs
             OverrideHelper.EnsureLoaded(_pluginDataPath);
         }
 
-        // public build APIs ================================
+        /// <summary>
+        /// Build (or clean) the VFS for a single optional series. Parameters control whether the root is cleaned and whether empty series folders are pruned.
+        /// </summary>
+        /// <param name="seriesId">Optional series ID to restrict the build.</param>
+        /// <param name="cleanRoot">If true, delete existing root before building.</param>
+        /// <param name="pruneSeries">If true, remove empty per-series folders.</param>
         public VfsBuildResult Build(int? seriesId = null, bool cleanRoot = true, bool pruneSeries = false)
         {
             return BuildInternal(seriesId.HasValue ? new[] { seriesId.Value } : null, cleanRoot, pruneSeries, cleanOnly: false);
         }
 
+        /// <summary>
+        /// Build (or clean) the VFS for the given collection of series IDs.
+        /// </summary>
+        /// <param name="seriesIds">Set of series IDs to process.</param>
+        /// <param name="cleanRoot">If true, delete existing root before building.</param>
+        /// <param name="pruneSeries">If true, remove empty per-series folders.</param>
         public VfsBuildResult Build(IReadOnlyCollection<int> seriesIds, bool cleanRoot = true, bool pruneSeries = false)
         {
             return BuildInternal(seriesIds, cleanRoot, pruneSeries, cleanOnly: false);
         }
 
         /// <summary>
-        /// Perform a clean operation without generating any VFS links.  This will
-        /// delete the root or per-series folders exactly the same way that the
-        /// normal build does when <c>cleanRoot</c> is true, but it returns before any
-        /// mapping/creation work begins.
+        /// Perform a clean operation without generating any VFS links.
+        /// This will delete the root or per-series folders exactly the same way that the normal build does when <c>cleanRoot</c> is true, but it returns before any mapping/creation work begins.
         /// </summary>
         public VfsBuildResult Clean(int? seriesId = null)
         {
@@ -136,12 +150,9 @@ namespace ShokoRelay.Vfs
                 seriesList = _metadataService.GetAllShokoSeries() ?? Array.Empty<IShokoSeries>();
             }
 
-            // apply overrides by grouping series under a primary id.  The previous
-            // implementation used g.First() as the representative which could end up
-            // being a secondary series ID if the list happened to enumerate it first.
-            // That caused builds to clean/write the wrong folder while mappings were
-            // derived from the primary.  Always pick the actual primary series object
-            // when available.
+            // apply overrides by grouping series under a primary id. Because the build is parallel, we need to ensure that all threads see the same grouping.
+            // So we load the overrides here and then apply them to the entire series list before processing begins.
+            // This also ensures that any warnings about invalid override entries are logged only once.
             OverrideHelper.EnsureLoaded(_pluginDataPath);
             if (ShokoRelay.Settings.TmdbEpNumbering)
             {

@@ -15,10 +15,7 @@ namespace ShokoRelay.Helpers
             @"(?m)^\(?\b((Modified )?Sour?ces?|Note( [1-9])?|Summ?ary|From|See Also):(?!$| a daikon)([^\r\n]+|$)",
             RegexOptions.Compiled | RegexOptions.IgnoreCase
         );
-        private static readonly Regex _listIndicatorRegex = new(
-            @"(?m)^(\*|[\u2014~-] (adapted|source|description|summary|translated|written):?) ([^\r\n]+|$)",
-            RegexOptions.Compiled | RegexOptions.IgnoreCase
-        );
+        private static readonly Regex _listIndicatorRegex = new(@"(?m)^(\*|[\u2014~-] (adapted|source|description|summary|translated|written):?) ([^\r\n]+|$)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
         private static readonly Regex _aniDBLinkRegex = new(@"(?:http:\/\/anidb\.net\/(?:ch|co|cr|[feast]|(?:character|creator|file|episode|anime|tag)\/)(?:\d+)) \[([^\]]+)]", RegexOptions.Compiled);
         private static readonly Regex _bbCodeItalicBugRegex = new(
             @"(?is)\[i\](?!" + Regex.Escape("\"The Sasami") + @"|" + Regex.Escape("\"Stellar") + @"|In the distant| occurred in)(.*?)\[\/i\]",
@@ -52,6 +49,9 @@ namespace ShokoRelay.Helpers
 
         public static readonly char[] InvalidWindowsChars = ReplacementCharMap.Keys.ToArray();
 
+        /// <summary>
+        /// Remove characters that are invalid in Windows filenames by replacing them with visually similar unicode characters. Useful when generating filesystem-friendly strings.
+        /// </summary>
         public static string StripInvalidWindowsChars(string value)
         {
             if (string.IsNullOrWhiteSpace(value))
@@ -72,6 +72,11 @@ namespace ShokoRelay.Helpers
             return cleaned;
         }
 
+        /// <summary>
+        /// Return an item's title according to a comma-separated list of preferred language codes. Falls back to the item's preferred title if no match is found or the language setting is empty.
+        /// </summary>
+        /// <param name="item">Object that exposes a <see cref="IWithTitles.Titles"/> collection.</param>
+        /// <param name="languageSetting">Comma-separated preferred language codes.</param>
         public static string GetTitleByLanguage(IWithTitles item, string languageSetting)
         {
             if (string.IsNullOrWhiteSpace(languageSetting))
@@ -98,6 +103,10 @@ namespace ShokoRelay.Helpers
             return item.PreferredTitle?.Value ?? string.Empty;
         }
 
+        /// <summary>
+        /// Determine display, sortable, and original titles for a series based on language preferences and optional prefix reordering settings.
+        /// </summary>
+        /// <param name="series">Series metadata.</param>
         public static (string DisplayTitle, string SortTitle, string? OriginalTitle) ResolveFullSeriesTitles(ISeries series)
         {
             // Get Title according to the language preference
@@ -121,6 +130,11 @@ namespace ShokoRelay.Helpers
             return (displayTitle, sortTitle, finalAlt);
         }
 
+        /// <summary>
+        /// Compute the best title to display for an episode, taking into account language settings, TMDB overrides, and ambiguous names that should default to the series title.
+        /// </summary>
+        /// <param name="ep">Episode metadata.</param>
+        /// <param name="displaySeriesTitle">Resolved series title to use as fallback.</param>
         public static string ResolveEpisodeTitle(IEpisode ep, string displaySeriesTitle)
         {
             string rawEpTitle = GetTitleByLanguage(ep, ShokoRelay.Settings.EpisodeTitleLanguage) ?? "";
@@ -173,6 +187,11 @@ namespace ShokoRelay.Helpers
             return rawEpTitle;
         }
 
+        /// <summary>
+        /// Clean up a summary string according to the configured <paramref name="mode"/> which may strip source notes, condense spacing, or leave the text alone.
+        /// </summary>
+        /// <param name="summary">Original summary text.</param>
+        /// <param name="mode">Sanitization mode to apply.</param>
         public static string SummarySanitizer(string? summary, SummaryMode mode)
         {
             if (string.IsNullOrWhiteSpace(summary))
@@ -204,7 +223,10 @@ namespace ShokoRelay.Helpers
             return summary.Trim(' ', '\r', '\n');
         }
 
-        // Check for plex split tags as this is the only reliable way to handle this - https://support.plex.tv/articles/naming-and-organizing-your-tv-show-files/
+        /// <summary>
+        /// Determine if a filename contains a Plex-style split tag (e.g. "pt1"). Used when mapping multi-disc releases.
+        /// Info: https://support.plex.tv/articles/naming-and-organizing-your-tv-show-files/
+        /// </summary>
         public static bool HasPlexSplitTag(string fileName)
         {
             if (string.IsNullOrWhiteSpace(fileName))
@@ -235,7 +257,7 @@ namespace ShokoRelay.Helpers
         }
 
         /// <summary>
-        /// Splits a CSV line on commas.  Caller must escape commas inside values using <see cref="EscapeCsvCommas"/> when generating.
+        /// Splits a CSV line on commas. Caller must escape commas inside values using <see cref="EscapeCsvCommas"/> when generating.
         /// </summary>
         public static string[] SplitCsvLine(string line)
         {
@@ -305,7 +327,11 @@ namespace ShokoRelay.Helpers
             return result;
         }
 
-        // Purely for aesthetic reasons, replace the first hyphen in extras filenames as they don't show an episode number
+        /// <summary>
+        /// For aesthetic reasons, convert the first hyphen in a filename to a right-pointing chevron character. Used with extras filenames.
+        /// </summary>
+        /// <param name="name">Original filename.</param>
+        /// <returns>Modified string with replacement or empty string on null/whitespace.</returns>
         public static string ReplaceFirstHyphenWithChevron(string? name)
         {
             if (string.IsNullOrWhiteSpace(name))

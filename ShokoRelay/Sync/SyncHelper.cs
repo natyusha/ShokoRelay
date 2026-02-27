@@ -4,7 +4,9 @@ using ShokoRelay.Plex;
 
 namespace ShokoRelay.Sync
 {
-    // Shared public records used by both SyncToShoko and SyncToPlex
+    /// <summary>
+    /// Per‑Plex‑user counters used during watched-state synchronization.
+    /// </summary>
     public record PlexWatchedUserResult
     {
         public int Processed { get; init; }
@@ -13,6 +15,9 @@ namespace ShokoRelay.Sync
         public int Errors { get; init; }
     }
 
+    /// <summary>
+    /// Represents a single change that would be applied during watched-state sync, capturing details about the Plex user, episode, titles, GUIDs, and reasons.
+    /// </summary>
     public record PlexWatchedChange
     {
         public string PlexUser { get; init; } = string.Empty;
@@ -34,6 +39,10 @@ namespace ShokoRelay.Sync
         public double? ShokoUserRating { get; init; }
     }
 
+    /// <summary>
+    /// Aggregate result of a watched-state synchronization run, including totals,
+    /// per-user breakdowns, missing mappings, and diagnostics.
+    /// </summary>
     public record PlexWatchedSyncResult
     {
         public int Processed { get; init; }
@@ -65,8 +74,7 @@ namespace ShokoRelay.Sync
     public static class SyncHelper
     {
         /// <summary>
-        /// Parse a Shoko episode id from a Plex GUID string.
-        /// Expected GUID fragment: {agentScheme}://episode/e{episodeId}[p{part}]
+        /// Parse a Shoko episode id from a Plex GUID string. Expected GUID fragment: {agentScheme}://episode/e{episodeId}[p{part}]
         /// </summary>
         public static int? TryParseShokoEpisodeIdFromGuid(string? guid)
         {
@@ -94,8 +102,7 @@ namespace ShokoRelay.Sync
         }
 
         /// <summary>
-        /// Parse a Shoko series id from a Plex GUID string.
-        /// Expected GUID fragment: {agentScheme}://show/{seriesId}
+        /// Parse a Shoko series id from a Plex GUID string. Expected GUID fragment: {agentScheme}://show/{seriesId}
         /// </summary>
         public static int? TryParseShokoSeriesIdFromGuid(string? guid)
         {
@@ -122,7 +129,10 @@ namespace ShokoRelay.Sync
             return null;
         }
 
-        // Create per-user result buckets (admin + extra user names)
+        /// <summary>
+        /// Construct a dictionary mapping Plex user names ("admin" plus any extras) to empty <see cref="PlexWatchedUserResult"/> instances. Used to aggregate per-user sync statistics.
+        /// </summary>
+        /// <param name="extraUserNames">Additional Plex usernames to include.</param>
         public static Dictionary<string, PlexWatchedUserResult> CreatePerUserBuckets(IEnumerable<string> extraUserNames)
         {
             var perUser = new Dictionary<string, PlexWatchedUserResult>(StringComparer.OrdinalIgnoreCase);
@@ -132,8 +142,9 @@ namespace ShokoRelay.Sync
             return perUser;
         }
 
-        // Safe helper to add a PlexWatchedChange into a per-user dictionary.
-        // NOTE: only record changes that will actually be applied (WouldMark == true) to keep responses small.
+        /// <summary>
+        /// Record a watched change in the provided per-user <paramref name="dict"/> only if <paramref name="change"/> would actually be applied.
+        /// </summary>
         public static void AddPerUserChange(Dictionary<string, List<PlexWatchedChange>> dict, string plexUser, PlexWatchedChange change)
         {
             if (change == null)
@@ -150,7 +161,9 @@ namespace ShokoRelay.Sync
             list.Add(change);
         }
 
-        // Factory to create a PlexWatchedChange with named optional parameters (reduces inline boilerplate)
+        /// <summary>
+        /// Factory helper for <see cref="PlexWatchedChange"/> accepting many optional parameters so callers can specify only the values they care about.
+        /// </summary>
         public static PlexWatchedChange MakeChange(
             string plexUser,
             int shokoEpisodeId = 0,
@@ -187,7 +200,12 @@ namespace ShokoRelay.Sync
                 ShokoUserRating = shokoUserRating,
             };
 
-        // Increment helpers — update both aggregate result and per-user bucket when provided
+        /// <summary>
+        /// Increment the <see cref="PlexWatchedSyncResult.Processed"/> counter on <paramref name="result"/> and optionally update the per-user bucket for <paramref name="plexUser"/>.
+        /// </summary>
+        /// <param name="result">Aggregate sync result to modify.</param>
+        /// <param name="perUser">Optional per-user dictionary to update.</param>
+        /// <param name="plexUser">Name of the plex user whose bucket to increment.</param>
         public static PlexWatchedSyncResult IncProcessed(PlexWatchedSyncResult result, Dictionary<string, PlexWatchedUserResult>? perUser, string? plexUser = null)
         {
             result = result with { Processed = result.Processed + 1 };
@@ -196,6 +214,12 @@ namespace ShokoRelay.Sync
             return result;
         }
 
+        /// <summary>
+        /// Increment the <see cref="PlexWatchedSyncResult.MarkedWatched"/> counter on <paramref name="result"/> and optionally adjust the per-user bucket for <paramref name="plexUser"/>.
+        /// </summary>
+        /// <param name="result">Aggregate sync result to modify.</param>
+        /// <param name="perUser">Optional per-user dictionary to update.</param>
+        /// <param name="plexUser">Plex username whose bucket should be updated.</param>
         public static PlexWatchedSyncResult IncMarkedWatched(PlexWatchedSyncResult result, Dictionary<string, PlexWatchedUserResult>? perUser, string? plexUser = null)
         {
             result = result with { MarkedWatched = result.MarkedWatched + 1 };
@@ -204,6 +228,12 @@ namespace ShokoRelay.Sync
             return result;
         }
 
+        /// <summary>
+        /// Increment the <see cref="PlexWatchedSyncResult.Skipped"/> count on <paramref name="result"/> and optionally update the per-user bucket for <paramref name="plexUser"/>.
+        /// </summary>
+        /// <param name="result">Aggregate sync result to modify.</param>
+        /// <param name="perUser">Optional per-user dictionary to update.</param>
+        /// <param name="plexUser">Plex username whose bucket should be updated.</param>
         public static PlexWatchedSyncResult IncSkipped(PlexWatchedSyncResult result, Dictionary<string, PlexWatchedUserResult>? perUser, string? plexUser = null)
         {
             result = result with { Skipped = result.Skipped + 1 };
@@ -212,22 +242,36 @@ namespace ShokoRelay.Sync
             return result;
         }
 
+        /// <summary>
+        /// Increment the <see cref="PlexWatchedSyncResult.VotesFound"/> counter on <paramref name="result"/>.
+        /// </summary>
+        /// <param name="result">Sync result to update.</param>
         public static PlexWatchedSyncResult IncVotesFound(PlexWatchedSyncResult result)
         {
             return result with { VotesFound = result.VotesFound + 1 };
         }
 
+        /// <summary>
+        /// Increment the <see cref="PlexWatchedSyncResult.VotesUpdated"/> counter on <paramref name="result"/>.
+        /// </summary>
+        /// <param name="result">Sync result to update.</param>
         public static PlexWatchedSyncResult IncVotesUpdated(PlexWatchedSyncResult result)
         {
             return result with { VotesUpdated = result.VotesUpdated + 1 };
         }
 
+        /// <summary>
+        /// Increment the <see cref="PlexWatchedSyncResult.VotesSkipped"/> counter on <paramref name="result"/>.
+        /// </summary>
+        /// <param name="result">Sync result to update.</param>
         public static PlexWatchedSyncResult IncVotesSkipped(PlexWatchedSyncResult result)
         {
             return result with { VotesSkipped = result.VotesSkipped + 1 };
         }
 
-        // Record an error: increment aggregate Errors, optionally increment per-user Errors, and append to ErrorsList
+        /// <summary>
+        /// Increment error counters in <paramref name="result"/> and optional per-user buckets, appending an optional <paramref name="message"/>.
+        /// </summary>
         public static PlexWatchedSyncResult RecordError(PlexWatchedSyncResult result, Dictionary<string, PlexWatchedUserResult>? perUser = null, string? plexUser = null, string? message = null)
         {
             result = result with { Errors = result.Errors + 1 };
@@ -238,7 +282,10 @@ namespace ShokoRelay.Sync
             return result;
         }
 
-        // Fetch a transient Plex auth token for a managed/home user (uses Plex Home switch). The token is not persisted.
+        /// <summary>
+        /// Obtain a transient Plex auth token for a managed/home <paramref name="userName"/> using <paramref name="plexAuth"/> and <paramref name="configProvider"/>.
+        /// Returns null if unavailable.
+        /// </summary>
         public static async Task<string?> FetchManagedUserTokenAsync(PlexAuth plexAuth, ConfigProvider configProvider, string userName, string? pin, CancellationToken cancellationToken = default)
         {
             var logger = LogManager.GetCurrentClassLogger();
@@ -289,7 +336,10 @@ namespace ShokoRelay.Sync
             return userToken;
         }
 
-        // Fetch episodes for a configured managed/home Plex user (returns episodes + optional error message)
+        /// <summary>
+        /// Fetch episodes from a Plex library section for a specified managed user.
+        /// Returns a tuple containing the episodes list and an optional error message.
+        /// </summary>
         public static async Task<(List<PlexMetadataItem> Episodes, string? ErrorMessage)> FetchManagedUserSectionEpisodesAsync(
             PlexAuth plexAuth,
             PlexClient plexClient,
@@ -424,9 +474,15 @@ namespace ShokoRelay.Sync
         private static readonly HttpClient _http = new HttpClient();
 
         /// <summary>
-        /// Check (and cache) whether a given Plex user token can access the specified library section.
-        /// Returns true for 'admin' without performing a request.
+        /// Determine whether the specified Plex user token has access to the given library <paramref name="target"/> by querying Plex for a small metadata set.
         /// </summary>
+        /// <param name="plexAuth">Plex auth helper.</param>
+        /// <param name="configProvider">Configuration provider for retrieving admin token.</param>
+        /// <param name="plexClient">Plex client for making requests.</param>
+        /// <param name="target">Library target to test access against.</param>
+        /// <param name="userName">Name of the managed user.</param>
+        /// <param name="pin">Optional PIN for switching home user.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
         public static async Task<bool> UserHasAccessToSectionAsync(
             PlexClient plexClient,
             PlexLibraryTarget target,
@@ -472,8 +528,14 @@ namespace ShokoRelay.Sync
             }
         }
 
+        /// <summary>
+        /// Create a Plex GUID string for a Shoko episode with the given ID.
+        /// </summary>
         public static string MakeEpisodeGuid(int episodeId) => $"{ShokoRelayInfo.AgentScheme}://episode/{PlexConstants.EpisodePrefix}{episodeId}";
 
+        /// <summary>
+        /// Create a Plex GUID string for a Shoko show/series with the given ID.
+        /// </summary>
         public static string MakeShowGuid(int seriesId) => $"{ShokoRelayInfo.AgentScheme}://show/{seriesId}";
     }
 }

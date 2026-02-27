@@ -3,6 +3,9 @@ using Shoko.Abstractions.Metadata.Shoko;
 
 namespace ShokoRelay.Helpers
 {
+    /// <summary>
+    /// Utility functions for deriving content rating and adult flag from series metadata.
+    /// </summary>
     public static class RatingHelper
     {
         private static readonly HashSet<string> RatingTags = new(StringComparer.OrdinalIgnoreCase)
@@ -21,6 +24,10 @@ namespace ShokoRelay.Helpers
             "sexual humour",
         };
 
+        /// <summary>
+        /// Determine a combined rating string and an "is adult" flag for a series. Preferences in <see cref="ShokoRelay.Settings"/> influence the resulting text.
+        /// </summary>
+        /// <param name="series">Series to evaluate; may be null.</param>
         public static (string? Rating, bool IsAdult) GetContentRatingAndAdult(ISeries? series)
         {
             var tagSet = BuildTagSet(series);
@@ -55,8 +62,7 @@ namespace ShokoRelay.Helpers
             var descriptorD = tagSet.Contains("sexual humour") ? "D" : string.Empty;
             var descriptorS = (tagSet.Contains("nudity") || tagSet.Contains("sex")) ? "S" : string.Empty;
             var descriptorV = tagSet.Contains("violence") ? "V" : string.Empty;
-            var descriptor =
-                (!string.IsNullOrEmpty(descriptorD) || !string.IsNullOrEmpty(descriptorS) || !string.IsNullOrEmpty(descriptorV)) ? "-" + descriptorD + descriptorS + descriptorV : string.Empty;
+            var descriptor = (!string.IsNullOrEmpty(descriptorD) || !string.IsNullOrEmpty(descriptorS) || !string.IsNullOrEmpty(descriptorV)) ? "-" + descriptorD + descriptorS + descriptorV : string.Empty;
 
             string? c_rating = null;
 

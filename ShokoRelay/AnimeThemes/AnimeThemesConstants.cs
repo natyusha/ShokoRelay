@@ -3,15 +3,18 @@ using System.Text.RegularExpressions;
 
 namespace ShokoRelay.AnimeThemes;
 
+/// <summary>
+/// Shared constants and helper utilities used throughout the AnimeThemes subcomponent.
+/// </summary>
 internal static class AnimeThemesConstants
 {
-    internal const string ApiBase = "https://api.animethemes.moe";
+    internal const string AtApiBase = "https://api.animethemes.moe";
 
-    internal const string DefaultRootFolder = "!AnimeThemes";
+    internal const string AtDefaultRootFolder = "!AnimeThemes";
 
-    internal const string MapFileName = "anidb_animethemes_xrefs.csv";
+    internal const string AtMapFileName = "anidb_animethemes_xrefs.csv";
 
-    internal const string RawMapUrl = "https://gist.githubusercontent.com/natyusha/bb33a3b3bc95bc7a3869633e23d522bb/raw/anidb_animethemes_xrefs.csv";
+    internal const string AtRawMapUrl = "https://gist.githubusercontent.com/natyusha/bb33a3b3bc95bc7a3869633e23d522bb/raw/";
 
     internal static readonly string[] VideoFileExtensions = { ".mkv", ".avi", ".mp4", ".mov", ".ogm", ".wmv", ".mpg", ".mpeg", ".mk3d", ".m4v" };
 
@@ -28,6 +31,9 @@ internal static class AnimeThemesConstants
         { "  ", " " },
     };
 
+    /// <summary>
+    /// Add a default User-Agent header to <paramref name="client"/> if none present. Identifies requests as originating from ShokoRelay.
+    /// </summary>
     internal static void EnsureUserAgent(HttpClient client)
     {
         if (client.DefaultRequestHeaders.UserAgent.Any())

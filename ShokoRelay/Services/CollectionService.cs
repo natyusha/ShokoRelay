@@ -3,16 +3,34 @@ using NLog;
 using Shoko.Abstractions.Metadata.Shoko;
 using Shoko.Abstractions.Services;
 using ShokoRelay.Config;
+using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
 
 namespace ShokoRelay.Services
 {
+    /// <summary>
+    /// Service responsible for building and managing Plex collections based on Shoko series metadata.
+    /// </summary>
     public interface ICollectionService
     {
+        /// <summary>
+        /// Create or update Plex collections for the supplied series list.
+        /// </summary>
+        /// <param name="seriesList">List of series to process (nullable entries ignored).</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
         Task<BuildCollectionsResult> BuildCollectionsAsync(IEnumerable<IShokoSeries?> seriesList, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Apply collection posters for the given series list.
+        /// </summary>
+        /// <param name="seriesList">Series to update posters for.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
         Task<ApplyPostersResult> ApplyCollectionPostersAsync(IEnumerable<IShokoSeries?> seriesList, CancellationToken cancellationToken = default);
     }
 
+    /// <summary>
+    /// Result returned by <see cref="ICollectionService.BuildCollectionsAsync"/>, containing counts of various actions and any errors encountered.
+    /// </summary>
     public sealed record BuildCollectionsResult(
         int Processed,
         int Created,
@@ -25,8 +43,14 @@ namespace ShokoRelay.Services
         List<string> ErrorsList
     );
 
+    /// <summary>
+    /// Outcome of applying collection posters via <see cref="ICollectionService.ApplyCollectionPostersAsync"/>.
+    /// </summary>
     public sealed record ApplyPostersResult(int Processed, int Uploaded, int Skipped, int Errors, List<string> ErrorsList);
 
+    /// <summary>
+    /// Default implementation of <see cref="ICollectionService"/>, using Plex API calls to create collections and upload posters based on Shoko series data.
+    /// </summary>
     public class CollectionService : ICollectionService
     {
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
@@ -58,7 +82,8 @@ namespace ShokoRelay.Services
             var addedSeries = new HashSet<int>();
             var presentSeriesUnique = new HashSet<int>();
 
-            var allowedIds = new HashSet<int>(seriesList?.Where(s => s != null).Select(s => s!.ID) ?? Enumerable.Empty<int>());
+            // collapse any provided series IDs through overrides so secondaries map to their primary. This keeps the filter set minimal and skips secondary‑only library items during processing.
+            var allowedIds = new HashSet<int>(seriesList?.Where(s => s != null).Select(s => OverrideHelper.GetPrimary(s!.ID, _metadataService)) ?? Enumerable.Empty<int>());
             var targets = _plexClient.GetConfiguredTargets();
 
             var totalSw = Stopwatch.StartNew();
@@ -244,7 +269,8 @@ namespace ShokoRelay.Services
                 skipped = 0,
                 errors = 0;
 
-            var allowedIds = new HashSet<int>(seriesList?.Where(s => s != null).Select(s => s!.ID) ?? Enumerable.Empty<int>());
+            // apply same override normalization for poster-only runs
+            var allowedIds = new HashSet<int>(seriesList?.Where(s => s != null).Select(s => OverrideHelper.GetPrimary(s!.ID, _metadataService)) ?? Enumerable.Empty<int>());
             var targets = _plexClient.GetConfiguredTargets();
 
             if (targets == null || targets.Count == 0)
@@ -355,14 +381,7 @@ namespace ShokoRelay.Services
 
         private async Task<bool> TryApplyCollectionPosterAsync(IShokoSeries series, string collectionName, int collectionId, PlexLibraryTarget target, CancellationToken cancellationToken)
         {
-            string? posterUrl = PlexHelper.GetCollectionPosterUrl(
-                series,
-                collectionName,
-                collectionId,
-                _metadataService,
-                _configProvider.PluginDirectory,
-                _configProvider.GetSettings().CollectionPosters
-            );
+            string? posterUrl = PlexHelper.GetCollectionPosterUrl(series, collectionName, collectionId, _metadataService, _configProvider.PluginDirectory, _configProvider.GetSettings().CollectionPosters);
             if (string.IsNullOrWhiteSpace(posterUrl))
                 return false;
 

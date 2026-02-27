@@ -146,6 +146,9 @@ namespace ShokoRelay.Vfs
             }
         }
 
+        /// <summary>
+        /// Refresh Plex library paths and collection metadata for a single series after its VFS links have been created or updated.This method is called
+        /// </summary>
         private async Task TriggerPlexUpdatesAsync(int seriesId)
         {
             if (!_plexLibrary.IsEnabled)

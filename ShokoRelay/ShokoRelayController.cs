@@ -42,6 +42,24 @@ namespace ShokoRelay.Controllers
         private const string EpisodePrefix = PlexConstants.EpisodePrefix;
         private const string PartPrefix = PlexConstants.PartPrefix;
 
+        /// <summary>
+        /// Constructs the controller with required services and helpers injected by dependency injection.
+        /// </summary>
+        /// <param name="metadataService">Service for accessing Shoko metadata.</param>
+        /// <param name="mapper">Helper that maps Shoko metadata to Plex structures.</param>
+        /// <param name="vfsBuilder">VFS builder used for virtual filesystem endpoints.</param>
+        /// <param name="animeThemeGenerator">Generator for anime theme VFS data.</param>
+        /// <param name="animeThemesMapping">Mapping helper for anime themes.</param>
+        /// <param name="configProvider">Configuration provider implementation.</param>
+        /// <param name="plexAuth">Plex authentication helper.</param>
+        /// <param name="plexLibrary">Plex client for library operations.</param>
+        /// <param name="collectionService">Service for collection management.</param>
+        /// <param name="criticRatingService">Service for critic ratings.</param>
+        /// <param name="watchedSyncService">Service syncing watched state from Plex.</param>
+        /// <param name="syncToPlexService">Service syncing watched state to Plex.</param>
+        /// <param name="userDataService">User data service.</param>
+        /// <param name="userService">User service.</param>
+        /// <param name="shokoImportService">Service triggering Shoko imports.</param>
         public ShokoRelayController(
             IMetadataService metadataService,
             PlexMetadata mapper,
@@ -80,6 +98,10 @@ namespace ShokoRelay.Controllers
         #region Dashboard / Config
 
         [HttpGet("dashboard/{*path}")]
+        /// <summary>
+        /// Serves the embedded dashboard UI and its static assets from the plugin folder. An optional <paramref name="path"/> selects a specific asset within the dashboard directory.
+        /// </summary>
+        /// <param name="path">Subpath within the dashboard folder (optional).</param>
         public IActionResult GetControllerPage([FromRoute] string? path = null)
         {
             // Serve only from the plugin folder under PluginsPath/…/dashboard
@@ -126,6 +148,9 @@ namespace ShokoRelay.Controllers
         }
 
         [HttpGet("config")]
+        /// <summary>
+        /// Returns the current configuration payload used by the dashboard UI. The result is sanitized and augmented by <see cref="ConfigProvider"/>.
+        /// </summary>
         public IActionResult GetConfig()
         {
             // provider handles serialization, augmentation and sanitization
@@ -134,6 +159,10 @@ namespace ShokoRelay.Controllers
         }
 
         [HttpPost("config")]
+        /// <summary>
+        /// Accepts a new dashboard configuration from the client and persists it via the <see cref="ConfigProvider"/>. The payload must not be null.
+        /// </summary>
+        /// <param name="config">New configuration settings.</param>
         public IActionResult SaveConfig([FromBody] RelayConfig config)
         {
             if (config == null)
@@ -144,6 +173,9 @@ namespace ShokoRelay.Controllers
         }
 
         [HttpGet("config/schema")]
+        /// <summary>
+        /// Builds and returns a JSON schema describing <see cref="RelayConfig"/> properties; used by the dashboard to render dynamic forms.
+        /// </summary>
         public IActionResult GetConfigSchema()
         {
             var props = BuildConfigSchema(typeof(RelayConfig), "");
@@ -151,6 +183,11 @@ namespace ShokoRelay.Controllers
         }
 
         [HttpGet("logs/{fileName}")]
+        /// <summary>
+        /// Returns the contents of a log file stored under the plugin's "logs" directory.
+        /// The <paramref name="fileName"/> must be provided and refer to an existing file, otherwise a 404/400 is returned.
+        /// </summary>
+        /// <param name="fileName">Name of the log file to retrieve.</param>
         public IActionResult GetLog(string fileName)
         {
             if (string.IsNullOrWhiteSpace(fileName))
@@ -168,6 +205,9 @@ namespace ShokoRelay.Controllers
         #region Metadata Provider
 
         [HttpGet]
+        /// <summary>
+        /// Announces the media provider capabilities to Plex. This endpoint is called by Plex agents to discover supported types and features.
+        /// </summary>
         public IActionResult GetMediaProvider()
         {
             var supportedTypes = new[] { PlexConstants.TypeShow, PlexConstants.TypeSeason, PlexConstants.TypeEpisode };
@@ -194,6 +234,12 @@ namespace ShokoRelay.Controllers
         [Route("matches")]
         [HttpPost]
         [HttpGet]
+        /// <summary>
+        /// Attempts to match a Plex media request to a Shoko series.
+        /// The search may use the <paramref name="name"/> query parameter, the <see cref="PlexMatchBody"/> body, or even a manual override contained therein.
+        /// </summary>
+        /// <param name="name">Optional query parameter containing a lookup name.</param>
+        /// <param name="body">Optional JSON body with filename/title/manual fields.</param>
         public IActionResult Match([FromQuery] string? name, [FromBody] PlexMatchBody? body = null)
         {
             int? seriesId = null; // compute below
@@ -248,6 +294,10 @@ namespace ShokoRelay.Controllers
         }
 
         [HttpGet("collections/{groupId}")]
+        /// <summary>
+        /// Retrieve metadata for a Plex collection representing the Shoko group identified by <paramref name="groupId"/>.
+        /// </summary>
+        /// <param name="groupId">Shoko group identifier.</param>
         public IActionResult GetCollection(int groupId)
         {
             var group = _metadataService.GetShokoGroupByID(groupId);
@@ -264,6 +314,10 @@ namespace ShokoRelay.Controllers
         }
 
         [HttpGet("collections/user/{groupId}")]
+        /// <summary>
+        /// Fetch the poster image file for a collection, if one exists on disk.
+        /// </summary>
+        /// <param name="groupId">ID of the Shoko group whose collection poster is requested.</param>
         public IActionResult GetCollectionPoster(int groupId)
         {
             var group = _metadataService.GetShokoGroupByID(groupId);
@@ -285,6 +339,13 @@ namespace ShokoRelay.Controllers
         }
 
         [HttpGet("metadata/{ratingKey}")]
+        /// <summary>
+        /// Return Plex-formatted metadata for the specified <paramref name="ratingKey"/>, which can represent a show, season, or episode.
+        /// The <paramref name="includeChildren"/> flag controls whether child items are embedded.
+        /// </summary>
+        /// <param name="ratingKey">Plex-style rating key (show/season/episode).</param>
+        /// <param name="includeChildren">Nonzero value requests child metadata.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
         public IActionResult GetMetadata(string ratingKey, [FromQuery] int includeChildren = 0, CancellationToken cancellationToken = default)
         {
             var ctx = GetSeriesContext(ratingKey);
@@ -370,6 +431,11 @@ namespace ShokoRelay.Controllers
         }
 
         [HttpGet("metadata/{ratingKey}/children")]
+        /// <summary>
+        /// List immediate child items (seasons or episodes) of the provided <paramref name="ratingKey"/>.
+        /// </summary>
+        /// <param name="ratingKey">Parent rating key.</param>
+        /// <param name="cancellationToken">Token to cancel the request.</param>
         public IActionResult GetChildren(string ratingKey, CancellationToken cancellationToken = default)
         {
             var ctx = GetSeriesContext(ratingKey);
@@ -388,6 +454,10 @@ namespace ShokoRelay.Controllers
         }
 
         [HttpGet("metadata/{ratingKey}/grandchildren")]
+        /// <summary>
+        /// Retrieve the grandchildren of a given rating key (e.g. episodes when the key represents a show).
+        /// </summary>
+        /// <param name="ratingKey">Parent rating key for which to fetch grandchildren.</param>
         public IActionResult GetGrandchildren(string ratingKey)
         {
             var ctx = GetSeriesContext(ratingKey);
@@ -404,6 +474,11 @@ namespace ShokoRelay.Controllers
         }
 
         [HttpGet("metadata/{ratingKey}/images")]
+        /// <summary>
+        /// Fetch image metadata (posters, thumbnails, etc.) associated with a particular rating key.
+        /// </summary>
+        /// <param name="ratingKey">Rating key whose images are requested.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
         public IActionResult GetImages(string ratingKey, CancellationToken cancellationToken = default)
         {
             var ctx = GetSeriesContext(ratingKey);
@@ -468,6 +543,10 @@ namespace ShokoRelay.Controllers
 
         #region Plex: Authentication
 
+        /// <summary>
+        /// Initiates the PIN‑based Plex authentication flow and returns both the PIN identifier and authorization URL required by the user.
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token.</param>
         [HttpGet("plex/auth")]
         public async Task<IActionResult> StartPlexAuth(CancellationToken cancellationToken = default)
         {
@@ -497,6 +576,11 @@ namespace ShokoRelay.Controllers
         }
 
         [HttpGet("plex/auth/status")]
+        /// <summary>
+        /// Polls the Plex authentication status for a previously created PIN; if completed the Plex token is persisted in the configuration file.
+        /// </summary>
+        /// <param name="pinId">Identifier returned by <see cref="StartPlexAuth"/>.</param>
+        /// <param name="cancellationToken">Token to cancel the request.</param>
         public async Task<IActionResult> GetPlexAuthStatus([FromQuery] string pinId, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(pinId))
@@ -616,6 +700,13 @@ namespace ShokoRelay.Controllers
         #region Plex: Automation
 
         [HttpGet("plex/collections/build")]
+        /// <summary>
+        /// Triggers the generation of Plex collections for a given set of series; supply either a single <paramref name="seriesId"/> or a <paramref name="filter"/>, not both.
+        /// </summary>
+        /// <param name="seriesId">Optional Shoko series ID to build collections for.</param>
+        /// <param name="filter">Optional comma‑separated list of series IDs or search
+        /// filter expression.</param>
+        /// <param name="cancellationToken">Token to observe for request cancellation.</param>
         public async Task<IActionResult> BuildPlexCollections([FromQuery] int? seriesId = null, [FromQuery] string? filter = null, CancellationToken cancellationToken = default)
         {
             if (!_plexLibrary.IsEnabled)
@@ -710,6 +801,12 @@ namespace ShokoRelay.Controllers
         }
 
         [HttpGet("plex/collections/posters")]
+        /// <summary>
+        /// Applies poster artwork to Plex collections for the given series set; specify either <paramref name="seriesId"/> or <paramref name="filter"/>, not both.
+        /// </summary>
+        /// <param name="seriesId">Optional single series ID to operate on.</param>
+        /// <param name="filter">Optional filter expression or comma separated list of IDs.</param>
+        /// <param name="cancellationToken">Cancellation token for the request.</param>
         public async Task<IActionResult> ApplyCollectionPosters([FromQuery] int? seriesId = null, [FromQuery] string? filter = null, CancellationToken cancellationToken = default)
         {
             if (!_plexLibrary.IsEnabled)
@@ -844,7 +941,10 @@ namespace ShokoRelay.Controllers
 
         #region Plex: Webhook
 
-        // Plugin-level Plex webhook receiver: https://support.plex.tv/articles/115002267687-webhooks/
+        /// <summary>
+        /// Receives webhook events sent by Plex to the relay plugin and processes them if auto‑scrobble is enabled.
+        /// Info: https://support.plex.tv/articles/115002267687-webhooks/
+        /// </summary>
         [HttpPost("plex/webhook")]
         public async Task<IActionResult> PluginPlexWebhook()
         {
@@ -879,7 +979,7 @@ namespace ShokoRelay.Controllers
             if (evt == null || evt.Metadata == null || !string.Equals(evt.Event, "media.scrobble", System.StringComparison.OrdinalIgnoreCase))
                 return Ok(); // only care about scrobble events
 
-            // --- FILTER: only accept scrobbles from admin (token owner) or configured ExtraPlexUsers ---
+            // Only accept scrobbles from admin (token owner) or configured ExtraPlexUsers
             var plexUserFromPayload = evt.Account?.Title?.Trim();
             if (string.IsNullOrWhiteSpace(plexUserFromPayload))
                 return Ok(new { status = "ignored", reason = "no_plex_user" });
@@ -1002,6 +1102,10 @@ namespace ShokoRelay.Controllers
 
         [HttpGet("shoko/remove-missing")]
         [HttpPost("shoko/remove-missing")]
+        /// <summary>
+        /// Removes missing video files from the Shoko database; when <paramref name="dryRun"/> is true, no changes are made and a report is returned.
+        /// </summary>
+        /// <param name="dryRun">If true skips deletion and returns a summary.</param>
         public async Task<IActionResult> RemoveMissingFiles([FromQuery] bool? dryRun = null)
         {
             try
@@ -1050,6 +1154,10 @@ namespace ShokoRelay.Controllers
         }
 
         [HttpPost("shoko/import")]
+        /// <summary>
+        /// Initiates a Shoko import run; by default only unrecognized files are scanned, controllable via <paramref name="onlyUnrecognized"/>.
+        /// </summary>
+        /// <param name="onlyUnrecognized">If true only unrecognized files are imported.</param>
         public async Task<IActionResult> RunShokoImport([FromQuery] bool onlyUnrecognized = true)
         {
             try
@@ -1113,6 +1221,15 @@ namespace ShokoRelay.Controllers
 
         [HttpGet("sync-watched")]
         [HttpPost("sync-watched")]
+        /// <summary>
+        /// Synchronizes watched status between Plex and Shoko with options to control scope, ratings sync and imports.
+        /// </summary>
+        /// <param name="dryRun">If non‑null the string "true" causes no updates.</param>
+        /// <param name="sinceHours">Only consider activity since this many hours ago.</param>
+        /// <param name="ratings">Whether to sync rating changes as well.</param>
+        /// <param name="import">True to import new episodes during sync.</param>
+        /// <param name="excludeAdmin">If true, ignore admin users' plex activity.</param>
+        /// <param name="cancellationToken">Token to cancel the operation.</param>
         public async Task<IActionResult> SyncPlexWatched(
             [FromQuery(Name = "dryRun")] string? dryRun = null,
             [FromQuery(Name = "sinceHours")] int? sinceHours = null,
@@ -1274,6 +1391,12 @@ namespace ShokoRelay.Controllers
         #region AnimeThemes
 
         [HttpGet("animethemes/vfs/build")]
+        /// <summary>
+        /// Apply the anime‑themes mapping file to the directory structure, optionally restricting to a subset of series via <paramref name="filter"/>.
+        /// </summary>
+        /// <param name="mapPath">Path to the CSV mapping file; defaults to the plugin directory value if omitted.</param>
+        /// <param name="filter">Comma‑separated list of Shoko series IDs to process.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
         public async Task<IActionResult> AnimeThemesVfsBuild([FromQuery] string? mapPath = null, [FromQuery] string? filter = null, CancellationToken cancellationToken = default)
         {
             var validation = ValidateFilterOrBadRequest(filter, out var filterIds);
@@ -1281,7 +1404,7 @@ namespace ShokoRelay.Controllers
                 return validation;
 
             // if the mapping file doesn't exist we return a user-friendly error rather than allowing a 500
-            string resolvedMapPath = mapPath ?? Path.Combine(_configProvider.PluginDirectory, AnimeThemesConstants.MapFileName);
+            string resolvedMapPath = mapPath ?? Path.Combine(_configProvider.PluginDirectory, AnimeThemesConstants.AtMapFileName);
             if (!System.IO.File.Exists(resolvedMapPath))
             {
                 return BadRequest(new { status = "error", message = "Mapping file not found" });
@@ -1323,6 +1446,11 @@ namespace ShokoRelay.Controllers
         }
 
         [HttpGet("animethemes/vfs/map")]
+        /// <summary>
+        /// Rebuild the anime‑themes mapping CSV file by scanning the configured directory structure. Returns counts of entries written.
+        /// </summary>
+        /// <param name="mapPath">Optional path to write the mapping file; uses the plugin directory default when omitted.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
         public async Task<IActionResult> AnimeThemesVfsMap([FromQuery] string? mapPath = null, CancellationToken cancellationToken = default)
         {
             var result = await _animeThemesMapping.BuildMappingFileAsync(mapPath, cancellationToken).ConfigureAwait(false);
@@ -1349,15 +1477,24 @@ namespace ShokoRelay.Controllers
         }
 
         [HttpPost("animethemes/vfs/import")]
+        /// <summary>
+        /// Download and import the latest anime‑themes mapping file from the official repository URL, overwriting the local map if successful.
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token.</param>
         public async Task<IActionResult> ImportAnimeThemesMapping(CancellationToken cancellationToken = default)
         {
             // use the raw URL directly; avoid the GitHub API which truncates large files
-            const string rawUrl = AnimeThemesConstants.RawMapUrl;
+            const string rawUrl = AnimeThemesConstants.AtRawMapUrl + AnimeThemesConstants.AtMapFileName;
             var (count, log) = await _animeThemesMapping.ImportMappingFromUrlAsync(rawUrl, cancellationToken).ConfigureAwait(false);
             return Ok(new { status = "ok", count });
         }
 
         [HttpGet("animethemes/mp3")]
+        /// <summary>
+        /// Generates or previews MP3 audio for anime themes based on the supplied <paramref name="query"/>, which encodes path and selection criteria; setting Batch processes multiple folders.
+        /// </summary>
+        /// <param name="query">Details including path, slug, offset, batch and force flags.</param>
+        /// <param name="cancellationToken">Token to cancel processing.</param>
         public async Task<IActionResult> AnimeThemesMp3([FromQuery] AnimeThemesMp3Query query, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(query.Path))

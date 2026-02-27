@@ -9,8 +9,14 @@ using ShokoRelay.Helpers;
 
 namespace ShokoRelay.Plex
 {
+    /// <summary>
+    /// Miscellaneous utility routines used by Plex-facing code such as poster resolution and GUID parsing.
+    /// </summary>
     public static class PlexHelper
     {
+        /// <summary>
+        /// Parse a Plex GUID string and return the embedded Shoko series ID if present. The GUID contains a "/show/{id}" segment when it maps to a series.
+        /// </summary>
         public static int? ExtractShokoSeriesIdFromGuid(string? guid)
         {
             if (string.IsNullOrWhiteSpace(guid))
@@ -26,6 +32,10 @@ namespace ShokoRelay.Plex
             return null;
         }
 
+        /// <summary>
+        /// Search configured import roots for a custom collection poster image that matches either the group ID, collection ID, or normalized collection title.
+        /// Returns the first matching file path or <c>null</c> if none found.
+        /// </summary>
         public static string? FindCollectionPosterPath(IShokoSeries series, string collectionName, int collectionId, IMetadataService? metadataService = null, string? pluginDir = null)
         {
             if (series == null)
@@ -69,6 +79,9 @@ namespace ShokoRelay.Plex
             return null;
         }
 
+        /// <summary>
+        /// Locate a local collection poster by matching against the specified group ID (and optionally the group's title).
+        /// </summary>
         public static string? FindCollectionPosterPathByGroup(IShokoSeries series, int groupId)
         {
             if (series == null)
@@ -131,6 +144,10 @@ namespace ShokoRelay.Plex
             return null;
         }
 
+        /// <summary>
+        /// Determine the set of filesystem import root folders that contain files for the provided <paramref name="series"/>.
+        /// Optionally pass a <paramref name="metadataService"/> for override-aware series grouping and the <paramref name="pluginDir"/> so that overrides can be loaded.
+        /// </summary>
         public static HashSet<string> ResolveImportRoots(IShokoSeries series, IMetadataService? metadataService = null, string? pluginDir = null)
         {
             var roots = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
@@ -211,6 +228,10 @@ namespace ShokoRelay.Plex
             return cleaned.Length == 0 ? null : cleaned.ToLowerInvariant();
         }
 
+        /// <summary>
+        /// Build a URL suitable for serving a collection poster image. Prefers a locally stored poster (using <see cref="FindCollectionPosterPath"/>).
+        /// Will optionally fall back to the primary series poster via <paramref name="metadataService"/>.
+        /// </summary>
         public static string? GetCollectionPosterUrl(
             IShokoSeries series,
             string collectionName,
@@ -250,7 +271,9 @@ namespace ShokoRelay.Plex
         }
     }
 
-    // DTO for Plex webhook payloads
+    /// <summary>
+    /// Data transfer object representing the JSON payload delivered by Plex webhooks. Only the fields used by the plugin are included.
+    /// </summary>
     public class PlexWebhookPayload
     {
         [JsonPropertyName("event")]
@@ -262,12 +285,18 @@ namespace ShokoRelay.Plex
         [JsonPropertyName("Metadata")]
         public PlexMetadata? Metadata { get; set; }
 
+        /// <summary>
+        /// Account information supplied in a webhook payload.
+        /// </summary>
         public class PlexAccount
         {
             [JsonPropertyName("title")]
             public string? Title { get; set; }
         }
 
+        /// <summary>
+        /// Metadata section of a Plex webhook payload. Includes GUID, viewed timestamp, section ID and other episode/show identifiers.
+        /// </summary>
         public class PlexMetadata
         {
             [JsonPropertyName("guid")]

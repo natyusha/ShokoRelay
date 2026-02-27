@@ -21,11 +21,21 @@ namespace ShokoRelay.Plex
             _configProvider = configProvider;
         }
 
-        // A Plex client is considered enabled if we have a token and at least one discovered
-        // library target. ServerUrl is stored per-target now and is not required globally.
+        /// <summary>
+        /// True when a Plex token exists and at least one library target has been discovered from the token file.
+        /// </summary>
         public bool IsEnabled => !string.IsNullOrWhiteSpace(Token) && GetTargets().Count > 0;
+
+        /// <summary>
+        /// Expose the configuration setting controlling whether Plex section refresh requests should trigger a scan on VFS refresh events.
+        /// </summary>
         public bool ScanOnVfsRefresh => _configProvider.GetSettings().ScanOnVfsRefresh;
 
+        /// <summary>
+        /// Request Plex to refresh the specified library section path across all configured targets. Returns true if any refresh succeeded.
+        /// </summary>
+        /// <param name="path">Filesystem path to refresh.</param>
+        /// <param name="cancellationToken">Token to cancel the operation.</param>
         public async Task<bool> RefreshSectionPathAsync(string path, CancellationToken cancellationToken = default)
         {
             if (!IsEnabled)

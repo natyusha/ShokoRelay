@@ -46,7 +46,11 @@ namespace ShokoRelay.Plex
             _config = config;
         }
 
-        // PIN Authentication Flow - Step 1: Generate a PIN
+        /// <summary>
+        /// Request a new Plex authentication PIN from the Plex.tv API.
+        /// </summary>
+        /// <param name="strong">If true, request a PIN requiring a longer code.</param>
+        /// <param name="cancellationToken">Cancellation token to abort the request.</param>
         public async Task<PlexPinResponse> CreatePinAsync(bool strong = true, CancellationToken cancellationToken = default)
         {
             EnsureConfigured();
@@ -66,7 +70,13 @@ namespace ShokoRelay.Plex
             return pin;
         }
 
-        // PIN Authentication Flow - Step 2: User Authentication (build auth URL)
+        /// <summary>
+        /// Construct the URL that the user must visit in order to authenticate the given <paramref name="pinCode"/>.
+        /// For short pins a simple link page is returned; otherwise the URL includes client and product details.
+        /// </summary>
+        /// <param name="pinCode">PIN code received from <see cref="CreatePinAsync"/>.</param>
+        /// <param name="productName">Product name to include in the request context.</param>
+        /// <param name="forwardUrl">Optional URL to redirect the user after auth.</param>
         public string BuildAuthUrl(string pinCode, string productName, string? forwardUrl = null)
         {
             EnsureConfigured();
@@ -92,9 +102,11 @@ namespace ShokoRelay.Plex
             return $"https://app.plex.tv/auth#?{string.Join("&", query)}";
         }
 
-        // PIN Authentication Flow - Step 3: Check PIN for the access token
-        // Note: We return the full PIN record here. In polling flows the auth token may be null
-        // until the user completes authentication, so callers should check the returned object.
+        /// <summary>
+        /// Retrieve the status for the specified Plex PIN. The returned object may contain a null auth token until the user completes authentication.
+        /// </summary>
+        /// <param name="pinId">Identifier returned by <see cref="CreatePinAsync"/>.</param>
+        /// <param name="cancellationToken">Cancellation token for the HTTP call.</param>
         public async Task<PlexPinResponse> GetPinAsync(string pinId, CancellationToken cancellationToken = default)
         {
             EnsureConfigured();
@@ -153,11 +165,7 @@ namespace ShokoRelay.Plex
 
         // --- Plex discovery & helpers (XML-based) ---
 
-        public async Task<(bool TokenValid, List<PlexServerInfo> Servers, List<PlexDevice> Devices)> GetPlexServerListAsync(
-            string token,
-            string clientIdentifier,
-            CancellationToken cancellationToken = default
-        )
+        public async Task<(bool TokenValid, List<PlexServerInfo> Servers, List<PlexDevice> Devices)> GetPlexServerListAsync(string token, string clientIdentifier, CancellationToken cancellationToken = default)
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, "https://clients.plex.tv/api/v2/resources");
             request.Headers.TryAddWithoutValidation("X-Plex-Token", token);
@@ -490,6 +498,13 @@ namespace ShokoRelay.Plex
             }
         }
 
+        /// <summary>
+        /// Discover Shoko-enabled libraries accessible by the given token, optionally filtering by server.
+        /// </summary>
+        /// <summary>
+        /// Discover Shoko-enabled libraries across Plex servers accessible with the
+        /// supplied token, optionally filtering by server.
+        /// </summary>
         public async Task<(bool TokenValid, List<PlexServerInfo> Servers, List<(PlexLibraryInfo Library, PlexServerInfo Server)> ShokoLibraries)> DiscoverShokoLibrariesAsync(
             string token,
             string clientIdentifier,

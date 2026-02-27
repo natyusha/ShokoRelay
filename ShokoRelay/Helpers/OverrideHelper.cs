@@ -6,20 +6,8 @@ namespace ShokoRelay.Helpers
 {
     /// <summary>
     /// Parses an optional "anidb_vfs_overrides.csv" file placed in the plugin directory.
-    /// The file allows a user to group multiple Shoko series IDs together so that
-    /// one primary ID is treated as the canonical series and the rest are merged
-    /// for VFS and metadata operations.
-    ///
-    /// Format:
-    ///   # comment lines are ignored
-    ///   1234,5678,9012   <-- 1234 is primary, the others are secondaries
-    ///   2222,3333        <-- 2222 primary for a second group
-    ///
-    /// Only active when TMDB episode numbering is enabled; when disabled the file is
-    /// ignored and all ids behave independently.
+    /// The file allows a user to group multiple Shoko series IDs together so that one primary ID is treated as the canonical series and the rest are merged for VFS and metadata operations.
     /// </summary>
-    // original helper for series merge overrides; kept in separate file for backwards compatibility
-    // renamed back to OverrideHelper as requested by user
     public static class OverrideHelper
     {
         // map AniDB id -> list of AniDB ids in group (first is primary AniDB id)
@@ -27,6 +15,10 @@ namespace ShokoRelay.Helpers
         private static DateTime _lastWriteUtc = DateTime.MinValue;
         private static string? _loadedPath;
 
+        /// <summary>
+        /// Load override groups from the optional <c>anidb_vfs_overrides.csv</c> file located in the plugin directory, refreshing if the file has changed since the last load.
+        /// </summary>
+        /// <param name="pluginDir">Directory to search for the override file. If null or empty the assembly location is used.</param>
         public static void EnsureLoaded(string? pluginDir = null)
         {
             if (string.IsNullOrWhiteSpace(pluginDir))
@@ -93,6 +85,12 @@ namespace ShokoRelay.Helpers
             catch { }
         }
 
+        /// <summary>
+        /// Return the primary series id for the given <paramref name="shokoSeriesId"/> according to the loaded override groups.
+        /// If numbering overrides are disabled or no mapping exists, the original id is returned.
+        /// </summary>
+        /// <param name="shokoSeriesId">Input series ID.</param>
+        /// <param name="metadataService">Service used to resolve series/anidb mappings.</param>
         public static int GetPrimary(int shokoSeriesId, IMetadataService metadataService)
         {
             if (!ShokoRelay.Settings.TmdbEpNumbering || metadataService == null)
@@ -111,6 +109,12 @@ namespace ShokoRelay.Helpers
             return shokoSeriesId;
         }
 
+        /// <summary>
+        /// Retrieve the full group of series IDs associated with the specified <paramref name="shokoSeriesId"/>, including the primary and any secondaries.
+        /// Returns a singleton list if no override applies.
+        /// </summary>
+        /// <param name="shokoSeriesId">Series id to look up.</param>
+        /// <param name="metadataService">Metadata service.</param>
         public static IReadOnlyList<int> GetGroup(int shokoSeriesId, IMetadataService metadataService)
         {
             if (!ShokoRelay.Settings.TmdbEpNumbering || metadataService == null)

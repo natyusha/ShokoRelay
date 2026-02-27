@@ -22,6 +22,12 @@ namespace ShokoRelay.Config
         // expose plugin directory for convenient access (populated during construction)
         public string PluginDirectory { get; }
 
+        /// <summary>
+        /// Creates a new <see cref="ConfigProvider"/> using the specified paths provided by the host application.
+        /// </summary>
+        /// <param name="applicationPaths">Paths supplied by the environment which
+        /// include the plugins directory used to determine where configuration
+        /// files are read and written.</param>
         public ConfigProvider(IApplicationPaths applicationPaths)
         {
             if (applicationPaths is null)
@@ -60,7 +66,9 @@ namespace ShokoRelay.Config
             Logger.Info("Config file changed externally, settings invalidated.");
         }
 
-        // convert any JsonElement trees into plain CLR values so the dashboard code never has to deal with them.
+        /// <summary>
+        /// Convert any <see cref="JsonElement"/> trees within <paramref name="obj"/> into plain CLR values.
+        /// </summary>
         public object SanitizeConfigObject(object obj)
         {
             if (obj is JsonElement je)
@@ -116,9 +124,14 @@ namespace ShokoRelay.Config
             }
         }
 
+        /// <summary>
+        /// Return the current settings, loading from disk if not already cached.
+        /// </summary>
         public RelayConfig GetSettings() => _settings ??= GetSettingsFromFile();
 
-        // Dashboard payload: settings + minimal Plex info, sanitized for JS
+        /// <summary>
+        /// Construct a sanitized payload of settings plus minimal Plex auth information for consumption by the web dashboard UI.
+        /// </summary>
         public object GetDashboardConfig()
         {
             var settings = GetSettings();
@@ -141,6 +154,9 @@ namespace ShokoRelay.Config
 
         public string ConfigDirectory => Path.GetDirectoryName(_filePath)!;
 
+        /// <summary>
+        /// Validate, normalize and persist the supplied <paramref name="settings"/> to disk.
+        /// </summary>
         public void SaveSettings(RelayConfig settings)
         {
             ApplyDefaultValues(settings);
@@ -187,6 +203,9 @@ namespace ShokoRelay.Config
             }
         }
 
+        /// <summary>
+        /// Delete the stored Plex token file if it exists; errors are logged but not thrown.
+        /// </summary>
         public void DeleteTokenFile()
         {
             try
@@ -251,7 +270,9 @@ namespace ShokoRelay.Config
             return settings;
         }
 
-        // --- helpers for ExtraPlexUsers parsing (shared canonical logic) ---
+        /// <summary>
+        /// Parse a comma-separated string of Plex user entries, optionally containing 4-digit PINs after a semicolon.
+        /// </summary>
         public static List<(string Name, string? Pin)> ParseExtraPlexUsers(string? extraRaw)
         {
             if (string.IsNullOrWhiteSpace(extraRaw))
@@ -278,12 +299,18 @@ namespace ShokoRelay.Config
                 .ToList();
         }
 
+        /// <summary>
+        /// Return configured extra Plex users as a list of name/PIN tuples.
+        /// </summary>
         public List<(string Name, string? Pin)> GetExtraPlexUserEntries()
         {
             var extraRaw = GetSettings().ExtraPlexUsers ?? string.Empty;
             return ParseExtraPlexUsers(extraRaw);
         }
 
+        /// <summary>
+        /// Return only the usernames of configured extra Plex users.
+        /// </summary>
         public List<string> GetExtraPlexUsernames()
         {
             return GetExtraPlexUserEntries().Select(e => e.Name).ToList();

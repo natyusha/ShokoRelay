@@ -89,9 +89,9 @@
       } catch {
         return { ok: res.ok, data: text };
       }
-    } catch (err) {
-      console.error("fetchJson error for", url, err);
-      return { ok: false, data: { error: String(err), message: err?.message ?? String(err), url } };
+    } catch (e) {
+      console.error("fetchJson error for", url, e);
+      return { ok: false, data: { error: String(e), message: e?.message ?? String(e), url } };
     }
   };
 
@@ -244,7 +244,8 @@
   }
   function setPlexUnlinkAction() {
     setPlexAction(
-      '<button id="plex-unlink" class="danger">Unlink Plex</button> <button id="plex-refresh" class="w46-button" title="Refresh Plex Libraries"><svg class="icon-svg"><use href="img/icons.svg#refresh"></use></svg></button>',
+      `<button id="plex-unlink" class="danger">Unlink Plex</button>
+      <button id="plex-refresh" class="w46-button" title="Refresh Plex Libraries"><svg class="icon-svg"><use href="img/icons.svg#refresh"></use></svg></button>`,
     );
     const unlinkBtn = el("plex-unlink");
     if (unlinkBtn) unlinkBtn.onclick = unlinkPlex;
@@ -303,9 +304,9 @@
         setColStatus("Error refreshing libraries", "error");
         console.error("Refresh libraries failed", rr.data);
       }
-    } catch (ex) {
+    } catch (e) {
       setColStatus("Error refreshing libraries", "error");
-      console.error(ex);
+      console.error(e);
     } finally {
       setButtonLoading(btn, false);
     }
@@ -347,9 +348,9 @@
       }
       setPlexAutomationControls(true);
       return true;
-    } catch (ex) {
+    } catch (e) {
       setColStatus("Error checking Plex config", "error");
-      console.error(ex);
+      console.error(e);
       setPlexAutomationControls(false);
       return false;
     }
@@ -442,9 +443,9 @@
       }
       setColStatus("Plex settings saved", "ok");
       return true;
-    } catch (ex) {
+    } catch (e) {
       setColStatus("Error saving Plex settings", "error");
-      console.error(ex);
+      console.error(e);
       return false;
     }
   }
@@ -655,9 +656,7 @@
         updateDirectionUI();
         try {
           localStorage.setItem("shoko-sync-direction", directionImport ? "import" : "export");
-        } catch (err) {
-          /* ignore */
-        }
+        } catch (e) {}
       };
       const onOverlayClick = (ev) => {
         if (ev.target === modal) onClose();
@@ -697,9 +696,9 @@
             if (startToast && startToast.parentElement) startToast.remove();
             toastOperation(res, "Sync");
           }
-        } catch (ex) {
+        } catch (e) {
           if (startToast && startToast.parentElement) startToast.remove();
-          showToast(`Sync Error: ${ex?.message || ex}`, "error", 0);
+          showToast(`Sync Error: ${e?.message || e}`, "error", 0);
         } finally {
           setButtonLoading(startBtn, false);
         }
@@ -846,9 +845,9 @@
           toastOperation(res, "Config save");
         }
         return res;
-      } catch (err) {
-        showToast(`Save Failed: ${err?.message || err}`, "error", 0);
-        return { ok: false, data: err };
+      } catch (e) {
+        showToast(`Save Failed: ${e?.message || e}`, "error", 0);
+        return { ok: false, data: e };
       }
     }
 
@@ -1149,8 +1148,8 @@
           try {
             setValueByPath(config, "ShokoSyncWatchedIncludeRatings", syncRatingsEl.checked);
             await persistConfig(config);
-          } catch (err) {
-            showToast(`Failed to save 'Include Ratings' setting: ${err?.message || err}`, "error", 0);
+          } catch (e) {
+            showToast(`Failed to save 'Include Ratings' setting: ${e?.message || e}`, "error", 0);
           }
         };
       }
@@ -1196,9 +1195,7 @@
       const next = cur === "dark" ? "light" : "dark";
       try {
         localStorage.setItem(THEME_KEY, next);
-      } catch (e) {
-        /* ignore */
-      }
+      } catch {}
       applyTheme(next);
     };
   }

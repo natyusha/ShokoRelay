@@ -7,13 +7,27 @@ using ShokoRelay.Plex;
 
 namespace ShokoRelay.Services
 {
+    /// <summary>
+    /// Service for applying critic ratings from Shoko metadata to Plex libraries.
+    /// </summary>
     public interface ICriticRatingService
     {
+        /// <summary>
+        /// Compute and push ratings for shows and episodes, optionally restricted to a subset of series IDs.
+        /// </summary>
+        /// <param name="allowedSeriesIds">If provided, only these series will be processed.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
         Task<ApplyRatingsResult> ApplyRatingsAsync(IEnumerable<int>? allowedSeriesIds = null, CancellationToken cancellationToken = default);
     }
 
+    /// <summary>
+    /// Aggregated status returned by <see cref="ICriticRatingService.ApplyRatingsAsync"/>, containing counters and any error messages.
+    /// </summary>
     public sealed record ApplyRatingsResult(int ProcessedShows, int UpdatedShows, int ProcessedEpisodes, int UpdatedEpisodes, int Errors, List<string> ErrorsList);
 
+    /// <summary>
+    /// Default implementation of <see cref="ICriticRatingService"/>, which queries Plex for shows/episodes and applies ratings based on Shoko metadata.
+    /// </summary>
     public class CriticRatingService : ICriticRatingService
     {
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();

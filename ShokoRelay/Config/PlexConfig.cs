@@ -3,6 +3,9 @@ using System.ComponentModel.DataAnnotations;
 
 namespace ShokoRelay.Config
 {
+    /// <summary>
+    /// Credentials required to initiate Plex authentication flows from the dashboard.
+    /// </summary>
     public class PlexAuthConfig
     {
         [Display(Name = "Client Identifier", Description = "Plex client identifier.")]
@@ -10,6 +13,9 @@ namespace ShokoRelay.Config
         public string ClientIdentifier { get; set; } = "";
     }
 
+    /// <summary>
+    /// Plex library section types used when filtering or identifying libraries.
+    /// </summary>
     public enum PlexLibraryType
     {
         Movie = 1,
@@ -18,6 +24,9 @@ namespace ShokoRelay.Config
         Photo = 13,
     }
 
+    /// <summary>
+    /// Runtime representation of a Plex library section discovered on a server. Contains identifiers used by the plugin to address specific sections.
+    /// </summary>
     public class PlexLibraryTarget
     {
         [Browsable(false)]
@@ -45,6 +54,9 @@ namespace ShokoRelay.Config
         public string ServerUrl { get; set; } = "";
     }
 
+    /// <summary>
+    /// Configuration options specific to an individual Plex library, including token and discovered server/library lists. Stored per-server in preferences.
+    /// </summary>
     public class PlexLibraryConfig
     {
         [Display(Name = "Plex Token", Description = "Plex token used for server API calls.")]
@@ -64,6 +76,9 @@ namespace ShokoRelay.Config
         public List<PlexAvailableLibrary> DiscoveredLibraries { get; set; } = new();
     }
 
+    /// <summary>
+    /// Information about a Plex server that was discovered during authentication.
+    /// </summary>
     public class PlexAvailableServer
     {
         public string Id { get; set; } = "";
@@ -71,6 +86,9 @@ namespace ShokoRelay.Config
         public string PreferredUri { get; set; } = "";
     }
 
+    /// <summary>
+    /// Metadata describing a library section exposed by a Plex server. Used when prompting the user to select a library during configuration.
+    /// </summary>
     public class PlexAvailableLibrary
     {
         public int Id { get; set; }

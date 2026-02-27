@@ -10,6 +10,9 @@ using ShokoRelay.Vfs;
 
 namespace ShokoRelay.AnimeThemes;
 
+/// <summary>
+/// Represents a single anime theme mapping between a local file path and AniDB/video identifiers.
+/// </summary>
 public sealed record AnimeThemesMappingEntry(
     [property: JsonPropertyName("filepath")] string FilePath,
     [property: JsonPropertyName("videoId")] int VideoId,
@@ -17,18 +20,27 @@ public sealed record AnimeThemesMappingEntry(
     [property: JsonPropertyName("newFilename")] string NewFileName
 );
 
+/// <summary>
+/// Result returned by a mapping file build operation, including statistics and messages.
+/// </summary>
 public sealed record AnimeThemesMappingBuildResult(string MapPath, int EntriesWritten, int Reused, int Errors, IReadOnlyList<string> Messages);
 
+/// <summary>
+/// Outcome of applying a mapping file to create VFS links, detailing how many links were created or skipped.
+/// </summary>
 public sealed record AnimeThemesMappingApplyResult(int LinksCreated, int Skipped, int SeriesMatched, IReadOnlyList<string> Errors, IReadOnlyList<string> Planned);
 
+/// <summary>
+/// Internal helper record used when looking up theme metadata by video identifier.
+/// </summary>
 internal sealed record AnimeThemesVideoLookup(int VideoId, int ThemeId, int AniDbId, string Slug, string SongTitle, string Tags);
 
+/// <summary>
+/// Provides operations for building and applying mappings between anime theme files and AniDB/video identifiers. Includes helpers for importing mapping data and querying the AnimeThemes API.
+/// </summary>
 public class AnimeThemesMapping
 {
-    // helpers for reading/writing the mapping file in CSV form.  The format
-    // uses simple comma-separated rows; commas inside values are escaped as
-    // "\u002C" by the generators.
-
+    // helpers for reading/writing the mapping file in CSV form. The format uses simple comma-separated rows; commas inside values are escaped as "\u002C" by the generators.
     private static List<AnimeThemesMappingEntry> ParseMappingContent(string content)
     {
         if (string.IsNullOrWhiteSpace(content))
@@ -121,7 +133,7 @@ public class AnimeThemesMapping
                 return (0, logMsg);
             }
 
-            string mapPath = Path.Combine(_pluginPath, AnimeThemesConstants.MapFileName);
+            string mapPath = Path.Combine(_pluginPath, AnimeThemesConstants.AtMapFileName);
             await File.WriteAllTextAsync(mapPath, content, ct).ConfigureAwait(false);
 
             try
@@ -147,6 +159,10 @@ public class AnimeThemesMapping
         }
     }
 
+    /// <summary>
+    /// Scan configured import roots for AnimeThemes files, optionally writing the mapping results to <paramref name="outputPath"/>.
+    /// Defaults to plugin map file and returns statistics about the operation.
+    /// </summary>
     public async Task<AnimeThemesMappingBuildResult> BuildMappingFileAsync(string? outputPath = null, CancellationToken ct = default)
     {
         // build list of candidate root folders containing the AnimeThemes files
@@ -177,9 +193,8 @@ public class AnimeThemesMapping
         Logger.Info("AnimeThemes mapping build started (roots={RootList})", string.Join(';', rootPaths));
         var sw = Stopwatch.StartNew();
 
-        string mapPath = outputPath ?? Path.Combine(_pluginPath, AnimeThemesConstants.MapFileName);
-        // map file path (CSV) for output.  existing CSV contents will be read when
-        // performing incremental updates.
+        string mapPath = outputPath ?? Path.Combine(_pluginPath, AnimeThemesConstants.AtMapFileName);
+        // map file path (CSV) for output. existing CSV contents will be read when performing incremental updates.
         var messages = new List<string>();
         var entries = new List<AnimeThemesMappingEntry>();
         int errors = 0;
@@ -286,21 +301,18 @@ public class AnimeThemesMapping
         await File.WriteAllTextAsync(mapPath, fileContent, ct);
 
         sw.Stop();
-        Logger.Info(
-            "AnimeThemes mapping build completed in {Elapsed}ms: entries={Count}, reused={Reused}, errors={Errors}, warnings={Warns}",
-            sw.ElapsedMilliseconds,
-            entries.Count,
-            reusedCount,
-            errors,
-            warns
-        );
+        Logger.Info("AnimeThemes mapping build completed in {Elapsed}ms: entries={Count}, reused={Reused}, errors={Errors}, warnings={Warns}", sw.ElapsedMilliseconds, entries.Count, reusedCount, errors, warns);
         Logger.Info("AnimeThemes mapping written to {Path} with {Count} entries", mapPath, entries.Count);
         return new AnimeThemesMappingBuildResult(mapPath, entries.Count, reusedCount, errors, messages);
     }
 
+    /// <summary>
+    /// Read a previously built mapping file and create/update VFS links for matching theme files.
+    /// Optionally restrict to a set of series via <paramref name="seriesFilter"/>. Returns counts of operations performed and any errors encountered.
+    /// </summary>
     public async Task<AnimeThemesMappingApplyResult> ApplyMappingAsync(string? mapPath = null, IReadOnlyCollection<int>? seriesFilter = null, CancellationToken ct = default)
     {
-        string resolvedMap = mapPath ?? Path.Combine(_pluginPath, AnimeThemesConstants.MapFileName);
+        string resolvedMap = mapPath ?? Path.Combine(_pluginPath, AnimeThemesConstants.AtMapFileName);
         if (!File.Exists(resolvedMap))
             throw new FileNotFoundException("Mapping file not found", resolvedMap);
 
@@ -503,7 +515,7 @@ public class AnimeThemesMapping
     private async Task<(AnimeThemesVideoLookup? lookup, bool idMissing)> FetchMetadataAsync(string baseName, CancellationToken ct)
     {
         bool idMissing = false;
-        string videoUrl = $"{AnimeThemesConstants.ApiBase}/video/{Uri.EscapeDataString(baseName)}?include=animethemeentries.animetheme";
+        string videoUrl = $"{AnimeThemesConstants.AtApiBase}/video/{Uri.EscapeDataString(baseName)}?include=animethemeentries.animetheme";
         var videoResp = await GetJsonAsync<VideoLookupResponse>(videoUrl, ct);
         if (videoResp?.Video == null)
             return (null, idMissing);
@@ -513,8 +525,7 @@ public class AnimeThemesMapping
         if (!themeId.HasValue)
             return (null, idMissing);
 
-        string animeUrl =
-            $"{AnimeThemesConstants.ApiBase}/anime?filter[has]=animethemes.animethemeentries.videos,animethemes&include=resources&filter[resource][site]=AniDB&filter[video][id]={videoId}";
+        string animeUrl = $"{AnimeThemesConstants.AtApiBase}/anime?filter[has]=animethemes.animethemeentries.videos,animethemes&include=resources&filter[resource][site]=AniDB&filter[video][id]={videoId}";
         var animeResp = await GetJsonAsync<AnimeLookupResponse>(animeUrl, ct);
         int anidbId = animeResp?.Anime?.FirstOrDefault()?.Resources?.FirstOrDefault(r => string.Equals(r.Site, "AniDB", StringComparison.OrdinalIgnoreCase) && r.ExternalId.HasValue)?.ExternalId ?? 0;
         if (anidbId == 0)
@@ -524,7 +535,7 @@ public class AnimeThemesMapping
             return (null, idMissing);
         }
 
-        string themeUrl = $"{AnimeThemesConstants.ApiBase}/animetheme/{themeId.Value}?include=animethemeentries.videos,song.artists";
+        string themeUrl = $"{AnimeThemesConstants.AtApiBase}/animetheme/{themeId.Value}?include=animethemeentries.videos,song.artists";
         var themeResp = await GetJsonAsync<ThemeLookupResponse>(themeUrl, ct);
         string slug = themeResp?.Animetheme?.Slug ?? "";
         string songTitle = themeResp?.Animetheme?.Song?.Title ?? "";
@@ -537,11 +548,8 @@ public class AnimeThemesMapping
         return (new AnimeThemesVideoLookup(videoId, themeId.Value, anidbId, slug, songTitle, tags), idMissing);
     }
 
-    // versionSuffix may contain something like "v2" or "v3" pulled from the
-    // original filename.  It is appended to the slug part of the name before the
-    // song title so that differences are preserved without relying on the later
-    // dedupe pass.
-
+    // versionSuffix may contain something like "v2" or "v3" pulled from the original filename.
+    // It is appended to the slug part of the name before the song title so that differences are preserved without relying on the later dedupe pass.
     private static string BuildNewFileName(AnimeThemesVideoLookup lookup, string extension, string versionSuffix = "")
     {
         string slug = string.IsNullOrWhiteSpace(lookup.Slug) ? "Theme" : lookup.Slug;
@@ -563,7 +571,7 @@ public class AnimeThemesMapping
     {
         string configured = ShokoRelay.Settings.AnimeThemesRootPath;
         if (string.IsNullOrWhiteSpace(configured))
-            configured = AnimeThemesConstants.DefaultRootFolder;
+            configured = AnimeThemesConstants.AtDefaultRootFolder;
 
         return configured.Trim().Trim('/', '\\');
     }

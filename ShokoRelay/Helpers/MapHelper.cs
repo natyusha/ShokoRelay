@@ -9,13 +9,22 @@ namespace ShokoRelay.Helpers
 {
     public static class MapHelper
     {
+        /// <summary>
+        /// Represents a mapping between a video file and one or more Shoko episodes, along with the calculated Plex coordinates and any TMDB episode data.
+        /// </summary>
         public record FileMapping(IVideo Video, IReadOnlyList<IEpisode> Episodes, IEpisode PrimaryEpisode, PlexCoords Coords, string FileName, int? PartIndex, int PartCount, object? TmdbEpisode);
 
+        /// <summary>
+        /// Aggregates file mapping information and available seasons for a series.
+        /// </summary>
         public record SeriesFileData(List<FileMapping> Mappings, List<int> Seasons)
         {
             public List<FileMapping> GetForSeason(int season) => Mappings.Where(m => m.Coords.Season == season).OrderBy(m => m.Coords.Episode).ToList();
         }
 
+        /// <summary>
+        /// Generate <see cref="SeriesFileData"/> for the given <paramref name="series"/> by building file mappings and enumerating seasons.
+        /// </summary>
         public static SeriesFileData GetSeriesFileData(ISeries series)
         {
             var mappings = BuildFileMappings(series);
@@ -24,9 +33,8 @@ namespace ShokoRelay.Helpers
         }
 
         /// <summary>
-        /// Returns the TMDB ordering ID that should be used for episode numbering,
-        /// or <c>null</c> if none applies.  This encapsulates the logic of detecting
-        /// when an alternate ordering is active and also respects the global
+        /// Returns the TMDB ordering ID that should be used for episode numbering, or <c>null</c> if none applies.
+        /// This encapsulates the logic of detecting when an alternate ordering is active and also respects the global
         /// <c>TmdbEpNumbering</c> setting.
         /// </summary>
         public static string? GetPreferredTmdbOrderingId(ISeries series)
@@ -54,11 +62,8 @@ namespace ShokoRelay.Helpers
         }
 
         /// <summary>
-        /// Return merged file data for a primary series and any additional series that
-        /// should be considered part of the same logical show.  The metadata for the
-        /// primary is kept, but the file mappings/seasons from the extras are included
-        /// so that children/grandchildren enumerations will surface episodes from all
-        /// series in the group.
+        /// Return merged file data for a primary series and any additional series that should be considered part of the same logical show.
+        /// The metadata for the primary is kept, but the file mappings/seasons from the extras are included so that children/grandchildren enums will surface episodes from all series in the group.
         /// </summary>
         public static SeriesFileData GetSeriesFileDataMerged(ISeries primary, IEnumerable<ISeries> extras)
         {
@@ -91,13 +96,9 @@ namespace ShokoRelay.Helpers
                 return result;
 
             // Cache the series' TMDB preferred ordering id (used repeatedly when applying TMDB episode-numbering).
-            // Normalize away the default show-ordering (Shoko's API sometimes exposes the show id as the
-            // PreferredOrdering.OrderingID when no alternate ordering is selected). Only keep a non-default
-            // ordering id if it's genuinely an alternate ordering.
-            // Acquire the preferred TMDB ordering ID (if any).  the helper already
-            // normalizes away the default ordering, so callers simply need to pass the
-            // value through to mapping functions.
-
+            // Normalize away the default show-ordering (Shoko's API sometimes exposes the show id as the PreferredOrdering.OrderingID when no alternate ordering is selected).
+            // Only keep a non-default ordering id if it's genuinely an alternate ordering then acquire the preferred TMDB ordering ID (if any).
+            // The helper already normalizes away the default ordering, so callers simply need to pass the value through to mapping functions.
             string? seriesPrefOrderingId = GetPreferredTmdbOrderingId(series);
 
             // Build episode file lists from cached videos
@@ -368,11 +369,7 @@ namespace ShokoRelay.Helpers
         }
 
         // Extracted helpers to simplify primary-type selection and deduplication logic.
-        private static List<(IEpisode Episode, PlexCoords Coords)> DeduplicateByCoords(
-            List<(IEpisode Episode, PlexCoords Coords)> filteredEps,
-            IVideo? video = null,
-            Dictionary<int, int>? xrefPosMap = null
-        )
+        private static List<(IEpisode Episode, PlexCoords Coords)> DeduplicateByCoords(List<(IEpisode Episode, PlexCoords Coords)> filteredEps, IVideo? video = null, Dictionary<int, int>? xrefPosMap = null)
         {
             // Deduplicate by (season, episode). When multiple episodes map to the same coordinates,
             // prefer episodes based on explicit episode relations where possible.

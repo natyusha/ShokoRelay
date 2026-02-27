@@ -1,5 +1,8 @@
 namespace ShokoRelay
 {
+    /// <summary>
+    /// Static information about the plugin such as version, API scheme and base path.
+    /// </summary>
     public static class ShokoRelayInfo
     {
         public const string Name = "Shoko Relay";

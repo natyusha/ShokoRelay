@@ -122,9 +122,7 @@ namespace ShokoRelay.Plex
             return outList.Count > 0 ? outList.ToArray() : null;
         }
 
-        // Build Country array from TMDB production-country ISO codes.
-        // Use the first linked TMDB *show* for a Shoko series; if none exists,
-        // fall back to the first linked TMDB *movie* for that series.
+        // Build Country array from TMDB production-country ISO codes. Use the first linked TMDB *show* for a Shoko series; if none exists, fall back to the first linked TMDB *movie* for that series.
         private object[]? BuildCountryArray(ISeries series)
         {
             IEnumerable<string>? codes = null;
@@ -274,9 +272,7 @@ namespace ShokoRelay.Plex
             var backdrop = images.GetImages(ImageEntityType.Backdrop).FirstOrDefault();
             var studios = CastHelper.GetStudioTags(series);
             var plexTheme =
-                ShokoRelay.Settings.PlexThemeMusic && series is IShokoSeries ss && ss.TmdbShows?.FirstOrDefault()?.TvdbShowID is int tvdb && tvdb > 0
-                    ? $"https://tvthemes.plexapp.com/{tvdb}.mp3"
-                    : null;
+                ShokoRelay.Settings.PlexThemeMusic && series is IShokoSeries ss && ss.TmdbShows?.FirstOrDefault()?.TvdbShowID is int tvdb && tvdb > 0 ? $"https://tvthemes.plexapp.com/{tvdb}.mp3" : null;
             var contentRating = RatingHelper.GetContentRatingAndAdult(series);
             var totalDuration = series.Episodes.Any() ? (int)series.Episodes.Sum(e => e.Runtime.TotalMilliseconds) : (int?)null;
             // csharpier-ignore-start
@@ -334,11 +330,8 @@ namespace ShokoRelay.Plex
                     primarySeries = s;
             }
 
-            // build list of group series for combined metadata lookups.  This will
-            // include the primary series plus any additional series defined via the
-            // `anidb_vfs_overrides.csv` helper.  Override entries are only meaningful
-            // when TMDB episode numbering is enabled; when the feature is off the
-            // overrides are ignored so we keep the list to just the primary.
+            // Build list of group series for combined metadata lookups. This will include the primary series plus any additional series defined via the `anidb_vfs_overrides.csv` helper.
+            // Override entries are only meaningful when TMDB episode numbering is enabled; when the feature is off the overrides are ignored so we keep the list to just the primary.
             var groupList = new List<IShokoSeries>();
             if (primarySeries is IShokoSeries ps)
                 groupList.Add(ps);
@@ -359,10 +352,8 @@ namespace ShokoRelay.Plex
             var seasonTitle = GetSeasonFolder(seasonNum);
             string? seasonSummary = null;
 
-            // Determine whether we should ignore TMDB season metadata because the series
-            // is running under a TMDB alternate ordering.  Season titles/descriptions and
-            // posters are taken from the default ordering and will not align with the
-            // adjusted episode numbers, so they must be skipped in that scenario.
+            // Determine whether we should ignore TMDB season metadata because the series is running under a TMDB alternate ordering.
+            // Season titles/descriptions and posters are taken from the default ordering and will not align with the adjusted episode numbers, so they must be skipped in that scenario.
             bool ignoreTmdbSeasonInfo = !string.IsNullOrEmpty(MapHelper.GetPreferredTmdbOrderingId(primarySeries));
 
             // TMDB metadata is preferred for season title/summary when available.
@@ -388,28 +379,15 @@ namespace ShokoRelay.Plex
                     seasonSummary = TextHelper.SummarySanitizer(tmdbDesc, ShokoRelay.Settings.SummaryMode) ?? tmdbDesc;
             }
 
-            // first episode should consider all series in the group as well
-            var firstEpisode = groupList
-                .SelectMany(s => s.Episodes)
-                .Select(e => new { Ep = e, Map = GetPlexCoordinates(e) })
-                .Where(x => x.Map.Season == seasonNum)
-                .OrderBy(x => x.Map.Episode)
-                .FirstOrDefault();
+            // First episode should consider all series in the group as well
+            var firstEpisode = groupList.SelectMany(s => s.Episodes).Select(e => new { Ep = e, Map = GetPlexCoordinates(e) }).Where(x => x.Map.Season == seasonNum).OrderBy(x => x.Map.Episode).FirstOrDefault();
 
-            // if the season itself has no release date, fall back to the earliest
-            // airdate of any episode contained within it.  this is particularly useful
-            // for specials/season0 entries which often lack their own metadata date.
-            // additionally we want episodes from any VFS override group members (see
-            // above) to count toward this fallback.
+            // If the season itself has no release date, fall back to the earliest airdate of any episode contained within it.
+            // Additionally, we want episodes from any VFS override group members (see above) to count toward this fallback.
             DateOnly? seasonDate = firstEpisode?.Ep.AirDate;
             if (!seasonDate.HasValue)
             {
-                seasonDate = groupList
-                    .SelectMany(s => s.Episodes)
-                    .Where(e => e.AirDate.HasValue && GetPlexCoordinates(e).Season == seasonNum)
-                    .Select(e => e.AirDate!.Value)
-                    .OrderBy(d => d)
-                    .FirstOrDefault();
+                seasonDate = groupList.SelectMany(s => s.Episodes).Where(e => e.AirDate.HasValue && GetPlexCoordinates(e).Season == seasonNum).Select(e => e.AirDate!.Value).OrderBy(d => d).FirstOrDefault();
             }
 
             // Only request season posters when there is more than one non-extra season present.
@@ -420,9 +398,8 @@ namespace ShokoRelay.Plex
 
             List<string>? seasonPosters = null; // Default: no season-specific posters
 
-            // Populate TMDB season posters when enabled, the series has >1 normal seasons,
-            // and TMDB season metadata is available on the Shoko series.  Skip posters if we
-            // are ignoring TMDB season info due to alternate ordering.
+            // Populate TMDB season posters when enabled, the series has >1 normal seasons, and TMDB season metadata is available on the Shoko series.
+            // Skip posters if we are ignoring TMDB season info due to an alternate ordering.
             if (ShokoRelay.Settings.TmdbSeasonPosters && nonExtraSeasonCount > 1 && tmdbSeason != null && !ignoreTmdbSeasonInfo)
             {
                 var orderedUrls = tmdbSeason.GetImages(ImageEntityType.Poster).OrderByDescending(i => i.IsPreferred).ThenByDescending(i => i.IsLocked).Select(i => ImageHelper.GetImageUrl(i)).ToList();
@@ -546,12 +523,7 @@ namespace ShokoRelay.Plex
                 }
                 if (seasonObj != null)
                 {
-                    var orderedUrls = seasonObj
-                        .GetImages(ImageEntityType.Poster)
-                        .OrderByDescending(i => i.IsPreferred)
-                        .ThenByDescending(i => i.IsLocked)
-                        .Select(i => ImageHelper.GetImageUrl(i))
-                        .ToList();
+                    var orderedUrls = seasonObj.GetImages(ImageEntityType.Poster).OrderByDescending(i => i.IsPreferred).ThenByDescending(i => i.IsLocked).Select(i => ImageHelper.GetImageUrl(i)).ToList();
 
                     if (seasonObj.DefaultPoster is not null)
                     {

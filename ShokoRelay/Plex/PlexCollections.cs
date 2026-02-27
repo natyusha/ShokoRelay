@@ -4,6 +4,9 @@ using ShokoRelay.Config;
 
 namespace ShokoRelay.Plex
 {
+    /// <summary>
+    /// Provides utilities for working with Plex collections such as creating, updating, and deleting collections as well as assigning items to them.
+    /// </summary>
     public class PlexCollections
     {
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
@@ -12,6 +15,12 @@ namespace ShokoRelay.Plex
         private readonly ConfigProvider _configProvider;
         private readonly PlexClient _plexClient; // for section/item helpers
 
+        /// <summary>
+        /// Initializes a new instance of <see cref="PlexCollections"/>.
+        /// </summary>
+        /// <param name="httpClient">HTTP client used to communicate with Plex servers.</param>
+        /// <param name="configProvider">Provider for configuration settings.</param>
+        /// <param name="plexClient">Helper for interacting with Plex-specific APIs.</param>
         public PlexCollections(HttpClient httpClient, ConfigProvider configProvider, PlexClient plexClient)
         {
             _httpClient = httpClient;
@@ -19,10 +28,25 @@ namespace ShokoRelay.Plex
             _plexClient = plexClient;
         }
 
+        /// <summary>
+        /// Gets a value indicating whether Plex integration is enabled based on the underlying <see cref="PlexClient"/>.
+        /// </summary>
         public bool IsEnabled => _plexClient.IsEnabled;
 
+        /// <summary>
+        /// Represents a specific collection target within a Plex library section.
+        /// </summary>
+        /// <param name="Target">The library target containing server and section information.</param>
+        /// <param name="CollectionId">The numeric ID of the collection.</param>
         public sealed record PlexLibraryCollectionTarget(PlexLibraryTarget Target, int CollectionId);
 
+        /// <summary>
+        /// Looks up a collection by name using the first configured Plex library target. If the collection does not already exist, an attempt will be made to create it.
+        /// </summary>
+        /// <param name="collectionName">The name of the collection to find or create.</param>
+        /// <param name="cancellationToken">Token used to cancel the operation.</param>
+        /// <returns>The numeric ID of the collection on success, or <c>null</c> if the
+        /// service is disabled, the name is empty, or the request fails.</returns>
         public async Task<int?> GetOrCreateCollectionIdAsync(string collectionName, CancellationToken cancellationToken = default)
         {
             if (!IsEnabled)
@@ -41,6 +65,13 @@ namespace ShokoRelay.Plex
             return collectionId;
         }
 
+        /// <summary>
+        /// Looks up or creates a collection with the given name in a specific library target. Also ensures the collection's sort title matches the provided name.
+        /// </summary>
+        /// <param name="collectionName">The name of the collection.</param>
+        /// <param name="target">The library target where the collection resides.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>The ID of the collection if successful, otherwise <c>null</c>.</returns>
         public async Task<int?> GetOrCreateCollectionIdAsync(string collectionName, PlexLibraryTarget target, CancellationToken cancellationToken = default)
         {
             if (!IsEnabled)
@@ -65,6 +96,13 @@ namespace ShokoRelay.Plex
             return collectionId;
         }
 
+        /// <summary>
+        /// Retrieves or creates a collection with the specified name across all configured Plex library targets.
+        /// </summary>
+        /// <param name="collectionName">The collection name to look up/create.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A list of <see cref="PlexLibraryCollectionTarget"/> containing
+        /// each target and its corresponding collection ID.</returns>
         public async Task<List<PlexLibraryCollectionTarget>> GetOrCreateCollectionIdsAsync(string collectionName, CancellationToken cancellationToken = default)
         {
             var results = new List<PlexLibraryCollectionTarget>();
@@ -83,6 +121,15 @@ namespace ShokoRelay.Plex
             return results;
         }
 
+        /// <summary>
+        /// Uploads a poster to a collection by providing an external URL. The URL is forwarded to Plex which fetches and attaches the image.
+        /// </summary>
+        /// <param name="collectionId">Numeric ID of the collection.</param>
+        /// <param name="posterUrl">URL of the poster image.</param>
+        /// <param name="target">Library target where the collection resides.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns><c>true</c> if the upload succeeded; <c>false</c> otherwise or if
+        /// prerequisites are not met.</returns>
         public async Task<bool> UploadCollectionPosterByUrlAsync(int collectionId, string posterUrl, PlexLibraryTarget target, CancellationToken cancellationToken = default)
         {
             if (!IsEnabled)
@@ -169,6 +216,14 @@ namespace ShokoRelay.Plex
             return int.TryParse(collection.RatingKey, out int ratingKey) ? ratingKey : null;
         }
 
+        /// <summary>
+        /// Assigns an item to a collection by updating the item's metadata on the Plex server. Uses Plex's metadata PUT interface to add a collection tag.
+        /// </summary>
+        /// <param name="ratingKey">Plex rating key of the item to modify.</param>
+        /// <param name="collectionName">Name of the collection to assign.</param>
+        /// <param name="target">Target server/section for the operation.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns><c>true</c> when the assignment succeeds; otherwise <c>false</c>.</returns>
         public async Task<bool> AssignCollectionToItemByMetadataAsync(int ratingKey, string collectionName, PlexLibraryTarget target, CancellationToken cancellationToken = default)
         {
             if (!IsEnabled)
@@ -221,6 +276,11 @@ namespace ShokoRelay.Plex
             }
         }
 
+        /// <summary>
+        /// Scans all configured Plex libraries and deletes any collections that contain zero items.
+        /// </summary>
+        /// <param name="cancellationToken">Token to cancel the operation.</param>
+        /// <returns>The number of collections that were deleted.</returns>
         public async Task<int> DeleteEmptyCollectionsAsync(CancellationToken cancellationToken = default)
         {
             if (!IsEnabled)
@@ -273,6 +333,13 @@ namespace ShokoRelay.Plex
             return deleted;
         }
 
+        /// <summary>
+        /// Deletes the specified collection if it contains no child items.
+        /// </summary>
+        /// <param name="collectionId">The ID of the collection to check/delete.</param>
+        /// <param name="target">Library target hosting the collection.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns><c>true</c> if the collection was deleted; otherwise <c>false</c>.</returns>
         public async Task<bool> DeleteCollectionIfEmptyAsync(int collectionId, PlexLibraryTarget target, CancellationToken cancellationToken = default)
         {
             if (!IsEnabled)
@@ -322,6 +389,14 @@ namespace ShokoRelay.Plex
             }
         }
 
+        /// <summary>
+        /// Updates the sort title of a collection so Plex orders it based on the provided <paramref name="title"/> rather than default sorting rules.
+        /// </summary>
+        /// <param name="collectionId">ID of the collection to update.</param>
+        /// <param name="title">New title to use for sorting.</param>
+        /// <param name="target">Library target containing the collection.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns><c>true</c> if the update succeeded, <c>false</c> otherwise.</returns>
         public async Task<bool> UpdateCollectionTitleSortAsync(int collectionId, string title, PlexLibraryTarget target, CancellationToken cancellationToken = default)
         {
             if (!IsEnabled)
