@@ -65,7 +65,7 @@ namespace ShokoRelay.Controllers
                 return null;
 
             // apply overrides: use primary metadata but merge file data for the entire group
-            OverrideHelper.EnsureLoaded(_configProvider.PluginDirectory);
+            OverrideHelper.EnsureLoaded();
             int primaryId = OverrideHelper.GetPrimary(series.ID, _metadataService);
             var primarySeries = _metadataService.GetShokoSeriesByID(primaryId) ?? series;
             var group = OverrideHelper.GetGroup(primaryId, _metadataService);
@@ -363,7 +363,7 @@ namespace ShokoRelay.Controllers
                 );
 
             // convert any secondary ids to their primary equivalents based on overrides
-            OverrideHelper.EnsureLoaded(_configProvider.PluginDirectory);
+            OverrideHelper.EnsureLoaded();
             if (ShokoRelay.Settings.TmdbEpNumbering)
             {
                 ids = ids.Select(i => OverrideHelper.GetPrimary(i, _metadataService)).Distinct().ToList();

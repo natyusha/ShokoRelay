@@ -25,9 +25,7 @@ namespace ShokoRelay.Config
         /// <summary>
         /// Creates a new <see cref="ConfigProvider"/> using the specified paths provided by the host application.
         /// </summary>
-        /// <param name="applicationPaths">Paths supplied by the environment which
-        /// include the plugins directory used to determine where configuration
-        /// files are read and written.</param>
+        /// <param name="applicationPaths">Paths supplied by the environment which include the plugins directory used to determine where configuration files are read and written.</param>
         public ConfigProvider(IApplicationPaths applicationPaths)
         {
             if (applicationPaths is null)
@@ -524,7 +522,7 @@ namespace ShokoRelay.Config
             try
             {
                 if (
-                    normalized.Length >= 2 && normalized[1] == ':' /* drive */
+                    normalized.Length >= 2 && normalized[1] == ':' // drive
                     || normalized.StartsWith(new string(sep, 2))
                     || normalized.StartsWith(sep)
                 )

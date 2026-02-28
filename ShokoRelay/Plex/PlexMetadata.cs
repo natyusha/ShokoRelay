@@ -318,8 +318,7 @@ namespace ShokoRelay.Plex
 
         public Dictionary<string, object?> MapSeason(ISeries series, int seasonNum, string seriesTitle, System.Threading.CancellationToken cancellationToken = default)
         {
-            // resolve overrides up front so that all lookups below use the
-            // canonical (primary) series and any related extras
+            // ensure overrides loaded and pick canonical primary series for downstream lookups
             OverrideHelper.EnsureLoaded();
             int primaryId = OverrideHelper.GetPrimary(series.ID, _metadataService);
             var primarySeries = series;
@@ -330,8 +329,7 @@ namespace ShokoRelay.Plex
                     primarySeries = s;
             }
 
-            // Build list of group series for combined metadata lookups. This will include the primary series plus any additional series defined via the `anidb_vfs_overrides.csv` helper.
-            // Override entries are only meaningful when TMDB episode numbering is enabled; when the feature is off the overrides are ignored so we keep the list to just the primary.
+            // assemble groupList containing primary (and any override extras when TMDB ep numbering active) for metadata lookups
             var groupList = new List<IShokoSeries>();
             if (primarySeries is IShokoSeries ps)
                 groupList.Add(ps);
@@ -379,22 +377,24 @@ namespace ShokoRelay.Plex
                     seasonSummary = TextHelper.SummarySanitizer(tmdbDesc, ShokoRelay.Settings.SummaryMode) ?? tmdbDesc;
             }
 
-            // First episode should consider all series in the group as well
-            var firstEpisode = groupList.SelectMany(s => s.Episodes).Select(e => new { Ep = e, Map = GetPlexCoordinates(e) }).Where(x => x.Map.Season == seasonNum).OrderBy(x => x.Map.Episode).FirstOrDefault();
-
-            // If the season itself has no release date, fall back to the earliest airdate of any episode contained within it.
-            // Additionally, we want episodes from any VFS override group members (see above) to count toward this fallback.
-            DateOnly? seasonDate = firstEpisode?.Ep.AirDate;
-            if (!seasonDate.HasValue)
-            {
-                seasonDate = groupList.SelectMany(s => s.Episodes).Where(e => e.AirDate.HasValue && GetPlexCoordinates(e).Season == seasonNum).Select(e => e.AirDate!.Value).OrderBy(d => d).FirstOrDefault();
-            }
-
             // Only request season posters when there is more than one non-extra season present.
             // Extras/specials are represented as negative season numbers and should be ignored for this count.
             var extras = groupList.Skip(1).Cast<ISeries>().ToList();
             var fileData = extras.Count > 0 ? MapHelper.GetSeriesFileDataMerged(primarySeries, extras) : MapHelper.GetSeriesFileData(primarySeries);
             int nonExtraSeasonCount = fileData.Seasons.Count(s => s >= 0);
+
+            // Determine season date from earliest airdate among fileData mappings (reflects VFS overrides); fallback to group list if none found.
+            DateOnly? seasonDate = fileData
+                .Mappings.Where(m => m.Coords.Season == seasonNum)
+                .SelectMany(m => m.Episodes)
+                .Where(e => e.AirDate.HasValue)
+                .Select(e => e.AirDate!.Value)
+                .OrderBy(d => d)
+                .FirstOrDefault();
+
+            // FirstOrDefault returns default(DateOnly) when empty; treat that as null so we don't accidentally emit 0001-01-01.
+            if (seasonDate == default(DateOnly))
+                seasonDate = null;
 
             List<string>? seasonPosters = null; // Default: no season-specific posters
 

@@ -36,7 +36,7 @@ namespace ShokoRelay.Plex
         /// Search configured import roots for a custom collection poster image that matches either the group ID, collection ID, or normalized collection title.
         /// Returns the first matching file path or <c>null</c> if none found.
         /// </summary>
-        public static string? FindCollectionPosterPath(IShokoSeries series, string collectionName, int collectionId, IMetadataService? metadataService = null, string? pluginDir = null)
+        public static string? FindCollectionPosterPath(IShokoSeries series, string collectionName, int collectionId, IMetadataService? metadataService = null)
         {
             if (series == null)
                 return null;
@@ -49,7 +49,7 @@ namespace ShokoRelay.Plex
             if (string.IsNullOrWhiteSpace(normalizedTitle))
                 return null;
 
-            var roots = ResolveImportRoots(series, metadataService, pluginDir);
+            var roots = ResolveImportRoots(series, metadataService);
             if (roots.Count == 0)
                 return null;
 
@@ -146,15 +146,14 @@ namespace ShokoRelay.Plex
 
         /// <summary>
         /// Determine the set of filesystem import root folders that contain files for the provided <paramref name="series"/>.
-        /// Optionally pass a <paramref name="metadataService"/> for override-aware series grouping and the <paramref name="pluginDir"/> so that overrides can be loaded.
+        /// Optionally pass a <paramref name="metadataService"/> for override-aware series grouping.
         /// </summary>
-        public static HashSet<string> ResolveImportRoots(IShokoSeries series, IMetadataService? metadataService = null, string? pluginDir = null)
+        public static HashSet<string> ResolveImportRoots(IShokoSeries series, IMetadataService? metadataService = null)
         {
             var roots = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
 
-            // make sure overrides are loaded if we know the plugin directory
-            if (!string.IsNullOrWhiteSpace(pluginDir))
-                OverrideHelper.EnsureLoaded(pluginDir);
+            // make sure overrides are loaded so mapping decisions use latest data
+            OverrideHelper.EnsureLoaded();
 
             // gather list of series to consider (primary + extras)
             var seriesList = new List<IShokoSeries> { series };
@@ -237,7 +236,6 @@ namespace ShokoRelay.Plex
             string collectionName,
             int collectionId,
             IMetadataService? metadataService = null,
-            string? pluginDir = null,
             bool allowPrimarySeriesFallback = true,
             string? baseUrl = null
         )
@@ -246,7 +244,7 @@ namespace ShokoRelay.Plex
                 return null;
 
             // 1) Check for local poster file for the collection
-            var posterPath = FindCollectionPosterPath(series, collectionName, collectionId, metadataService, pluginDir);
+            var posterPath = FindCollectionPosterPath(series, collectionName, collectionId, metadataService);
             if (!string.IsNullOrWhiteSpace(posterPath))
             {
                 string b = string.IsNullOrWhiteSpace(baseUrl) ? ImageHelper.GetBaseUrl() : baseUrl?.TrimEnd('/') ?? string.Empty;

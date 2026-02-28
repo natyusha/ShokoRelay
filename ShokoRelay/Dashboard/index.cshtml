@@ -36,7 +36,7 @@
           <button id="col-build" class="plex-auth">Generate Collections</button>
           <button id="rtg-build" class="plex-auth">Apply Critic Ratings</button>
         </div>
-        <hr>
+        <hr class="plex-divider">
         <div class="full">
           <label class="shoko-checkbox plex-auth">
             <input id="plex-scan-vfs" class="plex-auth" type="checkbox">
@@ -89,6 +89,11 @@
         </div>
         <div class="full">
           <button id="vfs-exec">Generate</button>
+          <button id="vfs-overrides" class="w46-button tmdb-ep-num" title="VFS Overrides Editor">
+            <svg class="icon-svg">
+              <use href="img/icons.svg#database-edit-outline"></use>
+            </svg>
+          </button>
           <button id="vfs-clean" class="w46-button toggle" title="Clean VFS Toggle" aria-pressed="true" type="button">
             <svg class="icon-svg">
               <use href="img/icons.svg#broom"></use>
@@ -202,7 +207,8 @@
         Provider Settings
       </h3>
       <div id="config-form"></div>
-      <small>All provider settings are saved automatically.</small>
+      <hr>
+      <small>All provider settings are saved automatically</small>
     </section>
     <!-- #endregion -->
   </div>
@@ -243,12 +249,27 @@
   </div>
   <!-- #endregion -->
 
+  <!--#region MARK: Overrides Modal -->
+  <div id="overrides-modal" class="modal-overlay" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="modal wide" role="document">
+      <header class="modal-header">VFS Overrides Editor</header>
+      <div class="modal-body">
+        <textarea id="overrides-text"></textarea>
+      </div>
+      <footer class="modal-actions">
+        <button id="overrides-cancel" class="cancel">Cancel</button>
+        <button id="overrides-save">Save</button>
+      </footer>
+    </div>
+  </div>
+  <!-- #endregion -->
+
   <!--#region MARK: Sync Watched Modal
   -->
   <div id="sync-modal" class="modal-overlay" aria-hidden="true" role="dialog" aria-modal="true"
        aria-labelledby="sync-modal-title">
     <div class="modal" role="document">
-      <header class="modal-header">Sync Watched States</header>
+      <header class="modal-header">Sync Watched States Menu</header>
       <div class="modal-body">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
           <label style="margin:0">Direction</label>

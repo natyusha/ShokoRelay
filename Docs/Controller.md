@@ -36,6 +36,7 @@ GET  /logs/{fileName}                                          -> GetLog (downlo
 
 - `GetConfig` returns the current plugin configuration payload (JSON) used by the dashboard page.
   - The `ConfigProvider` handles serialization, sanitization and omits any sensitive fields.
+  - This also includes `anidb_vfs_overrides.csv` in the response as a separate entry from the main payload.
 - `SaveConfig` persists automation/provider settings (tokens handled separately).
   - `/config` does not expose the Plex token. Instead the response includes `PlexLibrary.HasToken` which indicates token validity.
   - The actual secret lives only in `plex.token`.
@@ -176,12 +177,19 @@ POST /plex/webhook                                             -> PluginPlexWebh
 
 ```
 GET  /vfs?run={true|false}&clean={true|false}&filter={filter}  -> BuildVfs
+
+POST /vfs/overrides                                            -> SaveVfsOverrides
 ```
 
 - `BuildVfs` (all query parameters are optional)
   - `run` (default false) if true the VFS is constructed; when false the call just returns metadata.
   - `clean` (default true) clear the existing root before building.
   - `filter` comma separated Shoko series IDs to restrict processing.
+
+---
+
+- `SaveVfsOverrides` accepts the raw text of an `anidb_vfs_overrides.csv` file in the request body and overwrites (or clears) the file in the plugin's config directory.
+  - This is the endpoint targeted by the dashboard editor; a successful save will reload the override groups for any subsequent VFS/metadata ops.
 
 ---
 
@@ -193,10 +201,13 @@ GET  /vfs?run={true|false}&clean={true|false}&filter={filter}  -> BuildVfs
 - Each build writes a plain-text report to `vfs-report.log` in the plugin directory; the UI exposes a `logUrl` property to download it.
 - When importing local metadata images, files named `Specials.<ext>` will be renamed to `Season-Specials-Poster.<ext>` in the VFS
   - This is purely for the aesthetics of the original file structure (where `<ext>` is one of the supported image extensions)
-- A `anidb_vfs_overrides.csv` file may be placed in the plugin directory to group multiple Shoko series IDs under a single primary series.
+- A `anidb_vfs_overrides.csv` file may be placed in the plugin's _config_ directory to group multiple Shoko series IDs under a single primary series.
   - When present the first ID on each line becomes the canonical series and VFS/metadata operations merge the children of all listed IDs.
   - This requires all series that are being merged to have the same TMDB series match.
   - Blank lines and lines starting with `#` are ignored.
+  - The dashboard provides an editor modal (accessible via the Paths section) which posts edits to `/vfs/overrides`.
+    - If no override file exists when the editor is opened it will still appear empty and you may type new entries.
+    - Clicking **Save** will create the file in the config directory.
 
 ---
 
@@ -259,20 +270,19 @@ GET  /sync-watched/start                                       -> StartWatchedSy
 ### VFS
 
 ```
-GET  /animethemes/vfs/build?mapPath={map.csv}&filter={csv}     -> AnimeThemesVfsBuild
+GET  /animethemes/vfs/build?filter={csv}     -> AnimeThemesVfsBuild
 
-GET  /animethemes/vfs/map?mapPath={map.csv}                    -> AnimeThemesVfsMap
+GET  /animethemes/vfs/map                      -> AnimeThemesVfsMap
 
 POST /animethemes/vfs/import                                   -> ImportAnimeThemesMapping
 ```
 
-- `AnimeThemesVfsBuild` applies the mapping file to the AnimeThemes directory structure.
+- `AnimeThemesVfsBuild` applies the mapping file (located in the config directory) to the AnimeThemes directory structure.
   - When `anidb_vfs_overrides.csv` is present, all links for grouped series will be routed into the primary series folder.
-  - `mapPath` (optional) lets you specify a custom mapping file instead of the default `anidb_animethemes_xrefs.csv`.
   - `filter` restricts the mapping to the given comma separated AniDB IDs.
 
 - `AnimeThemesVfsMap` generates the mapping csv from the current raw source.
-  - `mapPath` (optional) overrides the default output file path.
+  - The resulting file is written to the config directory at `anidb_animethemes_xrefs.csv` in the plugin's *config* directory.
 
 - `ImportAnimeThemesMapping` downloads the latest mapping csv from the hardcoded Gist URL.
 
@@ -280,8 +290,7 @@ POST /animethemes/vfs/import                                   -> ImportAnimeThe
 
 **Notes:**
 
-- `anidb_animethemes_xrefs.csv` is meant to be placed in the plugin folder (CSV format with optional comments).
-- Example contents (note commas in filenames are encoded as `\u002C`):
+- Example `anidb_animethmes_xrefs.csv` contents (note commas in filenames are encoded as `\u002C`):
 
 ```csv
 # filepath, videoId, anidbId, newFilename

@@ -106,7 +106,7 @@ hr {
   background: var(--inset-color);
   border: none;
   height: 1px;
-  margin: 17px 0 5px 0;
+  margin: 0 0 4px 0;
   padding: 0;
 }
 button,
@@ -210,10 +210,15 @@ small {
 .w100 > button {
   width: 100%;
 }
+.plex-divider {
+  margin: 17px 0 5px 0;
+}
+.tmdb-ep-num:disabled,
 .plex-auth:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
+button.tmdb-ep-num:disabled:hover,
 button.plex-auth:disabled:hover {
   background: var(--button-color);
 }
@@ -279,8 +284,8 @@ label > small::before {
 */
 button.loading {
   opacity: 0.65;
-  pointer-events: none;
   position: relative;
+  cursor: not-allowed;
 }
 .button-spinner {
   position: absolute;
@@ -481,6 +486,35 @@ button.float-link {
 }
 /* #endregion */
 
+/* #region MARK: Details
+*/
+details[open] > summary::after {
+  transform: rotate(-135deg);
+}
+summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  font-weight: 500;
+  justify-content: space-between;
+  margin: 6px 12px 6px 0;
+  outline: none;
+  transition: all 0.3s ease-in-out;
+  user-select: none;
+}
+summary::after {
+  content: "";
+  border: solid;
+  border-width: 0 3px 3px 0;
+  display: inline-block;
+  padding: 4px;
+  transform: rotate(45deg);
+}
+summary:hover {
+  color: var(--hover-color);
+}
+/* #endregion */
+
 /* #region MARK: Toasts
 */
 #toast-container {
@@ -538,7 +572,7 @@ button.float-link {
 }
 /* #endregion */
 
-/* #region MARK: Sync Modal
+/* #region MARK: Modals
 */
 .modal-overlay {
   position: fixed;
@@ -558,10 +592,24 @@ button.float-link {
   color: var(--text-color);
   border: 1px solid var(--border-color);
   border-radius: 10px;
-  width: 390px;
-  max-width: calc(100% - 48px);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  max-width: calc(100% - 48px);
   overflow: hidden;
+  width: 390px;
+}
+.modal.wide {
+  width: 870px;
+}
+.modal.wide .modal-body {
+  padding: 0;
+}
+.modal textarea {
+  border-radius: 0;
+  font-family: monospace;
+  font-size: 1.1em;
+  height: 470px;
+  margin: 0;
+  width: 100%;
 }
 .modal-header {
   align-items: center;

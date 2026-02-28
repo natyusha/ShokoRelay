@@ -1,11 +1,10 @@
 using System.Globalization;
 using Shoko.Abstractions.Services;
-using ShokoRelay.Helpers; // for CsvHelper
 
 namespace ShokoRelay.Helpers
 {
     /// <summary>
-    /// Parses an optional "anidb_vfs_overrides.csv" file placed in the plugin directory.
+    /// Parses an optional "anidb_vfs_overrides.csv" file placed in the plugin's config directory.
     /// The file allows a user to group multiple Shoko series IDs together so that one primary ID is treated as the canonical series and the rest are merged for VFS and metadata operations.
     /// </summary>
     public static class OverrideHelper
@@ -14,25 +13,20 @@ namespace ShokoRelay.Helpers
         private static readonly Dictionary<int, List<int>> _groups = new();
         private static DateTime _lastWriteUtc = DateTime.MinValue;
         private static string? _loadedPath;
+        private const string OverridesFileName = "anidb_vfs_overrides.csv";
+        private static string OverridesPath => Path.Combine(ShokoRelay.ConfigDirectory, OverridesFileName);
 
         /// <summary>
-        /// Load override groups from the optional <c>anidb_vfs_overrides.csv</c> file located in the plugin directory, refreshing if the file has changed since the last load.
+        /// Load override groups from the optional <c>anidb_vfs_overrides.csv</c> file located in the config directory. Refreshes if the file has changed since the last load.
         /// </summary>
-        /// <param name="pluginDir">Directory to search for the override file. If null or empty the assembly location is used.</param>
-        public static void EnsureLoaded(string? pluginDir = null)
+        public static void EnsureLoaded()
         {
-            if (string.IsNullOrWhiteSpace(pluginDir))
-            {
-                var asmPath = typeof(OverrideHelper).Assembly.Location;
-                if (!string.IsNullOrWhiteSpace(asmPath))
-                {
-                    pluginDir = Path.GetDirectoryName(asmPath);
-                }
-            }
-            if (string.IsNullOrWhiteSpace(pluginDir))
+            var configDir = ShokoRelay.ConfigDirectory;
+            // require config directory; nothing to do otherwise
+            if (string.IsNullOrWhiteSpace(configDir))
                 return;
 
-            string path = Path.Combine(pluginDir, "anidb_vfs_overrides.csv");
+            string path = OverridesPath;
             if (_loadedPath == path)
             {
                 if (File.Exists(path))

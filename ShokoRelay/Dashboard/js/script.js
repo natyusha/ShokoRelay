@@ -217,6 +217,36 @@
     cur[parts[parts.length - 1]] = value;
   }
 
+  // helper to support the config payload wrapper introduced when overrides are sent
+  function unwrapConfig(data) {
+    if (data && typeof data === "object" && data.payload !== undefined) {
+      return data.payload || {};
+    }
+    return data || {};
+  }
+
+  // shared helper that attaches overlay-click + Escape-key listeners to a modal element.
+  // Returns a `close()` function which will also remove the listeners.
+  function attachModalCloseHandlers(modal) {
+    if (!modal) return () => {};
+    const onOverlayClick = (ev) => {
+      if (ev.target === modal) close();
+    };
+    const onKeydown = (ev) => {
+      if (ev.key === "Escape") close();
+    };
+    function close() {
+      modal.setAttribute("aria-hidden", "true");
+      modal.classList.remove("open");
+      document.body.style.overflow = "";
+      modal.removeEventListener("click", onOverlayClick);
+      document.removeEventListener("keydown", onKeydown);
+    }
+    modal.addEventListener("click", onOverlayClick);
+    document.addEventListener("keydown", onKeydown);
+    return close;
+  }
+
   // Helper used throughout the dashboard to enable/disable controls that depend on Plex Auth.
   function setPlexAutomationControls(enabled) {
     // everything marked with this class is controlled by Plex auth state
@@ -334,7 +364,8 @@
         setPlexAutomationControls(false);
         return false;
       }
-      const plex = cfgRes.data.PlexLibrary || {};
+      const settings = unwrapConfig(cfgRes.data);
+      const plex = settings.PlexLibrary || {};
       if (!plex.HasToken) {
         setColStatus("Plex token missing. Link Plex in Plex Auth.", "error");
         setPlexAutomationControls(false);
@@ -365,7 +396,7 @@
       setPlexStartAction();
       return;
     }
-    const settings = res.data || {};
+    let settings = unwrapConfig(res.data);
     // normalize ExtraPlexUsers to a string (avoid malicious objects)
     if (settings.ExtraPlexUsers && typeof settings.ExtraPlexUsers !== "string") {
       settings.ExtraPlexUsers = "";
@@ -425,7 +456,7 @@
         setColStatus("Error loading config", "error");
         return false;
       }
-      const cfg = cfgRes.data;
+      const cfg = unwrapConfig(cfgRes.data);
       // enforce string type for extra users in case the server returned something else
       if (cfg.ExtraPlexUsers && typeof cfg.ExtraPlexUsers !== "string") cfg.ExtraPlexUsers = "";
       cfg.ScanOnVfsRefresh = !!el("plex-scan-vfs")?.checked;
@@ -546,6 +577,71 @@
       toastOperation(res, `VFS (clean=${clean})`, { hasFilter });
     });
   }
+
+  // override editor panel handlers
+  const overridesBtn = el("vfs-overrides");
+  const overridesModal = el("overrides-modal");
+  const overridesText = el("overrides-text");
+  const overridesCancel = el("overrides-cancel");
+  const overridesSave = el("overrides-save");
+
+  if (overridesBtn && overridesModal && overridesText && overridesCancel && overridesSave) {
+    overridesBtn.onclick = async () => {
+      // fetch current overrides from server and fill textarea
+      try {
+        const cfgRes = await fetchJson(base + "/config");
+        if (cfgRes.ok && cfgRes.data) {
+          overridesText.value = cfgRes.data.overrides || "";
+        }
+      } catch {}
+
+      // ensure placeholder/hint is correct if text is empty
+      if (overridesText.value.trim() === "") {
+        overridesText.placeholder = [
+          "This allows shows which are separated on AniDB but part of the same TMDB listing to be combined into a single entry in Plex. Each line should contain a " +
+            "comma separated list of AniDB IDs you wish to merge. The first ID is the primary series and the others will be merged into it " +
+            "(for both VFS builds and metadata lookups). Lines that are blank or start with a '#' are ignored. An example is shown below:",
+          "",
+          "## Shoko Relay VFS Overrides",
+          "",
+          "# Fairy Tail",
+          "6662,8132,9980,13295",
+          "",
+          "# Bleach",
+          "2369,15449,17765,18220,19079",
+        ].join("\n");
+      }
+      overridesModal.setAttribute("aria-hidden", "false");
+      overridesModal.classList.add("open");
+      document.body.style.overflow = "hidden";
+      overridesText.focus();
+      // use shared helper for overlay/Escape close logic
+      attachModalCloseHandlers(overridesModal);
+    };
+    overridesCancel.onclick = () => {
+      overridesModal.setAttribute("aria-hidden", "true");
+      overridesModal.classList.remove("open");
+      document.body.style.overflow = "";
+    };
+    overridesSave.onclick = async () => {
+      try {
+        // use JSON body so the server's JSON input formatter will accept it regardless
+        const res = await fetchJson(base + "/vfs/overrides", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(overridesText.value),
+        });
+        if (res.ok) {
+          showToast("Overrides Saved", "success", 3000);
+          overridesCancel.onclick();
+        } else {
+          toastOperation(res, "Save Overrides");
+        }
+      } catch (e) {
+        showToast(`Save error: ${e?.message || e}`, "error", 0);
+      }
+    };
+  }
   // #endregion
 
   // #region Shoko: Automation
@@ -648,8 +744,6 @@
         dirToggle.removeEventListener("click", onToggle);
         startBtn.removeEventListener("click", onStart);
         cancelBtn.removeEventListener("click", onClose);
-        modal.removeEventListener("click", onOverlayClick);
-        document.removeEventListener("keydown", onKeydown);
       };
       const onToggle = () => {
         directionImport = !directionImport;
@@ -658,12 +752,8 @@
           localStorage.setItem("shoko-sync-direction", directionImport ? "import" : "export");
         } catch (e) {}
       };
-      const onOverlayClick = (ev) => {
-        if (ev.target === modal) onClose();
-      };
-      const onKeydown = (ev) => {
-        if (ev.key === "Escape") onClose();
-      };
+      // attach shared overlay/Escape handlers; close() defined above is reused
+      attachModalCloseHandlers(modal);
 
       const onStart = async () => {
         setButtonLoading(startBtn, true);
@@ -833,9 +923,34 @@
       return;
     }
     const schema = schemaRes.data.properties || [];
-    const config = configRes.data;
+    // extract overrides before we unwrap the payload
+    const rawCfg = configRes.data || {};
+    const overridesValue = rawCfg.overrides !== undefined ? rawCfg.overrides : "";
+    const config = unwrapConfig(rawCfg);
+
+    // disable override editing when TMDB episode numbering is disabled
+    if (overridesBtn) {
+      overridesBtn.disabled = !config.TmdbEpNumbering;
+    }
+
     const container = el("config-form");
     container.innerHTML = "";
+
+    // load overrides text from config payload (injected by server) and set textarea value.
+    try {
+      const otext = el("overrides-text");
+      if (otext) {
+        otext.value = overridesValue || "";
+      }
+    } catch {}
+
+    // create a details block to hold the various advanced settings, we'll append it at the end
+    const advKeys = new Set(["PathMappings", "VfsRootPath", "AnimeThemesRootPath", "CollectionPostersRootPath", "FFmpegPath", "Parallelism"]);
+    const advSection = document.createElement("details");
+    const advSummary = document.createElement("summary");
+    advSummary.textContent = "Advanced Settings";
+    advSection.appendChild(advSummary);
+    advSection.appendChild(document.createElement("hr"));
 
     // Persist updated config to the server (used by auto-save handlers)
     async function persistConfig(updated) {
@@ -964,9 +1079,9 @@
           const leftWrap = document.createElement("div");
           const rightWrap = document.createElement("div");
           const leftLabel = document.createElement("label");
-          leftLabel.textContent = "Plex Base Paths (match lines)";
+          leftLabel.textContent = "Plex Base Paths";
           const rightLabel = document.createElement("label");
-          rightLabel.textContent = "Shoko Base Paths (one per line)";
+          rightLabel.textContent = "Shoko Base Paths";
           leftWrap.appendChild(leftLabel);
           leftWrap.appendChild(left);
           rightWrap.appendChild(rightLabel);
@@ -1063,6 +1178,10 @@
 
             setValueByPath(config, input.dataset.path, val);
             await persistConfig(config);
+            // if the numbering toggle changed, reflect state immediately
+            if (input.dataset.path === "TmdbEpNumbering" && overridesBtn) {
+              overridesBtn.disabled = !input.checked;
+            }
           } catch (e) {
             showToast(`Auto-save error: ${e?.message || e}`, "error", 0);
           }
@@ -1071,8 +1190,18 @@
           wrap.appendChild(input);
         }
       }
-      container.appendChild(wrap);
+      // if this field belongs in the 'Advanced' section, route it there; otherwise put in main container
+      if (advKeys.has(p.Path)) {
+        advSection.appendChild(wrap);
+      } else {
+        container.appendChild(wrap);
+      }
     });
+
+    // if any fields were added under the 'Advanced' details, append it now
+    if (advSection.children.length > 1) {
+      container.appendChild(advSection);
+    }
 
     // Populate Shoko Automation custom inputs from the loaded config (keeps UI in sync)
     try {
@@ -1300,7 +1429,7 @@
   // #endregion
 
   // #region Toasts
-  // Notification toasts which appear in the botttom left and auto-dismiss after a timeout (or can be clicked to dismiss); used for operation results and errors
+  // Notification toasts which appear in the bottom left and auto-dismiss after a timeout (or can be clicked to dismiss); used for operation results and errors
   function ensureToastContainerFixed() {
     const tc = el("toast-container");
     if (!tc) return;

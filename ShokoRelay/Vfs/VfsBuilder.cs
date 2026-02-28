@@ -21,6 +21,7 @@ namespace ShokoRelay.Vfs
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
         private readonly IMetadataService _metadataService;
         private readonly string _pluginDataPath;
+        private readonly string _configDirectory;
 
         // Per-build caches (initialized for the duration of BuildInternal and cleared afterwards)
         private ConcurrentDictionary<int, MapHelper.SeriesFileData>? _seriesFileDataCacheForBuild;
@@ -46,6 +47,7 @@ namespace ShokoRelay.Vfs
             // reports and other plugin-specific files should live inside our plugin
             // folder rather than the global server data directory.
             _pluginDataPath = configProvider.PluginDirectory;
+            _configDirectory = configProvider.ConfigDirectory;
             try
             {
                 Directory.CreateDirectory(_pluginDataPath);
@@ -55,7 +57,7 @@ namespace ShokoRelay.Vfs
                 // ignore - writing later may still fail and will be logged
             }
             // load merge overrides now so they are available during builds/filters
-            OverrideHelper.EnsureLoaded(_pluginDataPath);
+            OverrideHelper.EnsureLoaded();
         }
 
         /// <summary>
@@ -153,7 +155,7 @@ namespace ShokoRelay.Vfs
             // apply overrides by grouping series under a primary id. Because the build is parallel, we need to ensure that all threads see the same grouping.
             // So we load the overrides here and then apply them to the entire series list before processing begins.
             // This also ensures that any warnings about invalid override entries are logged only once.
-            OverrideHelper.EnsureLoaded(_pluginDataPath);
+            OverrideHelper.EnsureLoaded();
             if (ShokoRelay.Settings.TmdbEpNumbering)
             {
                 seriesList = seriesList
@@ -298,7 +300,7 @@ namespace ShokoRelay.Vfs
             int folderId = series.ID;
             if (ShokoRelay.Settings.TmdbEpNumbering)
             {
-                OverrideHelper.EnsureLoaded(_pluginDataPath);
+                OverrideHelper.EnsureLoaded();
                 folderId = OverrideHelper.GetPrimary(series.ID, _metadataService);
             }
             string seriesFolder = folderId.ToString();
@@ -695,7 +697,7 @@ namespace ShokoRelay.Vfs
             }
 
             // ensure overrides are loaded so mapping decisions are up to date
-            OverrideHelper.EnsureLoaded(_pluginDataPath);
+            OverrideHelper.EnsureLoaded();
             int primaryId = OverrideHelper.GetPrimary(series.ID, _metadataService);
 
             return _seriesFileDataCacheForBuild.GetOrAdd(

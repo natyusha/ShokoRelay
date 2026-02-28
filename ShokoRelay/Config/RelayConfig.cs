@@ -213,10 +213,6 @@ namespace ShokoRelay.Config
         [Display(Name = "Path Mappings", Description = "Mappings for Plex base paths to Shoko base paths")]
         public Dictionary<string, string> PathMappings { get; set; } = new();
 
-        [Display(Name = "Parallelism", Description = "The maximum number of concurrent operations *used by VFS and AnimeThemes batch operations")]
-        [DefaultValue(4)]
-        public int Parallelism { get; set; } = 4;
-
         [Display(Name = "VFS Root Path", Description = "The location of the virtual links inside each import root")]
         [DefaultValue("!ShokoRelayVFS")]
         public string VfsRootPath { get; set; } = "!ShokoRelayVFS";
@@ -232,6 +228,10 @@ namespace ShokoRelay.Config
         [Display(Name = "FFmpeg Path", Description = "An optional folder containing FFmpeg/FFprobe. Leave empty to use the plugin root or PATH")]
         [DefaultValue("")]
         public string FFmpegPath { get; set; } = "";
+
+        [Display(Name = "Parallelism", Description = "The maximum number of concurrent operations *used by VFS and AnimeThemes batch operations")]
+        [DefaultValue(4)]
+        public int Parallelism { get; set; } = 4;
 
         #endregion
     }

@@ -100,7 +100,8 @@ public class AnimeThemesMapping
 
     private readonly IMetadataService _metadataService;
     private readonly IVideoService _videoService;
-    private readonly string _pluginPath;
+
+    private readonly string _configDirectory;
     private readonly JsonSerializerOptions _jsonOptions = new() { PropertyNameCaseInsensitive = true, WriteIndented = true };
 
     private readonly SemaphoreSlim _rateLock = new(1, 1);
@@ -110,7 +111,8 @@ public class AnimeThemesMapping
     {
         _metadataService = metadataService;
         _videoService = videoService;
-        _pluginPath = configProvider.PluginDirectory;
+
+        _configDirectory = configProvider.ConfigDirectory;
     }
 
     /// <summary>
@@ -133,7 +135,7 @@ public class AnimeThemesMapping
                 return (0, logMsg);
             }
 
-            string mapPath = Path.Combine(_pluginPath, AnimeThemesConstants.AtMapFileName);
+            string mapPath = Path.Combine(_configDirectory, AnimeThemesConstants.AtMapFileName);
             await File.WriteAllTextAsync(mapPath, content, ct).ConfigureAwait(false);
 
             try
@@ -160,10 +162,10 @@ public class AnimeThemesMapping
     }
 
     /// <summary>
-    /// Scan configured import roots for AnimeThemes files, optionally writing the mapping results to <paramref name="outputPath"/>.
-    /// Defaults to plugin map file and returns statistics about the operation.
+    /// Scan configured import roots for AnimeThemes files and write a mapping CSV.
+    /// The resulting file is always written to the standard location in the configuration directory and any existing file will be read to perform incremental updates.
     /// </summary>
-    public async Task<AnimeThemesMappingBuildResult> BuildMappingFileAsync(string? outputPath = null, CancellationToken ct = default)
+    public async Task<AnimeThemesMappingBuildResult> BuildMappingFileAsync(CancellationToken ct = default)
     {
         // build list of candidate root folders containing the AnimeThemes files
         var rootPaths = new List<string>();
@@ -193,7 +195,7 @@ public class AnimeThemesMapping
         Logger.Info("AnimeThemes mapping build started (roots={RootList})", string.Join(';', rootPaths));
         var sw = Stopwatch.StartNew();
 
-        string mapPath = outputPath ?? Path.Combine(_pluginPath, AnimeThemesConstants.AtMapFileName);
+        string mapPath = Path.Combine(_configDirectory, AnimeThemesConstants.AtMapFileName);
         // map file path (CSV) for output. existing CSV contents will be read when performing incremental updates.
         var messages = new List<string>();
         var entries = new List<AnimeThemesMappingEntry>();
@@ -310,17 +312,17 @@ public class AnimeThemesMapping
     /// Read a previously built mapping file and create/update VFS links for matching theme files.
     /// Optionally restrict to a set of series via <paramref name="seriesFilter"/>. Returns counts of operations performed and any errors encountered.
     /// </summary>
-    public async Task<AnimeThemesMappingApplyResult> ApplyMappingAsync(string? mapPath = null, IReadOnlyCollection<int>? seriesFilter = null, CancellationToken ct = default)
+    public async Task<AnimeThemesMappingApplyResult> ApplyMappingAsync(IReadOnlyCollection<int>? seriesFilter = null, CancellationToken ct = default)
     {
-        string resolvedMap = mapPath ?? Path.Combine(_pluginPath, AnimeThemesConstants.AtMapFileName);
-        if (!File.Exists(resolvedMap))
-            throw new FileNotFoundException("Mapping file not found", resolvedMap);
+        string mapPath = Path.Combine(_configDirectory, AnimeThemesConstants.AtMapFileName);
+        if (!File.Exists(mapPath))
+            throw new FileNotFoundException("Mapping file not found", mapPath);
 
-        string content = await File.ReadAllTextAsync(resolvedMap, ct);
+        string content = await File.ReadAllTextAsync(mapPath, ct);
         var entries = ParseMappingContent(content) ?? new();
 
         List<IShokoSeries?> seriesList = [];
-        Logger.Info("AnimeThemes apply mapping started (map={MapPath}, filter={FilterCount})", resolvedMap, seriesFilter?.Count ?? 0);
+        Logger.Info("AnimeThemes apply mapping started (map={MapPath}, filter={FilterCount})", mapPath, seriesFilter?.Count ?? 0);
         var sw2 = Stopwatch.StartNew();
         int warns2 = 0;
         if (seriesFilter != null && seriesFilter.Count > 0)

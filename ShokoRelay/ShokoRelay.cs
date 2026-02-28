@@ -103,6 +103,12 @@ namespace ShokoRelay
         /// </summary>
         public static RelayConfig Settings => _configProvider?.GetSettings() ?? new RelayConfig();
 
+        /// <summary>
+        /// Convenience accessor for the configuration directory path (same location as overrides, logs, etc.).
+        /// Returns an empty string if the provider is not yet available.
+        /// </summary>
+        public static string ConfigDirectory => _configProvider?.ConfigDirectory ?? string.Empty;
+
         private readonly VfsWatcher _watcher;
         private readonly Sync.SyncToShoko? _watchedSyncService;
         private readonly Services.ShokoImportService? _shokoImportService;

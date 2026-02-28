@@ -150,12 +150,24 @@ namespace ShokoRelay.Controllers
         [HttpGet("config")]
         /// <summary>
         /// Returns the current configuration payload used by the dashboard UI. The result is sanitized and augmented by <see cref="ConfigProvider"/>.
+        /// This also includes the current contents of the "anidb_vfs_overrides.csv" file for convenient editing within the dashboard, if the file exists.
+        /// If the file is not present or cannot be read, an empty string is returned for the overrides content. The payload is never null.
         /// </summary>
         public IActionResult GetConfig()
         {
             // provider handles serialization, augmentation and sanitization
             var payload = _configProvider.GetDashboardConfig();
-            return Ok(payload);
+            try
+            {
+                var path = Path.Combine(ShokoRelay.ConfigDirectory, "anidb_vfs_overrides.csv");
+                string overrides = System.IO.File.Exists(path) ? System.IO.File.ReadAllText(path) : string.Empty;
+                // payload is an anonymous object; create a new object merging the two
+                return Ok(new { payload, overrides });
+            }
+            catch
+            {
+                return Ok(new { payload, overrides = string.Empty });
+            }
         }
 
         [HttpPost("config")]
@@ -1096,6 +1108,30 @@ namespace ShokoRelay.Controllers
             );
         }
 
+        [HttpPost("vfs/overrides")]
+        /// <summary>
+        /// Persist the contents of an <c>anidb_vfs_overrides.csv</c> file supplied by the client.
+        /// The endpoint writes the raw text body to the config directory and reloads the groups so that subsequent VFS/metadata operations immediately honour any changes.
+        /// </summary>
+        /// <param name="content">Entire CSV payload (may be empty to clear the file).</param>
+        /// <returns>
+        /// <c>200 OK</c> with <c>{status:"ok"}</c> on success, or <c>400 BadRequest</c> with an error message if the write failed.
+        /// </returns>
+        public IActionResult SaveVfsOverrides([FromBody] string content)
+        {
+            try
+            {
+                string path = Path.Combine(ShokoRelay.ConfigDirectory, "anidb_vfs_overrides.csv");
+                System.IO.File.WriteAllText(path, content ?? string.Empty);
+                OverrideHelper.EnsureLoaded();
+                return Ok(new { status = "ok" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         #endregion
 
         #region Shoko: Automation
@@ -1394,23 +1430,22 @@ namespace ShokoRelay.Controllers
         /// <summary>
         /// Apply the anime‑themes mapping file to the directory structure, optionally restricting to a subset of series via <paramref name="filter"/>.
         /// </summary>
-        /// <param name="mapPath">Path to the CSV mapping file; defaults to the plugin directory value if omitted.</param>
         /// <param name="filter">Comma‑separated list of Shoko series IDs to process.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
-        public async Task<IActionResult> AnimeThemesVfsBuild([FromQuery] string? mapPath = null, [FromQuery] string? filter = null, CancellationToken cancellationToken = default)
+        public async Task<IActionResult> AnimeThemesVfsBuild([FromQuery] string? filter = null, CancellationToken cancellationToken = default)
         {
             var validation = ValidateFilterOrBadRequest(filter, out var filterIds);
             if (validation != null)
                 return validation;
 
-            // if the mapping file doesn't exist we return a user-friendly error rather than allowing a 500
-            string resolvedMapPath = mapPath ?? Path.Combine(_configProvider.PluginDirectory, AnimeThemesConstants.AtMapFileName);
+            // mapping file lives in config directory; check existence for user-friendly error
+            string resolvedMapPath = Path.Combine(_configProvider.ConfigDirectory, AnimeThemesConstants.AtMapFileName);
             if (!System.IO.File.Exists(resolvedMapPath))
             {
                 return BadRequest(new { status = "error", message = "Mapping file not found" });
             }
 
-            var result = await _animeThemesMapping.ApplyMappingAsync(mapPath, filterIds, cancellationToken).ConfigureAwait(false);
+            var result = await _animeThemesMapping.ApplyMappingAsync(filterIds, cancellationToken).ConfigureAwait(false);
 
             try
             {
@@ -1449,11 +1484,10 @@ namespace ShokoRelay.Controllers
         /// <summary>
         /// Rebuild the anime‑themes mapping CSV file by scanning the configured directory structure. Returns counts of entries written.
         /// </summary>
-        /// <param name="mapPath">Optional path to write the mapping file; uses the plugin directory default when omitted.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
-        public async Task<IActionResult> AnimeThemesVfsMap([FromQuery] string? mapPath = null, CancellationToken cancellationToken = default)
+        public async Task<IActionResult> AnimeThemesVfsMap(CancellationToken cancellationToken = default)
         {
-            var result = await _animeThemesMapping.BuildMappingFileAsync(mapPath, cancellationToken).ConfigureAwait(false);
+            var result = await _animeThemesMapping.BuildMappingFileAsync(cancellationToken).ConfigureAwait(false);
             try
             {
                 var sb = new System.Text.StringBuilder();
