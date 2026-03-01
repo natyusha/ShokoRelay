@@ -22,15 +22,31 @@ namespace ShokoRelay.Services
         /// </summary>
         public async Task<IReadOnlyList<string>> TriggerImportAsync(CancellationToken ct = default)
         {
-            var folders = _videoService
-                .GetAllManagedFolders()
-                .Where(f => f.DropFolderType.HasFlag(DropFolderType.Source))
-                .Select(f => f.Name ?? f.Path ?? string.Empty)
-                .Where(s => !string.IsNullOrEmpty(s))
-                .ToList();
+            List<string> folders = new();
+            try
+            {
+                var mf = _videoService.GetAllManagedFolders();
+                if (mf != null)
+                {
+                    folders = mf.Where(f => f.DropFolderType.HasFlag(DropFolderType.Source)).Select(f => f.Name ?? f.Path ?? string.Empty).Where(s => !string.IsNullOrEmpty(s)).ToList();
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "TriggerImportAsync: failed to query managed folders");
+                // fall through with empty list; no import will be scheduled but caller will see no folders
+            }
 
             // schedule the scan; the work executes asynchronously inside Shoko
-            await _videoService.ScheduleScanForManagedFolders(onlyDropSources: true).ConfigureAwait(false);
+            try
+            {
+                await _videoService.ScheduleScanForManagedFolders(onlyDropSources: true).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "TriggerImportAsync: failed to schedule folder scan");
+            }
+
             return folders;
         }
 

@@ -38,7 +38,15 @@ namespace ShokoRelay.Controllers
         {
             int seriesId;
 
-            if (ratingKey.StartsWith(PlexConstants.EpisodePrefix))
+            // alias: if key starts with 'a' followed by digits treat as AniDB series ID
+            if (ratingKey.Length > 1 && ratingKey[0] == 'a' && int.TryParse(ratingKey.Substring(1), out var anidb))
+            {
+                var candidate = _metadataService.GetShokoSeriesByAnidbID(anidb);
+                if (candidate == null)
+                    return null;
+                seriesId = candidate.ID;
+            }
+            else if (ratingKey.StartsWith(PlexConstants.EpisodePrefix))
             {
                 var epPart = ratingKey.Substring(PlexConstants.EpisodePrefix.Length);
                 if (epPart.Contains(PlexConstants.PartPrefix))
@@ -400,6 +408,7 @@ namespace ShokoRelay.Controllers
                 ".png" => "image/png",
                 ".svg" => "image/svg+xml",
                 ".woff2" => "font/woff2",
+                ".ico" => "image/x-icon",
                 _ => null,
             };
         }

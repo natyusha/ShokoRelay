@@ -277,6 +277,12 @@ namespace ShokoRelay.Plex
         [JsonPropertyName("event")]
         public string? Event { get; set; }
 
+        [JsonPropertyName("user")]
+        public bool? User { get; set; }
+
+        [JsonPropertyName("owner")]
+        public bool? Owner { get; set; }
+
         [JsonPropertyName("Account")]
         public PlexAccount? Account { get; set; }
 
@@ -293,12 +299,15 @@ namespace ShokoRelay.Plex
         }
 
         /// <summary>
-        /// Metadata section of a Plex webhook payload. Includes GUID, viewed timestamp, section ID and other episode/show identifiers.
+        /// Metadata section of a Plex webhook payload. Includes GUID, title, viewed timestamp, section ID and other episode/show identifiers.
         /// </summary>
         public class PlexMetadata
         {
             [JsonPropertyName("guid")]
             public string? Guid { get; set; }
+
+            [JsonPropertyName("title")]
+            public string? Title { get; set; }
 
             [JsonPropertyName("index")]
             public int? Index { get; set; }
@@ -311,6 +320,9 @@ namespace ShokoRelay.Plex
 
             [JsonPropertyName("type")]
             public string? Type { get; set; }
+
+            [JsonPropertyName("userRating")]
+            public double? UserRating { get; set; }
         }
     }
 }

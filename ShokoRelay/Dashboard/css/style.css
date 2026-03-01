@@ -159,6 +159,7 @@ textarea {
   border-radius: 0.25em;
   box-sizing: border-box;
   color: var(--text-color);
+  font-size: 0.9em;
   margin: 2px 0 6px;
   padding: 6px;
   outline: none;
@@ -261,7 +262,6 @@ label > small::before {
 .w46-button {
   align-items: center;
   display: inline-flex;
-  font-size: 0.9em;
   justify-content: center;
   max-width: 46px;
   padding: 12px 16px;
@@ -450,7 +450,7 @@ button.float-link {
 .tooltip-box {
   padding: 8px 16px;
   border-radius: 3px;
-  font-size: 90%;
+  font-size: 0.9em;
   width: max-content;
 }
 .tooltip-arrow {
@@ -611,28 +611,36 @@ summary:hover {
   margin: 0;
   width: 100%;
 }
-.modal-header {
+header {
   align-items: center;
   background: var(--bg-color);
   border-bottom: 1px solid var(--border-color);
   display: flex;
-  font-size: 20px;
+  font-size: 1.2em;
   font-weight: 500;
   justify-content: space-between;
   padding: 1rem;
 }
-.modal-body {
-  padding: 14px 16px;
-}
-.modal-actions {
+footer {
   display: flex;
   gap: 8px;
   padding: 12px 16px;
   justify-content: flex-end;
 }
+#sync-direction-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.modal-body {
+  padding: 14px 16px;
+}
+.modal-body .shoko-checkbox {
+  margin-top: 10px;
+}
 .direction-toggle {
   -webkit-appearance: none;
-  align-items: center;
   appearance: none;
   background: var(--inset-color);
   border: 1px solid var(--border-color);
@@ -640,6 +648,7 @@ summary:hover {
   color: var(--text-color);
   cursor: pointer;
   display: inline-flex;
+  margin-bottom: 16px;
   padding: 10px 6px;
   user-select: none;
 }
@@ -648,15 +657,14 @@ summary:hover {
 }
 .direction-toggle .dir-label {
   min-width: 100px;
+  font-size: 1em;
+  margin-top: 0;
+}
+.dir-label {
   text-align: center;
   color: var(--text-color);
-  font-size: 1em;
-}
-#sync-direction-arrow {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
+  font-size: 1.1em;
+  margin-top: 9px;
 }
 .dir-icon {
   width: 28px;

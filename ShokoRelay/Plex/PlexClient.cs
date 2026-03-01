@@ -76,6 +76,7 @@ namespace ShokoRelay.Plex
             if (!string.IsNullOrWhiteSpace(ClientIdentifier))
                 request.Headers.TryAddWithoutValidation("X-Plex-Client-Identifier", ClientIdentifier);
 
+            // default to JSON for most API calls; callers can override if they need a different format
             request.Headers.TryAddWithoutValidation("Accept", "application/json");
             return request;
         }

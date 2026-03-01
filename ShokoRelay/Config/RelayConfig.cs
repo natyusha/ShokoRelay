@@ -108,7 +108,7 @@ namespace ShokoRelay.Config
         [DefaultValue(false)]
         public bool ScanOnVfsRefresh { get; set; } = false;
 
-        [Display(Name = "Auto Scrobble", Description = "Enable instant scrobble handling from Plex webhooks (media.scrobble)")]
+        [Display(Name = "Auto Scrobble", Description = "Enable instant handling of Plex webhook events (media.scrobble and, if ratings included, media.rate)")]
         [Browsable(false)]
         [DefaultValue(false)]
         public bool AutoScrobble { get; set; } = false;
@@ -129,10 +129,15 @@ namespace ShokoRelay.Config
         [DefaultValue(0)]
         public int ShokoSyncWatchedFrequencyHours { get; set; } = 0;
 
-        [Display(Name = "Include Ratings for Scheduled Sync", Description = "When enabled, scheduled Plex->Shoko sync will also include user ratings/votes")]
+        [Display(Name = "Include Ratings for Scheduled Sync", Description = "When enabled, Plex->Shoko sync/scrobbles will also include user ratings/votes")]
         [Browsable(false)]
         [DefaultValue(false)]
         public bool ShokoSyncWatchedIncludeRatings { get; set; } = false;
+
+        [Display(Name = "Exclude Admin for Scheduled Sync", Description = "When enabled, Plex->Shoko sync/scrobbles will ignore items scrobbled by the Plex token owner/admin")]
+        [Browsable(false)]
+        [DefaultValue(false)]
+        public bool ShokoSyncWatchedExcludeAdmin { get; set; } = false;
 
         #endregion
 

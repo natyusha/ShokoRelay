@@ -397,6 +397,8 @@
       return;
     }
     let settings = unwrapConfig(res.data);
+    // keep a global copy for later UI components (e.g. sync modal)
+    window.relaySettings = settings;
     // normalize ExtraPlexUsers to a string (avoid malicious objects)
     if (settings.ExtraPlexUsers && typeof settings.ExtraPlexUsers !== "string") {
       settings.ExtraPlexUsers = "";
@@ -423,6 +425,8 @@
       plexWatchedEl.checked = !!settings.AutoScrobble;
       plexWatchedEl.onchange = savePlexSettings;
     }
+
+
 
     if (!plex.HasToken) {
       setPlexStartAction();
@@ -463,6 +467,8 @@
       cfg.ExtraPlexUsers = el("extra-plex-users")?.value || "";
       // 'Auto Scrobble' is handled independently via webhook
       cfg.AutoScrobble = !!el("plex-watched")?.checked;
+      // webhook-driven scrobble exclusion (single expression)
+      cfg.ShokoSyncWatchedExcludeAdmin = !!el("sync-exclude-admin")?.checked;
       // remove any plex-related keys inherited from GET response
       delete cfg.PlexLibrary;
       delete cfg.PlexAuth;
@@ -1279,6 +1285,24 @@
             await persistConfig(config);
           } catch (e) {
             showToast(`Failed to save 'Include Ratings' setting: ${e?.message || e}`, "error", 0);
+          }
+        };
+      }
+
+      // Persist admin-exclusion setting from the sync modal as well
+      const syncExcludeEl = el("sync-exclude-admin");
+      if (syncExcludeEl) {
+        try {
+          syncExcludeEl.checked = !!config.ShokoSyncWatchedExcludeAdmin;
+        } catch (e) {
+          syncExcludeEl.checked = false;
+        }
+        syncExcludeEl.onchange = async () => {
+          try {
+            setValueByPath(config, "ShokoSyncWatchedExcludeAdmin", syncExcludeEl.checked);
+            await persistConfig(config);
+          } catch (e) {
+            showToast(`Failed to save 'Exclude Admin' setting: ${e?.message || e}`, "error", 0);
           }
         };
       }

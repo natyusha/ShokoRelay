@@ -434,7 +434,16 @@ namespace ShokoRelay.Plex
                 }
                 catch (JsonException ex)
                 {
-                    Logger.Warn($"GetAccountInfoAsync: failed to parse JSON response: {ex.Message}");
+                    // Plex sometimes returns an HTML error page (e.g. when BaseUrl is incorrect or token is invalid) which starts with '<'.
+                    // This isn't JSON, so warn but don't spam with the raw exception message since it's expected in some misconfigurations.
+                    if (!string.IsNullOrWhiteSpace(content) && content.TrimStart().StartsWith("<"))
+                    {
+                        Logger.Warn("GetAccountInfoAsync: received non-JSON response (HTML?) from Plex, please check BaseUrl and token");
+                    }
+                    else
+                    {
+                        Logger.Warn($"GetAccountInfoAsync: failed to parse JSON response: {ex.Message}");
+                    }
                     return null;
                 }
             }

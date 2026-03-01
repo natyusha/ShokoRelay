@@ -8,7 +8,7 @@
 
 <!-- prettier-ignore-end -->
 
-This is a plugin for Shoko Server that acts as a [Custom Metadata Provider](https://forums.plex.tv/t/announcement-custom-metadata-providers/934384) for Plex. It is a successor to the [ShokoRelay.bundle](https://github.com/natyusha/ShokoRelay.bundle) legacy agent/scanner and intends to mirror all of its functionality (including the automation scripts). Scanning is much faster and it will be possible to add many new features in the future as well.
+This is a plugin for Shoko Server that acts as a [Custom Metadata Provider](https://forums.plex.tv/t/announcement-custom-metadata-providers/934384) for Plex. It is a successor to the [ShokoRelay.bundle](https://github.com/natyusha/ShokoRelay.bundle) legacy agent/scanner mirrors all of its functionality (including the automation scripts). Scanning is much faster and there are many new features included as well. Just like the old bundle this is intended to work with series of all types within a single "TV Shows" library. All you need to get started is a populated [Shoko Server](https://shokoanime.com/downloads/shoko-server)/[Plex Media Server](https://www.plex.tv/media-server-downloads/).
 
 Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File System) to ensure that varied folder structures are supported. This means that your anime can be organised with whatever file or folder structure you want. There is one caveat though. A folder cannot contain more than one AniDB series at a time if you want it to correctly support [local media assets](https://support.plex.tv/articles/200220717-local-media-assets-tv-shows/) (like posters or theme songs). The VFS will be automatically updated when a file move or rename is detected by Shoko.
 
@@ -71,6 +71,7 @@ Enable the following options in Shoko to ensure that Plex has at least one sourc
   - [x] Download Backdrops
   - [x] Download Posters
   - [x] Download Logos
+  - [x] Download Networks (available in `settings-server.json`)
 - `Settings > Collection > Relation Options`
   - [x] Auto Group Series
   - [x] Determine Main Series Using Relation Weighing
@@ -145,10 +146,11 @@ As a bonus this supports using the primary series poster as the collection poste
 
 #### Auto Scrobble
 
-- When `Auto Scrobble` is enabled Plex's webhook will be used to forward scrobble events to shoko
+- When `Auto Scrobble` is enabled Plex's [webhook](https://support.plex.tv/articles/115002267687-webhooks/) will be used to forward scrobble events to shoko
 - This can be enabled in the Plex Web/Desktop App under `Settings > Webhooks`
   - Click `Add Webhook` and enter: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/plex/webhook`
   - Click `Save Changes` to complete the process
+- The webhook respects the `Include Ratings` and `Exclude Admin` settings in the Sync Watched States Menu
 - _Requires a Plex Pass subscription_
 
 ## Shoko: Automation
@@ -317,7 +319,6 @@ Due to this plugin relying on Plex's metadata provider feature (which is still u
 
 ## TODO
 
-- ~~Fix networks not applying to series (may be a Shoko issue)~~ TMDB Network metadata is missing
 - Populate the provider's similar Array with similar AniDB series
 - Once available in Plex metadata providers:
   - Switch collection support from the Plex HTTP API "Generate Collections" button to the provider

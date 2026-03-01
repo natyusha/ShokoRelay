@@ -971,7 +971,7 @@ namespace ShokoRelay.Controllers
             }
             else
             {
-                using var sr = new System.IO.StreamReader(Request.Body);
+                using var sr = new StreamReader(Request.Body);
                 payloadJson = await sr.ReadToEndAsync().ConfigureAwait(false);
             }
 
@@ -988,10 +988,18 @@ namespace ShokoRelay.Controllers
                 return BadRequest(new { status = "error", message = "invalid payload" });
             }
 
-            if (evt == null || evt.Metadata == null || !string.Equals(evt.Event, "media.scrobble", System.StringComparison.OrdinalIgnoreCase))
-                return Ok(); // only care about scrobble events
+            // Determine if payload is a scrobble or (optional) rating event.
+            bool isScrobble = string.Equals(evt?.Event, "media.scrobble", StringComparison.OrdinalIgnoreCase);
+            bool isRate = string.Equals(evt?.Event, "media.rate", StringComparison.OrdinalIgnoreCase);
 
-            // Only accept scrobbles from admin (token owner) or configured ExtraPlexUsers
+            if (evt == null || evt.Metadata == null || !(isScrobble || (isRate && cfg.ShokoSyncWatchedIncludeRatings)))
+                return Ok(); // nothing for us to do
+
+            // ignore owner events if admin exclusion enabled (applies to both types)
+            if (cfg.ShokoSyncWatchedExcludeAdmin && evt.Owner == true)
+                return Ok(new { status = "ignored", reason = "admin_scrobble_excluded" });
+
+            // Accept events only from admin or configured ExtraPlexUsers. (For rate events admin behaviour identical.)
             var plexUserFromPayload = evt.Account?.Title?.Trim();
             if (string.IsNullOrWhiteSpace(plexUserFromPayload))
                 return Ok(new { status = "ignored", reason = "no_plex_user" });
@@ -1000,29 +1008,13 @@ namespace ShokoRelay.Controllers
             var extraEntries = _configProvider.GetExtraPlexUserEntries();
             var allowed = new HashSet<string>(extraEntries.Select(e => e.Name), StringComparer.OrdinalIgnoreCase);
 
-            // Attempt to add admin account title/username (if token present)
-            var adminToken = _configProvider.GetPlexToken();
-            if (!string.IsNullOrWhiteSpace(adminToken))
-            {
-                try
-                {
-                    var acct = await _plexAuth.GetAccountInfoAsync(adminToken).ConfigureAwait(false);
-                    if (acct != null)
-                    {
-                        if (!string.IsNullOrWhiteSpace(acct.Title))
-                            allowed.Add(acct.Title);
-                        if (!string.IsNullOrWhiteSpace(acct.Username))
-                            allowed.Add(acct.Username);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Logger.Warn(ex, "PluginPlexWebhook: failed to resolve admin Plex account info");
-                }
-            }
+            // accept owner events as they are always treated as coming from the admin user.
+            if (evt.Owner == true && !string.IsNullOrWhiteSpace(plexUserFromPayload))
+                allowed.Add(plexUserFromPayload);
 
-            // If payload user isn't in allowed list, ignore the scrobble
-            if (!allowed.Contains(plexUserFromPayload))
+            // If the webhook payload indicates the server owner triggered the event, treat it as allowed regardless of name resolution.
+            // This is a reliable fallback for when the account info call fails (e.g. the token is invalid or the server URL is misconfigured and causes an HTML error page to be returned).
+            if (evt.Owner != true && !allowed.Contains(plexUserFromPayload))
             {
                 Logger.Info("Ignored Plex scrobble from user '{User}' (not configured in ExtraPlexUsers nor admin)", plexUserFromPayload);
                 return Ok(new { status = "ignored", reason = "plex_user_not_allowed" });
@@ -1038,10 +1030,38 @@ namespace ShokoRelay.Controllers
             if (shokoEpisode == null)
                 return Ok(new { status = "ignored", reason = "episode_not_found" });
 
-            var user = _userService.GetUsers().FirstOrDefault();
+            Shoko.Abstractions.User.IUser? user = null;
+            try
+            {
+                user = _userService.GetUsers().FirstOrDefault();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "Webhook: error enumerating Shoko users");
+            }
             if (user == null)
                 return Ok(new { status = "ignored", reason = "no_shoko_user" });
 
+            if (isRate)
+            {
+                // rating events only processed if IncludeRatings config is true (checked earlier)
+                double? ratingValue = evt.Metadata?.UserRating;
+                if (!ratingValue.HasValue)
+                    return Ok(new { status = "ignored", reason = "no_rating" });
+
+                await _userDataService.RateEpisode(shokoEpisode, user, ratingValue).ConfigureAwait(false);
+                Logger.Info("Plex rating applied: user='{User}', title='{Title}', guid='{Guid}', rating={Rating}", plexUserFromPayload, evt.Metadata?.Title, evt.Metadata?.Guid, ratingValue);
+                return Ok(
+                    new
+                    {
+                        status = "ok",
+                        rated = true,
+                        rating = ratingValue,
+                    }
+                );
+            }
+
+            // default is scrobble handling
             DateTime? watchedAt = null;
             if (evt.Metadata.LastViewedAt.HasValue && evt.Metadata.LastViewedAt.Value > 0)
             {
@@ -1052,8 +1072,14 @@ namespace ShokoRelay.Controllers
                 catch { }
             }
 
-            var saved = await _userDataService.SetEpisodeWatchedStatus(shokoEpisode, user, true, watchedAt, true).ConfigureAwait(false);
+            var saved = await _userDataService.SetEpisodeWatchedStatus(shokoEpisode, user!, true, watchedAt).ConfigureAwait(false);
             bool updated = saved != null;
+
+            // log a successful scrobble
+            if (updated)
+            {
+                Logger.Info("Plex scrobble applied: user='{User}', title='{Title}', guid='{Guid}'", plexUserFromPayload, evt.Metadata?.Title, evt.Metadata?.Guid);
+            }
 
             return Ok(new { status = "ok", marked = updated });
         }
@@ -1321,7 +1347,8 @@ namespace ShokoRelay.Controllers
                         return StatusCode(500, new { status = "error", message = "WatchedSyncService is not available." });
 
                     direction = "Plex->Shoko";
-                    result = await _watchedSyncService.SyncWatchedAsync(parsedDryRun, sinceHours, includeRatings, cancellationToken).ConfigureAwait(false);
+                    // pass excludeAdmin through to the Shoko sync service; note scheduling also uses the new config property
+                    result = await _watchedSyncService.SyncWatchedAsync(parsedDryRun, sinceHours, includeRatings, excludeAdmin.GetValueOrDefault(false), cancellationToken).ConfigureAwait(false);
                 }
 
                 try
@@ -1400,7 +1427,9 @@ namespace ShokoRelay.Controllers
 
             try
             {
-                var result = await _watchedSyncService.SyncWatchedAsync(false, freqHours, settings?.ShokoSyncWatchedIncludeRatings ?? false, cancellationToken).ConfigureAwait(false);
+                var result = await _watchedSyncService
+                    .SyncWatchedAsync(false, freqHours, settings?.ShokoSyncWatchedIncludeRatings ?? false, settings?.ShokoSyncWatchedExcludeAdmin ?? false, cancellationToken)
+                    .ConfigureAwait(false);
 
                 // Replace schedule: mark last-run == now so automation schedules next run after configured interval
                 ShokoRelay.MarkSyncRunNow();

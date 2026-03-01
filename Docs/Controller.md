@@ -105,7 +105,9 @@ GET  /metadata/{ratingKey}/images                              -> GetImages (all
 - TMDB episode‑numbering is honoured when enabled (uses `IShokoEpisode.TmdbEpisodes`).
 - Hidden episodes are excluded.
 - Episodes of type "Other" without a TMDB match are placed in Season 1/0 or treated as extras.
-- RatingKey formats supported: `123` (series), `123s4` (season 4), `e56789` (episode).
+- RatingKey formats supported using ShokoID: `123` (series), `123s4` (season 4), `e56789` (episode).
+- A special alias exists if you want to lookup series metadata by AniDB ID instead of ShokoSeriesID: `a123` (series).
+  - This supports children/grandchildren at the series levl but not: `a123s#` or `ae56789`
 
 ---
 
@@ -165,11 +167,12 @@ GET  /plex/automation/run                                      -> RunPlexAutomat
 POST /plex/webhook                                             -> PluginPlexWebhook
 ```
 
-- `PluginPlexWebhook` handles Plex `media.scrobble` callbacks and synchronizes watched status to Shoko.
+- `PluginPlexWebhook` handles Plex `media.scrobble` callbacks and, when the "Include Ratings" option is enabled, `media.rate` events.
   - Supports both form‑encoded `payload` fields and raw JSON bodies.
-  - Only events originating from the admin or users listed in `RelayConfig.ExtraPlexUsers` are considered. Others are ignored.
+  - Only events originating from the admin or users listed in `RelayConfig.ExtraPlexUsers` are considered; owner events may also be ignored if the "Exclude Admin" flag is set.
   - The service extracts the ShokoEpisodeID from the `Metadata.guid` value `tv.plex.agents.custom.shoko://episode/{ShokoEpisodeID}`.
   - Events without a GUID are dropped `reason: no_shoko_guid`.
+  - Rating events update Shoko episode ratings via `IUserDataService.RateEpisode`.
 
 ---
 
@@ -253,7 +256,7 @@ GET  /sync-watched/start                                       -> StartWatchedSy
 
 - Synchronizes watched state between Plex and Shoko.
 - Default direction is **Plex→Shoko**. Set `import=true` for **Plex←Shoko**.
-- Scheduled automations use `RelayConfig.ShokoSyncWatchedFrequencyHours` and `RelayConfig.ShokoSyncWatchedIncludeRatings`.
+- Scheduled automations use `RelayConfig.ShokoSyncWatchedFrequencyHours`, `RelayConfig.ShokoSyncWatchedIncludeRatings`, and `RelayConfig.ShokoSyncWatchedExcludeAdmin`.
 - Scheduled imports/syncs are anchored to UTC midnight (with an optional offset) rather than relying on the previous run time.
 - This means a 24‑hour interval will always fire at midnight (plus offset) and server restarts do not reset the schedule.
 - Missed runs are executed on the next interval.
@@ -270,9 +273,9 @@ GET  /sync-watched/start                                       -> StartWatchedSy
 ### VFS
 
 ```
-GET  /animethemes/vfs/build?filter={csv}     -> AnimeThemesVfsBuild
+GET  /animethemes/vfs/build?filter={csv}                       -> AnimeThemesVfsBuild
 
-GET  /animethemes/vfs/map                      -> AnimeThemesVfsMap
+GET  /animethemes/vfs/map                                      -> AnimeThemesVfsMap
 
 POST /animethemes/vfs/import                                   -> ImportAnimeThemesMapping
 ```

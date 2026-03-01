@@ -34,10 +34,10 @@ namespace ShokoRelay.Sync
         /// <summary>
         /// Public entry supporting optional vote/rating sync in addition to watched-state.
         /// </summary>
-        public Task<PlexWatchedSyncResult> SyncWatchedAsync(bool dryRun, int? sinceHours, bool includeVotes, CancellationToken cancellationToken = default) =>
-            SyncWatchedInternalAsync(dryRun, sinceHours, includeVotes, cancellationToken);
+        public Task<PlexWatchedSyncResult> SyncWatchedAsync(bool dryRun, int? sinceHours, bool includeVotes, bool excludeAdmin, CancellationToken cancellationToken = default) =>
+            SyncWatchedInternalAsync(dryRun, sinceHours, includeVotes, excludeAdmin, cancellationToken);
 
-        private async Task<PlexWatchedSyncResult> SyncWatchedInternalAsync(bool dryRun, int? sinceHours, bool includeVotes, CancellationToken cancellationToken = default)
+        private async Task<PlexWatchedSyncResult> SyncWatchedInternalAsync(bool dryRun, int? sinceHours, bool includeVotes, bool excludeAdmin, CancellationToken cancellationToken = default)
         {
             var result = new PlexWatchedSyncResult();
             Logger.Info("WatchedSyncService: starting SyncWatched (dryRun={Dry}, sinceHours={SinceHours}, votes={Votes})", dryRun, sinceHours?.ToString() ?? "<none>", includeVotes);
@@ -56,7 +56,22 @@ namespace ShokoRelay.Sync
             }
 
             // Choose a user to apply watched-state to; default to first user if available.
-            IUser? defaultUser = _userService.GetUsers().FirstOrDefault();
+            IUser? defaultUser = null;
+            try
+            {
+                var users = _userService.GetUsers();
+                if (users != null)
+                    defaultUser = users.FirstOrDefault();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "WatchedSyncService: unable to enumerate Shoko users");
+            }
+            if (defaultUser == null)
+            {
+                Logger.Warn("WatchedSyncService: no Shoko user available, aborting sync");
+                return result;
+            }
 
             // prepare Extra Plex usernames from config (may be empty). Support optional PINs: "user;pin, otheruser;pin"
             var extraEntries = _configProvider.GetExtraPlexUserEntries();
@@ -130,7 +145,11 @@ namespace ShokoRelay.Sync
                 }
 
                 // Process admin and extra users separately so per-user stats are recorded
-                var userBuckets = new List<(string UserName, IEnumerable<PlexMetadataItem> Items)>() { ("admin", adminEpisodes ?? new List<PlexMetadataItem>()) };
+                var userBuckets = new List<(string UserName, IEnumerable<PlexMetadataItem> Items)>();
+                if (!excludeAdmin)
+                {
+                    userBuckets.Add(("admin", adminEpisodes ?? new List<PlexMetadataItem>()));
+                }
                 userBuckets.AddRange(extraUserEpisodes.Select(kv => (kv.Key, (IEnumerable<PlexMetadataItem>)kv.Value)));
 
                 foreach (var (plexUserName, items) in userBuckets)
@@ -298,7 +317,7 @@ namespace ShokoRelay.Sync
                                 else
                                 {
                                     // real run: attempt to apply only when wouldMark is true
-                                    var savedResult = await _userDataService.SetEpisodeWatchedStatus(shokoEpisode, user!, true, watchedAt, true).ConfigureAwait(false);
+                                    var savedResult = await _userDataService.SetEpisodeWatchedStatus(shokoEpisode, user!, true, watchedAt).ConfigureAwait(false);
                                     updated = savedResult != null;
 
                                     if (updated)

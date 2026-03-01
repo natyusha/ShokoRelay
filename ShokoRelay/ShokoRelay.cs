@@ -295,10 +295,16 @@ namespace ShokoRelay
                                 if (_lastSyncWatchedUtc == null || _lastSyncWatchedUtc < lastScheduled)
                                 {
                                     bool includeRatingsForScheduled = settings?.ShokoSyncWatchedIncludeRatings ?? false;
-                                    Logger.Info("Automation: triggering scheduled Plex->Shoko watched-state sync (frequency {0}h, ratings={1})", syncFreq, includeRatingsForScheduled);
+                                    bool excludeAdminForScheduled = settings?.ShokoSyncWatchedExcludeAdmin ?? false;
+                                    Logger.Info(
+                                        "Automation: triggering scheduled Plex->Shoko watched-state sync (frequency {0}h, ratings={1}, excludeAdmin={2})",
+                                        syncFreq,
+                                        includeRatingsForScheduled,
+                                        excludeAdminForScheduled
+                                    );
                                     try
                                     {
-                                        var syncTask = _watchedSyncService.SyncWatchedAsync(false, syncFreq + 1, includeRatingsForScheduled, ct);
+                                        var syncTask = _watchedSyncService.SyncWatchedAsync(false, syncFreq + 1, includeRatingsForScheduled, excludeAdminForScheduled, ct);
                                         await syncTask.ConfigureAwait(false);
                                     }
                                     catch (Exception ex)
@@ -340,15 +346,34 @@ namespace ShokoRelay
                                     Logger.Info("Automation: triggering scheduled Plex automation (frequency {0}h)", plexFreq);
                                     try
                                     {
-                                        var allSeries =
-                                            _metadataService.GetAllShokoSeries()?.Cast<Shoko.Abstractions.Metadata.Shoko.IShokoSeries?>().ToList() ?? new List<Shoko.Abstractions.Metadata.Shoko.IShokoSeries?>();
-                                        if (_collectionService != null)
+                                        // attempt to enumerate series; if this throws or yields no results, the server likely isn't ready yet.
+                                        List<Shoko.Abstractions.Metadata.Shoko.IShokoSeries?> allSeries;
+                                        try
                                         {
-                                            await _collectionService.BuildCollectionsAsync(allSeries, ct).ConfigureAwait(false);
+                                            allSeries =
+                                                _metadataService.GetAllShokoSeries()?.Cast<Shoko.Abstractions.Metadata.Shoko.IShokoSeries?>().ToList()
+                                                ?? new List<Shoko.Abstractions.Metadata.Shoko.IShokoSeries?>();
                                         }
-                                        if (_criticRatingService != null)
+                                        catch (Exception innerEx)
                                         {
-                                            await _criticRatingService.ApplyRatingsAsync(null, ct).ConfigureAwait(false);
+                                            Logger.Warn(innerEx, "Automation: metadata service not ready, skipping Plex automation");
+                                            allSeries = new List<Shoko.Abstractions.Metadata.Shoko.IShokoSeries?>();
+                                        }
+
+                                        if (allSeries.Count == 0)
+                                        {
+                                            Logger.Info("Automation: no series returned, deferring Plex automation");
+                                        }
+                                        else
+                                        {
+                                            if (_collectionService != null)
+                                            {
+                                                await _collectionService.BuildCollectionsAsync(allSeries, ct).ConfigureAwait(false);
+                                            }
+                                            if (_criticRatingService != null)
+                                            {
+                                                await _criticRatingService.ApplyRatingsAsync(null, ct).ConfigureAwait(false);
+                                            }
                                         }
                                     }
                                     catch (Exception ex)
