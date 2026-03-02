@@ -20,6 +20,8 @@ namespace ShokoRelay.Services
         /// <summary>
         /// Trigger import scans for every managed folder marked as a "Source". Returns the names of folders that were scheduled for scanning, which is useful for UI feedback.
         /// </summary>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>A read-only list of folder names that were scheduled for scanning.</returns>
         public async Task<IReadOnlyList<string>> TriggerImportAsync(CancellationToken ct = default)
         {
             List<string> folders = new();
@@ -54,16 +56,20 @@ namespace ShokoRelay.Services
         /// Scan for video file entries whose physical file has disappeared and optionally remove those records from the database.
         /// The <paramref name="dryRun"/> flag controls whether deletion occurs; in either case the list of missing paths is returned. Database deletions never touch disk files.
         /// </summary>
+        /// <param name="removeFromMyList">Whether to also remove the entry from AniDB MyList.</param>
+        /// <param name="dryRun">When <c>true</c>, list missing files without deleting them.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>A read-only list of paths for files that were identified as missing.</returns>
         public async Task<IReadOnlyList<string>> RemoveMissingFilesAsync(bool removeFromMyList = false, bool dryRun = false, CancellationToken ct = default)
         {
             var all = _videoService.GetAllVideoFiles() ?? Array.Empty<Shoko.Abstractions.Video.IVideoFile>();
-            var missing = all.Where(f => !File.Exists(f.Path)).Select(f => f.Path).ToList();
+            var missing = all.Where(f => !File.Exists(f.Path)).Select(f => f.Path).ToHashSet();
             if (!dryRun && missing.Count > 0)
             {
                 var toDelete = all.Where(f => missing.Contains(f.Path)).ToList();
                 await _videoService.DeleteVideoFiles(toDelete, removeFiles: false, removeFolders: false).ConfigureAwait(false);
             }
-            return missing;
+            return missing.ToList();
         }
     }
 }

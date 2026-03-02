@@ -3,6 +3,9 @@ using ShokoRelay.Config;
 
 namespace ShokoRelay.Plex
 {
+    /// <summary>
+    /// HTTP client wrapper that communicates with one or more Plex servers. Handles library target discovery, section refreshes, metadata queries, and path mapping.
+    /// </summary>
     public class PlexClient
     {
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
@@ -55,9 +58,13 @@ namespace ShokoRelay.Plex
         }
 
         /// <summary>
-        /// Assign a collection to a metadata item (ratingKey) by using the metadata PUT shortcut:
-        /// PUT /library/metadata/{ratingKey}?collection%5B0%5D.tag.tag={collectionName}
+        /// Create an <see cref="HttpRequestMessage"/> pre-configured with Plex authentication headers and JSON accept. Allows per-user token overrides for requests that need per-account visibility.
         /// </summary>
+        /// <param name="method">HTTP method for the request.</param>
+        /// <param name="path">Relative path (appended to <paramref name="baseServerUrl"/>).</param>
+        /// <param name="baseServerUrl">Base URL of the target Plex server.</param>
+        /// <param name="plexUserToken">Optional per-user token override; falls back to the configured admin token when <c>null</c>.</param>
+        /// <returns>A ready-to-send <see cref="HttpRequestMessage"/>.</returns>
         public HttpRequestMessage CreateRequest(HttpMethod method, string path, string? baseServerUrl = null, string? plexUserToken = null)
         {
             if (string.IsNullOrWhiteSpace(baseServerUrl))
@@ -134,6 +141,25 @@ namespace ShokoRelay.Plex
             return Array.Empty<PlexLibraryTarget>();
         }
 
+        /// <summary>
+        /// Normalize a path for comparison by standardizing separators and resolving the full path.
+        /// </summary>
+        private static string NormalizeForMatch(string p)
+        {
+            if (string.IsNullOrWhiteSpace(p))
+                return string.Empty;
+            string normalized = p.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
+            try
+            {
+                normalized = Path.GetFullPath(normalized).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            }
+            catch
+            {
+                normalized = normalized.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            }
+            return normalized;
+        }
+
         private string MapShokoPathToPlexPath(string path)
         {
             if (string.IsNullOrWhiteSpace(path))
@@ -143,23 +169,6 @@ namespace ShokoRelay.Plex
             var mappings = settings.PathMappings;
             if (mappings == null || mappings.Count == 0)
                 return path;
-
-            // Normalize input path for comparison
-            string NormalizeForMatch(string p)
-            {
-                if (string.IsNullOrWhiteSpace(p))
-                    return string.Empty;
-                string normalized = p.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
-                try
-                {
-                    normalized = Path.GetFullPath(normalized).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-                }
-                catch
-                {
-                    normalized = normalized.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-                }
-                return normalized;
-            }
 
             var inputNorm = NormalizeForMatch(path);
             var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
@@ -191,10 +200,10 @@ namespace ShokoRelay.Plex
         }
 
         /// <summary>
-        /// Reverse-map a Plex-style path back to the configured Shoko base path using PathMappings.
-        /// This allows callers (e.g. AnimeThemes endpoints) to accept paths as Plex exposes them and convert
-        /// them to server-local Shoko paths before processing.
+        /// Reverse-map a Plex-style path back to the configured Shoko base path using PathMappings. This allows callers (e.g. AnimeThemes endpoints) to accept paths as Plex exposes them and convert them to server-local Shoko paths before processing.
         /// </summary>
+        /// <param name="path">Plex-style file path to reverse-map.</param>
+        /// <returns>The Shoko-local path, or the original <paramref name="path"/> if no mapping matches.</returns>
         public string MapPlexPathToShokoPath(string path)
         {
             if (string.IsNullOrWhiteSpace(path))
@@ -204,23 +213,6 @@ namespace ShokoRelay.Plex
             var mappings = settings.PathMappings;
             if (mappings == null || mappings.Count == 0)
                 return path;
-
-            // Normalize input path for comparison (match logic mirrors MapShokoPathToPlexPath)
-            string NormalizeForMatch(string p)
-            {
-                if (string.IsNullOrWhiteSpace(p))
-                    return string.Empty;
-                string normalized = p.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
-                try
-                {
-                    normalized = Path.GetFullPath(normalized).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-                }
-                catch
-                {
-                    normalized = normalized.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-                }
-                return normalized;
-            }
 
             var inputNorm = NormalizeForMatch(path);
             var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
@@ -254,6 +246,7 @@ namespace ShokoRelay.Plex
         /// <summary>
         /// Expose configured targets for external callers (controllers/VFS) to make per-target decisions.
         /// </summary>
+        /// <returns>A read-only list of <see cref="PlexLibraryTarget"/> instances.</returns>
         public IReadOnlyList<PlexLibraryTarget> GetConfiguredTargets() => GetTargets();
 
         /// <summary>
@@ -271,7 +264,7 @@ namespace ShokoRelay.Plex
 
             try
             {
-                using var request = CreateRequest(HttpMethod.Get, $"/library/metadata/{ratingKey}", target.ServerUrl);
+                using var request = CreateRequest(HttpMethod.Get, $"/library/metadata/{ratingKey}?X-Plex-Container-Size=1", target.ServerUrl);
                 using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
                 if (!response.IsSuccessStatusCode)
                     return false;
@@ -330,6 +323,10 @@ namespace ShokoRelay.Plex
         /// <summary>
         /// Find the Plex ratingKey for a Shoko series within the given Plex section by searching for the Shoko GUID.
         /// </summary>
+        /// <param name="shokoSeriesId">Shoko series ID to search for.</param>
+        /// <param name="target">Target server and library section.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>The numeric rating key if found, or <c>null</c>.</returns>
         public async Task<int?> FindRatingKeyForShokoSeriesInSectionAsync(int shokoSeriesId, PlexLibraryTarget target, CancellationToken cancellationToken = default)
         {
             if (!IsEnabled)
@@ -365,6 +362,14 @@ namespace ShokoRelay.Plex
         /// <summary>
         /// List items in the given section. Uses paging and supports optional watch-state, GUID and media-type filters.
         /// </summary>
+        /// <param name="target">Target server and library section.</param>
+        /// <param name="plexUserToken">Optional per-user token for user-specific visibility.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <param name="onlyUnwatched">If <c>true</c>, only unwatched items; if <c>false</c>, only watched; <c>null</c> for all.</param>
+        /// <param name="guidFilter">Optional GUID string to filter results.</param>
+        /// <param name="minLastViewed">Optional Unix timestamp lower bound for <c>lastViewedAt</c>.</param>
+        /// <param name="mediaType">Optional Plex media type constant (e.g. show, episode).</param>
+        /// <returns>A list of <see cref="PlexMetadataItem"/> matching the query.</returns>
         public async Task<List<PlexMetadataItem>> GetSectionItemsAsync(
             PlexLibraryTarget target,
             string? plexUserToken = null,
@@ -435,6 +440,9 @@ namespace ShokoRelay.Plex
         /// <summary>
         /// List all series (shows) in the given section by delegating to the generic item enumeration helper with a show-type filter.
         /// </summary>
+        /// <param name="target">Target server and library section.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A list of <see cref="PlexMetadataItem"/> representing shows in the section.</returns>
         public Task<List<PlexMetadataItem>> GetSectionShowsAsync(PlexLibraryTarget target, CancellationToken cancellationToken = default)
         {
             // reuse the more flexible helper; passing null for onlyUnwatched/guidFilter yields a complete list of items of the requested type.
@@ -444,6 +452,13 @@ namespace ShokoRelay.Plex
         /// <summary>
         /// List all episodes in the given section by delegating to the generic item enumeration helper with an episode-type filter.
         /// </summary>
+        /// <param name="target">Target server and library section.</param>
+        /// <param name="plexUserToken">Optional per-user Plex token.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <param name="onlyUnwatched">Watch-state filter (see <see cref="GetSectionItemsAsync"/>).</param>
+        /// <param name="guidFilter">Optional GUID filter.</param>
+        /// <param name="minLastViewed">Optional minimum last-viewed Unix timestamp.</param>
+        /// <returns>A list of <see cref="PlexMetadataItem"/> representing episodes.</returns>
         public Task<List<PlexMetadataItem>> GetSectionEpisodesAsync(
             PlexLibraryTarget target,
             string? plexUserToken = null,

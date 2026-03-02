@@ -28,6 +28,7 @@ namespace ShokoRelay.Helpers
         /// Determine a combined rating string and an "is adult" flag for a series. Preferences in <see cref="ShokoRelay.Settings"/> influence the resulting text.
         /// </summary>
         /// <param name="series">Series to evaluate; may be null.</param>
+        /// <returns>A tuple of (Rating, IsAdult) where Rating is a TV-guideline string (e.g. "TV-14") and IsAdult indicates explicit content.</returns>
         public static (string? Rating, bool IsAdult) GetContentRatingAndAdult(ISeries? series)
         {
             var tagSet = BuildTagSet(series);

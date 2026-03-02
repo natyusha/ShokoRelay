@@ -54,9 +54,6 @@
   height: 100px;
   width: 100%;
 }
-:root[data-theme="dark"] .brand-header {
-  background-image: url("../img/shoko-relay-header-dark.png");
-}
 :root[data-theme="light"] .brand-header {
   background-image: url("../img/shoko-relay-header-light.png");
 }
@@ -543,6 +540,7 @@ summary:hover {
     transform 260ms cubic-bezier(0.2, 0.9, 0.2, 1),
     opacity 220ms ease;
   font-size: 0.95em;
+  cursor: pointer;
 }
 .toast.visible {
   opacity: 1;
@@ -562,13 +560,6 @@ summary:hover {
 }
 .toast[role="status"] {
   outline: none;
-}
-.toast {
-  cursor: pointer;
-}
-.toast .toast-message {
-  display: inline-block;
-  margin-right: 0;
 }
 /* #endregion */
 

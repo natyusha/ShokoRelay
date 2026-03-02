@@ -8,7 +8,7 @@
 
 <!-- prettier-ignore-end -->
 
-This is a plugin for Shoko Server that acts as a [Custom Metadata Provider](https://forums.plex.tv/t/announcement-custom-metadata-providers/934384) for Plex. It is a successor to the [ShokoRelay.bundle](https://github.com/natyusha/ShokoRelay.bundle) legacy agent/scanner mirrors all of its functionality (including the automation scripts). Scanning is much faster and there are many new features included as well. Just like the old bundle this is intended to work with series of all types within a single "TV Shows" library. All you need to get started is a populated [Shoko Server](https://shokoanime.com/downloads/shoko-server)/[Plex Media Server](https://www.plex.tv/media-server-downloads/).
+This is a plugin for Shoko Server that acts as a [Custom Metadata Provider](https://forums.plex.tv/t/announcement-custom-metadata-providers/934384) for Plex. It is a successor to the [ShokoRelay.bundle](https://github.com/natyusha/ShokoRelay.bundle) legacy agent/scanner mirrors all of its functionality (including the automation scripts). Scanning is much faster and there are many new features included as well. Just like the old bundle this is intended to work with series of all types within a single "TV Shows" library. All you need to get started is a populated [Shoko Server](https://shokoanime.com/downloads/shoko-server) and [Plex Media Server](https://www.plex.tv/media-server-downloads/).
 
 Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File System) to ensure that varied folder structures are supported. This means that your anime can be organised with whatever file or folder structure you want. There is one caveat though. A folder cannot contain more than one AniDB series at a time if you want it to correctly support [local media assets](https://support.plex.tv/articles/200220717-local-media-assets-tv-shows/) (like posters or theme songs). The VFS will be automatically updated when a file move or rename is detected by Shoko.
 
@@ -123,7 +123,7 @@ com.plexapp.agents.shokorelay
 ### Collection Generation
 
 - Currently Plex's Provider Framework does not allow collections to be automatically assigned
-  - They have to be injected manually via via Plex's HTTP API instead
+  - They have to be injected manually via Plex's HTTP API instead
 - Click the `Generate Collections` button in the "Plex: Automation" section to start this process
 - _Requires Plex authentication_
 
@@ -268,7 +268,7 @@ If you aren't happy with TMDB's default episode/season structure for a series, y
 
 **Combining Series**
 
-This allows shows which are separated on AniDB but part of the same TMDB listing to be combined into a single entry in Plex. To achieve this click the `VFS Overrides Editor` button on the dashboard. It will open a modal which will create (or edit an existing) `anidb_vfs_overrides.csv` file in the plugin directory. Each line should contain a comma separated list of AniDB IDs you wish to merge. The first ID is the _primary series_ and the others will be merged into it (for both VFS builds and metadata lookups). Lines that are blank or start with a "#" are ignored.
+This allows shows which are separated on AniDB but part of the same TMDB listing to be combined into a single entry in Plex. To achieve this click the `VFS Overrides Editor` button on the dashboard. It will open a modal which will create (or edit an existing) `anidb_vfs_overrides.csv` file in the plugin's config directory. Each line should contain a comma separated list of AniDB IDs you wish to merge. The first ID is the _primary series_ and the others will be merged into it (for both VFS builds and metadata lookups). Lines that are blank or start with a "#" are ignored.
 
 An example `anidb_vfs_overrides.csv` is available [here](https://gist.github.com/natyusha/a9ad00a5c16276cfbe2553346c745f1c).
 
@@ -282,7 +282,7 @@ Many tags on AniDB use a [3 Star Weight System](https://wiki.anidb.net/Tags#Star
 
 ### Assumed Content Ratings
 
-If `Assumed Content Ratings` are enabled in the Provider Settings the [target audience](https://anidb.net/tag/2606/animetb) and [content indicator](https://anidb.net/tag/2604/animetb) tags from AniDB will be used to roughly match the [TV Parental Guidelines](https://www.tvguidelines.org/resources/TheRatings.pdf) system. The target audience tags will be checked for ratings from most restrictive to least, then the content indicators will be appended. If the tag weights for the content indicators are high enough (> 400 or ★★☆) the rating will be raised to compensate. A general overview is listed in the table below:
+If `Assumed Content Ratings` are enabled in the Provider Settings the [target audience](https://anidb.net/tag/2606/animetb) and [content indicator](https://anidb.net/tag/2604/animetb) tags from AniDB will be used to roughly match the [TV Parental Guidelines](https://www.tvguidelines.org/resources/TheRatings.pdf) system. The target audience tags will be checked for ratings from most restrictive to least, then the content indicators will be appended. If the tag weights for the content indicators are high enough (≥ 400 or ★★☆) the rating will be raised to compensate. A general overview is listed in the table below:
 
 | Tag                        | Rating  |
 | :------------------------- | :------ |

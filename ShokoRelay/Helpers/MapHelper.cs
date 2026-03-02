@@ -25,6 +25,8 @@ namespace ShokoRelay.Helpers
         /// <summary>
         /// Generate <see cref="SeriesFileData"/> for the given <paramref name="series"/> by building file mappings and enumerating seasons.
         /// </summary>
+        /// <param name="series">The series to generate file data for.</param>
+        /// <returns>A <see cref="SeriesFileData"/> containing the computed mappings and season list.</returns>
         public static SeriesFileData GetSeriesFileData(ISeries series)
         {
             var mappings = BuildFileMappings(series);
@@ -37,6 +39,8 @@ namespace ShokoRelay.Helpers
         /// This encapsulates the logic of detecting when an alternate ordering is active and also respects the global
         /// <c>TmdbEpNumbering</c> setting.
         /// </summary>
+        /// <param name="series">The series whose TMDB ordering to inspect.</param>
+        /// <returns>The alternate TMDB ordering ID, or <c>null</c> when none is active or the feature is disabled.</returns>
         public static string? GetPreferredTmdbOrderingId(ISeries series)
         {
             if (!ShokoRelay.Settings.TmdbEpNumbering)
@@ -65,6 +69,9 @@ namespace ShokoRelay.Helpers
         /// Return merged file data for a primary series and any additional series that should be considered part of the same logical show.
         /// The metadata for the primary is kept, but the file mappings/seasons from the extras are included so that children/grandchildren enums will surface episodes from all series in the group.
         /// </summary>
+        /// <param name="primary">The primary series whose metadata drives the merged result.</param>
+        /// <param name="extras">Additional series whose file mappings are folded in.</param>
+        /// <returns>A <see cref="SeriesFileData"/> combining mappings from all provided series.</returns>
         public static SeriesFileData GetSeriesFileDataMerged(ISeries primary, IEnumerable<ISeries> extras)
         {
             var allMappings = new List<FileMapping>();
@@ -280,10 +287,12 @@ namespace ShokoRelay.Helpers
             return result;
         }
 
-        public static bool IsHidden(IEpisode e)
-        {
-            return e is IShokoEpisode shokoEp && shokoEp.IsHidden;
-        }
+        /// <summary>
+        /// Indicates whether an episode should be treated as hidden (i.e. excluded from mappings and VFS output).
+        /// </summary>
+        /// <param name="e">The episode to test.</param>
+        /// <returns><c>true</c> if the episode is a Shoko episode that has been marked as hidden; otherwise <c>false</c>.</returns>
+        public static bool IsHidden(IEpisode e) => e is IShokoEpisode shokoEp && shokoEp.IsHidden;
 
         // Select primary episode type and deduplicate coordinates.
         // Returns (filteredEps, dedupedEps).

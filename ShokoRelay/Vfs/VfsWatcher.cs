@@ -9,6 +9,9 @@ using ShokoRelay.Plex;
 
 namespace ShokoRelay.Vfs
 {
+    /// <summary>
+    /// Watches for Shoko video-file events (hashed, relocated, deleted) and triggers incremental VFS rebuilds plus Plex section refreshes.
+    /// </summary>
     public class VfsWatcher
     {
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
@@ -43,6 +46,9 @@ namespace ShokoRelay.Vfs
             _configProvider = configProvider;
         }
 
+        /// <summary>
+        /// Subscribe to Shoko video-file events and begin watching for changes.
+        /// </summary>
         public void Start()
         {
             _videoService.VideoFileHashed += OnVideoFileHashed;
@@ -52,6 +58,9 @@ namespace ShokoRelay.Vfs
             Logger.Info("VFS watcher started (auto-refresh on file changes).");
         }
 
+        /// <summary>
+        /// Unsubscribe from Shoko video-file events and stop watching.
+        /// </summary>
         public void Stop()
         {
             try
@@ -101,10 +110,11 @@ namespace ShokoRelay.Vfs
             {
                 while (true)
                 {
-                    int seriesId;
-                    if (!_pending.Keys.Any())
+                    // Use GetEnumerator + TryRemove to avoid snapshotting the entire key collection
+                    using var enumerator = _pending.GetEnumerator();
+                    if (!enumerator.MoveNext())
                         break;
-                    seriesId = _pending.Keys.First();
+                    int seriesId = enumerator.Current.Key;
                     _pending.TryRemove(seriesId, out _);
 
                     try
@@ -136,10 +146,14 @@ namespace ShokoRelay.Vfs
             {
                 lock (_gate)
                 {
-                    _processing = false;
-                    if (_pending.Count > 0)
+                    // Only release the processing flag when the queue is truly empty;
+                    // otherwise keep it set and re-enter to process remaining items.
+                    if (_pending.IsEmpty)
                     {
-                        _processing = true;
+                        _processing = false;
+                    }
+                    else
+                    {
                         Task.Run(ProcessQueue);
                     }
                 }

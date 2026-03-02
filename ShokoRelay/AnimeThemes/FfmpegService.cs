@@ -30,6 +30,9 @@ internal sealed class FfmpegService
     /// <summary>
     /// Probe a media file's duration using <c>ffprobe</c> and return the result as a <see cref="TimeSpan"/>. Throws if the output cannot be parsed.
     /// </summary>
+    /// <param name="inputPath">Path to the media file to probe.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The duration of the media as a <see cref="TimeSpan"/>.</returns>
     public async Task<TimeSpan> ProbeDurationAsync(string inputPath, CancellationToken ct)
     {
         EnsureFfmpegConfigured();
@@ -46,6 +49,13 @@ internal sealed class FfmpegService
     /// Convert the given <paramref name="inputPath"/> media file to an MP3 file written to <paramref name="outputPath"/>.
     /// Metadata tags for title, display slug, artist and album will be embedded in the output file.
     /// </summary>
+    /// <param name="inputPath">Path to the source media file.</param>
+    /// <param name="outputPath">Destination path for the MP3 output.</param>
+    /// <param name="title">Title metadata tag.</param>
+    /// <param name="slugDisplay">TIT3 metadata tag (display slug).</param>
+    /// <param name="artist">Artist metadata tag.</param>
+    /// <param name="album">Album metadata tag.</param>
+    /// <param name="ct">Cancellation token.</param>
     public async Task ConvertToMp3FileAsync(string inputPath, string outputPath, string title, string slugDisplay, string artist, string album, CancellationToken ct)
     {
         EnsureFfmpegConfigured();
@@ -79,6 +89,9 @@ internal sealed class FfmpegService
     /// <summary>
     /// Convert the given <paramref name="inputPath"/> media file to MP3 audio and return it in a <see cref="MemoryStream"/>. The stream is positioned at the beginning.
     /// </summary>
+    /// <param name="inputPath">Path to the source media file.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A <see cref="MemoryStream"/> containing the MP3-encoded audio, positioned at the start.</returns>
     public async Task<MemoryStream> ConvertToMp3StreamAsync(string inputPath, CancellationToken ct)
     {
         EnsureFfmpegConfigured();
@@ -90,10 +103,7 @@ internal sealed class FfmpegService
         return ms;
     }
 
-    private static string EscapeMetadata(string value)
-    {
-        return value?.Replace("\"", "'") ?? string.Empty;
-    }
+    private static string EscapeMetadata(string value) => value?.Replace("\"", "'") ?? string.Empty;
 
     private static void EnsureFfmpegConfigured()
     {
@@ -149,23 +159,10 @@ internal sealed class FfmpegService
 
             foreach (string dir in candidates)
             {
-                string ffmpegCandidate = Path.Combine(dir, ffmpegName);
-                string ffprobeCandidate = Path.Combine(dir, ffprobeName);
-
-                if (!ffmpegFound && File.Exists(ffmpegCandidate))
-                {
-                    _ffmpegPath = ffmpegCandidate;
-                    ffmpegFound = true;
-                    locatedDir ??= dir;
-                }
-
-                if (!ffprobeFound && File.Exists(ffprobeCandidate))
-                {
-                    _ffprobePath = ffprobeCandidate;
-                    ffprobeFound = true;
-                    locatedDir ??= dir;
-                }
-
+                if (!ffmpegFound)
+                    (ffmpegFound, locatedDir) = TryFindBinary(dir, ffmpegName, ref _ffmpegPath, locatedDir);
+                if (!ffprobeFound)
+                    (ffprobeFound, locatedDir) = TryFindBinary(dir, ffprobeName, ref _ffprobePath, locatedDir);
                 if (ffmpegFound && ffprobeFound)
                     break;
             }
@@ -185,6 +182,16 @@ internal sealed class FfmpegService
 
             _ffmpegConfigured = true;
         }
+    }
+
+    private static (bool Found, string? LocatedDir) TryFindBinary(string dir, string binaryName, ref string pathField, string? currentLocatedDir)
+    {
+        string candidate = Path.Combine(dir, binaryName);
+        if (!File.Exists(candidate))
+            return (false, currentLocatedDir);
+
+        pathField = candidate;
+        return (true, currentLocatedDir ?? dir);
     }
 
     private static string DetermineWorkingDirectory(string preferred)

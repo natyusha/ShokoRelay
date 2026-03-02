@@ -1,3 +1,5 @@
+using System.Collections.Frozen;
+
 namespace ShokoRelay.Plex
 {
     /// <summary>
@@ -68,13 +70,29 @@ namespace ShokoRelay.Plex
         };
 
         // Local media asset extensions for VFS linking
+        /// <summary>Extension-set lookup for recognized artwork file types.</summary>
         public static class LocalMediaAssets
         {
-            public static readonly HashSet<string> Artwork = new(StringComparer.OrdinalIgnoreCase) { ".bmp", ".gif", ".jpe", ".jpeg", ".jpg", ".png", ".tbn", ".tif", ".tiff", ".webp" };
+            /// <summary>Image file extensions considered local artwork by Plex.</summary>
+            public static readonly FrozenSet<string> Artwork = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ".bmp",
+                ".gif",
+                ".jpe",
+                ".jpeg",
+                ".jpg",
+                ".png",
+                ".tbn",
+                ".tif",
+                ".tiff",
+                ".webp",
+            }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
-            public static readonly HashSet<string> ThemeSongs = new(StringComparer.OrdinalIgnoreCase) { ".mp3" };
+            /// <summary>Audio extensions that Plex treats as theme songs.</summary>
+            public static readonly FrozenSet<string> ThemeSongs = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".mp3" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
-            public static readonly HashSet<string> Subtitles = new(StringComparer.OrdinalIgnoreCase) { ".srt", ".smi", ".ssa", ".ass", ".vtt" };
+            /// <summary>Text-based subtitle extensions supported by Plex.</summary>
+            public static readonly FrozenSet<string> Subtitles = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".srt", ".smi", ".ssa", ".ass", ".vtt" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
         }
     }
 }

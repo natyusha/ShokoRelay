@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Text.RegularExpressions;
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Anidb;
@@ -11,7 +12,7 @@ namespace ShokoRelay.Helpers
     public static class TagHelper
     {
         // https://github.com/ShokoAnime/ShokoServer/blob/9c0ae9208479420dea3b766156435d364794e809/Shoko.Server/Utilities/TagFilter.cs#L37
-        private static readonly IReadOnlySet<string> TagBlacklistAniDBHelpers = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        private static readonly FrozenSet<string> TagBlacklistAniDBHelpers = new[]
         {
             "asia",
             "awards",
@@ -58,61 +59,59 @@ namespace ShokoRelay.Helpers
             "translation convention",
             "tropes",
             "unsorted",
-        };
+        }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
         private static readonly Regex _wordRegex = new(@"[\'\w\d-]+\b", RegexOptions.Compiled);
-        private static readonly IReadOnlySet<string> _forceLower = new HashSet<string>(
-            [
-                "a",
-                "an",
-                "the",
-                "and",
-                "but",
-                "or",
-                "nor",
-                "at",
-                "by",
-                "for",
-                "from",
-                "in",
-                "into",
-                "of",
-                "off",
-                "on",
-                "onto",
-                "out",
-                "over",
-                "per",
-                "to",
-                "up",
-                "with",
-                "as",
-                "4-koma",
-                "-hime",
-                "-kei",
-                "-kousai",
-                "-sama",
-                "-warashi",
-                "no",
-                "vs",
-                "x",
-            ],
+        private static readonly FrozenSet<string> _forceLower = new[]
+        {
+            "a",
+            "an",
+            "the",
+            "and",
+            "but",
+            "or",
+            "nor",
+            "at",
+            "by",
+            "for",
+            "from",
+            "in",
+            "into",
+            "of",
+            "off",
+            "on",
+            "onto",
+            "out",
+            "over",
+            "per",
+            "to",
+            "up",
+            "with",
+            "as",
+            "4-koma",
+            "-hime",
+            "-kei",
+            "-kousai",
+            "-sama",
+            "-warashi",
+            "no",
+            "vs",
+            "x",
+        }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+        private static readonly FrozenSet<string> _forceUpper = new[] { "3d", "bdsm", "cg", "cgi", "ed", "fff", "ffm", "ii", "milf", "mmf", "mmm", "npc", "op", "rpg", "tbs", "tv" }.ToFrozenSet(
             StringComparer.OrdinalIgnoreCase
         );
-        private static readonly IReadOnlySet<string> _forceUpper = new HashSet<string>(
-            ["3d", "bdsm", "cg", "cgi", "ed", "fff", "ffm", "ii", "milf", "mmf", "mmm", "npc", "op", "rpg", "tbs", "tv"],
-            StringComparer.OrdinalIgnoreCase
-        );
-        private static readonly IReadOnlyDictionary<string, string> _forceSpecial = new Dictionary<string, string>
+        private static readonly FrozenDictionary<string, string> _forceSpecial = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             { "comicfesta", "ComicFesta" },
             { "d'etat", "d'Etat" },
             { "noitamina", "noitaminA" },
-        };
+        }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// Return an array of tag objects derived from the provided <paramref name="series"/>, applying blacklist rules and combining sources (Shoko, AniDB, TMDB) based on configuration.
         /// </summary>
         /// <param name="series">Series to extract tags from.</param>
+        /// <returns>An array of anonymous objects each containing a <c>tag</c> property with a title-cased tag name.</returns>
         public static object[] GetFilteredTags(ISeries series)
         {
             var shokoSeries = series as Shoko.Abstractions.Metadata.Shoko.IShokoSeries;

@@ -5,6 +5,9 @@ using Shoko.Abstractions.Metadata.Tmdb;
 
 namespace ShokoRelay.Plex
 {
+    /// <summary>
+    /// Maps Shoko episode/season data to Plex-style coordinates, handling TMDB alternate orderings and special season types.
+    /// </summary>
     public static class PlexMapping
     {
         /// <summary>
@@ -208,6 +211,7 @@ namespace ShokoRelay.Plex
         /// </summary>
         /// <param name="entries">TMDB episode entries.</param>
         /// <param name="showPreferredOrderingId">Optional show-level ordering id.</param>
+        /// <returns>The entries reordered so that those matching the preferred ordering come first, followed by the remainder.</returns>
         public static List<ITmdbEpisode> SelectPreferredTmdbOrdering(IEnumerable<ITmdbEpisode>? entries, string? showPreferredOrderingId = null)
         {
             if (entries == null)
@@ -265,6 +269,7 @@ namespace ShokoRelay.Plex
         /// </summary>
         /// <param name="ep">TMDB episode.</param>
         /// <param name="showPreferredOrderingId">Optional preferred ordering id.</param>
+        /// <returns>A tuple of (Season, Episode) where Season is <c>null</c> if undetermined.</returns>
         public static (int? Season, int Episode) GetOrderingCoords(ITmdbEpisode ep, string? showPreferredOrderingId = null)
         {
             if (ep == null)

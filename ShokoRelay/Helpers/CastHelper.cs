@@ -20,21 +20,22 @@ namespace ShokoRelay.Helpers
         /// Return an array of objects representing cast (and optionally crew) for the specified media item. The crew portion is included based on the <c>CrewListings</c> setting.
         /// </summary>
         /// <param name="item">Item implementing <see cref="IWithCastAndCrew"/>.</param>
+        /// <returns>An array of anonymous cast/crew objects suitable for Plex metadata responses.</returns>
         public static object[] GetCastAndCrew(IWithCastAndCrew item)
         {
             int order = 1;
 
             var cast =
-                item.Cast?.Select(c =>
-                        (object)
-                            new
-                            {
-                                order = order++,
-                                tag = GetName(c.Creator, c.Name),
-                                role = c.Character?.Name ?? c.Name,
-                                thumb = c.Creator?.PortraitImage is { } img ? ImageHelper.GetImageUrl(img, "Staff") : null,
-                            }
-                    )
+                item.Cast?.Select(c => new
+                    {
+                        order = order++,
+                        tag = GetName(c.Creator, c.Name),
+                        role = c.Character?.Name ?? c.Name,
+                        thumb = c.Creator?.PortraitImage is { } img ? ImageHelper.GetImageUrl(img, "Staff") : null,
+                    })
+                    // Filter out non-person entries (characters, vehicles, mecha, etc.) where the actor name matches the role name.
+                    .Where(c => !string.Equals(c.tag, c.role, StringComparison.Ordinal))
+                    .Cast<object>()
                     .ToArray()
                 ?? Array.Empty<object>();
 
@@ -62,12 +63,14 @@ namespace ShokoRelay.Helpers
         /// Return director credits for the given item.
         /// </summary>
         /// <param name="item">Item with cast/crew data.</param>
+        /// <returns>An array of anonymous objects containing director names.</returns>
         public static object[] GetDirectors(IWithCastAndCrew item) => FilterCrew(item, CrewRoleType.Director);
 
         /// <summary>
         /// Retrieve writing credits (series composers or source work) for the item.
         /// </summary>
         /// <param name="item">Source item.</param>
+        /// <returns>An array of anonymous objects containing writer names.</returns>
         public static object[] GetWriters(IWithCastAndCrew item) =>
             item.Crew?.Where(c => c.RoleType is CrewRoleType.SeriesComposer or CrewRoleType.SourceWork).Select(c => (object)new { tag = GetName(c.Creator, c.Name) }).ToArray() ?? Array.Empty<object>();
 
@@ -75,12 +78,14 @@ namespace ShokoRelay.Helpers
         /// Retrieve producer credits for the given item.
         /// </summary>
         /// <param name="item">Item with cast/crew data.</param>
+        /// <returns>An array of anonymous objects containing producer names.</returns>
         public static object[] GetProducers(IWithCastAndCrew item) => FilterCrew(item, CrewRoleType.Producer);
 
         /// <summary>
         /// Assemble an array of <see cref="TagItem"/> objects representing the series' studios.
         /// </summary>
         /// <param name="series">Series metadata.</param>
+        /// <returns>An array of <see cref="TagItem"/> instances, one per distinct studio.</returns>
         public static TagItem[] GetStudioTags(ISeries series) =>
             series.Studios?.Where(s => !string.IsNullOrWhiteSpace(s.Name)).Select(s => s.Name).Distinct(StringComparer.OrdinalIgnoreCase).Select(name => new TagItem { tag = name }).ToArray()
             ?? Array.Empty<TagItem>();

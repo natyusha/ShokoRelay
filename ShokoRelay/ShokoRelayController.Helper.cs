@@ -28,6 +28,26 @@ namespace ShokoRelay.Controllers
     public partial class ShokoRelayController
     {
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+        private static readonly System.Text.Json.JsonSerializerOptions _jsonCaseInsensitive = new() { PropertyNameCaseInsensitive = true };
+
+        /// <summary>
+        /// Write a structured report to a log file inside the plugin's <c>logs</c> directory.
+        /// </summary>
+        /// <param name="fileName">Name of the log file to create or overwrite.</param>
+        /// <param name="buildReport">Callback that populates the report content via a <see cref="System.Text.StringBuilder"/>.</param>
+        private void WriteReportLog(string fileName, Action<System.Text.StringBuilder> buildReport)
+        {
+            try
+            {
+                var sb = new System.Text.StringBuilder();
+                buildReport(sb);
+                LogHelper.WriteLog(_configProvider.PluginDirectory, fileName, sb.ToString());
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "Failed to write {FileName}", fileName);
+            }
+        }
 
         /// <summary>
         /// Convert a Plex-style <paramref name="ratingKey"/> into a <see cref="SeriesContext"/>.
@@ -186,6 +206,12 @@ namespace ShokoRelay.Controllers
             return _metadataService.GetAllShokoSeries().Cast<IShokoSeries?>().ToList();
         }
 
+        /// <summary>
+        /// Recursively build a list of <see cref="ConfigPropertySchema"/> entries describing each browsable property on <paramref name="type"/>, used to render dynamic dashboard forms.
+        /// </summary>
+        /// <param name="type">The type to reflect over.</param>
+        /// <param name="prefix">Dot-delimited property path prefix for nested types.</param>
+        /// <returns>A flat list of schema entries.</returns>
         private static List<ConfigPropertySchema> BuildConfigSchema(Type type, string prefix)
         {
             var props = new List<ConfigPropertySchema>();
@@ -259,6 +285,11 @@ namespace ShokoRelay.Controllers
 
         private sealed record ConfigPropertySchema(string Path, string Type, string? Display, string? Description, object? DefaultValue, object? EnumValues);
 
+        /// <summary>
+        /// Map a Plex library type string (e.g. "movie", "show") to its <see cref="PlexLibraryType"/> enum value, defaulting to <see cref="PlexLibraryType.Show"/>.
+        /// </summary>
+        /// <param name="type">Raw Plex library type string.</param>
+        /// <returns>The corresponding <see cref="PlexLibraryType"/>.</returns>
         private static PlexLibraryType MapLibraryType(string? type)
         {
             return type?.Trim().ToLowerInvariant() switch
@@ -271,6 +302,10 @@ namespace ShokoRelay.Controllers
             };
         }
 
+        /// <summary>
+        /// Attempt to load the dashboard Razor template from the application's <c>dashboard</c> output directory.
+        /// </summary>
+        /// <returns>The template HTML string, or <c>null</c> if the file does not exist.</returns>
         private static string? LoadControllerTemplate()
         {
             string baseDir = AppContext.BaseDirectory;
@@ -283,6 +318,12 @@ namespace ShokoRelay.Controllers
             return System.IO.File.ReadAllText(candidate);
         }
 
+        /// <summary>
+        /// Build a sorted list of mapped episode metadata objects for a given <paramref name="seasonNum"/>, resolving multi-episode files, TMDB reassignments and cross-season overrides.
+        /// </summary>
+        /// <param name="ctx">Series context containing file data and title information.</param>
+        /// <param name="seasonNum">Season number whose episodes should be returned.</param>
+        /// <returns>An ordered list of episode metadata objects for the season.</returns>
         private List<object> BuildEpisodeList(SeriesContext ctx, int seasonNum)
         {
             var items = new List<(PlexCoords Coords, object Meta)>();
@@ -323,7 +364,11 @@ namespace ShokoRelay.Controllers
             return items.OrderBy(x => x.Coords.Episode).Select(x => x.Meta).ToList();
         }
 
-        // Plex discovery helpers & network access wrappers
+        /// <summary>
+        /// De-duplicate discovered Plex library entries from multiple servers and return a clean list of <see cref="PlexAvailableLibrary"/> objects.
+        /// </summary>
+        /// <param name="pairs">Tuples of library info and server info returned by Plex discovery.</param>
+        /// <returns>De-duplicated list of available libraries.</returns>
         private static List<PlexAvailableLibrary> CollectDiscoveredLibraries(IEnumerable<(PlexLibraryInfo, PlexServerInfo)>? pairs)
         {
             var collected = new List<PlexAvailableLibrary>();
@@ -334,9 +379,8 @@ namespace ShokoRelay.Controllers
             foreach (var (lib, srv) in pairs)
             {
                 var key = !string.IsNullOrWhiteSpace(lib.Uuid) ? lib.Uuid : $"{srv.PreferredUri}::{lib.Id}";
-                if (seenKeys.Contains(key))
+                if (!seenKeys.Add(key))
                     continue;
-                seenKeys.Add(key);
 
                 var uuidVal = !string.IsNullOrWhiteSpace(lib.Uuid) ? lib.Uuid : key;
                 collected.Add(
@@ -357,6 +401,13 @@ namespace ShokoRelay.Controllers
             return collected;
         }
 
+        /// <summary>
+        /// Validate and parse a <paramref name="filter"/> query string; returns a <see cref="BadRequestResult"/> if any entry is invalid, otherwise <c>null</c>.
+        /// Also converts secondary IDs to their primary equivalents when TMDB numbering is enabled.
+        /// </summary>
+        /// <param name="filter">Raw comma-separated filter string.</param>
+        /// <param name="ids">Parsed and resolved list of series IDs (output).</param>
+        /// <returns><c>null</c> on success, or an <see cref="IActionResult"/> describing the validation error.</returns>
         private IActionResult? ValidateFilterOrBadRequest(string? filter, out List<int> ids)
         {
             ids = ParseFilterIds(filter, out var errors);
@@ -380,6 +431,11 @@ namespace ShokoRelay.Controllers
             return null;
         }
 
+        /// <summary>
+        /// Return a no-op success response when no Plex library targets are configured, indicating that all series were skipped.
+        /// </summary>
+        /// <param name="seriesList">Series that would have been processed.</param>
+        /// <returns>An OK result with all counts zeroed except <c>processed</c> and <c>skipped</c>.</returns>
         private IActionResult NoPlexTargetsResponse(IEnumerable<IShokoSeries?> seriesList)
         {
             int processedNone = seriesList.Count(s => s != null);
@@ -396,7 +452,11 @@ namespace ShokoRelay.Controllers
             );
         }
 
-        // Content types used by the dashboard (only serve the small set of web assets we ship)
+        /// <summary>
+        /// Map a file extension to its MIME content type for dashboard static assets. Returns <c>null</c> for disallowed types.
+        /// </summary>
+        /// <param name="ext">File extension including the leading dot (e.g. <c>.css</c>).</param>
+        /// <returns>The MIME type string, or <c>null</c> if the extension is not allowed.</returns>
         private static string? GetDashboardContentTypeForExtension(string ext)
         {
             if (string.IsNullOrWhiteSpace(ext))
@@ -413,7 +473,11 @@ namespace ShokoRelay.Controllers
             };
         }
 
-        // Content types for collection/poster images (broader image set)
+        /// <summary>
+        /// Map a file extension to its MIME content type for collection poster images. Returns <c>null</c> for unsupported types.
+        /// </summary>
+        /// <param name="ext">File extension including the leading dot (e.g. <c>.jpg</c>).</param>
+        /// <returns>The MIME type string, or <c>null</c> if the extension is not recognized.</returns>
         private static string? GetCollectionContentTypeForExtension(string ext)
         {
             if (string.IsNullOrWhiteSpace(ext))
@@ -430,6 +494,11 @@ namespace ShokoRelay.Controllers
             };
         }
 
+        /// <summary>
+        /// Fire-and-forget helper that triggers a Plex section refresh for every VFS root path belonging to the supplied series.
+        /// </summary>
+        /// <param name="series">Series whose VFS root paths should be refreshed in Plex.</param>
+        /// <returns>A task that completes when all refresh requests have been issued.</returns>
         private Task SchedulePlexRefreshForSeriesAsync(IEnumerable<IShokoSeries> series)
         {
             return Task.Run(async () =>
@@ -473,8 +542,13 @@ namespace ShokoRelay.Controllers
             });
         }
 
-        // Plex discovery types & network access moved to PlexAuth
-        // Wrapper methods below forward to PlexAuth for discovery and library fetching.
+        /// <summary>
+        /// Wrapper around <see cref="PlexAuth.GetPlexServerListAsync"/> that catches exceptions and returns empty results on failure.
+        /// </summary>
+        /// <param name="token">Plex authentication token.</param>
+        /// <param name="clientIdentifier">Client identifier for the Plex API.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A tuple indicating token validity, discovered servers and raw devices.</returns>
         private async Task<(bool TokenValid, List<PlexServerInfo> Servers, List<PlexDevice> Devices)> GetPlexServerListAsync(string token, string clientIdentifier, CancellationToken cancellationToken)
         {
             try
@@ -488,6 +562,14 @@ namespace ShokoRelay.Controllers
             }
         }
 
+        /// <summary>
+        /// Wrapper around <see cref="PlexAuth.GetPlexLibrariesAsync"/> that catches exceptions and returns an empty list on failure.
+        /// </summary>
+        /// <param name="token">Plex authentication token.</param>
+        /// <param name="clientIdentifier">Client identifier for the Plex API.</param>
+        /// <param name="serverUrl">Base URL of the Plex server to query.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A list of <see cref="PlexLibraryInfo"/> entries discovered on the server.</returns>
         private async Task<List<PlexLibraryInfo>> GetPlexLibrariesAsync(string token, string clientIdentifier, string serverUrl, CancellationToken cancellationToken)
         {
             try

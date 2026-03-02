@@ -364,7 +364,6 @@ namespace ShokoRelay.Controllers
             if (ctx == null)
                 return NotFound();
 
-            // --- EPISODE ---
             if (ratingKey.StartsWith(EpisodePrefix))
             {
                 var epPart = ratingKey.Substring(EpisodePrefix.Length);
@@ -414,7 +413,6 @@ namespace ShokoRelay.Controllers
                 return WrapInContainer(_mapper.MapEpisode(episode, coords, ctx.Series, ctx.Titles, partIndex, tmdbEpisode));
             }
 
-            // --- SEASON ---
             if (ratingKey.Contains(SeasonPrefix))
             {
                 int sNum = int.Parse(ratingKey.Split(SeasonPrefix)[1]);
@@ -429,7 +427,6 @@ namespace ShokoRelay.Controllers
                 return WrapInContainer(seasonMeta);
             }
 
-            // --- SERIES ---
             var showMeta = _mapper.MapSeries(ctx.Series, ctx.Titles);
 
             if (includeChildren == 1)
@@ -612,32 +609,25 @@ namespace ShokoRelay.Controllers
                     // ensure client id exists (write/token file if needed)
                     string clientIdentifier = _configProvider.GetPlexClientIdentifier();
 
-                    try
+                    var discovery = await _plexAuth.DiscoverShokoLibrariesAsync(pin.AuthToken, clientIdentifier, cancellationToken).ConfigureAwait(false);
+
+                    if (discovery.TokenValid && discovery.Servers?.Count > 0)
                     {
-                        var discovery = await _plexAuth.DiscoverShokoLibrariesAsync(pin.AuthToken, clientIdentifier, cancellationToken).ConfigureAwait(false);
+                        var servers = discovery
+                            .Servers.Select(s => new PlexAvailableServer
+                            {
+                                Id = s.Id,
+                                Name = s.Name,
+                                PreferredUri = s.PreferredUri ?? string.Empty,
+                            })
+                            .ToList();
 
-                        if (discovery.TokenValid && discovery.Servers?.Count > 0)
-                        {
-                            var servers = discovery
-                                .Servers.Select(s => new PlexAvailableServer
-                                {
-                                    Id = s.Id,
-                                    Name = s.Name,
-                                    PreferredUri = s.PreferredUri ?? string.Empty,
-                                })
-                                .ToList();
-
-                            _configProvider.UpdatePlexTokenInfo(servers: servers);
-                        }
-
-                        // Deduplicate & map discovered libraries via helper
-                        var libs = CollectDiscoveredLibraries(discovery.ShokoLibraries);
-                        _configProvider.UpdatePlexTokenInfo(libraries: libs);
+                        _configProvider.UpdatePlexTokenInfo(servers: servers);
                     }
-                    catch (Exception ex)
-                    {
-                        Logger.Warn($"Plex discovery failed: {ex.Message}");
-                    }
+
+                    // Deduplicate & map discovered libraries via helper
+                    var libs = CollectDiscoveredLibraries(discovery.ShokoLibraries);
+                    _configProvider.UpdatePlexTokenInfo(libraries: libs);
                 }
                 catch (Exception ex)
                 {
@@ -652,6 +642,10 @@ namespace ShokoRelay.Controllers
             }
         }
 
+        /// <summary>
+        /// Revokes the stored Plex token and removes all persisted Plex discovery data (servers, libraries) from the configuration file.
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token.</param>
         [HttpPost("plex/auth/unlink")]
         public async Task<IActionResult> UnlinkPlex(CancellationToken cancellationToken = default)
         {
@@ -668,6 +662,10 @@ namespace ShokoRelay.Controllers
             return Ok(new { status = "ok" });
         }
 
+        /// <summary>
+        /// Re-discovers Plex servers and libraries using the stored token and updates the persisted discovery data.
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token.</param>
         [HttpPost("plex/auth/refresh")]
         public async Task<IActionResult> RefreshPlexLibraries(CancellationToken cancellationToken = default)
         {
@@ -769,30 +767,27 @@ namespace ShokoRelay.Controllers
             // Use manager-provided skipped count
             skipped = managerResult.Skipped;
 
-            try
-            {
-                var sb = new System.Text.StringBuilder();
-                sb.AppendLine($"Collection Build Report - {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-                sb.AppendLine($"Processed: {processed}");
-                sb.AppendLine($"Created: {created}");
-                sb.AppendLine($"Uploaded: {uploaded}");
-                sb.AppendLine($"SeasonPostersUploaded: {seasonPostersUploaded}");
-                sb.AppendLine($"Skipped: {skipped}");
-                sb.AppendLine($"Errors: {errors}");
-                sb.AppendLine($"DeletedEmptyCollections: {deletedEmptyCollections}");
-                if (errorsList.Count > 0)
+            WriteReportLog(
+                "collections-report.log",
+                sb =>
                 {
-                    sb.AppendLine();
-                    sb.AppendLine("Errors List:");
-                    foreach (var e in errorsList)
-                        sb.AppendLine(e);
+                    sb.AppendLine($"Collection Build Report - {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                    sb.AppendLine($"Processed: {processed}");
+                    sb.AppendLine($"Created: {created}");
+                    sb.AppendLine($"Uploaded: {uploaded}");
+                    sb.AppendLine($"SeasonPostersUploaded: {seasonPostersUploaded}");
+                    sb.AppendLine($"Skipped: {skipped}");
+                    sb.AppendLine($"Errors: {errors}");
+                    sb.AppendLine($"DeletedEmptyCollections: {deletedEmptyCollections}");
+                    if (errorsList.Count > 0)
+                    {
+                        sb.AppendLine();
+                        sb.AppendLine("Errors List:");
+                        foreach (var e in errorsList)
+                            sb.AppendLine(e);
+                    }
                 }
-                LogHelper.WriteLog(_configProvider.PluginDirectory, "collections-report.log", sb.ToString());
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(ex, "Failed to write collection report log");
-            }
+            );
 
             return Ok(
                 new
@@ -858,6 +853,12 @@ namespace ShokoRelay.Controllers
             // Response delegated to CollectionManager earlier.
         }
 
+        /// <summary>
+        /// Applies critic/audience ratings from Shoko metadata to the corresponding Plex library items; supply either <paramref name="seriesId"/> or <paramref name="filter"/>, not both.
+        /// </summary>
+        /// <param name="seriesId">Optional single series to update.</param>
+        /// <param name="filter">Optional comma-separated list of series IDs.</param>
+        /// <param name="cancellationToken">Token to observe for cancellation.</param>
         [HttpGet("plex/ratings/apply")]
         public async Task<IActionResult> ApplyAudienceRatings([FromQuery] int? seriesId = null, [FromQuery] string? filter = null, CancellationToken cancellationToken = default)
         {
@@ -880,28 +881,25 @@ namespace ShokoRelay.Controllers
 
             var result = await _criticRatingService.ApplyRatingsAsync(allowedIds, cancellationToken).ConfigureAwait(false);
 
-            try
-            {
-                var sb = new System.Text.StringBuilder();
-                sb.AppendLine($"Audience Rating Report - {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-                sb.AppendLine($"ProcessedSeries: {result.ProcessedShows}");
-                sb.AppendLine($"UpdatedSeries: {result.UpdatedShows}");
-                sb.AppendLine($"ProcessedEpisodes: {result.ProcessedEpisodes}");
-                sb.AppendLine($"UpdatedEpisodes: {result.UpdatedEpisodes}");
-                sb.AppendLine($"Errors: {result.Errors}");
-                if (result.ErrorsList?.Count > 0)
+            WriteReportLog(
+                "ratings-report.log",
+                sb =>
                 {
-                    sb.AppendLine();
-                    sb.AppendLine("Errors List:");
-                    foreach (var e in result.ErrorsList)
-                        sb.AppendLine(e);
+                    sb.AppendLine($"Audience Rating Report - {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                    sb.AppendLine($"ProcessedSeries: {result.ProcessedShows}");
+                    sb.AppendLine($"UpdatedSeries: {result.UpdatedShows}");
+                    sb.AppendLine($"ProcessedEpisodes: {result.ProcessedEpisodes}");
+                    sb.AppendLine($"UpdatedEpisodes: {result.UpdatedEpisodes}");
+                    sb.AppendLine($"Errors: {result.Errors}");
+                    if (result.ErrorsList?.Count > 0)
+                    {
+                        sb.AppendLine();
+                        sb.AppendLine("Errors List:");
+                        foreach (var e in result.ErrorsList)
+                            sb.AppendLine(e);
+                    }
                 }
-                LogHelper.WriteLog(_configProvider.PluginDirectory, "ratings-report.log", sb.ToString());
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(ex, "Failed to write rating report log");
-            }
+            );
 
             return Ok(
                 new
@@ -918,6 +916,10 @@ namespace ShokoRelay.Controllers
             );
         }
 
+        /// <summary>
+        /// Manually triggers both collection building and critic-rating application for all series, then marks the automation schedule as run.
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token.</param>
         [HttpGet("plex/automation/run")]
         public async Task<IActionResult> RunPlexAutomationNow(CancellationToken cancellationToken = default)
         {
@@ -981,7 +983,7 @@ namespace ShokoRelay.Controllers
             PlexWebhookPayload? evt;
             try
             {
-                evt = System.Text.Json.JsonSerializer.Deserialize<PlexWebhookPayload>(payloadJson, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                evt = System.Text.Json.JsonSerializer.Deserialize<PlexWebhookPayload>(payloadJson, _jsonCaseInsensitive);
             }
             catch
             {
@@ -1088,6 +1090,12 @@ namespace ShokoRelay.Controllers
 
         #region Virtual File System
 
+        /// <summary>
+        /// Builds (or previews) the VFS symlink tree for the configured import folders. Set <paramref name="run"/> to <c>true</c> to actually create links; optionally restrict to specific series via <paramref name="filter"/>.
+        /// </summary>
+        /// <param name="clean">If true, removes stale links before building.</param>
+        /// <param name="run">Must be true to execute; otherwise returns a dry-run summary.</param>
+        /// <param name="filter">Optional comma-separated series IDs to restrict the build.</param>
         [HttpGet("vfs")]
         public IActionResult BuildVfs([FromQuery] bool clean = true, [FromQuery] bool run = false, [FromQuery] string? filter = null)
         {
@@ -1178,24 +1186,21 @@ namespace ShokoRelay.Controllers
                 bool doDry = dryRun ?? true;
                 var removed = await _shokoImportService.RemoveMissingFilesAsync(true, doDry).ConfigureAwait(false);
 
-                try
-                {
-                    var sb = new System.Text.StringBuilder();
-                    sb.AppendLine($"RemoveMissing Report - {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-                    sb.AppendLine($"DryRun: {doDry}");
-                    sb.AppendLine($"Count: {removed?.Count ?? 0}");
-                    if (removed != null && removed.Count > 0)
+                WriteReportLog(
+                    "remove-missing-report.log",
+                    sb =>
                     {
-                        sb.AppendLine();
-                        foreach (var path in removed)
-                            sb.AppendLine(path);
+                        sb.AppendLine($"RemoveMissing Report - {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                        sb.AppendLine($"DryRun: {doDry}");
+                        sb.AppendLine($"Count: {removed?.Count ?? 0}");
+                        if (removed != null && removed.Count > 0)
+                        {
+                            sb.AppendLine();
+                            foreach (var path in removed)
+                                sb.AppendLine(path);
+                        }
                     }
-                    LogHelper.WriteLog(_configProvider.PluginDirectory, "remove-missing-report.log", sb.ToString());
-                }
-                catch (Exception ex)
-                {
-                    Logger.Warn(ex, "Failed to write remove-missing log");
-                }
+                );
 
                 return Ok(
                     new
@@ -1215,11 +1220,11 @@ namespace ShokoRelay.Controllers
             }
         }
 
-        [HttpPost("shoko/import")]
         /// <summary>
-        /// Initiates a Shoko import run; by default only unrecognized files are scanned, controllable via <paramref name="onlyUnrecognized"/>.
+        /// Initiates a Shoko import scan for source-type import folders. Only unrecognized files are scanned by default.
         /// </summary>
         /// <param name="onlyUnrecognized">If true only unrecognized files are imported.</param>
+        [HttpPost("shoko/import")]
         public async Task<IActionResult> RunShokoImport([FromQuery] bool onlyUnrecognized = true)
         {
             try
@@ -1244,6 +1249,10 @@ namespace ShokoRelay.Controllers
             }
         }
 
+        /// <summary>
+        /// Triggers an immediate Shoko import and resets the automation schedule so the next run occurs after the configured interval.
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token.</param>
         [HttpGet("shoko/import/start")]
         public async Task<IActionResult> StartShokoImportNow(CancellationToken cancellationToken = default)
         {
@@ -1351,41 +1360,38 @@ namespace ShokoRelay.Controllers
                     result = await _watchedSyncService.SyncWatchedAsync(parsedDryRun, sinceHours, includeRatings, excludeAdmin.GetValueOrDefault(false), cancellationToken).ConfigureAwait(false);
                 }
 
-                try
-                {
-                    var sb = new System.Text.StringBuilder();
-                    sb.AppendLine($"Sync Watched Report - {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-                    sb.AppendLine($"DryRun: {parsedDryRun}");
-                    sb.AppendLine($"Direction: {direction}");
-                    sb.AppendLine($"Processed: {result.Processed}");
-                    sb.AppendLine($"Marked: {result.MarkedWatched}");
-                    sb.AppendLine($"Skipped: {result.Skipped}");
-                    sb.AppendLine($"Scheduled: {result.ScheduledJobs}");
-                    sb.AppendLine($"VotesFound: {result.VotesFound}");
-                    sb.AppendLine($"VotesUpdated: {result.VotesUpdated}");
-                    sb.AppendLine($"VotesSkipped: {result.VotesSkipped}");
-                    sb.AppendLine($"Matched: {result.Matched}");
-                    // write a summary of missing mapping ids rather than the List type name
-                    var missingList = result.MissingMappings ?? new List<int>();
-                    int missingCount = missingList.Count;
-                    sb.AppendLine($"MissingMappings: {missingCount}");
-                    if (missingCount > 0)
+                WriteReportLog(
+                    "sync-watched-report.log",
+                    sb =>
                     {
-                        sb.AppendLine("MissingIds: " + string.Join(',', missingList));
+                        sb.AppendLine($"Sync Watched Report - {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                        sb.AppendLine($"DryRun: {parsedDryRun}");
+                        sb.AppendLine($"Direction: {direction}");
+                        sb.AppendLine($"Processed: {result.Processed}");
+                        sb.AppendLine($"Marked: {result.MarkedWatched}");
+                        sb.AppendLine($"Skipped: {result.Skipped}");
+                        sb.AppendLine($"Scheduled: {result.ScheduledJobs}");
+                        sb.AppendLine($"VotesFound: {result.VotesFound}");
+                        sb.AppendLine($"VotesUpdated: {result.VotesUpdated}");
+                        sb.AppendLine($"VotesSkipped: {result.VotesSkipped}");
+                        sb.AppendLine($"Matched: {result.Matched}");
+                        // write a summary of missing mapping ids rather than the List type name
+                        var missingList = result.MissingMappings ?? new List<int>();
+                        int missingCount = missingList.Count;
+                        sb.AppendLine($"MissingMappings: {missingCount}");
+                        if (missingCount > 0)
+                        {
+                            sb.AppendLine("MissingIds: " + string.Join(',', missingList));
+                        }
+                        if (result.ErrorsList?.Count > 0)
+                        {
+                            sb.AppendLine();
+                            sb.AppendLine("Errors:");
+                            foreach (var e in result.ErrorsList)
+                                sb.AppendLine(e);
+                        }
                     }
-                    if (result.ErrorsList?.Count > 0)
-                    {
-                        sb.AppendLine();
-                        sb.AppendLine("Errors:");
-                        foreach (var e in result.ErrorsList)
-                            sb.AppendLine(e);
-                    }
-                    LogHelper.WriteLog(_configProvider.PluginDirectory, "sync-watched-report.log", sb.ToString());
-                }
-                catch (Exception ex)
-                {
-                    Logger.Warn(ex, "Failed to write sync log");
-                }
+                );
 
                 return Ok(
                     new
@@ -1416,6 +1422,10 @@ namespace ShokoRelay.Controllers
             }
         }
 
+        /// <summary>
+        /// Triggers an immediate Plex→Shoko watched-state sync and resets the automation schedule so the next run occurs after the configured interval.
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token.</param>
         [HttpGet("sync-watched/start")]
         public async Task<IActionResult> StartWatchedSyncNow(CancellationToken cancellationToken = default)
         {
@@ -1476,26 +1486,24 @@ namespace ShokoRelay.Controllers
 
             var result = await _animeThemesMapping.ApplyMappingAsync(filterIds, cancellationToken).ConfigureAwait(false);
 
-            try
-            {
-                var sb = new System.Text.StringBuilder();
-                sb.AppendLine($"AnimeThemes: VFS Build Report - {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-                sb.AppendLine($"LinksCreated: {result.LinksCreated}");
-                sb.AppendLine($"Skipped: {result.Skipped}");
-                sb.AppendLine($"SeriesMatched: {result.SeriesMatched}");
-                if (result.Errors?.Count > 0)
+            WriteReportLog(
+                "at-vfs-build-report.log",
+                sb =>
                 {
-                    sb.AppendLine();
-                    sb.AppendLine("Errors:");
-                    foreach (var e in result.Errors)
-                        sb.AppendLine(e);
+                    sb.AppendLine($"AnimeThemes: VFS Build Report - {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                    sb.AppendLine($"Elapsed: {result.Elapsed}");
+                    sb.AppendLine($"LinksCreated: {result.LinksCreated}");
+                    sb.AppendLine($"Skipped: {result.Skipped}");
+                    sb.AppendLine($"SeriesMatched: {result.SeriesMatched}");
+                    if (result.Errors?.Count > 0)
+                    {
+                        sb.AppendLine();
+                        sb.AppendLine("Errors:");
+                        foreach (var e in result.Errors)
+                            sb.AppendLine(e);
+                    }
                 }
-                LogHelper.WriteLog(_configProvider.PluginDirectory, "at-vfs-build-report.log", sb.ToString());
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(ex, "Failed to write animethemes apply log");
-            }
+            );
 
             return Ok(
                 new
@@ -1504,6 +1512,7 @@ namespace ShokoRelay.Controllers
                     result.Skipped,
                     result.SeriesMatched,
                     result.Errors,
+                    elapsed = result.Elapsed.ToString(),
                     logUrl = $"{ApiBase}/logs/at-vfs-build-report.log",
                 }
             );
@@ -1517,25 +1526,22 @@ namespace ShokoRelay.Controllers
         public async Task<IActionResult> AnimeThemesVfsMap(CancellationToken cancellationToken = default)
         {
             var result = await _animeThemesMapping.BuildMappingFileAsync(cancellationToken).ConfigureAwait(false);
-            try
-            {
-                var sb = new System.Text.StringBuilder();
-                sb.AppendLine($"AnimeThemes: Mapping Build Report - {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-                sb.AppendLine($"EntriesWritten: {result.EntriesWritten}");
-                sb.AppendLine($"Errors: {result.Errors}");
-                if (result.Messages?.Count > 0)
+            WriteReportLog(
+                "at-vfs-map-report.log",
+                sb =>
                 {
-                    sb.AppendLine();
-                    sb.AppendLine("Messages:");
-                    foreach (var m in result.Messages)
-                        sb.AppendLine(m);
+                    sb.AppendLine($"AnimeThemes: Mapping Build Report - {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                    sb.AppendLine($"EntriesWritten: {result.EntriesWritten}");
+                    sb.AppendLine($"Errors: {result.Errors}");
+                    if (result.Messages?.Count > 0)
+                    {
+                        sb.AppendLine();
+                        sb.AppendLine("Messages:");
+                        foreach (var m in result.Messages)
+                            sb.AppendLine(m);
+                    }
                 }
-                LogHelper.WriteLog(_configProvider.PluginDirectory, "at-vfs-map-report.log", sb.ToString());
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(ex, "Failed to write animethemes mapping log");
-            }
+            );
             return Ok(new { result, logUrl = $"{ApiBase}/logs/at-vfs-map-report.log" });
         }
 
@@ -1577,23 +1583,20 @@ namespace ShokoRelay.Controllers
             {
                 var batch = await _animeThemesGenerator.ProcessBatchAsync(query, cancellationToken);
 
-                try
-                {
-                    var sb = new System.Text.StringBuilder();
-                    sb.AppendLine($"AnimeThemes: MP3 Batch Report - {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-                    sb.AppendLine($"Processed: {batch.Processed}");
-                    sb.AppendLine($"Skipped: {batch.Skipped}");
-                    sb.AppendLine($"Errors: {batch.Errors}");
-                    foreach (var item in batch.Items)
+                WriteReportLog(
+                    "at-mp3-report.log",
+                    sb =>
                     {
-                        sb.AppendLine($"{item.Folder} -> {item.Status}{(item.Message != null ? ": " + item.Message : "")} ");
+                        sb.AppendLine($"AnimeThemes: MP3 Batch Report - {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                        sb.AppendLine($"Processed: {batch.Processed}");
+                        sb.AppendLine($"Skipped: {batch.Skipped}");
+                        sb.AppendLine($"Errors: {batch.Errors}");
+                        foreach (var item in batch.Items)
+                        {
+                            sb.AppendLine($"{item.Folder} -> {item.Status}{(item.Message != null ? ": " + item.Message : "")} ");
+                        }
                     }
-                    LogHelper.WriteLog(_configProvider.PluginDirectory, "at-mp3-report.log", sb.ToString());
-                }
-                catch (Exception ex)
-                {
-                    Logger.Warn(ex, "Failed to write anime themes mp3 report log");
-                }
+                );
 
                 return Ok(new { batch, logUrl = $"{ApiBase}/logs/at-mp3-report.log" });
             }

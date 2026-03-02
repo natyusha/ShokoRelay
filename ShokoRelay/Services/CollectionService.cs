@@ -18,6 +18,7 @@ namespace ShokoRelay.Services
         /// </summary>
         /// <param name="seriesList">List of series to process (nullable entries ignored).</param>
         /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A <see cref="BuildCollectionsResult"/> with counters and error details.</returns>
         Task<BuildCollectionsResult> BuildCollectionsAsync(IEnumerable<IShokoSeries?> seriesList, CancellationToken cancellationToken = default);
 
         /// <summary>
@@ -25,6 +26,7 @@ namespace ShokoRelay.Services
         /// </summary>
         /// <param name="seriesList">Series to update posters for.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>An <see cref="ApplyPostersResult"/> with counters and error details.</returns>
         Task<ApplyPostersResult> ApplyCollectionPostersAsync(IEnumerable<IShokoSeries?> seriesList, CancellationToken cancellationToken = default);
     }
 
@@ -182,15 +184,13 @@ namespace ShokoRelay.Services
                             {
                                 int? collectionId = await _plexCollections.GetOrCreateCollectionIdAsync(collectionName, target, cancellationToken).ConfigureAwait(false);
 
-                                if (collectionId.HasValue && !postedCollections.Contains(collectionId.Value))
+                                // Add to set before attempting upload so failures don't cause retries for every item in the same collection
+                                if (collectionId.HasValue && postedCollections.Add(collectionId.Value))
                                 {
                                     bool posterApplied = await TryApplyCollectionPosterAsync(series, collectionName, collectionId.Value, target, cancellationToken).ConfigureAwait(false);
 
                                     if (posterApplied)
-                                    {
                                         uploaded++;
-                                        postedCollections.Add(collectionId.Value);
-                                    }
                                 }
                             }
                             catch (Exception ex)
@@ -292,6 +292,7 @@ namespace ShokoRelay.Services
                 }
 
                 items ??= new List<PlexMetadataItem>();
+                var postedCollections = new HashSet<int>();
 
                 foreach (var item in items)
                 {
@@ -337,6 +338,13 @@ namespace ShokoRelay.Services
                     {
                         errors++;
                         errorsList.Add($"Exception getting/creating collection '{collectionName}' for series {shokoId.Value} in section {target.SectionId}: {ex.Message}");
+                        continue;
+                    }
+
+                    // Only attempt poster upload once per collection per target
+                    if (!postedCollections.Add(collectionId.Value))
+                    {
+                        skipped++;
                         continue;
                     }
 

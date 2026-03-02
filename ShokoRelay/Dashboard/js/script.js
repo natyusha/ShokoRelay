@@ -3,87 +3,67 @@
   const el = (id) => document.getElementById(id);
 
   // #region Helpers
-  function makeLogLink(logUrl) {
-    if (!logUrl) return "";
-    return `[<a href="${logUrl}" target="_blank" class="log-link">view log</a>]`;
-  }
+  /** @param {string} url - The log URL to wrap in an anchor tag. @returns {string} An HTML anchor link or an empty string if no URL was provided. */
+  const makeLogLink = (url) => (url ? `[<a href="${url}" target="_blank" class="log-link">view log</a>]` : "");
 
-  // helper for showing success/error toasts for HTTP responses third argument is an options object supporting the following fields:
-  //   hasFilter: boolean    // show 5s timeout when no errors (otherwise ignored)
-  //   summary: string       // custom summary text instead of summarizeResult()
-  //   hideOnSucceed: number // milliseconds; 0 means persist until dismissed
+  /**
+   * Show success/error toasts for HTTP responses with automatic log-link injection.
+   * @param {{ok: boolean, data: *}} res - The fetchJson response object.
+   * @param {string} label - A short label identifying the operation (e.g. "Collection build").
+   * @param {{hasFilter?: boolean, summary?: string, hideOnSucceed?: number}} [opts] - Display options.
+   */
   function toastOperation(res, label, opts = {}) {
-    const { hasFilter = false, summary, hideOnSucceed } = opts || {};
-
+    const { hasFilter = false, summary, hideOnSucceed } = opts;
     const logLink = makeLogLink(res.data?.logUrl);
     if (res.ok) {
       const text = summary || summarizeResult(res) || `${label} completed`;
       const errs = getErrorCount(res);
-      let timeout;
-      if (errs > 0) {
-        // errors always persist by default
-        timeout = 0;
-      } else {
-        if (hideOnSucceed !== undefined) {
-          timeout = hideOnSucceed;
-        } else {
-          timeout = hasFilter ? 5000 : 0;
-        }
-      }
+      const timeout = errs > 0 ? 0 : hideOnSucceed !== undefined ? hideOnSucceed : hasFilter ? 5000 : 0;
       showToast(`${label}: ${text} ${logLink}`, errs > 0 ? "error" : "success", timeout);
     } else {
-      const text = summary || res.data?.message || JSON.stringify(res.data);
-      showToast(`${label} failed: ${text} ${logLink}`, "error", 0);
+      showToast(`${label} failed: ${summary || res.data?.message || JSON.stringify(res.data)} ${logLink}`, "error", 0);
     }
   }
 
+  /**
+   * Build a human-readable summary string from common API response fields.
+   * @param {{ok: boolean, data: *}} res - The fetchJson response object.
+   * @returns {string} A comma-separated summary (e.g. "processed: 5, created: 3") or empty string.
+   */
   function summarizeResult(res) {
-    if (!res || !res.data) return "";
-    const d = res.data;
-    const parts = [];
-    const addIf = (keys, label) => {
-      for (const k of keys) {
-        if (d[k] !== undefined && d[k] !== null) {
-          // only include numeric error counts when > 0 (omit 0)
-          if (label === "errors") {
-            const v = d[k];
-            if (Array.isArray(v)) {
-              if (v.length > 0) parts.push(`${label}: ${v.length}`);
-            } else if (typeof v === "number") {
-              if (v > 0) parts.push(`${label}: ${v}`);
-            } else if (typeof v === "string" && /^\d+$/.test(v)) {
-              const n = Number(v);
-              if (n > 0) parts.push(`${label}: ${n}`);
-            }
-          } else {
-            parts.push(`${label}: ${d[k]}`);
-          }
-          return true;
-        }
-      }
-      return false;
-    };
-
-    addIf(["seriesProcessed", "processed", "scannedCount"], "processed");
-    addIf(["linksCreated", "created", "createdLinks", "LinksCreated"], "created");
-    addIf(["marked", "markedWatched"], "marked");
-    addIf(["skipped"], "skipped");
-
-    // Only show 'errors' in the summary when there are > 0 errors
-    addIf(["errors", "Errors", "errorsList", "ErrorsList"], "errors");
-
-    addIf(["uploaded"], "uploaded");
-
-    if (parts.length === 0 && typeof d === "string") {
-      return d.length > 200 ? d.substring(0, 200) + "..." : d;
-    }
+    if (!res?.data) return "";
+    const d = res.data,
+      parts = [];
+    const add = (keys, label) =>
+      keys.some((k) => {
+        const v = d[k];
+        if (v === undefined || v === null) return false;
+        if (label === "errors") {
+          const n = Array.isArray(v) ? v.length : typeof v === "number" ? v : /^\d+$/.test(String(v)) ? Number(v) : 0;
+          if (n > 0) parts.push(`${label}: ${n}`);
+        } else parts.push(`${label}: ${v}`);
+        return true;
+      });
+    add(["seriesProcessed", "processed", "scannedCount"], "processed");
+    add(["linksCreated", "created", "createdLinks", "LinksCreated"], "created");
+    add(["marked", "markedWatched"], "marked");
+    add(["skipped"], "skipped");
+    add(["errors", "Errors", "errorsList", "ErrorsList"], "errors");
+    add(["uploaded"], "uploaded");
+    if (!parts.length && typeof d === "string") return d.length > 200 ? d.substring(0, 200) + "..." : d;
     return parts.join(", ");
   }
 
+  /**
+   * Fetch a URL and parse the response as JSON, returning a normalized result object.
+   * @param {string} url - The URL to fetch.
+   * @param {RequestInit} [opts] - Optional fetch options (method, headers, body, etc.).
+   * @returns {Promise<{ok: boolean, data: *}>} Normalized response with parsed data.
+   */
   const fetchJson = async (url, opts) => {
     try {
-      const res = await fetch(url, opts);
-      const text = await res.text();
+      const res = await fetch(url, opts),
+        text = await res.text();
       try {
         return { ok: res.ok, data: JSON.parse(text) };
       } catch {
@@ -97,25 +77,30 @@
 
   const setBoolParam = (ps, k, v) => ps.set(k, v ? "true" : "false");
   const setIfNotEmpty = (ps, k, v) => {
-    if (v !== undefined && v !== null && String(v) !== "") ps.set(k, String(v));
+    if (v != null && String(v) !== "") ps.set(k, String(v));
   };
 
-  // Initialize a button as an aria-pressed toggle and attach a simple click handler.
-  // btn can be an element or an element id string. defaultState boolean indicates initial pressed state.
+  /**
+   * Initialize a button as an aria-pressed toggle with a click handler that flips its state.
+   * @param {HTMLElement|string} btn - The button element or its DOM id.
+   * @param {boolean} [defaultState=false] - Initial pressed state.
+   * @returns {HTMLElement|null} The resolved button element, or null if not found.
+   */
   function initToggle(btn, defaultState = false) {
-    const elBtn = typeof btn === "string" ? document.getElementById(btn) : btn;
+    const elBtn = typeof btn === "string" ? el(btn) : btn;
     if (!elBtn) return null;
-    if (!elBtn.hasAttribute("aria-pressed")) elBtn.setAttribute("aria-pressed", defaultState ? "true" : "false");
-    elBtn.onclick = () => {
-      const cur = elBtn.getAttribute("aria-pressed") === "true";
-      elBtn.setAttribute("aria-pressed", cur ? "false" : "true");
-    };
+    if (!elBtn.hasAttribute("aria-pressed")) elBtn.setAttribute("aria-pressed", String(!!defaultState));
+    elBtn.onclick = () => elBtn.setAttribute("aria-pressed", elBtn.getAttribute("aria-pressed") === "true" ? "false" : "true");
     return elBtn;
   }
 
-  // Wrap a button's click handler with loading state management (avoids repeating try/finally)
+  /**
+   * Wrap a button's click handler so it automatically shows/hides a loading spinner.
+   * @param {HTMLElement|string} btn - The button element or its DOM id.
+   * @param {Function} handler - Async click handler to execute while the button is in a loading state.
+   */
   function withButtonAction(btn, handler) {
-    const elBtn = typeof btn === "string" ? document.getElementById(btn) : btn;
+    const elBtn = typeof btn === "string" ? el(btn) : btn;
     if (!elBtn) return;
     elBtn.onclick = async (...args) => {
       setButtonLoading(elBtn, true);
@@ -127,56 +112,44 @@
     };
   }
 
-  // status helper important messages now surface via toasts
+  /**
+   * Surface important outcomes via toasts; transient 'running' updates are silently ignored.
+   * @param {string} message - Status message text (may contain an "errors: N" substring).
+   * @param {"error"|"ok"|"running"} level - Severity level controlling toast type.
+   */
   function setColStatus(message, level) {
-    // The inline status label was removed from the dashboard. Move important
-    // outcomes (errors/success) to toasts. Transient 'running' updates are silent.
-    if (!message) message = "pending";
-
-    // If a numeric errors value exists in the message, prefer to show that as an error toast
+    message = message || "pending";
     const m = String(message).match(/errors:?\s*(\d+)/i);
-    if (m) {
-      const n = Number(m[1]);
-      if (n > 0) {
-        showToast(message, "error", 0);
-        return;
-      }
-      // strip 'errors: 0' from the message to reduce noise
-      message = message.replace(/,?\s*errors:?\s*0/i, "").trim();
-      // fallthrough to normal handling
-    }
-
-    if (level === "error") {
-      showToast(message, "error", 0);
-    } else if (level === "ok") {
-      showToast(message, "success", 6000);
-    } else {
-      // don't show transient/running messages as toasts to avoid noise
-      return;
-    }
+    if (m && Number(m[1]) > 0) return showToast(message, "error", 0);
+    if (m) message = message.replace(/,?\s*errors:?\s*0/i, "").trim();
+    if (level === "error") showToast(message, "error", 0);
+    else if (level === "ok") showToast(message, "success", 6000);
   }
 
-  // button loading helper (overlay spinner + disabled look)
+  /**
+   * Toggle a button's loading state by adding/removing a spinner overlay and disabled attribute.
+   * @param {HTMLElement} btn - The button element to modify.
+   * @param {boolean} isLoading - Whether to enable or disable the loading state.
+   */
   function setButtonLoading(btn, isLoading) {
     if (!btn) return;
     if (isLoading) {
       btn.classList.add("loading");
       btn.setAttribute("disabled", "");
       if (!btn.querySelector(".button-spinner")) {
-        const span = document.createElement("span");
-        span.className = "button-spinner";
-        span.innerHTML = '<svg class="icon-svg"><use href="img/icons.svg#loading"></use></svg>';
-        btn.appendChild(span);
+        const s = document.createElement("span");
+        s.className = "button-spinner";
+        s.innerHTML = '<svg class="icon-svg"><use href="img/icons.svg#loading"></use></svg>';
+        btn.appendChild(s);
       }
     } else {
       btn.classList.remove("loading");
       btn.removeAttribute("disabled");
-      const sp = btn.querySelector(".button-spinner");
-      if (sp) sp.remove();
+      btn.querySelector(".button-spinner")?.remove();
     }
   }
 
-  // small builders to avoid repeating URLSearchParams logic
+  /** Build URLSearchParams for VFS generation requests from the dashboard filter and toggle state. @returns {URLSearchParams} */
   const buildVfsParams = () => {
     const ps = new URLSearchParams();
     setIfNotEmpty(ps, "filter", el("vfs-filter")?.value);
@@ -186,6 +159,7 @@
     return ps;
   };
 
+  /** Build URLSearchParams for AnimeThemes MP3 requests from the dashboard inputs and toggles. @returns {URLSearchParams} */
   const buildAtParams = () => {
     const ps = new URLSearchParams();
     setIfNotEmpty(ps, "path", el("at-path")?.value);
@@ -197,102 +171,92 @@
     return ps;
   };
 
+  /** Build URLSearchParams for AnimeThemes VFS mapping requests from the filter input. @returns {URLSearchParams} */
   const buildAtMapParams = () => {
     const ps = new URLSearchParams();
     setIfNotEmpty(ps, "filter", el("at-filter-map")?.value);
     return ps;
   };
 
-  function getValueByPath(obj, path) {
-    return path.split(".").reduce((o, k) => (o ? o[k] : undefined), obj);
-  }
+  /** @param {Object} obj @param {string} path - Dot-separated key path. @returns {*} The resolved value, or undefined. */
+  const getValueByPath = (obj, path) => path.split(".").reduce((o, k) => o?.[k], obj);
+  /** @param {Object} obj @param {string} path - Dot-separated key path. @param {*} value - The value to set at the resolved path. */
   function setValueByPath(obj, path, value) {
     const parts = path.split(".");
-    let cur = obj;
-    for (let i = 0; i < parts.length - 1; i++) {
-      const key = parts[i];
-      if (!cur[key]) cur[key] = {};
-      cur = cur[key];
-    }
-    cur[parts[parts.length - 1]] = value;
+    const last = parts.pop();
+    const target = parts.reduce((o, k) => ((o[k] ??= {}), o[k]), obj);
+    target[last] = value;
   }
 
-  // helper to support the config payload wrapper introduced when overrides are sent
-  function unwrapConfig(data) {
-    if (data && typeof data === "object" && data.payload !== undefined) {
-      return data.payload || {};
-    }
-    return data || {};
-  }
+  /** Unwrap a config response that may contain a payload wrapper. @param {Object} data @returns {Object} The inner config object. */
+  const unwrapConfig = (data) => (data?.payload !== undefined ? data.payload || {} : data || {});
 
-  // shared helper that attaches overlay-click + Escape-key listeners to a modal element.
-  // Returns a `close()` function which will also remove the listeners.
+  /**
+   * Attach overlay-click and Escape-key close listeners to a modal element.
+   * @param {HTMLElement} modal - The modal element to attach handlers to.
+   * @returns {Function} A close() function that hides the modal and removes its listeners.
+   */
   function attachModalCloseHandlers(modal) {
     if (!modal) return () => {};
-    const onOverlayClick = (ev) => {
+    const onOverlay = (ev) => {
       if (ev.target === modal) close();
     };
-    const onKeydown = (ev) => {
+    const onKey = (ev) => {
       if (ev.key === "Escape") close();
     };
     function close() {
       modal.setAttribute("aria-hidden", "true");
       modal.classList.remove("open");
       document.body.style.overflow = "";
-      modal.removeEventListener("click", onOverlayClick);
-      document.removeEventListener("keydown", onKeydown);
+      modal.removeEventListener("click", onOverlay);
+      document.removeEventListener("keydown", onKey);
     }
-    modal.addEventListener("click", onOverlayClick);
-    document.addEventListener("keydown", onKeydown);
+    modal.addEventListener("click", onOverlay);
+    document.addEventListener("keydown", onKey);
     return close;
   }
 
-  // Helper used throughout the dashboard to enable/disable controls that depend on Plex Auth.
-  function setPlexAutomationControls(enabled) {
-    // everything marked with this class is controlled by Plex auth state
-    document.querySelectorAll(".plex-auth").forEach((elmt) => {
-      elmt.disabled = !enabled;
+  /** Enable or disable all Plex-dependent automation controls on the dashboard. @param {boolean} enabled */
+  const setPlexAutomationControls = (enabled) =>
+    document.querySelectorAll(".plex-auth").forEach((e) => {
+      e.disabled = !enabled;
     });
-  }
   // #endregion
 
   // #region Plex: Authentication
   let plexPinId = "";
   let plexPollTimer = null;
 
-  function setPlexAction(html) {
-    const container = el("plex-auth-action");
-    if (container) container.innerHTML = html;
-  }
-  function setPlexLinkAction(authUrl) {
-    setPlexAction('<a id="plex-login" href="' + authUrl + '" target="_blank" class="plex-login-link">Login</a>');
-  }
+  const setPlexAction = (html) => {
+    const c = el("plex-auth-action");
+    if (c) c.innerHTML = html;
+  };
+  const setPlexLinkAction = (url) => setPlexAction(`<a id="plex-login" href="${url}" target="_blank" class="plex-login-link">Login</a>`);
   function setPlexStartAction() {
     setPlexAction('<button id="plex-start">Start Plex Auth</button>');
     const btn = el("plex-start");
     if (btn) btn.onclick = startPlexAuth;
   }
   function setPlexUnlinkAction() {
-    setPlexAction(
-      `<button id="plex-unlink" class="danger">Unlink Plex</button>
-      <button id="plex-refresh" class="w46-button" title="Refresh Plex Libraries"><svg class="icon-svg"><use href="img/icons.svg#refresh"></use></svg></button>`,
-    );
-    const unlinkBtn = el("plex-unlink");
-    if (unlinkBtn) unlinkBtn.onclick = unlinkPlex;
-    const refreshBtn = el("plex-refresh");
-    if (refreshBtn) refreshBtn.onclick = refreshPlexLibraries;
+    setPlexAction(`<button id="plex-unlink" class="danger">Unlink Plex</button>
+      <button id="plex-refresh" class="w46-button" title="Refresh Plex Libraries"><svg class="icon-svg"><use href="img/icons.svg#refresh"></use></svg></button>`);
+    const u = el("plex-unlink");
+    if (u) u.onclick = unlinkPlex;
+    const r = el("plex-refresh");
+    if (r) r.onclick = refreshPlexLibraries;
   }
-  function startPlexPolling() {
+  const startPlexPolling = () => {
     stopPlexPolling();
     plexPollTimer = setInterval(checkPlexAuthStatus, 2000);
-  }
-  function stopPlexPolling() {
+  };
+  const stopPlexPolling = () => {
     if (plexPollTimer) {
       clearInterval(plexPollTimer);
       plexPollTimer = null;
     }
-  }
+  };
 
+  /** Initiate the Plex OAuth flow by fetching a pin and redirecting the user to the auth URL. */
   async function startPlexAuth() {
     const btn = el("plex-start");
     setButtonLoading(btn, true);
@@ -311,20 +275,21 @@
     startPlexPolling();
   }
 
+  /** Poll the server for Plex OAuth completion; stops polling and refreshes state on success. */
   async function checkPlexAuthStatus() {
     if (!plexPinId) return;
     const res = await fetchJson(base + "/plex/auth/status?pinId=" + encodeURIComponent(plexPinId));
-    if (res.ok && res.data && res.data.status === "ok") {
+    if (res.ok && res.data?.status === "ok") {
       plexPinId = "";
       stopPlexPolling();
       await refreshPlexState();
     }
   }
 
+  /** POST to the server to rediscover Plex libraries, then refresh the dashboard state. */
   async function refreshPlexLibraries() {
     const btn = el("plex-refresh");
     setButtonLoading(btn, true);
-    setColStatus("Refreshing libraries...", "running");
     try {
       const rr = await fetchJson(base + "/plex/auth/refresh", { method: "POST" });
       if (rr.ok && rr.data) {
@@ -342,117 +307,88 @@
     }
   }
 
-  function clearPlexLibraries() {
-    const countEl = el("plex-libraries-count");
-    if (countEl) {
-      countEl.textContent = "0";
-    }
-  }
+  /** @param {Array} libraries - Array of discovered Plex library objects. */
+  const updateLibraryCount = (libraries) => {
+    const c = el("plex-libraries-count");
+    if (c) c.textContent = String((libraries || []).length);
+  };
 
-  function populateLibraries(libraries) {
-    const countEl = el("plex-libraries-count");
-    if (!countEl) return;
-    const count = (libraries || []).length;
-    countEl.textContent = String(count);
-  }
-
+  /**
+   * Validate that Plex is linked and libraries are available before running automation.
+   * @returns {Promise<boolean>} True if Plex is ready for automation, false otherwise.
+   */
   async function ensurePlexEnabled() {
+    const fail = (msg, e) => {
+      setColStatus(msg, "error");
+      if (e) console.error(e);
+      setPlexAutomationControls(false);
+      return false;
+    };
     try {
       const cfgRes = await fetchJson(base + "/config");
-      if (!cfgRes.ok || !cfgRes.data) {
-        setColStatus("Error loading config", "error");
-        setPlexAutomationControls(false);
-        return false;
-      }
-      const settings = unwrapConfig(cfgRes.data);
-      const plex = settings.PlexLibrary || {};
-      if (!plex.HasToken) {
-        setColStatus("Plex token missing. Link Plex in Plex Auth.", "error");
-        setPlexAutomationControls(false);
-        return false;
-      }
-      // library selection is automatic; just ensure at least one detected
-      if (!plex.DiscoveredLibraries || plex.DiscoveredLibraries.length === 0) {
-        setColStatus("No Plex libraries detected. Refresh Plex libraries.", "error");
-        setPlexAutomationControls(false);
-        return false;
-      }
+      if (!cfgRes.ok || !cfgRes.data) return fail("Error loading config");
+      const plex = unwrapConfig(cfgRes.data).PlexLibrary || {};
+      if (!plex.HasToken) return fail("Plex token missing. Link Plex in Plex Auth.");
+      if (!plex.DiscoveredLibraries?.length) return fail("No Plex libraries detected. Refresh Plex libraries.");
       setPlexAutomationControls(true);
       return true;
     } catch (e) {
-      setColStatus("Error checking Plex config", "error");
-      console.error(e);
-      setPlexAutomationControls(false);
-      return false;
+      return fail("Error checking Plex config", e);
     }
   }
 
+  /** Refresh the full Plex authentication state (token, libraries, settings bindings) from the server config. */
   async function refreshPlexState() {
-    clearPlexLibraries();
+    updateLibraryCount();
     const res = await fetchJson(base + "/config");
     if (!res.ok || !res.data) {
-      // if we can't even get the config, ensure the automation UI is disabled
       setPlexAutomationControls(false);
       setPlexStartAction();
       return;
     }
-    let settings = unwrapConfig(res.data);
-    // keep a global copy for later UI components (e.g. sync modal)
-    window.relaySettings = settings;
-    // normalize ExtraPlexUsers to a string (avoid malicious objects)
-    if (settings.ExtraPlexUsers && typeof settings.ExtraPlexUsers !== "string") {
-      settings.ExtraPlexUsers = "";
-    }
+    const settings = (window.relaySettings = unwrapConfig(res.data));
+    if (settings.ExtraPlexUsers && typeof settings.ExtraPlexUsers !== "string") settings.ExtraPlexUsers = "";
     const plex = settings.PlexLibrary || {};
-
-    // enable/disable the automation controls based on whether a token exists
     setPlexAutomationControls(!!plex.HasToken);
-
-    const extraEl = el("extra-plex-users");
-    if (extraEl) {
-      extraEl.value = settings.ExtraPlexUsers || "";
-      extraEl.onchange = savePlexSettings;
-    }
-    const scanEl = el("plex-scan-vfs");
-    if (scanEl) {
-      scanEl.checked = !!settings.ScanOnVfsRefresh;
-      scanEl.onchange = savePlexSettings;
-    }
-
-    const plexWatchedEl = el("plex-watched");
-    if (plexWatchedEl) {
-      // 'Auto Scrobble' is separate from periodic SyncWatched
-      plexWatchedEl.checked = !!settings.AutoScrobble;
-      plexWatchedEl.onchange = savePlexSettings;
-    }
-
-
-
+    const bind = (id, prop, val) => {
+      const e = el(id);
+      if (e) {
+        e[prop] = val;
+        e.onchange = savePlexSettings;
+      }
+    };
+    bind("extra-plex-users", "value", settings.ExtraPlexUsers || "");
+    bind("plex-scan-vfs", "checked", !!settings.ScanOnVfsRefresh);
+    bind("plex-watched", "checked", !!settings.AutoScrobble);
     if (!plex.HasToken) {
       setPlexStartAction();
       return;
     }
     setPlexUnlinkAction();
-    const libraries = (plex.DiscoveredLibraries || []).map((l) => ({ id: l.Id, title: l.Title, type: l.Type, uuid: l.Uuid, serverId: l.ServerId, serverName: l.ServerName, serverUrl: l.ServerUrl }));
-    if ((!libraries || libraries.length === 0) && plex.DiscoveredServers && plex.DiscoveredServers.length > 0) {
+    const mapLib = (l) => ({ id: l.Id, title: l.Title, type: l.Type, uuid: l.Uuid, serverId: l.ServerId, serverName: l.ServerName, serverUrl: l.ServerUrl });
+    const libraries = (plex.DiscoveredLibraries || []).map(mapLib);
+    if (!libraries.length && plex.DiscoveredServers?.length) {
       const rr = await fetchJson(base + "/plex/auth/refresh", { method: "POST" });
-      if (rr.ok && rr.data && rr.data.libraries) {
-        const libs = (rr.data.libraries || []).map((l) => ({ id: l.Id, title: l.Title, type: l.Type, uuid: l.Uuid, serverId: l.ServerId, serverName: l.ServerName, serverUrl: l.ServerUrl }));
-        populateLibraries(libs);
+      if (rr.ok && rr.data?.libraries) {
+        updateLibraryCount(rr.data.libraries.map(mapLib));
         return;
       }
     }
-    populateLibraries(libraries);
+    updateLibraryCount(libraries);
   }
 
+  /** Unlink the Plex account by posting to the server and refreshing the dashboard state. */
   async function unlinkPlex() {
-    const res = await fetchJson(base + "/plex/auth/unlink", { method: "POST" });
-    // refresh state so UI updates (controls disabled, start button shown)
+    await fetchJson(base + "/plex/auth/unlink", { method: "POST" });
     await refreshPlexState();
   }
   // #endregion
 
   // #region Plex: Automation
+  /**
+   * Read current config, merge Plex-specific settings from the dashboard, and POST the result.
+   * @returns {Promise<boolean>} True if the settings were saved successfully.
+   */
   async function savePlexSettings() {
     try {
       const cfgRes = await fetchJson(base + "/config");
@@ -461,15 +397,11 @@
         return false;
       }
       const cfg = unwrapConfig(cfgRes.data);
-      // enforce string type for extra users in case the server returned something else
       if (cfg.ExtraPlexUsers && typeof cfg.ExtraPlexUsers !== "string") cfg.ExtraPlexUsers = "";
       cfg.ScanOnVfsRefresh = !!el("plex-scan-vfs")?.checked;
       cfg.ExtraPlexUsers = el("extra-plex-users")?.value || "";
-      // 'Auto Scrobble' is handled independently via webhook
       cfg.AutoScrobble = !!el("plex-watched")?.checked;
-      // webhook-driven scrobble exclusion (single expression)
       cfg.ShokoSyncWatchedExcludeAdmin = !!el("sync-exclude-admin")?.checked;
-      // remove any plex-related keys inherited from GET response
       delete cfg.PlexLibrary;
       delete cfg.PlexAuth;
       const saveRes = await fetchJson(base + "/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cfg) });
@@ -487,83 +419,57 @@
     }
   }
 
-  // Collections Button
-  const colBuildBtn = el("col-build");
-  if (colBuildBtn) {
-    withButtonAction(colBuildBtn, async function () {
-      // show a toast that remains until the result is available
-      let startToast = showToast("Generating Collections...", "info", 0);
-      setColStatus("Checking Plex configuration...", "running");
-      const ok = await ensurePlexEnabled();
-      if (!ok) {
-        setButtonLoading(colBuildBtn, false);
+  /**
+   * Create a click handler for Plex automation buttons (collections, ratings) with toast feedback.
+   * @param {HTMLElement} btn - The button element to bind the action to.
+   * @param {string} label - Display label for toast messages.
+   * @param {string} startMsg - Toast message shown when the action begins.
+   * @param {string} endpoint - Server API endpoint to call.
+   * @param {Function} summarizeFn - Callback that receives response data and returns a summary string.
+   */
+  function plexBuildAction(btn, label, startMsg, endpoint, summarizeFn) {
+    withButtonAction(btn, async function () {
+      const startToast = showToast(startMsg, "info", 0);
+      if (!(await ensurePlexEnabled())) {
+        setButtonLoading(btn, false);
         return;
       }
-      setColStatus("Running collection build...", "running");
-      const res = await fetchJson(base + "/plex/collections/build");
-      const logUrl = res.data?.logUrl;
-      const logLink = makeLogLink(logUrl);
+      const res = await fetchJson(base + endpoint);
+      if (startToast?.parentElement) startToast.remove();
       if (!res.ok) {
-        if (startToast && startToast.parentElement) startToast.remove();
+        toastOperation(res, label);
         setColStatus("Error: " + (res.data?.message || "Request failed"), "error");
-        console.error(res.data);
-        toastOperation(res, "Collection build");
-        setButtonLoading(colBuildBtn, false);
         return;
       }
       const data = res.data;
       if (data?.status === "ok") {
-        if (startToast && startToast.parentElement) startToast.remove();
-        const uploadedText = data?.uploaded !== undefined ? `, uploaded ${data.uploaded}` : "";
-        // result toast will persist and helper appends the log link
-        const summary = `processed ${data.processed}, created ${data.created}${uploadedText}, skipped ${data.skipped}, errors ${data.errors}`;
-        toastOperation(res, "Collection build", { summary, hideOnSucceed: 0 });
-        setColStatus(`OK: processed ${data.processed}, created ${data.created}${uploadedText}, skipped ${data.skipped}, errors ${data.errors}`, "ok");
+        const summary = summarizeFn(data);
+        toastOperation(res, label, { summary, hideOnSucceed: 0 });
+        setColStatus(`OK: ${summary}`, "ok");
       } else {
-        if (startToast && startToast.parentElement) startToast.remove();
         const summary = data?.message || JSON.stringify(data);
-        toastOperation({ ok: false, data }, "Collection build", { summary });
+        toastOperation({ ok: false, data }, label, { summary });
         setColStatus("Error: " + summary, "error");
       }
     });
   }
 
-  // Ratings Button
-  const rtgBuildBtn = el("rtg-build");
-  if (rtgBuildBtn) {
-    withButtonAction(rtgBuildBtn, async function () {
-      let startToast = showToast("Applying Critic Ratings...", "info", 0);
-      setColStatus("Checking Plex configuration...", "running");
-      const ok = await ensurePlexEnabled();
-      if (!ok) {
-        setButtonLoading(rtgBuildBtn, false);
-        return;
-      }
-      setColStatus("Running rating update...", "running");
-      const res = await fetchJson(base + "/plex/ratings/apply");
-      if (!res.ok) {
-        if (startToast && startToast.parentElement) startToast.remove();
-        setColStatus("Error: " + (res.data?.message || "Request failed"), "error");
-        console.error(res.data);
-        toastOperation(res, "Ratings update");
-        setButtonLoading(rtgBuildBtn, false);
-        return;
-      }
-      const data = res.data;
-      if (data?.status === "ok") {
-        if (startToast && startToast.parentElement) startToast.remove();
-        const summary = `shows: ${data.processedShows}/${data.updatedShows}, episodes: ${data.processedEpisodes}/${data.updatedEpisodes}`;
-        // toastOperation will append the log link automatically
-        toastOperation(res, "Ratings update", { summary, hideOnSucceed: 0 });
-        setColStatus(`OK: ${summary}`, "ok");
-      } else {
-        if (startToast && startToast.parentElement) startToast.remove();
-        const summary = data?.message || JSON.stringify(data);
-        toastOperation({ ok: false, data }, "Ratings update", { summary });
-        setColStatus("Error: " + summary, "error");
-      }
+  const colBuildBtn = el("col-build");
+  if (colBuildBtn)
+    plexBuildAction(colBuildBtn, "Collection build", "Generating Collections...", "/plex/collections/build", (d) => {
+      const up = d.uploaded !== undefined ? `, uploaded ${d.uploaded}` : "";
+      return `processed ${d.processed}, created ${d.created}${up}, skipped ${d.skipped}, errors ${d.errors}`;
     });
-  }
+
+  const rtgBuildBtn = el("rtg-build");
+  if (rtgBuildBtn)
+    plexBuildAction(
+      rtgBuildBtn,
+      "Ratings update",
+      "Applying Critic Ratings...",
+      "/plex/ratings/apply",
+      (d) => `shows: ${d.processedShows}/${d.updatedShows}, episodes: ${d.processedEpisodes}/${d.updatedEpisodes}`,
+    );
   // #endregion
 
   // #region Shoko: VFS
@@ -573,13 +479,11 @@
   if (vfsExecBtn) {
     withButtonAction(vfsExecBtn, async function () {
       const clean = el("vfs-clean")?.getAttribute("aria-pressed") === "true";
-      // keep visible until we have results so user isn't left wondering
-      let startToast = showToast(`VFS Generation Started (clean=${clean})`, "info", 0);
+      const startToast = showToast(`VFS Generation Started (clean=${clean})`, "info", 0);
       const params = buildVfsParams();
       const res = await fetchJson(base + "/vfs?" + params.toString());
-      if (startToast && startToast.parentElement) startToast.remove();
-      const filterValue = el("vfs-filter")?.value || "";
-      const hasFilter = String(filterValue).trim() !== "";
+      if (startToast?.parentElement) startToast.remove();
+      const hasFilter = String(el("vfs-filter")?.value || "").trim() !== "";
       toastOperation(res, `VFS (clean=${clean})`, { hasFilter });
     });
   }
@@ -593,59 +497,37 @@
 
   if (overridesBtn && overridesModal && overridesText && overridesCancel && overridesSave) {
     overridesBtn.onclick = async () => {
-      // fetch current overrides from server and fill textarea
       try {
         const cfgRes = await fetchJson(base + "/config");
-        if (cfgRes.ok && cfgRes.data) {
-          overridesText.value = cfgRes.data.overrides || "";
-        }
+        if (cfgRes.ok && cfgRes.data) overridesText.value = cfgRes.data.overrides || "";
       } catch {}
-
-      // ensure placeholder/hint is correct if text is empty
       if (overridesText.value.trim() === "") {
-        overridesText.placeholder = [
+        overridesText.placeholder =
           "This allows shows which are separated on AniDB but part of the same TMDB listing to be combined into a single entry in Plex. Each line should contain a " +
-            "comma separated list of AniDB IDs you wish to merge. The first ID is the primary series and the others will be merged into it " +
-            "(for both VFS builds and metadata lookups). Lines that are blank or start with a '#' are ignored. An example is shown below:",
-          "",
-          "## Shoko Relay VFS Overrides",
-          "",
-          "# Fairy Tail",
-          "6662,8132,9980,13295",
-          "",
-          "# Bleach",
-          "2369,15449,17765,18220,19079",
-        ].join("\n");
+          "comma separated list of AniDB IDs you wish to merge. The first ID is the primary series and the others will be merged into it " +
+          "(for both VFS builds and metadata lookups). Lines that are blank or start with a '#' are ignored. An example is shown below:" +
+          "\n\n## Shoko Relay VFS Overrides\n\n# Fairy Tail\n6662,8132,9980,13295\n\n# Bleach\n2369,15449,17765,18220,19079";
       }
       overridesModal.setAttribute("aria-hidden", "false");
       overridesModal.classList.add("open");
       document.body.style.overflow = "hidden";
       overridesText.focus();
-      // use shared helper for overlay/Escape close logic
-      attachModalCloseHandlers(overridesModal);
-    };
-    overridesCancel.onclick = () => {
-      overridesModal.setAttribute("aria-hidden", "true");
-      overridesModal.classList.remove("open");
-      document.body.style.overflow = "";
-    };
-    overridesSave.onclick = async () => {
-      try {
-        // use JSON body so the server's JSON input formatter will accept it regardless
-        const res = await fetchJson(base + "/vfs/overrides", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(overridesText.value),
-        });
-        if (res.ok) {
-          showToast("Overrides Saved", "success", 3000);
-          overridesCancel.onclick();
-        } else {
-          toastOperation(res, "Save Overrides");
+      const closeModal = attachModalCloseHandlers(overridesModal);
+      const closeOverrides = () => {
+        closeModal();
+      };
+      overridesCancel.onclick = closeOverrides;
+      overridesSave.onclick = async () => {
+        try {
+          const res = await fetchJson(base + "/vfs/overrides", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(overridesText.value) });
+          if (res.ok) {
+            showToast("Overrides Saved", "success", 3000);
+            closeOverrides();
+          } else toastOperation(res, "Save Overrides");
+        } catch (e) {
+          showToast(`Save error: ${e?.message || e}`, "error", 0);
         }
-      } catch (e) {
-        showToast(`Save error: ${e?.message || e}`, "error", 0);
-      }
+      };
     };
   }
   // #endregion
@@ -671,141 +553,85 @@
         return;
       }
       const summary = summarizeResult(res) || `scanned ${res.data?.scannedCount ?? ""}`;
-      const shokoImportErr = getErrorCount(res);
-      toastOperation(res, "Shoko import", {
-        summary,
-        hideOnSucceed: shokoImportErr > 0 ? 0 : 5000,
-      });
+      toastOperation(res, "Shoko import", { summary, hideOnSucceed: getErrorCount(res) > 0 ? 0 : 5000 });
     });
   }
 
   const shokoSyncBtn = el("shoko-sync-watched");
   if (shokoSyncBtn) {
-    // Open configuration modal instead of an immediate sync
     shokoSyncBtn.onclick = () => {
-      const modal = el("sync-modal");
-      const startBtn = el("sync-start-button");
-      const cancelBtn = el("sync-cancel-button");
-      const dirToggle = el("sync-direction-toggle");
-      const dirArrow = el("sync-direction-arrow");
-      const ratingsEl = el("sync-ratings");
-      const excludeAdminEl = el("sync-exclude-admin");
-      if (!modal || !startBtn) {
-        return;
-      }
+      const modal = el("sync-modal"),
+        startBtn = el("sync-start-button"),
+        cancelBtn = el("sync-cancel-button");
+      const dirToggle = el("sync-direction-toggle"),
+        dirArrow = el("sync-direction-arrow");
+      const ratingsEl = el("sync-ratings"),
+        excludeAdminEl = el("sync-exclude-admin");
+      if (!modal || !startBtn) return;
 
-      let directionImport = false; // false = Plex -> Shoko (default), true = Plex <- Shoko
-      function updateDirectionUI() {
-        const iconRight = dirArrow.querySelector(".dir-icon-right");
-        const iconLeft = dirArrow.querySelector(".dir-icon-left");
-
-        // accessibility state
-        if (directionImport) {
-          dirToggle.setAttribute("aria-pressed", "true");
-          dirToggle.setAttribute("aria-label", "Direction: Shoko to Plex");
-        } else {
-          dirToggle.setAttribute("aria-pressed", "false");
-          dirToggle.setAttribute("aria-label", "Direction: Plex to Shoko");
-        }
-
-        // Fallback glyph if icons missing
-        if (!iconRight || !iconLeft) {
-          dirArrow.textContent = directionImport ? "❮" : "❯";
+      let dirImport = false;
+      try {
+        dirImport = localStorage.getItem("shoko-sync-direction") === "import";
+      } catch {}
+      const updateDir = () => {
+        dirToggle.setAttribute("aria-pressed", String(dirImport));
+        dirToggle.setAttribute("aria-label", dirImport ? "Direction: Shoko to Plex" : "Direction: Plex to Shoko");
+        const iconR = dirArrow.querySelector(".dir-icon-right"),
+          iconL = dirArrow.querySelector(".dir-icon-left");
+        if (!iconR || !iconL) {
+          dirArrow.textContent = dirImport ? "❮" : "❯";
           return;
         }
+        iconR.classList.toggle("hidden", dirImport);
+        iconL.classList.toggle("hidden", !dirImport);
+      };
+      updateDir();
 
-        // Simple visibility toggle (no animations): show the correct SVG and hide the other
-        if (directionImport) {
-          iconRight.classList.add("hidden");
-          iconLeft.classList.remove("hidden");
-        } else {
-          iconRight.classList.remove("hidden");
-          iconLeft.classList.add("hidden");
-        }
-      }
-
-      // initialize defaults and respect persisted configuration for the ratings checkbox
-      // restore last-used direction (persisted to localStorage); default = Plex -> Shoko
-      try {
-        directionImport = localStorage.getItem("shoko-sync-direction") === "import";
-      } catch (e) {
-        directionImport = false;
-      }
-
-      // Render initial direction state
-      updateDirectionUI();
-
-      // show modal
       modal.setAttribute("aria-hidden", "false");
       modal.classList.add("open");
       document.body.style.overflow = "hidden";
       startBtn.focus();
 
-      // Handlers
+      const closeModal = attachModalCloseHandlers(modal);
       const onClose = () => {
-        modal.setAttribute("aria-hidden", "true");
-        modal.classList.remove("open");
-        document.body.style.overflow = "";
-        // remove temporary listeners
-        dirToggle.removeEventListener("click", onToggle);
-        startBtn.removeEventListener("click", onStart);
-        cancelBtn.removeEventListener("click", onClose);
+        closeModal();
+        dirToggle.onclick = null;
+        startBtn.onclick = null;
+        cancelBtn.onclick = null;
       };
-      const onToggle = () => {
-        directionImport = !directionImport;
-        updateDirectionUI();
+      dirToggle.onclick = () => {
+        dirImport = !dirImport;
+        updateDir();
         try {
-          localStorage.setItem("shoko-sync-direction", directionImport ? "import" : "export");
-        } catch (e) {}
+          localStorage.setItem("shoko-sync-direction", dirImport ? "import" : "export");
+        } catch {}
       };
-      // attach shared overlay/Escape handlers; close() defined above is reused
-      attachModalCloseHandlers(modal);
-
-      const onStart = async () => {
+      startBtn.onclick = async () => {
         setButtonLoading(startBtn, true);
-        // show start toast with arrow direction depending on chosen sync direction
-        // directionImport=false means Plex→Shoko, true means Plex←Shoko
-        const arrow = directionImport ? "\u2190" : "\u2192";
-        let startToast = showToast(`Syncing Plex${arrow}Shoko...`, "info", 0);
+        const arrow = dirImport ? "\u2190" : "\u2192";
+        const startToast = showToast(`Syncing Plex${arrow}Shoko...`, "info", 0);
         try {
-          // make the start notice persistent so user knows something is happening
           const ps = new URLSearchParams();
-          ps.set("dryRun", "false"); // dashboard always does a real run
+          ps.set("dryRun", "false");
           setBoolParam(ps, "ratings", ratingsEl.checked);
           setBoolParam(ps, "excludeAdmin", excludeAdminEl.checked);
-          if (directionImport) setBoolParam(ps, "import", true); // Shoko → Plex
-          const url = base + "/sync-watched?" + ps.toString();
-          const res = await fetchJson(url, { method: "POST" });
+          if (dirImport) setBoolParam(ps, "import", true);
+          const res = await fetchJson(base + "/sync-watched?" + ps.toString(), { method: "POST" });
+          if (startToast?.parentElement) startToast.remove();
           if (res.ok) {
-            if (startToast && startToast.parentElement) startToast.remove();
             const summary = summarizeResult(res) || `processed ${res.data?.processed ?? 0}`;
-            const votesFound = res.data?.votesFound;
-            const votesPart = votesFound !== undefined ? `, votesFound: ${votesFound}` : "";
-            const syncErr = getErrorCount(res);
-            // persist regardless of errors; log link will be appended by helper
-            toastOperation(res, "Sync", {
-              summary: `Sync complete: ${summary}${votesPart}`,
-              hideOnSucceed: 0,
-            });
+            const vp = res.data?.votesFound !== undefined ? `, votesFound: ${res.data.votesFound}` : "";
+            toastOperation(res, "Sync", { summary: `Sync complete: ${summary}${vp}`, hideOnSucceed: 0 });
             onClose();
-          } else {
-            if (startToast && startToast.parentElement) startToast.remove();
-            toastOperation(res, "Sync");
-          }
+          } else toastOperation(res, "Sync");
         } catch (e) {
-          if (startToast && startToast.parentElement) startToast.remove();
+          if (startToast?.parentElement) startToast.remove();
           showToast(`Sync Error: ${e?.message || e}`, "error", 0);
         } finally {
           setButtonLoading(startBtn, false);
         }
       };
-
-      // Attach listeners
-      dirToggle.addEventListener("click", onToggle);
-      startBtn.addEventListener("click", onStart);
-      cancelBtn.addEventListener("click", onClose);
-      modal.addEventListener("click", onOverlayClick);
-      document.addEventListener("keydown", onKeydown);
+      cancelBtn.onclick = onClose;
     };
   }
   // #endregion
@@ -816,74 +642,39 @@
     withButtonAction(atImportBtn, async function () {
       showToast("Importing AnimeThemes Mapping From Gist...", "info", 5000);
       const res = await fetchJson(base + "/animethemes/vfs/import", { method: "POST" });
-      if (res.ok) {
-        const count = res.data?.count ?? 0;
-        toastOperation(res, "AnimeThemes import", {
-          summary: `Mapping imported (${count} entries)`,
-          hideOnSucceed: 6000,
-        });
-      } else {
-        toastOperation(res, "AnimeThemes import");
-      }
+      if (res.ok) toastOperation(res, "AnimeThemes import", { summary: `Mapping imported (${res.data?.count ?? 0} entries)`, hideOnSucceed: 6000 });
+      else toastOperation(res, "AnimeThemes import");
     });
   }
 
+  /**
+   * Create a click handler for AnimeThemes map/build buttons with toast feedback.
+   * @param {HTMLElement} btn - The button element to bind the action to.
+   * @param {string} label - Display label for toast messages.
+   * @param {string} endpoint - Server API endpoint to call.
+   */
+  function atBuildAction(btn, label, endpoint) {
+    withButtonAction(btn, async function () {
+      const startToast = showToast(`AnimeThemes: ${label}...`, "info", 0);
+      const p = buildAtMapParams();
+      const res = await fetchJson(base + endpoint + (p.toString() ? "?" + p.toString() : ""));
+      if (startToast?.parentElement) startToast.remove();
+      const hasFilter = String(el("at-filter-map")?.value || "").trim() !== "";
+      if (res.ok) {
+        const summary = summarizeResult(res) || "Complete";
+        toastOperation(res, `AnimeThemes ${label}`, { summary, hideOnSucceed: getErrorCount(res) > 0 ? 0 : hasFilter ? 5000 : 0 });
+      } else {
+        toastOperation(res, `AnimeThemes ${label}`, { summary: `AnimeThemes ${label} Failed: ${res.data?.message || JSON.stringify(res.data)}` });
+      }
+    });
+  }
   const atMappingBtn = el("at-mapping");
-  if (atMappingBtn) {
-    withButtonAction(atMappingBtn, async function () {
-      // persistent start toast until response arrives
-      let startToast = showToast("AnimeThemes: Building Mapping...", "info", 0);
-      const p = buildAtMapParams();
-      // mapping endpoint ignores filter param but we include it for parity
-      const res = await fetchJson(base + "/animethemes/vfs/map" + (p.toString() ? "?" + p.toString() : ""));
-      if (startToast && startToast.parentElement) startToast.remove();
-      const logUrl = res.data?.logUrl;
-      const filterVal = el("at-filter-map")?.value || "";
-      const hasFilter = String(filterVal).trim() !== "";
-      if (res.ok) {
-        const summary = summarizeResult(res) || "Complete";
-        const atMapErr = getErrorCount(res);
-        toastOperation(res, "AnimeThemes Mapping", {
-          summary,
-          hideOnSucceed: atMapErr > 0 ? 0 : hasFilter ? 5000 : 0,
-        });
-      } else {
-        toastOperation(res, "AnimeThemes Mapping", {
-          summary: `AnimeThemes Mapping Failed: ${res.data?.message || JSON.stringify(res.data)}`,
-        });
-      }
-    });
-  }
+  if (atMappingBtn) atBuildAction(atMappingBtn, "Mapping", "/animethemes/vfs/map");
   const atApplyBtn = el("at-apply");
-  if (atApplyBtn) {
-    withButtonAction(atApplyBtn, async function () {
-      // keep toast until result arrives
-      let startToast = showToast("AnimeThemes: Generating Mapping...", "info", 0);
-      const p = buildAtMapParams();
-      // use filter parameter as the mapping filter
-      const res = await fetchJson(base + "/animethemes/vfs/build" + (p.toString() ? "?" + p.toString() : ""));
-      if (startToast && startToast.parentElement) startToast.remove();
-      const logUrl = res.data?.logUrl;
-      const filterVal = el("at-filter-map")?.value || ""; // mapping filter field
-      const hasFilter = String(filterVal).trim() !== "";
-      if (res.ok) {
-        const summary = summarizeResult(res) || "Complete";
-        const atApplyErr = getErrorCount(res);
-        toastOperation(res, "AnimeThemes Generation", {
-          summary,
-          hideOnSucceed: atApplyErr > 0 ? 0 : hasFilter ? 5000 : 0,
-        });
-      } else {
-        toastOperation(res, "AnimeThemes Generation", {
-          summary: `AnimeThemes Generation Failed: ${res.data?.message || JSON.stringify(res.data)}`,
-        });
-      }
-    });
-  }
+  if (atApplyBtn) atBuildAction(atApplyBtn, "Generation", "/animethemes/vfs/build");
   // #endregion
 
   // #region AnimeThemes: MP3
-  // at-force / at-batch toggles
   initToggle("at-force", false);
   initToggle("at-batch", false);
 
@@ -893,25 +684,15 @@
       showToast("AnimeThemes: Generating MP3...", "info", 5000);
       const params = buildAtParams();
       const res = await fetchJson(base + "/animethemes/mp3?" + params.toString());
-      const logUrl = res.data?.logUrl;
-      const logLink = makeLogLink(logUrl);
+      const logLink = makeLogLink(res.data?.logUrl);
       if (res.ok) {
-        // prefer a computed summary, then look for the Status field (casing as sent by API)
         const summary = summarizeResult(res) || res.data?.Status || res.data?.status || "Done";
-        const atMp3Err = getErrorCount(res);
-        let toastType = "success";
-        if (atMp3Err > 0) {
-          toastType = "error";
-        } else if ((res.data?.Status || res.data?.status) === "skipped") {
-          // missing entry or similar non-fatal skip
-          toastType = "warning";
-        }
-        // if batch mode requested, keep toast until dismissed so user can click the log link
+        const status = res.data?.Status || res.data?.status;
+        const errs = getErrorCount(res);
+        const toastType = errs > 0 ? "error" : status === "skipped" ? "warning" : "success";
         const isBatch = params.get("batch") === "true";
-        const toastTimeout = toastType === "error" || isBatch ? 0 : 5000;
-        // include message text for skips (e.g. slug not found)
-        const msgPart = (res.data?.Status === "skipped" || res.data?.status === "skipped") && res.data?.message ? ` (${res.data.message})` : "";
-        showToast(`AnimeThemes mp3: ${summary}${msgPart} ${logLink}`, toastType, toastTimeout);
+        const msgPart = status === "skipped" && res.data?.message ? ` (${res.data.message})` : "";
+        showToast(`AnimeThemes mp3: ${summary}${msgPart} ${logLink}`, toastType, toastType === "error" || isBatch ? 0 : 5000);
       } else {
         showToast(`AnimeThemes mp3 failed: ${res.data?.message || JSON.stringify(res.data)} ${logLink}`, "error", 0);
       }
@@ -920,7 +701,10 @@
   // #endregion
 
   // #region Provider Settings
-  // Dynamically load config schema and values, then build a form based on the schema. Supported field types: bool, enum, number, PathMappings (special textarea pair for key-value path mappings).
+  /**
+   * Fetch the config schema and current values from the server, then dynamically build
+   * the settings form with appropriate input types (bool, enum, number, textarea, etc.).
+   */
   async function loadConfig() {
     const schemaRes = await fetchJson(base + "/config/schema");
     const configRes = await fetchJson(base + "/config");
@@ -934,37 +718,32 @@
     const overridesValue = rawCfg.overrides !== undefined ? rawCfg.overrides : "";
     const config = unwrapConfig(rawCfg);
 
-    // disable override editing when TMDB episode numbering is disabled
-    if (overridesBtn) {
-      overridesBtn.disabled = !config.TmdbEpNumbering;
-    }
+    if (overridesBtn) overridesBtn.disabled = !config.TmdbEpNumbering;
 
     const container = el("config-form");
     container.innerHTML = "";
 
-    // load overrides text from config payload (injected by server) and set textarea value.
     try {
       const otext = el("overrides-text");
-      if (otext) {
-        otext.value = overridesValue || "";
-      }
+      if (otext) otext.value = overridesValue || "";
     } catch {}
 
-    // create a details block to hold the various advanced settings, we'll append it at the end
     const advKeys = new Set(["PathMappings", "VfsRootPath", "AnimeThemesRootPath", "CollectionPostersRootPath", "FFmpegPath", "Parallelism"]);
     const advSection = document.createElement("details");
-    const advSummary = document.createElement("summary");
-    advSummary.textContent = "Advanced Settings";
-    advSection.appendChild(advSummary);
+    const advSum = document.createElement("summary");
+    advSum.textContent = "Advanced Settings";
+    advSection.appendChild(advSum);
     advSection.appendChild(document.createElement("hr"));
 
-    // Persist updated config to the server (used by auto-save handlers)
+    /**
+     * POST the updated config object to the server and surface any errors via toast.
+     * @param {Object} updated - The full config object to persist.
+     * @returns {Promise<{ok: boolean, data: *}>} The server response.
+     */
     async function persistConfig(updated) {
       try {
         const res = await fetchJson(base + "/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updated) });
-        if (!res.ok) {
-          toastOperation(res, "Config save");
-        }
+        if (!res.ok) toastOperation(res, "Config save");
         return res;
       } catch (e) {
         showToast(`Save Failed: ${e?.message || e}`, "error", 0);
@@ -1037,13 +816,7 @@
         } else if (p.Type === "number") {
           input = document.createElement("input");
           input.type = "number";
-          if (value !== undefined && value !== null && value !== "") {
-            input.value = value;
-          } else if (p.DefaultValue !== undefined && p.DefaultValue !== null) {
-            input.value = p.DefaultValue;
-          } else {
-            input.value = "";
-          }
+          input.value = value != null && value !== "" ? value : (p.DefaultValue ?? "");
         } else if (p.Path === "PathMappings") {
           const left = document.createElement("textarea");
           const right = document.createElement("textarea");
@@ -1100,219 +873,119 @@
           wrap.appendChild(help);
         } else if (p.Type === "json") {
           input = document.createElement("textarea");
-          if (value !== undefined && value !== null && value !== "") {
-            input.value = JSON.stringify(value, null, 2);
-          } else if (p.DefaultValue !== undefined && p.DefaultValue !== null) {
+          if (value != null && value !== "") input.value = JSON.stringify(value, null, 2);
+          else if (p.DefaultValue != null) {
             try {
               input.value = JSON.stringify(p.DefaultValue, null, 2);
             } catch {
               input.value = String(p.DefaultValue);
             }
-          } else {
-            input.value = "";
-          }
+          } else input.value = "";
         } else if (p.Path === "TagBlacklist") {
           input = document.createElement("textarea");
-          if (value !== undefined && value !== null && value !== "") {
-            input.value = value;
-          } else if (p.DefaultValue !== undefined && p.DefaultValue !== null) {
-            input.value = p.DefaultValue;
-          } else {
-            input.value = "";
-          }
+          input.value = value != null && value !== "" ? value : (p.DefaultValue ?? "");
         } else {
           input = document.createElement("input");
           input.type = "text";
-          if (value !== undefined && value !== null && value !== "") {
-            input.value = value;
-          } else if (p.DefaultValue !== undefined && p.DefaultValue !== null) {
-            input.value = p.DefaultValue;
-          } else {
-            input.value = "";
-          }
+          input.value = value != null && value !== "" ? value : (p.DefaultValue ?? "");
         }
       }
 
       if (input) {
         input.dataset.path = p.Path;
         input.dataset.type = p.Type;
-        if (p.DefaultValue !== undefined && p.DefaultValue !== null) {
-          // store the default so blanking the input reverts to it
-          input.dataset.default = JSON.stringify(p.DefaultValue);
-        }
-        // auto-save this provider settings field on change
+        if (p.DefaultValue != null) input.dataset.default = JSON.stringify(p.DefaultValue);
         input.onchange = async () => {
           try {
-            let val;
-            let usedDefault = false;
-            const type = input.dataset.type;
-            if (type === "bool") {
-              val = input.checked;
-            } else if (type === "enum" || type === "number") {
-              if (input.value === "" && input.dataset.default !== undefined) {
+            let val,
+              usedDefault = false;
+            const type = input.dataset.type,
+              hasDef = input.dataset.default !== undefined;
+            if (type === "bool") val = input.checked;
+            else if (type === "enum" || type === "number") {
+              if (input.value === "" && hasDef) {
                 val = Number(JSON.parse(input.dataset.default));
                 usedDefault = true;
-              } else {
-                val = input.value === "" ? 0 : Number(input.value);
-              }
+              } else val = input.value === "" ? 0 : Number(input.value);
             } else if (type === "json") {
               try {
-                if (input.value === "" && input.dataset.default !== undefined) {
+                if (input.value === "" && hasDef) {
                   val = JSON.parse(input.dataset.default);
                   usedDefault = true;
-                } else {
-                  val = input.value ? JSON.parse(input.value) : null;
-                }
-              } catch (e) {
+                } else val = input.value ? JSON.parse(input.value) : null;
+              } catch {
                 val = null;
               }
             } else {
-              if (input.value === "" && input.dataset.default !== undefined) {
+              if (input.value === "" && hasDef) {
                 val = JSON.parse(input.dataset.default);
                 usedDefault = true;
-              } else {
-                val = input.value;
-              }
+              } else val = input.value;
             }
-
-            // if we substituted the default, reflect it in the input itself
-            if (usedDefault) {
+            if (usedDefault)
               try {
                 input.value = String(val);
               } catch {}
-            }
-
             setValueByPath(config, input.dataset.path, val);
             await persistConfig(config);
-            // if the numbering toggle changed, reflect state immediately
-            if (input.dataset.path === "TmdbEpNumbering" && overridesBtn) {
-              overridesBtn.disabled = !input.checked;
-            }
+            if (input.dataset.path === "TmdbEpNumbering" && overridesBtn) overridesBtn.disabled = !input.checked;
           } catch (e) {
             showToast(`Auto-save error: ${e?.message || e}`, "error", 0);
           }
         };
-        if (!input.parentNode) {
-          wrap.appendChild(input);
-        }
+        if (!input.parentNode) wrap.appendChild(input);
       }
-      // if this field belongs in the 'Advanced' section, route it there; otherwise put in main container
-      if (advKeys.has(p.Path)) {
-        advSection.appendChild(wrap);
-      } else {
-        container.appendChild(wrap);
-      }
+      (advKeys.has(p.Path) ? advSection : container).appendChild(wrap);
     });
 
-    // if any fields were added under the 'Advanced' details, append it now
-    if (advSection.children.length > 1) {
-      container.appendChild(advSection);
-    }
+    if (advSection.children.length > 1) container.appendChild(advSection);
 
-    // Populate Shoko Automation custom inputs from the loaded config (keeps UI in sync)
     try {
-      const importVal = Number(config.ShokoImportFrequencyHours ?? 0);
-      const syncVal = Number(config.ShokoSyncWatchedFrequencyHours ?? 0);
-      const utcOffsetVal = Number(config.UtcOffsetHours ?? 0);
-      const plexAutoVal = Number(config.PlexAutomationFrequencyHours ?? 0);
-      const plexWatchedVal = !!config.AutoScrobble;
-      const importFreqEl = el("shoko-import-frequency");
-      const syncFreqEl = el("shoko-sync-frequency");
-      const utcOffsetEl = el("shoko-utc-offset");
-      const plexAutoFreqEl = el("plex-auto-frequency");
-      if (utcOffsetEl) {
-        utcOffsetEl.value = utcOffsetVal === 0 ? "" : String(utcOffsetVal);
-        utcOffsetEl.onchange = async () => {
+      const bindFreq = (id, key, label, { min, max } = {}) => {
+        const e = el(id);
+        if (!e) return;
+        const v = Number(config[key] ?? 0);
+        e.value = v === 0 ? "" : String(v);
+        e.onchange = async () => {
           try {
-            let newVal = Number(utcOffsetEl.value) || 0;
-            if (newVal < -12) newVal = -12;
-            if (newVal > 14) newVal = 14;
-            utcOffsetEl.value = String(newVal);
-            setValueByPath(config, "UtcOffsetHours", newVal);
+            let n = Number(e.value) || 0;
+            if (min != null && n < min) n = min;
+            if (max != null && n > max) n = max;
+            if (min != null || max != null) e.value = String(n);
+            setValueByPath(config, key, n);
             await persistConfig(config);
-          } catch (e) {
-            showToast(`Auto-save UTC offset error: ${e?.message || e}`, "error", 0);
+          } catch (err) {
+            showToast(`Auto-save ${label} error: ${err?.message || err}`, "error", 0);
           }
         };
-      }
-      if (importFreqEl) {
-        importFreqEl.value = importVal === 0 ? "" : String(importVal);
-        importFreqEl.onchange = async () => {
-          try {
-            const newVal = importFreqEl.value === "" ? 0 : Number(importFreqEl.value);
-            setValueByPath(config, "ShokoImportFrequencyHours", newVal);
-            await persistConfig(config);
-          } catch (e) {
-            showToast(`Auto-save import frequency error: ${e?.message || e}`, "error", 0);
-          }
-        };
-      }
-      if (syncFreqEl) {
-        syncFreqEl.value = syncVal === 0 ? "" : String(syncVal);
-        syncFreqEl.onchange = async () => {
-          try {
-            setValueByPath(config, "ShokoSyncWatchedFrequencyHours", syncFreqEl.value === "" ? 0 : Number(syncFreqEl.value));
-            await persistConfig(config);
-          } catch (e) {
-            showToast(`Auto-save sync frequency error: ${e?.message || e}`, "error", 0);
-          }
-        };
-      }
-      if (plexAutoFreqEl) {
-        plexAutoFreqEl.value = plexAutoVal === 0 ? "" : String(plexAutoVal);
-        plexAutoFreqEl.onchange = async () => {
-          try {
-            setValueByPath(config, "PlexAutomationFrequencyHours", plexAutoFreqEl.value === "" ? 0 : Number(plexAutoFreqEl.value));
-            await persistConfig(config);
-          } catch (e) {
-            showToast(`Auto-save plex automation frequency error: ${e?.message || e}`, "error", 0);
-          }
-        };
-      }
-      if (el("plex-watched")) el("plex-watched").checked = plexWatchedVal;
+      };
+      bindFreq("shoko-utc-offset", "UtcOffsetHours", "UTC offset", { min: -12, max: 14 });
+      bindFreq("shoko-import-frequency", "ShokoImportFrequencyHours", "import frequency");
+      bindFreq("shoko-sync-frequency", "ShokoSyncWatchedFrequencyHours", "sync frequency");
+      bindFreq("plex-auto-frequency", "PlexAutomationFrequencyHours", "plex automation frequency");
+      if (el("plex-watched")) el("plex-watched").checked = !!config.AutoScrobble;
 
-      // Persist the 'Include Ratings' checkbox from the modal so scheduled automation follows it
-      const syncRatingsEl = el("sync-ratings");
-      if (syncRatingsEl) {
-        try {
-          syncRatingsEl.checked = !!config.ShokoSyncWatchedIncludeRatings;
-        } catch (e) {
-          syncRatingsEl.checked = false;
-        }
-        syncRatingsEl.onchange = async () => {
+      const bindCheck = (id, key, label) => {
+        const chk = el(id);
+        if (!chk) return;
+        chk.checked = !!config[key];
+        chk.onchange = async () => {
           try {
-            setValueByPath(config, "ShokoSyncWatchedIncludeRatings", syncRatingsEl.checked);
+            setValueByPath(config, key, chk.checked);
             await persistConfig(config);
           } catch (e) {
-            showToast(`Failed to save 'Include Ratings' setting: ${e?.message || e}`, "error", 0);
+            showToast(`Failed to save '${label}' setting: ${e?.message || e}`, "error", 0);
           }
         };
-      }
-
-      // Persist admin-exclusion setting from the sync modal as well
-      const syncExcludeEl = el("sync-exclude-admin");
-      if (syncExcludeEl) {
-        try {
-          syncExcludeEl.checked = !!config.ShokoSyncWatchedExcludeAdmin;
-        } catch (e) {
-          syncExcludeEl.checked = false;
-        }
-        syncExcludeEl.onchange = async () => {
-          try {
-            setValueByPath(config, "ShokoSyncWatchedExcludeAdmin", syncExcludeEl.checked);
-            await persistConfig(config);
-          } catch (e) {
-            showToast(`Failed to save 'Exclude Admin' setting: ${e?.message || e}`, "error", 0);
-          }
-        };
-      }
+      };
+      bindCheck("sync-ratings", "ShokoSyncWatchedIncludeRatings", "Include Ratings");
+      bindCheck("sync-exclude-admin", "ShokoSyncWatchedExcludeAdmin", "Exclude Admin");
     } catch (e) {
       /* ignore */
     }
   }
 
   setPlexStartAction();
-  // until we know whether Plex is linked, disable automation fields/buttons
   setPlexAutomationControls(false);
   refreshPlexState();
   loadConfig();
@@ -1321,31 +994,27 @@
   // #region Theme Toggle
   // Persists to localStorage and sets data-theme on <html>
   const THEME_KEY = "dashboard-theme";
-  function getSavedTheme() {
+  /** @returns {string} The saved theme preference or the OS default ("dark" or "light"). */
+  const getSavedTheme = () => {
     try {
       const v = localStorage.getItem(THEME_KEY);
       if (v === "dark" || v === "light") return v;
-    } catch (e) {
-      /* ignore */
-    }
-    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-  }
+    } catch {}
+    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  };
+  /** Apply a theme by setting the data-theme attribute and updating the toggle button state. @param {string} theme - "dark" or "light". */
   function applyTheme(theme) {
-    try {
-      document.documentElement.setAttribute("data-theme", theme === "dark" ? "dark" : "light");
-    } catch (e) {
-      /* ignore */
-    }
+    document.documentElement.setAttribute("data-theme", theme === "dark" ? "dark" : "light");
     const btn = el("theme-toggle");
-    if (btn) btn.setAttribute("aria-pressed", theme === "dark" ? "true" : "false");
+    if (btn) btn.setAttribute("aria-pressed", String(theme === "dark"));
   }
+  /** Initialize the theme toggle button with the saved preference and attach the click handler. */
   function initTheme() {
     applyTheme(getSavedTheme());
     const t = el("theme-toggle");
     if (!t) return;
     t.onclick = () => {
-      const cur = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
-      const next = cur === "dark" ? "light" : "dark";
+      const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
       try {
         localStorage.setItem(THEME_KEY, next);
       } catch {}
@@ -1355,7 +1024,7 @@
   // #endregion
 
   // #region Tooltips
-  // mirrors Shoko WebUI tooltip styling (uses `title` attributes)
+  /** Create the shared tooltip element and attach show/hide listeners to all elements with a title attribute. Observes the DOM for dynamically added elements. */
   function initTooltips() {
     if (document.getElementById("shoko-tooltip")) return;
     const tpl = document.createElement("div");
@@ -1366,26 +1035,24 @@
     tpl.innerHTML = '<div class="tooltip-arrow"></div><div class="rt-content"></div>';
     document.body.appendChild(tpl);
     const content = tpl.querySelector(".rt-content");
+    let showTimer = null,
+      hideTimer = null;
 
-    let showTimer = null;
-    let hideTimer = null;
-
-    function showForElement(el) {
-      if (el.disabled) return;
-      const text = el.dataset.tooltipText || el.getAttribute("data-tooltip") || "";
+    function showForElement(target) {
+      if (target.disabled) return;
+      const text = target.dataset.tooltipText || target.getAttribute("data-tooltip") || "";
       if (!text) return;
       content.textContent = text;
       tpl.setAttribute("aria-hidden", "false");
       tpl.classList.remove("tooltip-closing");
       tpl.classList.add("tooltip-show");
-      el.setAttribute("aria-describedby", "shoko-tooltip");
-
+      target.setAttribute("aria-describedby", "shoko-tooltip");
       requestAnimationFrame(() => {
-        const rect = el.getBoundingClientRect();
-        const ttRect = tpl.getBoundingClientRect();
-        const margin = 8;
-        let top = rect.top - ttRect.height - margin;
-        let place = "top";
+        const rect = target.getBoundingClientRect(),
+          ttRect = tpl.getBoundingClientRect(),
+          margin = 8;
+        let top = rect.top - ttRect.height - margin,
+          place = "top";
         if (top < 8) {
           top = rect.bottom + margin;
           place = "bottom";
@@ -1400,78 +1067,82 @@
       });
     }
 
-    function hideTooltipForElement(el) {
+    const hideForElement = (target) => {
       tpl.classList.remove("tooltip-show");
       tpl.classList.add("tooltip-closing");
       tpl.setAttribute("aria-hidden", "true");
-      if (el) el.removeAttribute("aria-describedby");
-    }
+      if (target) target.removeAttribute("aria-describedby");
+    };
 
-    function attach(el) {
-      if (!el || el.dataset.tooltipInitialized) return;
-      const title = el.getAttribute("title");
+    function attach(target) {
+      if (!target || target.dataset.tooltipInitialized) return;
+      const title = target.getAttribute("title");
       if (!title) return;
-      el.dataset.tooltipText = title;
-      el.removeAttribute("title");
-      el.dataset.tooltipInitialized = "1";
-
-      el.addEventListener("mouseenter", () => {
+      target.dataset.tooltipText = title;
+      target.removeAttribute("title");
+      target.dataset.tooltipInitialized = "1";
+      target.addEventListener("mouseenter", () => {
         if (hideTimer) {
           clearTimeout(hideTimer);
           hideTimer = null;
         }
-        showTimer = setTimeout(() => showForElement(el), 75);
+        showTimer = setTimeout(() => showForElement(target), 75);
       });
-      el.addEventListener("mouseleave", () => {
+      target.addEventListener("mouseleave", () => {
         if (showTimer) {
           clearTimeout(showTimer);
           showTimer = null;
         }
-        hideTimer = setTimeout(() => hideTooltipForElement(el), 100);
+        hideTimer = setTimeout(() => hideForElement(target), 100);
       });
-      el.addEventListener("focus", () => {
+      target.addEventListener("focus", () => {
         if (showTimer) clearTimeout(showTimer);
-        showForElement(el);
+        showForElement(target);
       });
-      el.addEventListener("blur", () => hideTooltipForElement(el));
+      target.addEventListener("blur", () => hideForElement(target));
     }
 
     document.querySelectorAll("[title]").forEach(attach);
-
-    const mo = new MutationObserver((mutations) => {
-      for (const m of mutations) {
+    new MutationObserver((mutations) => {
+      for (const m of mutations)
         for (const node of m.addedNodes) {
           if (node.nodeType !== 1) continue;
-          const nn = node;
-          if (nn.hasAttribute && nn.hasAttribute("title")) attach(nn);
-          nn.querySelectorAll && nn.querySelectorAll("[title]").forEach(attach);
+          if (node.hasAttribute?.("title")) attach(node);
+          node.querySelectorAll?.("[title]").forEach(attach);
         }
-      }
-    });
-    mo.observe(document.body, { childList: true, subtree: true });
+    }).observe(document.body, { childList: true, subtree: true });
   }
   // #endregion
 
   // #region Toasts
-  // Notification toasts which appear in the bottom left and auto-dismiss after a timeout (or can be clicked to dismiss); used for operation results and errors
-  function ensureToastContainerFixed() {
+  const ensureToastContainerFixed = () => {
     const tc = el("toast-container");
-    if (!tc) return;
-    // ensure it is a direct child of body so position:fixed behaves as expected
-    if (tc.parentElement !== document.body) document.body.appendChild(tc);
-  }
+    if (tc && tc.parentElement !== document.body) document.body.appendChild(tc);
+  };
+
+  /**
+   * Extract the error count from an API response by checking common error fields.
+   * @param {{ok: boolean, data: *}} res - The fetchJson response object.
+   * @returns {number} The number of errors found, or 0 if none.
+   */
   function getErrorCount(res) {
-    if (!res || !res.data) return 0;
+    if (!res?.data) return 0;
     const d = res.data;
-    if (Array.isArray(d.errors)) return d.errors.length;
-    if (Array.isArray(d.Errors)) return d.Errors.length;
-    if (Array.isArray(d.errorsList)) return d.errorsList.length;
-    if (typeof d.errors === "number") return d.errors;
-    if (typeof d.Errors === "number") return d.Errors;
-    if (typeof d.errors === "string" && /^\d+$/.test(d.errors)) return Number(d.errors);
+    for (const k of ["errors", "Errors", "errorsList"]) {
+      if (Array.isArray(d[k])) return d[k].length;
+      if (typeof d[k] === "number") return d[k];
+      if (typeof d[k] === "string" && /^\d+$/.test(d[k])) return Number(d[k]);
+    }
     return 0;
   }
 
+  /**
+   * Display a dismissible toast notification in the toast container.
+   * @param {string} message - HTML message content.
+   * @param {"info"|"success"|"warning"|"error"} [type="info"] - Toast severity/style.
+   * @param {number} [timeout=5000] - Auto-dismiss delay in ms; use 0 to keep the toast visible until manually dismissed.
+   * @returns {HTMLElement|null} The created toast element, or null if the container is missing.
+   */
   function showToast(message, type = "info", timeout = 5000) {
     ensureToastContainerFixed();
     const container = el("toast-container");
@@ -1484,49 +1155,36 @@
     t.className = "toast " + (type || "info");
     t.setAttribute("role", "status");
     t.setAttribute("tabindex", "0");
-
     const msg = document.createElement("span");
     msg.className = "toast-message";
     msg.innerHTML = message;
     t.appendChild(msg);
-
     container.appendChild(t);
     requestAnimationFrame(() => t.classList.add("visible"));
 
-    // helper to remove the toast with animation
-    function dismissToast(elm) {
+    const dismiss = (elm) => {
       elm.classList.remove("visible");
       setTimeout(() => {
         try {
           elm.remove();
         } catch {}
       }, 300);
-    }
-
-    // Auto-dismiss timer (if a timeout > 0 was supplied)
-    let timer = null;
-    if (timeout > 0) {
-      timer = setTimeout(() => {
-        if (!t.parentElement) return;
-        dismissToast(t);
-      }, timeout);
-    }
-
-    // Clicking anywhere on the toast dismisses it (applies to persistent/error toasts too)
-    t.addEventListener("click", (ev) => {
-      ev.stopPropagation();
+    };
+    let timer =
+      timeout > 0
+        ? setTimeout(() => {
+            if (t.parentElement) dismiss(t);
+          }, timeout)
+        : null;
+    const cancelAndDismiss = (ev) => {
+      ev?.stopPropagation?.();
       if (timer) clearTimeout(timer);
-      if (t.parentElement) dismissToast(t);
-    });
-
-    // Keyboard: Escape dismisses focused toast (accessibility)
+      if (t.parentElement) dismiss(t);
+    };
+    t.addEventListener("click", cancelAndDismiss);
     t.addEventListener("keydown", (ev) => {
-      if (ev.key === "Escape" || ev.key === "Esc") {
-        if (timer) clearTimeout(timer);
-        if (t.parentElement) dismissToast(t);
-      }
+      if (ev.key === "Escape" || ev.key === "Esc") cancelAndDismiss(ev);
     });
-
     return t;
   }
   // #endregion

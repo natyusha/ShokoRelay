@@ -43,6 +43,12 @@ namespace ShokoRelay.Sync
         /// - Only applies matches by GUID (no filepath heuristics).
         /// - Optionally syncs votes/ratings when includeVotes=true.
         /// </summary>
+        /// <param name="dryRun">When <c>true</c>, report changes without actually applying them.</param>
+        /// <param name="sinceHours">Optional lookback window in hours; <c>null</c> means no limit.</param>
+        /// <param name="includeVotes">Whether to also sync Shoko ratings to Plex.</param>
+        /// <param name="excludeAdmin">Whether to skip the admin user during sync.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A <see cref="PlexWatchedSyncResult"/> with aggregate and per-user statistics.</returns>
         public async Task<PlexWatchedSyncResult> SyncWatchedAsync(bool dryRun = true, int? sinceHours = null, bool includeVotes = false, bool excludeAdmin = false, CancellationToken cancellationToken = default)
         {
             var result = new PlexWatchedSyncResult();
@@ -117,11 +123,11 @@ namespace ShokoRelay.Sync
                 // Per-target cache to remember whether an extra Plex user token can access this section
                 var userAccessCache = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
 
-                // --- episode synchronization: perform a GUID search per-library and per-plex-user (unwatched=1) ---
-                // For each Shoko-watched episode we query Plex for the Shoko GUID using the requesting
-                // user's token and `unwatched=1`. If the search returns a metadata item we extract the
-                // ratingKey and scrobble that exact ratingKey on behalf of the requesting user.
-                // This guarantees per-library + per-user behavior (exact match to spec).
+                // Episode Synchronization: perform a GUID search per-library and per-plex-user (unwatched=1)
+                //  - For each Shoko-watched episode we query Plex for the Shoko GUID using the requesting
+                //  - user's token and `unwatched=1`. If the search returns a metadata item we extract the
+                //  - ratingKey and scrobble that exact ratingKey on behalf of the requesting user.
+                //  - This guarantees per-library + per-user behavior (exact match to spec).
 
                 // also build series GUID -> ratingKey lookup for shows (used for series votes)
                 List<PlexMetadataItem> sectionShows;
@@ -140,11 +146,8 @@ namespace ShokoRelay.Sync
                     if (string.IsNullOrWhiteSpace(s.Guid) || string.IsNullOrWhiteSpace(s.RatingKey))
                         continue;
                     var shokoSeriesId = SyncHelper.TryParseShokoSeriesIdFromGuid(s.Guid);
-                    if (shokoSeriesId.HasValue && !seriesGuidMap.ContainsKey(shokoSeriesId.Value))
-                    {
-                        if (int.TryParse(s.RatingKey, out var _))
-                            seriesGuidMap[shokoSeriesId.Value] = s.RatingKey!;
-                    }
+                    if (shokoSeriesId.HasValue && int.TryParse(s.RatingKey, out var _))
+                        seriesGuidMap.TryAdd(shokoSeriesId.Value, s.RatingKey!);
                 }
 
                 async Task<bool> SendPlexGetAsync(HttpRequestMessage req)
@@ -199,10 +202,7 @@ namespace ShokoRelay.Sync
                         foreach (var item in unwatched)
                         {
                             if (!string.IsNullOrWhiteSpace(item.Guid) && !string.IsNullOrWhiteSpace(item.RatingKey))
-                            {
-                                if (!plexMap.ContainsKey(item.Guid))
-                                    plexMap[item.Guid] = item.RatingKey;
-                            }
+                                plexMap.TryAdd(item.Guid, item.RatingKey);
                         }
                     }
 

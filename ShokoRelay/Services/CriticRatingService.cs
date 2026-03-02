@@ -17,6 +17,7 @@ namespace ShokoRelay.Services
         /// </summary>
         /// <param name="allowedSeriesIds">If provided, only these series will be processed.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>An <see cref="ApplyRatingsResult"/> with counters and error details.</returns>
         Task<ApplyRatingsResult> ApplyRatingsAsync(IEnumerable<int>? allowedSeriesIds = null, CancellationToken cancellationToken = default);
     }
 
@@ -105,25 +106,9 @@ namespace ShokoRelay.Services
                     }
 
                     var rating = ComputeSeriesRating(series);
-                    double? plexRating = item.Rating;
-                    // only perform a PUT if the rating would change (including clearing when existing is >0)
-                    bool needUpdate;
-                    if (!rating.HasValue)
+                    if (!NeedsRatingUpdate(item.Rating, rating))
                     {
-                        needUpdate = plexRating.HasValue && plexRating.Value > 0.05;
-                    }
-                    else if (!plexRating.HasValue)
-                    {
-                        needUpdate = true;
-                    }
-                    else
-                    {
-                        needUpdate = Math.Abs(plexRating.Value - rating.Value) > 0.05;
-                    }
-
-                    if (!needUpdate)
-                    {
-                        Logger.Trace("CriticRatingService: skipping show {RatingKey} because rating {Rating} already matches current Plex rating", item.RatingKey, plexRating);
+                        Logger.Trace("CriticRatingService: skipping show {RatingKey} because rating {Rating} already matches current Plex rating", item.RatingKey, item.Rating);
                         continue;
                     }
 
@@ -182,24 +167,9 @@ namespace ShokoRelay.Services
 
                     processedEpisodes++;
                     var rating = ComputeEpisodeRating(episode);
-                    double? plexRating = item.Rating;
-                    bool needUpdate;
-                    if (!rating.HasValue)
+                    if (!NeedsRatingUpdate(item.Rating, rating))
                     {
-                        needUpdate = plexRating.HasValue && plexRating.Value > 0.05;
-                    }
-                    else if (!plexRating.HasValue)
-                    {
-                        needUpdate = true;
-                    }
-                    else
-                    {
-                        needUpdate = Math.Abs(plexRating.Value - rating.Value) > 0.05;
-                    }
-
-                    if (!needUpdate)
-                    {
-                        Logger.Trace("CriticRatingService: skipping episode {RatingKey} because rating {Rating} already matches current Plex rating", item.RatingKey, plexRating);
+                        Logger.Trace("CriticRatingService: skipping episode {RatingKey} because rating {Rating} already matches current Plex rating", item.RatingKey, item.Rating);
                         continue;
                     }
 
@@ -230,11 +200,24 @@ namespace ShokoRelay.Services
             return new ApplyRatingsResult(processedShows, updatedShows, processedEpisodes, updatedEpisodes, errors, errorsList);
         }
 
+        /// <summary>
+        /// Compare the current Plex rating against the computed value and return true when an update PUT is needed.
+        /// </summary>
+        private static bool NeedsRatingUpdate(double? plexRating, double? computedRating)
+        {
+            if (!computedRating.HasValue)
+                return plexRating.HasValue && plexRating.Value > 0.05;
+            if (!plexRating.HasValue)
+                return true;
+            return Math.Abs(plexRating.Value - computedRating.Value) > 0.05;
+        }
+
         private double? ComputeSeriesRating(IShokoSeries series)
         {
+            var tmdbShow = series.TmdbShows?.FirstOrDefault();
             return ShokoRelay.Settings.CriticRatingMode switch
             {
-                CriticRatingMode.TMDB => series.TmdbShows?.FirstOrDefault()?.Rating > 0 ? series.TmdbShows.First().Rating : null,
+                CriticRatingMode.TMDB => tmdbShow?.Rating > 0 ? tmdbShow.Rating : null,
                 CriticRatingMode.AniDB => series.Rating > 0 ? series.Rating : null,
                 _ => null,
             };

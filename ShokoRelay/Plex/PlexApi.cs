@@ -11,7 +11,7 @@ namespace ShokoRelay.Plex
         /// <summary>
         /// Shared <see cref="JsonSerializerOptions"/> used for deserializing Plex responses. Ignores null values and treats property names case‑insensitively.
         /// </summary>
-        public static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
+        public static readonly JsonSerializerOptions JsonOptions = new() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
 
         /// <summary>
         /// Read and deserialize a <see cref="PlexMediaContainer"/> from an HTTP response produced by a Plex server. Handles the outer wrapper object used by Plex.
@@ -91,6 +91,18 @@ namespace ShokoRelay.Plex
 
         [JsonPropertyName("userRating")]
         public double? UserRating { get; set; }
+
+        [JsonPropertyName("Collection")]
+        public List<PlexTag>? Collection { get; set; }
+    }
+
+    /// <summary>
+    /// Represents a tag entry (e.g. collection, genre, label) within a <see cref="PlexMetadataItem"/>.
+    /// </summary>
+    public class PlexTag
+    {
+        [JsonPropertyName("tag")]
+        public string? Tag { get; set; }
     }
 
     /// <summary>

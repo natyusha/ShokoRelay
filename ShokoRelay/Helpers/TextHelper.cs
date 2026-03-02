@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Text.RegularExpressions;
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Containers;
@@ -8,6 +9,7 @@ namespace ShokoRelay.Helpers
 {
     public static class TextHelper
     {
+        #region Compiled Regex
         private static readonly Regex _seriesPrefixRegex = new(@"^(Gekijou ?(?:ban(?: 3D)?|Tanpen|Remix Ban|Henshuuban|Soushuuhen)|Eiga|OVA) (.*$)", RegexOptions.Compiled);
         private static readonly Regex _movieDescriptorRegex = new(@"(?i)(:? The)?( Movie| Motion Picture)", RegexOptions.Compiled);
         private static readonly Regex _defaultTitleRegex = new(@"^(Episode|Volume|Special|Short|(Short )?Movie) [S0]?[1-9][0-9]*$", RegexOptions.Compiled);
@@ -29,54 +31,64 @@ namespace ShokoRelay.Helpers
         private static readonly Regex _bdDvdRegex = new(@"BD|DVD", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly Regex _numbersRegex = new(@"\d+", RegexOptions.Compiled);
         private static readonly Regex _opEdHyphenRegex = new(@"^((?:OP|ED)\d+(?:v\d+)?)-(\w+)", RegexOptions.Compiled);
+        private static readonly Regex _themeVersionRegex = new(@"(?:OP|ED)\d+(v\d+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        #endregion
+
+        #region General Text Helpers
+        /// <summary>
+        /// Replace runs of two or more whitespace characters with a single space.
+        /// </summary>
+        /// <param name="input">The string to condense.</param>
+        /// <returns>The input with consecutive whitespace collapsed to a single space.</returns>
+        public static string CondenseSpaces(string input) => _condenseSpacesRegex.Replace(input, " ");
+
+        /// <summary>
+        /// Replace literal commas with the unicode escape \u002C so that values containing commas can be stored in a simple comma-separated file.
+        /// </summary>
+        /// <param name="value">The string to escape.</param>
+        /// <returns>The escaped string, or <see cref="string.Empty"/> if <paramref name="value"/> is null or empty.</returns>
+        public static string EscapeCsvCommas(string value) => string.IsNullOrEmpty(value) ? string.Empty : value.Replace(",", "\\u002C");
+
+        /// <summary>
+        /// Splits a CSV line on commas. Caller must escape commas inside values using <see cref="EscapeCsvCommas"/> when generating.
+        /// </summary>
+        /// <param name="line">The CSV line to split.</param>
+        /// <returns>An array of field values, or an empty array if <paramref name="line"/> is null.</returns>
+        public static string[] SplitCsvLine(string line) => line?.Split(',') ?? Array.Empty<string>();
+
+        /// <summary>
+        /// For aesthetic reasons, convert the first hyphen in a filename to a right-pointing chevron character. Used with extras filenames.
+        /// </summary>
+        /// <param name="name">Original filename.</param>
+        /// <returns>Modified string with replacement or empty string on null/whitespace.</returns>
+        public static string ReplaceFirstHyphenWithChevron(string? name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return string.Empty;
+
+            int index = name.IndexOf('-');
+            if (index < 0)
+                return name;
+
+            return string.Concat(name.AsSpan(0, index), "\u276F", name.AsSpan(index + 1)); // Unicode Character "❯" (U+276F) - Heavy Right-Pointing Angle Quotation Mark Ornament
+        }
+
+        #endregion
+
+        #region Titles
+
         private static readonly IReadOnlySet<string> _ambiguousTitles = new HashSet<string>(
             ["Complete Movie", "Music Video", "OAD", "OVA", "Short Movie", "Special", "TV Special", "Web"],
             StringComparer.OrdinalIgnoreCase
         );
-
-        // Windows filename sanitization helpers - Invalid windows characters are defined as the keys of the ReplacementCharMap
-        public static readonly IReadOnlyDictionary<char, char> ReplacementCharMap = new Dictionary<char, char>
-        {
-            ['\\'] = '⧵',
-            ['/'] = '⁄',
-            [':'] = '꞉',
-            ['*'] = '＊',
-            ['?'] = '？',
-            ['<'] = '＜',
-            ['>'] = '＞',
-            ['|'] = '｜',
-        };
-
-        public static readonly char[] InvalidWindowsChars = ReplacementCharMap.Keys.ToArray();
-
-        /// <summary>
-        /// Remove characters that are invalid in Windows filenames by replacing them with visually similar unicode characters. Useful when generating filesystem-friendly strings.
-        /// </summary>
-        public static string StripInvalidWindowsChars(string value)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-                return string.Empty;
-
-            var sb = new System.Text.StringBuilder(value.Length);
-            foreach (char c in value)
-            {
-                if (Array.IndexOf(InvalidWindowsChars, c) >= 0)
-                    continue;
-                sb.Append(c);
-            }
-
-            var cleaned = sb.ToString().Trim();
-            while (cleaned.Contains("  "))
-                cleaned = cleaned.Replace("  ", " ");
-
-            return cleaned;
-        }
 
         /// <summary>
         /// Return an item's title according to a comma-separated list of preferred language codes. Falls back to the item's preferred title if no match is found or the language setting is empty.
         /// </summary>
         /// <param name="item">Object that exposes a <see cref="IWithTitles.Titles"/> collection.</param>
         /// <param name="languageSetting">Comma-separated preferred language codes.</param>
+        /// <returns>The best matching title string, or the item's preferred title as a fallback.</returns>
         public static string GetTitleByLanguage(IWithTitles item, string languageSetting)
         {
             if (string.IsNullOrWhiteSpace(languageSetting))
@@ -107,6 +119,7 @@ namespace ShokoRelay.Helpers
         /// Determine display, sortable, and original titles for a series based on language preferences and optional prefix reordering settings.
         /// </summary>
         /// <param name="series">Series metadata.</param>
+        /// <returns>A tuple of (DisplayTitle, SortTitle, OriginalTitle) where OriginalTitle is null when it duplicates the display title.</returns>
         public static (string DisplayTitle, string SortTitle, string? OriginalTitle) ResolveFullSeriesTitles(ISeries series)
         {
             // Get Title according to the language preference
@@ -135,6 +148,7 @@ namespace ShokoRelay.Helpers
         /// </summary>
         /// <param name="ep">Episode metadata.</param>
         /// <param name="displaySeriesTitle">Resolved series title to use as fallback.</param>
+        /// <returns>The resolved episode title string.</returns>
         public static string ResolveEpisodeTitle(IEpisode ep, string displaySeriesTitle)
         {
             string rawEpTitle = GetTitleByLanguage(ep, ShokoRelay.Settings.EpisodeTitleLanguage) ?? "";
@@ -187,11 +201,31 @@ namespace ShokoRelay.Helpers
             return rawEpTitle;
         }
 
+        #endregion
+
+        #region Summaries
+
+        /// <summary>
+        /// Sanitize <paramref name="summary"/> and, if the result is empty, fall back to <paramref name="tmdbSummary"/>.
+        /// </summary>
+        /// <param name="summary">Primary (AniDB) summary text.</param>
+        /// <param name="tmdbSummary">Optional TMDB fallback summary.</param>
+        /// <param name="mode">Sanitization mode to apply.</param>
+        /// <returns>The sanitized summary, or the sanitized TMDB fallback if the primary result is empty.</returns>
+        public static string SanitizeSummaryWithFallback(string? summary, string? tmdbSummary, SummaryMode mode)
+        {
+            var result = SummarySanitizer(summary, mode);
+            if (string.IsNullOrWhiteSpace(result) && !string.IsNullOrWhiteSpace(tmdbSummary))
+                result = SummarySanitizer(tmdbSummary, mode);
+            return result;
+        }
+
         /// <summary>
         /// Clean up a summary string according to the configured <paramref name="mode"/> which may strip source notes, condense spacing, or leave the text alone.
         /// </summary>
         /// <param name="summary">Original summary text.</param>
         /// <param name="mode">Sanitization mode to apply.</param>
+        /// <returns>The cleaned summary text, trimmed of leading/trailing whitespace and newlines.</returns>
         public static string SummarySanitizer(string? summary, SummaryMode mode)
         {
             if (string.IsNullOrWhiteSpace(summary))
@@ -223,10 +257,53 @@ namespace ShokoRelay.Helpers
             return summary.Trim(' ', '\r', '\n');
         }
 
+        #endregion
+
+        #region Plex
+
+        /// <summary>
+        /// Maps invalid Windows filename characters to visually similar Unicode replacements.
+        /// The dictionary keys define the set of characters considered invalid.
+        /// </summary>
+        public static readonly FrozenDictionary<char, char> ReplacementCharMap = new Dictionary<char, char>
+        {
+            ['\\'] = '⧵',
+            ['/'] = '⁄',
+            [':'] = '꞉',
+            ['*'] = '＊',
+            ['?'] = '？',
+            ['<'] = '＜',
+            ['>'] = '＞',
+            ['|'] = '｜',
+        }.ToFrozenDictionary();
+
+        /// <summary>
+        /// Remove characters that are invalid in Windows filenames by replacing them with visually similar unicode characters. Useful when generating filesystem-friendly strings.
+        /// </summary>
+        /// <param name="value">The string to sanitize.</param>
+        /// <returns>A sanitized copy of <paramref name="value"/> with invalid characters removed and whitespace condensed.</returns>
+        public static string StripInvalidWindowsChars(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return string.Empty;
+
+            var sb = new System.Text.StringBuilder(value.Length);
+            foreach (char c in value)
+            {
+                if (ReplacementCharMap.ContainsKey(c))
+                    continue;
+                sb.Append(c);
+            }
+
+            return _condenseSpacesRegex.Replace(sb.ToString().Trim(), " ");
+        }
+
         /// <summary>
         /// Determine if a filename contains a Plex-style split tag (e.g. "pt1"). Used when mapping multi-disc releases.
         /// Info: https://support.plex.tv/articles/naming-and-organizing-your-tv-show-files/
         /// </summary>
+        /// <param name="fileName">The filename to inspect.</param>
+        /// <returns><c>true</c> if a Plex split tag pattern is detected; otherwise <c>false</c>.</returns>
         public static bool HasPlexSplitTag(string fileName)
         {
             if (string.IsNullOrWhiteSpace(fileName))
@@ -238,12 +315,16 @@ namespace ShokoRelay.Helpers
             return _plexSplitTagRegex.IsMatch(name);
         }
 
+        /// <summary>
+        ///  Files are always placed inside a subfolder which itself lives directly under the numeric series ID folder.
+        /// </summary>
+        /// <param name="rawPath">Full file path to extract the series ID from.</param>
+        /// <returns>The extracted series ID, or null if not found.</returns>
         public static int? ExtractSeriesId(string rawPath)
         {
             if (string.IsNullOrWhiteSpace(rawPath))
                 return null;
 
-            // Files are always placed inside a subfolder which itself lives directly under the numeric series ID folder.
             string? dir = Path.GetDirectoryName(rawPath);
             for (int depth = 0; depth < 2 && !string.IsNullOrEmpty(dir); depth++)
             {
@@ -256,26 +337,15 @@ namespace ShokoRelay.Helpers
             return null;
         }
 
-        /// <summary>
-        /// Splits a CSV line on commas. Caller must escape commas inside values using <see cref="EscapeCsvCommas"/> when generating.
-        /// </summary>
-        public static string[] SplitCsvLine(string line)
-        {
-            if (line == null)
-                return Array.Empty<string>();
-            return line.Split(',');
-        }
+        #endregion
+
+        #region AnimeThemes
 
         /// <summary>
-        /// Replace literal commas with the unicode escape \u002C so that values containing commas can be stored in a simple comma-separated file.
+        /// Transform an AnimeThemes filename for Plex compatibility by inserting zero-width spaces in OP/ED prefixes (preventing Plex auto-rename), converting hyphens to middle dots, and cleaning bracketed tags.
         /// </summary>
-        public static string EscapeCsvCommas(string value)
-        {
-            if (string.IsNullOrEmpty(value))
-                return string.Empty;
-            return value.Replace(",", "\\u002C");
-        }
-
+        /// <param name="name">The original AnimeThemes filename.</param>
+        /// <returns>A Plex-friendly filename string, or <see cref="string.Empty"/> if <paramref name="name"/> is null or whitespace.</returns>
         public static string AnimeThemesPlexFileNames(string? name)
         {
             if (string.IsNullOrWhiteSpace(name))
@@ -328,20 +398,18 @@ namespace ShokoRelay.Helpers
         }
 
         /// <summary>
-        /// For aesthetic reasons, convert the first hyphen in a filename to a right-pointing chevron character. Used with extras filenames.
+        /// Extract the version suffix (e.g. "v2", "v3") from an anime theme filename such as "OP1v2" or "ED3v4".
         /// </summary>
-        /// <param name="name">Original filename.</param>
-        /// <returns>Modified string with replacement or empty string on null/whitespace.</returns>
-        public static string ReplaceFirstHyphenWithChevron(string? name)
+        /// <param name="fileNameWithoutExtension">Filename stem (no extension) to scan for a version suffix.</param>
+        /// <returns>The version suffix (e.g. "v2"), or <see cref="string.Empty"/> if none is present.</returns>
+        public static string ExtractThemeVersionSuffix(string fileNameWithoutExtension)
         {
-            if (string.IsNullOrWhiteSpace(name))
+            if (string.IsNullOrWhiteSpace(fileNameWithoutExtension))
                 return string.Empty;
-
-            int index = name.IndexOf('-');
-            if (index < 0)
-                return name;
-
-            return string.Concat(name.AsSpan(0, index), "\u276F", name.AsSpan(index + 1)); // Unicode Character "❯" (U+276F) - Heavy Right-Pointing Angle Quotation Mark Ornament
+            var match = _themeVersionRegex.Match(fileNameWithoutExtension);
+            return match.Success ? match.Groups[1].Value : string.Empty;
         }
+
+        #endregion
     }
 }

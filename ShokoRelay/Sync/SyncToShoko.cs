@@ -7,6 +7,9 @@ using ShokoRelay.Plex;
 
 namespace ShokoRelay.Sync
 {
+    /// <summary>
+    /// Synchronizes watched-state (and optional votes/ratings) from Plex into Shoko by querying Plex episodes and marking them watched in Shoko.
+    /// </summary>
     public class SyncToShoko
     {
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
@@ -34,6 +37,12 @@ namespace ShokoRelay.Sync
         /// <summary>
         /// Public entry supporting optional vote/rating sync in addition to watched-state.
         /// </summary>
+        /// <param name="dryRun">When <c>true</c>, report changes without actually applying them.</param>
+        /// <param name="sinceHours">Optional lookback window in hours; <c>null</c> means no limit.</param>
+        /// <param name="includeVotes">Whether to also sync Plex user ratings to Shoko.</param>
+        /// <param name="excludeAdmin">Whether to skip the admin user during sync.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A <see cref="PlexWatchedSyncResult"/> with aggregate and per-user statistics.</returns>
         public Task<PlexWatchedSyncResult> SyncWatchedAsync(bool dryRun, int? sinceHours, bool includeVotes, bool excludeAdmin, CancellationToken cancellationToken = default) =>
             SyncWatchedInternalAsync(dryRun, sinceHours, includeVotes, excludeAdmin, cancellationToken);
 

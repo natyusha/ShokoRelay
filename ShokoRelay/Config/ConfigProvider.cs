@@ -1,11 +1,15 @@
 using System.ComponentModel.DataAnnotations;
 using System.Reflection;
 using System.Text.Json;
+using Microsoft.AspNetCore.Http;
 using NLog;
 using Shoko.Abstractions.Plugin;
 
 namespace ShokoRelay.Config
 {
+    /// <summary>
+    /// Manages loading, saving, validation and normalization of the plugin configuration and Plex token/secrets file. Watches for external config changes to auto-invalidate the cache.
+    /// </summary>
     public class ConfigProvider
     {
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
@@ -21,6 +25,30 @@ namespace ShokoRelay.Config
 
         // expose plugin directory for convenient access (populated during construction)
         public string PluginDirectory { get; }
+
+        /// <summary>
+        /// Accessor for the current HTTP request context, set after DI resolution.
+        /// Used by <see cref="ServerBaseUrl"/> to capture the reachable host.
+        /// </summary>
+        public IHttpContextAccessor? HttpContextAccessor { get; set; }
+
+        private string _serverBaseUrl = "http://localhost:8111";
+
+        /// <summary>
+        /// The externally-reachable base URL of the Shoko server (e.g. <c>http://192.168.1.3:8111</c>).
+        /// When an HTTP request context is available the value is automatically refreshed from the incoming host header; background tasks that lack a context receive the last known value.
+        /// </summary>
+        public string ServerBaseUrl
+        {
+            get
+            {
+                var ctx = HttpContextAccessor?.HttpContext;
+                if (ctx is not null)
+                    _serverBaseUrl = $"{ctx.Request.Scheme}://{ctx.Request.Host}";
+                return _serverBaseUrl;
+            }
+            set => _serverBaseUrl = value ?? "http://localhost:8111";
+        }
 
         /// <summary>
         /// Creates a new <see cref="ConfigProvider"/> using the specified paths provided by the host application.
@@ -125,11 +153,13 @@ namespace ShokoRelay.Config
         /// <summary>
         /// Return the current settings, loading from disk if not already cached.
         /// </summary>
+        /// <returns>The active <see cref="RelayConfig"/> instance.</returns>
         public RelayConfig GetSettings() => _settings ??= GetSettingsFromFile();
 
         /// <summary>
         /// Construct a sanitized payload of settings plus minimal Plex auth information for consumption by the web dashboard UI.
         /// </summary>
+        /// <returns>A deserialized object graph suitable for JSON re-serialization to the dashboard.</returns>
         public object GetDashboardConfig()
         {
             var settings = GetSettings();
@@ -150,6 +180,9 @@ namespace ShokoRelay.Config
             return cleaned is Dictionary<string, object> d ? d : cleaned;
         }
 
+        /// <summary>
+        /// Absolute path to the directory containing the configuration file.
+        /// </summary>
         public string ConfigDirectory => Path.GetDirectoryName(_filePath)!;
 
         /// <summary>
@@ -300,6 +333,7 @@ namespace ShokoRelay.Config
         /// <summary>
         /// Return configured extra Plex users as a list of name/PIN tuples.
         /// </summary>
+        /// <returns>A list of (Name, Pin) tuples.</returns>
         public List<(string Name, string? Pin)> GetExtraPlexUserEntries()
         {
             var extraRaw = GetSettings().ExtraPlexUsers ?? string.Empty;
@@ -309,6 +343,7 @@ namespace ShokoRelay.Config
         /// <summary>
         /// Return only the usernames of configured extra Plex users.
         /// </summary>
+        /// <returns>A list of username strings (without PINs).</returns>
         public List<string> GetExtraPlexUsernames()
         {
             return GetExtraPlexUserEntries().Select(e => e.Name).ToList();
@@ -322,16 +357,18 @@ namespace ShokoRelay.Config
             public List<PlexAvailableLibrary>? Libraries { get; set; }
         }
 
+        private static TokenFile CreateEmptyTokenFile() => new TokenFile { Servers = new List<PlexAvailableServer>(), Libraries = new List<PlexAvailableLibrary>() };
+
         private TokenFile ReadTokenFile()
         {
             try
             {
                 if (!File.Exists(_tokenPath))
-                    return new TokenFile { Servers = new List<PlexAvailableServer>(), Libraries = new List<PlexAvailableLibrary>() };
+                    return CreateEmptyTokenFile();
 
                 var content = File.ReadAllText(_tokenPath);
                 if (string.IsNullOrWhiteSpace(content))
-                    return new TokenFile { Servers = new List<PlexAvailableServer>(), Libraries = new List<PlexAvailableLibrary>() };
+                    return CreateEmptyTokenFile();
 
                 try
                 {
@@ -348,28 +385,16 @@ namespace ShokoRelay.Config
                 {
                     // Token file is invalid JSON; return empty token object.
                     Logger.Warn($"Invalid token file format at {_tokenPath}: {ex.Message}");
-                    return new TokenFile
-                    {
-                        Token = null,
-                        ClientIdentifier = null,
-                        Servers = new List<PlexAvailableServer>(),
-                        Libraries = new List<PlexAvailableLibrary>(),
-                    };
+                    return CreateEmptyTokenFile();
                 }
 
                 // If we reach here the content did not deserialize to a TokenFile — return an empty token object.
-                return new TokenFile
-                {
-                    Token = null,
-                    ClientIdentifier = null,
-                    Servers = new List<PlexAvailableServer>(),
-                    Libraries = new List<PlexAvailableLibrary>(),
-                };
+                return CreateEmptyTokenFile();
             }
             catch (Exception ex)
             {
                 Logger.Warn($"Failed to read token file {_tokenPath}: {ex.Message}");
-                return new TokenFile { Servers = new List<PlexAvailableServer>(), Libraries = new List<PlexAvailableLibrary>() };
+                return CreateEmptyTokenFile();
             }
         }
 
@@ -397,11 +422,13 @@ namespace ShokoRelay.Config
         /// <summary>
         /// Retrieve the stored Plex token (from plex.token file).
         /// </summary>
+        /// <returns>An empty string if no token is stored.</returns>
         public string GetPlexToken() => ReadTokenFile().Token ?? string.Empty;
 
         /// <summary>
         /// Retrieve the Plex client identifier, generating one if missing.
         /// </summary>
+        /// <returns>The existing or newly generated client identifier.</returns>
         public string GetPlexClientIdentifier()
         {
             var tf = ReadTokenFile();
@@ -413,8 +440,10 @@ namespace ShokoRelay.Config
             return tf.ClientIdentifier ?? string.Empty;
         }
 
+        /// <summary>Retrieve the list of Plex servers discovered during authentication.</summary>
         public List<PlexAvailableServer> GetPlexDiscoveredServers() => ReadTokenFile().Servers ?? new List<PlexAvailableServer>();
 
+        /// <summary>Retrieve the list of Plex libraries discovered during authentication.</summary>
         public List<PlexAvailableLibrary> GetPlexDiscoveredLibraries() => ReadTokenFile().Libraries ?? new List<PlexAvailableLibrary>();
 
         /// <summary>

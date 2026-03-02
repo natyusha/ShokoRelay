@@ -68,10 +68,7 @@ namespace ShokoRelay.Helpers
                         continue;
                     int primary = parts[0];
                     foreach (var id in parts)
-                    {
-                        if (!_groups.ContainsKey(id))
-                            _groups[id] = parts;
-                    }
+                        _groups.TryAdd(id, parts);
                 }
                 var info = new FileInfo(path);
                 _lastWriteUtc = info.LastWriteTimeUtc;
@@ -85,6 +82,7 @@ namespace ShokoRelay.Helpers
         /// </summary>
         /// <param name="shokoSeriesId">Input series ID.</param>
         /// <param name="metadataService">Service used to resolve series/anidb mappings.</param>
+        /// <returns>The primary Shoko series ID for the override group, or <paramref name="shokoSeriesId"/> if no override exists.</returns>
         public static int GetPrimary(int shokoSeriesId, IMetadataService metadataService)
         {
             if (!ShokoRelay.Settings.TmdbEpNumbering || metadataService == null)
@@ -109,6 +107,7 @@ namespace ShokoRelay.Helpers
         /// </summary>
         /// <param name="shokoSeriesId">Series id to look up.</param>
         /// <param name="metadataService">Metadata service.</param>
+        /// <returns>A list of Shoko series IDs in the group (primary first), or a singleton list if no override applies.</returns>
         public static IReadOnlyList<int> GetGroup(int shokoSeriesId, IMetadataService metadataService)
         {
             if (!ShokoRelay.Settings.TmdbEpNumbering || metadataService == null)

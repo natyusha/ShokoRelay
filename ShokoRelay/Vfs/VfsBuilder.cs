@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using NLog;
-using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Shoko;
 using Shoko.Abstractions.Services;
 using ShokoRelay.Config;
@@ -16,6 +15,9 @@ namespace ShokoRelay.Vfs
     /// </summary>
     public record VfsBuildResult(string RootPath, int SeriesProcessed, int CreatedLinks, int Skipped, List<string> Errors, int PlannedLinks);
 
+    /// <summary>
+    /// Builds a virtual filesystem tree of symlinks for Plex by mapping Shoko series/episode metadata to Plex-style folder/file naming conventions.
+    /// </summary>
     public class VfsBuilder
     {
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
@@ -36,7 +38,7 @@ namespace ShokoRelay.Vfs
 
         private static readonly HashSet<string> MetadataExtensions = PlexConstants.LocalMediaAssets.Artwork.Union(PlexConstants.LocalMediaAssets.ThemeSongs).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        private static readonly HashSet<string> SubtitleExtensions = PlexConstants.LocalMediaAssets.Subtitles;
+        private static readonly IReadOnlySet<string> SubtitleExtensions = PlexConstants.LocalMediaAssets.Subtitles;
 
         /// <summary>
         /// Construct a <see cref="VfsBuilder"/> with the given metadata service and configuration provider.
@@ -44,8 +46,7 @@ namespace ShokoRelay.Vfs
         public VfsBuilder(IMetadataService metadataService, ConfigProvider configProvider)
         {
             _metadataService = metadataService;
-            // reports and other plugin-specific files should live inside our plugin
-            // folder rather than the global server data directory.
+            // reports and other plugin-specific files should live inside our plugin folder rather than the global server data directory.
             _pluginDataPath = configProvider.PluginDirectory;
             _configDirectory = configProvider.ConfigDirectory;
             try
@@ -66,6 +67,7 @@ namespace ShokoRelay.Vfs
         /// <param name="seriesId">Optional series ID to restrict the build.</param>
         /// <param name="cleanRoot">If true, delete existing root before building.</param>
         /// <param name="pruneSeries">If true, remove empty per-series folders.</param>
+        /// <returns>A <see cref="VfsBuildResult"/> describing what was created, skipped or errored.</returns>
         public VfsBuildResult Build(int? seriesId = null, bool cleanRoot = true, bool pruneSeries = false)
         {
             return BuildInternal(seriesId.HasValue ? new[] { seriesId.Value } : null, cleanRoot, pruneSeries, cleanOnly: false);
@@ -77,6 +79,7 @@ namespace ShokoRelay.Vfs
         /// <param name="seriesIds">Set of series IDs to process.</param>
         /// <param name="cleanRoot">If true, delete existing root before building.</param>
         /// <param name="pruneSeries">If true, remove empty per-series folders.</param>
+        /// <returns>A <see cref="VfsBuildResult"/> describing what was created, skipped or errored.</returns>
         public VfsBuildResult Build(IReadOnlyCollection<int> seriesIds, bool cleanRoot = true, bool pruneSeries = false)
         {
             return BuildInternal(seriesIds, cleanRoot, pruneSeries, cleanOnly: false);
@@ -86,11 +89,18 @@ namespace ShokoRelay.Vfs
         /// Perform a clean operation without generating any VFS links.
         /// This will delete the root or per-series folders exactly the same way that the normal build does when <c>cleanRoot</c> is true, but it returns before any mapping/creation work begins.
         /// </summary>
+        /// <param name="seriesId">Optional series ID to restrict the clean scope.</param>
+        /// <returns>A <see cref="VfsBuildResult"/> with zero created links.</returns>
         public VfsBuildResult Clean(int? seriesId = null)
         {
             return BuildInternal(seriesId.HasValue ? new[] { seriesId.Value } : null, cleanRoot: true, pruneSeries: false, cleanOnly: true);
         }
 
+        /// <summary>
+        /// Clean the VFS for the given collection of series IDs.
+        /// </summary>
+        /// <param name="seriesIds">Set of series IDs whose VFS folders should be deleted.</param>
+        /// <returns>A <see cref="VfsBuildResult"/> with zero created links.</returns>
         public VfsBuildResult Clean(IReadOnlyCollection<int> seriesIds)
         {
             return BuildInternal(seriesIds, cleanRoot: true, pruneSeries: false, cleanOnly: true);
@@ -444,10 +454,9 @@ namespace ShokoRelay.Vfs
                 if (cleanOnly)
                     continue;
 
-                Directory.CreateDirectory(rootPath);
-                // track directory creation
-                if (_createdDirsForBuild != null)
-                    _createdDirsForBuild.TryAdd(rootPath, 0);
+                // only issue the syscall the first time we encounter this path
+                if (_createdDirsForBuild == null || _createdDirsForBuild.TryAdd(rootPath, 0))
+                    Directory.CreateDirectory(rootPath);
 
                 string? source = VfsShared.ResolveSourcePath(location, importRoot);
 
@@ -462,9 +471,8 @@ namespace ShokoRelay.Vfs
 
                 string rootDirKey = $"/{importFolderSafe}/{rootFolderName}";
                 string seriesDirKey = $"/{importFolderSafe}/{rootFolderName}/{seriesFolder}";
-                Directory.CreateDirectory(seriesPath);
-                if (_createdDirsForBuild != null)
-                    _createdDirsForBuild.TryAdd(seriesPath, 0);
+                if (_createdDirsForBuild == null || _createdDirsForBuild.TryAdd(seriesPath, 0))
+                    Directory.CreateDirectory(seriesPath);
                 // record that we've processed these directories so LinkMetadata/LinkSubtitles can de-duplicate actions
                 reportedDirs.Add(rootDirKey);
                 reportedDirs.Add(seriesDirKey);
@@ -473,9 +481,8 @@ namespace ShokoRelay.Vfs
                 string seasonFolder = VfsHelper.SanitizeName(PlexMapping.GetSeasonFolder(mapping.Coords.Season));
                 string seasonPath = Path.Combine(seriesPath, seasonFolder);
                 string seasonDirKey = $"/{importFolderSafe}/{rootFolderName}/{seriesFolder}/{seasonFolder}";
-                Directory.CreateDirectory(seasonPath);
-                if (_createdDirsForBuild != null)
-                    _createdDirsForBuild.TryAdd(seasonPath, 0);
+                if (_createdDirsForBuild == null || _createdDirsForBuild.TryAdd(seasonPath, 0))
+                    Directory.CreateDirectory(seasonPath);
 
                 string extension = Path.GetExtension(source) ?? string.Empty;
                 int padForExtra = 1;

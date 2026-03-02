@@ -10,6 +10,7 @@ namespace ShokoRelay.Vfs
     public static class VfsHelper
     {
         private static readonly Regex _quotedTextRegex = new("\"(.*?)\"", RegexOptions.Compiled);
+        private static readonly Regex _whitespaceRegex = new(@"\s+", RegexOptions.Compiled);
         private static readonly (string Find, string Replace)[] _styledTitleReplacements = { ("1/2", "½"), ("1/6", "⅙"), ("-->", "→"), ("<--", "←"), ("->", "→"), ("<-", "←") };
         private static readonly IReadOnlyDictionary<char, char> _filenameCharMap = TextHelper.ReplacementCharMap;
 
@@ -27,6 +28,7 @@ namespace ShokoRelay.Vfs
         /// Remove invalid filename characters from <paramref name="name"/>, condense whitespace and trim trailing dots. Returns "Unknown" when the result is empty.
         /// </summary>
         /// <param name="name">Input string to sanitize.</param>
+        /// <returns>The sanitized filename, or "Unknown" when empty.</returns>
         public static string SanitizeName(string name)
         {
             if (string.IsNullOrWhiteSpace(name))
@@ -40,10 +42,7 @@ namespace ShokoRelay.Vfs
                 sb.Append(invalid.Contains(c) ? ' ' : c);
             }
 
-            string cleaned = sb.ToString();
-            while (cleaned.Contains("  "))
-                cleaned = cleaned.Replace("  ", " ");
-            cleaned = cleaned.Trim().TrimEnd('.');
+            string cleaned = TextHelper.CondenseSpaces(sb.ToString()).Trim().TrimEnd('.');
 
             return cleaned.Length == 0 ? "Unknown" : cleaned;
         }
@@ -59,6 +58,7 @@ namespace ShokoRelay.Vfs
         /// <param name="partIndexOverride">Optional manual part index.</param>
         /// <param name="partCountOverride">Optional total part count.</param>
         /// <param name="versionIndexOverride">Optional version index.</param>
+        /// <returns>A formatted episode filename string.</returns>
         public static string BuildStandardFileName(
             MapHelper.FileMapping mapping,
             int pad,
@@ -106,6 +106,7 @@ namespace ShokoRelay.Vfs
         /// <param name="partIndexOverride">Optional override for part index.</param>
         /// <param name="partCountOverride">Optional override for part count.</param>
         /// <param name="versionIndexOverride">Optional override for version index.</param>
+        /// <returns>A formatted extras filename string with a leading chevron separator.</returns>
         public static string BuildExtrasFileName(
             MapHelper.FileMapping mapping,
             (string Folder, string Subtype) extraInfo,
@@ -144,6 +145,7 @@ namespace ShokoRelay.Vfs
         /// substrings, mapping invalid characters and condensing whitespace.
         /// </summary>
         /// <param name="title">Original episode title.</param>
+        /// <returns>The cleaned title with invalid characters replaced.</returns>
         public static string CleanEpisodeTitleForFilename(string? title)
         {
             if (string.IsNullOrWhiteSpace(title))
@@ -171,7 +173,7 @@ namespace ShokoRelay.Vfs
                 }
             }
 
-            cleaned = Regex.Replace(sb.ToString(), "\\s+", " ", RegexOptions.Compiled).Trim();
+            cleaned = _whitespaceRegex.Replace(sb.ToString(), " ").Trim();
             return cleaned;
         }
     }

@@ -14,15 +14,19 @@ namespace ShokoRelay.Plex
     /// </summary>
     public static class PlexHelper
     {
+        private static readonly Regex _showIdRegex = new(@"/show/(\d+)", RegexOptions.Compiled);
+
         /// <summary>
         /// Parse a Plex GUID string and return the embedded Shoko series ID if present. The GUID contains a "/show/{id}" segment when it maps to a series.
         /// </summary>
+        /// <param name="guid">The Plex GUID string to parse.</param>
+        /// <returns>The extracted series ID, or <c>null</c> if the GUID does not contain a valid series reference.</returns>
         public static int? ExtractShokoSeriesIdFromGuid(string? guid)
         {
             if (string.IsNullOrWhiteSpace(guid))
                 return null;
 
-            var match = Regex.Match(guid, @"/show/(\d+)");
+            var match = _showIdRegex.Match(guid);
             if (!match.Success)
                 return null;
 
@@ -33,9 +37,13 @@ namespace ShokoRelay.Plex
         }
 
         /// <summary>
-        /// Search configured import roots for a custom collection poster image that matches either the group ID, collection ID, or normalized collection title.
-        /// Returns the first matching file path or <c>null</c> if none found.
+        /// Search configured import roots for a custom collection poster image that matches either the group ID, collection ID, or normalized collection title. Returns the first matching file path or <c>null</c> if none found.
         /// </summary>
+        /// <param name="series">Series whose import roots are searched for poster files.</param>
+        /// <param name="collectionName">Display name of the collection (used for fuzzy filename matching).</param>
+        /// <param name="collectionId">Numeric collection ID to match against poster filenames.</param>
+        /// <param name="metadataService">Optional metadata service for override-aware root resolution.</param>
+        /// <returns>The full path to the matching poster file, or <c>null</c>.</returns>
         public static string? FindCollectionPosterPath(IShokoSeries series, string collectionName, int collectionId, IMetadataService? metadataService = null)
         {
             if (series == null)
@@ -82,6 +90,9 @@ namespace ShokoRelay.Plex
         /// <summary>
         /// Locate a local collection poster by matching against the specified group ID (and optionally the group's title).
         /// </summary>
+        /// <param name="series">Series whose import roots are searched.</param>
+        /// <param name="groupId">The Shoko group ID to match against poster filenames.</param>
+        /// <returns>The full path to the matching poster file, or <c>null</c>.</returns>
         public static string? FindCollectionPosterPathByGroup(IShokoSeries series, int groupId)
         {
             if (series == null)
@@ -133,8 +144,8 @@ namespace ShokoRelay.Plex
                     // 3) Stripped invalid Windows filename characters match (e.g. "My: Group" -> "My Group")
                     if (!string.IsNullOrWhiteSpace(groupTitle))
                     {
-                        var strippedGroup = StripInvalidWindowsChars(groupTitle).ToLowerInvariant();
-                        var strippedBase = StripInvalidWindowsChars(baseName).ToLowerInvariant();
+                        var strippedGroup = TextHelper.StripInvalidWindowsChars(groupTitle).ToLowerInvariant();
+                        var strippedBase = TextHelper.StripInvalidWindowsChars(baseName).ToLowerInvariant();
                         if (!string.IsNullOrWhiteSpace(strippedGroup) && strippedGroup == strippedBase)
                             return file;
                     }
@@ -145,9 +156,11 @@ namespace ShokoRelay.Plex
         }
 
         /// <summary>
-        /// Determine the set of filesystem import root folders that contain files for the provided <paramref name="series"/>.
-        /// Optionally pass a <paramref name="metadataService"/> for override-aware series grouping.
+        /// Determine the set of filesystem import root folders that contain files for the provided <paramref name="series"/>. Optionally pass a <paramref name="metadataService"/> for override-aware series grouping.
         /// </summary>
+        /// <param name="series">Series whose video files are inspected for import roots.</param>
+        /// <param name="metadataService">Optional metadata service for override-aware series grouping.</param>
+        /// <returns>A set of unique import root directory paths.</returns>
         public static HashSet<string> ResolveImportRoots(IShokoSeries series, IMetadataService? metadataService = null)
         {
             var roots = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
@@ -201,11 +214,6 @@ namespace ShokoRelay.Plex
             return int.TryParse(trimmed, out int parsed) && parsed == id;
         }
 
-        private static string StripInvalidWindowsChars(string value)
-        {
-            return TextHelper.StripInvalidWindowsChars(value);
-        }
-
         private static string? NormalizeCollectionKey(string value)
         {
             if (string.IsNullOrWhiteSpace(value))
@@ -220,9 +228,7 @@ namespace ShokoRelay.Plex
                 sb.Append(c);
             }
 
-            string cleaned = sb.ToString().Trim();
-            while (cleaned.Contains("  "))
-                cleaned = cleaned.Replace("  ", " ");
+            string cleaned = TextHelper.CondenseSpaces(sb.ToString().Trim());
 
             return cleaned.Length == 0 ? null : cleaned.ToLowerInvariant();
         }
@@ -247,7 +253,7 @@ namespace ShokoRelay.Plex
             var posterPath = FindCollectionPosterPath(series, collectionName, collectionId, metadataService);
             if (!string.IsNullOrWhiteSpace(posterPath))
             {
-                string b = string.IsNullOrWhiteSpace(baseUrl) ? ImageHelper.GetBaseUrl() : baseUrl?.TrimEnd('/') ?? string.Empty;
+                string b = string.IsNullOrWhiteSpace(baseUrl) ? ShokoRelay.ServerBaseUrl : baseUrl?.TrimEnd('/') ?? string.Empty;
                 // Prefer the plugin-style provider base for generated collection poster URLs
                 return $"{b}{ShokoRelayInfo.BasePath}/collections/user/{series.TopLevelGroupID}";
             }

@@ -12,6 +12,9 @@ using ShokoRelay.Vfs;
 
 namespace ShokoRelay
 {
+    /// <summary>
+    /// Registers all plugin services, HTTP clients, singletons and the hosted background service into the DI container.
+    /// </summary>
     public class ServiceRegistration : IPluginServiceRegistration
     {
         /// <summary>
@@ -82,7 +85,9 @@ namespace ShokoRelay
         }
     }
 
-    // Minimal plugin metadata for new abstractions
+    /// <summary>
+    /// Minimal plugin descriptor that exposes the plugin's identity, name, description and embedded thumbnail to the Shoko host.
+    /// </summary>
     public class Plugin : IPlugin
     {
         public Guid ID => new Guid("2b0f5a7e-3d2b-4f3d-9e6b-7f0a6b2d8c9a");
@@ -91,7 +96,9 @@ namespace ShokoRelay
         public string? EmbeddedThumbnailResourceName => "ShokoRelay.dashboard.img.shoko-relay-thumbnail.png";
     }
 
-    // Hosted service that runs the VFS watcher and automation loop
+    /// <summary>
+    /// Hosted background service that starts the VFS file-system watcher and runs the periodic automation loop (imports, Plex collections, watched-state sync).
+    /// </summary>
     public class ShokoRelay : BackgroundService
     {
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
@@ -102,6 +109,12 @@ namespace ShokoRelay
         /// Shortcut to the current plugin settings; returns a default instance if the provider is not yet initialized.
         /// </summary>
         public static RelayConfig Settings => _configProvider?.GetSettings() ?? new RelayConfig();
+
+        /// <summary>
+        /// The externally-reachable base URL of the Shoko server, auto-refreshed from the current HTTP context.
+        /// Falls back to <c>http://localhost:8111</c> when the provider is not yet initialized.
+        /// </summary>
+        public static string ServerBaseUrl => _configProvider?.ServerBaseUrl ?? "http://localhost:8111";
 
         /// <summary>
         /// Convenience accessor for the configuration directory path (same location as overrides, logs, etc.).
@@ -138,7 +151,7 @@ namespace ShokoRelay
         /// Construct the hosted plugin service, wiring in required dependencies such as the VFS watcher, sync services, and configuration provider.
         /// </summary>
         /// <param name="applicationPaths">Host-provided paths (used for plugin directory).</param>
-        /// <param name="httpContextAccessor">Accessor used by <see cref="ImageHelper"/>.</param>
+        /// <param name="httpContextAccessor">Accessor used by <see cref="ConfigProvider"/> for base URL resolution.</param>
         /// <param name="watcher">VFS watcher service.</param>
         /// <param name="configProvider">Configuration provider.</param>
         /// <param name="watchedSyncService">Optional watched-sync service (Plex→Shoko).</param>
@@ -162,7 +175,7 @@ namespace ShokoRelay
                 throw new ArgumentNullException(nameof(metadataService));
             _configProvider = configProvider;
 
-            ImageHelper.HttpContextAccessor = httpContextAccessor;
+            configProvider.HttpContextAccessor = httpContextAccessor;
 
             _watcher = watcher;
             _watchedSyncService = watchedSyncService;
@@ -209,6 +222,25 @@ namespace ShokoRelay
             await base.StopAsync(cancellationToken).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Compute the last scheduled and next scheduled run times based on the current time, UTC offset and frequency.
+        /// </summary>
+        /// <param name="now">Current UTC time used as the reference point.</param>
+        /// <param name="offsetHours">UTC offset (hours) that anchors the daily schedule grid.</param>
+        /// <param name="frequencyHours">Interval in hours between successive runs.</param>
+        /// <returns>A tuple of the most recent scheduled time and the next upcoming run time.</returns>
+        private static (DateTime LastScheduled, DateTime NextRun) ComputeSchedule(DateTime now, int offsetHours, int frequencyHours)
+        {
+            DateTime anchor = new DateTime(now.Year, now.Month, now.Day, 0, 0, 0, DateTimeKind.Utc) + TimeSpan.FromHours(offsetHours);
+            if (anchor > now)
+                anchor = anchor.AddDays(-1);
+            double periods = Math.Floor((now - anchor).TotalHours / frequencyHours);
+            if (periods < 0)
+                periods = 0;
+            DateTime lastScheduled = anchor.AddHours(periods * frequencyHours);
+            return (lastScheduled, lastScheduled.AddHours(frequencyHours));
+        }
+
         private async Task AutomationLoop(CancellationToken ct)
         {
             try
@@ -219,7 +251,7 @@ namespace ShokoRelay
                     {
                         var settings = Settings; // RelayConfig
 
-                        // --- scheduled Shoko import (independent of watched-state automation) ---
+                        // Scheduled Shoko import (independent of watched-state automation)
                         int importFreqHours = settings?.ShokoImportFrequencyHours ?? 0;
                         DateTime? nextImportRunUtc = null;
 
@@ -232,15 +264,8 @@ namespace ShokoRelay
                         }
                         else
                         {
-                            // compute last scheduled run based on UTC midnight + offset
-                            DateTime anchor = new DateTime(now.Year, now.Month, now.Day, 0, 0, 0, DateTimeKind.Utc) + TimeSpan.FromHours(offset);
-                            if (anchor > now)
-                                anchor = anchor.AddDays(-1);
-                            double periods = Math.Floor((now - anchor).TotalHours / importFreqHours);
-                            if (periods < 0)
-                                periods = 0;
-                            DateTime lastScheduled = anchor.AddHours(periods * importFreqHours);
-                            nextImportRunUtc = lastScheduled.AddHours(importFreqHours);
+                            var (lastScheduled, nextRun) = ComputeSchedule(now, offset, importFreqHours);
+                            nextImportRunUtc = nextRun;
 
                             if (_lastImportRunUtc == null || _lastImportRunUtc < lastScheduled)
                             {
@@ -269,7 +294,7 @@ namespace ShokoRelay
                             }
                         }
 
-                        // --- Sync watched-state automation ---
+                        // Watched-state sync automation
                         DateTime? nextWatchedSyncRunUtc = null;
                         try
                         {
@@ -283,14 +308,8 @@ namespace ShokoRelay
                             }
                             else
                             {
-                                DateTime anchor = new DateTime(now.Year, now.Month, now.Day, 0, 0, 0, DateTimeKind.Utc) + TimeSpan.FromHours(offset);
-                                if (anchor > now)
-                                    anchor = anchor.AddDays(-1);
-                                double periods = Math.Floor((now - anchor).TotalHours / syncFreq);
-                                if (periods < 0)
-                                    periods = 0;
-                                DateTime lastScheduled = anchor.AddHours(periods * syncFreq);
-                                nextWatchedSyncRunUtc = lastScheduled.AddHours(syncFreq);
+                                var (lastScheduled, nextRun) = ComputeSchedule(now, offset, syncFreq);
+                                nextWatchedSyncRunUtc = nextRun;
 
                                 if (_lastSyncWatchedUtc == null || _lastSyncWatchedUtc < lastScheduled)
                                 {
@@ -321,7 +340,7 @@ namespace ShokoRelay
                             Logger.Warn(ex, "Automation: error while checking Plex watched-state automation");
                         }
 
-                        // --- Plex automation (collections + ratings) ---
+                        // Plex Automation (collections + ratings)
                         DateTime? nextPlexRunUtc = null;
                         try
                         {
@@ -332,14 +351,8 @@ namespace ShokoRelay
                             }
                             else
                             {
-                                DateTime anchor = new DateTime(now.Year, now.Month, now.Day, 0, 0, 0, DateTimeKind.Utc) + TimeSpan.FromHours(offset);
-                                if (anchor > now)
-                                    anchor = anchor.AddDays(-1);
-                                double periods = Math.Floor((now - anchor).TotalHours / plexFreq);
-                                if (periods < 0)
-                                    periods = 0;
-                                DateTime lastScheduled = anchor.AddHours(periods * plexFreq);
-                                nextPlexRunUtc = lastScheduled.AddHours(plexFreq);
+                                var (lastScheduled, nextRun) = ComputeSchedule(now, offset, plexFreq);
+                                nextPlexRunUtc = nextRun;
 
                                 if (_lastPlexAutomationUtc == null || _lastPlexAutomationUtc < lastScheduled)
                                 {
@@ -396,6 +409,8 @@ namespace ShokoRelay
                             earliestNext = nextImportRunUtc;
                         if (nextWatchedSyncRunUtc.HasValue && (!earliestNext.HasValue || nextWatchedSyncRunUtc.Value < earliestNext.Value))
                             earliestNext = nextWatchedSyncRunUtc;
+                        if (nextPlexRunUtc.HasValue && (!earliestNext.HasValue || nextPlexRunUtc.Value < earliestNext.Value))
+                            earliestNext = nextPlexRunUtc;
 
                         double delayMs;
                         if (earliestNext.HasValue)

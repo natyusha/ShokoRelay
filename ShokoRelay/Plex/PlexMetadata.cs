@@ -9,6 +9,9 @@ using static ShokoRelay.Plex.PlexMapping;
 
 namespace ShokoRelay.Plex
 {
+    /// <summary>
+    /// Converts Shoko series/episode/season metadata into Plex-compatible property dictionaries. Also constructs external GUID, rating, network, and country arrays.
+    /// </summary>
     public class PlexMetadata
     {
         private readonly IMetadataService _metadataService;
@@ -18,6 +21,21 @@ namespace ShokoRelay.Plex
             _metadataService = metadataService;
         }
 
+        /// <summary>
+        /// Derive a cache-busting token from the entity's <see cref="IWithUpdateDate.LastUpdatedAt"/> timestamp.
+        /// When AniDB replaces a poster the image ID stays the same, but the series' update date changes so
+        /// Plex sees a new URL and re-downloads the image.
+        /// </summary>
+        private static string? GetCacheBuster(object? entity) => entity is IWithUpdateDate upd ? new DateTimeOffset(upd.LastUpdatedAt).ToUnixTimeSeconds().ToString() : null;
+
+        /// <summary>
+        /// Compose a Plex rating key string from a metadata type and numeric identifiers.
+        /// </summary>
+        /// <param name="type">Metadata type ("collection", "show", "season", "episode").</param>
+        /// <param name="id">Primary numeric id (series/episode/group).</param>
+        /// <param name="season">Optional season number (used for season/episode types).</param>
+        /// <param name="part">Optional part index for multi-part episodes.</param>
+        /// <returns>A composite rating key string.</returns>
         public string GetRatingKey(string type, int id, int? season = null, int? part = null) =>
             type switch
             {
@@ -28,6 +46,14 @@ namespace ShokoRelay.Plex
                 _ => id.ToString(),
             };
 
+        /// <summary>
+        /// Compose a Plex GUID URI from a metadata type and numeric identifiers, using the <see cref="ShokoRelayInfo.AgentScheme"/>.
+        /// </summary>
+        /// <param name="type">Metadata type ("collection", "show", "season", "episode").</param>
+        /// <param name="id">Primary numeric id.</param>
+        /// <param name="season">Optional season number.</param>
+        /// <param name="part">Optional part index.</param>
+        /// <returns>A fully-qualified agent GUID URI.</returns>
         public string GetGuid(string type, int id, int? season = null, int? part = null) =>
             type switch
             {
@@ -219,6 +245,11 @@ namespace ShokoRelay.Plex
             return BuildRatingArray(tmdb);
         }
 
+        /// <summary>
+        /// Get the collection name for a series based on its top-level Shoko group, returning <c>null</c> when the group contains only one series.
+        /// </summary>
+        /// <param name="series">The series to check.</param>
+        /// <returns>The group's preferred title, or <c>null</c> if no collection applies.</returns>
         public string? GetCollectionName(ISeries series)
         {
             if (series is not IShokoSeries shokoSeries)
@@ -238,9 +269,16 @@ namespace ShokoRelay.Plex
             return group is IWithTitles titled && !string.IsNullOrWhiteSpace(titled.PreferredTitle?.Value) ? titled.PreferredTitle?.Value : null;
         }
 
+        /// <summary>
+        /// Build a Plex-compatible metadata dictionary for a collection backed by a Shoko group.
+        /// </summary>
+        /// <param name="group">Shoko group representing the collection.</param>
+        /// <param name="primarySeries">Primary series used for images.</param>
+        /// <returns>A dictionary of Plex metadata properties.</returns>
         public Dictionary<string, object?> MapCollection(IShokoGroup group, ISeries primarySeries)
         {
             var images = (IWithImages)primarySeries;
+            var cb = GetCacheBuster(primarySeries);
             var poster = images?.GetImages(ImageEntityType.Poster).FirstOrDefault();
             var backdrop = images?.GetImages(ImageEntityType.Backdrop).FirstOrDefault();
 
@@ -256,8 +294,8 @@ namespace ShokoRelay.Plex
                 ["type"]                  = "collection",
                 ["subtype"]               = "show",
                 ["title"]                 = collectiontitle,
-                ["thumb"]                 = poster != null ? ImageHelper.GetImageUrl(poster) : null,
-                ["art"]                   = backdrop != null ? ImageHelper.GetImageUrl(backdrop) : null,
+                ["thumb"]                 = poster != null ? ImageHelper.GetImageUrl(poster, cacheBuster: cb) : null,
+                ["art"]                   = backdrop != null ? ImageHelper.GetImageUrl(backdrop, cacheBuster: cb) : null,
                 ["titleSort"]             = collectiontitle,
                 //["summary"]             = There is no summary source for groups
                 //["Image"]               = Likely an image array will be used here
@@ -265,9 +303,16 @@ namespace ShokoRelay.Plex
             // csharpier-ignore-end
         }
 
+        /// <summary>
+        /// Build a Plex-compatible metadata dictionary for a series (show), including images, tags, cast, ratings, studios, and networks.
+        /// </summary>
+        /// <param name="series">The series to map.</param>
+        /// <param name="titles">Pre-resolved display, sort, and original title tuple.</param>
+        /// <returns>A dictionary of Plex metadata properties.</returns>
         public Dictionary<string, object?> MapSeries(ISeries series, (string DisplayTitle, string SortTitle, string? OriginalTitle) titles)
         {
             var images = (IWithImages)series;
+            var cb = GetCacheBuster(series);
             var poster = images.GetImages(ImageEntityType.Poster).FirstOrDefault();
             var backdrop = images.GetImages(ImageEntityType.Backdrop).FirstOrDefault();
             var studios = CastHelper.GetStudioTags(series);
@@ -284,20 +329,20 @@ namespace ShokoRelay.Plex
                 ["type"]                  = "show",
                 ["title"]                 = titles.DisplayTitle,
                 ["originallyAvailableAt"] = series.AirDate?.ToString("yyyy-MM-dd"),
-                ["thumb"]                 = poster != null ? ImageHelper.GetImageUrl(poster) : null,
-                ["art"]                   = backdrop != null ? ImageHelper.GetImageUrl(backdrop) : null,
+                ["thumb"]                 = poster != null ? ImageHelper.GetImageUrl(poster, cacheBuster: cb) : null,
+                ["art"]                   = backdrop != null ? ImageHelper.GetImageUrl(backdrop, cacheBuster: cb) : null,
                 ["contentRating"]         = contentRating.Rating,
                 ["originalTitle"]         = titles.OriginalTitle,
                 ["titleSort"]             = titles.SortTitle,
                 ["year"]                  = series.AirDate?.Year,
-                ["summary"]               = TextHelper.SummarySanitizer(((IWithDescriptions)series).PreferredDescription?.Value, ShokoRelay.Settings.SummaryMode) ?? "",
+                ["summary"]               = TextHelper.SanitizeSummaryWithFallback(((IWithDescriptions)series).PreferredDescription?.Value, (series as IShokoSeries)?.TmdbShows?.FirstOrDefault()?.PreferredDescription?.Value, ShokoRelay.Settings.SummaryMode),
                 ["isAdult"]               = contentRating.IsAdult,
                 ["duration"]              = totalDuration,
                 //["tagline"]             = TMDB has this but it is not exposed
                 ["studio"]                = studios.FirstOrDefault()?.tag,
                 ["theme"]                 = plexTheme,
 
-                ["Image"]                 = ImageHelper.GenerateImageArray(images, titles.DisplayTitle, ShokoRelay.Settings.AddEveryImage),
+                ["Image"]                 = ImageHelper.GenerateImageArray(images, titles.DisplayTitle, ShokoRelay.Settings.AddEveryImage, cb),
                 //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
                 ["Genre"]                 = TagHelper.GetFilteredTags(series),
                 ["Guid"]                  = BuildXrefGuidArray(series).ToArray(),
@@ -316,6 +361,14 @@ namespace ShokoRelay.Plex
             // csharpier-ignore-end
         }
 
+        /// <summary>
+        /// Build a Plex-compatible metadata dictionary for a single season, enriching with TMDB season titles, summaries, and posters when available.
+        /// </summary>
+        /// <param name="series">The parent series.</param>
+        /// <param name="seasonNum">Season number being mapped.</param>
+        /// <param name="seriesTitle">Display title of the parent series.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A dictionary of Plex metadata properties for the season.</returns>
         public Dictionary<string, object?> MapSeason(ISeries series, int seasonNum, string seriesTitle, System.Threading.CancellationToken cancellationToken = default)
         {
             // ensure overrides loaded and pick canonical primary series for downstream lookups
@@ -345,6 +398,7 @@ namespace ShokoRelay.Plex
             }
 
             var images = (IWithImages)primarySeries;
+            var cb = GetCacheBuster(primarySeries);
             var poster = images.GetImages(ImageEntityType.Poster).FirstOrDefault();
             var backdrop = images.GetImages(ImageEntityType.Backdrop).FirstOrDefault();
             var seasonTitle = GetSeasonFolder(seasonNum);
@@ -402,11 +456,16 @@ namespace ShokoRelay.Plex
             // Skip posters if we are ignoring TMDB season info due to an alternate ordering.
             if (ShokoRelay.Settings.TmdbSeasonPosters && nonExtraSeasonCount > 1 && tmdbSeason != null && !ignoreTmdbSeasonInfo)
             {
-                var orderedUrls = tmdbSeason.GetImages(ImageEntityType.Poster).OrderByDescending(i => i.IsPreferred).ThenByDescending(i => i.IsLocked).Select(i => ImageHelper.GetImageUrl(i)).ToList();
+                var orderedUrls = tmdbSeason
+                    .GetImages(ImageEntityType.Poster)
+                    .OrderByDescending(i => i.IsPreferred)
+                    .ThenByDescending(i => i.IsLocked)
+                    .Select(i => ImageHelper.GetImageUrl(i, cacheBuster: cb))
+                    .ToList();
 
                 if (tmdbSeason.DefaultPoster is not null)
                 {
-                    var defaultUrl = ImageHelper.GetImageUrl(tmdbSeason.DefaultPoster);
+                    var defaultUrl = ImageHelper.GetImageUrl(tmdbSeason.DefaultPoster, cacheBuster: cb);
                     seasonPosters = new List<string> { defaultUrl };
                     if (orderedUrls?.Any() == true)
                         seasonPosters.AddRange(orderedUrls.Where(u => u != defaultUrl));
@@ -422,10 +481,11 @@ namespace ShokoRelay.Plex
             if (seasonPosters != null && seasonPosters.Count > 0)
                 thumb = seasonPosters[0];
             else if (poster != null)
-                thumb = ImageHelper.GetImageUrl(poster);
+                thumb = ImageHelper.GetImageUrl(poster, cacheBuster: cb);
 
-            var coverPosters = ImageHelper.BuildCoverPosterArray(images, seasonTitle, ShokoRelay.Settings.AddEveryImage, seasonPosters).ToList();
+            var coverPosters = ImageHelper.BuildCoverPosterArray(images, seasonTitle, ShokoRelay.Settings.AddEveryImage, seasonPosters, cb).ToList();
             // csharpier-ignore-start
+            var contentRating = RatingHelper.GetContentRatingAndAdult(series);
             return new Dictionary<string, object?>
             {
                 ["ratingKey"] = GetRatingKey("season", series.ID, seasonNum),
@@ -435,20 +495,20 @@ namespace ShokoRelay.Plex
                 ["title"]                 = seasonTitle,
                 ["originallyAvailableAt"] = seasonDate?.ToString("yyyy-MM-dd"),
                 ["thumb"]                 = thumb,
-                ["contentRating"]         = RatingHelper.GetContentRatingAndAdult(series).Rating,
+                ["contentRating"]         = contentRating.Rating,
                 //['originalTitle']       =
                 ["titleSort"]             = !string.IsNullOrWhiteSpace(seasonTitle) ? seasonTitle : null,
                 ["year"]                  = seasonDate?.Year,
                 ["summary"]               = seasonSummary ?? string.Empty,
-                ["isAdult"]               = RatingHelper.GetContentRatingAndAdult(series).IsAdult,
+                ["isAdult"]               = contentRating.IsAdult,
 
                 ["parentRatingKey"]       = GetRatingKey("show", series.ID),
                 ["parentKey"]             = $"/metadata/{series.ID}",
                 ["parentGuid"]            = GetGuid("show", series.ID),
                 ["parentType"]            = "show",
                 ["parentTitle"]           = seriesTitle,
-                ["parentThumb"]           = poster != null ? ImageHelper.GetImageUrl(poster) : null,
-                ["parentArt"]             = backdrop != null ? ImageHelper.GetImageUrl(backdrop) : null,
+                ["parentThumb"]           = poster != null ? ImageHelper.GetImageUrl(poster, cacheBuster: cb) : null,
+                ["parentArt"]             = backdrop != null ? ImageHelper.GetImageUrl(backdrop, cacheBuster: cb) : null,
                 ["index"]                 = seasonNum,
 
                 ["Image"]                 = coverPosters.ToArray(),
@@ -457,6 +517,16 @@ namespace ShokoRelay.Plex
             // csharpier-ignore-end
         }
 
+        /// <summary>
+        /// Build a Plex-compatible metadata dictionary for a single episode. Supports multi-part episodes and TMDB title/summary overrides for secondary parts.
+        /// </summary>
+        /// <param name="ep">Episode metadata.</param>
+        /// <param name="mapped">Pre-calculated Plex season/episode coordinates.</param>
+        /// <param name="series">Parent series for context (images, titles, content rating).</param>
+        /// <param name="titles">Pre-resolved display, sort, and original title tuple for the series.</param>
+        /// <param name="partIndex">Optional 1-based part index for multi-part episodes.</param>
+        /// <param name="tmdbEpisode">Optional TMDB episode object used for title/summary overrides on secondary parts.</param>
+        /// <returns>A dictionary of Plex metadata properties for the episode.</returns>
         public Dictionary<string, object?> MapEpisode(
             IEpisode ep,
             PlexCoords mapped,
@@ -468,6 +538,7 @@ namespace ShokoRelay.Plex
         {
             var images = (IWithImages)ep;
             var seriesImages = (IWithImages)series;
+            var cb = GetCacheBuster(series);
             var thumb = ShokoRelay.Settings.TmdbThumbnails ? images.GetImages(ImageEntityType.Thumbnail).FirstOrDefault() : null;
             var seriesBackdrop = seriesImages.GetImages(ImageEntityType.Backdrop).FirstOrDefault();
             var seriesPoster = seriesImages.GetImages(ImageEntityType.Poster).FirstOrDefault();
@@ -488,7 +559,7 @@ namespace ShokoRelay.Plex
             ImageInfo[] imageArray = Array.Empty<ImageInfo>();
             if (ShokoRelay.Settings.TmdbThumbnails)
             {
-                imageArray = ImageHelper.GenerateImageArray(images, epTitle, ShokoRelay.Settings.AddEveryImage).Where(img => img.type == "snapshot").ToArray();
+                imageArray = ImageHelper.GenerateImageArray(images, epTitle, ShokoRelay.Settings.AddEveryImage, cb).Where(img => img.type == "snapshot").ToArray();
             }
 
             string? extraSubtype = null;
@@ -523,11 +594,16 @@ namespace ShokoRelay.Plex
                 }
                 if (seasonObj != null)
                 {
-                    var orderedUrls = seasonObj.GetImages(ImageEntityType.Poster).OrderByDescending(i => i.IsPreferred).ThenByDescending(i => i.IsLocked).Select(i => ImageHelper.GetImageUrl(i)).ToList();
+                    var orderedUrls = seasonObj
+                        .GetImages(ImageEntityType.Poster)
+                        .OrderByDescending(i => i.IsPreferred)
+                        .ThenByDescending(i => i.IsLocked)
+                        .Select(i => ImageHelper.GetImageUrl(i, cacheBuster: cb))
+                        .ToList();
 
                     if (seasonObj.DefaultPoster is not null)
                     {
-                        parentThumb = ImageHelper.GetImageUrl(seasonObj.DefaultPoster);
+                        parentThumb = ImageHelper.GetImageUrl(seasonObj.DefaultPoster, cacheBuster: cb);
                     }
                     else if (orderedUrls?.Any() == true)
                     {
@@ -537,7 +613,9 @@ namespace ShokoRelay.Plex
             }
 
             if (parentThumb == null && seriesPoster != null)
-                parentThumb = ImageHelper.GetImageUrl(seriesPoster);
+                parentThumb = ImageHelper.GetImageUrl(seriesPoster, cacheBuster: cb);
+
+            var contentRating = RatingHelper.GetContentRatingAndAdult(series);
             // csharpier-ignore-start
             var dict = new Dictionary<string, object?>
             {
@@ -548,14 +626,14 @@ namespace ShokoRelay.Plex
                 ["subtype"]               = extraSubtype,
                 ["title"]                 = epTitle,
                 ["originallyAvailableAt"] = ep.AirDate?.ToString("yyyy-MM-dd"),
-                ["thumb"]                 = thumb != null ? ImageHelper.GetImageUrl(thumb) : null,
+                ["thumb"]                 = thumb != null ? ImageHelper.GetImageUrl(thumb, cacheBuster: cb) : null,
                 //["art"]
-                ["contentRating"]         = RatingHelper.GetContentRatingAndAdult(series).Rating,
+                ["contentRating"]         = contentRating.Rating,
                 //["originalTitle"]
                 ["titleSort"]             = epTitle,
                 ["year"]                  = ep.AirDate?.Year,
-                ["summary"]               = TextHelper.SummarySanitizer(epSummary, ShokoRelay.Settings.SummaryMode) ?? "",
-                ["isAdult"]               = RatingHelper.GetContentRatingAndAdult(series).IsAdult,
+                ["summary"]               = TextHelper.SanitizeSummaryWithFallback(epSummary, (ep as IShokoEpisode)?.TmdbEpisodes?.FirstOrDefault()?.PreferredDescription?.Value, ShokoRelay.Settings.SummaryMode),
+                ["isAdult"]               = contentRating.IsAdult,
                 ["duration"]              = (int)ep.Runtime.TotalMilliseconds,
 
                 ["parentRatingKey"]       = GetRatingKey("season", series.ID, mapped.Season),
@@ -564,7 +642,7 @@ namespace ShokoRelay.Plex
                 ["parentType"]            = "season",
                 ["parentTitle"]           = GetSeasonFolder(mapped.Season),
                 ["parentThumb"]           = parentThumb,
-                ["parentArt"]             = seriesBackdrop != null ? ImageHelper.GetImageUrl(seriesBackdrop) : null, // Not documented
+                ["parentArt"]             = seriesBackdrop != null ? ImageHelper.GetImageUrl(seriesBackdrop, cacheBuster: cb) : null, // Not documented
                 ["index"]                 = mapped.Episode,
 
                 ["grandparentRatingKey"]  = GetRatingKey("show", series.ID),
@@ -572,8 +650,8 @@ namespace ShokoRelay.Plex
                 ["grandparentGuid"]       = GetGuid("show", series.ID),
                 ["grandparentType"]       = "show",
                 ["grandparentTitle"]      = titles.DisplayTitle,
-                ["grandparentThumb"]      = seriesPoster != null ? ImageHelper.GetImageUrl(seriesPoster) : null,
-                ["grandparentArt"]        = seriesBackdrop != null ? ImageHelper.GetImageUrl(seriesBackdrop) : null, // Not documented
+                ["grandparentThumb"]      = seriesPoster != null ? ImageHelper.GetImageUrl(seriesPoster, cacheBuster: cb) : null,
+                ["grandparentArt"]        = seriesBackdrop != null ? ImageHelper.GetImageUrl(seriesBackdrop, cacheBuster: cb) : null, // Not documented
                 ["parentIndex"]           = mapped.Season,
 
                 ["Image"]                 = imageArray,

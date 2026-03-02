@@ -28,7 +28,7 @@ public sealed record AnimeThemesMappingBuildResult(string MapPath, int EntriesWr
 /// <summary>
 /// Outcome of applying a mapping file to create VFS links, detailing how many links were created or skipped.
 /// </summary>
-public sealed record AnimeThemesMappingApplyResult(int LinksCreated, int Skipped, int SeriesMatched, IReadOnlyList<string> Errors, IReadOnlyList<string> Planned);
+public sealed record AnimeThemesMappingApplyResult(int LinksCreated, int Skipped, int SeriesMatched, IReadOnlyList<string> Errors, IReadOnlyList<string> Planned, TimeSpan Elapsed);
 
 /// <summary>
 /// Internal helper record used when looking up theme metadata by video identifier.
@@ -117,8 +117,10 @@ public class AnimeThemesMapping
 
     /// <summary>
     /// Download the mapping file from a direct raw URL (e.g. gist raw link) and save it.
-    /// Returns the number of entries parsed and a log message for the import report.
     /// </summary>
+    /// <param name="rawUrl">Raw URL to download the mapping content from.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A tuple of (Count, Log) with the number of entries parsed and a human-readable log message.</returns>
     public async Task<(int Count, string Log)> ImportMappingFromUrlAsync(string rawUrl, CancellationToken ct = default)
     {
         int count = 0;
@@ -140,9 +142,7 @@ public class AnimeThemesMapping
 
             try
             {
-                var list = ParseMappingContent(content);
-                if (list != null)
-                    count = list.Count;
+                count = ParseMappingContent(content).Count;
             }
             catch { }
 
@@ -165,6 +165,8 @@ public class AnimeThemesMapping
     /// Scan configured import roots for AnimeThemes files and write a mapping CSV.
     /// The resulting file is always written to the standard location in the configuration directory and any existing file will be read to perform incremental updates.
     /// </summary>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>An <see cref="AnimeThemesMappingBuildResult"/> with statistics and the output file path.</returns>
     public async Task<AnimeThemesMappingBuildResult> BuildMappingFileAsync(CancellationToken ct = default)
     {
         // build list of candidate root folders containing the AnimeThemes files
@@ -200,7 +202,6 @@ public class AnimeThemesMapping
         var messages = new List<string>();
         var entries = new List<AnimeThemesMappingEntry>();
         int errors = 0;
-        int warns = 0;
         int reusedCount = 0; // number of files already present in existing map
 
         // load existing map to avoid re-querying the API for entries we already have
@@ -210,15 +211,8 @@ public class AnimeThemesMapping
             try
             {
                 string oldContent = await File.ReadAllTextAsync(mapPath, ct).ConfigureAwait(false);
-                var oldList = ParseMappingContent(oldContent);
-                if (oldList != null)
-                {
-                    foreach (var e in oldList)
-                    {
-                        if (!existing.ContainsKey(e.FilePath))
-                            existing[e.FilePath] = e;
-                    }
-                }
+                foreach (var e in ParseMappingContent(oldContent))
+                    existing.TryAdd(e.FilePath, e);
             }
             catch (Exception ex)
             {
@@ -242,76 +236,87 @@ public class AnimeThemesMapping
             )
             .ToList();
 
+        // phase 1: partition files into reused (already in existing map) and toProcess (need API calls)
+        var toProcess = new List<(string File, string Rel)>();
         foreach (string file in files)
         {
-            ct.ThrowIfCancellationRequested();
-
-            // determine which root this file belongs to so we can get a relative path to it
             string? root = rootPaths.FirstOrDefault(r =>
                 file.StartsWith(r + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) || file.StartsWith(r + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
             );
-            string rel;
-            if (root != null)
-                rel = Path.GetRelativePath(root, file).Replace('\\', '/').TrimStart('/');
-            else
-                rel = file; // fallback if we somehow can't match
-            rel = "/" + rel;
+            string rel = root != null ? "/" + Path.GetRelativePath(root, file).Replace('\\', '/').TrimStart('/') : file;
 
-            // if we already have a mapping for this relative path, reuse it and skip the API call
             if (existing.TryGetValue(rel, out var oldEntry))
             {
                 entries.Add(oldEntry);
                 reusedCount++;
-                continue;
             }
-
-            try
+            else
             {
-                string baseName = Path.GetFileName(file);
-                // look for a version marker following an OP/ED number (e.g. OP1v2 or ED1v3)  and capture the "v#" portion
-                string versionSuffix = "";
-                var nameNoExt = Path.GetFileNameWithoutExtension(baseName) ?? "";
-                var verMatch = System.Text.RegularExpressions.Regex.Match(nameNoExt, "(?:OP|ED)\\d+(v\\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-                if (verMatch.Success)
-                    versionSuffix = verMatch.Groups[1].Value; // group contains only the v#
-
-                var (lookup, idMissing) = await FetchMetadataAsync(baseName, ct);
-                if (lookup == null)
-                {
-                    errors++;
-                    if (idMissing)
-                        messages.Add($"AniDB ID missing for {rel}");
-                    else
-                        messages.Add($"Missing metadata for {rel}");
-                    continue;
-                }
-
-                string ext = Path.GetExtension(baseName) ?? string.Empty;
-                string cleanName = BuildNewFileName(lookup, ext, versionSuffix);
-
-                entries.Add(new AnimeThemesMappingEntry(rel, lookup.VideoId, lookup.AniDbId, cleanName));
-            }
-            catch (Exception ex)
-            {
-                errors++;
-                Logger.Warn(ex, "Failed to build mapping for {File}", file);
-                messages.Add($"{rel}: {ex.Message}");
+                toProcess.Add((file, rel));
             }
         }
+
+        // phase 2: fetch metadata for new files in parallel; the rate limiter serialises API calls
+        int maxDop = Math.Max(1, ShokoRelay.Settings.Parallelism);
+        await Parallel
+            .ForEachAsync(
+                toProcess,
+                new ParallelOptions { MaxDegreeOfParallelism = maxDop, CancellationToken = ct },
+                async (item, token) =>
+                {
+                    try
+                    {
+                        string baseName = Path.GetFileName(item.File);
+                        string nameNoExt = Path.GetFileNameWithoutExtension(baseName) ?? "";
+                        string versionSuffix = TextHelper.ExtractThemeVersionSuffix(nameNoExt);
+
+                        var (lookup, idMissing) = await FetchMetadataAsync(baseName, token);
+                        if (lookup == null)
+                        {
+                            lock (messages)
+                            {
+                                Interlocked.Increment(ref errors);
+                                messages.Add(idMissing ? $"AniDB ID missing for {item.Rel}" : $"Missing metadata for {item.Rel}");
+                            }
+                            return;
+                        }
+
+                        string ext = Path.GetExtension(baseName) ?? string.Empty;
+                        string cleanName = BuildNewFileName(lookup, ext, versionSuffix);
+                        lock (entries)
+                        {
+                            entries.Add(new AnimeThemesMappingEntry(item.Rel, lookup.VideoId, lookup.AniDbId, cleanName));
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Interlocked.Increment(ref errors);
+                        Logger.Warn(ex, "Failed to build mapping for {File}", item.File);
+                        lock (messages)
+                        {
+                            messages.Add($"{item.Rel}: {ex.Message}");
+                        }
+                    }
+                }
+            )
+            .ConfigureAwait(false);
 
         var fileContent = SerializeMapping(entries);
         await File.WriteAllTextAsync(mapPath, fileContent, ct);
 
         sw.Stop();
-        Logger.Info("AnimeThemes mapping build completed in {Elapsed}ms: entries={Count}, reused={Reused}, errors={Errors}, warnings={Warns}", sw.ElapsedMilliseconds, entries.Count, reusedCount, errors, warns);
+        Logger.Info("AnimeThemes mapping build completed in {Elapsed}ms: entries={Count}, reused={Reused}, errors={Errors}", sw.ElapsedMilliseconds, entries.Count, reusedCount, errors);
         Logger.Info("AnimeThemes mapping written to {Path} with {Count} entries", mapPath, entries.Count);
         return new AnimeThemesMappingBuildResult(mapPath, entries.Count, reusedCount, errors, messages);
     }
 
     /// <summary>
     /// Read a previously built mapping file and create/update VFS links for matching theme files.
-    /// Optionally restrict to a set of series via <paramref name="seriesFilter"/>. Returns counts of operations performed and any errors encountered.
+    /// Optionally restrict to a set of series via <paramref name="seriesFilter"/>.
     /// </summary>
+    /// <param name="seriesFilter">Optional set of Shoko series IDs to limit processing to.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>An <see cref="AnimeThemesMappingApplyResult"/> with counts of operations performed and any errors encountered.</returns>
     public async Task<AnimeThemesMappingApplyResult> ApplyMappingAsync(IReadOnlyCollection<int>? seriesFilter = null, CancellationToken ct = default)
     {
         string mapPath = Path.Combine(_configDirectory, AnimeThemesConstants.AtMapFileName);
@@ -319,31 +324,33 @@ public class AnimeThemesMapping
             throw new FileNotFoundException("Mapping file not found", mapPath);
 
         string content = await File.ReadAllTextAsync(mapPath, ct);
-        var entries = ParseMappingContent(content) ?? new();
+        var entries = ParseMappingContent(content);
 
-        List<IShokoSeries?> seriesList = [];
-        Logger.Info("AnimeThemes apply mapping started (map={MapPath}, filter={FilterCount})", mapPath, seriesFilter?.Count ?? 0);
-        var sw2 = Stopwatch.StartNew();
-        int warns2 = 0;
+        Logger.Info("AnimeThemes apply mapping started (map={MapPath}, entries={EntryCount}, filter={FilterCount})", mapPath, entries.Count, seriesFilter?.Count ?? 0);
+        var sw = Stopwatch.StartNew();
+        string themeRootFolder = GetThemeRootFolderName();
+
+        List<IShokoSeries?> seriesList;
         if (seriesFilter != null && seriesFilter.Count > 0)
-        {
             seriesList = seriesFilter.Distinct().Select(id => _metadataService.GetShokoSeriesByID(id)).ToList();
-        }
         else
-        {
             seriesList = _metadataService.GetAllShokoSeries().Cast<IShokoSeries?>().ToList();
-        }
 
         seriesList = seriesList.Where(s => s != null && s.AnidbAnimeID > 0).ToList();
         var byAniDb = seriesList.GroupBy(s => s!.AnidbAnimeID).ToDictionary(g => g.Key, g => g.ToList());
 
         string rootName = VfsShared.ResolveRootFolderName();
         var destSeen = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+        var createdDirs = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+        // cache import roots per series ID to avoid repeated episode/file enumeration
+        var importRootsCache = new Dictionary<int, List<string>>();
 
         int created = 0;
         int skipped = 0;
         int matchedSeries = 0;
         var errors = new List<string>();
+        var planned = new List<string>();
+        var plannedDests = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
 
         if (seriesFilter != null && seriesFilter.Count > 0)
         {
@@ -353,37 +360,41 @@ public class AnimeThemesMapping
                     errors.Add($"Series {id} not found or missing AniDB id");
             }
         }
-        var planned = new List<string>();
 
+        // pre-group entries by AniDB ID so we can process per-series with timing
+        var entriesByAniDb = new Dictionary<int, List<AnimeThemesMappingEntry>>();
         foreach (var entry in entries)
         {
-            ct.ThrowIfCancellationRequested();
-
-            // skip files that belong to the misc folder – they are not part of the
-            // official released mapping and should never be linked into the VFS.
-            var normalized = entry.FilePath.TrimStart('/', '\\');
-            var segments = normalized.Split('/', '\\');
-            if (segments.Any(s => string.Equals(s, "misc", StringComparison.OrdinalIgnoreCase)))
-            {
-                skipped++;
-                continue;
-            }
-
-            if (!byAniDb.TryGetValue(entry.AniDbId, out var matches) || matches.Count == 0)
-            {
-                skipped++;
-                continue;
-            }
-
             string relativePath = entry.FilePath.TrimStart('/', '\\');
-            if (string.IsNullOrWhiteSpace(relativePath))
+            var segments = relativePath.Split('/', '\\');
+            if (string.IsNullOrWhiteSpace(relativePath) || segments.Any(s => string.Equals(s, "misc", StringComparison.OrdinalIgnoreCase)))
             {
                 skipped++;
-                errors.Add($"Invalid filepath for mapping entry: {entry.FilePath}");
                 continue;
             }
 
-            foreach (var series in matches!)
+            if (!byAniDb.ContainsKey(entry.AniDbId))
+            {
+                skipped++;
+                continue;
+            }
+
+            if (!entriesByAniDb.TryGetValue(entry.AniDbId, out var list))
+            {
+                list = new List<AnimeThemesMappingEntry>();
+                entriesByAniDb[entry.AniDbId] = list;
+            }
+            list.Add(entry);
+        }
+
+        // process per-series (grouped by AniDB ID) to enable per-series logging
+        foreach (var (anidbId, matchedEntries) in entriesByAniDb)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (!byAniDb.TryGetValue(anidbId, out var seriesMatches))
+                continue;
+
+            foreach (var series in seriesMatches)
             {
                 if (series == null)
                 {
@@ -391,96 +402,129 @@ public class AnimeThemesMapping
                     continue;
                 }
 
-                // determine primary group series id for destination folder
                 int primaryId = OverrideHelper.GetPrimary(series.ID, _metadataService);
 
-                var roots = GetImportRoots(series);
+                if (!importRootsCache.TryGetValue(series.ID, out var roots))
+                {
+                    roots = GetImportRoots(series);
+                    importRootsCache[series.ID] = roots;
+                }
                 if (roots.Count == 0)
                 {
                     skipped++;
                     continue;
                 }
 
+                var seriesSw = Stopwatch.StartNew();
+                int seriesCreated = 0,
+                    seriesSkipped = 0,
+                    seriesErrors = 0,
+                    seriesPlanned = 0;
+
                 matchedSeries++;
-                foreach (string importRoot in roots)
+                foreach (var entry in matchedEntries)
                 {
-                    string? source = ResolveThemeSourcePath(relativePath, importRoot);
-                    if (string.IsNullOrWhiteSpace(source) || !File.Exists(source))
+                    string relativePath = entry.FilePath.TrimStart('/', '\\');
+                    foreach (string importRoot in roots)
                     {
-                        skipped++;
-                        errors.Add($"Source missing for {entry.FilePath} under {importRoot}");
-                        continue;
-                    }
-
-                    string shortsDir = Path.Combine(importRoot, rootName, primaryId.ToString(), "Shorts");
-                    string destName = VfsHelper.CleanEpisodeTitleForFilename(entry.NewFileName);
-                    destName = TextHelper.AnimeThemesPlexFileNames(destName);
-                    destName = TextHelper.ReplaceFirstHyphenWithChevron(destName);
-                    destName = EnsureExtension(destName, Path.GetExtension(source));
-                    string destPath = Path.Combine(shortsDir, destName);
-
-                    string relativeTarget = BuildThemeRelativeTarget(relativePath);
-
-                    // record planned action (avoid duplicates in the planned list)
-                    if (!planned.Any(p => p.StartsWith(destPath, StringComparison.OrdinalIgnoreCase)))
-                        planned.Add($"{destPath} <- {relativeTarget}");
-
-                    try
-                    {
-                        Directory.CreateDirectory(shortsDir);
-                    }
-                    catch (Exception ex)
-                    {
-                        skipped++;
-                        warns2++;
-                        Logger.Warn(ex, "Failed to create directory {Dir}", shortsDir);
-                        errors.Add($"Failed to create directory {shortsDir}: {ex.Message}");
-                        continue;
-                    }
-
-                    // ensure destPath is unique; if already seen, append numeric suffix until free
-                    string originalDest = destPath;
-                    int dupIdx = 1;
-                    while (!destSeen.Add(destPath))
-                    {
-                        dupIdx++;
-                        string baseNoExt = Path.GetFileNameWithoutExtension(originalDest);
-                        string ext = Path.GetExtension(originalDest);
-                        destPath = Path.Combine(shortsDir, $"{baseNoExt} ({dupIdx}){ext}");
-                        // update planned list entry if present
-                        for (int pi = 0; pi < planned.Count; pi++)
+                        string? source = ResolveThemeSourcePath(relativePath, importRoot, themeRootFolder);
+                        if (string.IsNullOrWhiteSpace(source) || !File.Exists(source))
                         {
-                            if (planned[pi].StartsWith(originalDest, StringComparison.OrdinalIgnoreCase))
-                                planned[pi] = planned[pi].Replace(originalDest, destPath);
+                            skipped++;
+                            seriesSkipped++;
+                            errors.Add($"Source missing for {entry.FilePath} under {importRoot}");
+                            continue;
+                        }
+
+                        string shortsDir = Path.Combine(importRoot, rootName, primaryId.ToString(), "Shorts");
+                        string destName = VfsHelper.CleanEpisodeTitleForFilename(entry.NewFileName);
+                        destName = TextHelper.AnimeThemesPlexFileNames(destName);
+                        destName = TextHelper.ReplaceFirstHyphenWithChevron(destName);
+                        destName = EnsureExtension(destName, Path.GetExtension(source));
+                        string destPath = Path.Combine(shortsDir, destName);
+
+                        string relativeTarget = BuildThemeRelativeTarget(relativePath, themeRootFolder);
+
+                        if (plannedDests.Add(destPath))
+                        {
+                            planned.Add($"{destPath} <- {relativeTarget}");
+                            seriesPlanned++;
+                        }
+
+                        // only issue the syscall the first time we encounter this directory
+                        if (createdDirs.Add(shortsDir))
+                        {
+                            try
+                            {
+                                Directory.CreateDirectory(shortsDir);
+                            }
+                            catch (Exception ex)
+                            {
+                                skipped++;
+                                seriesSkipped++;
+                                seriesErrors++;
+                                Logger.Warn(ex, "Failed to create directory {Dir}", shortsDir);
+                                errors.Add($"Failed to create directory {shortsDir}: {ex.Message}");
+                                continue;
+                            }
+                        }
+
+                        // ensure destPath is unique; if already seen, append numeric suffix until free
+                        string originalDest = destPath;
+                        int dupIdx = 1;
+                        while (!destSeen.Add(destPath))
+                        {
+                            dupIdx++;
+                            string baseNoExt = Path.GetFileNameWithoutExtension(originalDest);
+                            string ext = Path.GetExtension(originalDest);
+                            destPath = Path.Combine(shortsDir, $"{baseNoExt} ({dupIdx}){ext}");
+                            for (int pi = 0; pi < planned.Count; pi++)
+                            {
+                                if (planned[pi].StartsWith(originalDest, StringComparison.OrdinalIgnoreCase))
+                                    planned[pi] = planned[pi].Replace(originalDest, destPath);
+                            }
+                        }
+
+                        if (VfsShared.TryCreateLink(source, destPath, Logger, targetOverride: relativeTarget))
+                        {
+                            created++;
+                            seriesCreated++;
+                        }
+                        else
+                        {
+                            skipped++;
+                            seriesSkipped++;
+                            seriesErrors++;
+                            Logger.Warn("Failed to link {Src} -> {Dest}", source, destPath);
+                            errors.Add($"Failed to link {source} -> {destPath}");
                         }
                     }
-
-                    if (VfsShared.TryCreateLink(source, destPath, Logger, targetOverride: relativeTarget))
-                    {
-                        created++;
-                    }
-                    else
-                    {
-                        skipped++;
-                        warns2++;
-                        Logger.Warn("Failed to link {Src} -> {Dest}", source, destPath);
-                        errors.Add($"Failed to link {source} -> {destPath}");
-                    }
                 }
+
+                seriesSw.Stop();
+                Logger.Debug(
+                    "AnimeThemesMapping --- BuildSeries {SeriesId} completed in {Elapsed}ms: mappings={Mappings} created={Created} planned={Planned} skipped={Skipped} errors={Errors}",
+                    series.ID,
+                    seriesSw.ElapsedMilliseconds,
+                    matchedEntries.Count,
+                    seriesCreated,
+                    seriesPlanned,
+                    seriesSkipped,
+                    seriesErrors
+                );
             }
         }
 
-        sw2.Stop();
+        sw.Stop();
         Logger.Info(
-            "AnimeThemes apply mapping completed in {Elapsed}ms: created={Created}, skipped={Skipped}, matchedSeries={Matched}, errors={Errors}, warnings={Warns}",
-            sw2.ElapsedMilliseconds,
+            "AnimeThemes apply mapping completed in {Elapsed}ms: created={Created}, skipped={Skipped}, matchedSeries={Matched}, errors={Errors}",
+            sw.ElapsedMilliseconds,
             created,
             skipped,
             matchedSeries,
-            errors.Count,
-            warns2
+            errors.Count
         );
-        return new AnimeThemesMappingApplyResult(created, skipped, matchedSeries, errors, planned);
+        return new AnimeThemesMappingApplyResult(created, skipped, matchedSeries, errors, planned, sw.Elapsed);
     }
 
     private static string EnsureExtension(string fileName, string ext)
@@ -495,22 +539,7 @@ public class AnimeThemesMapping
     private static List<string> GetImportRoots(IShokoSeries series)
     {
         var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
-        var set = new HashSet<string>(comparer);
-
-        foreach (var ep in series.Episodes)
-        {
-            foreach (var video in ep.VideoList)
-            {
-                foreach (var loc in video.Files)
-                {
-                    string? root = VfsShared.ResolveImportRootPath(loc);
-                    if (!string.IsNullOrWhiteSpace(root))
-                        set.Add(root);
-                }
-            }
-        }
-
-        return set.ToList();
+        return series.Episodes.SelectMany(ep => ep.VideoList).SelectMany(v => v.Files).Select(VfsShared.ResolveImportRootPath).Where(r => !string.IsNullOrWhiteSpace(r)).Distinct(comparer).ToList()!;
     }
 
     // returns tuple containing lookup and flag if AniDB id was missing
@@ -569,23 +598,15 @@ public class AnimeThemesMapping
         return VfsHelper.CleanEpisodeTitleForFilename(full);
     }
 
-    private static string GetThemeRootFolderName()
-    {
-        string configured = ShokoRelay.Settings.AnimeThemesRootPath;
-        if (string.IsNullOrWhiteSpace(configured))
-            configured = AnimeThemesConstants.AtDefaultRootFolder;
+    private static string GetThemeRootFolderName() => VfsShared.ResolveAnimeThemesFolderName();
 
-        return configured.Trim().Trim('/', '\\');
-    }
-
-    private static string? ResolveThemeSourcePath(string relativeFilePath, string importRoot)
+    private static string? ResolveThemeSourcePath(string relativeFilePath, string importRoot, string themeRootFolder)
     {
         string rel = relativeFilePath.TrimStart('/', '\\');
         if (string.IsNullOrWhiteSpace(rel))
             return null;
 
-        string folderName = GetThemeRootFolderName();
-        string basePath = Path.Combine(importRoot, folderName);
+        string basePath = Path.Combine(importRoot, themeRootFolder);
 
         string normalizedBase = Path.GetFullPath(basePath);
         string relativePart = rel.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
@@ -595,13 +616,12 @@ public class AnimeThemesMapping
         return File.Exists(fullCandidate) ? fullCandidate : null;
     }
 
-    private static string BuildThemeRelativeTarget(string relativeFilePath)
+    private static string BuildThemeRelativeTarget(string relativeFilePath, string themeRootFolder)
     {
         string rel = relativeFilePath.TrimStart('/', '\\');
         string normalized = rel.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
 
-        string rootFolder = GetThemeRootFolderName();
-        string basePath = Path.Combine("..", "..", "..", rootFolder);
+        string basePath = Path.Combine("..", "..", "..", themeRootFolder);
         string target = Path.Combine(basePath, normalized);
 
         return target.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);

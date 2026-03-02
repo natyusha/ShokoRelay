@@ -172,7 +172,7 @@ namespace ShokoRelay.Plex
 
         private async Task<int?> FindCollectionIdAsync(string title, PlexLibraryTarget target, CancellationToken cancellationToken)
         {
-            string requestPath = $"/library/sections/{target.SectionId}/collections?title={Uri.EscapeDataString(title)}";
+            string requestPath = $"/library/sections/{target.SectionId}/collections?title={Uri.EscapeDataString(title)}&X-Plex-Container-Size=10";
 
             using var request = _plexClient.CreateRequest(HttpMethod.Get, requestPath, target.ServerUrl);
             using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
@@ -237,6 +237,21 @@ namespace ShokoRelay.Plex
 
             try
             {
+                // Check if the item already has this collection assigned
+                string metadataPath = $"/library/metadata/{ratingKey}?X-Plex-Container-Size=1";
+                using var getRequest = _plexClient.CreateRequest(HttpMethod.Get, metadataPath, target.ServerUrl);
+                using var getResponse = await _httpClient.SendAsync(getRequest, cancellationToken).ConfigureAwait(false);
+                if (getResponse.IsSuccessStatusCode)
+                {
+                    var container = await PlexApi.ReadContainerAsync(getResponse, cancellationToken).ConfigureAwait(false);
+                    var existing = container?.Metadata?.FirstOrDefault();
+                    if (existing?.Collection?.Any(c => string.Equals(c.Tag, collectionName, StringComparison.OrdinalIgnoreCase)) == true)
+                    {
+                        Logger.Debug("Collection '{CollectionName}' already assigned to ratingKey {RatingKey}, skipping PUT", collectionName, ratingKey);
+                        return true;
+                    }
+                }
+
                 // Use Plex's 'collection[0].tag.tag' parameter which sets the collection tag properly.
                 string requestPath = $"/library/metadata/{ratingKey}?collection%5B0%5D.tag.tag={Uri.EscapeDataString(collectionName)}";
                 Logger.Debug("Assigning collection via metadata PUT: {Server}{Path}", target.ServerUrl, requestPath);
@@ -291,7 +306,7 @@ namespace ShokoRelay.Plex
             {
                 try
                 {
-                    string requestPath = $"/library/sections/{target.SectionId}/collections";
+                    string requestPath = $"/library/sections/{target.SectionId}/collections?X-Plex-Container-Size=500";
                     using var request = _plexClient.CreateRequest(HttpMethod.Get, requestPath, target.ServerUrl);
                     using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
                     if (!response.IsSuccessStatusCode)

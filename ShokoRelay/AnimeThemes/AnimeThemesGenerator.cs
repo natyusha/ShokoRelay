@@ -59,6 +59,7 @@ public class AnimeThemesGenerator
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private static readonly HttpClient Http = new();
+    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
     private readonly FfmpegService _ffmpegService;
 
     private readonly IVideoService _videoService;
@@ -102,84 +103,62 @@ public class AnimeThemesGenerator
         var folders = new List<string> { root };
         folders.AddRange(Directory.EnumerateDirectories(root));
         if (!query.Force)
-        {
             folders = folders.Where(f => !File.Exists(Path.Combine(f, "Theme.mp3"))).ToList();
-        }
 
-        // process in parallel using the configured parallelism setting. the heavy work
-        // (HTTP download + ffmpeg) is async anyway so limiting concurrency helps when
-        // there are hundreds or thousands of folders.
-        int maxDop = Math.Max(1, ShokoRelay.Settings.Parallelism);
-        var semaphore = new SemaphoreSlim(maxDop);
-        var tasks = new List<Task>();
-
-        foreach (var folder in folders)
+        // build exclusion set once before the loop
+        var excludedFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            await semaphore.WaitAsync(ct).ConfigureAwait(false);
-            tasks.Add(
-                Task.Run(
-                    async () =>
+            VfsShared.ResolveRootFolderName(),
+            VfsShared.ResolveCollectionPostersFolderName(),
+            VfsShared.ResolveAnimeThemesFolderName(),
+        };
+
+        // process in parallel using the configured parallelism setting
+        int maxDop = Math.Max(1, ShokoRelay.Settings.Parallelism);
+        await Parallel
+            .ForEachAsync(
+                folders,
+                new ParallelOptions { MaxDegreeOfParallelism = maxDop, CancellationToken = ct },
+                async (folder, token) =>
+                {
+                    string folderName = Path.GetFileName(folder);
+                    Logger.Info("AnimeThemes MP3 batch: processing folder {Folder}", folder);
+
+                    if (excludedFolders.Contains(folderName))
                     {
-                        try
+                        lock (results)
                         {
-                            ct.ThrowIfCancellationRequested();
-                            string folderName = Path.GetFileName(folder);
-                            string vfsRoot = ShokoRelay.Settings.VfsRootPath ?? "!ShokoRelayVFS";
-                            string collectionRoot = ShokoRelay.Settings.CollectionPostersRootPath ?? "!CollectionPosters";
-                            string animeThemesRoot = ShokoRelay.Settings.AnimeThemesRootPath ?? "!AnimeThemes";
-
-                            // log start of work on this folder
-                            Logger.Info("AnimeThemes MP3 batch: processing folder {Folder}", folder);
-
-                            if (
-                                string.Equals(folderName, vfsRoot, StringComparison.OrdinalIgnoreCase)
-                                || string.Equals(folderName, collectionRoot, StringComparison.OrdinalIgnoreCase)
-                                || string.Equals(folderName, animeThemesRoot, StringComparison.OrdinalIgnoreCase)
-                            )
-                            {
-                                lock (results)
-                                {
-                                    skipped++;
-                                    results.Add(new ThemeMp3OperationResult(folder, "skipped", "Excluded system folder."));
-                                }
-                                Logger.Info("AnimeThemes MP3 batch: skipped system folder {Folder}", folder);
-                                return;
-                            }
-
-                            var singleQuery = query with { Path = folder, Batch = false };
-                            var result = await ProcessSingleAsync(singleQuery, ct).ConfigureAwait(false);
-                            lock (results)
-                            {
-                                results.Add(result);
-                            }
-
-                            // log outcome
-                            Logger.Info("AnimeThemes MP3 batch: folder {Folder} => {Status}{Message}", folder, result.Status, string.IsNullOrWhiteSpace(result.Message) ? "" : ": " + result.Message);
-
-                            switch (result.Status)
-                            {
-                                case "ok":
-                                    Interlocked.Increment(ref processed);
-                                    break;
-                                case "skipped":
-                                    Interlocked.Increment(ref skipped);
-                                    break;
-                                default:
-                                    Interlocked.Increment(ref errors);
-                                    break;
-                            }
+                            skipped++;
+                            results.Add(new ThemeMp3OperationResult(folder, "skipped", "Excluded system folder."));
                         }
-                        finally
-                        {
-                            semaphore.Release();
-                        }
-                    },
-                    ct
-                )
-            );
-        }
+                        Logger.Info("AnimeThemes MP3 batch: skipped system folder {Folder}", folder);
+                        return;
+                    }
 
-        await Task.WhenAll(tasks).ConfigureAwait(false);
+                    var singleQuery = query with { Path = folder, Batch = false };
+                    var result = await ProcessSingleAsync(singleQuery, token).ConfigureAwait(false);
+                    lock (results)
+                    {
+                        results.Add(result);
+                    }
+
+                    Logger.Info("AnimeThemes MP3 batch: folder {Folder} => {Status}{Message}", folder, result.Status, string.IsNullOrWhiteSpace(result.Message) ? "" : ": " + result.Message);
+
+                    switch (result.Status)
+                    {
+                        case "ok":
+                            Interlocked.Increment(ref processed);
+                            break;
+                        case "skipped":
+                            Interlocked.Increment(ref skipped);
+                            break;
+                        default:
+                            Interlocked.Increment(ref errors);
+                            break;
+                    }
+                }
+            )
+            .ConfigureAwait(false);
 
         return new ThemeMp3BatchResult(root, results, processed, skipped, errors);
     }
@@ -192,17 +171,16 @@ public class AnimeThemesGenerator
     /// <returns>A <see cref="ThemeMp3OperationResult"/> describing success, skip, or error.</returns>
     public async Task<ThemeMp3OperationResult> ProcessSingleAsync(AnimeThemesMp3Query query, CancellationToken ct)
     {
-        var contextResult = await PrepareContextAsync(query, allowPreview: false, ct);
+        var contextResult = PrepareContext(query, allowPreview: false);
         if (contextResult.Error != null)
             return contextResult.Error;
 
         var (folder, themePath, videoFile, series) = contextResult.Data!.Value;
 
-        ThemeSelection? selection = null;
         string? tempPath = null;
         try
         {
-            selection = await FetchThemeAsync(series.AnidbAnimeID, query.Slug, query.Offset, ct);
+            var selection = await FetchThemeAsync(series.AnidbAnimeID, query.Slug, query.Offset, ct);
             if (selection == null)
             {
                 string reason;
@@ -233,16 +211,7 @@ public class AnimeThemesGenerator
         }
         finally
         {
-            if (!string.IsNullOrWhiteSpace(tempPath) && File.Exists(tempPath))
-            {
-                try
-                {
-                    File.Delete(tempPath);
-                }
-                catch
-                { // ignore cleanup errors
-                }
-            }
+            CleanupTempFile(tempPath);
         }
     }
 
@@ -254,17 +223,16 @@ public class AnimeThemesGenerator
     /// <returns>A tuple with either a <see cref="ThemePreviewResult"/> or an <see cref="ThemeMp3OperationResult"/> on error.</returns>
     public async Task<(ThemePreviewResult? Preview, ThemeMp3OperationResult? Error)> PreviewAsync(AnimeThemesMp3Query query, CancellationToken ct)
     {
-        var contextResult = await PrepareContextAsync(query, allowPreview: true, ct);
+        var contextResult = PrepareContext(query, allowPreview: true);
         if (contextResult.Error != null)
             return (null, contextResult.Error);
 
         var (folder, _, _, series) = contextResult.Data!.Value;
 
-        ThemeSelection? selection = null;
         string? tempPath = null;
         try
         {
-            selection = await FetchThemeAsync(series.AnidbAnimeID, query.Slug, query.Offset, ct);
+            var selection = await FetchThemeAsync(series.AnidbAnimeID, query.Slug, query.Offset, ct);
             if (selection == null)
                 return (null, Error(folder, "AnimeThemes entry not found for this series."));
 
@@ -279,14 +247,7 @@ public class AnimeThemesGenerator
         }
         finally
         {
-            if (!string.IsNullOrWhiteSpace(tempPath) && File.Exists(tempPath))
-            {
-                try
-                {
-                    File.Delete(tempPath);
-                }
-                catch { }
-            }
+            CleanupTempFile(tempPath);
         }
     }
 
@@ -295,41 +256,33 @@ public class AnimeThemesGenerator
     /// </summary>
     /// <param name="query">Query containing the path and other options.</param>
     /// <param name="allowPreview">If true the caller is only previewing and an existing MP3 file is permitted.</param>
-    /// <param name="ct">Cancellation token used by callers.</param>
-    private Task<(ThemeMp3OperationResult? Error, (string Folder, string ThemePath, IVideoFile VideoFile, IShokoSeries Series)? Data)> PrepareContextAsync(
-        AnimeThemesMp3Query query,
-        bool allowPreview,
-        CancellationToken ct
-    )
+    private (ThemeMp3OperationResult? Error, (string Folder, string ThemePath, IVideoFile VideoFile, IShokoSeries Series)? Data) PrepareContext(AnimeThemesMp3Query query, bool allowPreview)
     {
         if (string.IsNullOrWhiteSpace(query.Path))
-            return Task.FromResult<(ThemeMp3OperationResult?, (string, string, IVideoFile, IShokoSeries)?)>((Error("", "Path is required."), null));
+            return (Error("", "Path is required."), null);
 
         string folder = ResolvePath(query.Path);
         if (!Directory.Exists(folder))
-            return Task.FromResult<(ThemeMp3OperationResult?, (string, string, IVideoFile, IShokoSeries)?)>((Error(folder, "Folder not found."), null));
+            return (Error(folder, "Folder not found."), null);
 
         string themePath = Path.Combine(folder, "Theme.mp3");
         if (!allowPreview && !query.Force && File.Exists(themePath))
-            return Task.FromResult<(ThemeMp3OperationResult?, (string, string, IVideoFile, IShokoSeries)?)>((Error(folder, "Theme.mp3 already exists.", "skipped"), null));
+            return (Error(folder, "Theme.mp3 already exists.", "skipped"), null);
 
-        string? videoPath = Directory.EnumerateFiles(folder).FirstOrDefault(f => AnimeThemesConstants.VideoFileExtensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase));
-
+        string? videoPath = Directory.EnumerateFiles(folder).FirstOrDefault(f => AnimeThemesConstants.VideoFileExtensions.Contains(Path.GetExtension(f)));
         if (string.IsNullOrWhiteSpace(videoPath))
-            return Task.FromResult<(ThemeMp3OperationResult?, (string, string, IVideoFile, IShokoSeries)?)>((Error(folder, "No video files found in folder."), null));
+            return (Error(folder, "No video files found in folder."), null);
 
         var videoFile = _videoService.GetVideoFileByAbsolutePath(videoPath);
         if (videoFile?.Video == null)
-            return Task.FromResult<(ThemeMp3OperationResult?, (string, string, IVideoFile, IShokoSeries)?)>((Error(folder, "Video not recognized by Shoko."), null));
+            return (Error(folder, "Video not recognized by Shoko."), null);
 
         // Derive the series via the first linked episode since videos are linked at the episode level.
-        // This means that if there are multiple episodes from different series in the same folder, the result may be non-deterministic.
         var series = videoFile.Video.Episodes?.FirstOrDefault()?.Series;
         if (series == null)
-            return Task.FromResult<(ThemeMp3OperationResult?, (string, string, IVideoFile, IShokoSeries)?)>((Error(folder, "Series lookup failed."), null));
+            return (Error(folder, "Series lookup failed."), null);
 
-        ct.ThrowIfCancellationRequested();
-        return Task.FromResult<(ThemeMp3OperationResult?, (string, string, IVideoFile, IShokoSeries)?)>((null, (folder, themePath, videoFile, series)));
+        return (null, (folder, themePath, videoFile, series));
     }
 
     /// <summary>
@@ -407,12 +360,9 @@ public class AnimeThemesGenerator
 
         string result = raw.ToUpperInvariant();
         foreach (var pair in AnimeThemesConstants.SlugFormatting)
-        {
-            result = Regex.Replace(result, pair.Key, pair.Value, RegexOptions.IgnoreCase);
-        }
+            result = result.Replace(pair.Key, pair.Value, StringComparison.OrdinalIgnoreCase);
 
-        result = Regex.Replace(result, @"\s{2,}", " ").Trim();
-        return result.TrimEnd();
+        return Regex.Replace(result, @"\s{2,}", " ").Trim();
     }
 
     private static string? NormalizeSlug(string? slug)
@@ -471,7 +421,19 @@ public class AnimeThemesGenerator
             return default;
 
         await using var stream = await response.Content.ReadAsStreamAsync(ct);
-        return await JsonSerializer.DeserializeAsync<T>(stream, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }, ct);
+        return await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions, ct);
+    }
+
+    private static void CleanupTempFile(string? path)
+    {
+        if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+            try
+            {
+                File.Delete(path);
+            }
+            catch
+            { /* ignore cleanup errors */
+            }
     }
 
     private sealed record AnimeResponse(List<AnimeEntry>? Anime);

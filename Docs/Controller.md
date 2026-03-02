@@ -68,7 +68,7 @@ GET  /logs/{fileName}                                          -> GetLog (downlo
 
 ```
 GET  /                                                         -> GetMediaProvider (agent descriptor / supported types)
-GET  /matches?name={name}&title={id}?manual=1                  -> Match (title is a ShokoSeriesID)
+GET  /matches?name={name}&title={id}&manual=1                  -> Match (title is a ShokoSeriesID)
 POST /matches                                                  -> Match
 
 GET  /collections/{groupId}                                    -> GetCollection
@@ -104,10 +104,10 @@ GET  /metadata/{ratingKey}/images                              -> GetImages (all
 
 - TMDB episode‑numbering is honoured when enabled (uses `IShokoEpisode.TmdbEpisodes`).
 - Hidden episodes are excluded.
-- Episodes of type "Other" without a TMDB match are placed in Season 1/0 or treated as extras.
+- Episodes of type "Other" are initially placed in Featurettes (Season -4); a fallback rule moves them to Season 1 if it has no files, or Season 0 (Specials) if Season 1 is occupied, otherwise they remain in Featurettes.
 - RatingKey formats supported using ShokoID: `123` (series), `123s4` (season 4), `e56789` (episode).
 - A special alias exists if you want to lookup series metadata by AniDB ID instead of ShokoSeriesID: `a123` (series).
-  - This supports children/grandchildren at the series levl but not: `a123s#` or `ae56789`
+  - This supports children/grandchildren at the series level but not: `a123s#` or `ae56789`
 
 ---
 
@@ -128,13 +128,13 @@ POST /plex/auth/refresh                                        -> RefreshPlexLib
 
 ---
 
-## Plex Automation
+## Plex: Automation
 
 ```
 GET  /plex/collections/build?seriesId={id}&filter={filter}     -> BuildPlexCollections
 GET  /plex/collections/posters?seriesId={id}&filter={filter}   -> ApplyCollectionPosters
 
-GET  /plex/ratings/apply?seriesId={id}&filter={filter}         -> ApplyCriticRatings
+GET  /plex/ratings/apply?seriesId={id}&filter={filter}         -> ApplyAudienceRatings
 
 GET  /plex/automation/run                                      -> RunPlexAutomationNow
 ```
@@ -144,11 +144,11 @@ GET  /plex/automation/run                                      -> RunPlexAutomat
 
 ---
 
-- `ApplyCriticRatings` update series/episode ratings based on the configured source (TMDB/AniDB).
+- `ApplyAudienceRatings` update series/episode ratings based on the configured source (TMDB/AniDB).
 
 ---
 
-- `RunPlexAutomationNow` triggers the two operations above back-to-back.
+- `RunPlexAutomationNow` triggers collection building and rating application back-to-back for all series.
   - Useful if you want to force automation without waiting for the scheduled interval.
   - The scheduler itself is governed by `RelayConfig.PlexAutomationFrequencyHours` (0 disables it).
 
@@ -168,6 +168,7 @@ POST /plex/webhook                                             -> PluginPlexWebh
 ```
 
 - `PluginPlexWebhook` handles Plex `media.scrobble` callbacks and, when the "Include Ratings" option is enabled, `media.rate` events.
+  - The endpoint is gated by `RelayConfig.AutoScrobble`; when disabled all payloads are ignored with `reason: auto_scrobble_disabled`.
   - Supports both form‑encoded `payload` fields and raw JSON bodies.
   - Only events originating from the admin or users listed in `RelayConfig.ExtraPlexUsers` are considered; owner events may also be ignored if the "Exclude Admin" flag is set.
   - The service extracts the ShokoEpisodeID from the `Metadata.guid` value `tv.plex.agents.custom.shoko://episode/{ShokoEpisodeID}`.
@@ -220,7 +221,7 @@ POST /vfs/overrides                                            -> SaveVfsOverrid
 GET  /shoko/remove-missing?dryRun={true|false}                 -> RemoveMissingFiles (for preview/testing)
 POST /shoko/remove-missing?dryRun={true|false}                 -> RemoveMissingFiles
 
-POST /shoko/import                                             -> RunShokoImport
+POST /shoko/import?onlyUnrecognized={true|false}               -> RunShokoImport
 GET  /shoko/import/start                                       -> StartShokoImportNow
 
 GET  /sync-watched                                             -> SyncPlexWatched (for preview/testing)
@@ -293,7 +294,7 @@ POST /animethemes/vfs/import                                   -> ImportAnimeThe
 
 **Notes:**
 
-- Example `anidb_animethmes_xrefs.csv` contents (note commas in filenames are encoded as `\u002C`):
+- Example `anidb_animethemes_xrefs.csv` contents (note commas in filenames are encoded as `\u002C`):
 
 ```csv
 # filepath, videoId, anidbId, newFilename
@@ -321,7 +322,7 @@ GET  /animethemes/mp3                                          -> AnimeThemesMp3
 **Notes:**
 
 - Skips any subfolder whose name matches the configured VFS/CollectionPosters/AnimeThemes root.
-  - subfolders named `misc` are also skipepd as the AnimeThemes torrent puts files in there which will always fail to map
+  - subfolders named `misc` are also skipped as the AnimeThemes torrent puts files in there which will always fail to map
 - If no mapping entry exists for the specified series/slug the endpoint returns a `skipped` status instead of failing.
 - `path` may be a Plex or Shoko relative path; the controller translates them via configured path mappings.
 
