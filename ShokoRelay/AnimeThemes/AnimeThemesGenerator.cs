@@ -81,19 +81,19 @@ public class AnimeThemesGenerator
     }
 
     /// <summary>
-    /// Cached list of folders containing Theme.mp3 files. Loaded from <c>theme.cache</c> on first access and persisted after every mutation.
+    /// Cached list of folders containing Theme.mp3 files. Loaded from <c>mp3_animethemes.cache</c> on first access and persisted after every mutation.
     /// </summary>
     private List<string>? _themeMp3Cache;
     private readonly object _cacheLock = new();
 
     /// <summary>
-    /// Full path to the <c>theme.cache</c> file inside the config directory.
+    /// Full path to the <c>mp3_animethemes.cache</c> file inside the config directory.
     /// </summary>
-    private string ThemeCacheFilePath => Path.Combine(_configDirectory, "theme.cache");
+    private string ThemeCacheFilePath => Path.Combine(_configDirectory, "mp3_animethemes.cache");
 
     /// <summary>
     /// Returns the cached list of folders containing Theme.mp3 files.
-    /// On first call the cache is loaded from the <c>theme.cache</c> file; if the file does not exist an empty list is returned.
+    /// On first call the cache is loaded from the <c>mp3_animethemes.cache</c> file; if the file does not exist an empty list is returned.
     /// </summary>
     /// <returns>A read-only snapshot of cached folder paths.</returns>
     public IReadOnlyList<string> GetCachedThemeMp3Folders()
@@ -107,7 +107,7 @@ public class AnimeThemesGenerator
     }
 
     /// <summary>
-    /// Forces a re-scan of all managed import folder roots, rebuilds the in-memory Theme.mp3 cache and persists it to the <c>theme.cache</c> file.
+    /// Forces a re-scan of all managed import folder roots, rebuilds the in-memory Theme.mp3 cache and persists it to the <c>mp3_animethemes.cache</c> file.
     /// </summary>
     public void RefreshThemeMp3Cache()
     {
@@ -116,7 +116,7 @@ public class AnimeThemesGenerator
     }
 
     /// <summary>
-    /// Adds a folder path to the Theme.mp3 cache if it is not already present, then persists the updated cache to the <c>theme.cache</c> file.
+    /// Adds a folder path to the Theme.mp3 cache if it is not already present, then persists the updated cache to the <c>mp3_animethemes.cache</c> file.
     /// If the cache has not been loaded yet, it is loaded from the file first.
     /// </summary>
     /// <param name="folderPath">Absolute path of the folder containing a Theme.mp3.</param>
@@ -173,8 +173,10 @@ public class AnimeThemesGenerator
                 foreach (var file in Directory.EnumerateFiles(root!, "Theme.mp3", SearchOption.AllDirectories))
                 {
                     string dir = Path.GetDirectoryName(file)!;
-                    string folderName = Path.GetFileName(dir);
-                    if (excludedFolders.Contains(folderName))
+                    // Exclude files that reside anywhere inside a VFS/AT/Collection root folder
+                    string relative = dir.Substring(root!.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                    var segments = relative.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);
+                    if (segments.Any(s => excludedFolders.Contains(s)))
                         continue;
                     result.Add(dir);
                 }
@@ -191,7 +193,7 @@ public class AnimeThemesGenerator
     }
 
     /// <summary>
-    /// Loads the in-memory cache from the <c>theme.cache</c> file. If the file does not exist or is empty, a full scan is triggered automatically.
+    /// Loads the in-memory cache from the <c>mp3_animethemes.cache</c> file. If the file does not exist or is empty, a full scan is triggered automatically.
     /// </summary>
     private void LoadCacheFromFile()
     {
@@ -210,7 +212,7 @@ public class AnimeThemesGenerator
             }
             catch (Exception ex)
             {
-                Logger.Warn(ex, "Failed to read theme.cache file at {Path}, will attempt a full scan.", path);
+                Logger.Warn(ex, "Failed to read mp3_animethemes.cache file at {Path}, will attempt a full scan.", path);
             }
         }
         // No cache file or it was empty — run a full scan to populate it
@@ -219,7 +221,7 @@ public class AnimeThemesGenerator
     }
 
     /// <summary>
-    /// Persists the current in-memory cache to the <c>theme.cache</c> file, one folder path per line.
+    /// Persists the current in-memory cache to the <c>mp3_animethemes.cache</c> file, one folder path per line.
     /// </summary>
     private void SaveCacheToFile()
     {
@@ -231,7 +233,7 @@ public class AnimeThemesGenerator
         }
         catch (Exception ex)
         {
-            Logger.Warn(ex, "Failed to write theme.cache file at {Path}", ThemeCacheFilePath);
+            Logger.Warn(ex, "Failed to write mp3_animethemes.cache file at {Path}", ThemeCacheFilePath);
         }
     }
 

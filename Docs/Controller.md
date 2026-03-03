@@ -279,6 +279,9 @@ GET  /animethemes/vfs/build?filter={csv}                       -> AnimeThemesVfs
 GET  /animethemes/vfs/map                                      -> AnimeThemesVfsMap
 
 POST /animethemes/vfs/import                                   -> ImportAnimeThemesMapping
+
+GET  /animethemes/vfs/webm/tree                                -> AnimeThemesWebmTree
+GET  /animethemes/vfs/webm/stream?path={path}                  -> AnimeThemesWebmStream
 ```
 
 - `AnimeThemesVfsBuild` applies the mapping file (located in the config directory) to the AnimeThemes directory structure.
@@ -286,9 +289,25 @@ POST /animethemes/vfs/import                                   -> ImportAnimeThe
   - `filter` restricts the mapping to the given comma separated AniDB IDs.
 
 - `AnimeThemesVfsMap` generates the mapping csv from the current raw source.
+  - When multiple anime records match a video, the API response is sorted by release order (year then season) and the earliest entry is used.
+  - If two entries share the same release period the one with the lower AniDB ID is preferred.
+  - The generated CSV now includes a fifth column `artistName` (after `newFilename`) containing the contributing artist(s) from the AnimeThemes metadata.
   - The resulting file is written to the config directory at `anidb_animethemes_xrefs.csv` in the plugin's _config_ directory.
 
 - `ImportAnimeThemesMapping` downloads the latest mapping csv from the hardcoded Gist URL.
+
+---
+
+- `AnimeThemesWebmTree` returns the webm VFS cache as a tree structure of groups, series and files for the dashboard video player modal.
+  - Each series ID found in the cached paths is resolved to a display title and parent group name.
+  - Returns `{ status: "ok", items: [...] }` where each item has `group`, `series`, `file`, and `path` properties.
+  - Returns `{ status: "empty" }` when the cache file does not exist or is empty.
+  - The cache is written automatically after each `AnimeThemesVfsBuild` run.
+- `AnimeThemesWebmStream` streams a `.webm` theme file from a VFS path for in-browser playback.
+  - `path` (required) the full path to the `.webm` file. Plex-style paths are reverse-mapped automatically.
+  - Responds with `video/webm` content type and supports HTTP range requests for seekable playback.
+  - Returns `404` if the file does not exist at the resolved path.
+  - Used by the dashboard video player modal.
 
 ---
 
@@ -344,7 +363,7 @@ GET  /animethemes/mp3/random?refresh={true|false}              -> AnimeThemesMp3
   - subfolders named `misc` are also skipped as the AnimeThemes torrent puts files in there which will always fail to map
 - If no mapping entry exists for the specified series/slug the endpoint returns a `skipped` status instead of failing.
 - `path` may be a Plex or Shoko relative path; the controller translates them via configured path mappings.
-- The `theme.cache` file (located in the plugin's _config_ directory) persists the list of known `Theme.mp3` folder paths across plugin restarts.
+- The `mp3_animethemes.cache` file (located in the plugin's _config_ directory) persists the list of known `Theme.mp3` folder paths across plugin restarts.
   - On first access the cache is loaded from this file. If the file does not exist an empty cache is used.
   - After a full re-scan (`?refresh=true`) or when new MP3s are generated, the file is updated automatically.
   - Each successful single MP3 generation additively appends to the cache without rescanning.

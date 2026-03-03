@@ -1278,7 +1278,22 @@ namespace ShokoRelay.Controllers
 
             var result = await _animeThemesMapping.ApplyMappingAsync(filterIds, cancellationToken).ConfigureAwait(false);
 
-            WriteReportLog("at-vfs-build-report.log", sb => LogHelper.BuildAtVfsBuildReport(sb, result, filterIds));
+            // Persist a cache of all generated .webm VFS link paths for the dashboard video modal (unfiltered builds only)
+            if (filterIds == null || filterIds.Count == 0)
+                try
+                {
+                    var webmPaths = result
+                        .Planned.Select(p => p.Contains(" <- ") ? p.Substring(0, p.IndexOf(" <- ", StringComparison.Ordinal)) : p)
+                        .Where(p => p.EndsWith(".webm", StringComparison.OrdinalIgnoreCase))
+                        .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+                    System.IO.File.WriteAllLines(Path.Combine(_configProvider.ConfigDirectory, "webm_animethemes.cache"), webmPaths);
+                }
+                catch
+                { /* best-effort */
+                }
+
+            WriteReportLog("at-vfs-build-report.log", sb => LogHelper.BuildAtVfsBuildReport(sb, result, filterIds ?? new List<int>()));
 
             return Ok(
                 new
@@ -1416,6 +1431,114 @@ namespace ShokoRelay.Controllers
             // Avoids ArgumentOutOfRangeException when the file is being regenerated concurrently and its size changes between stat and send.
             var stream = new FileStream(themePath, FileMode.Open, FileAccess.Read, FileShare.Read);
             return File(stream, "audio/mpeg", enableRangeProcessing: true);
+        }
+
+        [HttpGet("animethemes/vfs/webm/tree")]
+        /// <summary>
+        /// Returns the webm VFS cache as a tree of groups, series and files suitable for the dashboard video player modal.
+        /// Each series ID in the cache path is resolved to a display title and parent group name.
+        /// </summary>
+        public IActionResult AnimeThemesWebmTree()
+        {
+            string cachePath = Path.Combine(_configProvider.ConfigDirectory, "webm_animethemes.cache");
+            if (!System.IO.File.Exists(cachePath))
+                return Ok(new { status = "empty" });
+
+            string[] lines;
+            try
+            {
+                lines = System.IO.File.ReadAllLines(cachePath).Where(l => !string.IsNullOrWhiteSpace(l)).ToArray();
+            }
+            catch
+            {
+                return Ok(new { status = "empty" });
+            }
+
+            if (lines.Length == 0)
+                return Ok(new { status = "empty" });
+
+            // Parse each line: extract the series-id folder and filename
+            // Expected path pattern: .../VfsRoot/seriesId/Shorts/filename.webm
+            var items = new List<object>();
+            var seriesTitleCache = new Dictionary<int, (string GroupTitle, string SeriesTitle)>();
+
+            foreach (var line in lines)
+            {
+                string normalized = line.Replace('\\', '/').Trim();
+                var segments = normalized.Split('/', StringSplitOptions.RemoveEmptyEntries);
+                // Find the numeric series ID segment (parent of "Shorts")
+                int? seriesId = null;
+                string? fileName = null;
+                for (int i = 0; i < segments.Length; i++)
+                {
+                    if (int.TryParse(segments[i], out int sid))
+                    {
+                        seriesId = sid;
+                        // filename is the last segment
+                        fileName = segments[^1];
+                        break;
+                    }
+                }
+
+                if (!seriesId.HasValue || fileName == null)
+                    continue;
+
+                if (!seriesTitleCache.TryGetValue(seriesId.Value, out var titles))
+                {
+                    var series = _metadataService.GetShokoSeriesByID(seriesId.Value);
+                    string seriesTitle;
+                    string groupTitle;
+
+                    if (series != null)
+                    {
+                        var resolved = TextHelper.ResolveFullSeriesTitles(series);
+                        seriesTitle = resolved.DisplayTitle;
+                        var group = _metadataService.GetShokoGroupByID(series.TopLevelGroupID);
+                        groupTitle = group is IWithTitles titled && !string.IsNullOrWhiteSpace(titled.PreferredTitle?.Value) ? titled.PreferredTitle!.Value : seriesTitle;
+                    }
+                    else
+                    {
+                        seriesTitle = $"Series {seriesId.Value}";
+                        groupTitle = seriesTitle;
+                    }
+
+                    titles = (groupTitle, seriesTitle);
+                    seriesTitleCache[seriesId.Value] = titles;
+                }
+
+                items.Add(
+                    new
+                    {
+                        group = titles.GroupTitle,
+                        series = titles.SeriesTitle,
+                        file = Path.GetFileNameWithoutExtension(fileName),
+                        path = normalized,
+                    }
+                );
+            }
+
+            return Ok(new { status = "ok", items });
+        }
+
+        [HttpGet("animethemes/vfs/webm/stream")]
+        [HttpHead("animethemes/vfs/webm/stream")]
+        /// <summary>
+        /// Streams a .webm theme file from a VFS path for in-browser playback.
+        /// </summary>
+        /// <param name="path">The full path to the .webm file.</param>
+        public IActionResult AnimeThemesWebmStream([FromQuery] string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return BadRequest(new { status = "error", message = "path is required" });
+
+            string resolved = _plexLibrary.MapPlexPathToShokoPath(path);
+            string fullPath = Path.GetFullPath(resolved);
+
+            if (!System.IO.File.Exists(fullPath))
+                return NotFound(new { status = "error", message = "File not found." });
+
+            var stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            return File(stream, "video/webm", enableRangeProcessing: true);
         }
 
         #endregion

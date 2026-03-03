@@ -60,12 +60,21 @@ namespace ShokoRelay.Helpers
             return null;
         }
 
+        private static readonly Regex _unicodeEscapeRegex = new(@"\\u([0-9a-fA-F]{4})", RegexOptions.Compiled);
+
         /// <summary>
         /// Replace literal commas with the unicode escape \u002C so that values containing commas can be stored in a simple comma-separated file.
         /// </summary>
         /// <param name="value">The string to escape.</param>
         /// <returns>The escaped string, or <see cref="string.Empty"/> if <paramref name="value"/> is null or empty.</returns>
         public static string EscapeCsvCommas(string value) => string.IsNullOrEmpty(value) ? string.Empty : value.Replace(",", "\\u002C");
+
+        /// <summary>
+        /// Decode \uXXXX escape sequences back into their actual Unicode characters.
+        /// </summary>
+        /// <param name="value">The string potentially containing escape sequences.</param>
+        /// <returns>The unescaped string, or the original value if no escapes are found.</returns>
+        public static string UnescapeUnicode(string value) => string.IsNullOrEmpty(value) ? value : _unicodeEscapeRegex.Replace(value, m => ((char)Convert.ToInt32(m.Groups[1].Value, 16)).ToString());
 
         /// <summary>
         /// Splits a CSV line on commas. Caller must escape commas inside values using <see cref="EscapeCsvCommas"/> when generating.

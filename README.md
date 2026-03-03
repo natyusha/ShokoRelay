@@ -183,6 +183,8 @@ This plugin includes full [AnimeThemes](https://animethemes.moe/) integration. I
 > [!IMPORTANT]
 > Similar to the VFS you must exclude the `!AnimeThemes` folder from Shoko scans using the `Exclude` server option. An example `settings-server.json` entry is shown [above](#shoko).
 
+Once the VFS has been generated a video player modal is available on the dashboard via the video icon button in the "AnimeThemes: VFS" section header. It displays a tree view of all the themes in the VFS grouped by Shoko group and series. This allows you to browse and play `.webm` files directly in the browser with various playback modes and a filter for finding things.
+
 ### Themes as Series BGM
 
 There is also support for generating `Theme.mp3` files as local metadata. This will add them to the VFS automatically and can be run for either a single series or as a batch operation. This process requires Shoko Server to have access to [FFmpeg/FFprobe](https://ffmpeg.org/download.html) (place system appropriate binaries in the ShokoRelay plugin folder or system PATH) as AnimeThemes does not provide the '.mp3' files that plex requires for this feature.

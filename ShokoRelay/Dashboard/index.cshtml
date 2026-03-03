@@ -141,12 +141,19 @@
       -->
       <div class="full">
         <section>
-          <h3>
-            <svg class="at-svg">
-              <use href="img/icons.svg#animethemes"></use>
-            </svg>
-            AnimeThemes: VFS
-          </h3>
+          <div class="full">
+            <h3>
+              <svg class="at-svg">
+                <use href="img/icons.svg#animethemes"></use>
+              </svg>
+              AnimeThemes: VFS
+            </h3>
+            <button id="at-webm-open" class="at-btn" title="Open Video Player" type="button" aria-label="Open Video Player">
+              <svg class="icon-svg">
+                <use href="img/icons.svg#movie-open"></use>
+              </svg>
+            </button>
+          </div>
           <div class="full">
             <div>
               <label for="at-filter-map">Filter by ShokoSeriesID</label>
@@ -178,27 +185,30 @@
               </svg>
               AnimeThemes: MP3
             </h3>
-            <button id="at-play" class="at-play-btn" title="MP3 Playback Start" type="button" aria-label="Shuffle Theme from Path" hidden>
-              <svg class="icon-svg">
+            <button id="at-play" class="at-btn" title="Play / Next" type="button" aria-label="Play / Next" hidden>
+              <svg class="icon-svg play">
                 <use href="img/icons.svg#play"></use>
               </svg>
+              <svg class="icon-svg next">
+                <use href="img/icons.svg#skip-next"></use>
+              </svg>
             </button>
-            <button id="at-mode" class="at-mode-toggle" title="MP3 Playback Mode" data-mode="loop" type="button" aria-label="Loop Toggle" hidden>
-              <svg class="icon-svg loop-icon">
+            <button id="at-mode" class="at-btn" title="Playback Mode" data-mode="loop" type="button" aria-label="Playback Mode" hidden>
+              <svg class="icon-svg mode loop">
                 <use href="img/icons.svg#sync"></use>
               </svg>
-              <svg class="icon-svg shuffle-icon">
+              <svg class="icon-svg mode shuffle">
                 <use href="img/icons.svg#shuffle-variant"></use>
               </svg>
-              <svg class="icon-svg off-icon">
+              <svg class="icon-svg mode off">
                 <use href="img/icons.svg#sync-off"></use>
               </svg>
             </button>
-            <button id="at-playback" class="at-playback-toggle toggle" title="MP3 Playback Toggle" aria-pressed="false" type="button" aria-label="MP3 Playback Toggle">
-              <svg class="icon-svg playback-on">
+            <button id="at-playback" class="at-btn toggle" title="Playback Toggle" aria-pressed="false" type="button" aria-label="Playback Toggle">
+              <svg class="icon-svg enabled">
                 <use href="img/icons.svg#volume-high"></use>
               </svg>
-              <svg class="icon-svg playback-off">
+              <svg class="icon-svg disabled">
                 <use href="img/icons.svg#volume-mute"></use>
               </svg>
             </button>
@@ -276,7 +286,7 @@
     <!--#region MARK: Overrides Modal
     -->
     <div id="overrides-modal" class="modal-overlay" aria-hidden="true" role="dialog" aria-modal="true">
-      <div class="modal wide" role="document">
+      <div class="modal overrides" role="document">
         <header>VFS Overrides Editor</header>
         <div class="modal-body">
           <textarea id="overrides-text"></textarea>
@@ -351,6 +361,52 @@
     </div>
     <!-- #endregion -->
 
+    <!--#region MARK: Video Player Modal
+    -->
+    <div id="webm-modal" class="modal-overlay" aria-hidden="true" role="dialog" aria-modal="true">
+      <div class="modal webm" role="document">
+        <div class="modal-body">
+          <video id="webm-video" controls></video>
+          <div class="webm-controls">
+            <button id="webm-next" class="at-btn" title="Next Theme" type="button" aria-label="Next Theme">
+              <svg class="icon-svg">
+                <use href="img/icons.svg#skip-next"></use>
+              </svg>
+            </button>
+            <button id="webm-mode" class="at-btn" title="Playback Mode" data-mode="off" type="button" aria-label="Playback Mode">
+              <svg class="icon-svg mode loop">
+                <use href="img/icons.svg#sync"></use>
+              </svg>
+              <svg class="icon-svg mode shuffle">
+                <use href="img/icons.svg#shuffle-variant"></use>
+              </svg>
+              <svg class="icon-svg mode next">
+                <use href="img/icons.svg#shuffle-disabled"></use>
+              </svg>
+              <svg class="icon-svg mode off">
+                <use href="img/icons.svg#sync-off"></use>
+              </svg>
+            </button>
+            <span class="webm-filter-wrap">
+              <svg class="icon-svg magnify-icon">
+                <use href="img/icons.svg#magnify"></use>
+              </svg>
+              <input id="webm-filter" type="text" placeholder="Filter..." />
+            </span>
+          </div>
+        </div>
+        <details id="webm-tree-details" class="details-anim webm-tree-details">
+          <summary>
+            <span id="webm-now-playing" class="webm-now-playing">AnimeThemes: VFS Video Player</span>
+          </summary>
+          <hr />
+          <div id="webm-tree" class="webm-tree details-content"></div>
+        </details>
+      </div>
+    </div>
+    <!-- #endregion -->
+
     <script src="js/script.js"></script>
+    <script src="js/animethemes.js"></script>
   </body>
 </html>

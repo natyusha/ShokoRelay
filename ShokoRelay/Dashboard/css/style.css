@@ -378,62 +378,41 @@ label.plex-auth.shoko-checkbox input:disabled ~ .shoko-checkbox-text {
 }
 /* #endregion */
 
-/* #region MARK: MP3 Playback
+/* #region MARK: Playback
 */
-.at-playback-toggle,
-.at-mode-toggle,
-.at-play-btn {
+.at-btn {
   all: unset;
   cursor: pointer;
   float: right;
   fill: var(--highlight-color);
-  margin: 0 4px 5px 0;
+  margin: 0 3px 5px 0;
   transition: all 0.3s ease-in-out;
 }
-.at-mode-toggle[hidden],
-.at-play-btn[hidden] {
+.at-btn[hidden],
+.at-btn[data-state="playing"] .play,
+.at-btn .next,
+.at-btn .mode,
+.at-btn.toggle[aria-pressed="false"] .enabled,
+.at-btn.toggle[aria-pressed="true"] .disabled {
   display: none;
 }
-.at-playback-toggle:hover,
-.at-mode-toggle:hover,
-.at-play-btn:hover {
+.at-btn:hover {
   background: none;
   fill: var(--hover-color);
 }
-.at-playback-toggle[aria-pressed="true"] .playback-on {
+.at-btn[data-state="idle"] .play,
+.at-btn[data-state="playing"] .next,
+.at-btn[data-mode="loop"] .mode.loop,
+.at-btn[data-mode="shuffle"] .mode.shuffle,
+.at-btn[data-mode="next"] .mode.next,
+.at-btn[data-mode="off"] .mode.off,
+.at-btn.toggle[aria-pressed="true"] .enabled {
   display: inline;
 }
-.at-playback-toggle[aria-pressed="true"] .playback-off {
-  display: none;
-}
-.at-playback-toggle[aria-pressed="false"] .playback-on {
-  display: none;
-}
-.at-playback-toggle[aria-pressed="false"] .playback-off {
-  display: inline;
+.at-btn.toggle[aria-pressed="false"] {
   fill: var(--danger-color);
 }
-.at-playback-toggle[aria-pressed="false"] .playback-off:hover {
-  display: inline;
-  fill: color-mix(in srgb, var(--danger-color), white 25%);
-}
-/* Loop toggle: 3-state (loop / shuffle / off) via data-mode */
-.at-mode-toggle .loop-icon,
-.at-mode-toggle .shuffle-icon,
-.at-mode-toggle .off-icon {
-  display: none;
-}
-.at-mode-toggle[data-mode="loop"] .loop-icon {
-  display: inline;
-}
-.at-mode-toggle[data-mode="shuffle"] .shuffle-icon {
-  display: inline;
-}
-.at-mode-toggle[data-mode="off"] .off-icon {
-  display: inline;
-  fill: var(--danger-color);
-}
-.at-mode-toggle[data-mode="off"]:hover .off-icon {
+.at-btn.toggle[aria-pressed="false"] .disabled:hover {
   fill: color-mix(in srgb, var(--danger-color), white 25%);
 }
 #at-mp3-section {
@@ -523,6 +502,7 @@ button.float-link {
   opacity: 0;
   will-change: opacity;
   overflow: visible;
+  z-index: 2000;
 }
 .tooltip-show {
   opacity: 0.9;
@@ -571,15 +551,15 @@ button.float-link {
 }
 /* #endregion */
 
-/* #region MARK: Details
+/* #region MARK: Details Animations
 */
-details > .details-content {
+.details-anim > .details-content:not(.webm-tree) {
   overflow: hidden;
 }
-details[open] > summary::after {
-  transform: rotate(-135deg);
+.details-anim[open] > summary::after {
+  transform: translateY(4px) rotate(-135deg);
 }
-summary {
+.details-anim > summary {
   align-items: center;
   cursor: pointer;
   display: flex;
@@ -590,7 +570,7 @@ summary {
   transition: all 0.3s ease-in-out;
   user-select: none;
 }
-summary::after {
+.details-anim > summary::after {
   content: "";
   border: solid;
   border-width: 0 3px 3px 0;
@@ -599,7 +579,7 @@ summary::after {
   transform: rotate(45deg);
   transition: transform 0.3s ease;
 }
-summary:hover {
+.details-anim > summary:hover {
   color: var(--hover-color);
 }
 /* #endregion */
@@ -676,6 +656,12 @@ summary:hover {
 .modal-overlay.open {
   display: flex;
 }
+#webm-modal.modal-overlay {
+  align-items: flex-start;
+}
+#webm-modal .modal {
+  margin-top: 2vh;
+}
 .modal {
   background: var(--panel-color);
   color: var(--text-color);
@@ -686,10 +672,16 @@ summary:hover {
   overflow: hidden;
   width: 390px;
 }
-.modal.wide {
+.modal.overrides {
   width: 870px;
 }
-.modal.wide .modal-body {
+.modal.webm {
+  display: flex;
+  flex-direction: column;
+  width: 1280px;
+  max-height: 90vh;
+}
+.modal.overrides .modal-body {
   padding: 0;
 }
 .modal textarea {
@@ -724,6 +716,20 @@ footer {
 }
 .modal-body {
   padding: 14px 16px;
+}
+.modal-body video {
+  width: 100%;
+  display: block;
+}
+.modal.webm .modal-body {
+  padding: 0;
+  aspect-ratio: 16 / 9;
+  background: var(--bg-color);
+  position: relative;
+}
+.modal.webm .modal-body video {
+  height: 100%;
+  object-fit: contain;
 }
 .modal-body .shoko-checkbox {
   margin-top: 10px;
@@ -769,5 +775,168 @@ footer {
 .dir-icon.hidden {
   opacity: 0;
   visibility: hidden;
+}
+.webm-controls {
+  position: absolute;
+  bottom: -51px;
+  right: 4px;
+  display: flex;
+  z-index: 1;
+}
+.webm-controls .at-btn svg {
+  height: 1.7em;
+  margin-right: 8px;
+  width: 1.7em;
+}
+.webm-now-playing {
+  font-size: 1.2em;
+  font-weight: 500;
+  margin-left: 25px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.webm-filter-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.webm-filter-wrap .magnify-icon {
+  fill: var(--text-color);
+  height: 24px;
+  left: 6px;
+  opacity: 0.6;
+  pointer-events: none;
+  position: absolute;
+  top: 9px;
+  width: 24px;
+}
+.webm-filter-wrap input {
+  font-size: 1em;
+  padding-left: 2.2em;
+}
+/* #endregion */
+
+/* #region MARK: Tree View
+*/
+.webm-tree-details {
+  position: relative;
+}
+.webm-tree-details > summary {
+  padding: 6px 8px;
+}
+.webm-tree-details > summary::after {
+  position: absolute;
+  left: 10px;
+  top: 17px;
+}
+.webm-tree {
+  --spacing: 1.2rem;
+  --radius: 6px;
+  max-height: 40vh;
+  overflow-y: auto;
+  padding: 0 8px 8px;
+  font-size: 0.9em;
+}
+.webm-tree .placeholder {
+  color: var(--text-color);
+  opacity: 0.5;
+  padding: 24px 8px;
+  text-align: center;
+}
+.webm-tree ul {
+  margin-left: calc(var(--radius) - var(--spacing));
+  padding-left: 0;
+}
+.webm-tree li {
+  display: block;
+  position: relative;
+  padding-left: calc(2 * var(--spacing) - var(--radius) - 2px);
+}
+.webm-tree ul li {
+  border-left: 2px solid var(--button-color);
+}
+.webm-tree ul.tree > li::before {
+  border-bottom-color: transparent;
+}
+.webm-tree ul li:last-child {
+  border-color: transparent;
+}
+.webm-tree ul li::before {
+  content: "";
+  display: block;
+  position: absolute;
+  top: calc(var(--spacing) / -2);
+  left: -2px;
+  width: calc(var(--spacing) + 2px);
+  height: calc(var(--spacing) + 1px);
+  border: solid var(--button-color);
+  border-width: 0 0 2px 2px;
+  border-bottom-left-radius: 3px;
+}
+.webm-tree summary {
+  cursor: pointer;
+  display: block;
+  list-style: none;
+  padding: 2px 0;
+  user-select: none;
+}
+.webm-tree summary::marker,
+.webm-tree summary::-webkit-details-marker,
+.webm-tree summary .tree-icon.collapse,
+.webm-tree summary .tree-icon.collapse::after,
+.webm-tree details[open] > summary .tree-icon.expand {
+  display: none;
+}
+.webm-tree li::after,
+.webm-tree summary .tree-icon {
+  display: block;
+  position: absolute;
+  top: calc(var(--spacing) / 2 - var(--radius));
+  left: calc(var(--spacing) - var(--radius) - 1px);
+  width: calc(2 * var(--radius));
+  height: calc(2 * var(--radius));
+  border-radius: 50%;
+  background: var(--border-color);
+}
+.webm-tree summary .tree-icon {
+  z-index: 1;
+  display: block;
+  border-radius: 2px;
+  background: var(--inset-color);
+  border: 1px solid var(--text-color);
+}
+.webm-tree summary .tree-icon::before,
+.webm-tree summary .tree-icon::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  background: var(--text-color);
+  transform: translate(-50%, -50%);
+}
+.webm-tree summary .tree-icon::before,
+.webm-tree summary .tree-icon::after {
+  width: 8px;
+  height: 2px;
+}
+.webm-tree details[open] > summary .tree-icon.collapse {
+  display: block;
+}
+.webm-tree .webm-leaf {
+  padding: 2px 4px;
+  cursor: pointer;
+  border-radius: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-left: -9px;
+}
+.webm-tree .webm-leaf:hover {
+  background: var(--inset-color);
+}
+.webm-tree .webm-leaf.active {
+  background: var(--button-color);
+  color: var(--bg-color);
 }
 /* #endregion */

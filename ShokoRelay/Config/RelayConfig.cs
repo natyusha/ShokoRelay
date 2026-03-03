@@ -139,15 +139,20 @@ namespace ShokoRelay.Config
         [DefaultValue(false)]
         public bool ShokoSyncWatchedExcludeAdmin { get; set; } = false;
 
+        [Display(Name = "AnimeThemes WEBM Mode", Description = "Playback mode for WEBM themes: loop, shuffle, next or off")]
+        [Browsable(false)]
+        [DefaultValue("loop")]
+        public string AnimeThemesWebmMode { get; set; } = "loop";
+
         [Display(Name = "AnimeThemes MP3 Playback", Description = "Enable to play generated theme MP3 files in the dashboard after generation")]
         [Browsable(false)]
         [DefaultValue(false)]
         public bool AnimeThemesMp3Playback { get; set; } = false;
 
-        [Display(Name = "AnimeThemes MP3 Loop", Description = "Playback mode for MP3 themes: loop, shuffle or off")]
+        [Display(Name = "AnimeThemes MP3 Mode", Description = "Playback mode for MP3 themes: loop, shuffle or off")]
         [Browsable(false)]
         [DefaultValue("loop")]
-        public string AnimeThemesMp3Loop { get; set; } = "loop";
+        public string AnimeThemesMp3Mode { get; set; } = "loop";
 
         #endregion
 
@@ -239,6 +244,10 @@ namespace ShokoRelay.Config
         [Display(Name = "Collection Posters Root Path", Description = "The location of custom local collection posters inside each import root")]
         [DefaultValue("!CollectionPosters")]
         public string CollectionPostersRootPath { get; set; } = "!CollectionPosters";
+
+        [Display(Name = "Shoko Server URL", Description = "A URL and port that Plex can access Shoko server from (e.g. http://localhost:8111)")]
+        [DefaultValue("")]
+        public string ShokoServerUrl { get; set; } = "";
 
         [Display(Name = "FFmpeg Path", Description = "An optional folder containing FFmpeg/FFprobe. Leave empty to use the plugin root or PATH")]
         [DefaultValue("")]

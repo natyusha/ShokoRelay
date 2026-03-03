@@ -36,12 +36,19 @@ namespace ShokoRelay.Config
 
         /// <summary>
         /// The externally-reachable base URL of the Shoko server (e.g. <c>http://192.168.1.3:8111</c>).
-        /// When an HTTP request context is available the value is automatically refreshed from the incoming host header; background tasks that lack a context receive the last known value.
+        /// When an explicit <see cref="RelayConfig.ShokoServerUrl"/> is configured that value is always returned.
+        /// Otherwise, when an HTTP request context is available the value is automatically refreshed from the incoming host header; background tasks that lack a context receive the last known value.
         /// </summary>
         public string ServerBaseUrl
         {
             get
             {
+                // Prefer explicitly configured URL
+                var configUrl = GetSettings()?.ShokoServerUrl;
+                if (!string.IsNullOrWhiteSpace(configUrl))
+                    return configUrl!.TrimEnd('/');
+
+                // Auto-detect from current HTTP context
                 var ctx = HttpContextAccessor?.HttpContext;
                 if (ctx is not null)
                     _serverBaseUrl = $"{ctx.Request.Scheme}://{ctx.Request.Host}";
