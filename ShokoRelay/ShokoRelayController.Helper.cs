@@ -31,6 +31,122 @@ namespace ShokoRelay.Controllers
         private static readonly System.Text.Json.JsonSerializerOptions _jsonCaseInsensitive = new() { PropertyNameCaseInsensitive = true };
 
         /// <summary>
+        /// Combined guard for Plex automation endpoints: checks Plex is enabled, validates filter/seriesId, and resolves the series list.
+        /// Returns a non-null <see cref="IActionResult"/> if validation fails (caller should return it immediately).
+        /// </summary>
+        private IActionResult? ValidatePlexFilterRequest(int? seriesId, string? filter, out List<IShokoSeries?> seriesList, out List<int> filterIds)
+        {
+            seriesList = new List<IShokoSeries?>();
+            filterIds = new List<int>();
+
+            if (!_plexLibrary.IsEnabled)
+                return BadRequest(new { status = "error", message = "Plex server configuration is missing or no library selected." });
+
+            var validation = ValidateFilterOrBadRequest(filter, out filterIds);
+            if (validation != null)
+                return validation;
+
+            if (seriesId.HasValue && filterIds.Count > 0)
+                return BadRequest(new { status = "error", message = "Use either seriesId or filter, not both." });
+
+            seriesList = ResolveSeriesList(seriesId, filterIds);
+            return null;
+        }
+
+        /// <summary>
+        /// Persist discovered Plex servers and libraries from a discovery result into the token file.
+        /// </summary>
+        private void PersistDiscoveryResults((bool TokenValid, List<PlexServerInfo> Servers, List<(PlexLibraryInfo Library, PlexServerInfo Server)> ShokoLibraries) discovery)
+        {
+            if (discovery.TokenValid && discovery.Servers?.Count > 0)
+            {
+                var servers = discovery
+                    .Servers.Select(s => new PlexAvailableServer
+                    {
+                        Id = s.Id,
+                        Name = s.Name,
+                        PreferredUri = s.PreferredUri ?? string.Empty,
+                    })
+                    .ToList();
+                _configProvider.UpdatePlexTokenInfo(servers: servers);
+            }
+
+            var libs = CollectDiscoveredLibraries(discovery.ShokoLibraries);
+            _configProvider.UpdatePlexTokenInfo(libraries: libs);
+        }
+
+        /// <summary>
+        /// Extract the <c>Image</c> array from a Plex metadata dictionary object, returning an empty array if not present.
+        /// </summary>
+        private static object[] ExtractImages(object metadata) => metadata is IDictionary<string, object?> dict && dict.TryGetValue("Image", out var img) && img is object[] arr ? arr : Array.Empty<object>();
+
+        /// <summary>
+        /// Read ID3v2 text frames from an MP3 file and return them as a dictionary keyed by frame ID (e.g. TIT2, TPE1, TALB). Only reads the first 64 KB to avoid scanning large files.
+        /// </summary>
+        private static Dictionary<string, string> ReadId3v2Tags(string filePath)
+        {
+            var tags = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+
+            Span<byte> header = stackalloc byte[10];
+            if (fs.Read(header) < 10 || header[0] != 'I' || header[1] != 'D' || header[2] != '3')
+                return tags;
+
+            int tagSize = (header[6] << 21) | (header[7] << 14) | (header[8] << 7) | header[9];
+            int maxRead = Math.Min(tagSize, 65536);
+            byte[] data = new byte[maxRead];
+            int read = fs.Read(data, 0, maxRead);
+
+            int pos = 0;
+            while (pos + 10 <= read)
+            {
+                string frameId = System.Text.Encoding.ASCII.GetString(data, pos, 4);
+                if (frameId[0] == '\0')
+                    break;
+                int frameSize = (data[pos + 4] << 24) | (data[pos + 5] << 16) | (data[pos + 6] << 8) | data[pos + 7];
+                if (frameSize <= 0 || pos + 10 + frameSize > read)
+                    break;
+
+                // Text frames start with T (except TXXX)
+                if (frameId.StartsWith('T') && frameId != "TXXX" && frameSize > 1)
+                {
+                    byte encoding = data[pos + 10];
+                    string value = encoding switch
+                    {
+                        1 => System.Text.Encoding.Unicode.GetString(data, pos + 11, frameSize - 1).TrimEnd('\0'),
+                        2 => System.Text.Encoding.BigEndianUnicode.GetString(data, pos + 11, frameSize - 1).TrimEnd('\0'),
+                        3 => System.Text.Encoding.UTF8.GetString(data, pos + 11, frameSize - 1).TrimEnd('\0'),
+                        _ => System.Text.Encoding.Latin1.GetString(data, pos + 11, frameSize - 1).TrimEnd('\0'),
+                    };
+                    // Strip BOM if present
+                    if (value.Length > 0 && value[0] == '\uFEFF')
+                        value = value[1..];
+                    tags[frameId] = value;
+                }
+                pos += 10 + frameSize;
+            }
+            return tags;
+        }
+
+        /// <summary>
+        /// Parse a nullable string query parameter into a boolean dry-run flag. Returns a <see cref="BadRequestResult"/> if the value is invalid.
+        /// Defaults to <c>true</c> (safe dry-run) when the parameter is omitted.
+        /// </summary>
+        private static (bool Parsed, IActionResult? Error) ParseDryRunParam(string? dryRun)
+        {
+            if (string.IsNullOrWhiteSpace(dryRun))
+                return (true, null);
+
+            var v = dryRun.Trim();
+            if (string.Equals(v, "true", StringComparison.OrdinalIgnoreCase))
+                return (true, null);
+            if (string.Equals(v, "false", StringComparison.OrdinalIgnoreCase))
+                return (false, null);
+
+            return (true, null); // treat unrecognized as dry-run for safety; alternatively return error below
+        }
+
+        /// <summary>
         /// Write a structured report to a log file inside the plugin's <c>logs</c> directory.
         /// </summary>
         /// <param name="fileName">Name of the log file to create or overwrite.</param>

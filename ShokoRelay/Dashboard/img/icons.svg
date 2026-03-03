@@ -40,24 +40,24 @@
     <path d="M19.36,2.72L20.78,4.14L15.06,9.85C16.13,11.39 16.28,13.24 15.38,14.44L9.06,8.12C10.26,7.22 12.11,7.37 13.65,8.44L19.36,2.72M5.93,17.57C3.92,15.56 2.69,13.16 2.35,10.92L7.23,8.83L14.67,16.27L12.58,21.15C10.34,20.81 7.94,19.58 5.93,17.57Z"/>
   </symbol>
 
-  <symbol id="sitemap" viewBox="0 0 24 24">
-    <title>Build Mapping File</title>
-    <path d="M9,2V8H11V11H5C3.89,11 3,11.89 3,13V16H1V22H7V16H5V13H11V16H9V22H15V16H13V13H19V16H17V22H23V16H21V13C21,11.89 20.11,11 19,11H13V8H15V2H9Z"/>
-  </symbol>
-
   <symbol id="download" viewBox="0 0 24 24">
     <title>Import Curated Mapping File</title>
     <path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/>
   </symbol>
 
-  <symbol id="file-tree" viewBox="0 0 24 24">
-    <title>Recursive Batch Toggle</title>
-    <path d="M3,3H9V7H3V3M15,10H21V14H15V10M15,17H21V21H15V17M13,13H7V18H13V20H7L5,20V9H7V11H13V13Z"/>
+  <symbol id="sitemap" viewBox="0 0 24 24">
+    <title>Build Mapping File</title>
+    <path d="M9,2V8H11V11H5C3.89,11 3,11.89 3,13V16H1V22H7V16H5V13H11V16H9V22H15V16H13V13H19V16H17V22H23V16H21V13C21,11.89 20.11,11 19,11H13V8H15V2H9Z"/>
   </symbol>
 
   <symbol id="chevron-triple-down" viewBox="0 0 24 24">
     <title>Force Overwrite Toggle</title>
     <path d="M7.41,14.58L12,19.17L16.59,14.58L18,16L12,22L6,16L7.41,14.58M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58M7.41,2.58L12,7.17L16.59,2.58L18,4L12,10L6,4L7.41,2.58Z"/>
+  </symbol>
+
+  <symbol id="file-tree" viewBox="0 0 24 24">
+    <title>Recursive Batch Toggle</title>
+    <path d="M3,3H9V7H3V3M15,10H21V14H15V10M15,17H21V21H15V17M13,13H7V18H13V20H7L5,20V9H7V11H13V13Z"/>
   </symbol>
   <!-- #endregion -->
 
@@ -84,6 +84,39 @@
   <symbol id="transfer-left" viewBox="0 0 24 24">
     <title>Sync to Plex</title>
     <path d="M21,16H19V8H21V16M17,16H15V8H17V16M13,16H11V8H13V16M9,5V19L2,12L9,5Z"/>
+  </symbol>
+  <!-- #endregion -->
+
+  <!-- #region MARK: Playback
+  -->
+  <symbol id="play" viewBox="0 0 24 24">
+    <title>MP3 Auto Shuffle</title>
+    <path d="M8,5.14V19.14L19,12.14L8,5.14Z"/>
+  </symbol>
+
+  <symbol id="sync" viewBox="0 0 24 24">
+    <title>MP3 Loop Enabled</title>
+    <path d="M12,18A6,6 0 0,1 6,12C6,11 6.25,10.03 6.7,9.2L5.24,7.74C4.46,8.97 4,10.43 4,12A8,8 0 0,0 12,20V23L16,19L12,15M12,4V1L8,5L12,9V6A6,6 0 0,1 18,12C18,13 17.75,13.97 17.3,14.8L18.76,16.26C19.54,15.03 20,13.57 20,12A8,8 0 0,0 12,4Z"/>
+  </symbol>
+
+  <symbol id="shuffle-variant" viewBox="0 0 24 24">
+    <title>MP3 Shuffle</title>
+    <path d="M17,3L22.25,7.5L17,12L22.25,16.5L17,21V18H14.26L11.44,15.18L13.56,13.06L15.5,15H17V12L17,9H15.5L6.5,18H2V15H5.26L14.26,6H17V3M2,6H6.5L9.32,8.82L7.2,10.94L5.26,9H2V6Z"/>
+  </symbol>
+
+  <symbol id="sync-off" viewBox="0 0 24 24">
+    <title>MP3 Loop Disabled</title>
+    <path d="M20,4H14V10L16.24,7.76C17.32,8.85 18,10.34 18,12C18,13 17.75,13.94 17.32,14.77L18.78,16.23C19.55,15 20,13.56 20,12C20,9.79 19.09,7.8 17.64,6.36L20,4M2.86,5.41L5.22,7.77C4.45,9 4,10.44 4,12C4,14.21 4.91,16.2 6.36,17.64L4,20H10V14L7.76,16.24C6.68,15.15 6,13.66 6,12C6,11 6.25,10.06 6.68,9.23L14.76,17.31C14.5,17.44 14.26,17.56 14,17.65V19.74C14.79,19.53 15.54,19.2 16.22,18.78L18.58,21.14L19.85,19.87L4.14,4.14L2.86,5.41M10,6.35V4.26C9.2,4.47 8.45,4.8 7.77,5.22L9.23,6.68C9.5,6.56 9.73,6.44 10,6.35Z"/>
+  </symbol>
+
+  <symbol id="volume-high" viewBox="0 0 24 24">
+    <title>MP3 Playback Enabled</title>
+    <path d="M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.84 14,18.7V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23M16.5,12C16.5,10.23 15.5,8.71 14,7.97V16C15.5,15.29 16.5,13.76 16.5,12M3,9V15H7L12,20V4L7,9H3Z"/>
+  </symbol>
+
+  <symbol id="volume-mute" viewBox="0 0 24 24">
+    <title>MP3 Playback Disabled</title>
+    <path d="M3,9H7L12,4V20L7,15H3V9M16.59,12L14,9.41L15.41,8L18,10.59L20.59,8L22,9.41L19.41,12L22,14.59L20.59,16L18,13.41L15.41,16L14,14.59L16.59,12Z"/>
   </symbol>
   <!-- #endregion -->
 

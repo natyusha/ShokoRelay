@@ -502,7 +502,8 @@ namespace ShokoRelay.Vfs
                     versionCounters[coordKey] = nextVersion + 1;
                 }
 
-                bool omitId = mapping.PartCount > 1 && mapping.PartIndex.HasValue; // multipart files must have the exact same name except for the part index, so the fileId must be removed for them to function in plex
+                // multipart files must have the exact same name except for the part index, so the fileId must be removed for them to function in plex
+                bool omitId = mapping.PartCount > 1 && mapping.PartIndex.HasValue;
                 string fileName = isExtra
                     ? VfsHelper.BuildExtrasFileName(mapping, specialInfo, padForExtra, extension, titles.DisplayTitle, effectivePartIndex, effectivePartCount, versionIndex)
                     : VfsHelper.BuildStandardFileName(mapping, epPad, extension, fileId, omitId, effectivePartIndex, effectivePartCount, versionIndex);
@@ -689,15 +690,13 @@ namespace ShokoRelay.Vfs
         }
 
         // Helper used by BuildSeries/PruneSeries to reuse MapHelper results for the duration of a VFS build
-        private MapHelper.SeriesFileData GetSeriesFileDataCached(Shoko.Abstractions.Metadata.Shoko.IShokoSeries series)
+        private MapHelper.SeriesFileData GetSeriesFileDataCached(IShokoSeries series)
         {
             if (_seriesFileDataCacheForBuild == null)
                 return MapHelper.GetSeriesFileData(series);
 
-            // if TMDB episode numbering is disabled we should ignore any override
-            // groups entirely; that keeps the behavior consistent with BuildInternal's
-            // seriesList grouping and avoids any possibility of "cleaning" a folder
-            // for a secondary while another thread still plans to copy into it.
+            // If TMDB episode numbering is disabled we should ignore any override groups entirely to keep the behavior consistent with BuildInternal's seriesList grouping.
+            // This avoids any possibility of "cleaning" a folder for a secondary while another thread still plans to copy into it.
             if (!ShokoRelay.Settings.TmdbEpNumbering)
             {
                 return _seriesFileDataCacheForBuild.GetOrAdd(series.ID, _ => MapHelper.GetSeriesFileData(series));

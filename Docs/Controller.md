@@ -286,7 +286,7 @@ POST /animethemes/vfs/import                                   -> ImportAnimeThe
   - `filter` restricts the mapping to the given comma separated AniDB IDs.
 
 - `AnimeThemesVfsMap` generates the mapping csv from the current raw source.
-  - The resulting file is written to the config directory at `anidb_animethemes_xrefs.csv` in the plugin's *config* directory.
+  - The resulting file is written to the config directory at `anidb_animethemes_xrefs.csv` in the plugin's _config_ directory.
 
 - `ImportAnimeThemesMapping` downloads the latest mapping csv from the hardcoded Gist URL.
 
@@ -308,14 +308,33 @@ POST /animethemes/vfs/import                                   -> ImportAnimeThe
 ```
 GET  /animethemes/mp3                                          -> AnimeThemesMp3
      [?path={path}&slug={slug}&offset={n}&batch={true|false}&force={true|false}]
+
+GET  /animethemes/mp3/stream?path={path}                       -> AnimeThemesMp3Stream
+
+GET  /animethemes/mp3/random?refresh={true|false}              -> AnimeThemesMp3Random
 ```
 
 - `AnimeThemesMp3` generates or batches MP3 files for theme folders.
-  - `path` (required) the filesystem path to a series folder. Can be in Plex form which will be translated.
+  - `path` (required) the filesystem path to a series folder. Plex-style paths are reverse-mapped automatically.
   - `slug` (optional) override the default selection with a specified OP#/ED#
   - `offset` (optional) when AnimeThemes matches to multiple anime, start at this index (1‑based).
   - `batch` (optional) if true the service will recurse down the directory tree and process every valid subfolder in sequence.
   - `force` (optional) regenerate an MP3 even if one already exists.
+
+---
+
+- `AnimeThemesMp3Stream` streams an existing `Theme.mp3` from the specified folder for in-browser playback.
+  - `path` (required) the filesystem path to the folder containing the `Theme.mp3`. Plex-style paths are reverse-mapped automatically.
+  - Responds with `audio/mpeg` content type and supports HTTP range requests for seekable playback.
+  - Returns `404` if no `Theme.mp3` exists at the resolved path.
+  - Used by the dashboard to play theme audio in the background when the `AnimeThemesMp3Playback` setting is enabled.
+
+---
+
+- `AnimeThemesMp3Random` returns the folder path of a randomly selected `Theme.mp3` from the cache.
+  - `refresh` (optional, default false) when true forces a full re-scan of all managed import folders and rebuilds the cache.
+  - Returns `404` when the cache is empty (no `Theme.mp3` files found).
+  - Used by the dashboard shuffle button.
 
 ---
 
@@ -325,5 +344,9 @@ GET  /animethemes/mp3                                          -> AnimeThemesMp3
   - subfolders named `misc` are also skipped as the AnimeThemes torrent puts files in there which will always fail to map
 - If no mapping entry exists for the specified series/slug the endpoint returns a `skipped` status instead of failing.
 - `path` may be a Plex or Shoko relative path; the controller translates them via configured path mappings.
+- The `theme.cache` file (located in the plugin's _config_ directory) persists the list of known `Theme.mp3` folder paths across plugin restarts.
+  - On first access the cache is loaded from this file. If the file does not exist an empty cache is used.
+  - After a full re-scan (`?refresh=true`) or when new MP3s are generated, the file is updated automatically.
+  - Each successful single MP3 generation additively appends to the cache without rescanning.
 
 ---

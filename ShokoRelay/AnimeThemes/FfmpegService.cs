@@ -60,28 +60,21 @@ internal sealed class FfmpegService
     {
         EnsureFfmpegConfigured();
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+        // csharpier-ignore-start
         var args = new List<string>
         {
-            "-y",
-            "-loglevel",
-            "error",
-            "-i",
-            inputPath,
-            "-vn",
-            "-acodec",
-            "libmp3lame",
-            "-b:a",
-            "320k",
+            "-y", "-loglevel", "error", "-i", inputPath, "-vn", "-acodec", "libmp3lame", "-b:a", "320k",
             "-metadata",
-            $"title={EscapeMetadata(title)}",
+            $"title={EscapeMetadata(title)}",      // Title
             "-metadata",
-            $"TIT3={EscapeMetadata(slugDisplay)}",
+            $"TIT3={EscapeMetadata(slugDisplay)}", // Subtitle
             "-metadata",
-            $"artist={EscapeMetadata(artist)}",
+            $"artist={EscapeMetadata(artist)}",    // Contributing artists
             "-metadata",
-            $"album={EscapeMetadata(album)}",
+            $"album={EscapeMetadata(album)}",      // Album
             outputPath,
         };
+        // csharpier-ignore-end
 
         await RunProcessAsync(_ffmpegPath, args, null, null, ct);
     }

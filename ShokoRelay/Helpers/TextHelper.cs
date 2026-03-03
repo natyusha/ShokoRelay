@@ -44,6 +44,23 @@ namespace ShokoRelay.Helpers
         public static string CondenseSpaces(string input) => _condenseSpacesRegex.Replace(input, " ");
 
         /// <summary>
+        /// Extracts the first sequence of digits from a string and returns it as an optional integer.
+        /// </summary>
+        /// <param name="text">The text to search.</param>
+        /// <returns>The first numeric sequence as an int, or null if not found or not parseable.</returns>
+        public static int? ExtractFirstNumber(string? text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return null;
+
+            var match = _numbersRegex.Match(text);
+            if (match.Success && int.TryParse(match.Value, out var id))
+                return id;
+
+            return null;
+        }
+
+        /// <summary>
         /// Replace literal commas with the unicode escape \u002C so that values containing commas can be stored in a simple comma-separated file.
         /// </summary>
         /// <param name="value">The string to escape.</param>

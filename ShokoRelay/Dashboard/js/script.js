@@ -2,6 +2,9 @@
   const base = location.pathname.replace(/\/dashboard$/, "");
   const el = (id) => document.getElementById(id);
 
+  /** Default auto-dismiss duration (ms) for transient toasts. Use 0 for persistent toasts that require manual dismissal. */
+  const TOAST_MS = 5000;
+
   // #region Helpers
   /** @param {string} url - The log URL to wrap in an anchor tag. @returns {string} An HTML anchor link or an empty string if no URL was provided. */
   const makeLogLink = (url) => (url ? `[<a href="${url}" target="_blank" class="log-link">view log</a>]` : "");
@@ -13,15 +16,15 @@
    * @param {{hasFilter?: boolean, summary?: string, hideOnSucceed?: number}} [opts] - Display options.
    */
   function toastOperation(res, label, opts = {}) {
-    const { hasFilter = false, summary, hideOnSucceed } = opts;
+    const { summary, hideOnSucceed } = opts;
     const logLink = makeLogLink(res.data?.logUrl);
     if (res.ok) {
-      const text = summary || summarizeResult(res) || `${label} completed`;
+      const text = summary || summarizeResult(res) || `${label} Complete`;
       const errs = getErrorCount(res);
-      const timeout = errs > 0 ? 0 : hideOnSucceed !== undefined ? hideOnSucceed : hasFilter ? 5000 : 0;
+      const timeout = errs > 0 ? 0 : hideOnSucceed !== undefined ? hideOnSucceed : TOAST_MS;
       showToast(`${label}: ${text} ${logLink}`, errs > 0 ? "error" : "success", timeout);
     } else {
-      showToast(`${label} failed: ${summary || res.data?.message || JSON.stringify(res.data)} ${logLink}`, "error", 0);
+      showToast(`${label} Failed: ${summary || res.data?.message || JSON.stringify(res.data)} ${logLink}`, "error", 0);
     }
   }
 
@@ -123,7 +126,7 @@
     if (m && Number(m[1]) > 0) return showToast(message, "error", 0);
     if (m) message = message.replace(/,?\s*errors:?\s*0/i, "").trim();
     if (level === "error") showToast(message, "error", 0);
-    else if (level === "ok") showToast(message, "success", 6000);
+    else if (level === "ok") showToast(message, "success", TOAST_MS);
   }
 
   /**
@@ -147,6 +150,39 @@
       btn.removeAttribute("disabled");
       btn.querySelector(".button-spinner")?.remove();
     }
+  }
+
+  /**
+   * Attach a smooth open/close animation to a &lt;details&gt; element using the Web Animations API.
+   * @param {HTMLDetailsElement} details - The details element.
+   * @param {HTMLElement} content - The inner content wrapper (`.details-content`).
+   * @param {number} [duration=300] - Animation duration in ms.
+   */
+  function initDetailsAnimation(details, content, duration = 300) {
+    let anim = null;
+    details.querySelector("summary")?.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (anim) anim.cancel();
+      if (details.open) {
+        // collapse: animate from current height to 0, then remove open
+        const startH = content.offsetHeight + "px";
+        anim = content.animate({ height: [startH, "0px"] }, { duration, easing: "ease" });
+        anim.onfinish = anim.oncancel = () => {
+          anim = null;
+          content.style.height = "";
+          details.open = false;
+        };
+      } else {
+        // expand: set open, animate from 0 to natural height
+        details.open = true;
+        const endH = content.offsetHeight + "px";
+        anim = content.animate({ height: ["0px", endH] }, { duration, easing: "ease" });
+        anim.onfinish = anim.oncancel = () => {
+          anim = null;
+          content.style.height = "";
+        };
+      }
+    });
   }
 
   /** Build URLSearchParams for VFS generation requests from the dashboard filter and toggle state. @returns {URLSearchParams} */
@@ -294,13 +330,13 @@
       const rr = await fetchJson(base + "/plex/auth/refresh", { method: "POST" });
       if (rr.ok && rr.data) {
         await refreshPlexState();
-        setColStatus("Libraries refreshed", "ok");
+        setColStatus("Plex Libraries Refreshed", "ok");
       } else {
-        setColStatus("Error refreshing libraries", "error");
+        setColStatus("Failed To Refresh Plex Libraries", "error");
         console.error("Refresh libraries failed", rr.data);
       }
     } catch (e) {
-      setColStatus("Error refreshing libraries", "error");
+      setColStatus("Failed To Refresh Plex Libraries", "error");
       console.error(e);
     } finally {
       setButtonLoading(btn, false);
@@ -328,8 +364,8 @@
       const cfgRes = await fetchJson(base + "/config");
       if (!cfgRes.ok || !cfgRes.data) return fail("Error loading config");
       const plex = unwrapConfig(cfgRes.data).PlexLibrary || {};
-      if (!plex.HasToken) return fail("Plex token missing. Link Plex in Plex Auth.");
-      if (!plex.DiscoveredLibraries?.length) return fail("No Plex libraries detected. Refresh Plex libraries.");
+      if (!plex.HasToken) return fail("Plex Token Missing — Link Plex First");
+      if (!plex.DiscoveredLibraries?.length) return fail("No Plex Libraries Found — Refresh Libraries");
       setPlexAutomationControls(true);
       return true;
     } catch (e) {
@@ -393,7 +429,7 @@
     try {
       const cfgRes = await fetchJson(base + "/config");
       if (!cfgRes.ok || !cfgRes.data) {
-        setColStatus("Error loading config", "error");
+        setColStatus("Failed To Load Config", "error");
         return false;
       }
       const cfg = unwrapConfig(cfgRes.data);
@@ -406,14 +442,14 @@
       delete cfg.PlexAuth;
       const saveRes = await fetchJson(base + "/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cfg) });
       if (!saveRes.ok) {
-        setColStatus("Error saving Plex settings", "error");
+        setColStatus("Plex Settings Save Failed", "error");
         console.error(saveRes.data);
         return false;
       }
-      setColStatus("Plex settings saved", "ok");
+      setColStatus("Plex Settings Saved", "ok");
       return true;
     } catch (e) {
-      setColStatus("Error saving Plex settings", "error");
+      setColStatus("Plex Settings Save Failed", "error");
       console.error(e);
       return false;
     }
@@ -438,25 +474,22 @@
       if (startToast?.parentElement) startToast.remove();
       if (!res.ok) {
         toastOperation(res, label);
-        setColStatus("Error: " + (res.data?.message || "Request failed"), "error");
         return;
       }
       const data = res.data;
       if (data?.status === "ok") {
         const summary = summarizeFn(data);
-        toastOperation(res, label, { summary, hideOnSucceed: 0 });
-        setColStatus(`OK: ${summary}`, "ok");
+        toastOperation(res, label, { summary });
       } else {
         const summary = data?.message || JSON.stringify(data);
         toastOperation({ ok: false, data }, label, { summary });
-        setColStatus("Error: " + summary, "error");
       }
     });
   }
 
   const colBuildBtn = el("col-build");
   if (colBuildBtn)
-    plexBuildAction(colBuildBtn, "Collection build", "Generating Collections...", "/plex/collections/build", (d) => {
+    plexBuildAction(colBuildBtn, "Collections", "Generating Collections...", "/plex/collections/build", (d) => {
       const up = d.uploaded !== undefined ? `, uploaded ${d.uploaded}` : "";
       return `processed ${d.processed}, created ${d.created}${up}, skipped ${d.skipped}, errors ${d.errors}`;
     });
@@ -465,10 +498,10 @@
   if (rtgBuildBtn)
     plexBuildAction(
       rtgBuildBtn,
-      "Ratings update",
+      "Critic Ratings",
       "Applying Critic Ratings...",
       "/plex/ratings/apply",
-      (d) => `shows: ${d.processedShows}/${d.updatedShows}, episodes: ${d.processedEpisodes}/${d.updatedEpisodes}`,
+      (d) => `shows ${d.processedShows}/${d.updatedShows}, episodes ${d.processedEpisodes}/${d.updatedEpisodes}`,
     );
   // #endregion
 
@@ -479,12 +512,11 @@
   if (vfsExecBtn) {
     withButtonAction(vfsExecBtn, async function () {
       const clean = el("vfs-clean")?.getAttribute("aria-pressed") === "true";
-      const startToast = showToast(`VFS Generation Started (clean=${clean})`, "info", 0);
+      const startToast = showToast(`VFS: Generating (clean=${clean})...`, "info", 0);
       const params = buildVfsParams();
       const res = await fetchJson(base + "/vfs?" + params.toString());
       if (startToast?.parentElement) startToast.remove();
-      const hasFilter = String(el("vfs-filter")?.value || "").trim() !== "";
-      toastOperation(res, `VFS (clean=${clean})`, { hasFilter });
+      toastOperation(res, `VFS (clean=${clean})`);
     });
   }
 
@@ -521,11 +553,11 @@
         try {
           const res = await fetchJson(base + "/vfs/overrides", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(overridesText.value) });
           if (res.ok) {
-            showToast("Overrides Saved", "success", 3000);
+            showToast("VFS Overrides Saved", "success", TOAST_MS);
             closeOverrides();
-          } else toastOperation(res, "Save Overrides");
+          } else toastOperation(res, "VFS Overrides");
         } catch (e) {
-          showToast(`Save error: ${e?.message || e}`, "error", 0);
+          showToast(`VFS Overrides Save Failed: ${e?.message || e}`, "error", 0);
         }
       };
     };
@@ -536,24 +568,24 @@
   const shokoRemoveMissingBtn = el("shoko-remove-missing");
   if (shokoRemoveMissingBtn) {
     withButtonAction(shokoRemoveMissingBtn, async function () {
-      showToast("Remove Missing Files: Started", "info", 5000);
+      showToast("Remove Missing: Processing...", "info", TOAST_MS);
       const res = await fetchJson(base + "/shoko/remove-missing?dryRun=false", { method: "POST" });
       const summary = res.data && typeof res.data.count === "number" ? `removed ${res.data.count}` : undefined;
-      toastOperation(res, "Remove missing", { summary });
+      toastOperation(res, "Remove Missing", { summary });
     });
   }
 
   const shokoImportRunBtn = el("shoko-import-run");
   if (shokoImportRunBtn) {
     withButtonAction(shokoImportRunBtn, async function () {
-      showToast("Shoko Import Requested", "info", 5000);
+      showToast("Shoko Import: Scanning...", "info", TOAST_MS);
       const res = await fetchJson(base + "/shoko/import", { method: "POST" });
       if (!res.ok) {
-        toastOperation(res, "Shoko import");
+        toastOperation(res, "Shoko Import");
         return;
       }
       const summary = summarizeResult(res) || `scanned ${res.data?.scannedCount ?? ""}`;
-      toastOperation(res, "Shoko import", { summary, hideOnSucceed: getErrorCount(res) > 0 ? 0 : 5000 });
+      toastOperation(res, "Shoko Import", { summary });
     });
   }
 
@@ -609,7 +641,7 @@
       startBtn.onclick = async () => {
         setButtonLoading(startBtn, true);
         const arrow = dirImport ? "\u2190" : "\u2192";
-        const startToast = showToast(`Syncing Plex${arrow}Shoko...`, "info", 0);
+        const startToast = showToast(`Sync: Plex${arrow}Shoko...`, "info", 0);
         try {
           const ps = new URLSearchParams();
           ps.set("dryRun", "false");
@@ -620,13 +652,13 @@
           if (startToast?.parentElement) startToast.remove();
           if (res.ok) {
             const summary = summarizeResult(res) || `processed ${res.data?.processed ?? 0}`;
-            const vp = res.data?.votesFound !== undefined ? `, votesFound: ${res.data.votesFound}` : "";
-            toastOperation(res, "Sync", { summary: `Sync complete: ${summary}${vp}`, hideOnSucceed: 0 });
+            const vp = res.data?.votesFound !== undefined ? `, votes: ${res.data.votesFound}` : "";
+            toastOperation(res, "Sync", { summary: `${summary}${vp}` });
             onClose();
           } else toastOperation(res, "Sync");
         } catch (e) {
           if (startToast?.parentElement) startToast.remove();
-          showToast(`Sync Error: ${e?.message || e}`, "error", 0);
+          showToast(`Sync Failed: ${e?.message || e}`, "error", 0);
         } finally {
           setButtonLoading(startBtn, false);
         }
@@ -640,10 +672,10 @@
   const atImportBtn = el("at-import");
   if (atImportBtn) {
     withButtonAction(atImportBtn, async function () {
-      showToast("Importing AnimeThemes Mapping From Gist...", "info", 5000);
+      showToast("AnimeThemes: Importing Mapping...", "info", TOAST_MS);
       const res = await fetchJson(base + "/animethemes/vfs/import", { method: "POST" });
-      if (res.ok) toastOperation(res, "AnimeThemes import", { summary: `Mapping imported (${res.data?.count ?? 0} entries)`, hideOnSucceed: 6000 });
-      else toastOperation(res, "AnimeThemes import");
+      if (res.ok) toastOperation(res, "AnimeThemes Import", { summary: `mapping imported (${res.data?.count ?? 0} entries)` });
+      else toastOperation(res, "AnimeThemes Import");
     });
   }
 
@@ -659,12 +691,11 @@
       const p = buildAtMapParams();
       const res = await fetchJson(base + endpoint + (p.toString() ? "?" + p.toString() : ""));
       if (startToast?.parentElement) startToast.remove();
-      const hasFilter = String(el("at-filter-map")?.value || "").trim() !== "";
       if (res.ok) {
-        const summary = summarizeResult(res) || "Complete";
-        toastOperation(res, `AnimeThemes ${label}`, { summary, hideOnSucceed: getErrorCount(res) > 0 ? 0 : hasFilter ? 5000 : 0 });
+        const summary = summarizeResult(res) || "complete";
+        toastOperation(res, `AnimeThemes ${label}`, { summary });
       } else {
-        toastOperation(res, `AnimeThemes ${label}`, { summary: `AnimeThemes ${label} Failed: ${res.data?.message || JSON.stringify(res.data)}` });
+        toastOperation(res, `AnimeThemes ${label}`);
       }
     });
   }
@@ -678,23 +709,172 @@
   initToggle("at-force", false);
   initToggle("at-batch", false);
 
+  /** Shared Audio element for background MP3 playback; reused across plays to avoid stacking. */
+  let atAudio = null;
+  /** Currently visible "Now Playing" toast element, dismissed when playback stops. */
+  let nowPlayingToast = null;
+
+  /** Dismiss the current "Now Playing" toast if one is showing. */
+  function dismissNowPlaying() {
+    if (nowPlayingToast) {
+      nowPlayingToast.click();
+      nowPlayingToast = null;
+    }
+  }
+
+  /** Fetch ID3 tags from the stream response headers and show a persistent "Now Playing" toast. */
+  async function showNowPlaying(folderPath) {
+    try {
+      const streamUrl = base + "/animethemes/mp3/stream?path=" + encodeURIComponent(folderPath);
+      const res = await fetch(streamUrl, { method: "HEAD" });
+      const title = res.headers.get("X-Theme-Title");
+      if (!title) return;
+      let slug = res.headers.get("X-Theme-Slug") || "";
+      slug = slug.replace(/\bOpening\s?/gi, "OP").replace(/\bEnding\s?/gi, "ED");
+      const artist = res.headers.get("X-Theme-Artist");
+      const album = res.headers.get("X-Theme-Album");
+      let html = `<span class="np-line">${title}</span>`;
+      if (artist) html += `<span class="np-line">${artist}</span>`;
+      const line3Parts = [];
+      if (album) line3Parts.push(album);
+      if (slug) line3Parts.push(slug);
+      if (line3Parts.length) html += `<small class="np-line">${line3Parts.join(" \u2014 ")}</small>`;
+      dismissNowPlaying();
+      nowPlayingToast = showToast(html, "info", 0);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  /** Progress bar elements. */
+  const atProgressTrack = el("at-progress-track");
+  const atProgressFill = el("at-progress-fill");
+
+  /** Update the progress bar fill width from the current audio position. */
+  function updateProgress() {
+    if (!atAudio || !atProgressFill || !atAudio.duration) return;
+    atProgressFill.style.width = (atAudio.currentTime / atAudio.duration) * 100 + "%";
+  }
+
+  /** Show or hide the progress bar and sync paused state. */
+  function syncProgressState() {
+    if (!atProgressTrack) return;
+    if (atAudio && atAudio.src) {
+      atProgressTrack.classList.add("active");
+      atProgressTrack.classList.toggle("paused", atAudio.paused);
+    } else {
+      atProgressTrack.classList.remove("active", "paused");
+      if (atProgressFill) atProgressFill.style.width = "0%";
+    }
+  }
+
+  // Seek on left-click within the progress track
+  if (atProgressTrack) {
+    atProgressTrack.addEventListener("click", (e) => {
+      if (!atAudio || !atAudio.duration) return;
+      const rect = atProgressTrack.getBoundingClientRect();
+      atAudio.currentTime = ((e.clientX - rect.left) / rect.width) * atAudio.duration;
+    });
+    // Middle-click toggles pause
+    atProgressTrack.addEventListener("auxclick", (e) => {
+      if (e.button !== 1 || !atAudio || !atAudio.src) return;
+      e.preventDefault();
+      if (atAudio.paused) atAudio.play().catch(() => {});
+      else atAudio.pause();
+    });
+    // Prevent default middle-click scroll icon
+    atProgressTrack.addEventListener("mousedown", (e) => {
+      if (e.button === 1) e.preventDefault();
+    });
+  }
+
+  /** Check whether the playback toggle is currently enabled. @returns {boolean} */
+  const isPlaybackEnabled = () => el("at-playback")?.getAttribute("aria-pressed") === "true";
+
+  /**
+   * Stream and play a Theme.mp3 in the background using the streaming endpoint.
+   * Stops any currently playing audio first. Does nothing if the playback toggle is off.
+   * @param {string} folderPath - The folder containing the Theme.mp3 to stream.
+   */
+  function playThemeMp3(folderPath) {
+    if (!isPlaybackEnabled() || !folderPath) return;
+    try {
+      dismissNowPlaying();
+      if (!atAudio) {
+        atAudio = new Audio();
+        atAudio.volume = 0.5;
+        const loopToggle = el("at-mode");
+        if (loopToggle) atAudio.loop = loopToggle.getAttribute("data-mode") === "loop";
+        atAudio.addEventListener("timeupdate", updateProgress);
+        atAudio.addEventListener("play", syncProgressState);
+        atAudio.addEventListener("pause", syncProgressState);
+        atAudio.addEventListener("ended", async () => {
+          syncProgressState();
+          // In shuffle mode, auto-play a random theme on ended
+          const mode = loopToggle ? loopToggle.getAttribute("data-mode") : "off";
+          if (mode === "shuffle") {
+            try {
+              const resp = await fetch(base + "/animethemes/mp3/random");
+              if (resp.ok) {
+                const data = await resp.json();
+                if (data?.path) {
+                  playThemeMp3(data.path);
+                  return;
+                }
+              }
+            } catch {
+              /* ignore */
+            }
+          }
+          dismissNowPlaying();
+        });
+      } else {
+        atAudio.pause();
+      }
+      const streamUrl = base + "/animethemes/mp3/stream?path=" + encodeURIComponent(folderPath);
+      atAudio.src = streamUrl;
+      atAudio.play().catch(() => {
+        /* autoplay may be blocked by browser */
+      });
+      syncProgressState();
+      showNowPlaying(folderPath);
+    } catch {
+      /* ignore playback errors */
+    }
+  }
+
   const atSingleBtn = el("at-single");
   if (atSingleBtn) {
     withButtonAction(atSingleBtn, async function () {
-      showToast("AnimeThemes: Generating MP3...", "info", 5000);
+      showToast("AnimeThemes MP3: Generating...", "info", TOAST_MS);
       const params = buildAtParams();
       const res = await fetchJson(base + "/animethemes/mp3?" + params.toString());
       const logLink = makeLogLink(res.data?.logUrl);
       if (res.ok) {
-        const summary = summarizeResult(res) || res.data?.Status || res.data?.status || "Done";
+        const summary = summarizeResult(res) || res.data?.Status || res.data?.status || "done";
         const status = res.data?.Status || res.data?.status;
         const errs = getErrorCount(res);
         const toastType = errs > 0 ? "error" : status === "skipped" ? "warning" : "success";
         const isBatch = params.get("batch") === "true";
         const msgPart = status === "skipped" && res.data?.message ? ` (${res.data.message})` : "";
-        showToast(`AnimeThemes mp3: ${summary}${msgPart} ${logLink}`, toastType, toastType === "error" || isBatch ? 0 : 5000);
+        showToast(`AnimeThemes MP3: ${summary}${msgPart} ${logLink}`, toastType, toastType === "error" ? 0 : TOAST_MS);
+        // play the generated MP3 in the background (single, non-batch only)
+        if (!isBatch && (status === "ok" || status === "skipped")) {
+          const folder = res.data?.folder || res.data?.Folder || params.get("path");
+          if (folder) playThemeMp3(folder);
+        }
       } else {
-        showToast(`AnimeThemes mp3 failed: ${res.data?.message || JSON.stringify(res.data)} ${logLink}`, "error", 0);
+        // when force is off and mp3 already exists, the server returns 400 with status "skipped"
+        const errStatus = res.data?.status || res.data?.Status;
+        const isBatch = params.get("batch") === "true";
+        if (!isBatch && errStatus === "skipped") {
+          const msgPart = res.data?.message ? ` (${res.data.message})` : "";
+          showToast(`AnimeThemes MP3: Skipped${msgPart} ${logLink}`, "warning", TOAST_MS);
+          const folder = res.data?.folder || res.data?.Folder || params.get("path");
+          if (folder) playThemeMp3(folder);
+        } else {
+          showToast(`AnimeThemes MP3 Failed: ${res.data?.message || JSON.stringify(res.data)} ${logLink}`, "error", 0);
+        }
       }
     });
   }
@@ -709,7 +889,7 @@
     const schemaRes = await fetchJson(base + "/config/schema");
     const configRes = await fetchJson(base + "/config");
     if (!schemaRes.ok || !configRes.ok) {
-      showToast("Failed To Load Config.", "error", 0);
+      showToast("Failed To Load Config", "error", 0);
       return;
     }
     const schema = schemaRes.data.properties || [];
@@ -733,7 +913,9 @@
     const advSum = document.createElement("summary");
     advSum.textContent = "Advanced Settings";
     advSection.appendChild(advSum);
-    advSection.appendChild(document.createElement("hr"));
+    const advContent = document.createElement("div");
+    advContent.className = "details-content";
+    advContent.appendChild(document.createElement("hr"));
 
     /**
      * POST the updated config object to the server and surface any errors via toast.
@@ -743,10 +925,10 @@
     async function persistConfig(updated) {
       try {
         const res = await fetchJson(base + "/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updated) });
-        if (!res.ok) toastOperation(res, "Config save");
+        if (!res.ok) toastOperation(res, "Config Save");
         return res;
       } catch (e) {
-        showToast(`Save Failed: ${e?.message || e}`, "error", 0);
+        showToast(`Config Save Failed: ${e?.message || e}`, "error", 0);
         return { ok: false, data: e };
       }
     }
@@ -850,7 +1032,7 @@
               setValueByPath(config, p.Path, mapping);
               await persistConfig(config);
             } catch (e) {
-              showToast(`Auto-Save Path Mappings Error: ${e?.message || e}`, "error", 0);
+              showToast(`Path Mappings Save Failed: ${e?.message || e}`, "error", 0);
             }
           };
           const col = document.createElement("div");
@@ -930,15 +1112,19 @@
             await persistConfig(config);
             if (input.dataset.path === "TmdbEpNumbering" && overridesBtn) overridesBtn.disabled = !input.checked;
           } catch (e) {
-            showToast(`Auto-save error: ${e?.message || e}`, "error", 0);
+            showToast(`Setting Save Failed: ${e?.message || e}`, "error", 0);
           }
         };
         if (!input.parentNode) wrap.appendChild(input);
       }
-      (advKeys.has(p.Path) ? advSection : container).appendChild(wrap);
+      (advKeys.has(p.Path) ? advContent : container).appendChild(wrap);
     });
 
-    if (advSection.children.length > 1) container.appendChild(advSection);
+    advSection.appendChild(advContent);
+    if (advContent.children.length > 1) {
+      container.appendChild(advSection);
+      initDetailsAnimation(advSection, advContent);
+    }
 
     try {
       const bindFreq = (id, key, label, { min, max } = {}) => {
@@ -955,7 +1141,7 @@
             setValueByPath(config, key, n);
             await persistConfig(config);
           } catch (err) {
-            showToast(`Auto-save ${label} error: ${err?.message || err}`, "error", 0);
+            showToast(`${label} Save Failed: ${err?.message || err}`, "error", 0);
           }
         };
       };
@@ -974,12 +1160,87 @@
             setValueByPath(config, key, chk.checked);
             await persistConfig(config);
           } catch (e) {
-            showToast(`Failed to save '${label}' setting: ${e?.message || e}`, "error", 0);
+            showToast(`${label} Save Failed: ${e?.message || e}`, "error", 0);
           }
         };
       };
       bindCheck("sync-ratings", "ShokoSyncWatchedIncludeRatings", "Include Ratings");
       bindCheck("sync-exclude-admin", "ShokoSyncWatchedExcludeAdmin", "Exclude Admin");
+
+      // Bind AnimeThemes MP3 playback toggle to the server config
+      const playBtn = el("at-play");
+      const modeBtn = el("at-mode");
+      const playbackBtn = el("at-playback");
+      const syncPlaybackControls = (enabled) => {
+        if (playBtn) playBtn.hidden = !enabled;
+        if (modeBtn) modeBtn.hidden = !enabled;
+      };
+      if (playbackBtn) {
+        playbackBtn.setAttribute("aria-pressed", String(!!config.AnimeThemesMp3Playback));
+        syncPlaybackControls(!!config.AnimeThemesMp3Playback);
+        playbackBtn.onclick = async () => {
+          const current = playbackBtn.getAttribute("aria-pressed") === "true";
+          const next = !current;
+          playbackBtn.setAttribute("aria-pressed", String(next));
+          syncPlaybackControls(next);
+          // stop any playing audio when disabling
+          if (!next && atAudio) {
+            atAudio.pause();
+            atAudio.removeAttribute("src");
+            atAudio.load();
+            syncProgressState();
+            dismissNowPlaying();
+          }
+          try {
+            setValueByPath(config, "AnimeThemesMp3Playback", next);
+            await persistConfig(config);
+          } catch (e) {
+            showToast(`MP3 Playback Save Failed: ${e?.message || e}`, "error", 0);
+          }
+        };
+      }
+
+      // Bind loop toggle -> 3-state: loop -> shuffle -> off -> loop
+      const loopModes = ["loop", "shuffle", "off"];
+      /** Apply loop mode to the button and audio element. */
+      function applyLoopMode(mode) {
+        if (modeBtn) modeBtn.setAttribute("data-mode", mode);
+        if (atAudio) atAudio.loop = mode === "loop";
+      }
+      /** Get the current loop mode from the button. */
+      const getLoopMode = () => (modeBtn ? modeBtn.getAttribute("data-mode") : "loop") || "loop";
+      if (modeBtn) {
+        const saved = typeof config.AnimeThemesMp3Loop === "string" ? config.AnimeThemesMp3Loop : config.AnimeThemesMp3Loop === false ? "off" : "loop";
+        applyLoopMode(loopModes.includes(saved) ? saved : "loop");
+        modeBtn.onclick = async () => {
+          const idx = loopModes.indexOf(getLoopMode());
+          const next = loopModes[(idx + 1) % loopModes.length];
+          applyLoopMode(next);
+          try {
+            setValueByPath(config, "AnimeThemesMp3Loop", next);
+            await persistConfig(config);
+          } catch (e) {
+            showToast(`MP3 Loop Save Failed: ${e?.message || e}`, "error", 0);
+          }
+        };
+      }
+
+      // Bind shuffle button — picks a random Theme.mp3 from the cache
+      if (playBtn) {
+        playBtn.onclick = async () => {
+          try {
+            const resp = await fetch(base + "/animethemes/mp3/random");
+            if (!resp.ok) {
+              showToast("Shuffle: No Theme.mp3 Files Found", "error", TOAST_MS);
+              return;
+            }
+            const data = await resp.json();
+            if (data?.path) playThemeMp3(data.path);
+          } catch (e) {
+            showToast(`Shuffle Failed: ${e?.message || e}`, "error", TOAST_MS);
+          }
+        };
+      }
     } catch (e) {
       /* ignore */
     }

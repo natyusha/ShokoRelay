@@ -378,6 +378,94 @@ label.plex-auth.shoko-checkbox input:disabled ~ .shoko-checkbox-text {
 }
 /* #endregion */
 
+/* #region MARK: MP3 Playback
+*/
+.at-playback-toggle,
+.at-mode-toggle,
+.at-play-btn {
+  all: unset;
+  cursor: pointer;
+  float: right;
+  fill: var(--highlight-color);
+  margin: 0 4px 5px 0;
+  transition: all 0.3s ease-in-out;
+}
+.at-mode-toggle[hidden],
+.at-play-btn[hidden] {
+  display: none;
+}
+.at-playback-toggle:hover,
+.at-mode-toggle:hover,
+.at-play-btn:hover {
+  background: none;
+  fill: var(--hover-color);
+}
+.at-playback-toggle[aria-pressed="true"] .playback-on {
+  display: inline;
+}
+.at-playback-toggle[aria-pressed="true"] .playback-off {
+  display: none;
+}
+.at-playback-toggle[aria-pressed="false"] .playback-on {
+  display: none;
+}
+.at-playback-toggle[aria-pressed="false"] .playback-off {
+  display: inline;
+  fill: var(--danger-color);
+}
+.at-playback-toggle[aria-pressed="false"] .playback-off:hover {
+  display: inline;
+  fill: color-mix(in srgb, var(--danger-color), white 25%);
+}
+/* Loop toggle: 3-state (loop / shuffle / off) via data-mode */
+.at-mode-toggle .loop-icon,
+.at-mode-toggle .shuffle-icon,
+.at-mode-toggle .off-icon {
+  display: none;
+}
+.at-mode-toggle[data-mode="loop"] .loop-icon {
+  display: inline;
+}
+.at-mode-toggle[data-mode="shuffle"] .shuffle-icon {
+  display: inline;
+}
+.at-mode-toggle[data-mode="off"] .off-icon {
+  display: inline;
+  fill: var(--danger-color);
+}
+.at-mode-toggle[data-mode="off"]:hover .off-icon {
+  fill: color-mix(in srgb, var(--danger-color), white 25%);
+}
+#at-mp3-section {
+  position: relative;
+  overflow: hidden;
+}
+.at-progress-track {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  cursor: pointer;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.at-progress-track.active {
+  opacity: 1;
+}
+.at-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--highlight-color);
+  border-radius: 0 0.5rem 0 0;
+  transition: width 0.15s linear;
+}
+.at-progress-track.paused .at-progress-fill {
+  filter: grayscale(1);
+}
+/* #endregion */
+
 /* #region MARK: Floating Links
 */
 .floating-actions {
@@ -485,6 +573,9 @@ button.float-link {
 
 /* #region MARK: Details
 */
+details > .details-content {
+  overflow: hidden;
+}
 details[open] > summary::after {
   transform: rotate(-135deg);
 }
@@ -506,6 +597,7 @@ summary::after {
   display: inline-block;
   padding: 4px;
   transform: rotate(45deg);
+  transition: transform 0.3s ease;
 }
 summary:hover {
   color: var(--hover-color);
@@ -560,6 +652,12 @@ summary:hover {
 }
 .toast[role="status"] {
   outline: none;
+}
+.np-line {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 /* #endregion */
 

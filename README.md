@@ -194,7 +194,7 @@ There is also support for generating `Theme.mp3` files as local metadata. This w
 
 **Notes:**
 
-Any subfolder named after the configured `VFS Root Path`, `Collection Posters Root Path`, or `AnimeThemes Root Path` are ignored during batch operations as those directories are used internally and never contain series data.
+Any subfolder named after the configured `VFS Root Path`, `Collection Posters Root Path`, or `AnimeThemes Root Path` are ignored during batch operations. This is due to those directories only being used internally and never containing series data. There is also a little media player included which will play downloaded themes if enabled. You can set it to looped playback or even have it shuffle through all of your Theme.mp3 files if desired. The progress bar is fully functional and you can pause playback by middle clicking it.
 
 ## Information
 

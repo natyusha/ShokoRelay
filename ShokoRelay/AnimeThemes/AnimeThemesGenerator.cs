@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using NLog;
 using Shoko.Abstractions.Metadata.Shoko;
 using Shoko.Abstractions.Services;
@@ -64,6 +63,7 @@ public class AnimeThemesGenerator
 
     private readonly IVideoService _videoService;
     private readonly IMetadataService _metadataService;
+    private readonly string _configDirectory;
 
     /// <summary>
     /// Constructs a new <see cref="AnimeThemesGenerator"/>, wiring in services for metadata lookup and ffmpeg operations.
@@ -75,8 +75,164 @@ public class AnimeThemesGenerator
     {
         _metadataService = metadataService;
         _videoService = videoService;
+        _configDirectory = configProvider.ConfigDirectory;
         _ffmpegService = new FfmpegService(configProvider.PluginDirectory);
         AnimeThemesConstants.EnsureUserAgent(Http);
+    }
+
+    /// <summary>
+    /// Cached list of folders containing Theme.mp3 files. Loaded from <c>theme.cache</c> on first access and persisted after every mutation.
+    /// </summary>
+    private List<string>? _themeMp3Cache;
+    private readonly object _cacheLock = new();
+
+    /// <summary>
+    /// Full path to the <c>theme.cache</c> file inside the config directory.
+    /// </summary>
+    private string ThemeCacheFilePath => Path.Combine(_configDirectory, "theme.cache");
+
+    /// <summary>
+    /// Returns the cached list of folders containing Theme.mp3 files.
+    /// On first call the cache is loaded from the <c>theme.cache</c> file; if the file does not exist an empty list is returned.
+    /// </summary>
+    /// <returns>A read-only snapshot of cached folder paths.</returns>
+    public IReadOnlyList<string> GetCachedThemeMp3Folders()
+    {
+        lock (_cacheLock)
+        {
+            if (_themeMp3Cache == null)
+                LoadCacheFromFile();
+            return _themeMp3Cache ?? (IReadOnlyList<string>)Array.Empty<string>();
+        }
+    }
+
+    /// <summary>
+    /// Forces a re-scan of all managed import folder roots, rebuilds the in-memory Theme.mp3 cache and persists it to the <c>theme.cache</c> file.
+    /// </summary>
+    public void RefreshThemeMp3Cache()
+    {
+        lock (_cacheLock)
+            RefreshThemeMp3CacheInternal();
+    }
+
+    /// <summary>
+    /// Adds a folder path to the Theme.mp3 cache if it is not already present, then persists the updated cache to the <c>theme.cache</c> file.
+    /// If the cache has not been loaded yet, it is loaded from the file first.
+    /// </summary>
+    /// <param name="folderPath">Absolute path of the folder containing a Theme.mp3.</param>
+    public void AddToThemeMp3Cache(string folderPath)
+    {
+        if (string.IsNullOrWhiteSpace(folderPath))
+            return;
+        lock (_cacheLock)
+        {
+            if (_themeMp3Cache == null)
+                LoadCacheFromFile();
+            var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+            var cache = _themeMp3Cache!;
+            if (!cache.Contains(folderPath, comparer))
+            {
+                cache.Add(folderPath);
+                SaveCacheToFile();
+            }
+        }
+    }
+
+    private void RefreshThemeMp3CacheInternal()
+    {
+        Logger.Info("Building Theme.mp3 cache — scanning all managed import folders…");
+        var excludedFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            VfsShared.ResolveRootFolderName(),
+            VfsShared.ResolveCollectionPostersFolderName(),
+            VfsShared.ResolveAnimeThemesFolderName(),
+        };
+
+        List<string?> roots;
+        try
+        {
+            var managed = _videoService.GetAllManagedFolders();
+            roots = (managed ?? Enumerable.Empty<Shoko.Abstractions.Video.IManagedFolder>())
+                .Select(mf => mf.Path?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+                .Where(p => !string.IsNullOrWhiteSpace(p) && Directory.Exists(p))
+                .Distinct(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, "RefreshThemeMp3Cache: Shoko repositories not ready yet, will retry on next access.");
+            // leave _themeMp3Cache null so the next call retries
+            return;
+        }
+
+        var result = new List<string>();
+        foreach (var root in roots)
+        {
+            try
+            {
+                foreach (var file in Directory.EnumerateFiles(root!, "Theme.mp3", SearchOption.AllDirectories))
+                {
+                    string dir = Path.GetDirectoryName(file)!;
+                    string folderName = Path.GetFileName(dir);
+                    if (excludedFolders.Contains(folderName))
+                        continue;
+                    result.Add(dir);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "RefreshThemeMp3Cache: error scanning {Root}", root);
+            }
+        }
+
+        _themeMp3Cache = result;
+        SaveCacheToFile();
+        Logger.Info("Theme.mp3 cache refreshed: {Count} folders found across {Roots} import roots.", result.Count, roots.Count);
+    }
+
+    /// <summary>
+    /// Loads the in-memory cache from the <c>theme.cache</c> file. If the file does not exist or is empty, a full scan is triggered automatically.
+    /// </summary>
+    private void LoadCacheFromFile()
+    {
+        var path = ThemeCacheFilePath;
+        if (File.Exists(path))
+        {
+            try
+            {
+                var lines = File.ReadAllLines(path).Where(l => !string.IsNullOrWhiteSpace(l)).ToList();
+                if (lines.Count > 0)
+                {
+                    _themeMp3Cache = lines;
+                    Logger.Info("Theme.mp3 cache loaded from file: {Count} entries from {Path}", lines.Count, path);
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "Failed to read theme.cache file at {Path}, will attempt a full scan.", path);
+            }
+        }
+        // No cache file or it was empty — run a full scan to populate it
+        RefreshThemeMp3CacheInternal();
+        // If the scan failed (Shoko not ready), _themeMp3Cache stays null and will retry on next access
+    }
+
+    /// <summary>
+    /// Persists the current in-memory cache to the <c>theme.cache</c> file, one folder path per line.
+    /// </summary>
+    private void SaveCacheToFile()
+    {
+        if (_themeMp3Cache == null)
+            return;
+        try
+        {
+            File.WriteAllLines(ThemeCacheFilePath, _themeMp3Cache);
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, "Failed to write theme.cache file at {Path}", ThemeCacheFilePath);
+        }
     }
 
     /// <summary>
@@ -332,7 +488,8 @@ public class AnimeThemesGenerator
 
         string slugDisplay = FormatSlugDisplay(theme.Slug ?? "");
         string songTitle = themeDetail?.Animetheme?.Song?.Title ?? string.Empty;
-        string artist = themeDetail?.Animetheme?.Song?.Artists?.FirstOrDefault()?.Name ?? string.Empty;
+        var artists = themeDetail?.Animetheme?.Song?.Artists;
+        string artist = artists?.Count > 0 ? string.Join(" / ", artists.Where(a => !string.IsNullOrWhiteSpace(a.Name)).Select(a => a.Name!)) : string.Empty; // account for multi-artist  tracks
 
         return new ThemeSelection(audioUrl, theme.Slug ?? string.Empty, slugDisplay, songTitle, artist, animeEntry.Name ?? string.Empty, animeEntry.Slug ?? string.Empty);
     }
@@ -362,7 +519,7 @@ public class AnimeThemesGenerator
         foreach (var pair in AnimeThemesConstants.SlugFormatting)
             result = result.Replace(pair.Key, pair.Value, StringComparison.OrdinalIgnoreCase);
 
-        return Regex.Replace(result, @"\s{2,}", " ").Trim();
+        return TextHelper.CondenseSpaces(result).Trim();
     }
 
     private static string? NormalizeSlug(string? slug)
@@ -385,7 +542,6 @@ public class AnimeThemesGenerator
 
     private static string ResolvePath(string path)
     {
-        // no basepath support any more; return full path directly
         return Path.GetFullPath(path);
     }
 
@@ -395,8 +551,7 @@ public class AnimeThemesGenerator
         if (string.IsNullOrWhiteSpace(importRoot))
             return null;
 
-        // seriesId should already be the primary for any override group, but do an
-        // extra lookup just in case caller passed original id.
+        // seriesId should already be the primary for any override group, but do an extra lookup just in case caller passed original id.
         int primaryId = OverrideHelper.GetPrimary(seriesId, _metadataService);
 
         string seriesFolder = Path.Combine(importRoot, VfsShared.ResolveRootFolderName(), primaryId.ToString());
@@ -432,7 +587,7 @@ public class AnimeThemesGenerator
                 File.Delete(path);
             }
             catch
-            { /* ignore cleanup errors */
+            { // ignore cleanup errors
             }
     }
 

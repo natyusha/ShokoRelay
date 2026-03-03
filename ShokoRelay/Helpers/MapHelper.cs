@@ -346,10 +346,8 @@ namespace ShokoRelay.Helpers
 
             var deduped = DeduplicateByCoords(filteredEps, video, xrefPosMap);
 
-            // Prefer the episode that appears earliest in the file's cross-reference list
-            // (this matches the behavior consumers see from the server API `/File/{id}/Episode`).
-            // We only reorder the `deduped` list so the primary selection (deduped[0]) will
-            // reflect the file's cross-reference precedence without changing dedupe semantics.
+            // Prefer the episode that appears earliest in the file's cross-reference list (this matches the behavior consumers see from the server API `/File/{id}/Episode`).
+            // We only reorder the `deduped` list so the primary selection (deduped[0]) will reflect the file's cross-reference precedence without changing dedupe semantics.
             if (xrefPosMap != null && deduped.Count > 1)
             {
                 try
@@ -362,7 +360,6 @@ namespace ShokoRelay.Helpers
                 }
             }
 
-            /* FilterAndDedupeByPrimaryType diagnostics removed */
             return (filteredEps, deduped);
         }
 
@@ -400,8 +397,7 @@ namespace ShokoRelay.Helpers
                 // Tie: decide whether to replace the existing selected episode for this coord.
                 var existing = deduped[existingIdx];
 
-                // Absolute file cross-reference precedence: if the file lists either the existing or the
-                // current entry in its CrossReferences, prefer whichever appears earlier in that list.
+                // Absolute file cross-reference precedence: if the file lists either the existing or the current entry in its CrossReferences, prefer whichever appears earlier in that list.
                 // This makes the file's cross-reference ordering authoritative (no fallback overrides).
                 Dictionary<int, int>? localPosMap = xrefPosMap;
                 if (localPosMap == null && video?.CrossReferences?.Count > 0)
@@ -465,38 +461,7 @@ namespace ShokoRelay.Helpers
             }
         }
 
-        // If a file would be placed into Featurettes (SeasonOther), prefer to place it into Season 1 if Season 1 is empty;
-        // otherwise, if Season 1 has files, prefer Season 0 (Specials) if empty; otherwise leave in Featurettes.
-        private static PlexCoords ApplyFeaturettesSeasonFallback(ISeries? series, PlexCoords coords)
-        {
-            // Backward-compatible (rare) path kept for debug/endpoints that call this directly.
-            // If we don't have series context, leave coords unchanged.
-            if (series == null)
-                return coords;
-
-            if (coords.Season != PlexConstants.SeasonOther)
-                return coords;
-
-            // Determine whether season 1 and season 0 currently have any episodes with files (non-hidden)
-            bool season1HasFiles = series.Episodes.Any(e => !IsHidden(e) && (e.VideoList?.Any() ?? false) && GetPlexCoordinates(e).Season == PlexConstants.SeasonStandard);
-            if (!season1HasFiles)
-            {
-                coords.Season = PlexConstants.SeasonStandard; // move Other -> Season 1 (normal episodes)
-                return coords;
-            }
-
-            bool season0HasFiles = series.Episodes.Any(e => !IsHidden(e) && (e.VideoList?.Any() ?? false) && GetPlexCoordinates(e).Season == PlexConstants.SeasonSpecials);
-            if (!season0HasFiles)
-            {
-                coords.Season = PlexConstants.SeasonSpecials; // move Other -> Specials
-                return coords;
-            }
-
-            // Both Season 1 and Specials have files — keep in Featurettes (SeasonOther)
-            return coords;
-        }
-
-        // Fast variant that uses precomputed per-series occupancy flags to avoid O(N) scans when called repeatedly
+        // Uses precomputed per-series occupancy flags to avoid O(N) scans when called repeatedly
         private static PlexCoords ApplyFeaturettesSeasonFallbackCached(PlexCoords coords, bool season1HasFiles, bool season0HasFiles)
         {
             if (coords.Season != PlexConstants.SeasonOther)

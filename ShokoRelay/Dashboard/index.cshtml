@@ -167,13 +167,42 @@
             </button>
           </div>
         </section>
-        <section>
-          <h3>
-            <svg class="at-svg">
-              <use href="img/icons.svg#animethemes"></use>
-            </svg>
-            AnimeThemes: MP3
-          </h3>
+        <section id="at-mp3-section">
+          <div id="at-progress-track" class="at-progress-track">
+            <div id="at-progress-fill" class="at-progress-fill"></div>
+          </div>
+          <div class="full">
+            <h3>
+              <svg class="at-svg">
+                <use href="img/icons.svg#animethemes"></use>
+              </svg>
+              AnimeThemes: MP3
+            </h3>
+            <button id="at-play" class="at-play-btn" title="MP3 Playback Start" type="button" aria-label="Shuffle Theme from Path" hidden>
+              <svg class="icon-svg">
+                <use href="img/icons.svg#play"></use>
+              </svg>
+            </button>
+            <button id="at-mode" class="at-mode-toggle" title="MP3 Playback Mode" data-mode="loop" type="button" aria-label="Loop Toggle" hidden>
+              <svg class="icon-svg loop-icon">
+                <use href="img/icons.svg#sync"></use>
+              </svg>
+              <svg class="icon-svg shuffle-icon">
+                <use href="img/icons.svg#shuffle-variant"></use>
+              </svg>
+              <svg class="icon-svg off-icon">
+                <use href="img/icons.svg#sync-off"></use>
+              </svg>
+            </button>
+            <button id="at-playback" class="at-playback-toggle toggle" title="MP3 Playback Toggle" aria-pressed="false" type="button" aria-label="MP3 Playback Toggle">
+              <svg class="icon-svg playback-on">
+                <use href="img/icons.svg#volume-high"></use>
+              </svg>
+              <svg class="icon-svg playback-off">
+                <use href="img/icons.svg#volume-mute"></use>
+              </svg>
+            </button>
+          </div>
           <div class="full">
             <div class="at-path-col"><label>Path</label><input id="at-path" type="text" placeholder="Shoko or Plex relative anime path" /></div>
             <div class="w46"><label title="Preferred Theme">Slug</label><input id="at-slug" type="text" placeholder="OP2" /></div>

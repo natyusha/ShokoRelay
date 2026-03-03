@@ -139,6 +139,16 @@ namespace ShokoRelay.Config
         [DefaultValue(false)]
         public bool ShokoSyncWatchedExcludeAdmin { get; set; } = false;
 
+        [Display(Name = "AnimeThemes MP3 Playback", Description = "Enable to play generated theme MP3 files in the dashboard after generation")]
+        [Browsable(false)]
+        [DefaultValue(false)]
+        public bool AnimeThemesMp3Playback { get; set; } = false;
+
+        [Display(Name = "AnimeThemes MP3 Loop", Description = "Playback mode for MP3 themes: loop, shuffle or off")]
+        [Browsable(false)]
+        [DefaultValue("loop")]
+        public string AnimeThemesMp3Loop { get; set; } = "loop";
+
         #endregion
 
         #region Provider Config
