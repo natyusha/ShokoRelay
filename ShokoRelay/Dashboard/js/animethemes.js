@@ -1,5 +1,21 @@
 (() => {
-  const { base, el, TOAST_MS, fetchJson, showToast, toastOperation, summarizeResult, makeLogLink, withButtonAction, initToggle, setIfNotEmpty, setValueByPath, getErrorCount, initDetailsAnimation } = window._sr;
+  const {
+    base,
+    el,
+    TOAST_MS,
+    fetchJson,
+    showToast,
+    toastOperation,
+    summarizeResult,
+    makeLogLink,
+    withButtonAction,
+    initToggle,
+    setIfNotEmpty,
+    setValueByPath,
+    getErrorCount,
+    initDetailsAnimation,
+    attachModalCloseHandlers,
+  } = window._sr;
 
   // #region Helpers
 
@@ -70,7 +86,8 @@
     const webmFilter = /** @type {HTMLInputElement} */ (el("webm-filter"));
     const webmNextBtn = el("webm-next");
     const webmModeBtn = el("webm-mode");
-    const webmNowPlaying = el("webm-now-playing");
+    const webmTitle = el("webm-title");
+    const webmAnime = el("webm-anime");
     const webmTreeDetails = el("webm-tree-details");
     let webmTreeData = null; // cached API response
 
@@ -188,16 +205,21 @@
     }
 
     /** Update the now-playing label with the filename (without extension). */
-    const DEFAULT_NOW_PLAYING = "AnimeThemes: VFS Video Player";
+    const [npTitle, npAnime] = ["AnimeThemes: VFS Video Player", "Select a theme to begin..."];
     function updateNowPlaying(path) {
-      if (!webmNowPlaying) return;
+      if (!webmTitle) return;
       if (!path) {
-        webmNowPlaying.textContent = DEFAULT_NOW_PLAYING;
+        webmTitle.textContent = npTitle;
+        if (webmAnime) webmAnime.textContent = npAnime;
         return;
       }
       const name = decodeUnicodeEscapes(path.split("/").pop().split("\\").pop() || "");
       const txt = name.replace(/\.[^.]+$/, "");
-      webmNowPlaying.textContent = txt || DEFAULT_NOW_PLAYING;
+      webmTitle.textContent = txt || npTitle;
+      if (webmAnime) {
+        const item = (webmTreeData || []).find((i) => i.path === path);
+        webmAnime.textContent = item?.series || npAnime;
+      }
     }
 
     /** Play a webm file by setting the video source. */
@@ -288,30 +310,56 @@
       renderWebmTree(webmTreeData, webmFilter?.value || "");
     }
 
+    let _closeWebmOverlay = null;
+
+    function setTreeHeight() {
+      if (!webmTreeDetails || !webmTree) return;
+      // Force reflow to get latest height
+      webmTree.style.height = "auto";
+      // 62px is the summary header, 48px is the filter bar, 16px is padding in landscape
+      const isLandscape = window.innerWidth / window.innerHeight > 4 / 3;
+      const offset = isLandscape ? 126 : 62;
+      webmTree.style.height = webmTreeDetails.offsetHeight - offset + "px";
+    }
+
     function openWebmModal() {
       if (!webmModal) return;
       webmModal.classList.add("open");
       webmModal.setAttribute("aria-hidden", "false");
       loadWebmTree();
+      setTreeHeight();
+      let resizeTimeout = null;
+      function debouncedSetTreeHeight() {
+        if (resizeTimeout) clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(setTreeHeight, 50);
+      }
+      window.addEventListener("resize", debouncedSetTreeHeight);
+      openWebmModal._resizeHandler = debouncedSetTreeHeight;
+      _closeWebmOverlay = attachModalCloseHandlers(webmModal);
     }
 
     function closeWebmModal() {
-      if (!webmModal) return;
-      webmModal.classList.remove("open");
-      webmModal.setAttribute("aria-hidden", "true");
+      if (_closeWebmOverlay) {
+        _closeWebmOverlay();
+        _closeWebmOverlay = null;
+      }
       if (webmVideo) {
         webmVideo.pause();
         webmVideo.removeAttribute("src");
         webmVideo.load();
       }
       updateNowPlaying("");
+      if (openWebmModal._resizeHandler) {
+        window.removeEventListener("resize", openWebmModal._resizeHandler);
+        openWebmModal._resizeHandler = null;
+      }
     }
 
-    if (webmOpenBtn) webmOpenBtn.onclick = openWebmModal;
-    if (webmModal) {
-      webmModal.addEventListener("click", (e) => {
-        if (e.target === webmModal) closeWebmModal();
-      });
+    if (webmOpenBtn) {
+      webmOpenBtn.onclick = () => {
+        openWebmModal();
+        syncLandscapeTree();
+      };
     }
 
     if (webmFilter) {
@@ -319,6 +367,15 @@
         if (webmTreeData) renderWebmTree(webmTreeData, webmFilter.value);
       });
     }
+
+    // ensure tree pane is forced open in landscape mode
+    function syncLandscapeTree() {
+      if (!webmTreeDetails) return;
+      if (window.innerWidth / window.innerHeight > 4 / 3) {
+        webmTreeDetails.open = true;
+      }
+    }
+    window.addEventListener("resize", syncLandscapeTree);
   }
   // #endregion
 

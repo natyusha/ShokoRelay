@@ -199,6 +199,11 @@ small {
 .full > * {
   flex: 1;
 }
+.two-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(442px, 1fr));
+  gap: 8px;
+}
 .w46 {
   max-width: 46px;
 }
@@ -641,7 +646,149 @@ button.float-link {
 }
 /* #endregion */
 
-/* #region MARK: Modals
+/* #region MARK: Tree View
+*/
+#webm-tree-details {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+}
+#webm-tree-details > summary {
+  border-bottom: 1px solid var(--inset-color);
+  margin: 0;
+  padding: 12px 8px;
+}
+#webm-tree-details > summary::after {
+  position: absolute;
+  left: 10px;
+  top: 22px;
+}
+#webm-tree {
+  --spacing: 1.3rem;
+  --radius: 6px;
+  overflow-y: auto;
+  padding: 0 8px 8px;
+  font-size: 0.9em;
+}
+#webm-tree .placeholder {
+  color: var(--text-color);
+  opacity: 0.5;
+  padding: 24px 8px;
+  text-align: center;
+}
+#webm-tree ul {
+  margin-left: calc(var(--radius) - var(--spacing));
+  margin-top: 0;
+  padding-left: 0;
+}
+#webm-tree ul:first-child {
+  margin-top: 4px;
+}
+#webm-tree li {
+  display: block;
+  position: relative;
+  padding-left: calc(2 * var(--spacing) - var(--radius) - 2px);
+}
+#webm-tree ul li {
+  border-left: 2px solid var(--button-color);
+}
+#webm-tree ul.tree > li::before {
+  border-bottom-color: transparent;
+}
+#webm-tree ul li:last-child {
+  border-color: transparent;
+}
+#webm-tree ul li::before {
+  content: "";
+  display: block;
+  position: absolute;
+  top: calc(var(--spacing) / -2);
+  left: -2px;
+  width: calc(var(--spacing) + 2px);
+  height: calc(var(--spacing) + 1px);
+  border: solid var(--button-color);
+  border-width: 0 0 2px 2px;
+  border-bottom-left-radius: 3px;
+}
+#webm-tree summary {
+  cursor: pointer;
+  display: block;
+  list-style: none;
+  padding: 2px 0;
+  user-select: none;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+#webm-tree summary::marker,
+#webm-tree summary::-webkit-details-marker,
+#webm-tree summary .tree-icon.collapse,
+#webm-tree summary .tree-icon.collapse::after,
+#webm-tree details[open] > summary .tree-icon.expand {
+  display: none;
+}
+#webm-tree li::after,
+#webm-tree summary .tree-icon {
+  display: block;
+  position: absolute;
+  top: calc(var(--spacing) / 2 - var(--radius));
+  left: calc(var(--spacing) - var(--radius) - 1px);
+  width: calc(2 * var(--radius));
+  height: calc(2 * var(--radius));
+  border-radius: 50%;
+  background: var(--border-color);
+}
+#webm-tree summary .tree-icon {
+  z-index: 1;
+  display: block;
+  border-radius: 2px;
+  background: var(--inset-color);
+  border: 1px solid var(--text-color);
+}
+#webm-tree summary .tree-icon::before,
+#webm-tree summary .tree-icon::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  background: var(--text-color);
+  transform: translate(-50%, -50%);
+}
+#webm-tree summary .tree-icon::before,
+#webm-tree summary .tree-icon::after {
+  width: 8px;
+  height: 2px;
+}
+
+#webm-tree summary .tree-icon.expand::after {
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+#webm-tree details[open] > summary .tree-icon.collapse {
+  display: block;
+}
+#webm-tree .webm-leaf {
+  padding: 2px 4px;
+  cursor: pointer;
+  border-radius: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-left: -12px;
+}
+#webm-tree .webm-leaf:hover,
+#webm-tree summary:hover {
+  background: var(--inset-color);
+}
+#webm-tree .webm-leaf.active {
+  background: var(--button-color);
+  color: var(--bg-color);
+}
+ul.tree {
+  margin-top: 8px;
+}
+/* #endregion */
+
+/* #region MARK: Modal Commons
 */
 .modal-overlay {
   position: fixed;
@@ -656,12 +803,6 @@ button.float-link {
 .modal-overlay.open {
   display: flex;
 }
-#webm-modal.modal-overlay {
-  align-items: flex-start;
-}
-#webm-modal .modal {
-  margin-top: 2vh;
-}
 .modal {
   background: var(--panel-color);
   color: var(--text-color);
@@ -674,12 +815,6 @@ button.float-link {
 }
 .modal.overrides {
   width: 870px;
-}
-.modal.webm {
-  display: flex;
-  flex-direction: column;
-  width: 1280px;
-  max-height: 90vh;
 }
 .modal.overrides .modal-body {
   padding: 0;
@@ -716,20 +851,6 @@ footer {
 }
 .modal-body {
   padding: 14px 16px;
-}
-.modal-body video {
-  width: 100%;
-  display: block;
-}
-.modal.webm .modal-body {
-  padding: 0;
-  aspect-ratio: 16 / 9;
-  background: var(--bg-color);
-  position: relative;
-}
-.modal.webm .modal-body video {
-  height: 100%;
-  object-fit: contain;
 }
 .modal-body .shoko-checkbox {
   margin-top: 10px;
@@ -776,22 +897,64 @@ footer {
   opacity: 0;
   visibility: hidden;
 }
-.webm-controls {
-  position: absolute;
-  bottom: -51px;
-  right: 4px;
+/* #endregion */
+
+/* #region MARK: Modal Videos
+*/
+#webm-modal.modal-overlay {
+  align-items: flex-start;
+}
+#webm-modal .modal {
+  margin-top: 1vh;
+}
+.modal.webm {
   display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 1920px;
+  max-height: 95vh;
+}
+.modal.webm .modal-body {
+  padding: 0;
+  aspect-ratio: 16 / 9;
+  background: var(--bg-color);
+  position: relative;
+  flex: 2 1;
+  min-width: 300px;
+  max-height: 1080px;
+}
+.modal.webm .modal-body video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+#webm-controls {
+  display: flex;
+  position: absolute;
+  bottom: -56px;
+  right: 8px;
   z-index: 1;
 }
-.webm-controls .at-btn svg {
+.modal.webm {
+  position: relative;
+}
+#webm-controls .at-btn svg {
   height: 1.7em;
   margin-right: 8px;
   width: 1.7em;
 }
 .webm-now-playing {
-  font-size: 1.2em;
-  font-weight: 500;
-  margin-left: 25px;
+  margin: 0 0 0 25px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  max-width: calc(100% - 400px);
+  font-size: 1.1em;
+}
+.webm-now-playing #webm-anime {
+  display: block;
+  margin-top: -3px;
+  max-width: 100%;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -815,128 +978,33 @@ footer {
   font-size: 1em;
   padding-left: 2.2em;
 }
-/* #endregion */
-
-/* #region MARK: Tree View
-*/
-.webm-tree-details {
-  position: relative;
-}
-.webm-tree-details > summary {
-  padding: 6px 8px;
-}
-.webm-tree-details > summary::after {
-  position: absolute;
-  left: 10px;
-  top: 17px;
-}
-.webm-tree {
-  --spacing: 1.2rem;
-  --radius: 6px;
-  max-height: 40vh;
-  overflow-y: auto;
-  padding: 0 8px 8px;
-  font-size: 0.9em;
-}
-.webm-tree .placeholder {
-  color: var(--text-color);
-  opacity: 0.5;
-  padding: 24px 8px;
-  text-align: center;
-}
-.webm-tree ul {
-  margin-left: calc(var(--radius) - var(--spacing));
-  padding-left: 0;
-}
-.webm-tree li {
-  display: block;
-  position: relative;
-  padding-left: calc(2 * var(--spacing) - var(--radius) - 2px);
-}
-.webm-tree ul li {
-  border-left: 2px solid var(--button-color);
-}
-.webm-tree ul.tree > li::before {
-  border-bottom-color: transparent;
-}
-.webm-tree ul li:last-child {
-  border-color: transparent;
-}
-.webm-tree ul li::before {
-  content: "";
-  display: block;
-  position: absolute;
-  top: calc(var(--spacing) / -2);
-  left: -2px;
-  width: calc(var(--spacing) + 2px);
-  height: calc(var(--spacing) + 1px);
-  border: solid var(--button-color);
-  border-width: 0 0 2px 2px;
-  border-bottom-left-radius: 3px;
-}
-.webm-tree summary {
-  cursor: pointer;
-  display: block;
-  list-style: none;
-  padding: 2px 0;
-  user-select: none;
-}
-.webm-tree summary::marker,
-.webm-tree summary::-webkit-details-marker,
-.webm-tree summary .tree-icon.collapse,
-.webm-tree summary .tree-icon.collapse::after,
-.webm-tree details[open] > summary .tree-icon.expand {
-  display: none;
-}
-.webm-tree li::after,
-.webm-tree summary .tree-icon {
-  display: block;
-  position: absolute;
-  top: calc(var(--spacing) / 2 - var(--radius));
-  left: calc(var(--spacing) - var(--radius) - 1px);
-  width: calc(2 * var(--radius));
-  height: calc(2 * var(--radius));
-  border-radius: 50%;
-  background: var(--border-color);
-}
-.webm-tree summary .tree-icon {
-  z-index: 1;
-  display: block;
-  border-radius: 2px;
-  background: var(--inset-color);
-  border: 1px solid var(--text-color);
-}
-.webm-tree summary .tree-icon::before,
-.webm-tree summary .tree-icon::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  background: var(--text-color);
-  transform: translate(-50%, -50%);
-}
-.webm-tree summary .tree-icon::before,
-.webm-tree summary .tree-icon::after {
-  width: 8px;
-  height: 2px;
-}
-.webm-tree details[open] > summary .tree-icon.collapse {
-  display: block;
-}
-.webm-tree .webm-leaf {
-  padding: 2px 4px;
-  cursor: pointer;
-  border-radius: 3px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-left: -9px;
-}
-.webm-tree .webm-leaf:hover {
-  background: var(--inset-color);
-}
-.webm-tree .webm-leaf.active {
-  background: var(--button-color);
-  color: var(--bg-color);
+@media (min-aspect-ratio: 4/3) {
+  .modal.webm {
+    flex-direction: row;
+    max-width: calc(1920px + 390px);
+    height: 100%;
+    max-height: 1080px;
+  }
+  #webm-tree-details {
+    width: 390px;
+    min-width: 390px;
+  }
+  #webm-tree-details > summary {
+    pointer-events: none;
+  }
+  #webm-tree-details > summary::after {
+    display: none;
+  }
+  .webm-now-playing {
+    margin: 0 8px 0 0;
+    max-width: none;
+  }
+  #webm-tree {
+    border-bottom: 1px solid var(--inset-color);
+  }
+  #webm-controls {
+    bottom: 0px;
+    right: -384px;
+  }
 }
 /* #endregion */

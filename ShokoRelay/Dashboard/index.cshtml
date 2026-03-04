@@ -13,7 +13,7 @@
       <div class="brand-header" role="img" aria-label="Shoko Relay Dashboard"></div>
       <!-- #region MARK: Plex
       -->
-      <div class="full">
+      <div class="two-cols">
         <section>
           <h3 class="plex">Plex: Authentication</h3>
           <div class="full" id="plex-auth-action">
@@ -75,7 +75,7 @@
 
       <!-- #region MARK: Shoko
       -->
-      <div class="full">
+      <div class="two-cols">
         <section>
           <h3>
             <svg class="icon-svg">
@@ -139,7 +139,7 @@
 
       <!-- #region MARK: AnimeThemes
       -->
-      <div class="full">
+      <div class="two-cols">
         <section>
           <div class="full">
             <h3>
@@ -367,7 +367,7 @@
       <div class="modal webm" role="document">
         <div class="modal-body">
           <video id="webm-video" controls></video>
-          <div class="webm-controls">
+          <div id="webm-controls">
             <button id="webm-next" class="at-btn" title="Next Theme" type="button" aria-label="Next Theme">
               <svg class="icon-svg">
                 <use href="img/icons.svg#skip-next"></use>
@@ -395,12 +395,11 @@
             </span>
           </div>
         </div>
-        <details id="webm-tree-details" class="details-anim webm-tree-details">
+        <details id="webm-tree-details" class="details-anim">
           <summary>
-            <span id="webm-now-playing" class="webm-now-playing">AnimeThemes: VFS Video Player</span>
+            <span class="webm-now-playing"><span id="webm-title">AnimeThemes: VFS Video Player</span><small id="webm-anime">Select a theme to begin...</small></span>
           </summary>
-          <hr />
-          <div id="webm-tree" class="webm-tree details-content"></div>
+          <div id="webm-tree" class="details-content"></div>
         </details>
       </div>
     </div>

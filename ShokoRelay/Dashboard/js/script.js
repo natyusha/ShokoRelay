@@ -255,6 +255,7 @@
     setValueByPath,
     getErrorCount,
     initDetailsAnimation,
+    attachModalCloseHandlers,
   };
   // #endregion
 
