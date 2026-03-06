@@ -11,11 +11,9 @@ internal static class AnimeThemesConstants
 {
     internal const string AtApiBase = "https://api.animethemes.moe";
 
-    internal const string AtDefaultRootFolder = "!AnimeThemes";
-
     internal const string AtMapFileName = "anidb_animethemes_xrefs.csv";
 
-    internal const string AtRawMapUrl = "https://gist.githubusercontent.com/natyusha/bb33a3b3bc95bc7a3869633e23d522bb/raw/";
+    internal const string AtRawMapUrl = "https://gist.githubusercontent.com/natyusha/bb33a3b3bc95bc7a3869633e23d522bb/raw";
 
     internal static readonly FrozenSet<string> VideoFileExtensions = FrozenSet.ToFrozenSet([".mkv", ".avi", ".mp4", ".mov", ".ogm", ".wmv", ".mpg", ".mpeg", ".mk3d", ".m4v"], StringComparer.OrdinalIgnoreCase);
 

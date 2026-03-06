@@ -696,7 +696,7 @@
       if (otext) otext.value = overridesValue || "";
     } catch {}
 
-    const advKeys = new Set(["PathMappings", "VfsRootPath", "AnimeThemesRootPath", "CollectionPostersRootPath", "ShokoServerUrl", "FFmpegPath", "Parallelism"]);
+    const advKeys = new Set(["ShokoServerUrl", "AnimeThemesOverlapLevel", "PathMappings", "VfsRootPath", "AnimeThemesRootPath", "CollectionPostersRootPath", "FFmpegPath", "Parallelism"]);
     const advSection = document.createElement("details");
     advSection.className = "details-anim";
     const advSum = document.createElement("summary");

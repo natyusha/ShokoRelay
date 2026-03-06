@@ -177,7 +177,7 @@ This plugin includes full [AnimeThemes](https://animethemes.moe/) integration. I
    - There is a torrent available with over 19000+ themes
 2. Generate a mapping for the the videos by clicking the `Build` button:
    - If you have the torrent click the `Import` button to download the [current torrent mapping](https://gist.github.com/natyusha/bb33a3b3bc95bc7a3869633e23d522bb)
-   - Mapping the torrent takes ~12 hours (due to rate limits) and generated mappings will be appended to it
+   - Mapping the torrent takes ~8 hours (due to rate limits) and generated mappings will be appended to it
 3. Apply the mapping to the VFS by clicking the `Generate` button
 
 > [!IMPORTANT]

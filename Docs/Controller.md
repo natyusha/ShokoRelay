@@ -276,7 +276,7 @@ GET  /sync-watched/start                                       -> StartWatchedSy
 ```
 GET  /animethemes/vfs/build?filter={csv}                       -> AnimeThemesVfsBuild
 
-GET  /animethemes/vfs/map                                      -> AnimeThemesVfsMap
+GET  /animethemes/vfs/map?testPath={filename}                  -> AnimeThemesVfsMap
 
 POST /animethemes/vfs/import                                   -> ImportAnimeThemesMapping
 
@@ -288,13 +288,25 @@ GET  /animethemes/vfs/webm/stream?path={path}                  -> AnimeThemesWeb
   - When `anidb_vfs_overrides.csv` is present, all links for grouped series will be routed into the primary series folder.
   - `filter` restricts the mapping to the given comma separated AniDB IDs.
 
-- `AnimeThemesVfsMap` generates the mapping csv from the current raw source.
-  - When multiple anime records match a video, the API response is sorted by release order (year then season) and the earliest entry is used.
-  - If two entries share the same release period the one with the lower AniDB ID is preferred.
-  - The generated CSV now includes a fifth column `artistName` (after `newFilename`) containing the contributing artist(s) from the AnimeThemes metadata.
-  - The resulting file is written to the config directory at `anidb_animethemes_xrefs.csv` in the plugin's _config_ directory.
+---
 
-- `ImportAnimeThemesMapping` downloads the latest mapping csv from the hardcoded Gist URL.
+- `AnimeThemesVfsMap` generates the mapping CSV from the current raw source, or tests a single filename when `testPath` is provided.
+  - When called without `testPath`, it scans the configured directory and builds the full mapping CSV (12+ hours for large collections).
+  - When called with `testPath` (e.g., `?testPath=OP1.webm`), it tests that single filename and returns the generated mapping without modifying the CSV.
+  - The CSV includes the following columns: `filepath`, `videoId`, `anidbId`, `nc`, `slug`, `version`, `songTitle`, `artistName`, `lyrics`, `subbed`, `uncen`, `nsfw`, `spoiler`, `source`, `resolution`, `episodes`, `overlap`
+  - All boolean fields (`nc`, `lyrics`, `subbed`, `uncen`, `nsfw`, `spoiler`) are written as `1` (true) or `0` (false).
+  - `overlap` indicates the degree to which the sequence and episode content overlap, with values: `None`, `Transition`, or `Over`.
+  - The filename for each theme is constructed as `{nc}{slug}{version} ❯ {songTitle} ❯ {artistName} [{attributes}]`
+    - Attributes are any true bools from (LYRICS, SUBS, UNCEN, NSFW, SPOIL) (e.g., `NCO‍Pv2 ❯ Title ❯ Artist [LYRICS, SUB].webm`).
+  - When multiple anime records match a video, the API response is sorted by release order (year then season) and the earliest entry is used.
+    - If two entries share the same release period, the one with the lower AniDB ID is preferred.
+  - The resulting file is written to the config directory at `anidb_animethemes_xrefs.csv` in the plugin's _config_ directory.
+  - Entries are deduplicated before saving (by filepath), so appending new themes to an existing CSV will not create duplicates.
+  - Test mode returns `{ status, testPath, error?, generatedFilename, csvLine, entry }` where entry contains all parsed metadata fields.
+
+---
+
+- `ImportAnimeThemesMapping` downloads the latest mapping CSV from the hardcoded [Gist URL](https://gist.githubusercontent.com/natyusha/bb33a3b3bc95bc7a3869633e23d522bb/raw).
 
 ---
 

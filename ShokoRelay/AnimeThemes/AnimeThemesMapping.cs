@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Text.Json;
 using System.Text.Json.Serialization;
 using NLog;
 using Shoko.Abstractions.Metadata.Shoko;
@@ -12,13 +11,26 @@ namespace ShokoRelay.AnimeThemes;
 
 /// <summary>
 /// Represents a single anime theme mapping between a local file path and AniDB/video identifiers.
+/// All boolean fields are written as 1 (true) or 0 (false).
 /// </summary>
 public sealed record AnimeThemesMappingEntry(
     [property: JsonPropertyName("filepath")] string FilePath,
     [property: JsonPropertyName("videoId")] int VideoId,
     [property: JsonPropertyName("anidbId")] int AniDbId,
-    [property: JsonPropertyName("newFilename")] string NewFileName,
-    [property: JsonPropertyName("artistName")] string ArtistName
+    [property: JsonPropertyName("nc")] bool NC, // (Creditless)
+    [property: JsonPropertyName("slug")] string Slug,
+    [property: JsonPropertyName("version")] int Version,
+    [property: JsonPropertyName("artistName")] string ArtistName,
+    [property: JsonPropertyName("songTitle")] string SongTitle,
+    [property: JsonPropertyName("lyrics")] bool Lyrics,
+    [property: JsonPropertyName("subbed")] bool Subbed,
+    [property: JsonPropertyName("uncen")] bool Uncen,
+    [property: JsonPropertyName("nsfw")] bool NSFW,
+    [property: JsonPropertyName("spoiler")] bool Spoiler,
+    [property: JsonPropertyName("source")] string Source,
+    [property: JsonPropertyName("resolution")] int Resolution,
+    [property: JsonPropertyName("episodes")] string Episodes,
+    [property: JsonPropertyName("overlap")] string Overlap // Transition, Over, or None
 );
 
 /// <summary>
@@ -34,7 +46,25 @@ public sealed record AnimeThemesMappingApplyResult(int LinksCreated, int Skipped
 /// <summary>
 /// Internal helper record used when looking up theme metadata by video identifier.
 /// </summary>
-internal sealed record AnimeThemesVideoLookup(int VideoId, int ThemeId, int AniDbId, string Slug, string SongTitle, string Tags, string Artist);
+internal sealed record AnimeThemesVideoLookup(
+    int VideoId,
+    int ThemeId,
+    int AniDbId,
+    bool NC,
+    string Slug,
+    int Version,
+    string ArtistName,
+    string SongTitle,
+    bool Lyrics,
+    bool Subbed,
+    bool Uncen,
+    bool NSFW,
+    bool Spoiler,
+    string Source,
+    int Resolution,
+    string Episodes,
+    string Overlap
+);
 
 /// <summary>
 /// Provides operations for building and applying mappings between anime theme files and AniDB/video identifiers. Includes helpers for importing mapping data and querying the AnimeThemes API.
@@ -42,6 +72,7 @@ internal sealed record AnimeThemesVideoLookup(int VideoId, int ThemeId, int AniD
 public class AnimeThemesMapping
 {
     // helpers for reading/writing the mapping file in CSV form. The format uses simple comma-separated rows; commas inside values are escaped as "\u002C" by the generators.
+    // CSV columns: filepath, videoId, anidbId, nc, slug, version, artistName, songTitle, lyrics, subbed, uncen, nsfw, spoiler, source, resolution, episodes, overlap
     private static List<AnimeThemesMappingEntry> ParseMappingContent(string content)
     {
         if (string.IsNullOrWhiteSpace(content))
@@ -57,7 +88,7 @@ public class AnimeThemesMapping
                 continue;
 
             var fields = TextHelper.SplitCsvLine(line);
-            if (fields.Length < 4)
+            if (fields.Length < 17)
                 continue;
 
             string filepath = fields[0];
@@ -65,12 +96,51 @@ public class AnimeThemesMapping
                 continue;
             if (!int.TryParse(fields[2], out int aid))
                 continue;
-            string newFilename = TextHelper.UnescapeUnicode(fields[3]);
-            string artistName = fields.Length >= 5 ? TextHelper.UnescapeUnicode(fields[4]) : string.Empty;
+            bool nc = ParseCsvBoolean(fields[3]);
+            string slug = fields[4];
+            if (!int.TryParse(fields[5], out int version))
+                continue;
+            string songTitle = TextHelper.UnescapeUnicode(fields[6]);
+            string artistName = TextHelper.UnescapeUnicode(fields[7]);
+            bool lyrics = ParseCsvBoolean(fields[8]);
+            bool subbed = ParseCsvBoolean(fields[9]);
+            bool uncen = ParseCsvBoolean(fields[10]);
+            bool nsfw = ParseCsvBoolean(fields[11]);
+            bool spoiler = ParseCsvBoolean(fields[12]);
+            string source = fields[13];
+            int resolution = 0;
+            var resField = fields[14];
+            if (!string.IsNullOrWhiteSpace(resField) && int.TryParse(resField, out var tmpRes))
+                resolution = tmpRes;
+            string episodes = fields[15];
+            string overlap = fields[16];
 
-            result.Add(new AnimeThemesMappingEntry(filepath, vid, aid, newFilename, artistName));
+            result.Add(new AnimeThemesMappingEntry(filepath, vid, aid, nc, slug, version, artistName, songTitle, lyrics, subbed, uncen, nsfw, spoiler, source, resolution, episodes, overlap));
         }
         return result;
+    }
+
+    private static string SerializeEntry(AnimeThemesMappingEntry e)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append(e.FilePath).Append(',');
+        sb.Append(e.VideoId).Append(',');
+        sb.Append(e.AniDbId).Append(',');
+        sb.Append(e.NC ? "1" : "0").Append(',');
+        sb.Append(e.Slug).Append(',');
+        sb.Append(e.Version).Append(',');
+        sb.Append(TextHelper.EscapeCsvCommas(e.SongTitle)).Append(',');
+        sb.Append(TextHelper.EscapeCsvCommas(e.ArtistName)).Append(',');
+        sb.Append(e.Lyrics ? "1" : "0").Append(',');
+        sb.Append(e.Subbed ? "1" : "0").Append(',');
+        sb.Append(e.Uncen ? "1" : "0").Append(',');
+        sb.Append(e.NSFW ? "1" : "0").Append(',');
+        sb.Append(e.Spoiler ? "1" : "0").Append(',');
+        sb.Append(e.Source).Append(',');
+        sb.Append(e.Resolution).Append(',');
+        sb.Append(TextHelper.EscapeCsvCommas(e.Episodes)).Append(',');
+        sb.Append(e.Overlap);
+        return sb.ToString();
     }
 
     private static string SerializeMapping(List<AnimeThemesMappingEntry> entries)
@@ -78,42 +148,33 @@ public class AnimeThemesMapping
         var sb = new System.Text.StringBuilder();
         sb.AppendLine("## Shoko Relay AniDB AnimeThemes Xrefs ##");
         sb.AppendLine();
-        sb.AppendLine("# filepath, videoId, anidbId, newFilename, artistName");
+        sb.AppendLine("# filepath, videoId, anidbId, nc, slug, version, songTitle, artistName, lyrics, subbed, uncen, nsfw, spoiler, source, resolution, episodes, overlap"); // see Controller.md for details
         foreach (var e in entries)
-        {
-            sb.Append(TextHelper.EscapeCsvCommas(e.FilePath)).Append(',');
-            sb.Append(e.VideoId).Append(',');
-            sb.Append(e.AniDbId).Append(',');
-            sb.Append(TextHelper.EscapeCsvCommas(e.NewFileName)).Append(',');
-            sb.Append(TextHelper.EscapeCsvCommas(e.ArtistName)).AppendLine();
-        }
+            sb.AppendLine(SerializeEntry(e));
         return sb.ToString();
     }
 
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
-    private static readonly HttpClient Http = new HttpClient();
-    private static readonly TimeSpan RateLimitDelay = TimeSpan.FromSeconds(0.7); // ~86 req/min to stay under the 90 that is enforced by AnimeThemes
-
-    // static constructor used to configure shared HttpClient (setting UA etc.)
-    static AnimeThemesMapping()
+    /// <summary>
+    /// Serialize a single AnimeThemesMappingEntry to a CSV line.
+    /// </summary>
+    internal static string SerializeMappingEntry(AnimeThemesMappingEntry entry)
     {
-        // some API endpoints now reject requests without a custom User-Agent header
-        AnimeThemesConstants.EnsureUserAgent(Http);
+        return SerializeEntry(entry);
     }
+
+    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
     private readonly IMetadataService _metadataService;
     private readonly IVideoService _videoService;
+    private readonly AnimeThemesApi _apiClient;
 
     private readonly string _configDirectory;
-    private readonly JsonSerializerOptions _jsonOptions = new() { PropertyNameCaseInsensitive = true, WriteIndented = true };
-
-    private readonly SemaphoreSlim _rateLock = new(1, 1);
-    private DateTimeOffset _lastRequest = DateTimeOffset.MinValue;
 
     public AnimeThemesMapping(IMetadataService metadataService, IVideoService videoService, ConfigProvider configProvider)
     {
         _metadataService = metadataService;
         _videoService = videoService;
+        _apiClient = new AnimeThemesApi();
 
         _configDirectory = configProvider.ConfigDirectory;
     }
@@ -260,6 +321,7 @@ public class AnimeThemesMapping
         }
 
         // phase 2: fetch metadata for new files in parallel; the rate limiter serialises API calls
+        Logger.Info("AnimeThemes mapping has {ToProcessCount} new files to query", toProcess.Count);
         int maxDop = Math.Max(1, ShokoRelay.Settings.Parallelism);
         await Parallel
             .ForEachAsync(
@@ -267,11 +329,10 @@ public class AnimeThemesMapping
                 new ParallelOptions { MaxDegreeOfParallelism = maxDop, CancellationToken = ct },
                 async (item, token) =>
                 {
+                    Logger.Info("Fetching metadata for {Rel}", item.Rel);
                     try
                     {
                         string baseName = Path.GetFileName(item.File);
-                        string nameNoExt = Path.GetFileNameWithoutExtension(baseName) ?? "";
-                        string versionSuffix = TextHelper.ExtractThemeVersionSuffix(nameNoExt);
 
                         var (lookup, idMissing) = await FetchMetadataAsync(baseName, token);
                         if (lookup == null)
@@ -284,11 +345,29 @@ public class AnimeThemesMapping
                             return;
                         }
 
-                        string ext = Path.GetExtension(baseName) ?? string.Empty;
-                        string cleanName = BuildNewFileName(lookup, ext, versionSuffix);
                         lock (entries)
                         {
-                            entries.Add(new AnimeThemesMappingEntry(item.Rel, lookup.VideoId, lookup.AniDbId, cleanName, lookup.Artist));
+                            entries.Add(
+                                new AnimeThemesMappingEntry(
+                                    item.Rel,
+                                    lookup.VideoId,
+                                    lookup.AniDbId,
+                                    lookup.NC,
+                                    lookup.Slug,
+                                    lookup.Version,
+                                    lookup.ArtistName,
+                                    lookup.SongTitle,
+                                    lookup.Lyrics,
+                                    lookup.Subbed,
+                                    lookup.Uncen,
+                                    lookup.NSFW,
+                                    lookup.Spoiler,
+                                    lookup.Source,
+                                    lookup.Resolution,
+                                    lookup.Episodes,
+                                    lookup.Overlap
+                                )
+                            );
                         }
                     }
                     catch (Exception ex)
@@ -304,13 +383,91 @@ public class AnimeThemesMapping
             )
             .ConfigureAwait(false);
 
-        var fileContent = SerializeMapping(entries);
+        // Deduplicate entries by FilePath (keeping first occurrence) to handle cases where users have multiple copies of the same themes
+        var deduplicatedEntries = new Dictionary<string, AnimeThemesMappingEntry>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in entries)
+        {
+            deduplicatedEntries.TryAdd(entry.FilePath, entry);
+        }
+        var finalEntries = deduplicatedEntries.Values.ToList();
+        int dedupedCount = entries.Count - finalEntries.Count;
+
+        var fileContent = SerializeMapping(finalEntries);
         await File.WriteAllTextAsync(mapPath, fileContent, ct);
 
         sw.Stop();
-        Logger.Info("AnimeThemes mapping build completed in {Elapsed}ms: entries={Count}, reused={Reused}, errors={Errors}", sw.ElapsedMilliseconds, entries.Count, reusedCount, errors);
-        Logger.Info("AnimeThemes mapping written to {Path} with {Count} entries", mapPath, entries.Count);
-        return new AnimeThemesMappingBuildResult(mapPath, entries.Count, reusedCount, errors, messages);
+        Logger.Info(
+            "AnimeThemes mapping build completed in {Elapsed}ms: entries={Count}, deduplicated={Deduped}, reused={Reused}, errors={Errors}",
+            sw.ElapsedMilliseconds,
+            finalEntries.Count,
+            dedupedCount,
+            reusedCount,
+            errors
+        );
+        Logger.Info("AnimeThemes mapping written to {Path} with {Count} entries", mapPath, finalEntries.Count);
+        return new AnimeThemesMappingBuildResult(mapPath, finalEntries.Count, reusedCount, errors, messages);
+    }
+
+    /// <summary>
+    /// Test the mapping process for a single webm filename without adding it to the CSV.
+    /// Returns the metadata that would be created for the file, useful for verifying API integration and filename generation.
+    /// </summary>
+    /// <param name="webbmFileName">The webm filename to test (e.g., "OP1.webm" or "ED2v3.webm").</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A result object containing the generated entry, any errors, and status information.</returns>
+    public async Task<(AnimeThemesMappingEntry? entry, string? error, string filename)> TestMappingEntryAsync(string webmFileName, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(webmFileName))
+            return (null, "Filename is empty or null", webmFileName);
+
+        try
+        {
+            Logger.Info("Testing mapping for {FileName}", webmFileName);
+
+            var (lookup, idMissing) = await FetchMetadataAsync(webmFileName, ct);
+            if (lookup == null)
+            {
+                string error = idMissing ? $"AniDB ID missing for {webmFileName}" : $"Missing metadata for {webmFileName}";
+                Logger.Warn("Test failed: {Error}", error);
+                return (null, error, webmFileName);
+            }
+
+            // Create a test entry with a dummy relative path
+            string testPath = $"/test/{webmFileName}";
+            var entry = new AnimeThemesMappingEntry(
+                testPath,
+                lookup.VideoId,
+                lookup.AniDbId,
+                lookup.NC,
+                lookup.Slug,
+                lookup.Version,
+                lookup.ArtistName,
+                lookup.SongTitle,
+                lookup.Lyrics,
+                lookup.Subbed,
+                lookup.Uncen,
+                lookup.NSFW,
+                lookup.Spoiler,
+                lookup.Source,
+                lookup.Resolution,
+                lookup.Episodes,
+                lookup.Overlap
+            );
+
+            // Generate the filename that would be created
+            string extension = Path.GetExtension(webmFileName);
+            string generatedFilename = BuildNewFileName(lookup, extension);
+
+            Logger.Info("Test succeeded for {FileName}: videoId={VideoId}, anidbId={AniDbId}, generated={Generated}", webmFileName, lookup.VideoId, lookup.AniDbId, generatedFilename);
+
+            return (entry, null, generatedFilename);
+        }
+        catch (Exception ex)
+        {
+            string error = $"Test failed with exception: {ex.Message}";
+            Logger.Warn(ex, "Test failed for {FileName}", webmFileName);
+            return (null, error, webmFileName);
+        }
     }
 
     /// <summary>
@@ -328,6 +485,7 @@ public class AnimeThemesMapping
 
         string content = await File.ReadAllTextAsync(mapPath, ct);
         var entries = ParseMappingContent(content);
+        Logger.Info("Applying AnimeThemes mapping: {EntryCount} entries parsed", entries.Count);
 
         Logger.Info("AnimeThemes apply mapping started (map={MapPath}, entries={EntryCount}, filter={FilterCount})", mapPath, entries.Count, seriesFilter?.Count ?? 0);
         var sw = Stopwatch.StartNew();
@@ -364,8 +522,9 @@ public class AnimeThemesMapping
             }
         }
 
-        // pre-group entries by AniDB ID so we can process per-series with timing
+        // pre-group entries by AniDB ID so we can process per-series with timing; also filter by configured overlap level
         var entriesByAniDb = new Dictionary<int, List<AnimeThemesMappingEntry>>();
+        var overlapLevel = ShokoRelay.Settings.AnimeThemesOverlapLevel;
         foreach (var entry in entries)
         {
             string relativePath = entry.FilePath.TrimStart('/', '\\');
@@ -374,6 +533,22 @@ public class AnimeThemesMapping
             {
                 skipped++;
                 continue;
+            }
+
+            // Filter by overlap level: None (2) blocks Transition and Over; TransitionOnly (1) blocks Over; All (0) allows everything
+            if (overlapLevel > OverlapLevel.All)
+            {
+                var overlap = entry.Overlap ?? "None";
+                if (overlapLevel == OverlapLevel.TransitionOnly && string.Equals(overlap, "Over", StringComparison.OrdinalIgnoreCase))
+                {
+                    skipped++;
+                    continue;
+                }
+                if (overlapLevel == OverlapLevel.None && (string.Equals(overlap, "Transition", StringComparison.OrdinalIgnoreCase) || string.Equals(overlap, "Over", StringComparison.OrdinalIgnoreCase)))
+                {
+                    skipped++;
+                    continue;
+                }
             }
 
             if (!byAniDb.ContainsKey(entry.AniDbId))
@@ -393,6 +568,7 @@ public class AnimeThemesMapping
         // process per-series (grouped by AniDB ID) to enable per-series logging
         foreach (var (anidbId, matchedEntries) in entriesByAniDb)
         {
+            Logger.Info("Processing {Count} mappings for AniDB {AniDbId}", matchedEntries.Count, anidbId);
             ct.ThrowIfCancellationRequested();
             if (!byAniDb.TryGetValue(anidbId, out var seriesMatches))
                 continue;
@@ -440,9 +616,28 @@ public class AnimeThemesMapping
                         }
 
                         string shortsDir = Path.Combine(importRoot, rootName, primaryId.ToString(), "Shorts");
-                        string destName = VfsHelper.CleanEpisodeTitleForFilename(entry.NewFileName);
-                        destName = TextHelper.AnimeThemesPlexFileNames(destName);
-                        destName = TextHelper.ReplaceFirstHyphenWithChevron(destName);
+                        string destName = BuildNewFileName(
+                            new AnimeThemesVideoLookup(
+                                entry.VideoId,
+                                0,
+                                entry.AniDbId,
+                                entry.NC,
+                                entry.Slug,
+                                entry.Version,
+                                entry.ArtistName,
+                                entry.SongTitle,
+                                entry.Lyrics,
+                                entry.Subbed,
+                                entry.Uncen,
+                                entry.NSFW,
+                                entry.Spoiler,
+                                entry.Source,
+                                entry.Resolution,
+                                entry.Episodes,
+                                entry.Overlap
+                            ),
+                            Path.GetExtension(source)
+                        );
                         destName = EnsureExtension(destName, Path.GetExtension(source));
                         string destPath = Path.Combine(shortsDir, destName);
 
@@ -549,18 +744,48 @@ public class AnimeThemesMapping
     private async Task<(AnimeThemesVideoLookup? lookup, bool idMissing)> FetchMetadataAsync(string baseName, CancellationToken ct)
     {
         bool idMissing = false;
-        string videoUrl = $"{AnimeThemesConstants.AtApiBase}/video/{Uri.EscapeDataString(baseName)}?include=animethemeentries.animetheme";
-        var videoResp = await GetJsonAsync<VideoLookupResponse>(videoUrl, ct);
+
+        // Optimized single call: fetch video with audio, theme info, anime, and song/artists in one request
+        var videoResp = await _apiClient.FetchVideoWithAudioAsync(baseName, ct);
         if (videoResp?.Video == null)
             return (null, idMissing);
 
+        // Extract video level values (in animethemes api order)
         int videoId = videoResp.Video.Id;
-        int? themeId = videoResp.Video.Animethemeentries?.FirstOrDefault()?.Animetheme?.Id;
-        if (!themeId.HasValue)
+        bool lyrics = videoResp.Video.Lyrics;
+        bool nc = videoResp.Video.NC;
+        string overlap = videoResp.Video.Overlap ?? "";
+        int resolution = videoResp.Video.Resolution ?? 0;
+        string source = videoResp.Video.Source ?? "";
+        bool subbed = videoResp.Video.Subbed;
+        bool uncen = videoResp.Video.Uncen;
+
+        var firstEntry = videoResp.Video.Animethemeentries?.FirstOrDefault();
+        if (firstEntry?.Animetheme == null)
             return (null, idMissing);
 
-        string animeUrl = $"{AnimeThemesConstants.AtApiBase}/anime?filter[has]=animethemes.animethemeentries.videos,animethemes&include=resources&filter[resource][site]=AniDB&filter[video][id]={videoId}";
-        var animeResp = await GetJsonAsync<AnimeLookupResponse>(animeUrl, ct);
+        // Extra animethemeentries level values (prefer the first entry / in animethemes api order)
+        int themeId = firstEntry.Animetheme.Id;
+        string episodes = firstEntry.Episodes ?? "";
+        bool nsfw = firstEntry.NSFW;
+        bool spoiler = firstEntry.Spoiler;
+        int version = firstEntry.Version;
+
+        // Extract animetheme level values
+        var song = firstEntry.Animetheme.Song;
+        string slug = firstEntry.Animetheme.Slug ?? "";
+        string songTitle = song?.Title ?? "";
+
+        // Capture artist(s)
+        string artist = string.Empty;
+        var artistsList = song?.Artists;
+        if (artistsList != null && artistsList.Count > 0)
+        {
+            artist = string.Join(" / ", artistsList.Where(a => !string.IsNullOrWhiteSpace(a.Name)).Select(a => a.Name!));
+        }
+
+        // Lookup AniDB ID from anime query (need second call for this)
+        var animeResp = await _apiClient.FetchAnimeResourcesAsync(videoId, ct);
         int anidbId = 0;
         // choose the anime entry with the earliest release date (year, then season); tie-breaker by smallest external AniDB id
         var animeList = animeResp?.Anime;
@@ -591,44 +816,60 @@ public class AnimeThemesMapping
             return (null, idMissing);
         }
 
-        string themeUrl = $"{AnimeThemesConstants.AtApiBase}/animetheme/{themeId.Value}?include=animethemeentries.videos,song.artists";
-        var themeResp = await GetJsonAsync<ThemeLookupResponse>(themeUrl, ct);
-        string slug = themeResp?.Animetheme?.Slug ?? "";
-        string songTitle = themeResp?.Animetheme?.Song?.Title ?? "";
-
-        // capture artist(s)
-        string artist = string.Empty;
-        var artistsList = themeResp?.Animetheme?.Song?.Artists;
-        if (artistsList != null && artistsList.Count > 0)
-        {
-            artist = string.Join(" / ", artistsList.Where(a => !string.IsNullOrWhiteSpace(a.Name)).Select(a => a.Name!));
-        }
-
-        string tags = "";
-        var matchingVideo = themeResp?.Animetheme?.Animethemeentries?.SelectMany(e => e.Videos ?? new List<ThemeVideoEntry>()).FirstOrDefault(v => v.Id == videoId);
-        if (matchingVideo != null && !string.IsNullOrWhiteSpace(matchingVideo.Tags))
-            tags = matchingVideo.Tags!;
-
-        return (new AnimeThemesVideoLookup(videoId, themeId.Value, anidbId, slug, songTitle, tags, artist), idMissing);
+        return (new AnimeThemesVideoLookup(videoId, themeId, anidbId, nc, slug, version, artist, songTitle, lyrics, subbed, uncen, nsfw, spoiler, source, resolution, episodes, overlap), idMissing);
     }
 
-    // versionSuffix may contain something like "v2" or "v3" pulled from the original filename.
-    // It is appended to the slug part of the name before the song title so that differences are preserved without relying on the later dedupe pass.
-    private static string BuildNewFileName(AnimeThemesVideoLookup lookup, string extension, string versionSuffix = "") // artist available via lookup.Artist if needed
+    /// <summary>
+    /// Filename format: {nc}{slug}{version} ❯ {songTitle} ❯ {artist} [{attributes}]
+    /// Boolean attributes (Lyrics, Subbed, Uncensored, NSFW, Spoiler) are appended in brackets if true.
+    /// Example: NCO‍P1v2 - Title · Artist [Lyrics, Subbed].webm
+    /// </summary>
+    private static string BuildNewFileName(AnimeThemesVideoLookup lookup, string extension)
     {
+        // Insert a zero-width space to prevent Plex from renaming OP/ED-prefixed files. Prefix Hair space to OP to sort it before ED. Remove the numeric suffix if it is "1"
         string slug = string.IsNullOrWhiteSpace(lookup.Slug) ? "Theme" : lookup.Slug;
-        if (!string.IsNullOrWhiteSpace(versionSuffix))
-            slug += versionSuffix;
+        const string zwsp = "\u200B"; // Zero-width space
+        const string hsp = "\u200A"; // Hair space
+        slug = slug switch
+        {
+            var s when s.StartsWith("OP") => $"{hsp}O{zwsp}P{(s[2..] == "1" ? "" : s[2..])}",
+            var s when s.StartsWith("ED") => $"E{zwsp}D{(s[2..] == "1" ? "" : s[2..])}",
+            _ => slug,
+        };
 
-        string baseName = slug;
-        if (!string.IsNullOrWhiteSpace(lookup.SongTitle))
-            baseName = $"{slug} - {lookup.SongTitle}";
+        string ncPrefix = lookup.NC ? $"NC" : "";
+        string versionStr = lookup.Version > 1 ? $"v{lookup.Version}" : ""; // Only show if version > 1
+        string titleStr = string.IsNullOrWhiteSpace(lookup.SongTitle) ? "" : " ❯ " + lookup.SongTitle;
 
-        if (!string.IsNullOrWhiteSpace(lookup.Tags))
-            baseName += $" [{lookup.Tags}]";
+        // If 4+ artists, use "Various Artists" to prevent extremely long filenames
+        string artistDisplay = (!string.IsNullOrWhiteSpace(lookup.ArtistName) && lookup.ArtistName.Split(" / ").Length >= 4) ? "Various Artists" : lookup.ArtistName;
+        string ArtistStr = string.IsNullOrWhiteSpace(artistDisplay) ? "" : " ❯ " + artistDisplay;
 
+        // Append boolean attributes if any are true
+        var attributes = new List<string>(5);
+        if (lookup.Lyrics)
+            attributes.Add("LYRICS");
+        if (lookup.Subbed)
+            attributes.Add("SUBS");
+        if (lookup.Uncen)
+            attributes.Add("UNCEN");
+        if (lookup.NSFW)
+            attributes.Add("NSFW");
+        if (lookup.Spoiler)
+            attributes.Add("SPOIL");
+        string attributeSuffix = attributes.Count > 0 ? $" [{string.Join(", ", attributes)}]" : "";
+
+        string baseName = $"{ncPrefix}{slug}{versionStr}{titleStr}{ArtistStr}{attributeSuffix}";
         string full = baseName + extension;
         return VfsHelper.CleanEpisodeTitleForFilename(full);
+    }
+
+    /// <summary>
+    /// Parse a CSV boolean field ("1" = true, anything else = false).
+    /// </summary>
+    private static bool ParseCsvBoolean(string field)
+    {
+        return field == "1";
     }
 
     private static string GetThemeRootFolderName() => VfsShared.ResolveAnimeThemesFolderName();
@@ -659,70 +900,4 @@ public class AnimeThemesMapping
 
         return target.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
     }
-
-    private async Task<T?> GetJsonAsync<T>(string url, CancellationToken ct)
-    {
-        await RateLimitAsync(ct);
-        // ensure UA is configured before every request in case the static ctor wasn't
-        AnimeThemesConstants.EnsureUserAgent(Http);
-        using var response = await Http.GetAsync(url, ct);
-        if (!response.IsSuccessStatusCode)
-        {
-            if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
-            {
-                Logger.Warn("AnimeThemes API returned Forbidden for {Url} (check user-agent/config)", url);
-            }
-            else
-            {
-                Logger.Warn("AnimeThemes API returned {Status} for {Url}", response.StatusCode, url);
-            }
-            return default;
-        }
-
-        await using var stream = await response.Content.ReadAsStreamAsync(ct);
-        return await JsonSerializer.DeserializeAsync<T>(stream, _jsonOptions, ct);
-    }
-
-    private async Task RateLimitAsync(CancellationToken ct)
-    {
-        await _rateLock.WaitAsync(ct);
-        try
-        {
-            var now = DateTimeOffset.UtcNow;
-            var wait = _lastRequest + RateLimitDelay - now;
-            if (wait > TimeSpan.Zero)
-                await Task.Delay(wait, ct);
-            _lastRequest = DateTimeOffset.UtcNow;
-        }
-        finally
-        {
-            _rateLock.Release();
-        }
-    }
-
-    private sealed record VideoLookupResponse(VideoEntry? Video);
-
-    private sealed record VideoEntry(int Id, string Basename, List<ThemeEntryWrapper>? Animethemeentries);
-
-    private sealed record ThemeEntryWrapper(ThemeOnly? Animetheme);
-
-    private sealed record ThemeOnly(int Id);
-
-    private sealed record AnimeLookupResponse(List<AnimeEntry>? Anime);
-
-    private sealed record AnimeEntry(List<AnimeResource>? Resources, string? Season, int? Year);
-
-    private sealed record AnimeResource([property: JsonPropertyName("external_id")] int? ExternalId, string Site);
-
-    private sealed record ThemeLookupResponse(ThemeFull? Animetheme);
-
-    private sealed record ThemeFull(string? Slug, ThemeSong? Song, List<ThemeEntry>? Animethemeentries);
-
-    private sealed record ThemeSong(string? Title, List<ThemeArtist>? Artists);
-
-    private sealed record ThemeArtist(string? Name);
-
-    private sealed record ThemeEntry(List<ThemeVideoEntry>? Videos);
-
-    private sealed record ThemeVideoEntry(int Id, string? Tags);
 }

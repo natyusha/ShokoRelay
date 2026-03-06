@@ -69,7 +69,6 @@ namespace ShokoRelay.Plex
             { SeasonUnknown, ("Other", "other") },
         };
 
-        // Local media asset extensions for VFS linking
         /// <summary>Extension-set lookup for recognized artwork file types.</summary>
         public static class LocalMediaAssets
         {

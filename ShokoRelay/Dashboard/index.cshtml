@@ -148,6 +148,11 @@
               </svg>
               AnimeThemes: VFS
             </h3>
+            <button id="at-webm-cancel" class="at-btn" title="Stop Background Playback" type="button" aria-label="Stop Background Playback" hidden>
+              <svg class="icon-svg">
+                <use href="img/icons.svg#volume-high"></use>
+              </svg>
+            </button>
             <button id="at-webm-open" class="at-btn" title="Open Video Player" type="button" aria-label="Open Video Player">
               <svg class="icon-svg">
                 <use href="img/icons.svg#movie-open"></use>
@@ -395,7 +400,7 @@
             </span>
           </div>
         </div>
-        <details id="webm-tree-details" class="details-anim">
+        <details id="webm-tree-details" class="details-anim" open>
           <summary>
             <span class="webm-now-playing"><span id="webm-title">AnimeThemes: VFS Video Player</span><small id="webm-anime">Select a theme to begin...</small></span>
           </summary>

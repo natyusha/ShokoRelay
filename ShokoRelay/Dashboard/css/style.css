@@ -654,7 +654,7 @@ button.float-link {
   overflow: hidden;
 }
 #webm-tree-details > summary {
-  border-bottom: 1px solid var(--inset-color);
+  border-bottom: 1px solid var(--border-color);
   margin: 0;
   padding: 12px 8px;
 }
@@ -917,7 +917,7 @@ footer {
 .modal.webm .modal-body {
   padding: 0;
   aspect-ratio: 16 / 9;
-  background: var(--bg-color);
+  background: #000;
   position: relative;
   flex: 2 1;
   min-width: 300px;
@@ -1000,7 +1000,7 @@ footer {
     max-width: none;
   }
   #webm-tree {
-    border-bottom: 1px solid var(--inset-color);
+    border-bottom: 1px solid var(--border-color);
   }
   #webm-controls {
     bottom: 0px;

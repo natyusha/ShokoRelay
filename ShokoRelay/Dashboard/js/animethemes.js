@@ -81,6 +81,7 @@
   {
     const webmModal = el("webm-modal");
     const webmOpenBtn = el("at-webm-open");
+    const webmCancelBtn = el("at-webm-cancel");
     const webmVideo = /** @type {HTMLVideoElement} */ (el("webm-video"));
     const webmTree = el("webm-tree");
     const webmFilter = /** @type {HTMLInputElement} */ (el("webm-filter"));
@@ -90,6 +91,23 @@
     const webmAnime = el("webm-anime");
     const webmTreeDetails = el("webm-tree-details");
     let webmTreeData = null; // cached API response
+
+    /** Update the cancel button visibility based on playback state. */
+    function syncCancelButtonState() {
+      if (!webmCancelBtn) return;
+      const isPlaying = !!webmVideo?.src && !webmVideo.paused;
+      webmCancelBtn.hidden = !isPlaying;
+    }
+
+    /** Stop all video playback and hide the cancel button. */
+    function cancelVideoPlayback() {
+      if (!webmVideo) return;
+      webmVideo.pause();
+      webmVideo.removeAttribute("src");
+      webmVideo.load();
+      updateNowPlaying("");
+      syncCancelButtonState();
+    }
 
     // Animate the tree collapsible section
     if (webmTreeDetails) {
@@ -227,6 +245,7 @@
       if (!webmVideo) return;
       webmVideo.src = base + "/animethemes/vfs/webm/stream?path=" + encodeURIComponent(path);
       webmVideo.play().catch(() => {});
+      syncCancelButtonState();
       updateNowPlaying(path);
     }
 
@@ -264,8 +283,10 @@
     /** Get the current webm mode from the button. */
     const getWebmMode = () => (webmModeBtn ? webmModeBtn.getAttribute("data-mode") : "off") || "off";
 
-    // Wire up video events for mode button behavior
+    // Wire up video events for mode button behavior and cancel button state
     if (webmVideo) {
+      webmVideo.addEventListener("play", syncCancelButtonState);
+      webmVideo.addEventListener("pause", syncCancelButtonState);
       webmVideo.addEventListener("ended", () => {
         const mode = getWebmMode();
         if (mode === "loop") {
@@ -275,8 +296,15 @@
           playRandomWebm();
         } else if (mode === "next") {
           playNextWebm();
+        } else {
+          syncCancelButtonState();
         }
       });
+    }
+
+    // Cancel button: stop all playback and hide the button
+    if (webmCancelBtn) {
+      webmCancelBtn.onclick = cancelVideoPlayback;
     }
 
     // Mode button: cycle loop -> shuffle -> next -> off
@@ -322,12 +350,15 @@
       webmTree.style.height = webmTreeDetails.offsetHeight - offset + "px";
     }
 
-    function openWebmModal() {
+    async function openWebmModal() {
       if (!webmModal) return;
       webmModal.classList.add("open");
       webmModal.setAttribute("aria-hidden", "false");
-      loadWebmTree();
-      setTreeHeight();
+      await loadWebmTree();
+      // Defer height calculation to next paint cycle to ensure layout is finalized
+      requestAnimationFrame(() => {
+        requestAnimationFrame(setTreeHeight);
+      });
       let resizeTimeout = null;
       function debouncedSetTreeHeight() {
         if (resizeTimeout) clearTimeout(resizeTimeout);
@@ -336,23 +367,6 @@
       window.addEventListener("resize", debouncedSetTreeHeight);
       openWebmModal._resizeHandler = debouncedSetTreeHeight;
       _closeWebmOverlay = attachModalCloseHandlers(webmModal);
-    }
-
-    function closeWebmModal() {
-      if (_closeWebmOverlay) {
-        _closeWebmOverlay();
-        _closeWebmOverlay = null;
-      }
-      if (webmVideo) {
-        webmVideo.pause();
-        webmVideo.removeAttribute("src");
-        webmVideo.load();
-      }
-      updateNowPlaying("");
-      if (openWebmModal._resizeHandler) {
-        window.removeEventListener("resize", openWebmModal._resizeHandler);
-        openWebmModal._resizeHandler = null;
-      }
     }
 
     if (webmOpenBtn) {

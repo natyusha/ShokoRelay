@@ -1,4 +1,3 @@
-using System.Text.Json;
 using NLog;
 using Shoko.Abstractions.Metadata.Shoko;
 using Shoko.Abstractions.Services;
@@ -54,29 +53,30 @@ internal sealed record ThemeSelection(string AudioUrl, string SlugRaw, string Sl
 /// Provides functionality for fetching, converting and previewing anime theme audio from the AnimeThemes API.
 /// This operates on individual folders or batches and integrates with Shoko metadata to locate the correct series and file.
 /// </summary>
-public class AnimeThemesGenerator
+public class AnimeThemesMp3Generator
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private static readonly HttpClient Http = new();
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
     private readonly FfmpegService _ffmpegService;
+    private readonly AnimeThemesApi _apiClient;
 
     private readonly IVideoService _videoService;
     private readonly IMetadataService _metadataService;
     private readonly string _configDirectory;
 
     /// <summary>
-    /// Constructs a new <see cref="AnimeThemesGenerator"/>, wiring in services for metadata lookup and ffmpeg operations.
+    /// Constructs a new <see cref="AnimeThemesMp3Generator"/>, wiring in services for metadata lookup and ffmpeg operations.
     /// </summary>
     /// <param name="metadataService">Service used to fetch Shoko metadata.</param>
     /// <param name="videoService">Service used to resolve video file objects.</param>
     /// <param name="configProvider">Provides configuration values such as the plugin directory path for <see cref="FfmpegService"/>.</param>
-    public AnimeThemesGenerator(IMetadataService metadataService, IVideoService videoService, ConfigProvider configProvider)
+    public AnimeThemesMp3Generator(IMetadataService metadataService, IVideoService videoService, ConfigProvider configProvider)
     {
         _metadataService = metadataService;
         _videoService = videoService;
         _configDirectory = configProvider.ConfigDirectory;
         _ffmpegService = new FfmpegService(configProvider.PluginDirectory);
+        _apiClient = new AnimeThemesApi();
         AnimeThemesConstants.EnsureUserAgent(Http);
     }
 
@@ -460,9 +460,8 @@ public class AnimeThemesGenerator
         if (!string.IsNullOrWhiteSpace(slugArg) && normalizedSlug == null)
             throw new ArgumentException("Invalid slug format. Use values like op, op2, ed, ed2, op1-tv, ed-bd.");
         string slugFilter = normalizedSlug != null ? $"&filter[animetheme][slug]={Uri.EscapeDataString(normalizedSlug)}" : "&filter[animetheme][type]=OP,ED";
-        string animeUrl = $"{AnimeThemesConstants.AtApiBase}/anime?filter[has]=resources&filter[site]=AniDB&filter[external_id]={anidbId}&include=animethemes{slugFilter}";
 
-        var anime = await GetJsonAsync<AnimeResponse>(animeUrl, ct);
+        var anime = await _apiClient.FetchAnimeThemesAsync(anidbId, slugFilter, ct);
         var animeEntry = anime?.Anime?.ElementAtOrDefault(offset);
         if (animeEntry == null || animeEntry.Animethemes == null || animeEntry.Animethemes.Count == 0)
             return null;
@@ -475,23 +474,20 @@ public class AnimeThemesGenerator
         if (theme == null)
             return null;
 
-        string themeUrl = $"{AnimeThemesConstants.AtApiBase}/animetheme/{theme.Id}?include=animethemeentries.videos,song.artists";
-        var themeDetail = await GetJsonAsync<ThemeResponse>(themeUrl, ct);
-        var entry = themeDetail?.Animetheme?.Animethemeentries?.FirstOrDefault();
-        var videoId = entry?.Videos?.FirstOrDefault()?.Id;
-        if (!videoId.HasValue)
+        var themeDetail = await _apiClient.FetchThemeWithAudioAsync(theme.Id, ct);
+        if (themeDetail?.Animetheme == null)
             return null;
 
-        string videoUrl = $"{AnimeThemesConstants.AtApiBase}/video?filter[video][id]={videoId.Value}&include=audio";
-        var video = await GetJsonAsync<VideoResponse>(videoUrl, ct);
-        string? audioUrl = video?.Videos?.FirstOrDefault()?.Audio?.Link;
+        var entry = themeDetail.Animetheme.Animethemeentries?.FirstOrDefault();
+        var video = entry?.Videos?.FirstOrDefault();
+        string? audioUrl = video?.Audio?.Link;
         if (string.IsNullOrWhiteSpace(audioUrl))
             return null;
 
         string slugDisplay = FormatSlugDisplay(theme.Slug ?? "");
-        string songTitle = themeDetail?.Animetheme?.Song?.Title ?? string.Empty;
-        var artists = themeDetail?.Animetheme?.Song?.Artists;
-        string artist = artists?.Count > 0 ? string.Join(" / ", artists.Where(a => !string.IsNullOrWhiteSpace(a.Name)).Select(a => a.Name!)) : string.Empty; // account for multi-artist  tracks
+        string songTitle = themeDetail.Animetheme.Song?.Title ?? string.Empty;
+        var artists = themeDetail.Animetheme.Song?.Artists;
+        string artist = artists?.Count > 0 ? string.Join(" / ", artists.Where(a => !string.IsNullOrWhiteSpace(a.Name)).Select(a => a.Name!)) : string.Empty; // account for multi-artist tracks
 
         return new ThemeSelection(audioUrl, theme.Slug ?? string.Empty, slugDisplay, songTitle, artist, animeEntry.Name ?? string.Empty, animeEntry.Slug ?? string.Empty);
     }
@@ -571,16 +567,6 @@ public class AnimeThemesGenerator
         return VfsShared.TryCreateLink(source, dest, Logger) ? dest : null;
     }
 
-    private static async Task<T?> GetJsonAsync<T>(string url, CancellationToken ct)
-    {
-        using var response = await Http.GetAsync(url, ct);
-        if (!response.IsSuccessStatusCode)
-            return default;
-
-        await using var stream = await response.Content.ReadAsStreamAsync(ct);
-        return await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions, ct);
-    }
-
     private static void CleanupTempFile(string? path)
     {
         if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
@@ -592,32 +578,4 @@ public class AnimeThemesGenerator
             { // ignore cleanup errors
             }
     }
-
-    private sealed record AnimeResponse(List<AnimeEntry>? Anime);
-
-    private sealed record AnimeEntry(string? Name, string? Slug, List<AnimeTheme>? Animethemes);
-
-    private sealed record AnimeTheme(int Id, string? Slug, List<AnimeThemeEntry>? Animethemeentries);
-
-    private sealed record AnimeThemeEntry(List<AnimeThemeVideo>? Videos);
-
-    private sealed record AnimeThemeVideo(int Id);
-
-    private sealed record ThemeResponse(ThemeWrapper? Animetheme);
-
-    private sealed record ThemeWrapper(ThemeSong? Song, List<ThemeEntry>? Animethemeentries);
-
-    private sealed record ThemeSong(string? Title, List<ThemeArtist>? Artists);
-
-    private sealed record ThemeArtist(string? Name);
-
-    private sealed record ThemeEntry(List<ThemeVideo>? Videos);
-
-    private sealed record ThemeVideo(int Id);
-
-    private sealed record VideoResponse(List<VideoItem>? Videos);
-
-    private sealed record VideoItem(VideoAudio? Audio);
-
-    private sealed record VideoAudio(string? Link);
 }

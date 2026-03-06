@@ -1,110 +1,109 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 
-namespace ShokoRelay.Config
+namespace ShokoRelay.Config;
+
+/// <summary>
+/// Credentials required to initiate Plex authentication flows from the dashboard.
+/// </summary>
+public class PlexAuthConfig
 {
-    /// <summary>
-    /// Credentials required to initiate Plex authentication flows from the dashboard.
-    /// </summary>
-    public class PlexAuthConfig
-    {
-        [Display(Name = "Client Identifier", Description = "Plex client identifier.")]
-        [DefaultValue("")]
-        public string ClientIdentifier { get; set; } = "";
-    }
+    [Display(Name = "Client Identifier", Description = "Plex client identifier.")]
+    [DefaultValue("")]
+    public string ClientIdentifier { get; set; } = "";
+}
 
-    /// <summary>
-    /// Plex library section types used when filtering or identifying libraries.
-    /// </summary>
-    public enum PlexLibraryType
-    {
-        Movie = 1,
-        Show = 2,
-        Music = 8,
-        Photo = 13,
-    }
+/// <summary>
+/// Plex library section types used when filtering or identifying libraries.
+/// </summary>
+public enum PlexLibraryType
+{
+    Movie = 1,
+    Show = 2,
+    Music = 8,
+    Photo = 13,
+}
 
-    /// <summary>
-    /// Runtime representation of a Plex library section discovered on a server. Contains identifiers used by the plugin to address specific sections.
-    /// </summary>
-    public class PlexLibraryTarget
-    {
-        [Browsable(false)]
-        public int SectionId { get; set; } = 0;
+/// <summary>
+/// Runtime representation of a Plex library section discovered on a server. Contains identifiers used by the plugin to address specific sections.
+/// </summary>
+public class PlexLibraryTarget
+{
+    [Browsable(false)]
+    public int SectionId { get; set; } = 0;
 
-        [Browsable(false)]
-        public string Title { get; set; } = "";
+    [Browsable(false)]
+    public string Title { get; set; } = "";
 
-        [Browsable(false)]
-        public string Type { get; set; } = "";
+    [Browsable(false)]
+    public string Type { get; set; } = "";
 
-        [Browsable(false)]
-        public string Uuid { get; set; } = "";
+    [Browsable(false)]
+    public string Uuid { get; set; } = "";
 
-        [Browsable(false)]
-        public PlexLibraryType LibraryType { get; set; } = PlexLibraryType.Show;
+    [Browsable(false)]
+    public PlexLibraryType LibraryType { get; set; } = PlexLibraryType.Show;
 
-        [Browsable(false)]
-        public string ServerId { get; set; } = "";
+    [Browsable(false)]
+    public string ServerId { get; set; } = "";
 
-        [Browsable(false)]
-        public string ServerName { get; set; } = "";
+    [Browsable(false)]
+    public string ServerName { get; set; } = "";
 
-        [Browsable(false)]
-        public string ServerUrl { get; set; } = "";
-    }
+    [Browsable(false)]
+    public string ServerUrl { get; set; } = "";
+}
 
-    /// <summary>
-    /// Configuration options specific to an individual Plex library, including token and discovered server/library lists. Stored per-server in preferences.
-    /// </summary>
-    public class PlexLibraryConfig
-    {
-        [Display(Name = "Plex Token", Description = "Plex token used for server API calls.")]
-        [DefaultValue("")]
-        [Browsable(false)]
-        public string Token { get; set; } = "";
+/// <summary>
+/// Configuration options specific to an individual Plex library, including token and discovered server/library lists. Stored per-server in preferences.
+/// </summary>
+public class PlexLibraryConfig
+{
+    [Display(Name = "Plex Token", Description = "Plex token used for server API calls.")]
+    [DefaultValue("")]
+    [Browsable(false)]
+    public string Token { get; set; } = "";
 
-        [Display(Name = "Client Identifier", Description = "Optional X-Plex-Client-Identifier header value.")]
-        [DefaultValue("")]
-        [Browsable(false)]
-        public string ClientIdentifier { get; set; } = "";
+    [Display(Name = "Client Identifier", Description = "Optional X-Plex-Client-Identifier header value.")]
+    [DefaultValue("")]
+    [Browsable(false)]
+    public string ClientIdentifier { get; set; } = "";
 
-        [Browsable(false)]
-        public List<PlexAvailableServer> DiscoveredServers { get; set; } = new();
+    [Browsable(false)]
+    public List<PlexAvailableServer> DiscoveredServers { get; set; } = new();
 
-        [Browsable(false)]
-        public List<PlexAvailableLibrary> DiscoveredLibraries { get; set; } = new();
-    }
+    [Browsable(false)]
+    public List<PlexAvailableLibrary> DiscoveredLibraries { get; set; } = new();
+}
 
-    /// <summary>
-    /// Information about a Plex server that was discovered during authentication.
-    /// </summary>
-    public class PlexAvailableServer
-    {
-        public string Id { get; set; } = "";
-        public string Name { get; set; } = "";
-        public string PreferredUri { get; set; } = "";
-    }
+/// <summary>
+/// Information about a Plex server that was discovered during authentication.
+/// </summary>
+public class PlexAvailableServer
+{
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string PreferredUri { get; set; } = "";
+}
 
-    /// <summary>
-    /// Metadata describing a library section exposed by a Plex server. Used when prompting the user to select a library during configuration.
-    /// </summary>
-    public class PlexAvailableLibrary
-    {
-        public int Id { get; set; }
-        public string Title { get; set; } = "";
-        public string Type { get; set; } = "";
-        public string Agent { get; set; } = "";
-        public string Uuid { get; set; } = "";
+/// <summary>
+/// Metadata describing a library section exposed by a Plex server. Used when prompting the user to select a library during configuration.
+/// </summary>
+public class PlexAvailableLibrary
+{
+    public int Id { get; set; }
+    public string Title { get; set; } = "";
+    public string Type { get; set; } = "";
+    public string Agent { get; set; } = "";
+    public string Uuid { get; set; } = "";
 
-        // Server association
-        [Browsable(false)]
-        public string ServerId { get; set; } = "";
+    // Server association
+    [Browsable(false)]
+    public string ServerId { get; set; } = "";
 
-        [Browsable(false)]
-        public string ServerName { get; set; } = "";
+    [Browsable(false)]
+    public string ServerName { get; set; } = "";
 
-        [Browsable(false)]
-        public string ServerUrl { get; set; } = "";
-    }
+    [Browsable(false)]
+    public string ServerUrl { get; set; } = "";
 }
