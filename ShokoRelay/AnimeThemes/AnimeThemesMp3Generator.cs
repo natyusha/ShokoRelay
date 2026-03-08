@@ -77,7 +77,7 @@ public class AnimeThemesMp3Generator
         _configDirectory = configProvider.ConfigDirectory;
         _ffmpegService = new FfmpegService(configProvider.PluginDirectory);
         _apiClient = new AnimeThemesApi();
-        AnimeThemesConstants.EnsureUserAgent(Http);
+        AnimeThemesHelper.EnsureUserAgent(Http);
     }
 
     /// <summary>
@@ -140,7 +140,7 @@ public class AnimeThemesMp3Generator
 
     private void RefreshThemeMp3CacheInternal()
     {
-        Logger.Info("Building Theme.mp3 cache — scanning all managed import folders…");
+        Logger.Info("Building Theme.mp3 cache — scanning all managed import folders...");
         var excludedFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             VfsShared.ResolveRootFolderName(),
@@ -152,7 +152,7 @@ public class AnimeThemesMp3Generator
         try
         {
             var managed = _videoService.GetAllManagedFolders();
-            roots = (managed ?? Enumerable.Empty<Shoko.Abstractions.Video.IManagedFolder>())
+            roots = (managed ?? Enumerable.Empty<IManagedFolder>())
                 .Select(mf => mf.Path?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
                 .Where(p => !string.IsNullOrWhiteSpace(p) && Directory.Exists(p))
                 .Distinct(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)
@@ -427,7 +427,7 @@ public class AnimeThemesMp3Generator
         if (!allowPreview && !query.Force && File.Exists(themePath))
             return (Error(folder, "Theme.mp3 already exists.", "skipped"), null);
 
-        string? videoPath = Directory.EnumerateFiles(folder).FirstOrDefault(f => AnimeThemesConstants.VideoFileExtensions.Contains(Path.GetExtension(f)));
+        string? videoPath = Directory.EnumerateFiles(folder).FirstOrDefault(f => AnimeThemesHelper.VideoFileExtensions.Contains(Path.GetExtension(f)));
         if (string.IsNullOrWhiteSpace(videoPath))
             return (Error(folder, "No video files found in folder."), null);
 
@@ -454,27 +454,55 @@ public class AnimeThemesMp3Generator
         return new ThemeMp3OperationResult(folder, status, message);
     }
 
+    /// <summary>
+    /// Fetches a specific anime theme from the AnimeThemes API, applies normalization to the slug for display,
+    /// and retrieves the associated audio URL and metadata.
+    /// </summary>
+    /// <param name="anidbId">The AniDB ID of the anime to fetch themes for.</param>
+    /// <param name="slugArg">An optional slug filter (e.g., "OP1", "ED2-BD").</param>
+    /// <param name="offset">The index offset if multiple anime entries are returned by the API.</param>
+    /// <param name="ct">A cancellation token to abort the network request.</param>
+    /// <returns>
+    /// A ThemeSelection containing the audio URL and formatted metadata if found; otherwise, null.
+    /// </returns>
+    /// <exception cref="ArgumentException">Thrown if the provided slugArg does not match the required regex format.</exception>
     private async Task<ThemeSelection?> FetchThemeAsync(int anidbId, string? slugArg, int offset, CancellationToken ct)
     {
-        string? normalizedSlug = NormalizeSlug(slugArg);
-        if (!string.IsNullOrWhiteSpace(slugArg) && normalizedSlug == null)
-            throw new ArgumentException("Invalid slug format. Use values like op, op2, ed, ed2, op1-tv, ed-bd.");
-        string slugFilter = normalizedSlug != null ? $"&filter[animetheme][slug]={Uri.EscapeDataString(normalizedSlug)}" : "&filter[animetheme][type]=OP,ED";
+        // Use the centralized helper to parse the incoming argument for filtering
+        var (parsedBase, _) = AnimeThemesHelper.ParseSlug(slugArg ?? "");
+
+        // Validation: Ensure the slug matches the expected format before querying the API
+        if (!string.IsNullOrWhiteSpace(slugArg) && !AnimeThemesHelper.SlugRegex.IsMatch(slugArg))
+            throw new ArgumentException("Invalid slug format. Use values like OP, OP2, ED, ED2, OP1-TV, ED-BD.");
+
+        // Normalize for the API filter: if it's OP/ED, ensure we search for both "OP" and "OP1"
+        string slugFilter;
+        if (string.IsNullOrWhiteSpace(slugArg))
+        {
+            slugFilter = "&filter[animetheme][type]=OP,ED";
+        }
+        else
+        {
+            // API requires OP1/ED1 for the first theme, so we check both for standard types
+            string apiSlug = (parsedBase is "OP" or "ED") ? $"{parsedBase},{parsedBase}1" : parsedBase;
+            slugFilter = $"&filter[animetheme][slug]={Uri.EscapeDataString(apiSlug)}";
+        }
 
         var anime = await _apiClient.FetchAnimeThemesAsync(anidbId, slugFilter, ct);
         var animeEntry = anime?.Anime?.ElementAtOrDefault(offset);
         if (animeEntry == null || animeEntry.Animethemes == null || animeEntry.Animethemes.Count == 0)
             return null;
 
+        // Default to the first theme, or the second if OP1 is explicitly found at index 1
         int idx = 0;
-        if (normalizedSlug == null && animeEntry.Animethemes.Count > 1 && string.Equals(animeEntry.Animethemes[1].Slug, "OP1", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(slugArg) && animeEntry.Animethemes.Count > 1 && string.Equals(animeEntry.Animethemes[1].Slug, "OP1", StringComparison.OrdinalIgnoreCase))
             idx = 1;
 
         var theme = animeEntry.Animethemes.ElementAtOrDefault(idx);
         if (theme == null)
             return null;
 
-        var themeDetail = await _apiClient.FetchThemeWithAudioAsync(theme.Id, ct);
+        var themeDetail = await _apiClient.FetchAnimeThemeWithArtistsAsync(theme.Id, ct);
         if (themeDetail?.Animetheme == null)
             return null;
 
@@ -484,10 +512,22 @@ public class AnimeThemesMp3Generator
         if (string.IsNullOrWhiteSpace(audioUrl))
             return null;
 
-        string slugDisplay = FormatSlugDisplay(theme.Slug ?? "");
+        // Extract base (e.g., "OP", "OP2") and suffix (e.g., "BD") using AnimeThemesHelper
+        var (basePart, suffixPart) = AnimeThemesHelper.ParseSlug(theme.Slug ?? "");
+
+        // Expand "OP" to "Opening" and "ED" to "Ending" while maintaining the count (e.g., "OP2" => "Opening 2")
+        string typeName = basePart.StartsWith("OP", StringComparison.OrdinalIgnoreCase) ? "Opening" : "Ending";
+        string baseDisplay = $"{typeName} {basePart[2..]}".Trim();
+
+        // Combine with the formatted tag from the helper dictionary
+        string slugTag = AnimeThemesHelper.FormatSlugTag(suffixPart);
+        string slugDisplay = (baseDisplay + slugTag).Trim();
+
         string songTitle = themeDetail.Animetheme.Song?.Title ?? string.Empty;
         var artists = themeDetail.Animetheme.Song?.Artists;
-        string artist = artists?.Count > 0 ? string.Join(" / ", artists.Where(a => !string.IsNullOrWhiteSpace(a.Name)).Select(a => a.Name!)) : string.Empty; // account for multi-artist tracks
+
+        // Join multiple artists with a seicolon, or use the single artist name, or fallback to empty string
+        string artist = (artists?.Count > 1) ? string.Join("; ", artists.Where(a => !string.IsNullOrWhiteSpace(a.Name)).Select(a => a.Name!)) : artists?.FirstOrDefault()?.Name ?? string.Empty;
 
         return new ThemeSelection(audioUrl, theme.Slug ?? string.Empty, slugDisplay, songTitle, artist, animeEntry.Name ?? string.Empty, animeEntry.Slug ?? string.Empty);
     }
@@ -506,36 +546,6 @@ public class AnimeThemesMp3Generator
         await using var output = File.Create(tempPath);
         await input.CopyToAsync(output, ct);
         return tempPath;
-    }
-
-    private static string FormatSlugDisplay(string raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw))
-            return "";
-
-        string result = raw.ToUpperInvariant();
-        foreach (var pair in AnimeThemesConstants.SlugFormatting)
-            result = result.Replace(pair.Key, pair.Value, StringComparison.OrdinalIgnoreCase);
-
-        return TextHelper.CondenseSpaces(result).Trim();
-    }
-
-    private static string? NormalizeSlug(string? slug)
-    {
-        if (string.IsNullOrWhiteSpace(slug))
-            return null;
-
-        string s = slug.Trim().ToUpperInvariant();
-        if (!AnimeThemesConstants.SlugRegex.IsMatch(s))
-            return null;
-
-        if (s is "OP1" or "ED1")
-            s = s[..2];
-
-        if (s is "OP" or "ED")
-            return $"{s},{s}1";
-
-        return s;
     }
 
     private static string ResolvePath(string path)

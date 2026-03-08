@@ -1,0 +1,248 @@
+html {
+  scrollbar-gutter: unset;
+}
+body {
+  margin: 0;
+}
+/* #region MARK: Player
+*/
+.player {
+  display: flex;
+  max-height: 100vh;
+  max-width: 100vw;
+  border: none;
+  position: relative;
+  flex-direction: column;
+  background-color: var(--panel-color);
+  overflow: hidden;
+}
+.player .video-container {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+}
+.player .video-container video {
+  height: 100%;
+  width: 100%;
+  object-fit: contain;
+}
+#controls {
+  position: absolute;
+  right: 8px;
+  bottom: -56px;
+  z-index: 1;
+  display: flex;
+}
+#controls .at-btn svg {
+  height: 1.7em;
+  width: 1.7em;
+  margin-right: 8px;
+}
+#details {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.header {
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+.now-playing {
+  display: block;
+  max-width: calc(100vw - 395px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 1.1em;
+  cursor: default;
+}
+#title,
+#anime {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#title {
+  font-weight: 500;
+}
+#anime {
+  margin-top: -3px;
+  opacity: 0.6;
+}
+.filter-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.filter-wrap .magnify-icon {
+  position: absolute;
+  top: 9px;
+  left: 6px;
+  height: 24px;
+  width: 24px;
+  fill: var(--text-color);
+  opacity: 0.6;
+  pointer-events: none;
+}
+.filter-wrap input {
+  padding-left: 2.2em;
+  font-size: 1em;
+}
+/* #endregion */
+
+/* #region MARK: Tree View
+*/
+#tree {
+  --spacing: 1.3rem;
+  --radius: 6px;
+  flex: 1;
+  padding: 0 8px;
+  overflow-y: auto;
+  font-size: 0.9em;
+}
+#tree .placeholder {
+  padding: 24px 8px;
+  text-align: center;
+  color: var(--text-color);
+  opacity: 0.6;
+}
+#tree ul {
+  margin-top: 0;
+  margin-left: calc(var(--radius) - var(--spacing));
+  padding-left: 0;
+}
+#tree ul:first-child {
+  margin-top: 4px;
+}
+#tree li {
+  display: block;
+  position: relative;
+  padding-left: calc(2 * var(--spacing) - var(--radius) - 2px);
+}
+#tree ul li {
+  border-left: 2px solid var(--button-color);
+}
+#tree ul.tree > li::before {
+  border-bottom-color: transparent;
+}
+#tree ul li:last-child {
+  border-color: transparent;
+}
+#tree ul li::before {
+  content: "";
+  display: block;
+  position: absolute;
+  top: calc(var(--spacing) / -2);
+  left: -2px;
+  height: calc(var(--spacing) + 1px);
+  width: calc(var(--spacing) + 2px);
+  border: solid var(--button-color);
+  border-width: 0 0 2px 2px;
+  border-bottom-left-radius: 3px;
+}
+#tree summary {
+  display: block;
+  padding: 2px 0;
+  cursor: pointer;
+  list-style: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: none;
+}
+#tree summary::marker,
+#tree summary::-webkit-details-marker,
+#tree summary .tree-icon.collapse,
+#tree summary .tree-icon.collapse::after,
+#tree details[open] > summary .tree-icon.expand {
+  display: none;
+}
+#tree li::after,
+#tree summary .tree-icon {
+  display: block;
+  position: absolute;
+  top: calc(var(--spacing) / 2 - var(--radius));
+  left: calc(var(--spacing) - var(--radius) - 1px);
+  height: calc(2 * var(--radius));
+  width: calc(2 * var(--radius));
+  border-radius: 50%;
+  background: var(--border-color);
+}
+#tree summary .tree-icon {
+  z-index: 1;
+  display: block;
+  border: 1px solid var(--text-color);
+  border-radius: 2px;
+  background: var(--inset-color);
+}
+#tree summary .tree-icon::before,
+#tree summary .tree-icon::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  height: 2px;
+  width: 8px;
+  background: var(--text-color);
+  transform: translate(-50%, -50%);
+}
+#tree summary .tree-icon.expand::after {
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+#tree details[open] > summary .tree-icon.collapse {
+  display: block;
+}
+#tree .leaf {
+  margin-left: -12px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+#tree .leaf:hover,
+#tree summary:hover {
+  background: var(--inset-color);
+}
+#tree .leaf.active {
+  color: var(--bg-color);
+  background: var(--button-color);
+}
+ul.tree {
+  margin-top: 8px;
+}
+/* #endregion */
+
+/* #region MARK: Layout Adjustments
+*/
+@media (min-aspect-ratio: 4/3) {
+  .player {
+    flex-direction: row;
+  }
+  .player .video-container {
+    flex: 1;
+    height: 100vh;
+    aspect-ratio: auto;
+  }
+  #details {
+    max-width: 390px;
+    width: 390px;
+    max-height: calc(100vh - 52px);
+  }
+  .now-playing {
+    max-width: auto;
+  }
+  #tree {
+    border-bottom: 1px solid var(--border-color);
+  }
+  #controls {
+    right: -384px;
+    bottom: 0px;
+  }
+}
+/* #endregion */

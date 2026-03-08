@@ -148,16 +148,11 @@
               </svg>
               AnimeThemes: VFS
             </h3>
-            <button id="at-webm-cancel" class="at-btn" title="Stop Background Playback" type="button" aria-label="Stop Background Playback" hidden>
-              <svg class="icon-svg">
-                <use href="img/icons.svg#volume-high"></use>
-              </svg>
-            </button>
-            <button id="at-webm-open" class="at-btn" title="Open Video Player" type="button" aria-label="Open Video Player">
+            <a href="player" target="_blank" rel="noopener noreferrer" class="at-btn" title="Open Video Player" aria-label="Open Video Player">
               <svg class="icon-svg">
                 <use href="img/icons.svg#movie-open"></use>
               </svg>
-            </button>
+            </a>
           </div>
           <div class="full">
             <div>
@@ -366,51 +361,8 @@
     </div>
     <!-- #endregion -->
 
-    <!--#region MARK: Video Player Modal
-    -->
-    <div id="webm-modal" class="modal-overlay" aria-hidden="true" role="dialog" aria-modal="true">
-      <div class="modal webm" role="document">
-        <div class="modal-body">
-          <video id="webm-video" controls></video>
-          <div id="webm-controls">
-            <button id="webm-next" class="at-btn" title="Next Theme" type="button" aria-label="Next Theme">
-              <svg class="icon-svg">
-                <use href="img/icons.svg#skip-next"></use>
-              </svg>
-            </button>
-            <button id="webm-mode" class="at-btn" title="Playback Mode" data-mode="off" type="button" aria-label="Playback Mode">
-              <svg class="icon-svg mode loop">
-                <use href="img/icons.svg#sync"></use>
-              </svg>
-              <svg class="icon-svg mode shuffle">
-                <use href="img/icons.svg#shuffle-variant"></use>
-              </svg>
-              <svg class="icon-svg mode next">
-                <use href="img/icons.svg#shuffle-disabled"></use>
-              </svg>
-              <svg class="icon-svg mode off">
-                <use href="img/icons.svg#sync-off"></use>
-              </svg>
-            </button>
-            <span class="webm-filter-wrap">
-              <svg class="icon-svg magnify-icon">
-                <use href="img/icons.svg#magnify"></use>
-              </svg>
-              <input id="webm-filter" type="text" placeholder="Filter..." />
-            </span>
-          </div>
-        </div>
-        <details id="webm-tree-details" class="details-anim" open>
-          <summary>
-            <span class="webm-now-playing"><span id="webm-title">AnimeThemes: VFS Video Player</span><small id="webm-anime">Select a theme to begin...</small></span>
-          </summary>
-          <div id="webm-tree" class="details-content"></div>
-        </details>
-      </div>
-    </div>
-    <!-- #endregion -->
-
     <script src="js/script.js"></script>
+    <script src="js/plex.js"></script>
     <script src="js/animethemes.js"></script>
   </body>
 </html>

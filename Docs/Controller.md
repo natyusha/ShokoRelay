@@ -20,7 +20,7 @@ They can be interacted with easily using **/swagger/** at: `http(s)://{ShokoHost
 ## Dashboard / Config
 
 ```
-GET  /dashboard/{*path}                                        -> GetControllerPage (serve dashboard index & assets)
+GET  /dashboard/{*path}                                        -> GetControllerPage (serve dashboard index, player & assets)
 
 GET  /config                                                   -> GetConfig
 POST /config                                                   -> SaveConfig
@@ -29,8 +29,11 @@ GET  /config/schema                                            -> GetConfigSchem
 GET  /logs/{fileName}                                          -> GetLog (download any report from logs folder)
 ```
 
-- `GetControllerPage` Serves the dashboard UI and static assets (fonts, images, JS/CSS) from the plugin `dashboard` folder.
-  - `{*path}` is an optional catch-all for dashboard assets.
+- `GetControllerPage` Serves the plugin's frontend components and static assets from the `dashboard` folder.
+  - `/dashboard` (no path): Serves the main settings dashboard (`index.cshtml`).
+  - `/dashboard/player`: Serves the stand-alone AnimeThemes video player (`player.cshtml`).
+  - `/dashboard/{assetPath}`: Serves static assets (JS, CSS, fonts, images).
+  - The controller automatically injects a `<base>` tag to ensure relative assets resolve correctly regardless of the sub-route (index or player).
 
 ---
 
@@ -296,8 +299,11 @@ GET  /animethemes/vfs/webm/stream?path={path}                  -> AnimeThemesWeb
   - The CSV includes the following columns: `filepath`, `videoId`, `anidbId`, `nc`, `slug`, `version`, `songTitle`, `artistName`, `lyrics`, `subbed`, `uncen`, `nsfw`, `spoiler`, `source`, `resolution`, `episodes`, `overlap`
   - All boolean fields (`nc`, `lyrics`, `subbed`, `uncen`, `nsfw`, `spoiler`) are written as `1` (true) or `0` (false).
   - `overlap` indicates the degree to which the sequence and episode content overlap, with values: `None`, `Transition`, or `Over`.
-  - The filename for each theme is constructed as `{nc}{slug}{version} ❯ {songTitle} ❯ {artistName} [{attributes}]`
-    - Attributes are any true bools from (LYRICS, SUBS, UNCEN, NSFW, SPOIL) (e.g., `NCO‍Pv2 ❯ Title ❯ Artist [LYRICS, SUB].webm`).
+  - Slug variants (e.g., `-BD`, `-EN`, `-TV`) are extracted from the slug and formatted into a human-readable tag appended after the title.
+    - Example: `ED1-BD` becomes base slug `ED1` with tag ` (Blu-ray)` placed after the title.
+  - The filename for each theme is constructed as `{nc}{slug}{version} ❯ {songTitle}{slugTag} ❯ {artistName} [{attributes}]`
+    - Example filename: `NCO‍P1v2 ❯ Opening Theme (Blu-ray) ❯ Artist [LYRICS, SUBS].webm`
+    - Attributes are any true bools from (LYRICS, SUBS, UNCEN, NSFW, SPOIL).
   - When multiple anime records match a video, the API response is sorted by release order (year then season) and the earliest entry is used.
     - If two entries share the same release period, the one with the lower AniDB ID is preferred.
   - The resulting file is written to the config directory at `anidb_animethemes_xrefs.csv` in the plugin's _config_ directory.
@@ -310,7 +316,7 @@ GET  /animethemes/vfs/webm/stream?path={path}                  -> AnimeThemesWeb
 
 ---
 
-- `AnimeThemesWebmTree` returns the webm VFS cache as a tree structure of groups, series and files for the dashboard video player modal.
+- `AnimeThemesWebmTree` returns the webm VFS cache as a tree structure of groups, series and files for the stand-alone AnimeThemes player page.
   - Each series ID found in the cached paths is resolved to a display title and parent group name.
   - Returns `{ status: "ok", items: [...] }` where each item has `group`, `series`, `file`, and `path` properties.
   - Returns `{ status: "empty" }` when the cache file does not exist or is empty.
@@ -319,7 +325,7 @@ GET  /animethemes/vfs/webm/stream?path={path}                  -> AnimeThemesWeb
   - `path` (required) the full path to the `.webm` file. Plex-style paths are reverse-mapped automatically.
   - Responds with `video/webm` content type and supports HTTP range requests for seekable playback.
   - Returns `404` if the file does not exist at the resolved path.
-  - Used by the dashboard video player modal.
+  - Used by the stand-alone AnimeThemes player page.
 
 ---
 

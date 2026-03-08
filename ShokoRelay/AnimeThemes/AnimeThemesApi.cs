@@ -25,25 +25,16 @@ public class AnimeThemesApi
     {
         _http = httpClient ?? new HttpClient();
         _jsonOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true, WriteIndented = true };
-        AnimeThemesConstants.EnsureUserAgent(_http);
+        AnimeThemesHelper.EnsureUserAgent(_http);
     }
 
     /// <summary>
     /// Fetch video metadata with included audio, theme info, anime data, and song artists in a single optimized call.
     /// </summary>
-    public async Task<VideoWithAudioResponse?> FetchVideoWithAudioAsync(string videoBaseName, CancellationToken ct)
+    public async Task<VideoWithAudioResponse?> FetchVideoWithArtistsAsync(string videoBaseName, CancellationToken ct)
     {
-        string url = $"{AnimeThemesConstants.AtApiBase}/video/{Uri.EscapeDataString(videoBaseName)}?include=animethemeentries.animetheme.anime,animethemeentries.animetheme.song.artists,audio";
+        string url = $"{AnimeThemesHelper.AtApiBase}/video/{Uri.EscapeDataString(videoBaseName)}?include=animethemeentries.animetheme.anime,animethemeentries.animetheme.song.artists";
         return await GetJsonAsync<VideoWithAudioResponse>(url, ct);
-    }
-
-    /// <summary>
-    /// Fetch anime and available themes for a given AniDB ID with optional slug filter.
-    /// </summary>
-    public async Task<AnimeThemesResponse?> FetchAnimeThemesAsync(int anidbId, string? slugFilter, CancellationToken ct)
-    {
-        string url = $"{AnimeThemesConstants.AtApiBase}/anime?filter[has]=resources&filter[site]=AniDB&filter[external_id]={anidbId}&include=animethemes{slugFilter ?? ""}";
-        return await GetJsonAsync<AnimeThemesResponse>(url, ct);
     }
 
     /// <summary>
@@ -51,16 +42,25 @@ public class AnimeThemesApi
     /// </summary>
     public async Task<AnimeResourceResponse?> FetchAnimeResourcesAsync(int videoId, CancellationToken ct)
     {
-        string url = $"{AnimeThemesConstants.AtApiBase}/anime?filter[has]=animethemes.animethemeentries.videos,animethemes&include=resources&filter[resource][site]=AniDB&filter[video][id]={videoId}";
+        string url = $"{AnimeThemesHelper.AtApiBase}/anime?filter[has]=animethemes.animethemeentries.videos,animethemes&include=resources&filter[resource][site]=AniDB&filter[video][id]={videoId}";
         return await GetJsonAsync<AnimeResourceResponse>(url, ct);
     }
 
     /// <summary>
-    /// Fetch theme detail with videos and audio in a single optimized call.
+    /// Fetch anime and available themes for mp3 generation with a given AniDB ID and optional slug filter.
     /// </summary>
-    public async Task<ThemeWithAudioResponse?> FetchThemeWithAudioAsync(int themeId, CancellationToken ct)
+    public async Task<AnimeThemesResponse?> FetchAnimeThemesAsync(int anidbId, string? slugFilter, CancellationToken ct)
     {
-        string url = $"{AnimeThemesConstants.AtApiBase}/animetheme/{themeId}?include=animethemeentries.videos.audio,song.artists";
+        string url = $"{AnimeThemesHelper.AtApiBase}/anime?filter[has]=resources&filter[site]=AniDB&filter[external_id]={anidbId}&include=animethemes{slugFilter ?? ""}";
+        return await GetJsonAsync<AnimeThemesResponse>(url, ct);
+    }
+
+    /// <summary>
+    /// Fetch animetheme details for mp3 generation, including artists
+    /// </summary>
+    public async Task<ThemeWithAudioResponse?> FetchAnimeThemeWithArtistsAsync(int themeId, CancellationToken ct)
+    {
+        string url = $"{AnimeThemesHelper.AtApiBase}/animetheme/{themeId}?include=animethemeentries.videos.audio,song.artists";
         return await GetJsonAsync<ThemeWithAudioResponse>(url, ct);
     }
 
@@ -70,7 +70,7 @@ public class AnimeThemesApi
     private async Task<T?> GetJsonAsync<T>(string url, CancellationToken ct)
     {
         await RateLimitAsync(ct);
-        AnimeThemesConstants.EnsureUserAgent(_http);
+        AnimeThemesHelper.EnsureUserAgent(_http);
 
         using var response = await _http.GetAsync(url, ct);
         if (!response.IsSuccessStatusCode)

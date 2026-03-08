@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Video Player | Shoko Relay</title>
+    <link rel="icon" href="favicon.ico" />
+    <link rel="stylesheet" href="css/style.css" />
+    <link rel="stylesheet" href="css/player.css" />
+  </head>
+  <body>
+    <div class="player" role="main">
+      <div class="video-container">
+        <div id="controls">
+          <button id="next" class="at-btn" title="Next Theme" type="button">
+            <svg class="icon-svg"><use href="img/icons.svg#skip-next"></use></svg>
+          </button>
+          <button id="mode" class="at-btn" title="Playback Mode" data-mode="off" type="button">
+            <svg class="icon-svg mode loop"><use href="img/icons.svg#sync"></use></svg>
+            <svg class="icon-svg mode shuffle"><use href="img/icons.svg#shuffle-variant"></use></svg>
+            <svg class="icon-svg mode next"><use href="img/icons.svg#shuffle-disabled"></use></svg>
+            <svg class="icon-svg mode off"><use href="img/icons.svg#sync-off"></use></svg>
+          </button>
+          <span class="filter-wrap">
+            <svg class="icon-svg magnify-icon"><use href="img/icons.svg#magnify"></use></svg>
+            <input id="filter" type="text" placeholder="Filter..." />
+          </span>
+        </div>
+        <video id="video" controls autoplay></video>
+      </div>
+      <div id="details">
+        <div class="header">
+          <div class="now-playing">
+            <span id="title" data-tooltip-overflow-only="true">AnimeThemes: VFS Video Player</span>
+            <small id="anime" data-tooltip-overflow-only="true">Select a theme to begin...</small>
+          </div>
+        </div>
+        <div id="tree"></div>
+      </div>
+    </div>
+
+    <script src="js/script.js"></script>
+    <script src="js/player.js"></script>
+  </body>
+</html>

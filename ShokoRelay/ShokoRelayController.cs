@@ -34,8 +34,6 @@ public partial class ShokoRelayController : ControllerBase
     private readonly IUserService _userService;
     private readonly Services.ShokoImportService _shokoImportService;
 
-    private const string ControllerPageFileName = "index.cshtml";
-
     private string ApiBase => $"{Request.Scheme}://{Request.Host}{ShokoRelayInfo.BasePath}";
 
     private const string SeasonPrefix = PlexConstants.SeasonPrefix;
@@ -104,47 +102,42 @@ public partial class ShokoRelayController : ControllerBase
     /// <param name="path">Subpath within the dashboard folder (optional).</param>
     public IActionResult GetControllerPage([FromRoute] string? path = null)
     {
-        // Serve only from the plugin folder under PluginsPath/…/dashboard
         string dashboardDir = Path.Combine(_configProvider.PluginDirectory, "dashboard");
 
-        if (!Directory.Exists(dashboardDir))
-            return NotFound("Dashboard index not found.");
+        // Select the file: default to index, check for player, otherwise use path
+        bool isPlayer = "player".Equals(path, StringComparison.OrdinalIgnoreCase);
+        string fileName = (string.IsNullOrWhiteSpace(path) || isPlayer) ? (isPlayer ? "player.cshtml" : "index.cshtml") : path;
 
-        // If a subpath is requested, serve only allowed asset types from the plugin dashboard folder.
-        if (!string.IsNullOrWhiteSpace(path))
+        // Security & Path Resolution
+        string safePath = fileName.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
+        string requested = Path.GetFullPath(Path.Combine(dashboardDir, safePath));
+        string dashboardRoot = Path.GetFullPath(dashboardDir);
+
+        if (!requested.StartsWith(dashboardRoot, StringComparison.OrdinalIgnoreCase) || !System.IO.File.Exists(requested))
+            return NotFound();
+
+        // Serve Static Assets
+        string ext = Path.GetExtension(requested).ToLowerInvariant();
+        if (ext != ".cshtml")
         {
-            // Normalize separators and prevent path traversal
-            string safePath = path.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
-            string requested = Path.GetFullPath(Path.Combine(dashboardDir, safePath));
-            string dashboardFull = Path.GetFullPath(dashboardDir);
-            if (!requested.StartsWith(dashboardFull, StringComparison.OrdinalIgnoreCase) || !System.IO.File.Exists(requested))
-                return NotFound();
-
-            string ext = Path.GetExtension(requested).ToLowerInvariant();
             string? contentType = GetDashboardContentTypeForExtension(ext);
-
-            if (string.IsNullOrEmpty(contentType))
-                return NotFound();
-
-            return PhysicalFile(requested, contentType);
+            return contentType != null ? PhysicalFile(requested, contentType) : NotFound();
         }
 
-        // No path: serve the dashboard index directly from the plugin dashboard folder.
-        string indexPath = Path.Combine(dashboardDir, ControllerPageFileName);
-        if (System.IO.File.Exists(indexPath))
+        // Serve HTML Pages (index/player) with dynamic <base> tag
+        var html = System.IO.File.ReadAllText(requested);
+        if (html.IndexOf("<base", StringComparison.OrdinalIgnoreCase) < 0)
         {
-            var indexHtml = System.IO.File.ReadAllText(indexPath);
-            // Ensure relative asset URLs (fonts/, img/) resolve under the dashboard route by inserting a base href.
-            if (indexHtml.IndexOf("<base", StringComparison.OrdinalIgnoreCase) < 0)
-            {
-                var baseHref = (Request.Path.Value ?? "/").TrimEnd('/') + "/";
-                var baseTag = $"<base href=\"{System.Net.WebUtility.HtmlEncode(baseHref)}\">";
-                indexHtml = indexHtml.Replace("<head>", "<head>\n    " + baseTag, StringComparison.OrdinalIgnoreCase);
-            }
-            return Content(indexHtml, "text/html");
+            // Find the index of "/dashboard" in the URL and cut there to ensure the base is always the dashboard root, regardless of the sub-page.
+            var reqPath = Request.Path.Value ?? "";
+            int dashIdx = reqPath.IndexOf("/dashboard", StringComparison.OrdinalIgnoreCase);
+            var baseHref = reqPath.Substring(0, dashIdx + 10).TrimEnd('/') + "/";
+
+            var baseTag = $"\n    <base href=\"{System.Net.WebUtility.HtmlEncode(baseHref)}\">";
+            html = html.Replace("<head>", "<head>" + baseTag, StringComparison.OrdinalIgnoreCase);
         }
 
-        return NotFound("Dashboard index not found.");
+        return Content(html, "text/html");
     }
 
     [HttpGet("config")]
@@ -818,65 +811,33 @@ public partial class ShokoRelayController : ControllerBase
         if (!cfg.AutoScrobble)
             return Ok(new { status = "ignored", reason = "auto_scrobble_disabled" });
 
-        string? payloadJson = null;
-        if (Request.HasFormContentType && Request.Form.ContainsKey("payload"))
-        {
-            payloadJson = Request.Form["payload"].ToString();
-        }
-        else
-        {
-            using var sr = new StreamReader(Request.Body);
-            payloadJson = await sr.ReadToEndAsync().ConfigureAwait(false);
-        }
+        // Use the helper to extract and deserialize the Plex webhook payload
+        var evt = await ExtractPlexWebhookPayloadAsync().ConfigureAwait(false);
 
-        if (string.IsNullOrWhiteSpace(payloadJson))
-            return BadRequest(new { status = "error", message = "missing payload" });
+        if (evt == null || evt.Metadata == null)
+            return BadRequest(new { status = "error", message = "missing or invalid payload" });
 
-        PlexWebhookPayload? evt;
-        try
-        {
-            evt = System.Text.Json.JsonSerializer.Deserialize<PlexWebhookPayload>(payloadJson, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-        }
-        catch
-        {
-            return BadRequest(new { status = "error", message = "invalid payload" });
-        }
+        // Determine if payload is a scrobble or rating event
+        bool isScrobble = string.Equals(evt.Event, "media.scrobble", StringComparison.OrdinalIgnoreCase);
+        bool isRate = string.Equals(evt.Event, "media.rate", StringComparison.OrdinalIgnoreCase);
 
-        // Determine if payload is a scrobble or (optional) rating event.
-        bool isScrobble = string.Equals(evt?.Event, "media.scrobble", StringComparison.OrdinalIgnoreCase);
-        bool isRate = string.Equals(evt?.Event, "media.rate", StringComparison.OrdinalIgnoreCase);
+        // Exit early if the event type isn't supported or ratings sync is disabled
+        if (!(isScrobble || (isRate && cfg.ShokoSyncWatchedIncludeRatings)))
+            return Ok(new { status = "ignored", reason = "unsupported_event_type" });
 
-        if (evt == null || evt.Metadata == null || !(isScrobble || (isRate && cfg.ShokoSyncWatchedIncludeRatings)))
-            return Ok(); // nothing for us to do
-
-        // ignore owner events if admin exclusion enabled (applies to both types)
+        // Logic for admin exclusion
         if (cfg.ShokoSyncWatchedExcludeAdmin && evt.Owner == true)
             return Ok(new { status = "ignored", reason = "admin_scrobble_excluded" });
 
-        // Accept events only from admin or configured ExtraPlexUsers. (For rate events admin behaviour identical.)
-        var plexUserFromPayload = evt.Account?.Title?.Trim();
-        if (string.IsNullOrWhiteSpace(plexUserFromPayload))
-            return Ok(new { status = "ignored", reason = "no_plex_user" });
-
-        // Reuse centralized ExtraPlexUsers parsing from ConfigProvider
-        var extraEntries = _configProvider.GetExtraPlexUserEntries();
-        var allowed = new HashSet<string>(extraEntries.Select(e => e.Name), StringComparer.OrdinalIgnoreCase);
-
-        // accept owner events as they are always treated as coming from the admin user.
-        if (evt.Owner == true && !string.IsNullOrWhiteSpace(plexUserFromPayload))
-            allowed.Add(plexUserFromPayload);
-
-        // If the webhook payload indicates the server owner triggered the event, treat it as allowed regardless of name resolution.
-        // This is a reliable fallback for when the account info call fails (e.g. the token is invalid or the server URL is misconfigured and causes an HTML error page to be returned).
-        if (evt.Owner != true && !allowed.Contains(plexUserFromPayload))
+        // Utilize helper to validate if the Plex user is allowed to sync
+        if (!IsPlexUserAllowed(evt, cfg))
         {
-            Logger.Info("Ignored Plex scrobble from user '{User}' (not configured in ExtraPlexUsers nor admin)", plexUserFromPayload);
+            Logger.Info("Ignored Plex {Event} from user '{User}' (not allowed)", evt.Event, evt.Account?.Title);
             return Ok(new { status = "ignored", reason = "plex_user_not_allowed" });
         }
 
-        // Try to extract Shoko episode id from GUID (agent GUID format used by this plugin)
+        // Try to extract Shoko episode id from the Plex GUID
         int? shokoEpisodeId = SyncHelper.TryParseShokoEpisodeIdFromGuid(evt.Metadata.Guid);
-
         if (!shokoEpisodeId.HasValue)
             return Ok(new { status = "ignored", reason = "no_shoko_guid" });
 
@@ -884,6 +845,7 @@ public partial class ShokoRelayController : ControllerBase
         if (shokoEpisode == null)
             return Ok(new { status = "ignored", reason = "episode_not_found" });
 
+        // Resolve the primary Shoko user to apply the sync to
         Shoko.Abstractions.User.IUser? user = null;
         try
         {
@@ -893,18 +855,19 @@ public partial class ShokoRelayController : ControllerBase
         {
             Logger.Warn(ex, "Webhook: error enumerating Shoko users");
         }
+
         if (user == null)
             return Ok(new { status = "ignored", reason = "no_shoko_user" });
 
+        // Handle Rating Events
         if (isRate)
         {
-            // rating events only processed if IncludeRatings config is true (checked earlier)
-            double? ratingValue = evt.Metadata?.UserRating;
+            double? ratingValue = evt.Metadata.UserRating;
             if (!ratingValue.HasValue)
                 return Ok(new { status = "ignored", reason = "no_rating" });
 
             await _userDataService.RateEpisode(shokoEpisode, user, ratingValue).ConfigureAwait(false);
-            Logger.Info("Plex rating applied: user='{User}', title='{Title}', guid='{Guid}', rating={Rating}", plexUserFromPayload, evt.Metadata?.Title, evt.Metadata?.Guid, ratingValue);
+            Logger.Info("Plex rating applied: user='{User}', title='{Title}', rating={Rating}", evt.Account?.Title, evt.Metadata.Title, ratingValue);
             return Ok(
                 new
                 {
@@ -915,7 +878,7 @@ public partial class ShokoRelayController : ControllerBase
             );
         }
 
-        // default is scrobble handling
+        // Handle Scrobble (Watched Status) Events
         DateTime? watchedAt = null;
         if (evt.Metadata.LastViewedAt.HasValue && evt.Metadata.LastViewedAt.Value > 0)
         {
@@ -923,17 +886,16 @@ public partial class ShokoRelayController : ControllerBase
             {
                 watchedAt = DateTimeOffset.FromUnixTimeSeconds(evt.Metadata.LastViewedAt.Value).UtcDateTime;
             }
-            catch { }
+            catch
+            { /* fallback to current server time */
+            }
         }
 
-        var saved = await _userDataService.SetEpisodeWatchedStatus(shokoEpisode, user!, true, watchedAt).ConfigureAwait(false);
+        var saved = await _userDataService.SetEpisodeWatchedStatus(shokoEpisode, user, true, watchedAt).ConfigureAwait(false);
         bool updated = saved != null;
 
-        // log a successful scrobble
         if (updated)
-        {
-            Logger.Info("Plex scrobble applied: user='{User}', title='{Title}', guid='{Guid}'", plexUserFromPayload, evt.Metadata?.Title, evt.Metadata?.Guid);
-        }
+            Logger.Info("Plex scrobble applied: user='{User}', title='{Title}'", evt.Account?.Title, evt.Metadata.Title);
 
         return Ok(new { status = "ok", marked = updated });
     }
@@ -1030,32 +992,8 @@ public partial class ShokoRelayController : ControllerBase
     /// <param name="dryRun">If true skips deletion and returns a summary.</param>
     public async Task<IActionResult> RemoveMissingFiles([FromQuery] bool? dryRun = null)
     {
-        try
-        {
-            if (_shokoImportService == null)
-                return StatusCode(500, new { status = "error", message = "Import service not available." });
-
-            bool doDry = dryRun ?? true;
-            var removed = await _shokoImportService.RemoveMissingFilesAsync(true, doDry).ConfigureAwait(false);
-
-            WriteReportLog("remove-missing-report.log", sb => LogHelper.BuildRemoveMissingReport(sb, doDry, removed));
-
-            return Ok(
-                new
-                {
-                    status = "ok",
-                    dryRun = doDry,
-                    removed,
-                    count = removed?.Count ?? 0,
-                    logUrl = $"{ApiBase}/logs/remove-missing-report.log",
-                }
-            );
-        }
-        catch (Exception ex)
-        {
-            Logger.Warn(ex, "RemoveMissingFiles failed");
-            return StatusCode(500, new { status = "error", message = ex.Message });
-        }
+        var (data, error) = await PerformRemoveMissingFilesAsync(dryRun);
+        return error != null ? StatusCode(500, new { status = "error", message = error }) : Ok(data);
     }
 
     /// <summary>
@@ -1065,26 +1003,8 @@ public partial class ShokoRelayController : ControllerBase
     [HttpPost("shoko/import")]
     public async Task<IActionResult> RunShokoImport([FromQuery] bool onlyUnrecognized = true)
     {
-        try
-        {
-            if (_shokoImportService == null)
-                return StatusCode(500, new { status = "error", message = "Import service not available." });
-
-            var scanned = await _shokoImportService.TriggerImportAsync().ConfigureAwait(false);
-            return Ok(
-                new
-                {
-                    status = "ok",
-                    scanned,
-                    scannedCount = scanned?.Count ?? 0,
-                }
-            );
-        }
-        catch (Exception ex)
-        {
-            Logger.Warn(ex, "RunShokoImport failed");
-            return StatusCode(500, new { status = "error", message = ex.Message });
-        }
+        var (data, error) = await PerformShokoImportAsync(false);
+        return error != null ? StatusCode(500, new { status = "error", message = error }) : Ok(data);
     }
 
     /// <summary>
@@ -1095,33 +1015,23 @@ public partial class ShokoRelayController : ControllerBase
     public async Task<IActionResult> StartShokoImportNow(CancellationToken cancellationToken = default)
     {
         var settings = _configProvider.GetSettings();
-        int freqHours = settings?.ShokoImportFrequencyHours ?? 0;
+        var (data, error) = await PerformShokoImportAsync(true);
 
-        if (_shokoImportService == null)
-            return StatusCode(501, new { status = "error", message = "ShokoImportService not available" });
+        if (error != null)
+            return StatusCode(500, new { status = "error", message = error });
 
-        try
-        {
-            var scanned = await _shokoImportService.TriggerImportAsync(cancellationToken).ConfigureAwait(false);
-
-            // Replace schedule: mark last-run == now so automation schedules next run after configured interval
-            ShokoRelay.MarkImportRunNow();
-
-            return Ok(
-                new
-                {
-                    status = "ok",
-                    triggered = true,
-                    scheduled = freqHours > 0,
-                    nextRunInHours = freqHours,
-                    scanned,
-                }
-            );
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { status = "error", message = ex.Message });
-        }
+        // Add the extra scheduling info required by this specific endpoint
+        var freqHours = settings?.ShokoImportFrequencyHours ?? 0;
+        return Ok(
+            new
+            {
+                status = "ok",
+                triggered = true,
+                scheduled = freqHours > 0,
+                nextRunInHours = freqHours,
+                scanned = ((dynamic)data!).scanned,
+            }
+        );
     }
 
     #endregion
@@ -1270,7 +1180,7 @@ public partial class ShokoRelayController : ControllerBase
             return validation;
 
         // mapping file lives in config directory; check existence for user-friendly error
-        string resolvedMapPath = Path.Combine(_configProvider.ConfigDirectory, AnimeThemesConstants.AtMapFileName);
+        string resolvedMapPath = Path.Combine(_configProvider.ConfigDirectory, AnimeThemesHelper.AtMapFileName);
         if (!System.IO.File.Exists(resolvedMapPath))
         {
             return BadRequest(new { status = "error", message = "Mapping file not found" });
@@ -1374,7 +1284,7 @@ public partial class ShokoRelayController : ControllerBase
     public async Task<IActionResult> ImportAnimeThemesMapping(CancellationToken cancellationToken = default)
     {
         // use the raw URL directly; avoid the GitHub API which truncates large files
-        const string rawUrl = AnimeThemesConstants.AtRawMapUrl + AnimeThemesConstants.AtMapFileName;
+        const string rawUrl = AnimeThemesHelper.AtRawMapUrl + AnimeThemesHelper.AtMapFileName;
         var (count, log) = await _animeThemesMapping.ImportMappingFromUrlAsync(rawUrl, cancellationToken).ConfigureAwait(false);
         return Ok(new { status = "ok", count });
     }

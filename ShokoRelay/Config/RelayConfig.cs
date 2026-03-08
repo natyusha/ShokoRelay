@@ -258,7 +258,7 @@ public class RelayConfig
     [DefaultValue("")]
     public string ShokoServerUrl { get; set; } = "";
 
-    [Display(Name = "AnimeThemes Overlap Level", Description = "The level of overlap allowed for AnimeThemes .webm files")]
+    [Display(Name = "AnimeThemes Overlap Level", Description = "The amount of overlap allowed for AnimeThemes .webm files to be added to the VFS")]
     [DefaultValue(OverlapLevel.All)]
     public OverlapLevel AnimeThemesOverlapLevel { get; set; } = OverlapLevel.All;
 

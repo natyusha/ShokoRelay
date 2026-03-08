@@ -507,6 +507,61 @@ public partial class ShokoRelayController
     #endregion
 
     #region Plex: Webhook
+
+    /// <summary>
+    /// Safely extracts and deserializes the JSON payload from the current Request,
+    /// supporting both multipart form-data and raw JSON bodies.
+    /// </summary>
+    /// <returns>A deserialized <see cref="PlexWebhookPayload"/>, or <c>null</c> if the payload is missing or invalid.</returns>
+    private async Task<PlexWebhookPayload?> ExtractPlexWebhookPayloadAsync()
+    {
+        string? payloadJson = null;
+
+        if (Request.HasFormContentType && Request.Form.ContainsKey("payload"))
+        {
+            payloadJson = Request.Form["payload"].ToString();
+        }
+        else
+        {
+            using var sr = new StreamReader(Request.Body);
+            payloadJson = await sr.ReadToEndAsync().ConfigureAwait(false);
+        }
+
+        if (string.IsNullOrWhiteSpace(payloadJson))
+            return null;
+
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<PlexWebhookPayload>(payloadJson, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Validates whether the user identified in the Plex webhook is permitted to sync data
+    /// based on the server owner status and the <c>ExtraPlexUsers</c> configuration.
+    /// </summary>
+    /// <param name="evt">The deserialized Plex webhook payload.</param>
+    /// <param name="cfg">The current relay configuration.</param>
+    /// <returns><c>true</c> if the user is the server owner or is listed in the allowed extra users; otherwise, <c>false</c>.</returns>
+    private bool IsPlexUserAllowed(PlexWebhookPayload evt, RelayConfig cfg)
+    {
+        var plexUser = evt.Account?.Title?.Trim();
+        if (string.IsNullOrWhiteSpace(plexUser))
+            return false;
+
+        // Owner is always allowed
+        if (evt.Owner == true)
+            return true;
+
+        // Check against ExtraPlexUsers
+        var extraEntries = _configProvider.GetExtraPlexUserEntries();
+        return extraEntries.Any(e => string.Equals(e.Name, plexUser, StringComparison.OrdinalIgnoreCase));
+    }
+
     #endregion
 
     #region Virtual File System
@@ -527,9 +582,70 @@ public partial class ShokoRelayController
 
         return _metadataService.GetAllShokoSeries().Cast<IShokoSeries?>().ToList();
     }
+
     #endregion
 
     #region Shoko: Automation
+
+    /// <summary>
+    /// Executes the removal of missing files from Shoko and generates a report log.
+    /// </summary>
+    /// <param name="dryRun">If true, prevents actual deletion and only returns a summary.</param>
+    /// <returns>
+    /// A tuple containing the formatted data object on success, or an error message if the service is unavailable.
+    /// </returns>
+    private async Task<(object? Data, string? Error)> PerformRemoveMissingFilesAsync(bool? dryRun)
+    {
+        if (_shokoImportService == null)
+            return (null, "Import service not available.");
+
+        bool doDry = dryRun ?? true;
+        var removed = await _shokoImportService.RemoveMissingFilesAsync(true, doDry).ConfigureAwait(false);
+
+        // Centralized log writing logic
+        WriteReportLog("remove-missing-report.log", sb => LogHelper.BuildRemoveMissingReport(sb, doDry, removed));
+
+        return (
+            new
+            {
+                status = "ok",
+                dryRun = doDry,
+                removed,
+                count = removed?.Count ?? 0,
+                logUrl = $"{ApiBase}/logs/remove-missing-report.log",
+            },
+            null
+        );
+    }
+
+    /// <summary>
+    /// Triggers a Shoko import scan and optionally resets the automation schedule.
+    /// </summary>
+    /// <param name="markSchedule">If true, updates the ShokoRelay last-run timestamp.</param>
+    /// <returns>
+    /// A tuple containing the scan results on success, or an error message if the service is unavailable.
+    /// </returns>
+    private async Task<(object? Data, string? Error)> PerformShokoImportAsync(bool markSchedule)
+    {
+        if (_shokoImportService == null)
+            return (null, "Import service not available.");
+
+        var scanned = await _shokoImportService.TriggerImportAsync().ConfigureAwait(false);
+
+        if (markSchedule)
+            ShokoRelay.MarkImportRunNow();
+
+        return (
+            new
+            {
+                status = "ok",
+                scanned,
+                scannedCount = scanned?.Count ?? 0,
+            },
+            null
+        );
+    }
+
     #endregion
 
     #region Sync Watched
@@ -651,5 +767,6 @@ public partial class ShokoRelayController
         }
         return tags;
     }
+
     #endregion
 }

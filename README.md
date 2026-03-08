@@ -183,7 +183,7 @@ This plugin includes full [AnimeThemes](https://animethemes.moe/) integration. I
 > [!IMPORTANT]
 > Similar to the VFS you must exclude the `!AnimeThemes` folder from Shoko scans using the `Exclude` server option. An example `settings-server.json` entry is shown [above](#shoko).
 
-Once the VFS has been generated a video player modal is available on the dashboard via the video icon button in the "AnimeThemes: VFS" section header. It displays a tree view of all the themes in the VFS grouped by Shoko group and series. This allows you to browse and play `.webm` files directly in the browser with various playback modes and a filter for finding things.
+A video player page is available on the dashboard via the video icon button in the "AnimeThemes: VFS" section header. It displays a tree view of all the themes in the VFS grouped by Shoko group and series. This allows you to browse and play `.webm` files directly in the browser with various playback modes and a filter for finding things.
 
 ### Themes as Series BGM
 
@@ -327,3 +327,5 @@ Due to this plugin relying on Plex's metadata provider feature (which is still u
   - Add custom or generic series/episode ratings directly through the provider
   - Add rich cast info (bios) for cast and crew
   - Include generic ratings for "old experience" Plex clients without using the HTTP API
+- Add favourites functionality to the AnimeThemes player
+- Add some way to distinguish between AnimeThemes of the same slug index that are grouped due to VFS overrides
