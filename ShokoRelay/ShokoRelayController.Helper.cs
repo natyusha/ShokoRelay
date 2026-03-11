@@ -541,25 +541,61 @@ public partial class ShokoRelayController
     }
 
     /// <summary>
-    /// Validates whether the user identified in the Plex webhook is permitted to sync data
-    /// based on the server owner status and the <c>ExtraPlexUsers</c> configuration.
+    /// Validates whether the user identified in the Plex webhook is permitted to sync data based on the server owner status and the <c>ExtraPlexUsers</c> configuration.
+    /// This also ensures that the server the event is from is one that is actually using Shoko Relay.
     /// </summary>
     /// <param name="evt">The deserialized Plex webhook payload.</param>
     /// <param name="cfg">The current relay configuration.</param>
     /// <returns><c>true</c> if the user is the server owner or is listed in the allowed extra users; otherwise, <c>false</c>.</returns>
-    private bool IsPlexUserAllowed(PlexWebhookPayload evt, RelayConfig cfg)
+    private async Task<(bool Allowed, string Reason)> ValidateWebhookSource(PlexWebhookPayload evt, RelayConfig cfg, CancellationToken ct)
     {
+        if (!_configProvider.IsManagedServer(evt.Server?.Uuid))
+            return (false, "unrecognized_server_uuid");
+
         var plexUser = evt.Account?.Title?.Trim();
         if (string.IsNullOrWhiteSpace(plexUser))
-            return false;
+            return (false, "empty_account_title");
 
-        // Owner is always allowed
-        if (evt.Owner == true)
-            return true;
-
-        // Check against ExtraPlexUsers
+        // Check Extra Users list
         var extraEntries = _configProvider.GetExtraPlexUserEntries();
-        return extraEntries.Any(e => string.Equals(e.Name, plexUser, StringComparison.OrdinalIgnoreCase));
+        if (extraEntries.Any(e => string.Equals(e.Name, plexUser, StringComparison.OrdinalIgnoreCase)))
+            return (true, "allowed_extra_user");
+
+        // Handle Admin/Owner logic
+        if (evt.Owner == true)
+        {
+            string? adminName = _configProvider.GetAdminUsername();
+
+            // If we don't have the admin name yet, fetch it once
+            if (string.IsNullOrEmpty(adminName))
+            {
+                await _configProvider.RefreshAdminUsername(_plexAuth, ct);
+                adminName = _configProvider.GetAdminUsername();
+            }
+
+            // If we STILL don't have the admin name (API failure), and Exclude Admin is OFF, we have to assume the 'Owner' is the admin.
+            if (string.IsNullOrEmpty(adminName))
+            {
+                if (cfg.ShokoSyncWatchedExcludeAdmin)
+                    return (false, "admin_excluded_identity_unknown");
+
+                return (true, "allowed_owner_identity_assumed");
+            }
+
+            // If we know the admin name, do a strict check
+            if (string.Equals(plexUser, adminName, StringComparison.OrdinalIgnoreCase))
+            {
+                if (cfg.ShokoSyncWatchedExcludeAdmin)
+                    return (false, "admin_excluded_by_config");
+
+                return (true, "allowed_admin");
+            }
+
+            // If Owner: true but name doesn't match and isn't in Extra Users, it's a random managed user.
+            return (false, $"unauthorized_managed_user ({plexUser})");
+        }
+
+        return (false, $"user_not_authorized ({plexUser})");
     }
 
     #endregion

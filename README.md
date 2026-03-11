@@ -183,8 +183,6 @@ This plugin includes full [AnimeThemes](https://animethemes.moe/) integration. I
 > [!IMPORTANT]
 > Similar to the VFS you must exclude the `!AnimeThemes` folder from Shoko scans using the `Exclude` server option. An example `settings-server.json` entry is shown [above](#shoko).
 
-A video player page is available on the dashboard via the video icon button in the "AnimeThemes: VFS" section header. It displays a tree view of all the themes in the VFS grouped by Shoko group and series. This allows you to browse and play `.webm` files directly in the browser with various playback modes and a filter for finding things.
-
 ### Themes as Series BGM
 
 There is also support for generating `Theme.mp3` files as local metadata. This will add them to the VFS automatically and can be run for either a single series or as a batch operation. This process requires Shoko Server to have access to [FFmpeg/FFprobe](https://ffmpeg.org/download.html) (place system appropriate binaries in the ShokoRelay plugin folder or system PATH) as AnimeThemes does not provide the '.mp3' files that plex requires for this feature.
@@ -197,6 +195,14 @@ There is also support for generating `Theme.mp3` files as local metadata. This w
 **Notes:**
 
 Any subfolder named after the configured `VFS Root Path`, `Collection Posters Root Path`, or `AnimeThemes Root Path` are ignored during batch operations. This is due to those directories only being used internally and never containing series data. There is also a little media player included which will play downloaded themes if enabled. You can set it to looped playback or even have it shuffle through all of your Theme.mp3 files if desired. The progress bar is fully functional and you can pause playback by middle clicking it.
+
+### AnimeThemes Video Player
+
+Shoko Relay includes a stand-alone, browser-based video player designed specifically for your AnimeThemes collection. It can be accessed via the `Open Video Player` icon (clap board) within the "AnimeThemes: VFS" section of the dashboard (or by a dedicated url: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/dashboard/player`). There is a included tree view which allows you to browse your themes by Group and Series as they would appear in Plex. Support for Loop, Shuffle, and Sequential playback is available via a 4 stage toggle button as well as a per word filtering which supports series, group, or filename level queries.
+
+#### Favourites
+
+You can mark any theme as a favourite by clicking the heart icon `❤` next to its name in the tree view. Once marked as a favourite the icon for a given item will change to be red in colour and it will be persisted to a settings file based on its AnimeThemes VideoID. To quickly view only your marked themes, type `favs` into the search bar. This keyword can be combined with other search terms (e.g., `favs gundam`) to find specific favourites.
 
 ## Information
 
@@ -327,5 +333,4 @@ Due to this plugin relying on Plex's metadata provider feature (which is still u
   - Add custom or generic series/episode ratings directly through the provider
   - Add rich cast info (bios) for cast and crew
   - Include generic ratings for "old experience" Plex clients without using the HTTP API
-- Add favourites functionality to the AnimeThemes player
-- Add some way to distinguish between AnimeThemes of the same slug index that are grouped due to VFS overrides
+- Add a way to distinguish between AnimeThemes of the same slug index that are grouped due to VFS overrides

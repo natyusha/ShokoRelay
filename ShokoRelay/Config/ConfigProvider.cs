@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using NLog;
 using Shoko.Abstractions.Plugin;
+using ShokoRelay.Plex;
 
 namespace ShokoRelay.Config;
 
@@ -20,6 +21,9 @@ public class ConfigProvider
     private readonly string _tokenPath;
     private readonly object _settingsLock = new();
     private RelayConfig? _settings;
+    private List<PlexAvailableServer>? _cachedServers;
+    private List<(string Name, string? Pin)>? _cachedExtraUsers;
+    private string? _cachedAdminUsername;
 
     private static readonly JsonSerializerOptions Options = new() { AllowTrailingCommas = true, WriteIndented = true };
 
@@ -95,6 +99,9 @@ public class ConfigProvider
         lock (_settingsLock)
         {
             _settings = null;
+            _cachedServers = null;
+            _cachedExtraUsers = null;
+            _cachedAdminUsername = null;
         }
         Logger.Info("Config file changed externally, settings invalidated.");
     }
@@ -309,6 +316,57 @@ public class ConfigProvider
     }
 
     /// <summary>
+    /// Get the admin username associated with the current Plex token, if available. This is used to exclude admin scrobbles when configured.
+    /// </summary>
+    /// <returns></returns>
+    public string? GetAdminUsername()
+    {
+        if (!string.IsNullOrEmpty(_cachedAdminUsername))
+            return _cachedAdminUsername;
+
+        var tf = ReadTokenFile();
+        if (!string.IsNullOrEmpty(tf.AdminUsername))
+        {
+            _cachedAdminUsername = tf.AdminUsername;
+            return _cachedAdminUsername;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Add this to be called by the Controller during Webhook validation if cache is empty
+    /// </summary>
+    /// <param name="auth"></param>
+    /// <param name="ct"></param>
+    /// <returns></returns>
+    public async Task RefreshAdminUsername(PlexAuth auth, CancellationToken ct)
+    {
+        var token = GetPlexToken();
+        if (string.IsNullOrEmpty(token))
+            return;
+
+        var info = await auth.GetAccountInfoAsync(token, ct);
+        if (info != null)
+        {
+            _cachedAdminUsername = info.Title ?? info.Username;
+            UpdatePlexTokenInfo(adminName: _cachedAdminUsername);
+            Logger.Info("Persisted Plex Admin username: {User}", _cachedAdminUsername);
+        }
+    }
+
+    /// <summary>
+    /// Checks if the provided UUID matches any of the servers discovered and saved during authentication.
+    /// </summary>
+    public bool IsManagedServer(string? uuid)
+    {
+        if (string.IsNullOrWhiteSpace(uuid))
+            return false;
+        var discovered = GetPlexDiscoveredServers();
+        return discovered.Any(s => string.Equals(s.Id, uuid, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Parse a comma-separated string of Plex user entries, optionally containing 4-digit PINs after a semicolon.
     /// </summary>
     public static List<(string Name, string? Pin)> ParseExtraPlexUsers(string? extraRaw)
@@ -343,8 +401,12 @@ public class ConfigProvider
     /// <returns>A list of (Name, Pin) tuples.</returns>
     public List<(string Name, string? Pin)> GetExtraPlexUserEntries()
     {
+        if (_cachedExtraUsers != null)
+            return _cachedExtraUsers;
+
         var extraRaw = GetSettings().ExtraPlexUsers ?? string.Empty;
-        return ParseExtraPlexUsers(extraRaw);
+        _cachedExtraUsers = ParseExtraPlexUsers(extraRaw);
+        return _cachedExtraUsers;
     }
 
     /// <summary>
@@ -360,6 +422,7 @@ public class ConfigProvider
     {
         public string? Token { get; set; }
         public string? ClientIdentifier { get; set; }
+        public string? AdminUsername { get; set; }
         public List<PlexAvailableServer>? Servers { get; set; }
         public List<PlexAvailableLibrary>? Libraries { get; set; }
     }
@@ -405,12 +468,13 @@ public class ConfigProvider
         }
     }
 
-    private void WriteTokenFile(string? token, string? clientIdentifier, List<PlexAvailableServer>? servers = null, List<PlexAvailableLibrary>? libraries = null)
+    private void WriteTokenFile(string? token, string? clientIdentifier, string? adminName, List<PlexAvailableServer>? servers = null, List<PlexAvailableLibrary>? libraries = null)
     {
         var tokenObj = new TokenFile
         {
             Token = token ?? string.Empty,
             ClientIdentifier = clientIdentifier ?? string.Empty,
+            AdminUsername = adminName ?? string.Empty,
             Servers = servers ?? new List<PlexAvailableServer>(),
             Libraries = libraries ?? new List<PlexAvailableLibrary>(),
         };
@@ -442,29 +506,35 @@ public class ConfigProvider
         if (string.IsNullOrWhiteSpace(tf.ClientIdentifier))
         {
             tf.ClientIdentifier = GenerateClientIdentifier();
-            WriteTokenFile(tf.Token, tf.ClientIdentifier, tf.Servers, tf.Libraries);
+            WriteTokenFile(tf.Token, tf.ClientIdentifier, tf.AdminUsername, tf.Servers, tf.Libraries);
         }
         return tf.ClientIdentifier ?? string.Empty;
     }
 
-    /// <summary>Retrieve the list of Plex servers discovered during authentication.</summary>
-    public List<PlexAvailableServer> GetPlexDiscoveredServers() => ReadTokenFile().Servers ?? new List<PlexAvailableServer>();
+    /// <summary>Retrieve the list of Plex servers discovered during authentication and cache the result.</summary>
+    public List<PlexAvailableServer> GetPlexDiscoveredServers()
+    {
+        if (_cachedServers != null)
+            return _cachedServers;
+        _cachedServers = ReadTokenFile().Servers ?? new List<PlexAvailableServer>();
+        return _cachedServers;
+    }
 
     /// <summary>Retrieve the list of Plex libraries discovered during authentication.</summary>
     public List<PlexAvailableLibrary> GetPlexDiscoveredLibraries() => ReadTokenFile().Libraries ?? new List<PlexAvailableLibrary>();
 
     /// <summary>
-    /// Update the token file with the provided values. Any null parameter will leave the
-    /// existing value in place (except token/clientIdentifier which may be overwritten by empty string).
+    /// Update the token file with the provided values. Any null parameter will leave the existing value in place (except token/clientIdentifier which may be overwritten by empty string).
     /// </summary>
-    public void UpdatePlexTokenInfo(string? token = null, string? clientIdentifier = null, List<PlexAvailableServer>? servers = null, List<PlexAvailableLibrary>? libraries = null)
+    public void UpdatePlexTokenInfo(string? token = null, string? clientIdentifier = null, string? adminName = null, List<PlexAvailableServer>? servers = null, List<PlexAvailableLibrary>? libraries = null)
     {
         var existing = ReadTokenFile();
         string newToken = token ?? existing.Token ?? string.Empty;
         string newCid = clientIdentifier ?? existing.ClientIdentifier ?? string.Empty;
+        string newAdmin = adminName ?? existing.AdminUsername ?? string.Empty;
         var newServers = servers ?? existing.Servers;
         var newLibs = libraries ?? existing.Libraries;
-        WriteTokenFile(newToken, newCid, newServers, newLibs);
+        WriteTokenFile(newToken, newCid, newAdmin, newServers, newLibs);
     }
 
     private bool NormalizePathMappings(RelayConfig settings)

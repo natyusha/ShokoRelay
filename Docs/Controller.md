@@ -282,9 +282,6 @@ GET  /animethemes/vfs/build?filter={csv}                       -> AnimeThemesVfs
 GET  /animethemes/vfs/map?testPath={filename}                  -> AnimeThemesVfsMap
 
 POST /animethemes/vfs/import                                   -> ImportAnimeThemesMapping
-
-GET  /animethemes/vfs/webm/tree                                -> AnimeThemesWebmTree
-GET  /animethemes/vfs/webm/stream?path={path}                  -> AnimeThemesWebmStream
 ```
 
 - `AnimeThemesVfsBuild` applies the mapping file (located in the config directory) to the AnimeThemes directory structure.
@@ -296,7 +293,8 @@ GET  /animethemes/vfs/webm/stream?path={path}                  -> AnimeThemesWeb
 - `AnimeThemesVfsMap` generates the mapping CSV from the current raw source, or tests a single filename when `testPath` is provided.
   - When called without `testPath`, it scans the configured directory and builds the full mapping CSV (12+ hours for large collections).
   - When called with `testPath` (e.g., `?testPath=OP1.webm`), it tests that single filename and returns the generated mapping without modifying the CSV.
-  - The CSV includes the following columns: `filepath`, `videoId`, `anidbId`, `nc`, `slug`, `version`, `songTitle`, `artistName`, `lyrics`, `subbed`, `uncen`, `nsfw`, `spoiler`, `source`, `resolution`, `episodes`, `overlap`
+  - The CSV includes the following columns:
+    - `filepath`, `videoId`, `anidbId`, `nc`, `slug`, `version`, `songTitle`, `artistName`, `lyrics`, `subbed`, `uncen`, `nsfw`, `spoiler`, `source`, `resolution`, `episodes`, `overlap`
   - All boolean fields (`nc`, `lyrics`, `subbed`, `uncen`, `nsfw`, `spoiler`) are written as `1` (true) or `0` (false).
   - `overlap` indicates the degree to which the sequence and episode content overlap, with values: `None`, `Transition`, or `Over`.
   - Slug variants (e.g., `-BD`, `-EN`, `-TV`) are extracted from the slug and formatted into a human-readable tag appended after the title.
@@ -316,6 +314,26 @@ GET  /animethemes/vfs/webm/stream?path={path}                  -> AnimeThemesWeb
 
 ---
 
+**Notes:**
+
+- Example `anidb_animethemes_xrefs.csv` contents (note commas in songTitle/artistName are encoded as `\u002C`):
+
+```csv
+# filepath, videoId, anidbId, nc, slug, version, songTitle, artistName, lyrics, subbed, uncen, nsfw, spoiler, source, resolution, episodes, overlap
+/60s/ExampleSeries-OP1.webm,12345,6789,0,OP1,1,Hello\u002C World,Artist,0,0,0,0,0,WEB,1080,,None
+```
+
+### WebM
+
+```
+GET  /animethemes/webm/tree                                    -> AnimeThemesWebmTree
+GET  /animethemes/webm/stream?path={path}                      -> AnimeThemesWebmStream
+GET  /animethemes/webm/favourites                              -> GetAnimeThemesFavourites
+POST /animethemes/webm/favourites                              -> UpdateAnimeThemesFavourite
+```
+
+---
+
 - `AnimeThemesWebmTree` returns the webm VFS cache as a tree structure of groups, series and files for the stand-alone AnimeThemes player page.
   - Each series ID found in the cached paths is resolved to a display title and parent group name.
   - Returns `{ status: "ok", items: [...] }` where each item has `group`, `series`, `file`, and `path` properties.
@@ -326,17 +344,12 @@ GET  /animethemes/vfs/webm/stream?path={path}                  -> AnimeThemesWeb
   - Responds with `video/webm` content type and supports HTTP range requests for seekable playback.
   - Returns `404` if the file does not exist at the resolved path.
   - Used by the stand-alone AnimeThemes player page.
-
----
-
-**Notes:**
-
-- Example `anidb_animethemes_xrefs.csv` contents (note commas in filenames are encoded as `\u002C`):
-
-```csv
-# filepath, videoId, anidbId, newFilename
-/60s/ExampleSeries-OP1.webm,12345,6789,OP1 - Hello\u002C World.webm
-```
+- `GetAnimeThemesFavourites` returns a JSON array of `videoId` integers currently marked as favourites.
+  - Data is persisted in `favs_animethemes.cache` within the plugin's configuration directory.
+  - Used by the video player to initialize the state of heart icons in the navigation tree.
+- `UpdateAnimeThemesFavourite` accepts a raw integer `videoId` in the request body and toggles its presence in the favourites list.
+  - Returns the updated state: `{ videoId: n, isFavourite: true|false }`.
+  - Automatically handles the creation and updating of the CSV file.
 
 ---
 

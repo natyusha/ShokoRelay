@@ -13,9 +13,14 @@
   const playerTitle = el("title");
   const playerAnime = el("anime");
 
-  /** @type {Array<{group: string, series: string, file: string, path: string}>} */
+  /** @type {Array<{group: string, series: string, file: string, path: string, videoId: number}>} */
   let webmTreeData = [];
   let currentWebmPath = "";
+  let favourites = new Set();
+
+  /** @type {Set<string>} */
+  const shuffleHistory = new Set();
+  let lastFilterValue = "";
 
   // #region Utilities
   /**
@@ -34,22 +39,71 @@
   const getNextMode = (current, modes) => modes[(modes.indexOf(current) + 1) % modes.length];
 
   /**
-   * Filters the tree data based on query words. Each word in the query must be found in either the group, series, or filename. Invisible characters (ZWSP, Hair Space) are stripped before matching.
+   * Filters the tree data based on query words.
+   * Each word in the query must be found in either the group, series, or filename.
+   * If the keyword "favs" is present, the result is restricted to favourited items.
+   * Invisible characters (ZWSP, Hair Space) are stripped before matching.
    * @returns {Object[]}
    */
   const getFilteredItems = () => {
     const rawFt = (playerFilter?.value || "").toLowerCase().trim();
     if (!rawFt) return webmTreeData;
+
     const queryWords = rawFt.split(/\s+/);
+    // Check if the user is asking specifically for favourites
+    const isFavQuery = queryWords.includes("favs");
+    // Remove "favs" from the words used to match text content
+    const searchTerms = queryWords.filter((w) => w !== "favs");
+
     return webmTreeData.filter((item) => {
       let searchableText = `${item.group} ${item.series} ${decodeUnicode(item.file)}`.toLowerCase();
       searchableText = searchableText.replace(/[\u200B\u200A]/g, ""); // Remove zero-width space and hair space
-      return queryWords.every((word) => searchableText.includes(word));
+
+      // Check if text search terms match
+      const textMatch = searchTerms.every((word) => searchableText.includes(word));
+      // Check if the item matches the favourite requirement (if "favs" was typed)
+      const favMatch = !isFavQuery || (item.videoId > 0 && favourites.has(item.videoId));
+
+      return textMatch && favMatch;
     });
   };
   // #endregion
 
   // #region Tree
+  /**
+   * Toggles the favourite status of a videoId on the server and updates local state.
+   * @param {number} videoId
+   * @param {HTMLElement} heartEl
+   */
+  async function toggleFavourite(videoId, heartEl) {
+    if (!videoId || videoId <= 0) {
+      console.warn("Cannot favourite: VideoId is missing. Run 'Build Mapping File' on dashboard.");
+      return;
+    }
+
+    const res = await fetchJson(base + "/animethemes/webm/favourites", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(videoId),
+    });
+
+    if (res.ok) {
+      const isFav = res.data.isFavourite;
+      if (isFav) {
+        favourites.add(videoId);
+      } else {
+        favourites.delete(videoId);
+      }
+
+      heartEl.classList.toggle("favourited", isFav);
+
+      // Re-run filter if current view is "favs"
+      if (playerFilter?.value.toLowerCase().includes("favs")) {
+        renderTree(getFilteredItems());
+      }
+    }
+  }
+
   /**
    * Renders the VFS items into a hierarchical tree.
    * @param {Object[]} items
@@ -92,7 +146,7 @@
       .forEach((gName) => {
         const sMap = groups.get(gName),
           sKeys = [...sMap.keys()].sort((a, b) => a.localeCompare(b)),
-          ft = playerFilter?.value;
+          ft = (playerFilter?.value || "").trim();
 
         const sNodes = sKeys.map((sName) => {
           const files = sMap.get(sName).map((f) => {
@@ -100,17 +154,36 @@
               leaf = document.createElement("div"),
               name = decodeUnicode(f.file);
             leaf.className = `leaf ${f.path === currentWebmPath ? "active" : ""}`;
-            leaf.textContent = name;
-            leaf.title = name;
-            leaf.dataset.tooltipOverflowOnly = "true";
             leaf.dataset.path = f.path;
+
+            // Favourites Heart Icon
+            const heart = document.createElement("span");
+            const isFavourited = favourites.has(f.videoId);
+            heart.className = `fav-icon ${isFavourited ? "favourited" : ""}`;
+            heart.textContent = "❤"; 
+            heart.onclick = (e) => {
+              e.stopPropagation();
+              toggleFavourite(f.videoId, heart);
+            };
+
+            // Theme Name Text
+            const text = document.createElement("span");
+            text.textContent = name;
+            text.title = name;
+            text.dataset.tooltipOverflowOnly = "true";
+            text.style.overflow = "hidden";
+            text.style.textOverflow = "ellipsis";
+
             leaf.onclick = () => playFile(f.path);
+
+            leaf.append(heart, text);
             li.appendChild(leaf);
             return li;
           });
-          return makeNode(sName, files, sKeys.length <= 3 || !!ft);
+          return makeNode(sName, files, !!ft);
         });
-        rootUl.appendChild(sKeys.length === 1 ? sNodes[0] : makeNode(gName, sNodes, groups.size <= 5 || !!ft));
+
+        rootUl.appendChild(sKeys.length === 1 ? sNodes[0] : makeNode(gName, sNodes, !!ft));
       });
     playerTree.appendChild(rootUl);
   }
@@ -124,7 +197,7 @@
   function playFile(path) {
     if (!playerVideo) return;
     currentWebmPath = path;
-    playerVideo.src = `${base}/animethemes/vfs/webm/stream?path=${encodeURIComponent(path)}`;
+    playerVideo.src = `${base}/animethemes/webm/stream?path=${encodeURIComponent(path)}`;
     playerVideo.play().catch(() => {});
 
     // Update UI Header
@@ -144,9 +217,45 @@
    */
   function playMove(isShuffle = false) {
     const items = getFilteredItems();
-    if (!items.length) return;
-    let idx = isShuffle ? Math.floor(Math.random() * items.length) : (items.findIndex((i) => i.path === currentWebmPath) + 1) % items.length;
-    playFile(items[idx < 0 ? 0 : idx].path);
+    if (items.length === 0) return;
+
+    // Reset history if the filter has changed
+    const currentFilter = (playerFilter?.value || "").trim();
+    if (currentFilter !== lastFilterValue) {
+      shuffleHistory.clear();
+      lastFilterValue = currentFilter;
+    }
+
+    let idx;
+    if (isShuffle) {
+      // Identify items that haven't been played yet in this cycle
+      let pool = items.filter((item) => !shuffleHistory.has(item.path));
+
+      // If everything has been played, reset the cycle
+      if (pool.length === 0) {
+        shuffleHistory.clear();
+        pool = items;
+      }
+
+      // Avoid playing the current song again immediately if other options exist
+      if (pool.length > 1) {
+        pool = pool.filter((item) => item.path !== currentWebmPath);
+      }
+
+      // Pick random item from the remaining pool
+      const selectedItem = pool[Math.floor(Math.random() * pool.length)];
+      idx = items.indexOf(selectedItem);
+
+      // Record this item in history
+      shuffleHistory.add(selectedItem.path);
+    } else {
+      // Normal sequential logic
+      shuffleHistory.clear(); // Clear history when leaving shuffle mode
+      const currentIdx = items.findIndex((i) => i.path === currentWebmPath);
+      idx = (currentIdx + 1) % items.length;
+    }
+
+    playFile(items[idx].path);
   }
   // #endregion
 
@@ -163,7 +272,7 @@
       playerModeBtn.onclick = async () => {
         const next = getNextMode(playerModeBtn.getAttribute("data-mode") || "off", ["loop", "shuffle", "next", "off"]);
         playerModeBtn.setAttribute("data-mode", next);
-
+        shuffleHistory.clear(); // Clear shuffle history if switching modes
         // Persist setting to server
         const res = await fetchJson(base + "/config");
         if (res.ok) {
@@ -188,7 +297,11 @@
 
     // Initial Data Load
     (async () => {
-      const [treeRes, cfgRes] = await Promise.all([fetchJson(base + "/animethemes/vfs/webm/tree"), fetchJson(base + "/config")]);
+      const [treeRes, cfgRes, favRes] = await Promise.all([fetchJson(base + "/animethemes/webm/tree"), fetchJson(base + "/config"), fetchJson(base + "/animethemes/webm/favourites")]);
+
+      if (favRes.ok) {
+        favourites = new Set(favRes.data);
+      }
 
       if (treeRes.ok) {
         webmTreeData = (treeRes.data?.items || []).sort((a, b) => a.path.localeCompare(b.path));

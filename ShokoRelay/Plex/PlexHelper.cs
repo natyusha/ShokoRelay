@@ -282,6 +282,21 @@ public static class PlexHelper
 /// </summary>
 public class PlexWebhookPayload
 {
+    /// <summary>
+    /// Server information supplied in a webhook payload. Used to avoid checking webhook events from extraneous Plex servers
+    /// </summary>
+    [JsonPropertyName("Server")]
+    public PlexServer? Server { get; set; }
+
+    public class PlexServer
+    {
+        [JsonPropertyName("title")]
+        public string? Title { get; set; }
+
+        [JsonPropertyName("uuid")]
+        public string? Uuid { get; set; }
+    }
+
     [JsonPropertyName("event")]
     public string? Event { get; set; }
 
@@ -313,6 +328,12 @@ public class PlexWebhookPayload
     {
         [JsonPropertyName("guid")]
         public string? Guid { get; set; }
+
+        [JsonPropertyName("grandparentTitle")]
+        public string? GrandparentTitle { get; set; }
+
+        [JsonPropertyName("parentIndex")]
+        public int? ParentIndex { get; set; }
 
         [JsonPropertyName("title")]
         public string? Title { get; set; }

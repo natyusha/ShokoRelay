@@ -366,61 +366,24 @@ public class PlexAuth
 
         try
         {
-            var url = new Uri($"{BaseUrl}/users/account");
+            var url = new Uri($"{BaseUrl}/api/v2/user");
             using var request = CreateRequest(HttpMethod.Get, url, token);
             using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+
             if (!response.IsSuccessStatusCode)
+            {
+                Logger.Warn("GetAccountInfoAsync failed: {Status}", response.StatusCode);
                 return null;
+            }
 
             var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-            if (string.IsNullOrWhiteSpace(content))
-                return null;
+            using var doc = JsonDocument.Parse(content);
+            var root = doc.RootElement;
 
-            try
-            {
-                using var doc = JsonDocument.Parse(content);
-                var root = doc.RootElement;
+            string? title = root.TryGetProperty("title", out var t) ? t.GetString() : null;
+            string? username = root.TryGetProperty("username", out var u) ? u.GetString() : null;
 
-                // Attempt to read "title" and "username" fields at top-level or under a nested "user" object.
-                string? title = null;
-                string? username = null;
-
-                if (root.ValueKind == JsonValueKind.Object)
-                {
-                    if (root.TryGetProperty("title", out var t) && t.ValueKind == JsonValueKind.String)
-                        title = t.GetString();
-
-                    if (root.TryGetProperty("username", out var u) && u.ValueKind == JsonValueKind.String)
-                        username = u.GetString();
-
-                    if (string.IsNullOrWhiteSpace(title) && root.TryGetProperty("user", out var userObj) && userObj.ValueKind == JsonValueKind.Object)
-                    {
-                        if (userObj.TryGetProperty("title", out var ut) && ut.ValueKind == JsonValueKind.String)
-                            title = ut.GetString();
-                        if (userObj.TryGetProperty("username", out var uu) && uu.ValueKind == JsonValueKind.String)
-                            username = uu.GetString();
-                    }
-                }
-
-                if (string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(username))
-                    return null;
-
-                return new PlexAccountInfo(title?.Trim(), username?.Trim());
-            }
-            catch (JsonException ex)
-            {
-                // Plex sometimes returns an HTML error page (e.g. when BaseUrl is incorrect or token is invalid) which starts with '<'.
-                // This isn't JSON, so warn but don't spam with the raw exception message since it's expected in some misconfigurations.
-                if (!string.IsNullOrWhiteSpace(content) && content.TrimStart().StartsWith("<"))
-                {
-                    Logger.Warn("GetAccountInfoAsync: received non-JSON response (HTML?) from Plex, please check BaseUrl and token");
-                }
-                else
-                {
-                    Logger.Warn($"GetAccountInfoAsync: failed to parse JSON response: {ex.Message}");
-                }
-                return null;
-            }
+            return new PlexAccountInfo(title?.Trim(), username?.Trim());
         }
         catch (Exception ex)
         {

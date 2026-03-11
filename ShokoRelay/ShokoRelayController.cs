@@ -587,6 +587,15 @@ public partial class ShokoRelayController : ControllerBase
 
             try
             {
+                await _configProvider.RefreshAdminUsername(_plexAuth, cancellationToken); // Fetch and save the Admin Username immediately after linking
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn($"Failed to fetch admin name during auth: {ex.Message}");
+            }
+
+            try
+            {
                 string clientIdentifier = _configProvider.GetPlexClientIdentifier();
                 var discovery = await _plexAuth.DiscoverShokoLibrariesAsync(pin.AuthToken, clientIdentifier, cancellationToken).ConfigureAwait(false);
                 PersistDiscoveryResults(discovery);
@@ -635,6 +644,7 @@ public partial class ShokoRelayController : ControllerBase
         if (string.IsNullOrWhiteSpace(token))
             return Unauthorized(new { status = "error", message = "Plex token is missing." });
 
+        await _configProvider.RefreshAdminUsername(_plexAuth, cancellationToken);
         string clientIdentifier = _configProvider.GetPlexClientIdentifier();
 
         try
@@ -801,7 +811,8 @@ public partial class ShokoRelayController : ControllerBase
     #region Plex: Webhook
 
     /// <summary>
-    /// Receives webhook events sent by Plex to the relay plugin and processes them if auto‑scrobble is enabled.
+    /// Receives webhook events sent by Plex to the relay plugin and processes them if auto-scrobble is enabled.
+    /// Distinguishes between the actual Admin account and managed users.
     /// Info: https://support.plex.tv/articles/115002267687-webhooks/
     /// </summary>
     [HttpPost("plex/webhook")]
@@ -811,7 +822,7 @@ public partial class ShokoRelayController : ControllerBase
         if (!cfg.AutoScrobble)
             return Ok(new { status = "ignored", reason = "auto_scrobble_disabled" });
 
-        // Use the helper to extract and deserialize the Plex webhook payload
+        // Safely extract and deserialize the payload from the Request (form or body)
         var evt = await ExtractPlexWebhookPayloadAsync().ConfigureAwait(false);
 
         if (evt == null || evt.Metadata == null)
@@ -825,15 +836,12 @@ public partial class ShokoRelayController : ControllerBase
         if (!(isScrobble || (isRate && cfg.ShokoSyncWatchedIncludeRatings)))
             return Ok(new { status = "ignored", reason = "unsupported_event_type" });
 
-        // Logic for admin exclusion
-        if (cfg.ShokoSyncWatchedExcludeAdmin && evt.Owner == true)
-            return Ok(new { status = "ignored", reason = "admin_scrobble_excluded" });
-
-        // Utilize helper to validate if the Plex user is allowed to sync
-        if (!IsPlexUserAllowed(evt, cfg))
+        // Strict Validation: Server UUID + Identity Check (Managed User vs Admin)
+        var (allowed, reason) = await ValidateWebhookSource(evt, cfg, HttpContext.RequestAborted);
+        if (!allowed)
         {
-            Logger.Info("Ignored Plex {Event} from user '{User}' (not allowed)", evt.Event, evt.Account?.Title);
-            return Ok(new { status = "ignored", reason = "plex_user_not_allowed" });
+            Logger.Info("Plex Webhook Ignored: {Reason} | User: {User} | Event: {Event}", reason, evt.Account?.Title, evt.Event);
+            return Ok(new { status = "ignored", reason });
         }
 
         // Try to extract Shoko episode id from the Plex GUID
@@ -849,6 +857,7 @@ public partial class ShokoRelayController : ControllerBase
         Shoko.Abstractions.User.IUser? user = null;
         try
         {
+            // Plugin defaults to first Shoko user
             user = _userService.GetUsers().FirstOrDefault();
         }
         catch (Exception ex)
@@ -859,6 +868,10 @@ public partial class ShokoRelayController : ControllerBase
         if (user == null)
             return Ok(new { status = "ignored", reason = "no_shoko_user" });
 
+        // Prepare metadata for logging (Series Name - S01E05)
+        string seriesName = evt.Metadata.GrandparentTitle ?? shokoEpisode.Series?.PreferredTitle?.Value ?? "Unknown Series";
+        string seasonEp = $"S{(evt.Metadata.ParentIndex ?? 0):D2}E{(evt.Metadata.Index ?? 0):D2}";
+
         // Handle Rating Events
         if (isRate)
         {
@@ -866,8 +879,9 @@ public partial class ShokoRelayController : ControllerBase
             if (!ratingValue.HasValue)
                 return Ok(new { status = "ignored", reason = "no_rating" });
 
-            await _userDataService.RateEpisode(shokoEpisode, user, ratingValue).ConfigureAwait(false);
-            Logger.Info("Plex rating applied: user='{User}', title='{Title}', rating={Rating}", evt.Account?.Title, evt.Metadata.Title, ratingValue);
+            await _userDataService.RateEpisode(shokoEpisode, user, ratingValue.Value).ConfigureAwait(false);
+            Logger.Info("Plex rating applied: user='{User}', series='{Series}', episode='{SeasonEp}', rating={Rating}", evt.Account?.Title, seriesName, seasonEp, ratingValue);
+
             return Ok(
                 new
                 {
@@ -887,7 +901,8 @@ public partial class ShokoRelayController : ControllerBase
                 watchedAt = DateTimeOffset.FromUnixTimeSeconds(evt.Metadata.LastViewedAt.Value).UtcDateTime;
             }
             catch
-            { /* fallback to current server time */
+            {
+                /* Fallback to server time implicitly if timestamp is invalid */
             }
         }
 
@@ -895,7 +910,9 @@ public partial class ShokoRelayController : ControllerBase
         bool updated = saved != null;
 
         if (updated)
-            Logger.Info("Plex scrobble applied: user='{User}', title='{Title}'", evt.Account?.Title, evt.Metadata.Title);
+        {
+            Logger.Info("Plex scrobble applied: user='{User}', series='{Series}', episode='{SeasonEp}'", evt.Account?.Title, seriesName, seasonEp);
+        }
 
         return Ok(new { status = "ok", marked = updated });
     }
@@ -1179,29 +1196,64 @@ public partial class ShokoRelayController : ControllerBase
         if (validation != null)
             return validation;
 
-        // mapping file lives in config directory; check existence for user-friendly error
         string resolvedMapPath = Path.Combine(_configProvider.ConfigDirectory, AnimeThemesHelper.AtMapFileName);
         if (!System.IO.File.Exists(resolvedMapPath))
-        {
             return BadRequest(new { status = "error", message = "Mapping file not found" });
-        }
 
         var result = await _animeThemesMapping.ApplyMappingAsync(filterIds, cancellationToken).ConfigureAwait(false);
 
-        // Persist a cache of all generated .webm VFS link paths for the dashboard video modal (unfiltered builds only)
+        // Only save the full cache during UNFILTERED builds
         if (filterIds == null || filterIds.Count == 0)
+        {
             try
             {
-                var webmPaths = result
-                    .Planned.Select(p => p.Contains(" <- ") ? p.Substring(0, p.IndexOf(" <- ", StringComparison.Ordinal)) : p)
-                    .Where(p => p.EndsWith(".webm", StringComparison.OrdinalIgnoreCase))
-                    .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
-                    .ToList();
-                System.IO.File.WriteAllLines(Path.Combine(_configProvider.ConfigDirectory, "webm_animethemes.cache"), webmPaths);
+                // Resolve the root folder name once (e.g., "!AnimeThemes")
+                string themeRoot = VfsShared.ResolveAnimeThemesFolderName();
+
+                // Load xrefs: Key is the filepath from the CSV, Value is the VideoId
+                var xrefs = System
+                    .IO.File.ReadAllLines(resolvedMapPath)
+                    .Where(l => !l.StartsWith("#") && !string.IsNullOrWhiteSpace(l))
+                    .Select(l => TextHelper.SplitCsvLine(l))
+                    .Where(f => f.Length > 1)
+                    .ToDictionary(f => f[0], f => f[1], StringComparer.OrdinalIgnoreCase);
+
+                var cacheLines = new List<string>();
+                foreach (var plan in result.Planned)
+                {
+                    // plan looks like: "VfsPath <- ../../../!AnimeThemes/subdir/file.webm"
+                    var parts = plan.Split(" <- ");
+                    if (parts.Length < 2)
+                        continue;
+
+                    string vfsPath = parts[0];
+                    string symlinkTarget = parts[1].Replace('\\', '/'); // Standardize slashes
+
+                    // Extract the relative path from the symlink target. Look for the position of the root folder name and take everything after it.
+                    string lookupKey = string.Empty;
+                    int rootIdx = symlinkTarget.IndexOf("/" + themeRoot + "/", StringComparison.OrdinalIgnoreCase);
+                    if (rootIdx != -1)
+                        lookupKey = symlinkTarget.Substring(rootIdx + themeRoot.Length + 1); // Skip /!AnimeThemes
+                    else if (symlinkTarget.Contains(themeRoot + "/"))
+                        lookupKey = symlinkTarget.Substring(symlinkTarget.IndexOf(themeRoot + "/") + themeRoot.Length);
+
+                    // Ensure lookupKey starts with / to match CSV format
+                    if (!lookupKey.StartsWith("/"))
+                        lookupKey = "/" + lookupKey;
+
+                    if (xrefs.TryGetValue(lookupKey, out var vid))
+                        cacheLines.Add($"{vfsPath}|{vid}");
+                    else
+                        cacheLines.Add($"{vfsPath}|0");
+                }
+
+                System.IO.File.WriteAllLines(Path.Combine(_configProvider.ConfigDirectory, "webm_animethemes.cache"), cacheLines);
             }
-            catch
-            { /* best-effort */
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "Failed to save webm cache with IDs");
             }
+        }
 
         WriteReportLog("at-vfs-build-report.log", sb => LogHelper.BuildAtVfsBuildReport(sb, result, filterIds ?? new List<int>()));
 
@@ -1288,6 +1340,10 @@ public partial class ShokoRelayController : ControllerBase
         var (count, log) = await _animeThemesMapping.ImportMappingFromUrlAsync(rawUrl, cancellationToken).ConfigureAwait(false);
         return Ok(new { status = "ok", count });
     }
+
+    #endregion
+
+    #region AnimeThemes: MP3
 
     [HttpGet("animethemes/mp3")]
     /// <summary>
@@ -1389,7 +1445,11 @@ public partial class ShokoRelayController : ControllerBase
         return File(stream, "audio/mpeg", enableRangeProcessing: true);
     }
 
-    [HttpGet("animethemes/vfs/webm/tree")]
+    #endregion
+
+    #region AnimeThemes: WebM
+
+    [HttpGet("animethemes/webm/tree")]
     /// <summary>
     /// Returns the webm VFS cache as a tree of groups, series and files suitable for the dashboard video player modal.
     /// Each series ID in the cache path is resolved to a display title and parent group name.
@@ -1410,27 +1470,27 @@ public partial class ShokoRelayController : ControllerBase
             return Ok(new { status = "empty" });
         }
 
-        if (lines.Length == 0)
-            return Ok(new { status = "empty" });
-
-        // Parse each line: extract the series-id folder and filename
-        // Expected path pattern: .../VfsRoot/seriesId/Shorts/filename.webm
         var items = new List<object>();
         var seriesTitleCache = new Dictionary<int, (string GroupTitle, string SeriesTitle)>();
 
         foreach (var line in lines)
         {
-            string normalized = line.Replace('\\', '/').Trim();
+            // Split by the pipe character added in the generation step
+            var pipeParts = line.Split('|');
+            string pathRaw = pipeParts[0];
+            int videoId = (pipeParts.Length > 1 && int.TryParse(pipeParts[1], out var vid)) ? vid : 0;
+
+            string normalized = pathRaw.Replace('\\', '/').Trim();
             var segments = normalized.Split('/', StringSplitOptions.RemoveEmptyEntries);
-            // Find the numeric series ID segment (parent of "Shorts")
+
             int? seriesId = null;
             string? fileName = null;
+
             for (int i = 0; i < segments.Length; i++)
             {
                 if (int.TryParse(segments[i], out int sid))
                 {
                     seriesId = sid;
-                    // filename is the last segment
                     fileName = segments[^1];
                     break;
                 }
@@ -1442,23 +1502,15 @@ public partial class ShokoRelayController : ControllerBase
             if (!seriesTitleCache.TryGetValue(seriesId.Value, out var titles))
             {
                 var series = _metadataService.GetShokoSeriesByID(seriesId.Value);
-                string seriesTitle;
-                string groupTitle;
-
                 if (series != null)
                 {
                     var resolved = TextHelper.ResolveFullSeriesTitles(series);
-                    seriesTitle = resolved.DisplayTitle;
                     var group = _metadataService.GetShokoGroupByID(series.TopLevelGroupID);
-                    groupTitle = group is IWithTitles titled && !string.IsNullOrWhiteSpace(titled.PreferredTitle?.Value) ? titled.PreferredTitle!.Value : seriesTitle;
+                    titles = (group is IWithTitles titled && !string.IsNullOrWhiteSpace(titled.PreferredTitle?.Value) ? titled.PreferredTitle!.Value : resolved.DisplayTitle, resolved.DisplayTitle);
                 }
                 else
-                {
-                    seriesTitle = $"Series {seriesId.Value}";
-                    groupTitle = seriesTitle;
-                }
+                    titles = ($"Series {seriesId.Value}", $"Series {seriesId.Value}");
 
-                titles = (groupTitle, seriesTitle);
                 seriesTitleCache[seriesId.Value] = titles;
             }
 
@@ -1469,15 +1521,15 @@ public partial class ShokoRelayController : ControllerBase
                     series = titles.SeriesTitle,
                     file = Path.GetFileNameWithoutExtension(fileName),
                     path = normalized,
+                    videoId = videoId,
                 }
             );
         }
-
         return Ok(new { status = "ok", items });
     }
 
-    [HttpGet("animethemes/vfs/webm/stream")]
-    [HttpHead("animethemes/vfs/webm/stream")]
+    [HttpGet("animethemes/webm/stream")]
+    [HttpHead("animethemes/webm/stream")]
     /// <summary>
     /// Streams a .webm theme file from a VFS path for in-browser playback.
     /// </summary>
@@ -1495,6 +1547,78 @@ public partial class ShokoRelayController : ControllerBase
 
         var stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
         return File(stream, "video/webm", enableRangeProcessing: true);
+    }
+
+    [HttpGet("animethemes/webm/favourites")]
+    /// <summary>
+    /// Returns the list of videoIds marked as favourites from favs_animethemes.cache.
+    /// </summary>
+    public IActionResult GetAnimeThemesFavourites()
+    {
+        string path = Path.Combine(_configProvider.ConfigDirectory, AnimeThemesHelper.AtFavsFileName);
+        if (!System.IO.File.Exists(path))
+            return Ok(Array.Empty<int>());
+
+        try
+        {
+            var ids = System
+                .IO.File.ReadAllLines(path)
+                .Select(l => l.Trim())
+                .Where(l => !string.IsNullOrWhiteSpace(l) && !l.StartsWith("#"))
+                .Select(l => int.TryParse(l, out int id) ? id : 0)
+                .Where(id => id > 0)
+                .Distinct()
+                .ToList();
+            return Ok(ids);
+        }
+        catch
+        {
+            return Ok(Array.Empty<int>());
+        }
+    }
+
+    [HttpPost("animethemes/webm/favourites")]
+    /// <summary>
+    /// Toggles a videoId in the favourites file.
+    /// </summary>
+    public IActionResult UpdateAnimeThemesFavourite([FromBody] int videoId)
+    {
+        if (videoId <= 0)
+            return BadRequest(new { message = "Invalid VideoId. Ensure you have generated the AnimeThemes Mapping CSV." });
+
+        string path = Path.Combine(_configProvider.ConfigDirectory, AnimeThemesHelper.AtFavsFileName);
+        var ids = new HashSet<int>();
+
+        if (System.IO.File.Exists(path))
+        {
+            try
+            {
+                var lines = System.IO.File.ReadAllLines(path);
+                foreach (var l in lines)
+                    if (int.TryParse(l.Trim(), out int id))
+                        ids.Add(id);
+            }
+            catch { }
+        }
+
+        bool isFav = false;
+        if (ids.Contains(videoId))
+            ids.Remove(videoId);
+        else
+        {
+            ids.Add(videoId);
+            isFav = true;
+        }
+
+        try
+        {
+            System.IO.File.WriteAllLines(path, ids.Select(i => i.ToString()));
+            return Ok(new { videoId, isFavourite = isFav });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, ex.Message);
+        }
     }
 
     #endregion

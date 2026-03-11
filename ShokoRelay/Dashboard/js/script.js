@@ -339,6 +339,8 @@
    * the settings form with appropriate input types (bool, enum, number, textarea, etc.).
    */
   async function loadConfig() {
+    if (!el("config-form")) return; // prevent errors on the player page which shares this script but doesn't have the config form
+
     const [schemaRes, configRes] = await Promise.all([fetchJson(base + "/config/schema"), fetchJson(base + "/config")]);
     if (!schemaRes.ok || !configRes.ok) return showToast("Failed To Load Config", "error", 0);
 

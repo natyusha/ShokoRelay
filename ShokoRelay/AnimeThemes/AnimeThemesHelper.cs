@@ -12,6 +12,7 @@ internal static class AnimeThemesHelper
     internal const string AtApiBase = "https://api.animethemes.moe";
 
     internal const string AtMapFileName = "anidb_animethemes_xrefs.csv";
+    internal const string AtFavsFileName = "favs_animethemes.cache";
 
     internal const string AtRawMapUrl = "https://gist.githubusercontent.com/natyusha/bb33a3b3bc95bc7a3869633e23d522bb/raw";
 

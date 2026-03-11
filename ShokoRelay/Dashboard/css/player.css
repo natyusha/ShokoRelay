@@ -146,7 +146,8 @@ body {
 }
 #tree summary {
   display: block;
-  padding: 2px 0;
+  padding: 2px 4px;
+  border-radius: 3px;
   cursor: pointer;
   list-style: none;
   overflow: hidden;
@@ -197,7 +198,9 @@ body {
   display: block;
 }
 #tree .leaf {
-  margin-left: -12px;
+  display: flex;
+  align-items: center;
+  margin-left: -11px;
   padding: 2px 4px;
   border-radius: 3px;
   overflow: hidden;
@@ -215,6 +218,25 @@ body {
 }
 ul.tree {
   margin-top: 8px;
+}
+.fav-icon {
+  padding: 0 4px;
+  font-size: 1.1em;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.3s ease-in-out;
+  flex-shrink: 0;
+  opacity: 0.1;
+}
+.fav-icon.favourited {
+  color: var(--danger-color);
+  opacity: 1;
+}
+.fav-icon:hover {
+  opacity: 1;
+}
+.leaf.active .fav-icon.favourited {
+  color: var(--danger-color);
 }
 /* #endregion */
 
