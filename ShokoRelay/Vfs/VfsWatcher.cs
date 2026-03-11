@@ -3,7 +3,6 @@ using System.Diagnostics;
 using NLog;
 using Shoko.Abstractions.Events;
 using Shoko.Abstractions.Services;
-using ShokoRelay.Config;
 using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
 
@@ -21,21 +20,12 @@ public class VfsWatcher
     private readonly PlexMetadata _plexMetadata;
     private readonly PlexClient _plexLibrary;
     private readonly PlexCollections _plexCollections;
-    private readonly ConfigProvider _configProvider;
 
     private readonly ConcurrentDictionary<int, byte> _pending = new();
     private bool _processing;
     private readonly object _gate = new();
 
-    public VfsWatcher(
-        IVideoService videoService,
-        VfsBuilder builder,
-        IMetadataService metadataService,
-        PlexMetadata plexMetadata,
-        PlexClient plexLibrary,
-        PlexCollections plexCollections,
-        ConfigProvider configProvider
-    )
+    public VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadataService metadataService, PlexMetadata plexMetadata, PlexClient plexLibrary, PlexCollections plexCollections)
     {
         _videoService = videoService;
         _builder = builder;
@@ -43,7 +33,6 @@ public class VfsWatcher
         _plexMetadata = plexMetadata;
         _plexLibrary = plexLibrary;
         _plexCollections = plexCollections;
-        _configProvider = configProvider;
     }
 
     /// <summary>
@@ -200,7 +189,7 @@ public class VfsWatcher
                 if (collectionId == null)
                     continue;
 
-                string? posterUrl = PlexHelper.GetCollectionPosterUrl(series, collectionName, collectionId.Value, _metadataService, _configProvider.GetSettings().CollectionPosters);
+                string? posterUrl = PlexHelper.GetCollectionPosterUrl(series, collectionName, collectionId.Value, _metadataService, ShokoRelay.Settings.CollectionPosters);
 
                 if (!string.IsNullOrWhiteSpace(posterUrl))
                 {

@@ -14,6 +14,8 @@ public static class ConfigConstants
     public const string ConfigSubfolder = "config";
 }
 
+#region Enum Definitions
+
 /// <summary>
 /// Levels of sanitization to apply when transferring the series summary to Plex.
 /// </summary>
@@ -102,81 +104,20 @@ public enum OverlapLevel
     None = 2,
 }
 
+#endregion
+
+#region Provider Config
+
 /// <summary>
 /// Strongly typed representation of the user's configuration options that are persisted in <c>preferences.json</c>.
+/// Includes nested settings for better organization, but all options are ultimately stored in a single JSON file for simplicity.
 /// </summary>
 public class RelayConfig
 {
-    #region Automation Config
-
-    [Display(Name = "Extra Plex Users", Description = "Comma-separated Plex usernames (stored in preferences.json)")]
-    [Browsable(false)]
-    [DefaultValue("")]
-    public string ExtraPlexUsers { get; set; } = "";
-
-    [Display(Name = "Plex Automation Frequency (hours)", Description = "Run Plex automation tasks every N hours. Set to 0 to disable")]
-    [Browsable(false)]
-    [DefaultValue(0)]
-    public int PlexAutomationFrequencyHours { get; set; } = 0;
-
-    [Browsable(false)]
-    [Display(Name = "Scan On VFS Refresh", Description = "Trigger Plex library scans when the VFS is refreshed.")]
-    [DefaultValue(false)]
-    public bool ScanOnVfsRefresh { get; set; } = false;
-
-    [Display(Name = "Auto Scrobble", Description = "Enable instant handling of Plex webhook events (media.scrobble and, if ratings included, media.rate)")]
-    [Browsable(false)]
-    [DefaultValue(false)]
-    public bool AutoScrobble { get; set; } = false;
-
-    [Display(Name = "UTC Offset Hours", Description = "Offset from UTC midnight used as the anchor for scheduling (-12 to +14)")]
-    [Browsable(false)]
-    [Range(-12, 14, ErrorMessage = "UTC Offset must be between -12 and +14")]
-    [DefaultValue(0)]
-    public int UtcOffsetHours { get; set; } = 0;
-
-    [Display(Name = "Auto Import Frequency (hours)", Description = "Run Shoko import detection every N hours. Set to 0 to disable")]
-    [Browsable(false)]
-    [DefaultValue(0)]
-    public int ShokoImportFrequencyHours { get; set; } = 0;
-
-    [Display(Name = "Auto Sync Watched Frequency (hours)", Description = "Run watched-state sync every N hours. Set to 0 to disable")]
-    [Browsable(false)]
-    [DefaultValue(0)]
-    public int ShokoSyncWatchedFrequencyHours { get; set; } = 0;
-
-    [Display(Name = "Include Ratings for Scheduled Sync", Description = "When enabled, Plex->Shoko sync/scrobbles will also include user ratings/votes")]
-    [Browsable(false)]
-    [DefaultValue(false)]
-    public bool ShokoSyncWatchedIncludeRatings { get; set; } = false;
-
-    [Display(Name = "Exclude Admin for Scheduled Sync", Description = "When enabled, Plex->Shoko sync/scrobbles will ignore items scrobbled by the Plex token owner/admin")]
-    [Browsable(false)]
-    [DefaultValue(false)]
-    public bool ShokoSyncWatchedExcludeAdmin { get; set; } = false;
-
-    #endregion
-
-    #region Playback Config
-
-    [Display(Name = "AnimeThemes WEBM Mode", Description = "Playback mode for WEBM themes: loop, shuffle, next or off")]
-    [Browsable(false)]
-    [DefaultValue("loop")]
-    public string AnimeThemesWebmMode { get; set; } = "loop";
-
-    [Display(Name = "AnimeThemes MP3 Playback", Description = "Enable to play generated theme MP3 files in the dashboard after generation")]
-    [Browsable(false)]
-    [DefaultValue(false)]
-    public bool AnimeThemesMp3Playback { get; set; } = false;
-
-    [Display(Name = "AnimeThemes MP3 Mode", Description = "Playback mode for MP3 themes: loop, shuffle or off")]
-    [Browsable(false)]
-    [DefaultValue("loop")]
-    public string AnimeThemesMp3Mode { get; set; } = "loop";
-
-    #endregion
-
-    #region Provider Config
+    // Nest settings in a separate classes by type
+    public AutomationConfig Automation { get; set; } = new();
+    public PlaybackConfig Playback { get; set; } = new();
+    public AdvancedConfig Advanced { get; set; } = new();
 
     [Display(Name = "Series Title Language", Description = "Priority, comma separated")]
     [DefaultValue("SHOKO, X-JAT, EN")]
@@ -249,11 +190,89 @@ public class RelayConfig
     [Display(Name = "Tag Blacklist", Description = "A list of tags to exclude from series in Plex, comma separated")]
     [DefaultValue("")]
     public string TagBlacklist { get; set; } = "";
+}
 
-    #endregion
+#endregion
 
-    #region Advanced Config
+#region Automation Config
 
+public class AutomationConfig
+{
+    [Display(Name = "Extra Plex Users", Description = "Comma-separated Plex usernames (stored in preferences.json)")]
+    [Browsable(false)]
+    [DefaultValue("")]
+    public string ExtraPlexUsers { get; set; } = "";
+
+    [Display(Name = "Plex Automation Frequency (hours)", Description = "Run Plex automation tasks every N hours. Set to 0 to disable")]
+    [Browsable(false)]
+    [DefaultValue(0)]
+    public int PlexAutomationFrequencyHours { get; set; } = 0;
+
+    [Browsable(false)]
+    [Display(Name = "Scan On VFS Refresh", Description = "Trigger Plex library scans when the VFS is refreshed.")]
+    [DefaultValue(false)]
+    public bool ScanOnVfsRefresh { get; set; } = false;
+
+    [Display(Name = "Auto Scrobble", Description = "Enable instant handling of Plex webhook events (media.scrobble and, if ratings included, media.rate)")]
+    [Browsable(false)]
+    [DefaultValue(false)]
+    public bool AutoScrobble { get; set; } = false;
+
+    [Display(Name = "UTC Offset Hours", Description = "Offset from UTC midnight used as the anchor for scheduling (-12 to +14)")]
+    [Browsable(false)]
+    [Range(-12, 14, ErrorMessage = "UTC Offset must be between -12 and +14")]
+    [DefaultValue(0)]
+    public int UtcOffsetHours { get; set; } = 0;
+
+    [Display(Name = "Auto Import Frequency (hours)", Description = "Run Shoko import detection every N hours. Set to 0 to disable")]
+    [Browsable(false)]
+    [DefaultValue(0)]
+    public int ShokoImportFrequencyHours { get; set; } = 0;
+
+    [Display(Name = "Auto Sync Watched Frequency (hours)", Description = "Run watched-state sync every N hours. Set to 0 to disable")]
+    [Browsable(false)]
+    [DefaultValue(0)]
+    public int ShokoSyncWatchedFrequencyHours { get; set; } = 0;
+
+    [Display(Name = "Include Ratings for Scheduled Sync", Description = "When enabled, Plex->Shoko sync/scrobbles will also include user ratings/votes")]
+    [Browsable(false)]
+    [DefaultValue(false)]
+    public bool ShokoSyncWatchedIncludeRatings { get; set; } = false;
+
+    [Display(Name = "Exclude Admin for Scheduled Sync", Description = "When enabled, Plex->Shoko sync/scrobbles will ignore items scrobbled by the Plex token owner/admin")]
+    [Browsable(false)]
+    [DefaultValue(false)]
+    public bool ShokoSyncWatchedExcludeAdmin { get; set; } = false;
+}
+
+#endregion
+
+#region Playback Config
+
+public class PlaybackConfig
+{
+    [Display(Name = "AnimeThemes WEBM Mode", Description = "Playback mode for WEBM themes: loop, shuffle, next or off")]
+    [Browsable(false)]
+    [DefaultValue("loop")]
+    public string AnimeThemesWebmMode { get; set; } = "loop";
+
+    [Display(Name = "AnimeThemes MP3 Playback", Description = "Enable to play generated theme MP3 files in the dashboard after generation")]
+    [Browsable(false)]
+    [DefaultValue(false)]
+    public bool AnimeThemesMp3Playback { get; set; } = false;
+
+    [Display(Name = "AnimeThemes MP3 Mode", Description = "Playback mode for MP3 themes: loop, shuffle or off")]
+    [Browsable(false)]
+    [DefaultValue("loop")]
+    public string AnimeThemesMp3Mode { get; set; } = "loop";
+}
+
+#endregion
+
+#region Advanced Config
+
+public class AdvancedConfig
+{
     [Display(Name = "Shoko Server URL", Description = "A URL and port that Plex can access Shoko server from (e.g. http://localhost:8111)")]
     [DefaultValue("")]
     public string ShokoServerUrl { get; set; } = "";
@@ -261,6 +280,10 @@ public class RelayConfig
     [Display(Name = "AnimeThemes Overlap Level", Description = "The amount of overlap allowed for AnimeThemes .webm files to be added to the VFS")]
     [DefaultValue(OverlapLevel.All)]
     public OverlapLevel AnimeThemesOverlapLevel { get; set; } = OverlapLevel.All;
+
+    [Display(Name = "Append AnimeThemes Tags", Description = "Enable to append attributes like [SPOIL, SUBS] to AnimeThemes VFS filenames")]
+    [DefaultValue(true)]
+    public bool AnimeThemesAppendTags { get; set; } = true;
 
     [Display(Name = "Path Mappings", Description = "Mappings for Plex base paths to Shoko base paths")]
     public Dictionary<string, string> PathMappings { get; set; } = new();
@@ -284,9 +307,9 @@ public class RelayConfig
     [Display(Name = "Parallelism", Description = "The maximum number of concurrent operations *used by VFS and AnimeThemes batch operations")]
     [DefaultValue(4)]
     public int Parallelism { get; set; } = 4;
-
-    #endregion
 }
+
+#endregion
 
 /// <summary>
 /// Container for any secrets required by the plugin (currently only Plex auth info).

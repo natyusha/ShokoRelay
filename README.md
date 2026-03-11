@@ -17,7 +17,7 @@ Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File Sy
 ### Shoko
 
 > [!IMPORTANT]
-> The VFS is created inside each of Shoko's "destination" type folders under a subfolder named `!ShokoRelayVFS` (configurable under `VFS Root Path`). To stop Shoko from scanning the generated links, navigate to Shoko's installation directory and add the following regex entries to `settings-server.json` under `Exclude`:
+> The VFS is created inside each of Shoko's "destination" type folders under a subfolder named `!ShokoRelayVFS` (configurable under `Advanced Settings > VFS Root Path`). To stop Shoko from scanning the generated links, navigate to Shoko's installation directory and add the following regex entries to `settings-server.json` under `Exclude`:
 >
 > ```json
 > "Exclude": [
@@ -151,6 +151,7 @@ As a bonus this supports using the primary series poster as the collection poste
   - Click `Add Webhook` and enter: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/plex/webhook`
   - Click `Save Changes` to complete the process
 - The webhook respects the `Include Ratings` and `Exclude Admin` settings in the Sync Watched States Menu
+- Manages users must be added to `Extra Plex Users` on the dashboard if you wish them to be included
 - _Requires a Plex Pass subscription_
 
 ## Shoko: Automation
@@ -183,6 +184,9 @@ This plugin includes full [AnimeThemes](https://animethemes.moe/) integration. I
 > [!IMPORTANT]
 > Similar to the VFS you must exclude the `!AnimeThemes` folder from Shoko scans using the `Exclude` server option. An example `settings-server.json` entry is shown [above](#shoko).
 
+> [!TIP]
+> By default, the plugin appends metadata attributes to the filename, such as `[SPOIL, SUBS]`. If you prefer a cleaner look, you can disable this by unchecking `Advanced Settings > Append AnimeThemes Tags` in the dashboard's Provider Settings. Note that a fresh "Generate" run is required to rename existing links after changing this setting.
+
 ### Themes as Series BGM
 
 There is also support for generating `Theme.mp3` files as local metadata. This will add them to the VFS automatically and can be run for either a single series or as a batch operation. This process requires Shoko Server to have access to [FFmpeg/FFprobe](https://ffmpeg.org/download.html) (place system appropriate binaries in the ShokoRelay plugin folder or system PATH) as AnimeThemes does not provide the '.mp3' files that plex requires for this feature.
@@ -198,17 +202,28 @@ Any subfolder named after the configured `VFS Root Path`, `Collection Posters Ro
 
 ### AnimeThemes Video Player
 
-Shoko Relay includes a stand-alone, browser-based video player designed specifically for your AnimeThemes collection. It can be accessed via the `Open Video Player` icon (clap board) within the "AnimeThemes: VFS" section of the dashboard (or by a dedicated url: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/dashboard/player`). There is a included tree view which allows you to browse your themes by Group and Series as they would appear in Plex. Support for Loop, Shuffle, and Sequential playback is available via a 4 stage toggle button as well as a per word filtering which supports series, group, or filename level queries.
+Shoko Relay includes a stand-alone, browser-based video player designed specifically for your AnimeThemes collection. It can be accessed via the `Open Video Player` icon (clap board) within the "AnimeThemes: VFS" section of the dashboard (or by a dedicated url: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/dashboard/player`). There is a included tree view which allows you to browse your themes by Group and Series as they would appear in Plex. Support for Loop, Shuffle, and Sequential playback is also available via a 4 stage toggle button.
+
+#### Filter
+
+There is a search box included which will filter the treeview based on series, group, or filename level queries. The filter supports tag-based filtering syntax using `+` (inclusion) and `-` (exclusion) operators. and the following metadata tags:
+
+- `spoil` (Spoiler content)
+- `nsfw` (Not Safe For Work)
+- `lyrics` (Includes timed lyrics)
+- `subs` (Includes subtitles)
+- `uncen` (Uncensored version)
+- `nc` (No Credits version)
 
 #### Favourites
 
-You can mark any theme as a favourite by clicking the heart icon `❤` next to its name in the tree view. Once marked as a favourite the icon for a given item will change to be red in colour and it will be persisted to a settings file based on its AnimeThemes VideoID. To quickly view only your marked themes, type `favs` into the search bar. This keyword can be combined with other search terms (e.g., `favs gundam`) to find specific favourites.
+You can mark any theme as a favourite by clicking the heart icon `❤` next to its name in the tree view. Once marked as a favourite the icon for a given item will change to be red in colour and it will be persisted to a settings file based on its AnimeThemes VideoID. To quickly view only your marked themes, type `favs` into the search bar. This keyword can be combined with other search terms as well as tags (e.g., `+nc favs gundam`) to find specific favourites.
 
 ## Information
 
 ### VFS Mapping
 
-When building the VFS files are placed into folders which are named according to their Shoko SeriesID. Within those folders they will be split into subfolders depending on the type of episode. For regular episodes or specials this means placement into a `Season #` or `Specials` folder. Files placed into those folders are named with the following pattern: `S##E##(-pt#)(-v#) [{ShokoFileID}].ext` (the parts in parenthesis are conditional). Files with `-pt#` in their name will also have `[{ShokoFileID}]` stripped to fully follow the format described in [Combining Episodes](#combining-episodes).\
+When building the VFS files are placed into folders which are named according to their Shoko SeriesID. Within those folders they will be split into subfolders depending on the type of episode. For regular episodes or specials this means placement into a `Season #` or `Specials` folder. Files placed into those folders are named with the following pattern: `S##E##(-pt#)(-v#) [{ShokoFileID}].ext` (the parts in parenthesis are conditional). Files with `-pt#` in their name will also have `[{ShokoFileID}]` stripped to fully follow the format described in [Combining Episodes](#combining-episodes). To avoid conflicts any file which is a cross over episode will not trigger local metadata/subtitle linking.\
 _The ShokoFileID is unused by Plex and is there purely to help users visualise the file mappings._
 
 Non standard episodes on the other hand, are placed into a local series level Extra folder. Due to Plex not having individual episode pages or metadata for files placed in said folders they will be named according to the episode name (with a prefix) `X# ❯ Title.ext`. More info on local extras is available [here](https://support.plex.tv/articles/local-files-for-tv-show-trailers-and-extras/) and the following table showcases the assignments.

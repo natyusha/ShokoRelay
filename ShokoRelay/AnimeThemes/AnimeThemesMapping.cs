@@ -175,7 +175,6 @@ public class AnimeThemesMapping
         _metadataService = metadataService;
         _videoService = videoService;
         _apiClient = new AnimeThemesApi();
-
         _configDirectory = configProvider.ConfigDirectory;
     }
 
@@ -322,7 +321,7 @@ public class AnimeThemesMapping
 
         // phase 2: fetch metadata for new files in parallel; the rate limiter serialises API calls
         Logger.Info("AnimeThemes mapping has {ToProcessCount} new files to query", toProcess.Count);
-        int maxDop = Math.Max(1, ShokoRelay.Settings.Parallelism);
+        int maxDop = Math.Max(1, ShokoRelay.Settings.Advanced.Parallelism);
         await Parallel
             .ForEachAsync(
                 toProcess,
@@ -490,7 +489,7 @@ public class AnimeThemesMapping
         var state = new MappingState();
         string themeRoot = GetThemeRootFolderName();
         string rootName = VfsShared.ResolveRootFolderName();
-        var overlapLevel = ShokoRelay.Settings.AnimeThemesOverlapLevel;
+        var overlapLevel = ShokoRelay.Settings.Advanced.AnimeThemesOverlapLevel;
 
         var seriesList = (seriesFilter?.Any() == true ? seriesFilter.Distinct().Select(id => _metadataService.GetShokoSeriesByID(id)) : _metadataService.GetAllShokoSeries())
             .Where(s => s?.AnidbAnimeID > 0)
@@ -802,7 +801,8 @@ public class AnimeThemesMapping
         if (lookup.Spoiler)
             attributes.Add("SPOIL");
 
-        string attributeSuffix = attributes.Count > 0 ? $" [{string.Join(", ", attributes)}]" : "";
+        // Only create the suffix string if the setting is enabled and there are attributes present
+        string attributeSuffix = (ShokoRelay.Settings.Advanced.AnimeThemesAppendTags && attributes.Count > 0) ? $" [{string.Join(", ", attributes)}]" : "";
 
         string baseName = $"{ncPrefix}{slug}{versionStr}{titleStr}{slugTag}{artistStr}{attributeSuffix}";
         string full = baseName + extension;

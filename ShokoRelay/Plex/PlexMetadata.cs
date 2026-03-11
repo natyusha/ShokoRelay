@@ -4,6 +4,7 @@ using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Shoko;
 using Shoko.Abstractions.Metadata.Tmdb;
 using Shoko.Abstractions.Services;
+using ShokoRelay.Config;
 using ShokoRelay.Helpers;
 using static ShokoRelay.Plex.PlexMapping;
 
@@ -19,6 +20,109 @@ public class PlexMetadata
     public PlexMetadata(IMetadataService metadataService)
     {
         _metadataService = metadataService;
+    }
+
+    /// <summary>
+    /// Aggregates relevant information about a Shoko series for controller responses.
+    /// Includes the series metadata, API base URL, resolved titles, content rating string, and file data used when building VFS links.
+    /// </summary>
+    public record SeriesContext(ISeries Series, (string DisplayTitle, string SortTitle, string? OriginalTitle) Titles, string ContentRating, MapHelper.SeriesFileData FileData);
+
+    /// <summary>
+    /// Convert a Plex-style ratingKey into a SeriesContext.
+    /// This resolves the underlying Shoko series, applies any merge overrides, and gathers file data and titles.
+    /// </summary>
+    public SeriesContext? GetSeriesContext(string ratingKey)
+    {
+        int seriesId;
+
+        // alias: if key starts with 'a' followed by digits treat as AniDB series ID
+        if (ratingKey.Length > 1 && ratingKey[0] == 'a' && int.TryParse(ratingKey.Substring(1), out var anidb))
+        {
+            var candidate = _metadataService.GetShokoSeriesByAnidbID(anidb);
+            if (candidate == null)
+                return null;
+            seriesId = candidate.ID;
+        }
+        else if (ratingKey.StartsWith(PlexConstants.EpisodePrefix))
+        {
+            var epPart = ratingKey.Substring(PlexConstants.EpisodePrefix.Length);
+            if (epPart.Contains(PlexConstants.PartPrefix))
+                epPart = epPart.Split(PlexConstants.PartPrefix)[0];
+
+            var ep = _metadataService.GetShokoEpisodeByID(int.Parse(epPart));
+            if (ep?.Series == null)
+                return null;
+            seriesId = ep.Series.ID;
+        }
+        else if (ratingKey.Contains(PlexConstants.SeasonPrefix))
+        {
+            if (!int.TryParse(ratingKey.Split(PlexConstants.SeasonPrefix)[0], out seriesId))
+                return null;
+        }
+        else
+        {
+            if (!int.TryParse(ratingKey, out seriesId))
+                return null;
+        }
+
+        var series = _metadataService.GetShokoSeriesByID(seriesId);
+        if (series == null)
+            return null;
+
+        // apply overrides: use primary metadata but merge file data for the entire group
+        OverrideHelper.EnsureLoaded();
+        int primaryId = OverrideHelper.GetPrimary(series.ID, _metadataService);
+        var primarySeries = _metadataService.GetShokoSeriesByID(primaryId) ?? series;
+        var group = OverrideHelper.GetGroup(primaryId, _metadataService);
+        List<ISeries> extras = group.Skip(1).Select(id => _metadataService.GetShokoSeriesByID(id)).Where(s => s != null).Cast<ISeries>().ToList();
+
+        var fileData = extras.Count > 0 ? MapHelper.GetSeriesFileDataMerged(primarySeries, extras) : MapHelper.GetSeriesFileData(primarySeries);
+
+        return new SeriesContext(primarySeries, TextHelper.ResolveFullSeriesTitles(primarySeries), RatingHelper.GetContentRatingAndAdult(primarySeries).Rating ?? "", fileData);
+    }
+
+    /// <summary>
+    /// Build a sorted list of mapped episode metadata objects for a given season number.
+    /// </summary>
+    public List<object> BuildEpisodeList(SeriesContext ctx, int seasonNum)
+    {
+        var items = new List<(PlexCoords Coords, object Meta)>();
+
+        foreach (var m in ctx.FileData.GetForSeason(seasonNum))
+        {
+            if (m.Episodes.Count == 1)
+            {
+                items.Add((m.Coords, MapEpisode(m.PrimaryEpisode, m.Coords, ctx.Series, ctx.Titles, m.PartIndex, m.TmdbEpisode)));
+                continue;
+            }
+
+            foreach (var ep in m.Episodes)
+            {
+                var coordsEp = GetPlexCoordinates(ep);
+                if (coordsEp.Season != seasonNum)
+                {
+                    // If the episode is originally 'Other' but this file mapping was reassigned into this season, apply that season to the episode so metadata matches the VFS placement.
+                    if (coordsEp.Season == PlexConstants.SeasonOther && m.Coords.Season == seasonNum)
+                    {
+                        coordsEp = new PlexCoords
+                        {
+                            Season = m.Coords.Season,
+                            Episode = coordsEp.Episode,
+                            EndEpisode = coordsEp.EndEpisode,
+                        };
+                    }
+                    else
+                    {
+                        continue;
+                    }
+                }
+
+                items.Add((coordsEp, MapEpisode(ep, coordsEp, ctx.Series, ctx.Titles)));
+            }
+        }
+
+        return items.OrderBy(x => x.Coords.Episode).Select(x => x.Meta).ToList();
     }
 
     /// <summary>

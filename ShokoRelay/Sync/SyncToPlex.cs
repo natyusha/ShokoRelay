@@ -45,12 +45,13 @@ public class SyncToPlex
     /// </summary>
     /// <param name="dryRun">When <c>true</c>, report changes without actually applying them.</param>
     /// <param name="sinceHours">Optional lookback window in hours; <c>null</c> means no limit.</param>
-    /// <param name="includeVotes">Whether to also sync Shoko ratings to Plex.</param>
-    /// <param name="excludeAdmin">Whether to skip the admin user during sync.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A <see cref="PlexWatchedSyncResult"/> with aggregate and per-user statistics.</returns>
-    public async Task<PlexWatchedSyncResult> SyncWatchedAsync(bool dryRun = true, int? sinceHours = null, bool includeVotes = false, bool excludeAdmin = false, CancellationToken cancellationToken = default)
+    public async Task<PlexWatchedSyncResult> SyncWatchedAsync(bool dryRun = true, int? sinceHours = null, CancellationToken cancellationToken = default)
     {
+        bool includeVotes = ShokoRelay.Settings.Automation.ShokoSyncWatchedIncludeRatings;
+        bool excludeAdmin = ShokoRelay.Settings.Automation.ShokoSyncWatchedExcludeAdmin;
+
         var result = new PlexWatchedSyncResult();
         Logger.Info("SyncToPlex: starting (dryRun={Dry}, sinceHours={Since}, votes={Votes})", dryRun, sinceHours, includeVotes);
 

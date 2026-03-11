@@ -39,15 +39,15 @@ public class SyncToShoko
     /// </summary>
     /// <param name="dryRun">When <c>true</c>, report changes without actually applying them.</param>
     /// <param name="sinceHours">Optional lookback window in hours; <c>null</c> means no limit.</param>
-    /// <param name="includeVotes">Whether to also sync Plex user ratings to Shoko.</param>
-    /// <param name="excludeAdmin">Whether to skip the admin user during sync.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A <see cref="PlexWatchedSyncResult"/> with aggregate and per-user statistics.</returns>
-    public Task<PlexWatchedSyncResult> SyncWatchedAsync(bool dryRun, int? sinceHours, bool includeVotes, bool excludeAdmin, CancellationToken cancellationToken = default) =>
-        SyncWatchedInternalAsync(dryRun, sinceHours, includeVotes, excludeAdmin, cancellationToken);
+    public Task<PlexWatchedSyncResult> SyncWatchedAsync(bool dryRun, int? sinceHours, CancellationToken cancellationToken = default) => SyncWatchedInternalAsync(dryRun, sinceHours, cancellationToken);
 
-    private async Task<PlexWatchedSyncResult> SyncWatchedInternalAsync(bool dryRun, int? sinceHours, bool includeVotes, bool excludeAdmin, CancellationToken cancellationToken = default)
+    private async Task<PlexWatchedSyncResult> SyncWatchedInternalAsync(bool dryRun, int? sinceHours, CancellationToken cancellationToken = default)
     {
+        bool includeVotes = ShokoRelay.Settings.Automation.ShokoSyncWatchedIncludeRatings;
+        bool excludeAdmin = ShokoRelay.Settings.Automation.ShokoSyncWatchedExcludeAdmin;
+
         var result = new PlexWatchedSyncResult();
         Logger.Info("WatchedSyncService: starting SyncWatched (dryRun={Dry}, sinceHours={SinceHours}, votes={Votes})", dryRun, sinceHours?.ToString() ?? "<none>", includeVotes);
 

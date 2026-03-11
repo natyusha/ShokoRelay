@@ -32,7 +32,7 @@ public class PlexClient
     /// <summary>
     /// Expose the configuration setting controlling whether Plex section refresh requests should trigger a scan on VFS refresh events.
     /// </summary>
-    public bool ScanOnVfsRefresh => _configProvider.GetSettings().ScanOnVfsRefresh;
+    public bool ScanOnVfsRefresh => ShokoRelay.Settings.Automation.ScanOnVfsRefresh;
 
     /// <summary>
     /// Request Plex to refresh the specified library section path across all configured targets. Returns true if any refresh succeeded.
@@ -165,8 +165,7 @@ public class PlexClient
         if (string.IsNullOrWhiteSpace(path))
             return path;
 
-        var settings = _configProvider.GetSettings();
-        var mappings = settings.PathMappings;
+        var mappings = ShokoRelay.Settings.Advanced.PathMappings;
         if (mappings == null || mappings.Count == 0)
             return path;
 
@@ -209,8 +208,7 @@ public class PlexClient
         if (string.IsNullOrWhiteSpace(path))
             return path;
 
-        var settings = _configProvider.GetSettings();
-        var mappings = settings.PathMappings;
+        var mappings = ShokoRelay.Settings.Advanced.PathMappings;
         if (mappings == null || mappings.Count == 0)
             return path;
 

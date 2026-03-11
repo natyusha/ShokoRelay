@@ -108,7 +108,7 @@ internal sealed class FfmpegService
             if (_ffmpegConfigured)
                 return;
 
-            string configured = ShokoRelay.Settings.FFmpegPath;
+            string configured = ShokoRelay.Settings.Advanced.FFmpegPath;
             string pluginDir = _pluginDirectory;
             string ffmpegName = OperatingSystem.IsWindows() ? "ffmpeg.exe" : "ffmpeg";
             string ffprobeName = OperatingSystem.IsWindows() ? "ffprobe.exe" : "ffprobe";

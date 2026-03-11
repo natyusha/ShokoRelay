@@ -119,20 +119,6 @@
   }
 
   /**
-   * Surface important outcomes via toasts; transient 'running' updates are silently ignored.
-   * @param {string} message - Status message text (may contain an "errors: N" substring).
-   * @param {"error"|"ok"|"running"} level - Severity level controlling toast type.
-   */
-  function setColStatus(message, level) {
-    message = (message || "pending").trim();
-    const m = String(message).match(/errors:?\s*(\d+)/i);
-    if (m && Number(m[1]) > 0) return showToast(message, "error", 0);
-    const cleanMsg = message.replace(/,?\s*errors:?\s*0/i, "").trim();
-    if (level === "error") showToast(cleanMsg, "error", 0);
-    else if (level === "ok") showToast(cleanMsg, "success", TOAST_MS);
-  }
-
-  /**
    * Toggle a button's loading state by adding/removing a spinner overlay and disabled attribute.
    * @param {HTMLElement} btn - The button element to modify.
    * @param {boolean} isLoading - Whether to enable or disable the loading state.
@@ -184,6 +170,7 @@
 
   /** @param {Object} obj @param {string} path - Dot-separated key path. @returns {*} The resolved value, or undefined. */
   const getValueByPath = (obj, path) => path.split(".").reduce((o, k) => o?.[k], obj);
+
   /** @param {Object} obj @param {string} path - Dot-separated key path. @param {*} value - The value to set at the resolved path. */
   function setValueByPath(obj, path, value) {
     const parts = path.split("."),
@@ -191,6 +178,31 @@
     const target = parts.reduce((o, k) => ((o[k] ??= {}), o[k]), obj);
     target[last] = value;
   }
+
+  /**
+   * Binds a UI element to a config path with automatic persistence.
+   * @param {string} id - The DOM element ID.
+   * @param {string} path - The dot-notation path in the config (e.g., "Automation.UtcOffsetHours").
+   * @param {Object} config - The global config object.
+   * @param {Function} persistFn - The function that POSTs the config to the server.
+   * @param {"text"|"number"|"check"} type - The type of input handling.
+   */
+  const bindConfig = (id, path, config, persistFn, type = "text") => {
+    const e = el(id);
+    if (!e) return;
+
+    // Set initial state
+    const val = getValueByPath(config, path);
+    if (type === "check") e.checked = !!val;
+    else e.value = val ?? "";
+
+    // Auto-save on change
+    e.onchange = async () => {
+      let newVal = type === "check" ? e.checked : type === "number" ? Number(e.value) || 0 : e.value;
+      setValueByPath(config, path, newVal);
+      await persistFn(config);
+    };
+  };
 
   /** Unwrap a config response that may contain a payload wrapper. @param {Object} data @returns {Object} The inner config object. */
   const unwrapConfig = (data) => (data?.payload !== undefined ? data.payload || {} : data || {});
@@ -239,7 +251,9 @@
     withButtonAction,
     initToggle,
     setIfNotEmpty,
+    getValueByPath,
     setValueByPath,
+    bindConfig,
     getErrorCount,
     unwrapConfig,
   };
@@ -339,7 +353,7 @@
    * the settings form with appropriate input types (bool, enum, number, textarea, etc.).
    */
   async function loadConfig() {
-    if (!el("config-form")) return; // prevent errors on the player page which shares this script but doesn't have the config form
+    if (!el("config-form")) return;
 
     const [schemaRes, configRes] = await Promise.all([fetchJson(base + "/config/schema"), fetchJson(base + "/config")]);
     if (!schemaRes.ok || !configRes.ok) return showToast("Failed To Load Config", "error", 0);
@@ -347,11 +361,15 @@
     const schema = schemaRes.data.properties || [],
       rawCfg = configRes.data || {},
       config = unwrapConfig(rawCfg);
-    if (overridesBtn) overridesBtn.disabled = !config.TmdbEpNumbering;
+
+    // Disable overrides button if TMDB Ep Numbering is off
+    // Note: The path might now be "Advanced.TmdbEpNumbering" or just "TmdbEpNumbering" depending on your RelayConfig structure
+    const tmdbEnabled = getValueByPath(config, "TmdbEpNumbering") ?? getValueByPath(config, "Advanced.TmdbEpNumbering");
+    if (overridesBtn) overridesBtn.disabled = !tmdbEnabled;
+
     el("config-form").innerHTML = "";
     el("overrides-text") && (el("overrides-text").value = rawCfg.overrides || "");
 
-    const advKeys = new Set(["ShokoServerUrl", "AnimeThemesOverlapLevel", "PathMappings", "VfsRootPath", "AnimeThemesRootPath", "CollectionPostersRootPath", "FFmpegPath", "Parallelism"]);
     const advSection = document.createElement("details"),
       advContent = document.createElement("div");
     advSection.className = "details-anim";
@@ -360,9 +378,7 @@
     advContent.appendChild(document.createElement("hr"));
 
     /**
-     * POST the updated config object to the server and surface any errors via toast.
-     * @param {Object} updated - The full config object to persist.
-     * @returns {Promise<{ok: boolean, data: *}>} The server response.
+     * POST the updated config object to the server.
      */
     async function persistConfig(updated) {
       const res = await fetchJson(base + "/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updated) });
@@ -381,7 +397,7 @@
           <span class="shoko-checkbox-icon" aria-hidden="true"><svg class="unchecked"><use href="img/icons.svg#checkbox-blank-circle-outline"></use></svg><svg class="checked"><use href="img/icons.svg#checkbox-marked-circle-outline"></use></svg></span>
           <span class="shoko-checkbox-text"><span class="shoko-checkbox-title">${p.Display || p.Path}</span><small class="shoko-checkbox-desc" style="display:block">${p.Description || ""}</small></span></label>`;
         input = wrap.querySelector("input");
-      } else if (p.Path === "PathMappings") {
+      } else if (p.Path.endsWith("PathMappings")) {
         wrap.innerHTML = `<div class="full"><div><label>Plex Base Paths</label><textarea id="path-mappings-left" placeholder="e.g. M:\\Anime"></textarea></div><div><label>Shoko Base Paths</label><textarea id="path-mappings-right" placeholder="e.g. /anime"></textarea></div></div><small>Enter one mapping per line.</small>`;
         const l = wrap.querySelector("#path-mappings-left"),
           r = wrap.querySelector("#path-mappings-right"),
@@ -391,9 +407,9 @@
         r.value = keys.join("\n");
         input = [l, r];
       } else {
-        label.innerHTML = `<span>${p.Display || p.Path}</span>${p.Description ? `<small>${p.Description}</small>` : ""}`;
+        label.innerHTML = `<span>${p.Display || p.Path.split(".").pop()}</span>${p.Description ? `<small>${p.Description}</small>` : ""}`;
         wrap.appendChild(label);
-        input = document.createElement(p.Type === "enum" ? "select" : p.Type === "json" || p.Path === "TagBlacklist" ? "textarea" : "input");
+        input = document.createElement(p.Type === "enum" ? "select" : p.Type === "json" || p.Path.endsWith("TagBlacklist") ? "textarea" : "input");
         if (p.Type === "enum")
           (p.EnumValues || []).forEach((ev) => {
             const opt = new Option(ev.name, ev.value);
@@ -415,7 +431,7 @@
       inputs.forEach((i) => {
         i.onchange = async () => {
           let val = p.Type === "bool" ? i.checked : i.value;
-          if (p.Path === "PathMappings") {
+          if (p.Path.endsWith("PathMappings")) {
             val = {};
             const lLines = inputs[0].value.split("\n"),
               rLines = inputs[1].value.split("\n");
@@ -432,10 +448,16 @@
 
           setValueByPath(config, p.Path, val);
           await persistConfig(config);
-          if (p.Path === "TmdbEpNumbering" && overridesBtn) overridesBtn.disabled = !val;
+
+          // Update overrides button state if numbering changed
+          if (p.Path.endsWith("TmdbEpNumbering") && overridesBtn) {
+            overridesBtn.disabled = !val;
+          }
         };
       });
-      (advKeys.has(p.Path) ? advContent : el("config-form")).appendChild(wrap);
+
+      // Place in advanced or standard container
+      (p.Advanced ? advContent : el("config-form")).appendChild(wrap);
     });
 
     if (advContent.children.length > 1) {
@@ -444,23 +466,17 @@
       initDetailsAnimation(advSection, advContent);
     }
 
-    const bind = (id, key, type) => {
-      const e = el(id);
-      if (!e) return;
-      if (type === "check") e.checked = !!config[key];
-      else e.value = config[key] || "";
-      e.onchange = () => {
-        setValueByPath(config, key, type === "check" ? e.checked : Number(e.value) || 0);
-        persistConfig(config);
-      };
-    };
-    bind("shoko-utc-offset", "UtcOffsetHours");
-    bind("shoko-import-frequency", "ShokoImportFrequencyHours");
-    bind("shoko-sync-frequency", "ShokoSyncWatchedFrequencyHours");
-    bind("plex-auto-frequency", "PlexAutomationFrequencyHours");
-    bind("sync-ratings", "ShokoSyncWatchedIncludeRatings", "check");
-    bind("sync-exclude-admin", "ShokoSyncWatchedExcludeAdmin", "check");
-    if (el("plex-watched")) el("plex-watched").checked = !!config.AutoScrobble;
+    // Static bindings for automation fields (outside the main preferences)
+    const b = (id, path, type) => window._sr.bindConfig(id, path, config, persistConfig, type);
+
+    b("shoko-utc-offset", "Automation.UtcOffsetHours", "number");
+    b("shoko-import-frequency", "Automation.ShokoImportFrequencyHours", "number");
+    b("shoko-sync-frequency", "Automation.ShokoSyncWatchedFrequencyHours", "number");
+    b("plex-auto-frequency", "Automation.PlexAutomationFrequencyHours", "number");
+    b("sync-ratings", "Automation.ShokoSyncWatchedIncludeRatings", "check");
+    b("sync-exclude-admin", "Automation.ShokoSyncWatchedExcludeAdmin", "check");
+    b("plex-scrobble", "Automation.AutoScrobble", "check");
+
     window._sr.initAtConfig?.(config, persistConfig);
   }
   // #endregion

@@ -39,32 +39,78 @@
   const getNextMode = (current, modes) => modes[(modes.indexOf(current) + 1) % modes.length];
 
   /**
-   * Filters the tree data based on query words.
-   * Each word in the query must be found in either the group, series, or filename.
-   * If the keyword "favs" is present, the result is restricted to favourited items.
-   * Invisible characters (ZWSP, Hair Space) are stripped before matching.
+   * Debounce helper to prevent lag during rapid typing
+   */
+  const debounce = (fn, ms) => {
+    let timeout;
+    return (...args) => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => fn.apply(this, args), ms);
+    };
+  };
+
+  /**
+   * Filters the tree data based on query words. Each word in the query must be found in either the group, series, or filename.
+   * If the keyword "favs" is present, the result is restricted to favourited items. Invisible characters (ZWSP, Hair Space) are stripped before matching.
+   * Tags can be excluded or included by prepending with "-", e.g. "-spoil" or a a "+", e.g. "+spoil" for inclusions.
    * @returns {Object[]}
    */
   const getFilteredItems = () => {
     const rawFt = (playerFilter?.value || "").toLowerCase().trim();
     if (!rawFt) return webmTreeData;
 
-    const queryWords = rawFt.split(/\s+/);
-    // Check if the user is asking specifically for favourites
-    const isFavQuery = queryWords.includes("favs");
-    // Remove "favs" from the words used to match text content
-    const searchTerms = queryWords.filter((w) => w !== "favs");
+    const words = rawFt.split(/\s+/);
+    const isFavQuery = words.includes("favs");
+
+    const tagExclusions = [];
+    const tagInclusions = [];
+    const searchTerms = [];
+
+    // Categorize search tokens
+    words.forEach((w) => {
+      if (w === "favs") return;
+      if (w.startsWith("-")) tagExclusions.push(w.substring(1));
+      else if (w.startsWith("+")) tagInclusions.push(w.substring(1));
+      else searchTerms.push(w);
+    });
+
+    const matchesTag = (tag, item) => {
+      switch (tag) {
+        case "spoil":
+          return item.spoiler;
+        case "nsfw":
+          return item.nsfw;
+        case "lyrics":
+          return item.lyrics;
+        case "subs":
+          return item.subs;
+        case "uncen":
+          return item.uncen;
+        case "nc":
+          return item.nc;
+        default:
+          return false;
+      }
+    };
 
     return webmTreeData.filter((item) => {
-      let searchableText = `${item.group} ${item.series} ${decodeUnicode(item.file)}`.toLowerCase();
-      searchableText = searchableText.replace(/[\u200B\u200A]/g, ""); // Remove zero-width space and hair space
+      // 1. Favourites check
+      if (isFavQuery && (!item.videoId || !favourites.has(item.videoId))) return false;
 
-      // Check if text search terms match
-      const textMatch = searchTerms.every((word) => searchableText.includes(word));
-      // Check if the item matches the favourite requirement (if "favs" was typed)
-      const favMatch = !isFavQuery || (item.videoId > 0 && favourites.has(item.videoId));
+      // 2. Metadata exclusion checks (-spoil, -nsfw, etc)
+      // Returns false if the item HAS a tag the user wants to exclude
+      for (const tag of tagExclusions) {
+        if (matchesTag(tag, item)) return false;
+      }
 
-      return textMatch && favMatch;
+      // 3. Metadata inclusion checks (+lyrics, +subs, etc)
+      // Returns false if the item is MISSING a tag the user explicitly requested
+      for (const tag of tagInclusions) {
+        if (!matchesTag(tag, item)) return false;
+      }
+
+      // 4. Inclusion text search (using pre-calculated index)
+      return searchTerms.every((word) => item._searchIndex.includes(word));
     });
   };
   // #endregion
@@ -160,7 +206,7 @@
             const heart = document.createElement("span");
             const isFavourited = favourites.has(f.videoId);
             heart.className = `fav-icon ${isFavourited ? "favourited" : ""}`;
-            heart.textContent = "❤"; 
+            heart.textContent = "❤";
             heart.onclick = (e) => {
               e.stopPropagation();
               toggleFavourite(f.videoId, heart);
@@ -261,11 +307,14 @@
 
   // #region Initialization
   if (playerVideo) {
-    // Filter Input
-    if (playerFilter)
-      playerFilter.oninput = () => {
+    // Filter Input (Debounced)
+    if (playerFilter) {
+      const debouncedRender = debounce(() => {
         renderTree(getFilteredItems());
-      };
+      }, 250); // 250ms delay
+
+      playerFilter.oninput = debouncedRender;
+    }
 
     // Mode Toggle
     if (playerModeBtn) {
@@ -277,7 +326,7 @@
         const res = await fetchJson(base + "/config");
         if (res.ok) {
           const cfg = unwrapConfig(res.data);
-          setValueByPath(cfg, "AnimeThemesWebmMode", next);
+          setValueByPath(cfg, "Playback.AnimeThemesWebmMode", next);
           await fetchJson(base + "/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cfg) });
         }
       };
@@ -299,17 +348,22 @@
     (async () => {
       const [treeRes, cfgRes, favRes] = await Promise.all([fetchJson(base + "/animethemes/webm/tree"), fetchJson(base + "/config"), fetchJson(base + "/animethemes/webm/favourites")]);
 
-      if (favRes.ok) {
-        favourites = new Set(favRes.data);
-      }
+      if (favRes.ok) favourites = new Set(favRes.data);
 
       if (treeRes.ok) {
-        webmTreeData = (treeRes.data?.items || []).sort((a, b) => a.path.localeCompare(b.path));
+        // Pre-calculate search index for every item for speed
+        webmTreeData = (treeRes.data?.items || [])
+          .map((item) => {
+            item._searchIndex = `${item.group} ${item.series} ${decodeUnicode(item.file)}`.toLowerCase().replace(/[\u200B\u200A]/g, "");
+            return item;
+          })
+          .sort((a, b) => a.path.localeCompare(b.path));
+
         renderTree(getFilteredItems());
       }
 
       if (cfgRes.ok && playerModeBtn) {
-        const mode = unwrapConfig(cfgRes.data).AnimeThemesWebmMode || "off";
+        const mode = unwrapConfig(cfgRes.data).Playback.AnimeThemesWebmMode || "off";
         playerModeBtn.setAttribute("data-mode", mode);
       }
     })();

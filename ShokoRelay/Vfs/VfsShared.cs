@@ -55,19 +55,19 @@ internal static class VfsShared
     /// Determine the name to use for the top‑level VFS root folder. Reads the <c>VfsRootPath</c> setting and sanitizes it; falls back to a default string if the configured value is empty or invalid.
     /// </summary>
     /// <returns>The resolved root folder name.</returns>
-    public static string ResolveRootFolderName() => ResolveFolderName(ShokoRelay.Settings.VfsRootPath, DefaultVfsRootName);
+    public static string ResolveRootFolderName() => ResolveFolderName(ShokoRelay.Settings.Advanced.VfsRootPath, DefaultVfsRootName);
 
     /// <summary>
     /// Compute the folder name used for collection poster assets in the VFS. Sanitizes the <c>CollectionPostersRootPath</c> setting and falls back to a default if necessary.
     /// </summary>
     /// <returns>The resolved collection posters folder name.</returns>
-    public static string ResolveCollectionPostersFolderName() => ResolveFolderName(ShokoRelay.Settings.CollectionPostersRootPath, DefaultCollectionPostersRootName);
+    public static string ResolveCollectionPostersFolderName() => ResolveFolderName(ShokoRelay.Settings.Advanced.CollectionPostersRootPath, DefaultCollectionPostersRootName);
 
     /// <summary>
     /// Compute the folder name used for anime theme MP3 assets. Sanitizes the <c>AnimeThemesRootPath</c> setting and falls back to a default if necessary.
     /// </summary>
     /// <returns>The resolved anime themes folder name.</returns>
-    public static string ResolveAnimeThemesFolderName() => ResolveFolderName(ShokoRelay.Settings.AnimeThemesRootPath, DefaultAnimeThemesRootName);
+    public static string ResolveAnimeThemesFolderName() => ResolveFolderName(ShokoRelay.Settings.Advanced.AnimeThemesRootPath, DefaultAnimeThemesRootName);
 
     /// <summary>
     /// Sanitize and resolve a configured folder name, falling back to <paramref name="defaultName"/> when the result is empty or invalid.

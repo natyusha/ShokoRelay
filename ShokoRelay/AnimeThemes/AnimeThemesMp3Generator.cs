@@ -272,7 +272,7 @@ public class AnimeThemesMp3Generator
         };
 
         // process in parallel using the configured parallelism setting
-        int maxDop = Math.Max(1, ShokoRelay.Settings.Parallelism);
+        int maxDop = Math.Max(1, ShokoRelay.Settings.Advanced.Parallelism);
         await Parallel
             .ForEachAsync(
                 folders,

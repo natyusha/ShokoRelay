@@ -103,7 +103,7 @@
     }
   }
 
-  /** Refresh the full Plex authentication state (token, libraries, settings bindings) from the server config. */
+  /** Refresh the full Plex authentication state (token, libraries, settings bindings) from the server config.  */
   async function refreshPlexState() {
     updateLibraryCount();
     const res = await fetchJson(base + "/config");
@@ -115,25 +115,43 @@
 
     const settings = (window.relaySettings = unwrapConfig(res.data));
     const plex = settings.PlexLibrary || {};
+
+    // Enable or disable automation buttons based on whether we have a token
     setPlexAutomationControls(!!plex.HasToken);
 
-    const bind = (id, prop, val) => {
-      const e = el(id);
-      if (!e) return;
-      e[prop] = val;
-      e.onchange = savePlexSettings;
+    // Shared persistence function for plex.js that strips UI-only metadata
+    const persistPlex = async (cfg) => {
+      const cleanCfg = JSON.parse(JSON.stringify(cfg));
+      // Remove properties that the backend doesn't expect in the POST body
+      delete cleanCfg.PlexLibrary;
+      delete cleanCfg.PlexAuth;
+
+      const save = await fetchJson(base + "/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(cleanCfg),
+      });
+
+      if (save.ok) showToast("Plex Settings Saved", "success");
+      else showToast("Plex Settings Save Failed", "error");
     };
 
-    bind("extra-plex-users", "value", settings.ExtraPlexUsers || "");
-    bind("plex-scan-vfs", "checked", !!settings.ScanOnVfsRefresh);
-    bind("plex-watched", "checked", !!settings.AutoScrobble);
+    // Helper to bind inputs to the Automation nested object
+    const b = (id, path, type) => window._sr.bindConfig(id, path, settings, persistPlex, type);
 
+    b("extra-plex-users", "Automation.ExtraPlexUsers", "text");
+    b("plex-scan-vfs", "Automation.ScanOnVfsRefresh", "check");
+    b("plex-watched", "Automation.AutoScrobble", "check");
+
+    // Toggle between Start Auth and Unlink buttons
     if (!plex.HasToken) return setPlexStartAction();
     setPlexUnlinkAction();
 
+    // Map discovered library data for the UI count
     const mapLib = (l) => ({ id: l.Id, title: l.Title, type: l.Type, uuid: l.Uuid });
     let libs = (plex.DiscoveredLibraries || []).map(mapLib);
 
+    // If no libraries are cached but servers exist, try one automatic background refresh
     if (!libs.length && plex.DiscoveredServers?.length) {
       const rr = await fetchJson(base + "/plex/auth/refresh", { method: "POST" });
       if (rr.ok && rr.data?.libraries) libs = rr.data.libraries.map(mapLib);
@@ -149,33 +167,6 @@
   // #endregion
 
   // #region Automation
-  /**
-   * Read current config, merge Plex-specific settings from the dashboard, and POST the result.
-   * @returns {Promise<boolean>} True if the settings were saved successfully.
-   */
-  async function savePlexSettings() {
-    try {
-      const res = await fetchJson(base + "/config");
-      const cfg = unwrapConfig(res.data);
-      cfg.ScanOnVfsRefresh = !!el("plex-scan-vfs")?.checked;
-      cfg.ExtraPlexUsers = el("extra-plex-users")?.value || "";
-      cfg.AutoScrobble = !!el("plex-watched")?.checked;
-      cfg.ShokoSyncWatchedExcludeAdmin = !!el("sync-exclude-admin")?.checked;
-
-      // Clean up sensitive/redundant objects before saving
-      delete cfg.PlexLibrary;
-      delete cfg.PlexAuth;
-
-      const save = await fetchJson(base + "/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cfg) });
-      if (save.ok) showToast("Plex Settings Saved", "success");
-      else showToast("Plex Settings Save Failed", "error");
-      return save.ok;
-    } catch (e) {
-      showToast("Plex Settings Save Failed", "error");
-      return false;
-    }
-  }
-
   /**
    * Create a click handler for Plex automation buttons (collections, ratings) with toast feedback.
    * @param {HTMLElement} btn - The button element to bind the action to.

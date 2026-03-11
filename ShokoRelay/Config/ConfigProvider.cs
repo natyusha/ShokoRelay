@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Reflection;
 using System.Text.Json;
@@ -48,7 +49,7 @@ public class ConfigProvider
         get
         {
             // Prefer explicitly configured URL
-            var configUrl = GetSettings()?.ShokoServerUrl;
+            var configUrl = GetSettings()?.Advanced.ShokoServerUrl;
             if (!string.IsNullOrWhiteSpace(configUrl))
                 return configUrl!.TrimEnd('/');
 
@@ -225,25 +226,29 @@ public class ConfigProvider
     }
 
     // Ensure settings object contains sensible defaults for any string property that was left empty/whitespace
-    private static void ApplyDefaultValues(RelayConfig settings)
+    private static void ApplyDefaultValues(object obj)
     {
-        if (settings == null)
+        if (obj == null)
             return;
 
-        var defaults = new RelayConfig();
-        foreach (var prop in typeof(RelayConfig).GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        foreach (var prop in obj.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
             if (!prop.CanRead || !prop.CanWrite)
                 continue;
-            if (prop.PropertyType != typeof(string))
-                continue;
 
-            var cur = (string?)prop.GetValue(settings);
-            if (string.IsNullOrWhiteSpace(cur))
+            if (prop.PropertyType == typeof(string))
             {
-                var def = (string?)prop.GetValue(defaults);
-                if (!string.IsNullOrWhiteSpace(def))
-                    prop.SetValue(settings, def);
+                var cur = (string?)prop.GetValue(obj);
+                var defAttr = prop.GetCustomAttribute<DefaultValueAttribute>();
+                if (string.IsNullOrWhiteSpace(cur) && defAttr != null)
+                    prop.SetValue(obj, defAttr.Value);
+            }
+            // Recurse into nested configuration classes (like AdvancedConfig)
+            else if (prop.PropertyType.IsClass && prop.PropertyType != typeof(string) && !typeof(System.Collections.IDictionary).IsAssignableFrom(prop.PropertyType))
+            {
+                var nested = prop.GetValue(obj);
+                if (nested != null)
+                    ApplyDefaultValues(nested);
             }
         }
     }
@@ -404,7 +409,7 @@ public class ConfigProvider
         if (_cachedExtraUsers != null)
             return _cachedExtraUsers;
 
-        var extraRaw = GetSettings().ExtraPlexUsers ?? string.Empty;
+        var extraRaw = GetSettings().Automation.ExtraPlexUsers ?? string.Empty;
         _cachedExtraUsers = ParseExtraPlexUsers(extraRaw);
         return _cachedExtraUsers;
     }
@@ -539,11 +544,11 @@ public class ConfigProvider
 
     private bool NormalizePathMappings(RelayConfig settings)
     {
-        if (settings == null || settings.PathMappings == null || settings.PathMappings.Count == 0)
+        if (settings == null || settings.Advanced.PathMappings == null || settings.Advanced.PathMappings.Count == 0)
             return false;
 
         var normalized = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var kv in settings.PathMappings)
+        foreach (var kv in settings.Advanced.PathMappings)
         {
             var rawKey = kv.Key ?? string.Empty;
             var rawVal = kv.Value ?? string.Empty;
@@ -563,11 +568,11 @@ public class ConfigProvider
         }
 
         // Compare serialized form to detect changes
-        var origJson = JsonSerializer.Serialize(settings.PathMappings, Options);
+        var origJson = JsonSerializer.Serialize(settings.Advanced.PathMappings, Options);
         var normJson = JsonSerializer.Serialize(normalized, Options);
         if (origJson != normJson)
         {
-            settings.PathMappings = normalized;
+            settings.Advanced.PathMappings = normalized;
             return true;
         }
 
@@ -603,11 +608,11 @@ public class ConfigProvider
             changed = true;
         }
 
-        var extraRaw = settings.ExtraPlexUsers ?? string.Empty;
+        var extraRaw = settings.Automation.ExtraPlexUsers ?? string.Empty;
         var normExtra = NormalizeCsvString(extraRaw);
-        if (!string.Equals(normExtra, settings.ExtraPlexUsers ?? string.Empty, StringComparison.Ordinal))
+        if (!string.Equals(normExtra, settings.Automation.ExtraPlexUsers ?? string.Empty, StringComparison.Ordinal))
         {
-            settings.ExtraPlexUsers = normExtra;
+            settings.Automation.ExtraPlexUsers = normExtra;
             changed = true;
         }
 

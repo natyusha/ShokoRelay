@@ -25,61 +25,43 @@ public class ServiceRegistration : IPluginServiceRegistration
     {
         serviceCollection.AddHttpContextAccessor();
         serviceCollection.AddControllers().AddApplicationPart(typeof(ServiceRegistration).Assembly);
+
+        // ConfigProvider is required for Secrets (Plex Token) and paths
         serviceCollection.AddSingleton(new ConfigProvider(applicationPaths));
-        serviceCollection.AddSingleton(provider => new AnimeThemesMp3Generator(
-            provider.GetRequiredService<IMetadataService>(),
-            provider.GetRequiredService<IVideoService>(),
-            provider.GetRequiredService<ConfigProvider>()
-        ));
-        serviceCollection.AddSingleton(provider => new AnimeThemesMapping(
-            provider.GetRequiredService<IMetadataService>(),
-            provider.GetRequiredService<IVideoService>(),
-            provider.GetRequiredService<ConfigProvider>()
-        ));
-        serviceCollection.AddSingleton(provider => new PlexMetadata(provider.GetRequiredService<IMetadataService>()));
-        // Use HttpClient instances with CookieContainer so Plex /myplex switch flows that set cookies work correctly.
+
+        // These services read settings via ShokoRelay.Settings internally
+        serviceCollection.AddSingleton<AnimeThemesMp3Generator>();
+        serviceCollection.AddSingleton<AnimeThemesMapping>();
+        serviceCollection.AddSingleton<PlexMetadata>();
+        serviceCollection.AddSingleton<VfsBuilder>();
+        serviceCollection.AddSingleton<VfsWatcher>();
+        serviceCollection.AddSingleton<Services.ICollectionService, Services.CollectionService>();
+        serviceCollection.AddSingleton<Services.ICriticRatingService, Services.CriticRatingService>();
+        serviceCollection.AddSingleton<Services.ShokoImportService>();
+
+        // Plex Services still need ConfigProvider for the Token (Secrets)
         var handlerWithCookies = new HttpClientHandler { UseCookies = true, CookieContainer = new System.Net.CookieContainer() };
+
         serviceCollection.AddSingleton(provider =>
         {
             var cp = provider.GetRequiredService<ConfigProvider>();
             var plexAuthConfig = new PlexAuthConfig { ClientIdentifier = cp.GetPlexClientIdentifier() };
             return new PlexAuth(new HttpClient(handlerWithCookies, disposeHandler: false), plexAuthConfig);
         });
+
         serviceCollection.AddSingleton(provider => new PlexClient(new HttpClient(handlerWithCookies, disposeHandler: false), provider.GetRequiredService<ConfigProvider>()));
+
         serviceCollection.AddSingleton(provider => new PlexCollections(
             new HttpClient(handlerWithCookies, disposeHandler: false),
             provider.GetRequiredService<ConfigProvider>(),
             provider.GetRequiredService<PlexClient>()
         ));
-        serviceCollection.AddSingleton<Services.ICollectionService, Services.CollectionService>();
-        serviceCollection.AddSingleton<Services.ICriticRatingService, Services.CriticRatingService>();
-        serviceCollection.AddSingleton<VfsBuilder>();
-        serviceCollection.AddSingleton<VfsWatcher>();
 
-        // Watched-state sync service (Plex -> Shoko)
-        serviceCollection.AddSingleton(provider => new Sync.SyncToShoko(
-            provider.GetRequiredService<PlexClient>(),
-            provider.GetRequiredService<IMetadataService>(),
-            provider.GetRequiredService<IUserDataService>(),
-            provider.GetRequiredService<IUserService>(),
-            provider.GetRequiredService<ConfigProvider>(),
-            provider.GetRequiredService<PlexAuth>()
-        ));
+        // Sync Services
+        serviceCollection.AddSingleton<Sync.SyncToShoko>();
+        serviceCollection.AddSingleton<Sync.SyncToPlex>();
 
-        // Watched-state export service (Plex <- Shoko)
-        serviceCollection.AddSingleton(provider => new Sync.SyncToPlex(
-            provider.GetRequiredService<PlexClient>(),
-            provider.GetRequiredService<IMetadataService>(),
-            provider.GetRequiredService<IUserDataService>(),
-            provider.GetRequiredService<IUserService>(),
-            provider.GetRequiredService<ConfigProvider>(),
-            provider.GetRequiredService<PlexAuth>()
-        ));
-
-        // Shoko import helper service
-        serviceCollection.AddSingleton(provider => new Services.ShokoImportService(provider.GetRequiredService<IVideoService>()));
-
-        // Run the plugin runtime as a hosted service (starts VFS watcher + automation loop)
+        // Main Runtime
         serviceCollection.AddHostedService<ShokoRelay>();
     }
 }
@@ -187,26 +169,53 @@ public class ShokoRelay : BackgroundService
     }
 
     /// <summary>
-    /// Main execution loop for the hosted service. Starts the VFS watcher and then enters the automation loop until cancellation is requested.
+    /// Main execution loop for the hosted service. Starts the VFS watcher,
+    /// initializes scheduling anchors to prevent redundant startup tasks,
+    /// and then enters the automation loop until cancellation is requested.
     /// </summary>
     /// <param name="stoppingToken">Cancellation token.</param>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // Start watcher immediately
-        _watcher.Start();
-        Logger.Info("Relay started with VFS auto-refresh.");
-
-        // Run automation loop until cancellation
-        await AutomationLoop(stoppingToken).ConfigureAwait(false);
-
-        // Shutdown watcher when stopping
         try
         {
-            _watcher.Stop();
+            // Initialize automation anchors on startup. Set the last run time to the "LastScheduled" slot of the current time, preventing catch-up runs for slots that have already passed.
+            var now = DateTime.UtcNow;
+            var settings = Settings;
+            int offset = Math.Clamp(settings?.Automation.UtcOffsetHours ?? 0, -12, 14);
+
+            if (settings?.Automation.ShokoImportFrequencyHours > 0)
+            {
+                _lastImportRunUtc = ComputeSchedule(now, offset, settings.Automation.ShokoImportFrequencyHours).LastScheduled;
+            }
+
+            if (settings?.Automation.ShokoSyncWatchedFrequencyHours > 0)
+            {
+                _lastSyncWatchedUtc = ComputeSchedule(now, offset, settings.Automation.ShokoSyncWatchedFrequencyHours).LastScheduled;
+            }
+
+            if (settings?.Automation.PlexAutomationFrequencyHours > 0)
+            {
+                _lastPlexAutomationUtc = ComputeSchedule(now, offset, settings.Automation.PlexAutomationFrequencyHours).LastScheduled;
+            }
+
+            // Start watcher immediately
+            _watcher.Start();
+            Logger.Info("Relay started with VFS auto-refresh. Automation anchors initialized to current UTC slots.");
+
+            // Run automation loop until cancellation
+            await AutomationLoop(stoppingToken).ConfigureAwait(false);
         }
-        catch (Exception ex)
+        finally
         {
-            Logger.Warn(ex, "Error while stopping VFS watcher");
+            // Shutdown watcher when stopping
+            try
+            {
+                _watcher.Stop();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "Error while stopping VFS watcher");
+            }
         }
     }
 
@@ -251,11 +260,11 @@ public class ShokoRelay : BackgroundService
                     var settings = Settings; // RelayConfig
 
                     // Scheduled Shoko import (independent of watched-state automation)
-                    int importFreqHours = settings?.ShokoImportFrequencyHours ?? 0;
+                    int importFreqHours = settings?.Automation.ShokoImportFrequencyHours ?? 0;
                     DateTime? nextImportRunUtc = null;
 
                     var now = DateTime.UtcNow;
-                    int offset = Math.Clamp(settings?.UtcOffsetHours ?? 0, -12, 14);
+                    int offset = Math.Clamp(settings?.Automation.UtcOffsetHours ?? 0, -12, 14);
 
                     if (importFreqHours <= 0)
                     {
@@ -297,7 +306,7 @@ public class ShokoRelay : BackgroundService
                     DateTime? nextWatchedSyncRunUtc = null;
                     try
                     {
-                        int syncFreq = settings?.ShokoSyncWatchedFrequencyHours ?? 0;
+                        int syncFreq = settings?.Automation.ShokoSyncWatchedFrequencyHours ?? 0;
 
                         // Automatic watched-state sync is controlled *only* by the configured interval.
                         // If interval <= 0 the automation is disabled (same behaviour as Shoko import).
@@ -312,8 +321,8 @@ public class ShokoRelay : BackgroundService
 
                             if (_lastSyncWatchedUtc == null || _lastSyncWatchedUtc < lastScheduled)
                             {
-                                bool includeRatingsForScheduled = settings?.ShokoSyncWatchedIncludeRatings ?? false;
-                                bool excludeAdminForScheduled = settings?.ShokoSyncWatchedExcludeAdmin ?? false;
+                                bool includeRatingsForScheduled = settings?.Automation.ShokoSyncWatchedIncludeRatings ?? false;
+                                bool excludeAdminForScheduled = settings?.Automation.ShokoSyncWatchedExcludeAdmin ?? false;
                                 Logger.Info(
                                     "Automation: triggering scheduled Plex->Shoko watched-state sync (frequency {0}h, ratings={1}, excludeAdmin={2})",
                                     syncFreq,
@@ -322,7 +331,7 @@ public class ShokoRelay : BackgroundService
                                 );
                                 try
                                 {
-                                    var syncTask = _watchedSyncService.SyncWatchedAsync(false, syncFreq + 1, includeRatingsForScheduled, excludeAdminForScheduled, ct);
+                                    var syncTask = _watchedSyncService.SyncWatchedAsync(false, syncFreq + 1, ct);
                                     await syncTask.ConfigureAwait(false);
                                 }
                                 catch (Exception ex)
@@ -343,7 +352,7 @@ public class ShokoRelay : BackgroundService
                     DateTime? nextPlexRunUtc = null;
                     try
                     {
-                        int plexFreq = settings?.PlexAutomationFrequencyHours ?? 0;
+                        int plexFreq = settings?.Automation.PlexAutomationFrequencyHours ?? 0;
                         if (plexFreq <= 0 || (_collectionService == null && _criticRatingService == null))
                         {
                             _lastPlexAutomationUtc = null;

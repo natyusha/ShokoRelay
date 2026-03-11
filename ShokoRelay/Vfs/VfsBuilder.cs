@@ -23,7 +23,6 @@ public class VfsBuilder
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private readonly IMetadataService _metadataService;
     private readonly string _pluginDataPath;
-    private readonly string _configDirectory;
 
     // Per-build caches (initialized for the duration of BuildInternal and cleared afterwards)
     private ConcurrentDictionary<int, MapHelper.SeriesFileData>? _seriesFileDataCacheForBuild;
@@ -46,18 +45,7 @@ public class VfsBuilder
     public VfsBuilder(IMetadataService metadataService, ConfigProvider configProvider)
     {
         _metadataService = metadataService;
-        // reports and other plugin-specific files should live inside our plugin folder rather than the global server data directory.
         _pluginDataPath = configProvider.PluginDirectory;
-        _configDirectory = configProvider.ConfigDirectory;
-        try
-        {
-            Directory.CreateDirectory(_pluginDataPath);
-        }
-        catch
-        {
-            // ignore - writing later may still fail and will be logged
-        }
-        // load merge overrides now so they are available during builds/filters
         OverrideHelper.EnsureLoaded();
     }
 
@@ -180,7 +168,7 @@ public class VfsBuilder
         }
 
         // Bounded parallel processing of series to improve throughput while avoiding excessive IO contention.
-        int maxDop = Math.Max(1, ShokoRelay.Settings.Parallelism);
+        int maxDop = Math.Max(1, ShokoRelay.Settings.Advanced.Parallelism);
         var po = new ParallelOptions { MaxDegreeOfParallelism = maxDop };
 
         Parallel.ForEach(
