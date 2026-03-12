@@ -40,7 +40,7 @@ public class ConfigProvider
     private string _serverBaseUrl = "http://localhost:8111";
 
     /// <summary>
-    /// The externally-reachable base URL of the Shoko server (e.g. <c>http://192.168.1.3:8111</c>).
+    /// The externally-reachable base URL of the Shoko server (e.g. <c>http://localhost:8111</c>).
     /// When an explicit <see cref="RelayConfig.ShokoServerUrl"/> is configured that value is always returned.
     /// Otherwise, when an HTTP request context is available the value is automatically refreshed from the incoming host header; background tasks that lack a context receive the last known value.
     /// </summary>
@@ -48,18 +48,15 @@ public class ConfigProvider
     {
         get
         {
-            // Prefer explicitly configured URL
             var configUrl = GetSettings()?.Advanced.ShokoServerUrl;
             if (!string.IsNullOrWhiteSpace(configUrl))
-                return configUrl!.TrimEnd('/');
+                return configUrl.Trim().TrimEnd('/');
 
-            // Auto-detect from current HTTP context
-            var ctx = HttpContextAccessor?.HttpContext;
-            if (ctx is not null)
+            if (HttpContextAccessor?.HttpContext is { } ctx)
                 _serverBaseUrl = $"{ctx.Request.Scheme}://{ctx.Request.Host}";
+
             return _serverBaseUrl;
         }
-        set => _serverBaseUrl = value ?? "http://localhost:8111";
     }
 
     /// <summary>

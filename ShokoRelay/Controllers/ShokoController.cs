@@ -47,7 +47,7 @@ public class ShokoController : ShokoRelayBaseController
     /// <param name="filter">Optional comma-separated list of Shoko series IDs to restrict processing.</param>
     /// <returns>A summary of series processed and links created.</returns>
     [HttpGet("vfs")]
-    public IActionResult BuildVfs([FromQuery] bool clean = true, [FromQuery] bool run = false, [FromQuery] string? filter = null)
+    public async Task<IActionResult> BuildVfs([FromQuery] bool clean = true, [FromQuery] bool run = false, [FromQuery] string? filter = null)
     {
         var validation = ValidateFilterOrBadRequest(filter, out var filterIds);
         if (validation != null)
@@ -66,25 +66,15 @@ public class ShokoController : ShokoRelayBaseController
 
         var result = filterIds.Count > 0 ? _vfsBuilder.Build(filterIds, clean) : _vfsBuilder.Build((int?)null, clean);
 
+        // Trigger background Plex scans if enabled
         if (_plexLibrary.IsEnabled && ShokoRelay.Settings.Automation.ScanOnVfsRefresh && filterIds.Count > 0)
         {
             var toProcess = ResolveSeriesList(null, filterIds).Where(s => s != null).Cast<IShokoSeries>().ToList();
             _ = SchedulePlexRefreshForSeriesAsync(toProcess);
         }
 
-        return Ok(
-            new
-            {
-                status = "ok",
-                root = result.RootPath,
-                seriesProcessed = result.SeriesProcessed,
-                linksCreated = result.CreatedLinks,
-                plannedLinks = result.PlannedLinks,
-                skipped = result.Skipped,
-                errors = result.Errors,
-                logUrl = $"{ApiBase}/logs/vfs-report.log",
-            }
-        );
+        // Use the helper!
+        return await LogAndReturn("vfs-report.log", result, (sb, r) => { });
     }
 
     /// <summary>
@@ -185,17 +175,21 @@ public class ShokoController : ShokoRelayBaseController
 
         bool doImport = import.GetValueOrDefault(false);
         bool includeRatings = ratings.GetValueOrDefault(false);
-        PlexWatchedSyncResult result;
         string direction = doImport ? "Plex<-Shoko" : "Plex->Shoko";
 
         try
         {
+            PlexWatchedSyncResult result;
             if (doImport)
-                result = await _syncToPlexService.SyncWatchedAsync(parsedDry, sinceHours, HttpContext.RequestAborted);
+                result = await _syncToPlexService.SyncWatchedAsync(parsedDry, sinceHours, ratings, excludeAdmin, HttpContext.RequestAborted);
             else
-                result = await _watchedSyncService.SyncWatchedAsync(parsedDry, sinceHours, HttpContext.RequestAborted);
+                result = await _watchedSyncService.SyncWatchedAsync(parsedDry, sinceHours, ratings, excludeAdmin, HttpContext.RequestAborted);
 
-            return await LogAndReturn("sync-watched-report.log", result, (sb, r) => LogHelper.BuildSyncWatchedReport(sb, r, direction, parsedDry, includeRatings));
+            // Set the direction in the result so it is included in the 'data' payload
+            result.Direction = direction;
+
+            // Use the helper!
+            return await LogAndReturn("sync-watched-report.log", result, (sb, r) => LogHelper.BuildSyncWatchedReport(sb, r, r.Direction, r.DryRun, includeRatings));
         }
         catch (Exception ex)
         {
@@ -212,7 +206,7 @@ public class ShokoController : ShokoRelayBaseController
         int freq = ShokoRelay.Settings.Automation.ShokoSyncWatchedFrequencyHours;
         try
         {
-            var result = await _watchedSyncService.SyncWatchedAsync(false, freq, HttpContext.RequestAborted);
+            var result = await _watchedSyncService.SyncWatchedAsync(false, freq, cancellationToken: HttpContext.RequestAborted).ConfigureAwait(false);
             ShokoRelay.MarkSyncRunNow();
             return Ok(
                 new

@@ -22,8 +22,11 @@
             <svg class="icon-svg mode off"><use href="img/icons.svg#sync-off"></use></svg>
           </button>
           <span class="filter-wrap">
-            <svg class="icon-svg magnify-icon"><use href="img/icons.svg#magnify"></use></svg>
+            <svg class="filter-icon magnify"><use href="img/icons.svg#magnify"></use></svg>
             <input id="filter" type="text" placeholder="Filter..." />
+            <button id="filter-clear" title="Clear" type="button" hidden>
+              <svg class="filter-icon clear"><use href="img/icons.svg#close"></use></svg>
+            </button>
           </span>
         </div>
         <video id="video" controls autoplay></video>

@@ -253,7 +253,7 @@ POST /animethemes/vfs/import                                   -> ImportAnimeThe
 
 - `AnimeThemesVfsBuild` applies the mapping and generates `webm_animethemes.cache`.
   - **Cache Format:** `VfsPath|VideoId|Bitmask`.
-  - Bitmask flags: `1:NC, 2:Lyrics, 4:Subs, 8:Uncen, 16:NSFW, 32:Spoil`.
+  - Bitmask flags: `1:NC, 2:Lyrics, 4:Subs, 8:Uncen, 16:NSFW, 32:Spoil, 64:Trans, 128:Over`.
 - `AnimeThemesVfsMap` generates the mapping CSV or tests a single filename mapping.
   - The filename generation respects the `Advanced.AnimeThemesAppendTags` setting.
 

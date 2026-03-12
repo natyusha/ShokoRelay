@@ -96,6 +96,12 @@ public class AnimeThemesController : ShokoRelayBaseController
                                 flags |= 16; // nsfw
                             if (fields[12] == "1")
                                 flags |= 32; // spoiler
+
+                            // Overlap bits
+                            if (fields[16] == "Transition")
+                                flags |= 64;
+                            if (fields[16] == "Over")
+                                flags |= 128;
                         }
                         cacheLines.Add($"{vfsPath}|{videoId}|{flags}");
                     }
@@ -312,6 +318,8 @@ public class AnimeThemesController : ShokoRelayBaseController
                     uncen = (flags & 8) != 0,
                     nsfw = (flags & 16) != 0,
                     spoiler = (flags & 32) != 0,
+                    trans = (flags & 64) != 0,
+                    over = (flags & 128) != 0,
                 }
             );
         }

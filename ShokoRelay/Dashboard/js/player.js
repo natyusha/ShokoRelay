@@ -8,6 +8,7 @@
   const playerVideo = el("video");
   const playerTree = el("tree");
   const playerFilter = el("filter");
+  const playerFilterClear = el("filter-clear");
   const playerNextBtn = el("next");
   const playerModeBtn = el("mode");
   const playerTitle = el("title");
@@ -31,12 +32,16 @@
   const decodeUnicode = (s) => s.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
 
   /**
-   * Get next mode in sequence.
+   * Get next or previous mode in sequence.
    * @param {string} current
    * @param {string[]} modes
+   * @param {number} dir - 1 for forward, -1 for backward
    * @returns {string}
    */
-  const getNextMode = (current, modes) => modes[(modes.indexOf(current) + 1) % modes.length];
+  const cycleMode = (current, modes, dir = 1) => {
+    const idx = modes.indexOf(current);
+    return modes[(idx + dir + modes.length) % modes.length];
+  };
 
   /**
    * Debounce helper to prevent lag during rapid typing
@@ -88,6 +93,10 @@
           return item.uncen;
         case "nc":
           return item.nc;
+        case "trans":
+          return item.trans;
+        case "over":
+          return item.over;
         default:
           return false;
       }
@@ -258,10 +267,11 @@
   }
 
   /**
-   * Advances playback based on mode (Next/Shuffle).
+   * Advances or reverses playback based on mode.
    * @param {boolean} isShuffle
+   * @param {number} direction - 1 for next, -1 for previous
    */
-  function playMove(isShuffle = false) {
+  function playMove(isShuffle = false, direction = 1) {
     const items = getFilteredItems();
     if (items.length === 0) return;
 
@@ -295,13 +305,33 @@
       // Record this item in history
       shuffleHistory.add(selectedItem.path);
     } else {
-      // Normal sequential logic
       shuffleHistory.clear(); // Clear history when leaving shuffle mode
       const currentIdx = items.findIndex((i) => i.path === currentWebmPath);
-      idx = (currentIdx + 1) % items.length;
+      idx = (currentIdx + direction + items.length) % items.length; // Handle direction for sequential play
     }
 
     playFile(items[idx].path);
+  }
+
+  /**
+   * Updates and persists the playback mode.
+   * @param {number} direction - 1 for forward, -1 for backward
+   */
+  async function updateMode(direction = 1) {
+    if (!playerModeBtn) return;
+    const modes = ["loop", "shuffle", "next", "off"];
+    const current = playerModeBtn.getAttribute("data-mode") || "off";
+    const next = cycleMode(current, modes, direction);
+
+    playerModeBtn.setAttribute("data-mode", next);
+    shuffleHistory.clear();
+
+    const res = await fetchJson(base + "/config");
+    if (res.ok) {
+      const cfg = unwrapConfig(res.data);
+      setValueByPath(cfg, "Playback.AnimeThemesWebmMode", next);
+      await fetchJson(base + "/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cfg) });
+    }
   }
   // #endregion
 
@@ -313,27 +343,31 @@
         renderTree(getFilteredItems());
       }, 250); // 250ms delay
 
-      playerFilter.oninput = debouncedRender;
+      playerFilter.oninput = () => {
+        if (playerFilterClear) playerFilterClear.hidden = !playerFilter.value; // Toggle the 'x' button visibility based on content
+        debouncedRender();
+      };
     }
 
     // Mode Toggle
     if (playerModeBtn) {
-      playerModeBtn.onclick = async () => {
-        const next = getNextMode(playerModeBtn.getAttribute("data-mode") || "off", ["loop", "shuffle", "next", "off"]);
-        playerModeBtn.setAttribute("data-mode", next);
-        shuffleHistory.clear(); // Clear shuffle history if switching modes
-        // Persist setting to server
-        const res = await fetchJson(base + "/config");
-        if (res.ok) {
-          const cfg = unwrapConfig(res.data);
-          setValueByPath(cfg, "Playback.AnimeThemesWebmMode", next);
-          await fetchJson(base + "/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cfg) });
-        }
+      playerModeBtn.onclick = () => updateMode(1);
+    }
+
+    // Filter Clear Action
+    if (playerFilterClear) {
+      playerFilterClear.onclick = () => {
+        playerFilter.value = "";
+        playerFilterClear.hidden = true;
+        renderTree(getFilteredItems()); // Re-render the full tree immediately
+        playerFilter.focus();
       };
     }
 
     // Controls
-    if (playerNextBtn) playerNextBtn.onclick = () => playMove(playerModeBtn?.getAttribute("data-mode") === "shuffle");
+    if (playerNextBtn) {
+      playerNextBtn.onclick = () => playMove(playerModeBtn?.getAttribute("data-mode") === "shuffle", 1);
+    }
 
     // Video Events
     playerVideo.addEventListener("ended", () => {
@@ -341,7 +375,39 @@
       if (m === "loop") {
         playerVideo.currentTime = 0;
         playerVideo.play();
-      } else if (m === "shuffle" || m === "next") playMove(m === "shuffle");
+      } else if (m === "shuffle" || m === "next") {
+        playMove(m === "shuffle", 1);
+      }
+    });
+
+    // Hotkeys
+    window.addEventListener("keydown", (e) => {
+      if (!e.ctrlKey) return;
+      const isShuffle = playerModeBtn?.getAttribute("data-mode") === "shuffle";
+
+      switch (e.key) {
+        case "ArrowRight":
+          e.preventDefault();
+          playMove(isShuffle, 1);
+          break;
+        case "ArrowLeft":
+          e.preventDefault();
+          playMove(isShuffle, -1);
+          break;
+        case "ArrowUp":
+          e.preventDefault();
+          updateMode(1);
+          break;
+        case "ArrowDown":
+          e.preventDefault();
+          updateMode(-1);
+          break;
+        case "k":
+        case "K":
+          e.preventDefault();
+          playerFilter?.focus();
+          break;
+      }
     });
 
     // Initial Data Load

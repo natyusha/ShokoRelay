@@ -214,6 +214,8 @@ There is a search box included which will filter the treeview based on series, g
 - `subs` (Includes subtitles)
 - `uncen` (Uncensored version)
 - `nc` (No Credits version)
+- `trans` (Transition overlap)
+- `over` (Full overlap)
 
 #### Favourites
 

@@ -78,20 +78,46 @@ body {
   position: relative;
   display: flex;
   align-items: center;
+  max-width: 295px;
 }
-.filter-wrap .magnify-icon {
-  position: absolute;
-  top: 9px;
-  left: 6px;
-  height: 24px;
+.filter-icon {
   width: 24px;
+  height: 24px;
   fill: var(--text-color);
   opacity: 0.6;
+  transition: all 0.3s ease-in-out;
+}
+.magnify {
+  position: absolute;
+  top: 10px;
+  left: 6px;
   pointer-events: none;
 }
 .filter-wrap input {
-  padding-left: 2.2em;
+  padding: 0 2.2em;
   font-size: 1em;
+}
+#filter-clear {
+  position: absolute;
+  top: 5px;
+  right: 3px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+#filter-clear:hover {
+  background: none;
+}
+#filter-clear[hidden] {
+  display: none;
+}
+.clear:hover {
+  opacity: 1;
 }
 /* #endregion */
 

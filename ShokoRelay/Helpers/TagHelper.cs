@@ -13,29 +13,29 @@ public static class TagHelper
 {
     private static readonly Regex _wordRegex = new(@"[\'\w\d-]+\b", RegexOptions.Compiled);
 
+    // csharpier-ignore-start
     // https://github.com/ShokoAnime/ShokoServer/blob/9c0ae9208479420dea3b766156435d364794e809/Shoko.Server/Utilities/TagFilter.cs#L37
-        // csharpier-ignore-start
-        private static readonly FrozenSet<string> TagBlacklistAniDBHelpers = new[]
-        {
-            "asia", "awards", "body and host", "breasts", "cast missing", "cast", "complete manga adaptation", "content indicators", "delayed 16-9 broadcast",
-            "description missing", "description needs improvement", "development hell", "dialogue driven", "dynamic", "earth", "elements", "ending",
-            "ensemble cast", "family life", "fast-paced", "fetishes", "maintenance tags", "meta tags", "motifs", "no english subs available",
-            "origin", "pic needs improvement", "place", "pornography", "season", "setting", "some weird shit goin' on", "source material",
-            "staff missing", "storytelling", "tales", "target audience",  "technical aspects", "themes", "time",
-            "to be moved to character","to be moved to episode", "translation convention", "tropes", "unsorted",
-        }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
-        private static readonly FrozenSet<string> _forceLower = new[]
-        {
-            "a", "an", "the", "and", "but", "or", "nor", "at", "by", "for", "from", "in", "into", "of", "off", "on", "onto", "out",
-            "over", "per", "to", "up", "with", "as", "4-koma", "-hime","-kei", "-kousai", "-sama", "-warashi", "no", "vs", "x",
-        }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
-        private static readonly FrozenSet<string> _forceUpper = new[] { "3d", "bdsm", "cg", "cgi", "ed", "fff", "ffm", "ii", "milf", "mmf", "mmm", "npc", "op", "rpg", "tbs", "tv" }.ToFrozenSet(
-            StringComparer.OrdinalIgnoreCase
-        );
-        private static readonly FrozenDictionary<string, string> _forceSpecial = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            { "comicfesta", "ComicFesta" }, { "d'etat", "d'Etat" }, { "noitamina", "noitaminA" },
-        }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+    private static readonly FrozenSet<string> TagBlacklistAniDBHelpers = new[]
+    {
+        "asia", "awards", "body and host", "breasts", "cast missing", "cast", "complete manga adaptation", "content indicators", "delayed 16-9 broadcast",
+        "description missing", "description needs improvement", "development hell", "dialogue driven", "dynamic", "earth", "elements", "ending",
+        "ensemble cast", "family life", "fast-paced", "fetishes", "maintenance tags", "meta tags", "motifs", "no english subs available",
+        "origin", "pic needs improvement", "place", "pornography", "season", "setting", "some weird shit goin' on", "source material",
+        "staff missing", "storytelling", "tales", "target audience",  "technical aspects", "themes", "time",
+        "to be moved to character","to be moved to episode", "translation convention", "tropes", "unsorted",
+    }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+    private static readonly FrozenSet<string> _forceLower = new[]
+    {
+        "a", "an", "the", "and", "but", "or", "nor", "at", "by", "for", "from", "in", "into", "of", "off", "on", "onto", "out",
+        "over", "per", "to", "up", "with", "as", "4-koma", "-hime","-kei", "-kousai", "-sama", "-warashi", "no", "vs", "x",
+    }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+    private static readonly FrozenSet<string> _forceUpper = new[] { "3d", "bdsm", "cg", "cgi", "ed", "fff", "ffm", "ii", "milf", "mmf", "mmm", "npc", "op", "rpg", "tbs", "tv" }.ToFrozenSet(
+        StringComparer.OrdinalIgnoreCase
+    );
+    private static readonly FrozenDictionary<string, string> _forceSpecial = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        { "comicfesta", "ComicFesta" }, { "d'etat", "d'Etat" }, { "noitamina", "noitaminA" },
+    }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
     // csharpier-ignore-end
 
     /// <summary>
