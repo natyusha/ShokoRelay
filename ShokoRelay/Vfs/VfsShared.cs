@@ -11,6 +11,11 @@ internal static class VfsShared
     private const string DefaultAnimeThemesRootName = "!AnimeThemes";
 
     /// <summary>
+    /// Gets a string comparer appropriate for the current operating system's path sensitivity.
+    /// </summary>
+    public static StringComparer PathComparer => OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+
+    /// <summary>
     /// Determine the root import path for a video file based on its absolute and relative paths, falling back to the containing directory.
     /// </summary>
     /// <param name="location">Video file whose import root is needed.</param>
@@ -26,8 +31,7 @@ internal static class VfsShared
         if (!string.IsNullOrWhiteSpace(relative))
         {
             string normalizedRel = NormalizeSeparators(relative);
-            var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-            if (normalizedPath.EndsWith(normalizedRel, comparison))
+            if (normalizedPath.EndsWith(normalizedRel, PathComparer == StringComparer.OrdinalIgnoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
             {
                 string root = normalizedPath.Substring(0, normalizedPath.Length - normalizedRel.Length).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
                 if (!string.IsNullOrWhiteSpace(root))

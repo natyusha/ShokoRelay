@@ -24,7 +24,7 @@ public class DashboardController : ShokoRelayBaseController
     /// <summary>
     /// Serves the embedded dashboard UI and its static assets from the plugin folder.
     /// </summary>
-    /// <param name="path">The relative sub-path within the dashboard directory. Defaults to index.cshtml.</param>
+    /// <param name="path">The relative sub-path within the dashboard directory. Defaults to dashboard.cshtml.</param>
     /// <returns>The requested file as a PhysicalFileResult, or HTML content with an injected base tag.</returns>
     [HttpGet("dashboard/{*path}")]
     public IActionResult GetControllerPage([FromRoute] string? path = null)
@@ -32,7 +32,7 @@ public class DashboardController : ShokoRelayBaseController
         string dashboardDir = Path.Combine(_configProvider.PluginDirectory, "dashboard");
 
         bool isPlayer = "player".Equals(path, StringComparison.OrdinalIgnoreCase);
-        string fileName = (string.IsNullOrWhiteSpace(path) || isPlayer) ? (isPlayer ? "player.cshtml" : "index.cshtml") : path;
+        string fileName = (string.IsNullOrWhiteSpace(path) || isPlayer) ? (isPlayer ? "player.cshtml" : "dashboard.cshtml") : path;
 
         string safePath = fileName.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
         string requested = Path.GetFullPath(Path.Combine(dashboardDir, safePath));

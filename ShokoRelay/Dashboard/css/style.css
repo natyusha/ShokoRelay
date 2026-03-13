@@ -254,125 +254,64 @@ label > small::before {
 }
 /* #endregion */
 
-/* #region MARK: Toggle Buttons
+/* #region MARK: Tooltips
 */
-.w46-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  max-width: 46px;
-  padding: 12px 16px;
-  fill: var(--bg-color);
-}
-.w46-button .icon-svg {
-  height: 2em;
-  width: 2em;
-  margin: -2em;
-}
-.w46-button.toggle[aria-pressed="true"] {
-  background: hsl(from var(--hover-color) h 60% l);
-}
-.w46-button.toggle[aria-pressed="true"]:hover {
-  background: var(--hover-color);
-}
-/* #endregion */
-
-/* #region MARK: Loading Buttons
-*/
-button.loading {
-  position: relative;
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-.button-spinner {
+.tooltip-core {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  z-index: 2;
-  height: 20px;
-  width: 20px;
-  transform: translate(-50%, -50%);
+  top: 0;
+  left: 0;
+  z-index: 2000;
+  opacity: 0;
+  overflow: visible;
+  pointer-events: none;
+  will-change: opacity;
+}
+.tooltip-show {
+  opacity: 0.9;
+  transition: opacity 0.15s ease-out;
+}
+.tooltip-closing {
+  opacity: 0;
+  transition: opacity 0.15s ease-in;
+}
+.tooltip-box {
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  padding: 8px 16px;
+  border-radius: 3px;
+  font-size: 0.9em;
+  word-wrap: break-word;
+}
+.tooltip-arrow {
+  position: absolute;
+  height: 8px;
+  width: 8px;
+  background: inherit;
   pointer-events: none;
 }
-.button-spinner svg {
-  display: block;
-  height: 100%;
-  width: 100%;
-  fill: var(--bg-color);
-  transform-origin: center center;
-  animation: spin 900ms linear infinite;
+.tooltip-place-top > .tooltip-arrow {
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
 }
-.w46-button .button-spinner {
-  margin: 24px 0 0 24px;
+.tooltip-place-bottom > .tooltip-arrow {
+  top: -4px;
+  left: 50%;
+  transform: translateX(-50%) rotate(225deg);
 }
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.tooltip-place-left > .tooltip-arrow {
+  top: 50%;
+  right: -4px;
+  transform: translateY(-50%) rotate(315deg);
 }
-/* #endregion */
-
-/* #region MARK: Styled Checkboxes
-*/
-label.shoko-checkbox {
-  display: inline-flex;
-  align-items: flex-start;
-  gap: 0.6rem;
-  padding: 0.25rem 0;
-  cursor: pointer;
-  user-select: none;
+.tooltip-place-right > .tooltip-arrow {
+  top: 50%;
+  left: -4px;
+  transform: translateY(-50%) rotate(135deg);
 }
-label.shoko-checkbox input[type="checkbox"] {
-  position: absolute;
-  height: 1px;
-  width: 1px;
-  margin: -1px;
-  padding: 0;
-  border: 0;
-  clip: rect(0 0 0 0);
-  overflow: hidden;
-  white-space: nowrap;
-}
-.shoko-checkbox-text {
-  display: inline-block;
-  margin-top: -2px;
-  line-height: 1em;
-}
-.shoko-checkbox-title {
-  font-weight: 500;
-}
-.shoko-checkbox-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  fill: var(--highlight-color);
-  transition: all 0.3s ease-in-out;
-}
-.shoko-checkbox-icon svg {
-  height: 1.5rem;
-  width: 1.5rem;
-}
-label.shoko-checkbox:hover .shoko-checkbox-icon {
-  fill: var(--hover-color);
-}
-.shoko-checkbox-icon .checked,
-label.shoko-checkbox input[type="checkbox"]:checked + .shoko-checkbox-icon .unchecked {
-  display: none;
-}
-label.shoko-checkbox input[type="checkbox"]:checked + .shoko-checkbox-icon {
-  fill: var(--hover-color);
-}
-label.shoko-checkbox input[type="checkbox"]:checked + .shoko-checkbox-icon .checked {
-  display: block;
-}
-label.plex-auth.shoko-checkbox input:disabled,
-label.plex-auth.shoko-checkbox input:disabled + .shoko-checkbox-icon,
-label.plex-auth.shoko-checkbox input:disabled ~ .shoko-checkbox-text {
-  opacity: 0.5;
-  cursor: not-allowed;
+.tooltip-dark {
+  color: var(--text-color);
+  background: var(--tooltip-color);
 }
 /* #endregion */
 
@@ -440,314 +379,5 @@ label.plex-auth.shoko-checkbox input:disabled ~ .shoko-checkbox-text {
 }
 .at-progress-track.paused .at-progress-fill {
   filter: grayscale(1);
-}
-/* #endregion */
-
-/* #region MARK: Floating Links
-*/
-.floating-actions {
-  position: fixed;
-  right: 12px;
-  bottom: 12px;
-  z-index: 1000;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.floating-actions .icon-svg,
-.floating-actions .at-svg {
-  fill: currentColor;
-}
-.float-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 40px;
-  width: 40px;
-  color: var(--text-color);
-  transition: all 0.3s ease-in-out;
-}
-button.float-link {
-  appearance: none;
-  -webkit-appearance: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 40px;
-  width: 40px;
-  margin: 0;
-  padding: 0;
-  color: var(--text-color);
-  background: transparent;
-  border: none;
-}
-.float-link:hover {
-  color: var(--hover-color);
-  transform: translateY(-1px);
-}
-.float-link.theme-toggle[aria-pressed="false"] {
-  color: var(--highlight-color);
-}
-/* #endregion */
-
-/* #region MARK: Tooltips
-*/
-.tooltip-core {
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: 2000;
-  opacity: 0;
-  overflow: visible;
-  pointer-events: none;
-  will-change: opacity;
-}
-.tooltip-show {
-  opacity: 0.9;
-  transition: opacity 0.15s ease-out;
-}
-.tooltip-closing {
-  opacity: 0;
-  transition: opacity 0.15s ease-in;
-}
-.tooltip-box {
-  width: max-content;
-  max-width: calc(100vw - 32px);
-  padding: 8px 16px;
-  border-radius: 3px;
-  font-size: 0.9em;
-  word-wrap: break-word;
-}
-.tooltip-arrow {
-  position: absolute;
-  height: 8px;
-  width: 8px;
-  background: inherit;
-  pointer-events: none;
-}
-.tooltip-place-top > .tooltip-arrow {
-  bottom: -4px;
-  left: 50%;
-  transform: translateX(-50%) rotate(45deg);
-}
-.tooltip-place-bottom > .tooltip-arrow {
-  top: -4px;
-  left: 50%;
-  transform: translateX(-50%) rotate(225deg);
-}
-.tooltip-place-left > .tooltip-arrow {
-  top: 50%;
-  right: -4px;
-  transform: translateY(-50%) rotate(315deg);
-}
-.tooltip-place-right > .tooltip-arrow {
-  top: 50%;
-  left: -4px;
-  transform: translateY(-50%) rotate(135deg);
-}
-.tooltip-dark {
-  color: var(--text-color);
-  background: var(--tooltip-color);
-}
-/* #endregion */
-
-/* #region MARK: Details Animations
-*/
-.details-anim > .details-content:not(.webm-tree) {
-  overflow: hidden;
-}
-.details-anim[open] > summary::after {
-  transform: translateY(4px) rotate(-135deg);
-}
-.details-anim > summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin: 6px 12px 6px 0;
-  font-weight: 500;
-  cursor: pointer;
-  outline: none;
-  user-select: none;
-  transition: all 0.3s ease-in-out;
-}
-.details-anim > summary::after {
-  content: "";
-  display: inline-block;
-  padding: 4px;
-  border: solid;
-  border-width: 0 3px 3px 0;
-  transform: rotate(45deg);
-  transition: transform 0.3s ease;
-}
-.details-anim > summary:hover {
-  color: var(--hover-color);
-}
-/* #endregion */
-
-/* #region MARK: Toasts
-*/
-#toast-container {
-  position: fixed;
-  right: auto;
-  bottom: 12px;
-  left: 12px;
-  top: auto;
-  z-index: 2000;
-  display: flex;
-  flex-direction: column-reverse;
-  gap: 8px;
-}
-.toast {
-  min-width: 220px;
-  max-width: 420px;
-  padding: 10px 14px;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
-  font-size: 0.95em;
-  color: var(--text-color);
-  background: var(--panel-color);
-  opacity: 0;
-  cursor: pointer;
-  transform: translateX(-18px) translateZ(0);
-  transition:
-    transform 260ms cubic-bezier(0.2, 0.9, 0.2, 1),
-    opacity 220ms ease;
-}
-.toast.visible {
-  opacity: 1;
-  transform: translateX(0) translateZ(0);
-}
-.toast.info {
-  border-left: 4px solid var(--highlight-color);
-}
-.toast.success {
-  border-left: 4px solid var(--ok-color);
-}
-.toast.error {
-  border-left: 4px solid var(--danger-color);
-}
-.toast.warning {
-  border-left: 4px solid var(--warning-color);
-}
-.toast[role="status"] {
-  outline: none;
-}
-.np-line {
-  display: block;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-/* #endregion */
-
-/* #region MARK: Modals
-*/
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1500;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: rgba(0, 0, 0, 0.45);
-}
-.modal-overlay.open {
-  display: flex;
-}
-.modal {
-  width: 390px;
-  max-width: calc(100% - 48px);
-  overflow: hidden;
-  color: var(--text-color);
-  background: var(--panel-color);
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
-}
-.modal.overrides {
-  width: 870px;
-}
-.modal.overrides .modal-body {
-  padding: 0;
-}
-.modal textarea {
-  height: 470px;
-  width: 100%;
-  margin: 0;
-  border-radius: 0;
-  font-family: monospace;
-  font-size: 1.1em;
-}
-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1rem;
-  font-size: 1.2em;
-  font-weight: 500;
-  background: var(--bg-color);
-  border-bottom: 1px solid var(--border-color);
-}
-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 12px 16px;
-}
-#sync-direction-arrow {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-}
-.modal-body {
-  padding: 14px 16px;
-}
-.modal-body .shoko-checkbox {
-  margin-top: 10px;
-}
-.direction-toggle {
-  display: inline-flex;
-  margin-bottom: 16px;
-  padding: 10px 6px;
-  appearance: none;
-  -webkit-appearance: none;
-  color: var(--text-color);
-  background: var(--inset-color);
-  border: 1px solid var(--border-color);
-  box-shadow: 0 0 4px 2px rgba(148, 170, 209, 0.3);
-  cursor: pointer;
-  user-select: none;
-}
-.direction-toggle:hover {
-  background: color-mix(in srgb, var(--inset-color), white 5%);
-}
-.direction-toggle .dir-label {
-  min-width: 100px;
-  margin-top: 0;
-  font-size: 1em;
-}
-.dir-label {
-  margin-top: 9px;
-  text-align: center;
-  font-size: 1.1em;
-  color: var(--text-color);
-}
-.dir-icon {
-  position: absolute;
-  height: 28px;
-  width: 28px;
-  display: inline-block;
-  fill: var(--highlight-color);
-  visibility: visible;
-  transition:
-    opacity 0.4s ease-out,
-    visibility 0.4s steps(2, end);
-}
-.dir-icon.hidden {
-  opacity: 0;
-  visibility: hidden;
 }
 /* #endregion */

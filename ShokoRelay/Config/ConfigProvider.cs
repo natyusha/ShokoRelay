@@ -10,39 +10,29 @@ using ShokoRelay.Plex;
 namespace ShokoRelay.Config;
 
 /// <summary>
-/// Manages loading, saving, validation and normalization of the plugin configuration and Plex token/secrets file. Watches for external config changes to auto-invalidate the cache.
+/// Manages loading, saving, validation and normalization of the plugin configuration and Plex token/secrets file.
+/// Watches for external config changes to auto-invalidate the cache.
 /// </summary>
 public class ConfigProvider
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
-
-    private static RelayConfig CreateDefaultSettings() => new RelayConfig();
-
-    private readonly string _filePath;
-    private readonly string _tokenPath;
-    private readonly object _settingsLock = new();
-    private RelayConfig? _settings;
-    private List<PlexAvailableServer>? _cachedServers;
-    private List<(string Name, string? Pin)>? _cachedExtraUsers;
-    private string? _cachedAdminUsername;
-
     private static readonly JsonSerializerOptions Options = new() { AllowTrailingCommas = true, WriteIndented = true };
 
-    // expose plugin directory for convenient access (populated during construction)
-    public string PluginDirectory { get; }
+    private readonly string _filePath,
+        _tokenPath;
+    private readonly object _settingsLock = new();
+    private RelayConfig? _settings;
+    private List<(string Name, string? Pin)>? _cachedExtraUsers;
+    private List<PlexAvailableServer>? _cachedServers;
+    private string? _cachedAdminUsername,
+        _serverBaseUrl = "http://localhost:8111";
 
-    /// <summary>
-    /// Accessor for the current HTTP request context, set after DI resolution.
-    /// Used by <see cref="ServerBaseUrl"/> to capture the reachable host.
-    /// </summary>
+    public string PluginDirectory { get; }
     public IHttpContextAccessor? HttpContextAccessor { get; set; }
 
-    private string _serverBaseUrl = "http://localhost:8111";
-
     /// <summary>
-    /// The externally-reachable base URL of the Shoko server (e.g. <c>http://localhost:8111</c>).
-    /// When an explicit <see cref="RelayConfig.ShokoServerUrl"/> is configured that value is always returned.
-    /// Otherwise, when an HTTP request context is available the value is automatically refreshed from the incoming host header; background tasks that lack a context receive the last known value.
+    /// The externally-reachable base URL of the Shoko server.
+    /// Priority: 1. Advanced.ShokoServerUrl setting, 2. Current HTTP Context, 3. Last known good value.
     /// </summary>
     public string ServerBaseUrl
     {
@@ -51,45 +41,32 @@ public class ConfigProvider
             var configUrl = GetSettings()?.Advanced.ShokoServerUrl;
             if (!string.IsNullOrWhiteSpace(configUrl))
                 return configUrl.Trim().TrimEnd('/');
-
             if (HttpContextAccessor?.HttpContext is { } ctx)
                 _serverBaseUrl = $"{ctx.Request.Scheme}://{ctx.Request.Host}";
-
-            return _serverBaseUrl;
+            return _serverBaseUrl!;
         }
     }
 
     /// <summary>
-    /// Creates a new <see cref="ConfigProvider"/> using the specified paths provided by the host application.
+    /// Creates a new ConfigProvider using the specified paths provided by the host application.
     /// </summary>
-    /// <param name="applicationPaths">Paths supplied by the environment which include the plugins directory used to determine where configuration files are read and written.</param>
     public ConfigProvider(IApplicationPaths applicationPaths)
     {
-        if (applicationPaths is null)
-            throw new ArgumentNullException(nameof(applicationPaths));
         PluginDirectory = Path.Combine(applicationPaths.PluginsPath, ConfigConstants.PluginSubfolder);
         string configDir = Path.Combine(PluginDirectory, ConfigConstants.ConfigSubfolder);
-        Directory.CreateDirectory(PluginDirectory); // Ensure plugin directory exists
-        Directory.CreateDirectory(configDir); // Ensure config directory exists
+        Directory.CreateDirectory(configDir);
         _filePath = Path.Combine(configDir, ConfigConstants.ConfigFileName);
         _tokenPath = Path.Combine(configDir, ConfigConstants.SecretsFileName);
-        Logger.Info($"Config path: {_filePath}");
-        Logger.Info($"Token path: {_tokenPath}");
 
-        // Watch for external changes to the config file
-        var watcher = new FileSystemWatcher(Path.GetDirectoryName(_filePath)!, ConfigConstants.ConfigFileName) { NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName };
+        SetupWatcher(_filePath);
+        SetupWatcher(_tokenPath);
+    }
+
+    private void SetupWatcher(string path)
+    {
+        var watcher = new FileSystemWatcher(Path.GetDirectoryName(path)!, Path.GetFileName(path)) { NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName };
         watcher.Changed += (_, _) => InvalidateSettings();
-        watcher.Created += (_, _) => InvalidateSettings();
-        watcher.Deleted += (_, _) => InvalidateSettings();
-        watcher.Renamed += (_, _) => InvalidateSettings();
         watcher.EnableRaisingEvents = true;
-
-        var tokenWatcher = new FileSystemWatcher(Path.GetDirectoryName(_tokenPath)!, ConfigConstants.SecretsFileName) { NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName };
-        tokenWatcher.Changed += (_, _) => InvalidateSettings();
-        tokenWatcher.Created += (_, _) => InvalidateSettings();
-        tokenWatcher.Deleted += (_, _) => InvalidateSettings();
-        tokenWatcher.Renamed += (_, _) => InvalidateSettings();
-        tokenWatcher.EnableRaisingEvents = true;
     }
 
     private void InvalidateSettings()
@@ -97,104 +74,60 @@ public class ConfigProvider
         lock (_settingsLock)
         {
             _settings = null;
-            _cachedServers = null;
             _cachedExtraUsers = null;
+            _cachedServers = null;
             _cachedAdminUsername = null;
         }
-        Logger.Info("Config file changed externally, settings invalidated.");
+        Logger.Info("Settings invalidated due to external file change.");
     }
 
     /// <summary>
-    /// Convert any <see cref="JsonElement"/> trees within <paramref name="obj"/> into plain CLR values.
+    /// Convert any JsonElement trees within <paramref name="obj"/> into plain CLR values.
     /// </summary>
-    public object SanitizeConfigObject(object obj)
-    {
-        if (obj is JsonElement je)
-            return SanitizeConfigElement(je);
-        if (obj == null)
-            return obj!;
+    public object SanitizeConfigObject(object obj) =>
+        obj switch
+        {
+            JsonElement je => SanitizeConfigElement(je),
+            null => null!,
+            _ => SanitizeConfigObject(JsonSerializer.Deserialize<object>(JsonSerializer.Serialize(obj, Options), Options)!),
+        };
 
-        try
+    private object SanitizeConfigElement(JsonElement je) =>
+        je.ValueKind switch
         {
-            var json = JsonSerializer.Serialize(obj, Options);
-            var result = JsonSerializer.Deserialize<object>(json, Options) ?? string.Empty;
-            return result is JsonElement je2 ? SanitizeConfigElement(je2) : result;
-        }
-        catch
-        {
-            return obj;
-        }
-    }
-
-    private object SanitizeConfigElement(JsonElement je)
-    {
-        switch (je.ValueKind)
-        {
-            case JsonValueKind.String:
-                return je.GetString() ?? string.Empty;
-            case JsonValueKind.Number:
-                if (je.TryGetInt32(out var i))
-                    return i;
-                if (je.TryGetInt64(out var l))
-                    return l;
-                if (je.TryGetDouble(out var d))
-                    return d;
-                return 0;
-            case JsonValueKind.True:
-                return true;
-            case JsonValueKind.False:
-                return false;
-            case JsonValueKind.Object:
-                var dict = new Dictionary<string, object>();
-                foreach (var prop in je.EnumerateObject())
-                    dict[prop.Name] = SanitizeConfigObject(prop.Value);
-                return dict;
-            case JsonValueKind.Array:
-                var list = new List<object>();
-                foreach (var el in je.EnumerateArray())
-                    list.Add(SanitizeConfigObject(el));
-                return list;
-            case JsonValueKind.Null:
-            case JsonValueKind.Undefined:
-                return null!;
-            default:
-                return je.ToString();
-        }
-    }
+            JsonValueKind.String => je.GetString()!,
+            JsonValueKind.Number => je.TryGetInt32(out var i) ? i
+            : je.TryGetInt64(out var l) ? l
+            : je.GetDouble(),
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            JsonValueKind.Object => je.EnumerateObject().ToDictionary(p => p.Name, p => SanitizeConfigObject(p.Value)),
+            JsonValueKind.Array => je.EnumerateArray().Select(x => SanitizeConfigObject(x)).ToList(),
+            _ => null!,
+        };
 
     /// <summary>
     /// Return the current settings, loading from disk if not already cached.
     /// </summary>
-    /// <returns>The active <see cref="RelayConfig"/> instance.</returns>
     public RelayConfig GetSettings() => _settings ??= GetSettingsFromFile();
 
     /// <summary>
-    /// Construct a sanitized payload of settings plus minimal Plex auth information for consumption by the web dashboard UI.
+    /// Construct a sanitized payload of settings plus minimal Plex auth information for the dashboard.
     /// </summary>
-    /// <returns>A deserialized object graph suitable for JSON re-serialization to the dashboard.</returns>
     public object GetDashboardConfig()
     {
-        var settings = GetSettings();
-        var serOpts = new JsonSerializerOptions { AllowTrailingCommas = true, WriteIndented = true };
-        var baseDict = JsonSerializer.Deserialize<Dictionary<string, object>>(JsonSerializer.Serialize(settings, serOpts)) ?? new Dictionary<string, object>();
-
-        var plexLib = new
+        var dict = JsonSerializer.Deserialize<Dictionary<string, object>>(JsonSerializer.Serialize(GetSettings(), Options))!;
+        dict["PlexLibrary"] = new
         {
             HasToken = !string.IsNullOrWhiteSpace(GetPlexToken()),
             ClientIdentifier = GetPlexClientIdentifier(),
             DiscoveredServers = GetPlexDiscoveredServers(),
             DiscoveredLibraries = GetPlexDiscoveredLibraries(),
         };
-        baseDict["PlexLibrary"] = plexLib;
-        baseDict["PlexAuth"] = new PlexAuthConfig { ClientIdentifier = plexLib.ClientIdentifier };
-
-        var cleaned = SanitizeConfigObject(baseDict);
-        return cleaned is Dictionary<string, object> d ? d : cleaned;
+        dict["PlexAuth"] = new { ClientIdentifier = GetPlexClientIdentifier() };
+        return SanitizeConfigObject(dict);
     }
 
-    /// <summary>
-    /// Absolute path to the directory containing the configuration file.
-    /// </summary>
     public string ConfigDirectory => Path.GetDirectoryName(_filePath)!;
 
     /// <summary>
@@ -203,56 +136,14 @@ public class ConfigProvider
     public void SaveSettings(RelayConfig settings)
     {
         ApplyDefaultValues(settings);
-
         ValidateSettings(settings);
-
-        // Normalize path mappings prior to persisting so users can enter natural paths in the UI
         NormalizePathMappings(settings);
-
-        // Normalize comma separated fields prior to persisting
-        NormalizeCommaSeparatedFields(settings);
-
-        var json = JsonSerializer.Serialize(settings, Options);
+        NormalizeCsvFields(settings);
         lock (_settingsLock)
-        {
-            File.WriteAllText(_filePath, json);
-        }
-
+            File.WriteAllText(_filePath, JsonSerializer.Serialize(settings, Options));
         _settings = settings;
-        Logger.Info("Config saved.");
     }
 
-    // Ensure settings object contains sensible defaults for any string property that was left empty/whitespace
-    private static void ApplyDefaultValues(object obj)
-    {
-        if (obj == null)
-            return;
-
-        foreach (var prop in obj.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
-        {
-            if (!prop.CanRead || !prop.CanWrite)
-                continue;
-
-            if (prop.PropertyType == typeof(string))
-            {
-                var cur = (string?)prop.GetValue(obj);
-                var defAttr = prop.GetCustomAttribute<DefaultValueAttribute>();
-                if (string.IsNullOrWhiteSpace(cur) && defAttr != null)
-                    prop.SetValue(obj, defAttr.Value);
-            }
-            // Recurse into nested configuration classes (like AdvancedConfig)
-            else if (prop.PropertyType.IsClass && prop.PropertyType != typeof(string) && !typeof(System.Collections.IDictionary).IsAssignableFrom(prop.PropertyType))
-            {
-                var nested = prop.GetValue(obj);
-                if (nested != null)
-                    ApplyDefaultValues(nested);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Delete the stored Plex token file if it exists; errors are logged but not thrown.
-    /// </summary>
     public void DeleteTokenFile()
     {
         try
@@ -262,163 +153,40 @@ public class ConfigProvider
         }
         catch (Exception ex)
         {
-            Logger.Warn($"Failed to delete token file {_tokenPath}: {ex.Message}");
+            Logger.Warn(ex, "Failed to delete token file.");
         }
     }
 
     private RelayConfig GetSettingsFromFile()
     {
-        RelayConfig settings;
-        var needsSave = false;
-        string contents = string.Empty;
-
+        RelayConfig s;
         try
         {
-            contents = File.ReadAllText(_filePath);
-            settings = JsonSerializer.Deserialize<RelayConfig>(contents, Options)!;
-
-            if (settings is null)
-            {
-                settings = CreateDefaultSettings();
-                needsSave = true;
-                Logger.Warn("Config file empty or invalid JSON, using defaults.");
-            }
-            else
-            {
-                Logger.Info("Config loaded from file.");
-            }
+            s = File.Exists(_filePath) ? JsonSerializer.Deserialize<RelayConfig>(File.ReadAllText(_filePath), Options) ?? new() : new();
         }
-        catch (FileNotFoundException)
+        catch (Exception ex)
         {
-            settings = CreateDefaultSettings();
-            needsSave = true;
-            Logger.Info("Config file not found, creating defaults.");
+            Logger.Warn(ex, "Invalid config, using defaults.");
+            s = new();
         }
-        catch (JsonException ex)
-        {
-            settings = CreateDefaultSettings();
-            needsSave = true;
-            Logger.Warn($"Invalid config file, using defaults: {ex.Message}");
-        }
-
-        // Normalize any path mappings so users can enter natural paths (e.g., "M:\\Anime" or "/mnt/plex/anime/")
-        if (NormalizePathMappings(settings))
-            needsSave = true;
-
-        // Normalize comma separated fields (TagBlacklist, ExtraPlexUsers)
-        if (NormalizeCommaSeparatedFields(settings))
-            needsSave = true;
-
-        ValidateSettings(settings);
-
-        if (needsSave)
-            SaveSettings(settings);
-
-        return settings;
+        ApplyDefaultValues(s);
+        NormalizePathMappings(s);
+        NormalizeCsvFields(s);
+        return s;
     }
 
     /// <summary>
-    /// Get the admin username associated with the current Plex token, if available. This is used to exclude admin scrobbles when configured.
+    /// Parse a comma-separated string of Plex user entries, optionally containing 4-digit PINs.
     /// </summary>
-    /// <returns></returns>
-    public string? GetAdminUsername()
-    {
-        if (!string.IsNullOrEmpty(_cachedAdminUsername))
-            return _cachedAdminUsername;
-
-        var tf = ReadTokenFile();
-        if (!string.IsNullOrEmpty(tf.AdminUsername))
-        {
-            _cachedAdminUsername = tf.AdminUsername;
-            return _cachedAdminUsername;
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Add this to be called by the Controller during Webhook validation if cache is empty
-    /// </summary>
-    /// <param name="auth"></param>
-    /// <param name="ct"></param>
-    /// <returns></returns>
-    public async Task RefreshAdminUsername(PlexAuth auth, CancellationToken ct)
-    {
-        var token = GetPlexToken();
-        if (string.IsNullOrEmpty(token))
-            return;
-
-        var info = await auth.GetAccountInfoAsync(token, ct);
-        if (info != null)
-        {
-            _cachedAdminUsername = info.Title ?? info.Username;
-            UpdatePlexTokenInfo(adminName: _cachedAdminUsername);
-            Logger.Info("Persisted Plex Admin username: {User}", _cachedAdminUsername);
-        }
-    }
-
-    /// <summary>
-    /// Checks if the provided UUID matches any of the servers discovered and saved during authentication.
-    /// </summary>
-    public bool IsManagedServer(string? uuid)
-    {
-        if (string.IsNullOrWhiteSpace(uuid))
-            return false;
-        var discovered = GetPlexDiscoveredServers();
-        return discovered.Any(s => string.Equals(s.Id, uuid, StringComparison.OrdinalIgnoreCase));
-    }
-
-    /// <summary>
-    /// Parse a comma-separated string of Plex user entries, optionally containing 4-digit PINs after a semicolon.
-    /// </summary>
-    public static List<(string Name, string? Pin)> ParseExtraPlexUsers(string? extraRaw)
-    {
-        if (string.IsNullOrWhiteSpace(extraRaw))
-            return new List<(string, string?)>();
-
-        return extraRaw
+    public static List<(string Name, string? Pin)> ParseExtraPlexUsers(string? raw) =>
+        (raw ?? "")
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(s => s.Trim())
-            .Where(s => !string.IsNullOrWhiteSpace(s))
-            .Select(s =>
-            {
-                // If the entry contains a semicolon and the part after it is exactly 4 digits, treat that as a PIN.
-                // Otherwise treat the full entry as the username (semicolons remain part of the username).
-                if (s.Contains(';'))
-                {
-                    var parts = s.Split(';', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                    if (parts.Length > 1 && parts[1].Length == 4 && parts[1].All(char.IsDigit))
-                        return (Name: parts[0].Trim(), Pin: parts[1].Trim());
-                }
-
-                return (Name: s, Pin: (string?)null);
-            })
-            .Where(t => !string.IsNullOrWhiteSpace(t.Name))
+            .Select(s => s.Split(';', 2))
+            .Where(p => p.Length > 0 && !string.IsNullOrWhiteSpace(p[0]))
+            .Select(p => (Name: p[0].Trim(), Pin: (p.Length > 1 && p[1].Trim().Length == 4 && p[1].Trim().All(char.IsDigit)) ? p[1].Trim() : null))
             .ToList();
-    }
 
-    /// <summary>
-    /// Return configured extra Plex users as a list of name/PIN tuples.
-    /// </summary>
-    /// <returns>A list of (Name, Pin) tuples.</returns>
-    public List<(string Name, string? Pin)> GetExtraPlexUserEntries()
-    {
-        if (_cachedExtraUsers != null)
-            return _cachedExtraUsers;
-
-        var extraRaw = GetSettings().Automation.ExtraPlexUsers ?? string.Empty;
-        _cachedExtraUsers = ParseExtraPlexUsers(extraRaw);
-        return _cachedExtraUsers;
-    }
-
-    /// <summary>
-    /// Return only the usernames of configured extra Plex users.
-    /// </summary>
-    /// <returns>A list of username strings (without PINs).</returns>
-    public List<string> GetExtraPlexUsernames()
-    {
-        return GetExtraPlexUserEntries().Select(e => e.Name).ToList();
-    }
+    public List<(string Name, string? Pin)> GetExtraPlexUserEntries() => _cachedExtraUsers ??= ParseExtraPlexUsers(GetSettings().Automation.ExtraPlexUsers);
 
     private sealed class TokenFile
     {
@@ -429,263 +197,121 @@ public class ConfigProvider
         public List<PlexAvailableLibrary>? Libraries { get; set; }
     }
 
-    private static TokenFile CreateEmptyTokenFile() => new TokenFile { Servers = new List<PlexAvailableServer>(), Libraries = new List<PlexAvailableLibrary>() };
-
     private TokenFile ReadTokenFile()
     {
         try
         {
-            if (!File.Exists(_tokenPath))
-                return CreateEmptyTokenFile();
+            return File.Exists(_tokenPath) ? JsonSerializer.Deserialize<TokenFile>(File.ReadAllText(_tokenPath), new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new() : new();
+        }
+        catch
+        {
+            return new();
+        }
+    }
 
-            var content = File.ReadAllText(_tokenPath);
-            if (string.IsNullOrWhiteSpace(content))
-                return CreateEmptyTokenFile();
-
-            try
-            {
-                var jsonOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-                var parsed = JsonSerializer.Deserialize<TokenFile>(content, jsonOptions);
-                if (parsed != null)
+    private void WriteTokenFile(string? t, string? c, string? a, List<PlexAvailableServer>? s = null, List<PlexAvailableLibrary>? l = null) =>
+        File.WriteAllText(
+            _tokenPath,
+            JsonSerializer.Serialize(
+                new TokenFile
                 {
-                    parsed.Servers ??= new List<PlexAvailableServer>();
-                    parsed.Libraries ??= new List<PlexAvailableLibrary>();
-                    return parsed;
-                }
-            }
-            catch (JsonException ex)
-            {
-                // Token file is invalid JSON; return empty token object.
-                Logger.Warn($"Invalid token file format at {_tokenPath}: {ex.Message}");
-                return CreateEmptyTokenFile();
-            }
+                    Token = t ?? "",
+                    ClientIdentifier = c ?? "",
+                    AdminUsername = a ?? "",
+                    Servers = s ?? new(),
+                    Libraries = l ?? new(),
+                },
+                Options
+            )
+        );
 
-            // If we reach here the content did not deserialize to a TokenFile — return an empty token object.
-            return CreateEmptyTokenFile();
-        }
-        catch (Exception ex)
-        {
-            Logger.Warn($"Failed to read token file {_tokenPath}: {ex.Message}");
-            return CreateEmptyTokenFile();
-        }
-    }
+    public string GetPlexToken() => ReadTokenFile().Token ?? "";
 
-    private void WriteTokenFile(string? token, string? clientIdentifier, string? adminName, List<PlexAvailableServer>? servers = null, List<PlexAvailableLibrary>? libraries = null)
-    {
-        var tokenObj = new TokenFile
-        {
-            Token = token ?? string.Empty,
-            ClientIdentifier = clientIdentifier ?? string.Empty,
-            AdminUsername = adminName ?? string.Empty,
-            Servers = servers ?? new List<PlexAvailableServer>(),
-            Libraries = libraries ?? new List<PlexAvailableLibrary>(),
-        };
-
-        try
-        {
-            var json = JsonSerializer.Serialize(tokenObj, Options);
-            File.WriteAllText(_tokenPath, json);
-        }
-        catch (Exception ex)
-        {
-            Logger.Warn($"Failed to write token file {_tokenPath}: {ex.Message}");
-        }
-    }
-
-    /// <summary>
-    /// Retrieve the stored Plex token (from plex.token file).
-    /// </summary>
-    /// <returns>An empty string if no token is stored.</returns>
-    public string GetPlexToken() => ReadTokenFile().Token ?? string.Empty;
-
-    /// <summary>
-    /// Retrieve the Plex client identifier, generating one if missing.
-    /// </summary>
-    /// <returns>The existing or newly generated client identifier.</returns>
     public string GetPlexClientIdentifier()
     {
         var tf = ReadTokenFile();
         if (string.IsNullOrWhiteSpace(tf.ClientIdentifier))
         {
-            tf.ClientIdentifier = GenerateClientIdentifier();
+            tf.ClientIdentifier = Guid.NewGuid().ToString("N");
             WriteTokenFile(tf.Token, tf.ClientIdentifier, tf.AdminUsername, tf.Servers, tf.Libraries);
         }
-        return tf.ClientIdentifier ?? string.Empty;
+        return tf.ClientIdentifier!;
     }
 
-    /// <summary>Retrieve the list of Plex servers discovered during authentication and cache the result.</summary>
-    public List<PlexAvailableServer> GetPlexDiscoveredServers()
+    public List<PlexAvailableServer> GetPlexDiscoveredServers() => _cachedServers ??= ReadTokenFile().Servers ?? new();
+
+    public List<PlexAvailableLibrary> GetPlexDiscoveredLibraries() => ReadTokenFile().Libraries ?? new();
+
+    public string? GetAdminUsername() => _cachedAdminUsername ??= ReadTokenFile().AdminUsername;
+
+    public async Task RefreshAdminUsername(PlexAuth auth, CancellationToken ct)
     {
-        if (_cachedServers != null)
-            return _cachedServers;
-        _cachedServers = ReadTokenFile().Servers ?? new List<PlexAvailableServer>();
-        return _cachedServers;
+        if (await auth.GetAccountInfoAsync(GetPlexToken(), ct) is { } info)
+        {
+            _cachedAdminUsername = info.Title ?? info.Username;
+            UpdatePlexTokenInfo(adminName: _cachedAdminUsername);
+        }
     }
 
-    /// <summary>Retrieve the list of Plex libraries discovered during authentication.</summary>
-    public List<PlexAvailableLibrary> GetPlexDiscoveredLibraries() => ReadTokenFile().Libraries ?? new List<PlexAvailableLibrary>();
-
-    /// <summary>
-    /// Update the token file with the provided values. Any null parameter will leave the existing value in place (except token/clientIdentifier which may be overwritten by empty string).
-    /// </summary>
     public void UpdatePlexTokenInfo(string? token = null, string? clientIdentifier = null, string? adminName = null, List<PlexAvailableServer>? servers = null, List<PlexAvailableLibrary>? libraries = null)
     {
-        var existing = ReadTokenFile();
-        string newToken = token ?? existing.Token ?? string.Empty;
-        string newCid = clientIdentifier ?? existing.ClientIdentifier ?? string.Empty;
-        string newAdmin = adminName ?? existing.AdminUsername ?? string.Empty;
-        var newServers = servers ?? existing.Servers;
-        var newLibs = libraries ?? existing.Libraries;
-        WriteTokenFile(newToken, newCid, newAdmin, newServers, newLibs);
+        var e = ReadTokenFile();
+        WriteTokenFile(token ?? e.Token, clientIdentifier ?? e.ClientIdentifier, adminName ?? e.AdminUsername, servers ?? e.Servers, libraries ?? e.Libraries);
     }
+
+    public bool IsManagedServer(string? uuid) => !string.IsNullOrWhiteSpace(uuid) && GetPlexDiscoveredServers().Any(s => string.Equals(s.Id, uuid, StringComparison.OrdinalIgnoreCase));
 
     private bool NormalizePathMappings(RelayConfig settings)
     {
-        if (settings == null || settings.Advanced.PathMappings == null || settings.Advanced.PathMappings.Count == 0)
+        if (settings.Advanced.PathMappings.Count == 0)
             return false;
-
-        var normalized = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var kv in settings.Advanced.PathMappings)
-        {
-            var rawKey = kv.Key ?? string.Empty;
-            var rawVal = kv.Value ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(rawKey) || string.IsNullOrWhiteSpace(rawVal))
-                continue;
-
-            string keyNorm = NormalizeShokoKey(rawKey);
-            string valNorm = NormalizePlexBasePath(rawVal);
-
-            if (string.IsNullOrWhiteSpace(keyNorm) || string.IsNullOrWhiteSpace(valNorm))
-                continue;
-
-            if (!normalized.ContainsKey(keyNorm))
-                normalized[keyNorm] = valNorm;
-            else if (normalized[keyNorm] != valNorm)
-                Logger.Warn("Duplicate mapping after normalization for {Key}; overriding with {Val}", keyNorm, valNorm);
-        }
-
-        // Compare serialized form to detect changes
-        var origJson = JsonSerializer.Serialize(settings.Advanced.PathMappings, Options);
-        var normJson = JsonSerializer.Serialize(normalized, Options);
-        if (origJson != normJson)
-        {
-            settings.Advanced.PathMappings = normalized;
-            return true;
-        }
-
-        return false;
-    }
-
-    private static string NormalizeCsvString(string raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw))
-            return string.Empty;
-
-        var parts = raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(s => s.Trim())
-            .Where(s => !string.IsNullOrWhiteSpace(s))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        return string.Join(", ", parts);
-    }
-
-    private bool NormalizeCommaSeparatedFields(RelayConfig settings)
-    {
-        if (settings == null)
+        var norm = settings.Advanced.PathMappings.ToDictionary(k => NormalizeShokoKey(k.Key), v => NormalizePlexBasePath(v.Value));
+        if (JsonSerializer.Serialize(settings.Advanced.PathMappings) == JsonSerializer.Serialize(norm))
             return false;
-
-        bool changed = false;
-
-        var tagRaw = settings.TagBlacklist ?? string.Empty;
-        var normTag = NormalizeCsvString(tagRaw);
-        if (!string.Equals(normTag, settings.TagBlacklist ?? string.Empty, StringComparison.Ordinal))
-        {
-            settings.TagBlacklist = normTag;
-            changed = true;
-        }
-
-        var extraRaw = settings.Automation.ExtraPlexUsers ?? string.Empty;
-        var normExtra = NormalizeCsvString(extraRaw);
-        if (!string.Equals(normExtra, settings.Automation.ExtraPlexUsers ?? string.Empty, StringComparison.Ordinal))
-        {
-            settings.Automation.ExtraPlexUsers = normExtra;
-            changed = true;
-        }
-
-        return changed;
+        settings.Advanced.PathMappings = norm;
+        return true;
     }
 
-    private static string NormalizeShokoKey(string rawKey)
+    private bool NormalizeCsvFields(RelayConfig s)
     {
-        if (string.IsNullOrWhiteSpace(rawKey))
-            return string.Empty;
+        string Norm(string? r) => string.Join(", ", (r ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase));
+        var (nt, ne) = (Norm(s.TagBlacklist), Norm(s.Automation.ExtraPlexUsers));
+        bool c = s.TagBlacklist != nt || s.Automation.ExtraPlexUsers != ne;
+        s.TagBlacklist = nt;
+        s.Automation.ExtraPlexUsers = ne;
+        return c;
+    }
 
-        // Normalize separators to the local platform and trim
-        var sep = Path.DirectorySeparatorChar;
-        string normalized = rawKey.Trim();
-        normalized = normalized.Replace('/', sep).Replace('\\', sep);
-
-        // Try to produce a full absolute path for rooted inputs
+    private static string NormalizeShokoKey(string k)
+    {
+        string n = k.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar).Trim();
         try
         {
-            if (
-                normalized.Length >= 2 && normalized[1] == ':' // drive
-                || normalized.StartsWith(new string(sep, 2))
-                || normalized.StartsWith(sep)
-            )
-            {
-                normalized = Path.GetFullPath(normalized).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            }
-            else
-            {
-                normalized = normalized.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            }
+            return Path.IsPathRooted(n) ? Path.GetFullPath(n).TrimEnd(Path.DirectorySeparatorChar) : n.TrimEnd(Path.DirectorySeparatorChar);
         }
         catch
         {
-            normalized = normalized.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            return n;
         }
-
-        return normalized;
     }
 
-    private static string NormalizePlexBasePath(string rawVal)
+    private static string NormalizePlexBasePath(string v) => (v.Trim().Replace('\\', '/').TrimEnd('/') is var p && !p.StartsWith("/") && !p.Contains(":") && !p.StartsWith("//")) ? "/" + p : p;
+
+    private static void ApplyDefaultValues(object obj)
     {
-        if (string.IsNullOrWhiteSpace(rawVal))
-            return string.Empty;
-
-        string val = rawVal.Trim();
-        // Use forward slashes for Plex and remove trailing slashes
-        val = val.Replace('\\', '/');
-        val = val.TrimEnd('/');
-
-        // If not rooted and not a Windows drive, presume a Unix-style path and prefix '/'
-        if (!val.StartsWith("/") && !val.Contains(":") && !val.StartsWith("//"))
-            val = "/" + val;
-
-        return val;
-    }
-
-    private static string GenerateClientIdentifier() => Guid.NewGuid().ToString("N");
-
-    private static void ValidateSettings(RelayConfig settings)
-    {
-        var validationResults = new List<ValidationResult>();
-        var validationContext = new ValidationContext(settings);
-
-        var isValid = Validator.TryValidateObject(settings, validationContext, validationResults, true);
-        if (isValid)
-            return;
-
-        foreach (var validationResult in validationResults)
+        foreach (var p in obj.GetType().GetProperties().Where(p => p.CanRead && p.CanWrite))
         {
-            foreach (var memberName in validationResult.MemberNames)
-            {
-                Logger.Error($"Error validating settings for property {memberName}: {validationResult.ErrorMessage}");
-            }
+            if (p.PropertyType == typeof(string) && string.IsNullOrWhiteSpace(p.GetValue(obj) as string) && p.GetCustomAttribute<DefaultValueAttribute>() is { } d)
+                p.SetValue(obj, d.Value);
+            else if (p.PropertyType.IsClass && p.PropertyType != typeof(string) && !typeof(System.Collections.IDictionary).IsAssignableFrom(p.PropertyType))
+                ApplyDefaultValues(p.GetValue(obj)!);
         }
+    }
 
-        throw new ArgumentException("Error in settings validation");
+    private static void ValidateSettings(RelayConfig s)
+    {
+        var results = new List<ValidationResult>();
+        if (!Validator.TryValidateObject(s, new ValidationContext(s), results, true))
+            throw new ArgumentException("Config validation failed.");
     }
 }

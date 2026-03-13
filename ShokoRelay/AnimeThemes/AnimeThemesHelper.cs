@@ -1,6 +1,8 @@
 using System.Collections.Frozen;
 using System.Net.Http.Headers;
 using System.Text.RegularExpressions;
+using ShokoRelay.Helpers;
+using ShokoRelay.Vfs;
 
 namespace ShokoRelay.AnimeThemes;
 
@@ -10,17 +12,14 @@ namespace ShokoRelay.AnimeThemes;
 internal static class AnimeThemesHelper
 {
     internal const string AtApiBase = "https://api.animethemes.moe";
-
     internal const string AtMapFileName = "anidb_animethemes_xrefs.csv";
     internal const string AtFavsFileName = "favs_animethemes.cache";
-
     internal const string AtRawMapUrl = "https://gist.githubusercontent.com/natyusha/bb33a3b3bc95bc7a3869633e23d522bb/raw";
 
     internal static readonly FrozenSet<string> VideoFileExtensions = FrozenSet.ToFrozenSet([".mkv", ".avi", ".mp4", ".mov", ".ogm", ".wmv", ".mpg", ".mpeg", ".mk3d", ".m4v"], StringComparer.OrdinalIgnoreCase);
-
     internal static readonly Regex SlugRegex = new("^(?:op|ed)(?!0)[0-9]{0,2}(?:-(?:bd|web|tv|original))?$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    internal static readonly Dictionary<string, string> SlugFormatting = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly Dictionary<string, string> SlugFormatting = new(StringComparer.OrdinalIgnoreCase)
     {
         { "Animax", "Animax" },
         { "ATX", "AT-X" },
@@ -51,50 +50,191 @@ internal static class AnimeThemesHelper
     /// <summary>
     /// Add a default User-Agent header to <paramref name="client"/> if none present. Identifies requests as originating from ShokoRelay.
     /// </summary>
+    /// <param name="client">The HttpClient to configure.</param>
     internal static void EnsureUserAgent(HttpClient client)
     {
-        if (client.DefaultRequestHeaders.UserAgent.Any())
-            return;
+        if (!client.DefaultRequestHeaders.UserAgent.Any())
+            client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("ShokoRelay", ShokoRelayInfo.Version));
+    }
 
-        client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("ShokoRelay", ShokoRelayInfo.Version));
+    #region CSV Logic
+
+    /// <summary>
+    /// Parses a CSV string into a list of mapping entries.
+    /// </summary>
+    /// <param name="content">The raw CSV content string.</param>
+    /// <returns>A list of parsed AnimeThemesMappingEntry objects.</returns>
+    internal static List<AnimeThemesMappingEntry> ParseMappingContent(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+            return new List<AnimeThemesMappingEntry>();
+        var result = new List<AnimeThemesMappingEntry>();
+        using var reader = new StringReader(content);
+        string? line;
+        while ((line = reader.ReadLine()) != null)
+        {
+            line = line.Trim();
+            if (line.Length == 0 || line.StartsWith("#"))
+                continue;
+            var f = TextHelper.SplitCsvLine(line);
+            if (f.Length < 17 || !int.TryParse(f[1], out int vid) || !int.TryParse(f[2], out int aid) || !int.TryParse(f[5], out int ver))
+                continue;
+
+            result.Add(
+                new AnimeThemesMappingEntry(
+                    f[0],
+                    vid,
+                    aid,
+                    f[3] == "1",
+                    f[4],
+                    ver,
+                    TextHelper.UnescapeUnicode(f[7]),
+                    TextHelper.UnescapeUnicode(f[6]),
+                    f[8] == "1",
+                    f[9] == "1",
+                    f[10] == "1",
+                    f[11] == "1",
+                    f[12] == "1",
+                    f[13],
+                    int.TryParse(f[14], out var res) ? res : 0,
+                    f[15],
+                    f[16]
+                )
+            );
+        }
+        return result;
     }
 
     /// <summary>
-    /// Parse slug to extract base slug and suffix variant. Examples: "ED1-EN" -> ("ED1", "EN"), "OP2" -> ("OP2", null). Also, Normalizes "OP1" to "OP" and "ED1" to "ED".
+    /// Serializes a list of mapping entries into a CSV string with a standard header.
     /// </summary>
+    /// <param name="entries">The list of entries to serialize.</param>
+    /// <returns>A formatted CSV string.</returns>
+    internal static string SerializeMapping(List<AnimeThemesMappingEntry> entries)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("## Shoko Relay AniDB AnimeThemes Xrefs ##\n");
+        sb.AppendLine("# filepath, videoId, anidbId, nc, slug, version, songTitle, artistName, lyrics, subbed, uncen, nsfw, spoiler, source, resolution, episodes, overlap");
+        foreach (var e in entries)
+            sb.AppendLine(SerializeEntry(e));
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Serialize a single AnimeThemesMappingEntry to a comma-separated line.
+    /// </summary>
+    /// <param name="e">The entry to serialize.</param>
+    /// <returns>A CSV formatted string line.</returns>
+    internal static string SerializeEntry(AnimeThemesMappingEntry e)
+    {
+        return $"{e.FilePath},{e.VideoId},{e.AniDbId},{(e.NC ? "1" : "0")},{e.Slug},{e.Version},"
+            + $"{TextHelper.EscapeCsvCommas(e.SongTitle)},{TextHelper.EscapeCsvCommas(e.ArtistName)},"
+            + $"{(e.Lyrics ? "1" : "0")},{(e.Subbed ? "1" : "0")},{(e.Uncen ? "1" : "0")},"
+            + $"{(e.NSFW ? "1" : "0")},{(e.Spoiler ? "1" : "0")},{e.Source},{e.Resolution},"
+            + $"{TextHelper.EscapeCsvCommas(e.Episodes)},{e.Overlap}";
+    }
+
+    #endregion
+
+    #region Naming & Path Logic
+
+    /// <summary>
+    /// Constructs a sanitized filename from theme metadata.
+    /// Format: {nc}{slug}{version} ❯ {songTitle}{slugTag} ❯ {artist} [{attributes}]
+    /// </summary>
+    /// <param name="lookup">The metadata lookup object.</param>
+    /// <param name="extension">The file extension to append.</param>
+    /// <returns>A formatted and sanitized filename.</returns>
+    internal static string BuildNewFileName(AnimeThemesVideoLookup lookup, string extension)
+    {
+        var nc = lookup.NC ? "NC" : "";
+        var (baseSlug, slugSuffix) = ParseSlug(lookup.Slug ?? "");
+        string slug = string.IsNullOrWhiteSpace(baseSlug) ? "Theme" : baseSlug;
+        const string zwsp = "\u200B",
+            hsp = "\u200A";
+
+        if (slug.StartsWith("OP", StringComparison.OrdinalIgnoreCase))
+            slug = $"{hsp}O{zwsp}P{slug[2..]}";
+        else if (slug.StartsWith("ED", StringComparison.OrdinalIgnoreCase))
+            slug = $"E{zwsp}D{slug[2..]}";
+
+        string ver = lookup.Version > 1 ? $"v{lookup.Version}" : "";
+        string title = string.IsNullOrWhiteSpace(lookup.SongTitle) ? "" : " ❯ " + lookup.SongTitle;
+        string slugTag = FormatSlugTag(slugSuffix);
+
+        var artistList = !string.IsNullOrWhiteSpace(lookup.ArtistName) ? lookup.ArtistName.Split(new[] { " / " }, StringSplitOptions.RemoveEmptyEntries) : Array.Empty<string>();
+        string artistDisplay = artistList.Length switch
+        {
+            >= 4 => "Various Artists",
+            3 => $"{artistList[0]}, {artistList[1]} & {artistList[2]}",
+            2 => $"{artistList[0]} & {artistList[1]}",
+            1 => artistList[0],
+            _ => "",
+        };
+        string artistStr = string.IsNullOrWhiteSpace(artistDisplay) ? "" : " ❯ " + artistDisplay;
+
+        var attr = new List<string>();
+        if (lookup.Lyrics)
+            attr.Add("LYRICS");
+        if (lookup.Subbed)
+            attr.Add("SUBS");
+        if (lookup.Uncen)
+            attr.Add("UNCEN");
+        if (lookup.NSFW)
+            attr.Add("NSFW");
+        if (lookup.Spoiler)
+            attr.Add("SPOIL");
+        if (lookup.Overlap == "Transition")
+            attr.Add("TRANS");
+        else if (lookup.Overlap == "Over")
+            attr.Add("OVER");
+
+        string attrStr = (ShokoRelay.Settings.Advanced.AnimeThemesAppendTags && attr.Count > 0) ? $" [{string.Join(", ", attr)}]" : "";
+        return VfsHelper.CleanEpisodeTitleForFilename($"{nc}{slug}{ver}{title}{slugTag}{artistStr}{attrStr}{extension}");
+    }
+
+    /// <summary>
+    /// Parses a theme slug into base and suffix components.
+    /// </summary>
+    /// <param name="slug">The raw slug from the API.</param>
+    /// <returns>A tuple containing the base slug and optional suffix.</returns>
     internal static (string baseSlug, string? suffix) ParseSlug(string slug)
     {
         if (string.IsNullOrWhiteSpace(slug))
             return ("", null);
-
-        int hyphenIndex = slug.IndexOf('-');
-
-        // Split into base and suffix
-        string base_ = hyphenIndex < 0 ? slug : slug[..hyphenIndex];
-        string? suff = hyphenIndex < 0 ? null : slug[(hyphenIndex + 1)..];
-
-        // Remove "1" from OP1 or ED1 (Case-insensitive check)
-        if (base_.Equals("OP1", StringComparison.OrdinalIgnoreCase) || base_.Equals("ED1", StringComparison.OrdinalIgnoreCase))
-        {
-            base_ = base_[..2];
-        }
-
-        return (base_, string.IsNullOrWhiteSpace(suff) ? null : suff);
+        int dash = slug.IndexOf('-');
+        string b = dash < 0 ? slug : slug[..dash];
+        if (b.Equals("OP1", StringComparison.OrdinalIgnoreCase) || b.Equals("ED1", StringComparison.OrdinalIgnoreCase))
+            b = b[..2];
+        return (b, dash < 0 ? null : slug[(dash + 1)..]);
     }
 
     /// <summary>
-    /// Format a slug suffix using the configured mappings. Examples: "BD" -> " (Blu-ray)", "EN" -> " (English)". Returns empty string if suffix is null.
+    /// Formats a slug variant suffix into a human-readable tag.
     /// </summary>
-    internal static string FormatSlugTag(string? suffix)
+    /// <param name="suffix">The variant suffix (e.g., BD).</param>
+    /// <returns>A parenthesized tag string.</returns>
+    internal static string FormatSlugTag(string? suffix) => (string.IsNullOrWhiteSpace(suffix)) ? "" : $" ({(SlugFormatting.TryGetValue(suffix.Trim(), out var f) ? f : suffix)})";
+
+    /// <summary>
+    /// Ensures a filename has the correct extension.
+    /// </summary>
+    internal static string EnsureExtension(string fileName, string ext) => string.IsNullOrWhiteSpace(Path.GetExtension(fileName)) ? fileName + ext : fileName;
+
+    /// <summary>
+    /// Resolves the absolute path to a theme source file.
+    /// </summary>
+    internal static string? ResolveThemeSourcePath(string relativeFilePath, string importRoot, string themeRootFolder)
     {
-        if (string.IsNullOrWhiteSpace(suffix))
-            return "";
-
-        // Directly lookup the suffix (case-insensitive thanks to Dictionary setup)
-        if (SlugFormatting.TryGetValue(suffix.Trim(), out var formatted))
-            return $" ({formatted})";
-
-        // Fallback if no mapping exists
-        return $" ({suffix})";
+        string path = Path.Combine(importRoot, themeRootFolder, relativeFilePath.TrimStart('/', '\\').Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar));
+        return File.Exists(path) ? Path.GetFullPath(path) : null;
     }
+
+    /// <summary>
+    /// Constructs the relative symlink target string for VFS themes.
+    /// </summary>
+    internal static string BuildThemeRelativeTarget(string relativeFilePath, string themeRootFolder) =>
+        Path.Combine("..", "..", "..", themeRootFolder, relativeFilePath.TrimStart('/', '\\')).Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
+
+    #endregion
 }

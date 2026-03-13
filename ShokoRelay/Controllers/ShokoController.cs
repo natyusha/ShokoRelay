@@ -73,7 +73,6 @@ public class ShokoController : ShokoRelayBaseController
             _ = SchedulePlexRefreshForSeriesAsync(toProcess);
         }
 
-        // Use the helper!
         return await LogAndReturn("vfs-report.log", result, (sb, r) => { });
     }
 
@@ -188,7 +187,6 @@ public class ShokoController : ShokoRelayBaseController
             // Set the direction in the result so it is included in the 'data' payload
             result.Direction = direction;
 
-            // Use the helper!
             return await LogAndReturn("sync-watched-report.log", result, (sb, r) => LogHelper.BuildSyncWatchedReport(sb, r, r.Direction, r.DryRun, includeRatings));
         }
         catch (Exception ex)

@@ -81,7 +81,12 @@
     }
   };
 
-  const setBoolParam = (ps, k, v) => ps.set(k, v ? "true" : "false");
+  /**
+   * Helper to append a key-value pair to a URLSearchParams object only if the value is provided and non-empty.
+   * @param {URLSearchParams} ps - The search parameters object to modify.
+   * @param {string} k - The parameter key.
+   * @param {*} v - The value to check and potentially append.
+   */
   const setIfNotEmpty = (ps, k, v) => {
     if (v != null && String(v) !== "") ps.set(k, String(v));
   };
@@ -158,15 +163,6 @@
       };
     });
   }
-
-  /** Build URLSearchParams for VFS generation requests from the dashboard filter and toggle state. @returns {URLSearchParams} */
-  const buildVfsParams = () => {
-    const ps = new URLSearchParams();
-    setIfNotEmpty(ps, "filter", el("vfs-filter")?.value);
-    setBoolParam(ps, "clean", el("vfs-clean")?.getAttribute("aria-pressed") === "true");
-    setBoolParam(ps, "run", true);
-    return ps;
-  };
 
   /** @param {Object} obj @param {string} path - Dot-separated key path. @returns {*} The resolved value, or undefined. */
   const getValueByPath = (obj, path) => path.split(".").reduce((o, k) => o?.[k], obj);
@@ -256,95 +252,9 @@
     bindConfig,
     getErrorCount,
     unwrapConfig,
+    openModal,
+    setButtonLoading,
   };
-  // #endregion
-
-  // #region Shoko: VFS
-  initToggle("vfs-clean", true);
-  withButtonAction("vfs-exec", async () => {
-    const clean = el("vfs-clean")?.getAttribute("aria-pressed") === "true";
-    const startToast = showToast(`VFS: Generating (clean=${clean})...`, "info", 0);
-    const res = await fetchJson(`${base}/vfs?${buildVfsParams()}`);
-    startToast?.remove();
-    toastOperation(res, `VFS (clean=${clean})`);
-  });
-
-  const overridesBtn = el("vfs-overrides");
-  if (overridesBtn) {
-    overridesBtn.onclick = async () => {
-      const modal = el("overrides-modal"),
-        txt = el("overrides-text");
-      try {
-        const cfgRes = await fetchJson(base + "/config");
-        if (cfgRes.ok) txt.value = cfgRes.data?.overrides || "";
-      } catch {}
-      if (!txt.value.trim())
-        txt.placeholder =
-          "This allows shows which are separated on AniDB but part of the same TMDB listing to be combined into a single entry in Plex. Each line should contain a " +
-          "comma separated list of AniDB IDs you wish to merge. The first ID is the primary series and the others will be merged into it " +
-          "(for both VFS builds and metadata lookups). Lines that are blank or start with a '#' are ignored. An example is shown below:" +
-          "\n\n## Shoko Relay VFS Overrides\n\n# Fairy Tail\n6662,8132,9980,13295\n\n# Bleach\n2369,15449,17765,18220,19079";
-      const close = openModal(modal);
-      el("overrides-cancel").onclick = close;
-      el("overrides-save").onclick = async () => {
-        const res = await fetchJson(base + "/vfs/overrides", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(txt.value) });
-        if (res.ok) {
-          showToast("VFS Overrides Saved", "success", TOAST_MS);
-          close();
-        } else toastOperation(res, "VFS Overrides");
-      };
-    };
-  }
-  // #endregion
-
-  // #region Shoko: Automation
-  withButtonAction("shoko-remove-missing", async () => {
-    showToast("Remove Missing: Processing...", "info", TOAST_MS);
-    const res = await fetchJson(base + "/shoko/remove-missing?dryRun=false", { method: "POST" });
-    toastOperation(res, "Remove Missing", { summary: typeof res.data?.count === "number" ? `removed ${res.data.count}` : undefined });
-  });
-
-  withButtonAction("shoko-import-run", async () => {
-    showToast("Shoko Import: Scanning...", "info", TOAST_MS);
-    const res = await fetchJson(base + "/shoko/import", { method: "POST" });
-    toastOperation(res, "Shoko Import", { summary: summarizeResult(res) || `scanned ${res.data?.scannedCount ?? ""}` });
-  });
-
-  if (el("shoko-sync-watched")) {
-    el("shoko-sync-watched").onclick = () => {
-      const modal = el("sync-modal"),
-        startBtn = el("sync-start-button"),
-        dirToggle = el("sync-direction-toggle"),
-        dirArrow = el("sync-direction-arrow");
-      let dirImport = localStorage.getItem("shoko-sync-direction") === "import";
-      const updateDir = () => {
-        dirToggle.setAttribute("aria-pressed", String(dirImport));
-        dirArrow.querySelector(".dir-icon-right")?.classList.toggle("hidden", dirImport);
-        dirArrow.querySelector(".dir-icon-left")?.classList.toggle("hidden", !dirImport);
-      };
-      updateDir();
-      const close = openModal(modal);
-      dirToggle.onclick = () => {
-        dirImport = !dirImport;
-        updateDir();
-        localStorage.setItem("shoko-sync-direction", dirImport ? "import" : "export");
-      };
-      startBtn.onclick = async () => {
-        setButtonLoading(startBtn, true);
-        const startToast = showToast(`Sync: Plex ${dirImport ? "←" : "→"} Shoko...`, "info", 0);
-        const ps = new URLSearchParams({ dryRun: "false", ratings: el("sync-ratings").checked, excludeAdmin: el("sync-exclude-admin").checked });
-        if (dirImport) ps.set("import", "true");
-        const res = await fetchJson(`${base}/sync-watched?${ps}`);
-        startToast?.remove();
-        setButtonLoading(startBtn, false);
-        if (res.ok) {
-          toastOperation(res, "Sync", { summary: `${summarizeResult(res) || `processed ${res.data?.processed ?? 0}`}${res.data?.votesFound ? `, votes: ${res.data.votesFound}` : ""}` });
-          close();
-        } else toastOperation(res, "Sync");
-      };
-      el("sync-cancel-button").onclick = close;
-    };
-  }
   // #endregion
 
   // #region Provider Settings
@@ -362,8 +272,9 @@
       rawCfg = configRes.data || {},
       config = unwrapConfig(rawCfg);
 
-    // Disable overrides button if TMDB Ep Numbering is off
-    // Note: The path might now be "Advanced.TmdbEpNumbering" or just "TmdbEpNumbering" depending on your RelayConfig structure
+    const overridesBtn = el("vfs-overrides");
+
+    // Disable overrides button if TMDB Ep Numbering is off.
     const tmdbEnabled = getValueByPath(config, "TmdbEpNumbering") ?? getValueByPath(config, "Advanced.TmdbEpNumbering");
     if (overridesBtn) overridesBtn.disabled = !tmdbEnabled;
 
@@ -398,7 +309,11 @@
           <span class="shoko-checkbox-text"><span class="shoko-checkbox-title">${p.Display || p.Path}</span><small class="shoko-checkbox-desc" style="display:block">${p.Description || ""}</small></span></label>`;
         input = wrap.querySelector("input");
       } else if (p.Path.endsWith("PathMappings")) {
-        wrap.innerHTML = `<div class="full"><div><label>Plex Base Paths</label><textarea id="path-mappings-left" placeholder="e.g. M:\\Anime"></textarea></div><div><label>Shoko Base Paths</label><textarea id="path-mappings-right" placeholder="e.g. /anime"></textarea></div></div><small>Enter one mapping per line.</small>`;
+        label.innerHTML = `<span>${p.Display || p.Path.split(".").pop()}</span>${p.Description ? `<small>${p.Description}</small>` : ""}`;
+        wrap.appendChild(label);
+        const mappingContainer = document.createElement("div");
+        mappingContainer.innerHTML = `<div class="full"><div><small>Plex Base Paths</small><textarea id="path-mappings-left" placeholder="e.g. M:\\Anime"></textarea></div><div><small>Shoko Base Paths</small><textarea id="path-mappings-right" placeholder="e.g. /anime"></textarea></div></div>`;
+        wrap.appendChild(mappingContainer);
         const l = wrap.querySelector("#path-mappings-left"),
           r = wrap.querySelector("#path-mappings-right"),
           m = value || {};
@@ -450,8 +365,9 @@
           await persistConfig(config);
 
           // Update overrides button state if numbering changed
-          if (p.Path.endsWith("TmdbEpNumbering") && overridesBtn) {
-            overridesBtn.disabled = !val;
+          if (p.Path.endsWith("TmdbEpNumbering")) {
+            const btn = el("vfs-overrides");
+            if (btn) btn.disabled = !val;
           }
         };
       });

@@ -310,7 +310,7 @@ public class PlexController : ShokoRelayBaseController
         }
 
         DateTime? watchedAt = evt.Metadata.LastViewedAt > 0 ? DateTimeOffset.FromUnixTimeSeconds(evt.Metadata.LastViewedAt.Value).UtcDateTime : null;
-        var saved = await _userDataService.SetEpisodeWatchedStatus(shokoEpisode, user, true, watchedAt).ConfigureAwait(false);
+        var saved = await _userDataService.SetEpisodeWatchedStatus(shokoEpisode, user, true, watchedAt, videoReason: Shoko.Abstractions.UserData.Enums.VideoUserDataSaveReason.PlaybackEnd).ConfigureAwait(false);
 
         if (saved != null)
             Logger.Info("Plex scrobble applied: user='{User}', series='{Series}', episode='{SeasonEp}'", evt.Account?.Title, seriesName, seasonEp);

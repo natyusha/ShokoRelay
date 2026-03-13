@@ -3,7 +3,7 @@
  * @description Dedicated logic for the AnimeThemes VFS and Theme.mp3 generation on the Shoko Relay dashboard.
  */
 (() => {
-  const { base, el, TOAST_MS, fetchJson, showToast, toastOperation, summarizeResult, makeLogLink, withButtonAction, initToggle, setIfNotEmpty, setValueByPath, getErrorCount } = window._sr;
+  const { base, el, TOAST_MS, fetchJson, showToast, toastOperation, summarizeResult, withButtonAction, initToggle, setIfNotEmpty } = window._sr;
 
   // #region Helpers
   /**
@@ -145,21 +145,24 @@
   }
 
   withButtonAction(el("at-single"), async () => {
-    showToast("AnimeThemes MP3: Generating...", "info", TOAST_MS);
-    const ps = buildAtParams(),
-      isBatch = ps.get("batch") === "true";
+    const startToast = showToast("AnimeThemes MP3: Generating...", "info", 0);
+    const ps = buildAtParams();
+    const isBatch = ps.get("batch") === "true";
     const res = await fetchJson(`${base}/animethemes/mp3?${ps}`);
-    const status = res.data?.status || res.data?.Status,
-      logLink = makeLogLink(res.data?.logUrl);
+    startToast?.remove();
+
+    const status = res.data?.status || res.data?.Status;
+    const hideOnSucceed = isBatch ? 0 : TOAST_MS;
+
     if (res.ok || status === "skipped") {
-      const type = getErrorCount(res) > 0 ? "error" : status === "skipped" ? "warning" : "success";
-      // Persistent toast if batch operation
-      showToast(`AnimeThemes MP3: ${summarizeResult(res) || status || "done"} ${logLink}`, type, type === "error" || isBatch ? 0 : TOAST_MS);
+      toastOperation(res, "AnimeThemes MP3", { summary: summarizeResult(res) || status || "Complete", hideOnSucceed });
       if (!isBatch && (status === "ok" || status === "skipped")) {
         const folder = res.data?.folder || res.data?.Folder || ps.get("path");
         if (folder) playThemeMp3(folder);
       }
-    } else showToast(`AnimeThemes MP3 Failed: ${res.data?.message || "Error"} ${logLink}`, "error", 0);
+    } else {
+      toastOperation(res, "AnimeThemes MP3", { hideOnSucceed: 0 });
+    }
   });
 
   /**

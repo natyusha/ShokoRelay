@@ -277,6 +277,9 @@ public class AdvancedConfig
     [DefaultValue("")]
     public string ShokoServerUrl { get; set; } = "";
 
+    [Display(Name = "Path Mappings", Description = "Mappings for Plex base paths to Shoko base paths. Enter one mapping per line")]
+    public Dictionary<string, string> PathMappings { get; set; } = new();
+
     [Display(Name = "AnimeThemes Overlap Level", Description = "The amount of overlap allowed for AnimeThemes .webm files to be added to the VFS")]
     [DefaultValue(OverlapLevel.All)]
     public OverlapLevel AnimeThemesOverlapLevel { get; set; } = OverlapLevel.All;
@@ -284,9 +287,6 @@ public class AdvancedConfig
     [Display(Name = "Append AnimeThemes Tags", Description = "Enable to append attributes like [SPOIL, SUBS] to AnimeThemes VFS filenames")]
     [DefaultValue(true)]
     public bool AnimeThemesAppendTags { get; set; } = true;
-
-    [Display(Name = "Path Mappings", Description = "Mappings for Plex base paths to Shoko base paths")]
-    public Dictionary<string, string> PathMappings { get; set; } = new();
 
     [Display(Name = "VFS Root Path", Description = "The location of the virtual links inside each import root")]
     [DefaultValue("!ShokoRelayVFS")]
@@ -311,6 +311,8 @@ public class AdvancedConfig
 
 #endregion
 
+#region Secrets
+
 /// <summary>
 /// Container for any secrets required by the plugin (currently only Plex auth info).
 /// </summary>
@@ -330,3 +332,5 @@ public class PlexAuthSecrets
 
     public bool IsEmpty => string.IsNullOrWhiteSpace(ClientIdentifier);
 }
+
+#endregion

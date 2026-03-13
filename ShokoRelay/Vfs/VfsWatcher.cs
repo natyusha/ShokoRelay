@@ -150,7 +150,7 @@ public class VfsWatcher
     }
 
     /// <summary>
-    /// Refresh Plex library paths and collection metadata for a single series after its VFS links have been created or updated.This method is called
+    /// Refresh Plex library paths and collection metadata for a single series after its VFS links have been created or updated.
     /// </summary>
     private async Task TriggerPlexUpdatesAsync(int seriesId)
     {
