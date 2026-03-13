@@ -53,24 +53,15 @@ public sealed record ApplyPostersResult(int Processed, int Uploaded, int Skipped
 /// <summary>
 /// Default implementation of <see cref="ICollectionService"/>, using Plex API calls to create collections and upload posters based on Shoko series data.
 /// </summary>
-public class CollectionService : ICollectionService
+public class CollectionService(PlexClient plexClient, PlexCollections plexCollections, IMetadataService metadataService, PlexMetadata mapper, ConfigProvider configProvider) : ICollectionService
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
-    private readonly PlexClient _plexClient;
-    private readonly PlexCollections _plexCollections;
-    private readonly IMetadataService _metadataService;
-    private readonly PlexMetadata _mapper;
-    private readonly ConfigProvider _configProvider;
-
-    public CollectionService(PlexClient plexClient, PlexCollections plexCollections, IMetadataService metadataService, PlexMetadata mapper, ConfigProvider configProvider)
-    {
-        _plexClient = plexClient;
-        _plexCollections = plexCollections;
-        _metadataService = metadataService;
-        _mapper = mapper;
-        _configProvider = configProvider;
-    }
+    private readonly PlexClient _plexClient = plexClient;
+    private readonly PlexCollections _plexCollections = plexCollections;
+    private readonly IMetadataService _metadataService = metadataService;
+    private readonly PlexMetadata _mapper = mapper;
+    private readonly ConfigProvider _configProvider = configProvider;
 
     public async Task<BuildCollectionsResult> BuildCollectionsAsync(IEnumerable<IShokoSeries?> seriesList, CancellationToken cancellationToken = default)
     {
@@ -85,7 +76,7 @@ public class CollectionService : ICollectionService
         var presentSeriesUnique = new HashSet<int>();
 
         // collapse any provided series IDs through overrides so secondaries map to their primary. This keeps the filter set minimal and skips secondary‑only library items during processing.
-        var allowedIds = new HashSet<int>(seriesList?.Where(s => s != null).Select(s => OverrideHelper.GetPrimary(s!.ID, _metadataService)) ?? Enumerable.Empty<int>());
+        var allowedIds = new HashSet<int>(seriesList?.Where(s => s != null).Select(s => OverrideHelper.GetPrimary(s!.ID, _metadataService)) ?? []);
         var targets = _plexClient.GetConfiguredTargets();
 
         var totalSw = Stopwatch.StartNew();
@@ -123,7 +114,7 @@ public class CollectionService : ICollectionService
             }
 
             // defensive: ensure items is never null for the foreach below
-            items ??= new List<PlexMetadataItem>();
+            items ??= [];
 
             var postedCollections = new HashSet<int>();
 
@@ -270,7 +261,7 @@ public class CollectionService : ICollectionService
             errors = 0;
 
         // apply same override normalization for poster-only runs
-        var allowedIds = new HashSet<int>(seriesList?.Where(s => s != null).Select(s => OverrideHelper.GetPrimary(s!.ID, _metadataService)) ?? Enumerable.Empty<int>());
+        var allowedIds = new HashSet<int>(seriesList?.Where(s => s != null).Select(s => OverrideHelper.GetPrimary(s!.ID, _metadataService)) ?? []);
         var targets = _plexClient.GetConfiguredTargets();
 
         if (targets == null || targets.Count == 0)
@@ -291,7 +282,7 @@ public class CollectionService : ICollectionService
                 continue;
             }
 
-            items ??= new List<PlexMetadataItem>();
+            items ??= [];
             var postedCollections = new HashSet<int>();
 
             foreach (var item in items)

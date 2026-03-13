@@ -42,9 +42,9 @@ namespace ShokoRelay.Plex
         // csharpier-ignore-end
 
         // Optional subtype lists (for reference / validation)
-        public static readonly string[] CollectionSubtypes = { "movie", "show", "artist", "album" };
+        public static readonly string[] CollectionSubtypes = ["movie", "show", "artist", "album"];
         public static readonly string[] ExtrasSubtypes =
-        {
+        [
             "trailer",
             "deletedScene",
             "interview",
@@ -57,7 +57,7 @@ namespace ShokoRelay.Plex
             "featurette",
             "short",
             "other",
-        };
+        ];
 
         // Extra buckets used only when no TMDB match is present (and other episodes don't have an empty season to fallback to - Includes Plex extras subtype to match the Plex API spec
         public static readonly IReadOnlyDictionary<int, (string Folder, string Subtype)> ExtraSeasons = new Dictionary<int, (string Folder, string Subtype)>

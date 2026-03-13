@@ -11,7 +11,7 @@ namespace ShokoRelay.AnimeThemes;
 internal sealed class FfmpegService
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
-    private static readonly object FfmpegLock = new();
+    private static readonly Lock FfmpegLock = new();
     private static bool _ffmpegConfigured;
     private static string _ffmpegPath = "ffmpeg";
     private static string _ffprobePath = "ffprobe";
@@ -39,10 +39,9 @@ internal sealed class FfmpegService
         var args = new List<string> { "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", inputPath };
 
         string output = await RunProcessCaptureAsync(_ffprobePath, args, ct);
-        if (double.TryParse(output.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out double seconds))
-            return TimeSpan.FromSeconds(seconds);
-
-        throw new InvalidOperationException("Unable to parse duration from ffprobe output.");
+        return double.TryParse(output.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out double seconds)
+            ? TimeSpan.FromSeconds(seconds)
+            : throw new InvalidOperationException("Unable to parse duration from ffprobe output.");
     }
 
     /// <summary>
@@ -196,10 +195,7 @@ internal sealed class FfmpegService
                 return dir;
         }
 
-        if (Directory.Exists(preferred))
-            return preferred;
-
-        return _pluginDirectory;
+        return Directory.Exists(preferred) ? preferred : _pluginDirectory;
     }
 
     private static async Task RunProcessAsync(string fileName, IReadOnlyList<string> args, Stream? stdIn, Stream? stdOut, CancellationToken ct)
@@ -266,10 +262,7 @@ internal sealed class FfmpegService
         string output = await process.StandardOutput.ReadToEndAsync();
         await process.WaitForExitAsync(ct);
 
-        if (process.ExitCode != 0)
-            throw new InvalidOperationException($"{fileName} exited with code {process.ExitCode}: {stderr.ToString().Trim()}");
-
-        return output;
+        return process.ExitCode != 0 ? throw new InvalidOperationException($"{fileName} exited with code {process.ExitCode}: {stderr.ToString().Trim()}") : output;
     }
 
     private static ProcessStartInfo CreateProcessStartInfo(string fileName, IReadOnlyList<string> args)

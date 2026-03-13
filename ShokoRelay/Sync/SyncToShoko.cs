@@ -8,25 +8,15 @@ namespace ShokoRelay.Sync;
 /// <summary>
 /// Synchronizes watched-state (and optional votes/ratings) from Plex into Shoko by querying Plex episodes and marking them watched in Shoko.
 /// </summary>
-public class SyncToShoko
+public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService, IUserDataService userDataService, IUserService userService, ConfigProvider configProvider, PlexAuth plexAuth)
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
-    private readonly PlexClient _plexClient;
-    private readonly IMetadataService _metadataService;
-    private readonly IUserDataService _userDataService;
-    private readonly IUserService _userService;
-    private readonly ConfigProvider _configProvider;
-    private readonly PlexAuth _plexAuth;
-
-    public SyncToShoko(PlexClient plexClient, IMetadataService metadataService, IUserDataService userDataService, IUserService userService, ConfigProvider configProvider, PlexAuth plexAuth)
-    {
-        _plexClient = plexClient;
-        _metadataService = metadataService;
-        _userDataService = userDataService;
-        _userService = userService;
-        _configProvider = configProvider;
-        _plexAuth = plexAuth;
-    }
+    private readonly PlexClient _plexClient = plexClient;
+    private readonly IMetadataService _metadataService = metadataService;
+    private readonly IUserDataService _userDataService = userDataService;
+    private readonly IUserService _userService = userService;
+    private readonly ConfigProvider _configProvider = configProvider;
+    private readonly PlexAuth _plexAuth = plexAuth;
 
     /// <summary>
     /// Sync watched-state from Plex into Shoko.
@@ -57,13 +47,13 @@ public class SyncToShoko
 
             var userBuckets = new List<(string Name, List<PlexMetadataItem> Items)>();
             if (!actualExclude)
-                userBuckets.Add(("admin", adminItems ?? new()));
-            foreach (var ex in extraEntries)
+                userBuckets.Add(("admin", adminItems ?? []));
+            foreach (var (Name, Pin) in extraEntries)
             {
-                var (eps, err) = await SyncHelper.FetchManagedUserSectionEpisodesAsync(_plexAuth, _plexClient, _configProvider, target, ex.Name, ex.Pin, sinceHours, cancellationToken).ConfigureAwait(false);
+                var (eps, err) = await SyncHelper.FetchManagedUserSectionEpisodesAsync(_plexAuth, _plexClient, _configProvider, target, Name, Pin, sinceHours, cancellationToken).ConfigureAwait(false);
                 if (!string.IsNullOrEmpty(err))
-                    result = SyncHelper.RecordError(result, result.PerUser, ex.Name, err);
-                userBuckets.Add((ex.Name, eps));
+                    result = SyncHelper.RecordError(result, result.PerUser, Name, err);
+                userBuckets.Add((Name, eps));
             }
 
             foreach (var (uName, items) in userBuckets)

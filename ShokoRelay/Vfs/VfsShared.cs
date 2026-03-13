@@ -33,16 +33,14 @@ internal static class VfsShared
             string normalizedRel = NormalizeSeparators(relative);
             if (normalizedPath.EndsWith(normalizedRel, PathComparer == StringComparer.OrdinalIgnoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
             {
-                string root = normalizedPath.Substring(0, normalizedPath.Length - normalizedRel.Length).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                string root = normalizedPath[..^normalizedRel.Length].TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
                 if (!string.IsNullOrWhiteSpace(root))
                     return root;
             }
         }
 
         string? dir = Path.GetDirectoryName(normalizedPath);
-        if (string.IsNullOrWhiteSpace(dir))
-            return null;
-        return dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return string.IsNullOrWhiteSpace(dir) ? null : dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
     }
 
     /// <summary>
@@ -134,10 +132,7 @@ internal static class VfsShared
             return false;
         }
 
-        if (TryCreateSymlink(dest, relativeTarget, logger))
-            return true;
-
-        return false;
+        return TryCreateSymlink(dest, relativeTarget, logger);
     }
 
     private static bool TryCreateSymlink(string linkPath, string target, Logger logger)

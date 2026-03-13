@@ -10,7 +10,7 @@ namespace ShokoRelay.Helpers;
 public static class OverrideHelper
 {
     // map AniDB id -> list of AniDB ids in group (first is primary AniDB id)
-    private static readonly Dictionary<int, List<int>> _groups = new();
+    private static readonly Dictionary<int, List<int>> _groups = [];
     private static DateTime _lastWriteUtc = DateTime.MinValue;
     private static string? _loadedPath;
     private const string OverridesFileName = "anidb_vfs_overrides.csv";
@@ -111,10 +111,10 @@ public static class OverrideHelper
     public static IReadOnlyList<int> GetGroup(int shokoSeriesId, IMetadataService metadataService)
     {
         if (!ShokoRelay.Settings.TmdbEpNumbering || metadataService == null)
-            return new List<int> { shokoSeriesId };
+            return [shokoSeriesId];
         var s = metadataService.GetShokoSeriesByID(shokoSeriesId);
         if (s == null || s.AnidbAnimeID <= 0)
-            return new List<int> { shokoSeriesId };
+            return [shokoSeriesId];
         int anidb = s.AnidbAnimeID;
         if (_groups.TryGetValue(anidb, out var grp) && grp.Count > 0)
         {
@@ -128,6 +128,6 @@ public static class OverrideHelper
             if (list.Count > 0)
                 return list;
         }
-        return new List<int> { shokoSeriesId };
+        return [shokoSeriesId];
     }
 }

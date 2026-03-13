@@ -56,11 +56,11 @@ public record PlexWatchedSyncResult
     public int VotesUpdated { get; init; }
     public int VotesSkipped { get; init; }
     public int Matched { get; init; }
-    public List<int> MissingMappings { get; init; } = new();
-    public Dictionary<int, List<string>> MissingMappingsDiagnostics { get; init; } = new();
-    public Dictionary<string, PlexWatchedUserResult> PerUser { get; init; } = new();
-    public Dictionary<string, List<PlexWatchedChange>> PerUserChanges { get; init; } = new();
-    public List<string> ErrorsList { get; init; } = new();
+    public List<int> MissingMappings { get; init; } = [];
+    public Dictionary<int, List<string>> MissingMappingsDiagnostics { get; init; } = [];
+    public Dictionary<string, PlexWatchedUserResult> PerUser { get; init; } = [];
+    public Dictionary<string, List<PlexWatchedChange>> PerUserChanges { get; init; } = [];
+    public List<string> ErrorsList { get; init; } = [];
 }
 
 /// <summary>
@@ -87,7 +87,7 @@ public static class SyncHelper
         int idx = guid.IndexOf(prefix, StringComparison.OrdinalIgnoreCase);
         if (idx < 0)
             return null;
-        var idStr = new string(guid[(idx + prefix.Length)..].TakeWhile(char.IsDigit).ToArray());
+        var idStr = new string([.. guid[(idx + prefix.Length)..].TakeWhile(char.IsDigit)]);
         return int.TryParse(idStr, out int id) ? id : null;
     }
 
@@ -101,7 +101,7 @@ public static class SyncHelper
     public static Dictionary<string, PlexWatchedUserResult> CreatePerUserBuckets(IEnumerable<string> extraUserNames)
     {
         var perUser = new Dictionary<string, PlexWatchedUserResult>(StringComparer.OrdinalIgnoreCase) { ["admin"] = new() };
-        foreach (var n in extraUserNames ?? Array.Empty<string>())
+        foreach (var n in extraUserNames ?? [])
             perUser[n] = new();
         return perUser;
     }
@@ -114,7 +114,7 @@ public static class SyncHelper
         if (change == null || !change.WouldMark)
             return;
         if (!dict.TryGetValue(plexUser, out var list))
-            dict[plexUser] = list = new();
+            dict[plexUser] = list = [];
         list.Add(change);
     }
 
@@ -170,8 +170,8 @@ public static class SyncHelper
     )
     {
         res = global(res);
-        if (perUser != null && !string.IsNullOrWhiteSpace(user) && perUser.TryGetValue(user!, out var stats))
-            perUser[user!] = usr(stats);
+        if (perUser != null && !string.IsNullOrWhiteSpace(user) && perUser.TryGetValue(user, out var stats))
+            perUser[user] = usr(stats);
         return res;
     }
 
@@ -193,7 +193,7 @@ public static class SyncHelper
     public static PlexWatchedSyncResult RecordError(PlexWatchedSyncResult res, Dictionary<string, PlexWatchedUserResult>? perUser = null, string? user = null, string? message = null)
     {
         if (!string.IsNullOrWhiteSpace(message))
-            res.ErrorsList.Add(message!);
+            res.ErrorsList.Add(message);
         return UpdateStat(res, perUser, user, x => x with { Errors = x.Errors + 1 }, x => x with { Errors = x.Errors + 1 });
     }
 
@@ -276,15 +276,15 @@ public static class SyncHelper
 
             if (string.IsNullOrWhiteSpace(userToken))
             {
-                return (new List<PlexMetadataItem>(), null);
+                return ([], null);
             }
 
             string? serverAccessToken = null;
             try
             {
                 var clientIdentifier = configProvider.GetPlexClientIdentifier();
-                var plexServerList = await plexAuth.GetPlexServerListAsync(userToken!, clientIdentifier, cancellationToken).ConfigureAwait(false);
-                var devices = plexServerList.Devices ?? new List<PlexDevice>();
+                var (TokenValid, Servers, Devices) = await plexAuth.GetPlexServerListAsync(userToken, clientIdentifier, cancellationToken).ConfigureAwait(false);
+                var devices = Devices ?? [];
 
                 foreach (var dev in devices)
                 {
@@ -334,7 +334,7 @@ public static class SyncHelper
             var list = await plexClient.GetSectionEpisodesAsync(target, effectiveToken, cancellationToken, onlyUnwatched: false, guidFilter: null, minLastViewed: minLast).ConfigureAwait(false);
             logger.Info("WatchedSyncService: fetched {Count} watched episodes for user {User} (since={Since})", list?.Count ?? 0, userName, minLast);
 
-            return (list ?? new List<PlexMetadataItem>(), null);
+            return (list ?? [], null);
         }
         catch (Exception ex)
         {

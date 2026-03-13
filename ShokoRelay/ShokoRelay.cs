@@ -22,7 +22,7 @@ public class ServiceRegistration : IPluginServiceRegistration
     /// </summary>
     /// <param name="serviceCollection">DI service collection.</param>
     /// <param name="applicationPaths">Paths provided by host for configuration and plugin directories.</param>
-    public void RegisterServices(IServiceCollection serviceCollection, IApplicationPaths applicationPaths)
+    public static void RegisterServices(IServiceCollection serviceCollection, IApplicationPaths applicationPaths)
     {
         serviceCollection.AddHttpContextAccessor();
         serviceCollection.AddControllers().AddApplicationPart(typeof(ServiceRegistration).Assembly);
@@ -54,11 +54,7 @@ public class ServiceRegistration : IPluginServiceRegistration
 
         serviceCollection.AddSingleton(provider => new PlexClient(new HttpClient(handlerWithCookies, disposeHandler: false), provider.GetRequiredService<ConfigProvider>()));
 
-        serviceCollection.AddSingleton(provider => new PlexCollections(
-            new HttpClient(handlerWithCookies, disposeHandler: false),
-            provider.GetRequiredService<ConfigProvider>(),
-            provider.GetRequiredService<PlexClient>()
-        ));
+        serviceCollection.AddSingleton(provider => new PlexCollections(new HttpClient(handlerWithCookies, disposeHandler: false), provider.GetRequiredService<PlexClient>()));
 
         // Main Runtime
         serviceCollection.AddHostedService<ShokoRelay>();
@@ -70,7 +66,7 @@ public class ServiceRegistration : IPluginServiceRegistration
 /// </summary>
 public class Plugin : IPlugin
 {
-    public Guid ID => new Guid("2b0f5a7e-3d2b-4f3d-9e6b-7f0a6b2d8c9a");
+    public Guid ID => new("2b0f5a7e-3d2b-4f3d-9e6b-7f0a6b2d8c9a");
     public string Name => ShokoRelayInfo.Name;
     public string? Description => "A Custom Metadata Provider and Automation Tools for Plex in the form of a Shoko Server plugin";
     public string? EmbeddedThumbnailResourceName => "ShokoRelay.dashboard.img.shoko-relay-thumbnail.png";
@@ -229,7 +225,7 @@ public class ShokoRelay : BackgroundService
                 var settings = Settings;
                 var now = DateTime.UtcNow;
                 int offset = Math.Clamp(settings.Automation.UtcOffsetHours, -12, 14);
-                List<DateTime> nextRuns = new();
+                List<DateTime> nextRuns = [];
 
                 // Scheduled Shoko import
                 int importFreq = settings.Automation.ShokoImportFrequencyHours;
@@ -240,7 +236,7 @@ public class ShokoRelay : BackgroundService
                     if (_lastImportRunUtc == null || _lastImportRunUtc < lastSched)
                     {
                         Logger.Info("Automation: triggering scheduled Shoko import ({0}h)", importFreq);
-                        await _shokoImportService.TriggerImportAsync(ct).ConfigureAwait(false);
+                        await _shokoImportService.TriggerImportAsync().ConfigureAwait(false);
                         _lastImportRunUtc = lastSched;
                     }
                 }

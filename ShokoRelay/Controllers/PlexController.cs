@@ -8,35 +8,24 @@ using ShokoRelay.Sync;
 namespace ShokoRelay.Controllers;
 
 /// <summary>
-/// Manages Plex-specific integrations, including OAuth authentication, discovered library discovery,
-/// collection/rating automation, and real-time scrobble webhooks.
+/// Manages Plex-specific integrations, including OAuth authentication, discovered library discovery, collection/rating automation, and real-time scrobble webhooks.
 /// </summary>
-public class PlexController : ShokoRelayBaseController
+public class PlexController(
+    ConfigProvider configProvider,
+    IMetadataService metadataService,
+    PlexClient plexLibrary,
+    PlexAuth plexAuth,
+    Services.ICollectionService collectionService,
+    Services.ICriticRatingService criticRatingService,
+    IUserService userService,
+    IUserDataService userDataService
+) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
 {
-    private readonly PlexAuth _plexAuth;
-    private readonly Services.ICollectionService _collectionService;
-    private readonly Services.ICriticRatingService _criticRatingService;
-    private readonly IUserService _userService;
-    private readonly IUserDataService _userDataService;
-
-    public PlexController(
-        ConfigProvider configProvider,
-        IMetadataService metadataService,
-        PlexClient plexLibrary,
-        PlexAuth plexAuth,
-        Services.ICollectionService collectionService,
-        Services.ICriticRatingService criticRatingService,
-        IUserService userService,
-        IUserDataService userDataService
-    )
-        : base(configProvider, metadataService, plexLibrary)
-    {
-        _plexAuth = plexAuth;
-        _collectionService = collectionService;
-        _criticRatingService = criticRatingService;
-        _userService = userService;
-        _userDataService = userDataService;
-    }
+    private readonly PlexAuth _plexAuth = plexAuth;
+    private readonly Services.ICollectionService _collectionService = collectionService;
+    private readonly Services.ICriticRatingService _criticRatingService = criticRatingService;
+    private readonly IUserService _userService = userService;
+    private readonly IUserDataService _userDataService = userDataService;
 
     #region Authentication
 
@@ -181,7 +170,7 @@ public class PlexController : ShokoRelayBaseController
             return NoPlexTargetsResponse(seriesList);
 
         var r = await _collectionService.BuildCollectionsAsync(seriesList, cancellationToken).ConfigureAwait(false);
-        return await LogAndReturn("collections-report.log", r, (sb, res) => LogHelper.BuildCollectionsReport(sb, res));
+        return LogAndReturn("collections-report.log", r, LogHelper.BuildCollectionsReport);
     }
 
     /// <summary>
@@ -224,7 +213,7 @@ public class PlexController : ShokoRelayBaseController
         var allowedIds = new HashSet<int>(seriesList.Select(s => s?.ID ?? 0));
         var result = await _criticRatingService.ApplyRatingsAsync(allowedIds, cancellationToken).ConfigureAwait(false);
 
-        return await LogAndReturn("ratings-report.log", result, (sb, res) => LogHelper.BuildRatingsReport(sb, res));
+        return LogAndReturn("ratings-report.log", result, LogHelper.BuildRatingsReport);
     }
 
     /// <summary>
@@ -238,7 +227,7 @@ public class PlexController : ShokoRelayBaseController
 
         try
         {
-            var allSeries = _metadataService.GetAllShokoSeries()?.Cast<Shoko.Abstractions.Metadata.Shoko.IShokoSeries?>().ToList() ?? new List<Shoko.Abstractions.Metadata.Shoko.IShokoSeries?>();
+            var allSeries = _metadataService.GetAllShokoSeries()?.Cast<Shoko.Abstractions.Metadata.Shoko.IShokoSeries?>().ToList() ?? [];
             if (_collectionService != null)
                 await _collectionService.BuildCollectionsAsync(allSeries, cancellationToken).ConfigureAwait(false);
             if (_criticRatingService != null)
@@ -296,7 +285,7 @@ public class PlexController : ShokoRelayBaseController
             return Ok(new { status = "ignored", reason = "no_shoko_user" });
 
         string seriesName = evt.Metadata.GrandparentTitle ?? shokoEpisode.Series?.PreferredTitle?.Value ?? "Unknown Series";
-        string seasonEp = $"S{(evt.Metadata.ParentIndex ?? 0):D2}E{(evt.Metadata.Index ?? 0):D2}";
+        string seasonEp = $"S{evt.Metadata.ParentIndex ?? 0:D2}E{evt.Metadata.Index ?? 0:D2}";
 
         if (isRate)
         {
@@ -314,7 +303,7 @@ public class PlexController : ShokoRelayBaseController
 
         if (saved != null)
             Logger.Info("Plex scrobble applied: user='{User}', series='{Series}', episode='{SeasonEp}'", evt.Account?.Title, seriesName, seasonEp);
-        return Ok(new { status = "ok", marked = (saved != null) });
+        return Ok(new { status = "ok", marked = saved != null });
     }
 
     #endregion

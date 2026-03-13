@@ -11,29 +11,19 @@ namespace ShokoRelay.Vfs;
 /// <summary>
 /// Watches for Shoko video-file events (hashed, relocated, deleted) and triggers incremental VFS rebuilds plus Plex section refreshes.
 /// </summary>
-public class VfsWatcher
+public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadataService metadataService, PlexMetadata plexMetadata, PlexClient plexLibrary, PlexCollections plexCollections)
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
-    private readonly IVideoService _videoService;
-    private readonly VfsBuilder _builder;
-    private readonly IMetadataService _metadataService;
-    private readonly PlexMetadata _plexMetadata;
-    private readonly PlexClient _plexLibrary;
-    private readonly PlexCollections _plexCollections;
+    private readonly IVideoService _videoService = videoService;
+    private readonly VfsBuilder _builder = builder;
+    private readonly IMetadataService _metadataService = metadataService;
+    private readonly PlexMetadata _plexMetadata = plexMetadata;
+    private readonly PlexClient _plexLibrary = plexLibrary;
+    private readonly PlexCollections _plexCollections = plexCollections;
 
     private readonly ConcurrentDictionary<int, byte> _pending = new();
     private bool _processing;
-    private readonly object _gate = new();
-
-    public VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadataService metadataService, PlexMetadata plexMetadata, PlexClient plexLibrary, PlexCollections plexCollections)
-    {
-        _videoService = videoService;
-        _builder = builder;
-        _metadataService = metadataService;
-        _plexMetadata = plexMetadata;
-        _plexLibrary = plexLibrary;
-        _plexCollections = plexCollections;
-    }
+    private readonly Lock _gate = new();
 
     /// <summary>
     /// Subscribe to Shoko video-file events and begin watching for changes.

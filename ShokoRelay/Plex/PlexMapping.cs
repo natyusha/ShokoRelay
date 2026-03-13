@@ -38,12 +38,9 @@ public static class PlexMapping
     /// <param name="seasonNumber">Season number.</param>
     public static string GetSeasonFolder(int seasonNumber)
     {
-        if (TryGetExtraSeason(seasonNumber, out var special))
-            return special.Folder;
-
-        if (seasonNumber == 0)
-            return "Specials";
-        return $"Season {seasonNumber}";
+        return TryGetExtraSeason(seasonNumber, out var special) ? special.Folder
+            : seasonNumber == 0 ? "Specials"
+            : $"Season {seasonNumber}";
     }
 
     /// <summary>
@@ -70,27 +67,27 @@ public static class PlexMapping
             // Only evaluate alternate-ordering logic when a series-level preferred ordering id is present.
             // Otherwise use the fast default ordering (season -> episode) to avoid touching AllOrderings.
             var tmdbEpisodes = string.IsNullOrWhiteSpace(showPrefId)
-                ? shokoEpisode.TmdbEpisodes.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber).ToList()
+                ? [.. shokoEpisode.TmdbEpisodes.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber)]
                 : SelectPreferredTmdbOrdering(shokoEpisode.TmdbEpisodes, showPrefId);
 
             if (tmdbEpisodes.Count > 0)
             {
                 var first = tmdbEpisodes.First();
-                var firstCoords = GetOrderingCoords(first, showPrefId);
-                if (firstCoords.Season.HasValue)
+                var (Season, Episode) = GetOrderingCoords(first, showPrefId);
+                if (Season.HasValue)
                 {
                     int? endEp = null;
                     if (tmdbEpisodes.Count > 1)
                     {
                         var lastCoords = GetOrderingCoords(tmdbEpisodes.Last(), showPrefId);
-                        if (lastCoords.Season == firstCoords.Season)
+                        if (lastCoords.Season == Season)
                             endEp = lastCoords.Episode;
                     }
 
                     result = new PlexCoords
                     {
-                        Season = firstCoords.Season.Value,
-                        Episode = firstCoords.Episode,
+                        Season = Season.Value,
+                        Episode = Episode,
                         EndEpisode = endEp,
                     };
 
@@ -121,7 +118,7 @@ public static class PlexMapping
     /// <param name="fileIndexWithinEpisode">Zero-based index of this file when multiple files map to the same episode.</param>
     public static PlexCoords GetPlexCoordinatesForFile(IEnumerable<IEpisode> episodes, int? fileIndexWithinEpisode = null)
     {
-        var eps = (episodes ?? Enumerable.Empty<IEpisode>()).ToList();
+        var eps = (episodes ?? []).ToList();
         if (!eps.Any())
             return new PlexCoords
             {
@@ -141,14 +138,14 @@ public static class PlexMapping
             string? showPrefId = eps.OfType<IShokoEpisode>().Select(se => se.Series).FirstOrDefault()?.TmdbShows?.FirstOrDefault()?.PreferredOrdering?.OrderingID;
 
             var tmdbEntries = string.IsNullOrWhiteSpace(showPrefId)
-                ? tmdbEntriesRaw.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber).ToList()
+                ? [.. tmdbEntriesRaw.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber)]
                 : SelectPreferredTmdbOrdering(tmdbEntriesRaw, showPrefId);
 
             if (tmdbEntries.Any())
             {
                 var first = tmdbEntries.First();
-                var firstCoords = GetOrderingCoords(first, showPrefId);
-                if (firstCoords.Season.HasValue)
+                var (Season, Episode) = GetOrderingCoords(first, showPrefId);
+                if (Season.HasValue)
                 {
                     // If fileIndex is provided and within range, pick the specific offset
                     // Otherwise, return the full range (for single files mapping to multiple TMDB episodes)
@@ -158,7 +155,7 @@ public static class PlexMapping
                         var epCoords = GetOrderingCoords(tmdbEp, showPrefId);
                         return new PlexCoords
                         {
-                            Season = epCoords.Season ?? firstCoords.Season.Value,
+                            Season = epCoords.Season ?? Season.Value,
                             Episode = epCoords.Episode,
                             EndEpisode = null,
                         };
@@ -168,11 +165,11 @@ public static class PlexMapping
                         // No fileIndex provided (single file) or only one TMDB entry: return the range
                         var last = tmdbEntries.Last();
                         var lastCoords = GetOrderingCoords(last, showPrefId);
-                        int? endEpisode = (tmdbEntries.Count > 1 && lastCoords.Season == firstCoords.Season) ? lastCoords.Episode : (int?)null;
+                        int? endEpisode = (tmdbEntries.Count > 1 && lastCoords.Season == Season) ? lastCoords.Episode : null;
                         return new PlexCoords
                         {
-                            Season = firstCoords.Season.Value,
-                            Episode = firstCoords.Episode,
+                            Season = Season.Value,
+                            Episode = Episode,
                             EndEpisode = endEpisode,
                         };
                     }
@@ -187,7 +184,7 @@ public static class PlexMapping
 
         var start = GetPlexCoordinates(eps.First());
         var end = GetPlexCoordinates(eps.Last());
-        int? endEpisodeFinal = start.Season == end.Season ? end.Episode : (int?)null;
+        int? endEpisodeFinal = start.Season == end.Season ? end.Episode : null;
 
         return new PlexCoords
         {
@@ -199,12 +196,8 @@ public static class PlexMapping
 
     // Determine if a TMDB Alternate ordering is preferred for the show
     // Lightweight caches to avoid repeated expensive access to TMDB alternate-ordering data (AllOrderings)
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<(int EpId, string? OrderingId), bool> _tmdbAllOrderingsContainsCache = new System.Collections.Concurrent.ConcurrentDictionary<
-        (int, string?),
-        bool
-    >();
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<(int EpId, string? OrderingId), (int? Season, int Episode)> _orderingCoordsCache =
-        new System.Collections.Concurrent.ConcurrentDictionary<(int, string?), (int?, int)>();
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<(int EpId, string? OrderingId), bool> _tmdbAllOrderingsContainsCache = new();
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<(int EpId, string? OrderingId), (int? Season, int Episode)> _orderingCoordsCache = new();
 
     /// <summary>
     /// Filter a list of TMDB episode entries to the ordering preferred by the show, if any. Used when TMDB alternate numbering is enabled.
@@ -215,7 +208,7 @@ public static class PlexMapping
     public static List<ITmdbEpisode> SelectPreferredTmdbOrdering(IEnumerable<ITmdbEpisode>? entries, string? showPreferredOrderingId = null)
     {
         if (entries == null)
-            return new List<ITmdbEpisode>();
+            return [];
 
         var list = entries.ToList();
         if (!list.Any())
@@ -257,11 +250,11 @@ public static class PlexMapping
 
             var preferred = preferredDirect.Concat(preferredFromAll).ToList();
             var others = list.Except(preferred).OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber);
-            return preferred.Concat(others).ToList();
+            return [.. preferred, .. others];
         }
 
         // Default: canonical season/episode ordering (fast and deterministic).
-        return list.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber).ToList();
+        return [.. list.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber)];
     }
 
     /// <summary>
@@ -305,18 +298,16 @@ public static class PlexMapping
     private static int ResolveSeasonNumber(IEpisode e)
     {
         // Prefer provider season numbers when available (covers regular episodes and specials).
-        if (e.SeasonNumber.HasValue)
-            return e.SeasonNumber.Value;
-
-        return e.Type switch
-        {
-            EpisodeType.Episode => PlexConstants.SeasonStandard,
-            EpisodeType.Special => PlexConstants.SeasonSpecials,
-            EpisodeType.Credits => PlexConstants.SeasonCredits,
-            EpisodeType.Trailer => PlexConstants.SeasonTrailers,
-            EpisodeType.Parody => PlexConstants.SeasonParody,
-            EpisodeType.Other => PlexConstants.SeasonOther,
-            _ => PlexConstants.SeasonUnknown,
-        };
+        return e.SeasonNumber
+            ?? e.Type switch
+            {
+                EpisodeType.Episode => PlexConstants.SeasonStandard,
+                EpisodeType.Special => PlexConstants.SeasonSpecials,
+                EpisodeType.Credits => PlexConstants.SeasonCredits,
+                EpisodeType.Trailer => PlexConstants.SeasonTrailers,
+                EpisodeType.Parody => PlexConstants.SeasonParody,
+                EpisodeType.Other => PlexConstants.SeasonOther,
+                _ => PlexConstants.SeasonUnknown,
+            };
     }
 }

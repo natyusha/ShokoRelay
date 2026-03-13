@@ -10,32 +10,22 @@ using ShokoRelay.Vfs;
 namespace ShokoRelay.Controllers;
 
 /// <summary>
-/// Handles Shoko-specific automation tasks, including Virtual File System (VFS) construction,
-/// file database maintenance, source imports, and watched-state synchronization with Plex.
+/// Handles Shoko-specific automation tasks, including Virtual File System (VFS) construction, file database maintenance, source imports, and watched-state synchronization with Plex.
 /// </summary>
-public class ShokoController : ShokoRelayBaseController
+public class ShokoController(
+    ConfigProvider configProvider,
+    IMetadataService metadataService,
+    PlexClient plexLibrary,
+    VfsBuilder vfsBuilder,
+    Services.ShokoImportService shokoImportService,
+    SyncToShoko watchedSyncService,
+    SyncToPlex syncToPlexService
+) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
 {
-    private readonly VfsBuilder _vfsBuilder;
-    private readonly Services.ShokoImportService _shokoImportService;
-    private readonly SyncToShoko _watchedSyncService;
-    private readonly SyncToPlex _syncToPlexService;
-
-    public ShokoController(
-        ConfigProvider configProvider,
-        IMetadataService metadataService,
-        PlexClient plexLibrary,
-        VfsBuilder vfsBuilder,
-        Services.ShokoImportService shokoImportService,
-        SyncToShoko watchedSyncService,
-        SyncToPlex syncToPlexService
-    )
-        : base(configProvider, metadataService, plexLibrary)
-    {
-        _vfsBuilder = vfsBuilder;
-        _shokoImportService = shokoImportService;
-        _watchedSyncService = watchedSyncService;
-        _syncToPlexService = syncToPlexService;
-    }
+    private readonly VfsBuilder _vfsBuilder = vfsBuilder;
+    private readonly Services.ShokoImportService _shokoImportService = shokoImportService;
+    private readonly SyncToShoko _watchedSyncService = watchedSyncService;
+    private readonly SyncToPlex _syncToPlexService = syncToPlexService;
 
     #region Virtual File System
 
@@ -46,8 +36,7 @@ public class ShokoController : ShokoRelayBaseController
     /// <param name="run">Must be true to actually execute the link creation.</param>
     /// <param name="filter">Optional comma-separated list of Shoko series IDs to restrict processing.</param>
     /// <returns>A summary of series processed and links created.</returns>
-    [HttpGet("vfs")]
-    public async Task<IActionResult> BuildVfs([FromQuery] bool clean = true, [FromQuery] bool run = false, [FromQuery] string? filter = null)
+    public IActionResult BuildVfs([FromQuery] bool clean = true, [FromQuery] bool run = false, [FromQuery] string? filter = null)
     {
         var validation = ValidateFilterOrBadRequest(filter, out var filterIds);
         if (validation != null)
@@ -73,7 +62,7 @@ public class ShokoController : ShokoRelayBaseController
             _ = SchedulePlexRefreshForSeriesAsync(toProcess);
         }
 
-        return await LogAndReturn("vfs-report.log", result, (sb, r) => { });
+        return LogAndReturn("vfs-report.log", result, (sb, r) => { });
     }
 
     /// <summary>
@@ -139,7 +128,7 @@ public class ShokoController : ShokoRelayBaseController
                 triggered = true,
                 scheduled = freq > 0,
                 nextRunInHours = freq,
-                scanned = ((dynamic)data!).scanned,
+                ((dynamic)data!).scanned,
             }
         );
     }
@@ -178,16 +167,14 @@ public class ShokoController : ShokoRelayBaseController
 
         try
         {
-            PlexWatchedSyncResult result;
-            if (doImport)
-                result = await _syncToPlexService.SyncWatchedAsync(parsedDry, sinceHours, ratings, excludeAdmin, HttpContext.RequestAborted);
-            else
-                result = await _watchedSyncService.SyncWatchedAsync(parsedDry, sinceHours, ratings, excludeAdmin, HttpContext.RequestAborted);
+            PlexWatchedSyncResult result = doImport
+                ? await _syncToPlexService.SyncWatchedAsync(parsedDry, sinceHours, ratings, excludeAdmin, HttpContext.RequestAborted)
+                : await _watchedSyncService.SyncWatchedAsync(parsedDry, sinceHours, ratings, excludeAdmin, HttpContext.RequestAborted);
 
             // Set the direction in the result so it is included in the 'data' payload
             result.Direction = direction;
 
-            return await LogAndReturn("sync-watched-report.log", result, (sb, r) => LogHelper.BuildSyncWatchedReport(sb, r, r.Direction, r.DryRun, includeRatings));
+            return LogAndReturn("sync-watched-report.log", result, (sb, r) => LogHelper.BuildSyncWatchedReport(sb, r, r.Direction, r.DryRun, includeRatings));
         }
         catch (Exception ex)
         {
@@ -230,7 +217,7 @@ public class ShokoController : ShokoRelayBaseController
     private async Task<(object? Data, string? Error)> PerformRemoveMissingFilesAsync(bool? dryRun)
     {
         bool doDry = dryRun ?? true;
-        var removed = await _shokoImportService.RemoveMissingFilesAsync(true, doDry);
+        var removed = await _shokoImportService.RemoveMissingFilesAsync(doDry);
         return (
             new
             {

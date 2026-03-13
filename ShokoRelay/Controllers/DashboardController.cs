@@ -12,12 +12,9 @@ namespace ShokoRelay.Controllers;
 /// Handles the plugin's frontend components, including serving static assets,
 /// generating the dynamic configuration schema, and providing log access.
 /// </summary>
-public class DashboardController : ShokoRelayBaseController
+public class DashboardController(ConfigProvider configProvider, IMetadataService metadataService, PlexClient plexLibrary) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
 {
     private static readonly Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider ContentTypeProvider = new();
-
-    public DashboardController(ConfigProvider configProvider, IMetadataService metadataService, PlexClient plexLibrary)
-        : base(configProvider, metadataService, plexLibrary) { }
 
     #region Pages & Assets
 
@@ -54,7 +51,7 @@ public class DashboardController : ShokoRelayBaseController
         {
             var reqPath = Request.Path.Value ?? "";
             int dashIdx = reqPath.IndexOf("/dashboard", StringComparison.OrdinalIgnoreCase);
-            var baseHref = reqPath.Substring(0, dashIdx + 10).TrimEnd('/') + "/";
+            var baseHref = reqPath[..(dashIdx + 10)].TrimEnd('/') + "/";
 
             var baseTag = $"\n    <base href=\"{System.Net.WebUtility.HtmlEncode(baseHref)}\">";
             html = html.Replace("<head>", "<head>" + baseTag, StringComparison.OrdinalIgnoreCase);
@@ -131,9 +128,7 @@ public class DashboardController : ShokoRelayBaseController
 
         string logsDir = Path.Combine(_configProvider.PluginDirectory, "logs");
         string path = Path.Combine(logsDir, fileName);
-        if (!System.IO.File.Exists(path))
-            return NotFound(new { status = "error", message = "log not found" });
-        return PhysicalFile(path, "text/plain", fileName);
+        return !System.IO.File.Exists(path) ? NotFound(new { status = "error", message = "log not found" }) : PhysicalFile(path, "text/plain", fileName);
     }
 
     #endregion
@@ -142,11 +137,9 @@ public class DashboardController : ShokoRelayBaseController
 
     private string GetContentType(string filePath)
     {
-        if (filePath.EndsWith(".cshtml"))
-            return "text/html";
-        if (ContentTypeProvider.TryGetContentType(filePath, out var contentType))
-            return contentType;
-        return "application/octet-stream";
+        return filePath.EndsWith(".cshtml") ? "text/html"
+            : ContentTypeProvider.TryGetContentType(filePath, out var contentType) ? contentType
+            : "application/octet-stream";
     }
 
     private sealed record ConfigPropertySchema(string Path, string Type, string? Display, string? Description, object? DefaultValue, object? EnumValues, bool Advanced);

@@ -278,7 +278,7 @@ public class AdvancedConfig
     public string ShokoServerUrl { get; set; } = "";
 
     [Display(Name = "Path Mappings", Description = "Mappings for Plex base paths to Shoko base paths. Enter one mapping per line")]
-    public Dictionary<string, string> PathMappings { get; set; } = new();
+    public Dictionary<string, string> PathMappings { get; set; } = [];
 
     [Display(Name = "AnimeThemes Overlap Level", Description = "The amount of overlap allowed for AnimeThemes .webm files to be added to the VFS")]
     [DefaultValue(OverlapLevel.All)]

@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using NLog;
-using Shoko.Abstractions.Metadata.Shoko;
 using Shoko.Abstractions.Services;
 using ShokoRelay.Config;
 using ShokoRelay.Helpers;
@@ -64,24 +63,16 @@ internal sealed record AnimeThemesVideoLookup(
 /// <summary>
 /// Provides operations for building and applying mappings between anime theme files and AniDB/video identifiers.
 /// </summary>
-public class AnimeThemesMapping
+/// <param name="metadataService">Service for accessing Shoko metadata.</param>
+/// <param name="videoService">Service for resolving video file objects.</param>
+/// <param name="configProvider">Provider for configuration settings.</param>
+public class AnimeThemesMapping(IMetadataService metadataService, IVideoService videoService, ConfigProvider configProvider)
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
-    private readonly IMetadataService _metadataService;
-    private readonly IVideoService _videoService;
-    private readonly AnimeThemesApi _apiClient;
-    private readonly string _configDirectory;
-
-    /// <summary>
-    /// Initializes a new instance of the AnimeThemesMapping service.
-    /// </summary>
-    public AnimeThemesMapping(IMetadataService metadataService, IVideoService videoService, ConfigProvider configProvider)
-    {
-        _metadataService = metadataService;
-        _videoService = videoService;
-        _apiClient = new AnimeThemesApi();
-        _configDirectory = configProvider.ConfigDirectory;
-    }
+    private readonly IMetadataService _metadataService = metadataService;
+    private readonly IVideoService _videoService = videoService;
+    private readonly AnimeThemesApi _apiClient = new();
+    private readonly string _configDirectory = configProvider.ConfigDirectory;
 
     /// <summary>
     /// Serialize a single AnimeThemesMappingEntry to a CSV line.
@@ -347,7 +338,7 @@ public class AnimeThemesMapping
     /// <summary>
     /// Checks if a mapping entry is allowed based on user overlap preferences.
     /// </summary>
-    private static bool IsAllowed(AnimeThemesMappingEntry e, OverlapLevel level) => level == OverlapLevel.All || (e.Overlap == "None" || (level == OverlapLevel.TransitionOnly && e.Overlap == "Transition"));
+    private static bool IsAllowed(AnimeThemesMappingEntry e, OverlapLevel level) => level == OverlapLevel.All || e.Overlap == "None" || (level == OverlapLevel.TransitionOnly && e.Overlap == "Transition");
 
     /// <summary>
     /// Fetches theme metadata from the AnimeThemes API.
@@ -362,7 +353,7 @@ public class AnimeThemesMapping
             return (null, false);
 
         var anime = await _apiClient.FetchAnimeResourcesAsync(v.Video.Id, ct);
-        string[] seasonOrder = { "Winter", "Spring", "Summer", "Fall" };
+        string[] seasonOrder = ["Winter", "Spring", "Summer", "Fall"];
         var best = anime
             ?.Anime?.Select(e => new
             {
@@ -410,7 +401,7 @@ public class AnimeThemesMapping
         public int Created,
             Skipped,
             Matched;
-        public List<string> Errors = new(),
-            Planned = new();
+        public List<string> Errors = [],
+            Planned = [];
     }
 }

@@ -29,22 +29,13 @@ public sealed record ApplyRatingsResult(int ProcessedShows, int UpdatedShows, in
 /// <summary>
 /// Default implementation of <see cref="ICriticRatingService"/>, which queries Plex for shows/episodes and applies ratings based on Shoko metadata.
 /// </summary>
-public class CriticRatingService : ICriticRatingService
+public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, IMetadataService metadataService) : ICriticRatingService
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
-    private readonly HttpClient _httpClient;
-    private readonly ConfigProvider _configProvider;
-    private readonly PlexClient _plexClient;
-    private readonly IMetadataService _metadataService;
-
-    public CriticRatingService(HttpClient httpClient, ConfigProvider configProvider, PlexClient plexClient, IMetadataService metadataService)
-    {
-        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-        _configProvider = configProvider ?? throw new ArgumentNullException(nameof(configProvider));
-        _plexClient = plexClient ?? throw new ArgumentNullException(nameof(plexClient));
-        _metadataService = metadataService ?? throw new ArgumentNullException(nameof(metadataService));
-    }
+    private readonly HttpClient _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+    private readonly PlexClient _plexClient = plexClient ?? throw new ArgumentNullException(nameof(plexClient));
+    private readonly IMetadataService _metadataService = metadataService ?? throw new ArgumentNullException(nameof(metadataService));
 
     public async Task<ApplyRatingsResult> ApplyRatingsAsync(IEnumerable<int>? allowedSeriesIds = null, CancellationToken cancellationToken = default)
     {
@@ -74,7 +65,7 @@ public class CriticRatingService : ICriticRatingService
             List<PlexMetadataItem> shows;
             try
             {
-                shows = await _plexClient.GetSectionShowsAsync(target, cancellationToken).ConfigureAwait(false) ?? new List<PlexMetadataItem>();
+                shows = await _plexClient.GetSectionShowsAsync(target, cancellationToken).ConfigureAwait(false) ?? [];
             }
             catch (Exception ex)
             {
@@ -139,7 +130,7 @@ public class CriticRatingService : ICriticRatingService
             List<PlexMetadataItem> episodes;
             try
             {
-                episodes = await _plexClient.GetSectionEpisodesAsync(target, null, cancellationToken).ConfigureAwait(false) ?? new List<PlexMetadataItem>();
+                episodes = await _plexClient.GetSectionEpisodesAsync(target, null, cancellationToken).ConfigureAwait(false) ?? [];
             }
             catch (Exception ex)
             {
@@ -205,11 +196,7 @@ public class CriticRatingService : ICriticRatingService
     /// </summary>
     private static bool NeedsRatingUpdate(double? plexRating, double? computedRating)
     {
-        if (!computedRating.HasValue)
-            return plexRating.HasValue && plexRating.Value > 0.05;
-        if (!plexRating.HasValue)
-            return true;
-        return Math.Abs(plexRating.Value - computedRating.Value) > 0.05;
+        return !computedRating.HasValue ? plexRating.HasValue && plexRating.Value > 0.05 : !plexRating.HasValue || Math.Abs(plexRating.Value - computedRating.Value) > 0.05;
     }
 
     private double? ComputeSeriesRating(IShokoSeries series)

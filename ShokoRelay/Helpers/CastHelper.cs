@@ -6,7 +6,7 @@ namespace ShokoRelay.Helpers;
 
 public sealed class TagItem
 {
-    public string tag { get; init; } = "";
+    public string Tag { get; init; } = "";
 }
 
 /// <summary>
@@ -37,7 +37,7 @@ public static class CastHelper
                 .Where(c => !string.Equals(c.tag, c.role, StringComparison.Ordinal))
                 .Cast<object>()
                 .ToArray()
-            ?? Array.Empty<object>();
+            ?? [];
 
         if (!ShokoRelay.Settings.CrewListings)
             return cast;
@@ -54,9 +54,9 @@ public static class CastHelper
                         }
                 )
                 .ToArray()
-            ?? Array.Empty<object>();
+            ?? [];
 
-        return cast.Concat(crew).ToArray();
+        return [.. cast, .. crew];
     }
 
     /// <summary>
@@ -72,7 +72,7 @@ public static class CastHelper
     /// <param name="item">Source item.</param>
     /// <returns>An array of anonymous objects containing writer names.</returns>
     public static object[] GetWriters(IWithCastAndCrew item) =>
-        item.Crew?.Where(c => c.RoleType is CrewRoleType.SeriesComposer or CrewRoleType.SourceWork).Select(c => (object)new { tag = GetName(c.Creator, c.Name) }).ToArray() ?? Array.Empty<object>();
+        item.Crew?.Where(c => c.RoleType is CrewRoleType.SeriesComposer or CrewRoleType.SourceWork).Select(c => (object)new { tag = GetName(c.Creator, c.Name) }).ToArray() ?? [];
 
     /// <summary>
     /// Retrieve producer credits for the given item.
@@ -87,8 +87,7 @@ public static class CastHelper
     /// <param name="series">Series metadata.</param>
     /// <returns>An array of <see cref="TagItem"/> instances, one per distinct studio.</returns>
     public static TagItem[] GetStudioTags(ISeries series) =>
-        series.Studios?.Where(s => !string.IsNullOrWhiteSpace(s.Name)).Select(s => s.Name).Distinct(StringComparer.OrdinalIgnoreCase).Select(name => new TagItem { tag = name }).ToArray()
-        ?? Array.Empty<TagItem>();
+        series.Studios?.Where(s => !string.IsNullOrWhiteSpace(s.Name)).Select(s => s.Name).Distinct(StringComparer.OrdinalIgnoreCase).Select(name => new TagItem { Tag = name }).ToArray() ?? [];
 
     /// <summary>
     /// Return the first studio name associated with a series, or <c>null</c> if none exist.
@@ -97,5 +96,5 @@ public static class CastHelper
     public static string? GetStudio(ISeries series) => series.Studios?.FirstOrDefault()?.Name;
 
     private static object[] FilterCrew(IWithCastAndCrew item, CrewRoleType roleType) =>
-        item.Crew?.Where(c => c.RoleType == roleType).Select(c => (object)new { tag = GetName(c.Creator, c.Name) }).ToArray() ?? Array.Empty<object>();
+        item.Crew?.Where(c => c.RoleType == roleType).Select(c => (object)new { tag = GetName(c.Creator, c.Name) }).ToArray() ?? [];
 }

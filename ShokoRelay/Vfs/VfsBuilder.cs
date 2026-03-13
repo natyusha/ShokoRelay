@@ -97,7 +97,7 @@ public class VfsBuilder
             new(),
             new(VfsShared.PathComparer),
             new(VfsShared.PathComparer),
-            new(),
+            [],
             new(VfsShared.PathComparer)
         );
 
@@ -112,22 +112,24 @@ public class VfsBuilder
 
         IEnumerable<IShokoSeries> seriesList =
             (seriesIds?.Count > 0)
-                ? seriesIds
-                    .Distinct()
-                    .Select(_metadataService.GetShokoSeriesByID)
-                    .OfType<IShokoSeries>()
-                    .Select(s =>
-                    {
-                        if (pruneSeries)
-                            PruneSeries(rootName, s);
-                        return s;
-                    })
-                    .ToList()
-                : (_metadataService.GetAllShokoSeries() ?? Array.Empty<IShokoSeries>());
+                ?
+                [
+                    .. seriesIds
+                        .Distinct()
+                        .Select(_metadataService.GetShokoSeriesByID)
+                        .OfType<IShokoSeries>()
+                        .Select(s =>
+                        {
+                            if (pruneSeries)
+                                PruneSeries(rootName, s);
+                            return s;
+                        }),
+                ]
+                : (_metadataService.GetAllShokoSeries() ?? []);
 
         OverrideHelper.EnsureLoaded();
         if (ShokoRelay.Settings.TmdbEpNumbering)
-            seriesList = seriesList.GroupBy(s => OverrideHelper.GetPrimary(s.ID, _metadataService)).Select(g => g.FirstOrDefault(s => s.ID == g.Key) ?? g.First()).ToList();
+            seriesList = [.. seriesList.GroupBy(s => OverrideHelper.GetPrimary(s.ID, _metadataService)).Select(g => g.FirstOrDefault(s => s.ID == g.Key) ?? g.First())];
 
         Parallel.ForEach(
             seriesList,
@@ -136,11 +138,11 @@ public class VfsBuilder
             {
                 try
                 {
-                    var res = BuildSeries(series, rootName, cleanRoot, cleanedRoots, cleanedSeries, seriesIds?.Count > 0, cleanOnly, rootTasks, seriesTasks);
-                    Interlocked.Add(ref created, res.Created);
-                    Interlocked.Add(ref skipped, res.Skipped);
-                    Interlocked.Add(ref planned, res.Planned);
-                    foreach (var err in res.Errors)
+                    var (Created, Skipped, Errors, Planned) = BuildSeries(series, rootName, cleanRoot, cleanedRoots, cleanedSeries, seriesIds?.Count > 0, cleanOnly, rootTasks, seriesTasks);
+                    Interlocked.Add(ref created, Created);
+                    Interlocked.Add(ref skipped, Skipped);
+                    Interlocked.Add(ref planned, Planned);
+                    foreach (var err in Errors)
                         errorsBag.Add(err);
                     Interlocked.Increment(ref seriesProcessed);
                 }
@@ -184,7 +186,7 @@ public class VfsBuilder
     )
     {
         var (created, skipped, planned, errors, sSw) = (0, 0, 0, new List<string>(), Stopwatch.StartNew());
-        var titles = TextHelper.ResolveFullSeriesTitles(series);
+        var (DisplayTitle, SortTitle, OriginalTitle) = TextHelper.ResolveFullSeriesTitles(series);
         int folderId = ShokoRelay.Settings.TmdbEpNumbering ? OverrideHelper.GetPrimary(series.ID, _metadataService) : series.ID;
         var fileData = GetSeriesFileDataCached(series);
         if (!fileData.Mappings.Any())
@@ -251,7 +253,7 @@ public class VfsBuilder
                         ex,
                         extraPad.GetValueOrDefault(mapping.Coords.Season, 1),
                         Path.GetExtension(src),
-                        titles.DisplayTitle,
+                        DisplayTitle,
                         hasPeer ? mapping.PartIndex : null,
                         hasPeer ? mapping.PartCount : 1,
                         vIdx
@@ -332,7 +334,7 @@ public class VfsBuilder
     {
         if (string.IsNullOrWhiteSpace(sourceDir) || !Directory.Exists(sourceDir))
             return;
-        var candidates = _metadataFileCacheForBuild?.GetOrAdd(sourceDir, _ => Directory.EnumerateFiles(sourceDir).Where(f => MetadataExtensions.Contains(Path.GetExtension(f))).ToArray()) ?? [];
+        var candidates = _metadataFileCacheForBuild?.GetOrAdd(sourceDir, _ => [.. Directory.EnumerateFiles(sourceDir).Where(f => MetadataExtensions.Contains(Path.GetExtension(f)))]) ?? [];
         foreach (var file in candidates)
         {
             string name = Path.GetFileName(file),
@@ -350,7 +352,7 @@ public class VfsBuilder
             return;
         string originalBase = Path.GetFileNameWithoutExtension(sourceFile);
         var dirSw = Stopwatch.StartNew();
-        var candidates = _subtitleFileCacheForBuild?.GetOrAdd(sourceDir, _ => Directory.GetFiles(sourceDir).Where(f => SubtitleExtensions.Contains(Path.GetExtension(f))).ToArray()) ?? [];
+        var candidates = _subtitleFileCacheForBuild?.GetOrAdd(sourceDir, _ => [.. Directory.GetFiles(sourceDir).Where(f => SubtitleExtensions.Contains(Path.GetExtension(f)))]) ?? [];
         dirSw.Stop();
         if (dirSw.ElapsedMilliseconds > 50)
             Logger.Debug("Directory.GetFiles({SourceDir}) took {Elapsed}ms and returned {Count} entries", sourceDir, dirSw.ElapsedMilliseconds, candidates.Length);

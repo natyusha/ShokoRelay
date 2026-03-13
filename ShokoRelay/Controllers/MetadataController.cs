@@ -11,15 +11,10 @@ namespace ShokoRelay.Controllers;
 /// Provides the core Metadata Provider endpoints for the Plex Agent.
 /// Handles series matching, detailed metadata retrieval, and artwork enumeration.
 /// </summary>
-public class MetadataController : ShokoRelayBaseController
+public class MetadataController(IMetadataService metadataService, PlexMetadata mapper, ConfigProvider configProvider, PlexClient plexLibrary)
+    : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
 {
-    private readonly PlexMetadata _mapper;
-
-    public MetadataController(IMetadataService metadataService, PlexMetadata mapper, ConfigProvider configProvider, PlexClient plexLibrary)
-        : base(configProvider, metadataService, plexLibrary)
-    {
-        _mapper = mapper;
-    }
+    private readonly PlexMetadata _mapper = mapper;
 
     #region Provider Descriptor
 
@@ -57,20 +52,18 @@ public class MetadataController : ShokoRelayBaseController
     #region Matching
 
     /// <summary>
-    /// Attempts to match a Plex media lookup request to a Shoko series.
-    /// Priority is given to numeric IDs found in the filename or manual overrides in the request body.
+    /// Attempts to match a Plex media lookup request to a Shoko series. Priority is given to numeric IDs found in the filename or manual overrides in the request body.
     /// </summary>
-    /// <param name="name">Optional query parameter containing a lookup name.</param>
     /// <param name="body">Optional JSON body containing filename, title, and manual match flags.</param>
     /// <returns>A MediaContainer containing the matched series or an empty match result.</returns>
     [Route("matches")]
     [HttpPost]
     [HttpGet]
-    public IActionResult Match([FromQuery] string? name, [FromBody] PlexMatchBody? body = null)
+    public IActionResult Match([FromBody] PlexMatchBody? body = null)
     {
-        int? seriesId = null;
         string? rawPath = body?.Filename;
 
+        int? seriesId;
         if (string.IsNullOrWhiteSpace(rawPath))
         {
             if (body?.Manual == 1 && int.TryParse(body.Title, out var manualId))
@@ -138,7 +131,7 @@ public class MetadataController : ShokoRelayBaseController
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A MediaContainer with the requested metadata object.</returns>
     [HttpGet("metadata/{ratingKey}")]
-    public IActionResult GetMetadata(string ratingKey, [FromQuery] int includeChildren = 0, CancellationToken cancellationToken = default)
+    public IActionResult GetMetadata(string ratingKey, [FromQuery] int includeChildren = 0)
     {
         var ctx = _mapper.GetSeriesContext(ratingKey);
         if (ctx == null)
@@ -147,7 +140,7 @@ public class MetadataController : ShokoRelayBaseController
         // Level: Episode
         if (ratingKey.StartsWith(PlexConstants.EpisodePrefix))
         {
-            var epIdPart = ratingKey.Substring(PlexConstants.EpisodePrefix.Length).Split(PlexConstants.PartPrefix)[0];
+            var epIdPart = ratingKey[PlexConstants.EpisodePrefix.Length..].Split(PlexConstants.PartPrefix)[0];
             int epId = int.Parse(epIdPart);
             int? partIdx = ratingKey.Contains(PlexConstants.PartPrefix) ? int.Parse(ratingKey.Split(PlexConstants.PartPrefix)[1]) : null;
 
@@ -156,17 +149,14 @@ public class MetadataController : ShokoRelayBaseController
                 return NotFound();
 
             var m = ctx.FileData.Mappings.FirstOrDefault(x => x.Episodes.Any(e => e.ID == epId));
-            if (m == null)
-                return NotFound();
-
-            return WrapInContainer(_mapper.MapEpisode(episode, m.Coords, ctx.Series, ctx.Titles, partIdx, m.TmdbEpisode));
+            return m == null ? NotFound() : WrapInContainer(_mapper.MapEpisode(episode, m.Coords, ctx.Series, ctx.Titles, partIdx, m.TmdbEpisode));
         }
 
         // Level: Season
         if (ratingKey.Contains(PlexConstants.SeasonPrefix))
         {
             int sNum = int.Parse(ratingKey.Split(PlexConstants.SeasonPrefix)[1]);
-            var seasonMeta = _mapper.MapSeason(ctx.Series, sNum, ctx.Titles.DisplayTitle, cancellationToken);
+            var seasonMeta = _mapper.MapSeason(ctx.Series, sNum, ctx.Titles.DisplayTitle);
 
             if (includeChildren == 1)
             {
@@ -182,7 +172,7 @@ public class MetadataController : ShokoRelayBaseController
 
         if (includeChildren == 1)
         {
-            var seasons = ctx.FileData.Seasons.Select(s => _mapper.MapSeason(ctx.Series, s, ctx.Titles.DisplayTitle, cancellationToken)).ToList();
+            var seasons = ctx.FileData.Seasons.Select(s => _mapper.MapSeason(ctx.Series, s, ctx.Titles.DisplayTitle)).ToList();
             ((IDictionary<string, object?>)showMeta)["Children"] = new { size = seasons.Count, Metadata = seasons };
         }
 
@@ -196,7 +186,7 @@ public class MetadataController : ShokoRelayBaseController
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A paged MediaContainer with the child objects.</returns>
     [HttpGet("metadata/{ratingKey}/children")]
-    public IActionResult GetChildren(string ratingKey, CancellationToken cancellationToken = default)
+    public IActionResult GetChildren(string ratingKey)
     {
         var ctx = _mapper.GetSeriesContext(ratingKey);
         if (ctx == null)
@@ -208,7 +198,7 @@ public class MetadataController : ShokoRelayBaseController
             return WrapInPagedContainer(_mapper.BuildEpisodeList(ctx, sNum));
         }
 
-        var seasons = ctx.FileData.Seasons.Select(s => _mapper.MapSeason(ctx.Series, s, ctx.Titles.DisplayTitle, cancellationToken)).ToList();
+        var seasons = ctx.FileData.Seasons.Select(s => _mapper.MapSeason(ctx.Series, s, ctx.Titles.DisplayTitle)).ToList();
 
         return WrapInPagedContainer(seasons);
     }
@@ -241,7 +231,7 @@ public class MetadataController : ShokoRelayBaseController
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A MediaContainer containing an array of Image objects.</returns>
     [HttpGet("metadata/{ratingKey}/images")]
-    public IActionResult GetImages(string ratingKey, CancellationToken cancellationToken = default)
+    public IActionResult GetImages(string ratingKey)
     {
         var ctx = _mapper.GetSeriesContext(ratingKey);
         if (ctx == null)
@@ -250,19 +240,19 @@ public class MetadataController : ShokoRelayBaseController
         object[] images;
         if (ratingKey.Contains(PlexConstants.EpisodePrefix))
         {
-            var parts = ratingKey.Substring(PlexConstants.EpisodePrefix.Length).Split(PlexConstants.PartPrefix);
+            var parts = ratingKey[PlexConstants.EpisodePrefix.Length..].Split(PlexConstants.PartPrefix);
             int epId = int.Parse(parts[0]);
             int? partIdx = parts.Length > 1 ? int.Parse(parts[1]) : null;
 
             var episode = ctx.Series.Episodes.FirstOrDefault(e => e.ID == epId);
             var m = ctx.FileData.Mappings.FirstOrDefault(x => x.Episodes.Any(e => e.ID == epId));
 
-            images = (episode != null && m != null) ? ExtractImages(_mapper.MapEpisode(episode, m.Coords, ctx.Series, ctx.Titles, partIdx, m.TmdbEpisode)) : Array.Empty<object>();
+            images = (episode != null && m != null) ? ExtractImages(_mapper.MapEpisode(episode, m.Coords, ctx.Series, ctx.Titles, partIdx, m.TmdbEpisode)) : [];
         }
         else if (ratingKey.Contains(PlexConstants.SeasonPrefix))
         {
             int sNum = int.Parse(ratingKey.Split(PlexConstants.SeasonPrefix)[1]);
-            images = ExtractImages(_mapper.MapSeason(ctx.Series, sNum, ctx.Titles.DisplayTitle, cancellationToken));
+            images = ExtractImages(_mapper.MapSeason(ctx.Series, sNum, ctx.Titles.DisplayTitle));
         }
         else
         {
@@ -326,10 +316,9 @@ public class MetadataController : ShokoRelayBaseController
             return NotFound();
 
         var posterPath = PlexHelper.FindCollectionPosterPathByGroup(primarySeries, groupId);
-        if (string.IsNullOrWhiteSpace(posterPath) || !System.IO.File.Exists(posterPath))
-            return NotFound();
-
-        return PhysicalFile(posterPath, GetCollectionContentTypeForExtension(Path.GetExtension(posterPath)) ?? "application/octet-stream");
+        return string.IsNullOrWhiteSpace(posterPath) || !System.IO.File.Exists(posterPath)
+            ? NotFound()
+            : PhysicalFile(posterPath, GetCollectionContentTypeForExtension(Path.GetExtension(posterPath)) ?? "application/octet-stream");
     }
 
     #endregion
@@ -339,7 +328,7 @@ public class MetadataController : ShokoRelayBaseController
     /// <summary>
     /// Extract the Image array from a Plex metadata dictionary object.
     /// </summary>
-    private static object[] ExtractImages(object metadata) => metadata is IDictionary<string, object?> dict && dict.TryGetValue("Image", out var img) && img is object[] arr ? arr : Array.Empty<object>();
+    private static object[] ExtractImages(object metadata) => metadata is IDictionary<string, object?> dict && dict.TryGetValue("Image", out var img) && img is object[] arr ? arr : [];
 
     #endregion
 }

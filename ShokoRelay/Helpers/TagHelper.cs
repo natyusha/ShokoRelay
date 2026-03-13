@@ -48,7 +48,7 @@ public static class TagHelper
         var shokoSeries = series as Shoko.Abstractions.Metadata.Shoko.IShokoSeries;
         var shokoTags = shokoSeries?.Tags;
         if (shokoTags == null)
-            return Array.Empty<object>();
+            return [];
 
         var userBlacklist = ShokoRelay.Settings.TagBlacklist.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         var sourceSetting = ShokoRelay.Settings.TagSources;
@@ -59,11 +59,13 @@ public static class TagHelper
         // if user-only, skip all external sources
         if (sourceSetting == TagSources.UserOnly)
         {
-            return shokoNames
-                .Where(tagName => !TagBlacklistAniDBHelpers.Contains(tagName) && !userBlacklist.Contains(tagName, StringComparer.OrdinalIgnoreCase))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Select(tagName => new { tag = TitleCase(tagName) })
-                .ToArray<object>();
+            return
+            [
+                .. shokoNames
+                    .Where(tagName => !TagBlacklistAniDBHelpers.Contains(tagName) && !userBlacklist.Contains(tagName, StringComparer.OrdinalIgnoreCase))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Select(tagName => new { tag = TitleCase(tagName) }),
+            ];
         }
 
         // build AniDB names list if source permits
@@ -82,7 +84,7 @@ public static class TagHelper
                     continue;
                 if (minWeight > 0 && t.Weight < minWeight)
                     continue;
-                anidbNames.Add(t.Name!);
+                anidbNames.Add(t.Name);
             }
         }
 
@@ -103,11 +105,13 @@ public static class TagHelper
         // always include Shoko custom tags (already computed)
         var combined = anidbNames.Concat(tmdbNames).Concat(shokoNames);
 
-        return combined
-            .Where(tagName => !string.IsNullOrWhiteSpace(tagName) && !TagBlacklistAniDBHelpers.Contains(tagName) && !userBlacklist.Contains(tagName, StringComparer.OrdinalIgnoreCase))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(tagName => new { tag = TitleCase(tagName) })
-            .ToArray<object>();
+        return
+        [
+            .. combined
+                .Where(tagName => !string.IsNullOrWhiteSpace(tagName) && !TagBlacklistAniDBHelpers.Contains(tagName) && !userBlacklist.Contains(tagName, StringComparer.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Select(tagName => new { tag = TitleCase(tagName) }),
+        ];
     }
 
     /// <summary>
@@ -132,18 +136,18 @@ public static class TagHelper
                     return word.ToUpper(); // Convert words from force_upper to uppercase (abbreviations or acronyms that should be fully capitalised)
 
                 // Capitalise all words accounting for apostrophes first
-                return char.ToUpper(word[0]) + word.Substring(1);
+                return char.ToUpper(word[0]) + word[1..];
             }
         );
 
         // Force capitalise the first character no matter what
-        result = char.ToUpper(result[0]) + result.Substring(1);
+        result = char.ToUpper(result[0]) + result[1..];
 
         // Force capitalise the first character of the last word no matter what
         int lastSpaceIndex = result.LastIndexOf(' ');
         if (lastSpaceIndex >= 0 && lastSpaceIndex < result.Length - 1)
         {
-            result = result.Substring(0, lastSpaceIndex + 1) + char.ToUpper(result[lastSpaceIndex + 1]) + result.Substring(lastSpaceIndex + 2);
+            result = result[..(lastSpaceIndex + 1)] + char.ToUpper(result[lastSpaceIndex + 1]) + result[(lastSpaceIndex + 2)..];
         }
 
         // Apply special cases as a last step (where a specific capitalisation style is preferred)
@@ -151,9 +155,7 @@ public static class TagHelper
             result,
             m =>
             {
-                if (_forceSpecial.TryGetValue(m.Value, out var special))
-                    return special;
-                return m.Value;
+                return _forceSpecial.TryGetValue(m.Value, out var special) ? special : m.Value;
             }
         );
 

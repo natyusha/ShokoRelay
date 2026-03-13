@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Shoko;
 
@@ -8,7 +9,7 @@ namespace ShokoRelay.Helpers;
 /// </summary>
 public static class RatingHelper
 {
-    private static readonly HashSet<string> RatingTags = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly FrozenSet<string> RatingTags = new[]
     {
         "kodomo",
         "mina",
@@ -22,7 +23,7 @@ public static class RatingHelper
         "sex",
         "violence",
         "sexual humour",
-    };
+    }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Determine a combined rating string and an "is adult" flag for a series. Preferences in <see cref="ShokoRelay.Settings"/> influence the resulting text.

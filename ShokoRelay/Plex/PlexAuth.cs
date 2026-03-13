@@ -8,7 +8,7 @@ using ShokoRelay.Config;
 namespace ShokoRelay.Plex;
 
 /// <summary>
-/// Represents a single connection endpoint for a Plex device, including local/relay status and the connection URI.
+/// Represents a single connection endpoint for a Plex device.
 /// </summary>
 public sealed record PlexDeviceConnection
 {
@@ -18,7 +18,7 @@ public sealed record PlexDeviceConnection
 }
 
 /// <summary>
-/// Plex device resource returned by the Plex.tv resources API, containing identifier, name, capabilities, access token, and available connections.
+/// Plex device resource returned by the Plex.tv resources API.
 /// </summary>
 public sealed record PlexDevice
 {
@@ -30,19 +30,24 @@ public sealed record PlexDevice
 }
 
 /// <summary>
-/// Summary of a Plex server including its client identifier, display name, and preferred connection URI.
+/// Summary of a Plex server connection.
 /// </summary>
 public sealed record PlexServerInfo(string Id, string Name, string? PreferredUri);
 
 /// <summary>
-/// Summary of a Plex library section including its numeric ID, title, content type, agent identifier, and unique UUID.
+/// Summary of a Plex library section.
 /// </summary>
 public sealed record PlexLibraryInfo(int Id, string Title, string Type, string Agent, string Uuid);
 
-public class PlexAuth
+/// <summary>
+/// Handles authentication with Plex.tv, including PIN generation, server/library discovery, and Plex Home user switching.
+/// </summary>
+/// <param name="httpClient">HttpClient (should include CookieContainer for user switching).</param>
+/// <param name="config">Authentication configuration containing the Client Identifier.</param>
+public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
 {
     private const string BaseUrl = "https://plex.tv";
-
+    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -50,137 +55,193 @@ public class PlexAuth
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
-
-    private readonly HttpClient _httpClient;
-    private readonly PlexAuthConfig _config;
-
-    public PlexAuth(HttpClient httpClient, PlexAuthConfig config)
-    {
-        _httpClient = httpClient;
-        _config = config;
-    }
+    private readonly HttpClient _httpClient = httpClient;
+    private readonly PlexAuthConfig _config = config;
 
     /// <summary>
     /// Request a new Plex authentication PIN from the Plex.tv API.
     /// </summary>
-    /// <param name="strong">If true, request a PIN requiring a longer code.</param>
-    /// <param name="cancellationToken">Cancellation token to abort the request.</param>
+    /// <param name="strong">If true, request a high-entropy PIN code.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A response containing the PIN ID and the user-facing Code.</returns>
     public async Task<PlexPinResponse> CreatePinAsync(bool strong = true, CancellationToken cancellationToken = default)
     {
-        EnsureConfigured();
-
-        string urlText = strong ? $"{BaseUrl}/api/v2/pins?strong=true" : $"{BaseUrl}/api/v2/pins";
-        var url = new Uri(urlText);
-
-        using var request = CreateRequest(HttpMethod.Post, url);
-
+        using var request = CreateRequest(HttpMethod.Post, new Uri($"{BaseUrl}/api/v2/pins{(strong ? "?strong=true" : "")}"));
         using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-
-        var pin = await ReadJsonAsync<PlexPinResponse>(response, cancellationToken).ConfigureAwait(false);
-        if (pin == null)
-            throw new InvalidOperationException("Plex pin response was empty.");
-
-        return pin;
+        return await ReadJsonAsync<PlexPinResponse>(response, cancellationToken).ConfigureAwait(false) ?? throw new InvalidOperationException("Plex pin response was empty.");
     }
 
     /// <summary>
-    /// Construct the URL that the user must visit in order to authenticate the given <paramref name="pinCode"/>.
-    /// For short pins a simple link page is returned; otherwise the URL includes client and product details.
+    /// Construct the URL that the user must visit in order to authenticate the PIN.
     /// </summary>
-    /// <param name="pinCode">PIN code received from <see cref="CreatePinAsync"/>.</param>
-    /// <param name="productName">Product name to include in the request context.</param>
-    /// <param name="forwardUrl">Optional URL to redirect the user after auth.</param>
     public string BuildAuthUrl(string pinCode, string productName, string? forwardUrl = null)
     {
-        EnsureConfigured();
-
-        if (string.IsNullOrWhiteSpace(pinCode))
-            throw new ArgumentException("Pin code is required.", nameof(pinCode));
-
-        // For short 4-digit pins, use the link page (user must type the code manually)
         if (pinCode.Length <= 4)
             return $"https://plex.tv/link/?pin={Uri.EscapeDataString(pinCode)}";
-
-        var query = new List<string>
-        {
-            $"clientID={Uri.EscapeDataString(_config.ClientIdentifier)}",
-            $"code={Uri.EscapeDataString(pinCode)}",
-            // encoded form of: context[device][product]=<productName>
-            $"context%5Bdevice%5D%5Bproduct%5D={Uri.EscapeDataString(productName)}",
-        };
-
+        var query = $"clientID={Uri.EscapeDataString(_config.ClientIdentifier)}&code={Uri.EscapeDataString(pinCode)}&context%5Bdevice%5D%5Bproduct%5D={Uri.EscapeDataString(productName)}";
         if (!string.IsNullOrWhiteSpace(forwardUrl))
-            query.Add($"forwardUrl={Uri.EscapeDataString(forwardUrl)}");
-
-        return $"https://app.plex.tv/auth#?{string.Join("&", query)}";
+            query += $"&forwardUrl={Uri.EscapeDataString(forwardUrl)}";
+        return $"https://app.plex.tv/auth#?{query}";
     }
 
     /// <summary>
-    /// Retrieve the status for the specified Plex PIN. The returned object may contain a null auth token until the user completes authentication.
+    /// Retrieve the status for a specific Plex PIN.
     /// </summary>
-    /// <param name="pinId">Identifier returned by <see cref="CreatePinAsync"/>.</param>
-    /// <param name="cancellationToken">Cancellation token for the HTTP call.</param>
     public async Task<PlexPinResponse> GetPinAsync(string pinId, CancellationToken cancellationToken = default)
     {
-        EnsureConfigured();
-
-        if (string.IsNullOrWhiteSpace(pinId))
-            throw new ArgumentException("Pin id is required.", nameof(pinId));
-
-        var url = new Uri($"{BaseUrl}/api/v2/pins/{Uri.EscapeDataString(pinId)}");
-
-        using var request = CreateRequest(HttpMethod.Get, url);
+        using var request = CreateRequest(HttpMethod.Get, new Uri($"{BaseUrl}/api/v2/pins/{Uri.EscapeDataString(pinId)}"));
         using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-
-        var pin = await ReadJsonAsync<PlexPinResponse>(response, cancellationToken).ConfigureAwait(false);
-        if (pin == null)
-            throw new InvalidOperationException("Plex pin response was empty.");
-
-        return pin;
+        return await ReadJsonAsync<PlexPinResponse>(response, cancellationToken).ConfigureAwait(false) ?? throw new InvalidOperationException("Plex pin response was empty.");
     }
 
-    private HttpRequestMessage CreateRequest(HttpMethod method, Uri url, string? token = null, string? clientIdentifier = null)
+    /// <summary>
+    /// Query the Plex.tv resources API for all accessible servers.
+    /// </summary>
+    public async Task<(bool TokenValid, List<PlexServerInfo> Servers, List<PlexDevice> Devices)> GetPlexServerListAsync(string token, string cid, CancellationToken ct = default)
     {
-        var request = new HttpRequestMessage(method, url);
-        request.Headers.TryAddWithoutValidation("X-Plex-Client-Identifier", clientIdentifier ?? _config.ClientIdentifier);
-        request.Headers.TryAddWithoutValidation("X-Plex-Product", ShokoRelayInfo.Name);
-        request.Headers.TryAddWithoutValidation("X-Plex-Version", ShokoRelayInfo.Version);
-        request.Headers.TryAddWithoutValidation("X-Plex-Platform", "Shoko Relay");
-        request.Headers.TryAddWithoutValidation("X-Plex-Device", "Shoko Relay");
-        request.Headers.TryAddWithoutValidation("X-Plex-Device-Name", ShokoRelayInfo.Name);
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        if (!string.IsNullOrWhiteSpace(token))
-            request.Headers.TryAddWithoutValidation("X-Plex-Token", token);
-        return request;
+        using var request = CreateRequest(HttpMethod.Get, new Uri("https://clients.plex.tv/api/v2/resources"), token, cid);
+        using var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+            return (response.StatusCode is not HttpStatusCode.Unauthorized and not HttpStatusCode.Forbidden, [], []);
+
+        var devices = await ReadJsonAsync<List<PlexDevice>>(response, ct).ConfigureAwait(false) ?? [];
+        var servers = devices
+            .Where(d => d.Provides?.Contains("server", StringComparison.OrdinalIgnoreCase) == true)
+            .Select(d =>
+            {
+                var pref = d.Connections?.OrderByDescending(c => (c.Local && !c.Relay ? 100 : 0) + (c.Uri?.StartsWith("https") == true ? 10 : 0) + (!c.Relay ? 1 : 0)).FirstOrDefault()?.Uri;
+                return new PlexServerInfo(d.ClientIdentifier ?? "", d.Name ?? "", pref);
+            })
+            .ToList();
+        return (true, servers, devices);
     }
 
-    private static async Task<T?> ReadJsonAsync<T>(HttpResponseMessage response, CancellationToken cancellationToken)
+    /// <summary>
+    /// Fetch the list of library sections for a specific Plex server.
+    /// </summary>
+    public async Task<List<PlexLibraryInfo>> GetPlexLibrariesAsync(string token, string cid, string url, CancellationToken ct = default)
     {
-        string content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        if (string.IsNullOrWhiteSpace(content))
-            return default;
+        using var req = CreateRequest(HttpMethod.Get, new Uri($"{url.TrimEnd('/')}/library/sections"), token, cid);
+        using var resp = await _httpClient.SendAsync(req, ct).ConfigureAwait(false);
+        var wrapper = await ReadJsonAsync<LibrarySectionsResponse>(resp, ct).ConfigureAwait(false);
+        return wrapper
+                ?.MediaContainer?.Directory?.Select(d => new PlexLibraryInfo(int.TryParse(d.Key, out int id) ? id : 0, d.Title ?? "", d.Type ?? "", d.Agent ?? "", d.Uuid ?? ""))
+                .Where(l => l.Id > 0)
+                .ToList()
+            ?? [];
+    }
 
+    /// <summary>
+    /// Revokes an authentication token at Plex.tv.
+    /// </summary>
+    public async Task RevokePlexTokenAsync(string token, string cid, CancellationToken ct = default)
+    {
         try
         {
-            return JsonSerializer.Deserialize<T>(content, JsonOptions);
+            using var req = CreateRequest(HttpMethod.Delete, new Uri($"{BaseUrl}/api/v2/user/authentication"), token, cid);
+            await _httpClient.SendAsync(req, ct).ConfigureAwait(false);
         }
-        catch (JsonException ex)
+        catch
         {
-            string snippet = content.Length > 512 ? content[..512] + "..." : content;
-            throw new InvalidOperationException($"Expected JSON from Plex but got invalid content. Status={(int)response.StatusCode} {response.ReasonPhrase}. Body starts with: {snippet}", ex);
+            Logger.Warn("Failed to revoke Plex token.");
         }
     }
 
-    private void EnsureConfigured()
+    /// <summary>
+    /// Retrieve all managed/home users associated with the account.
+    /// </summary>
+    public async Task<List<PlexHomeUser>> GetHomeUsersAsync(string adminToken, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(_config.ClientIdentifier))
-            throw new InvalidOperationException("Plex auth client identifier is not configured.");
+        using var req = CreateRequest(HttpMethod.Get, new Uri($"{BaseUrl}/api/v2/home/users"), adminToken);
+        using var resp = await _httpClient.SendAsync(req, ct).ConfigureAwait(false);
+        return (await ReadJsonAsync<PlexHomeUsersResponse>(resp, ct).ConfigureAwait(false))?.Users ?? [];
     }
 
-    // Response DTOs for library sections JSON
+    /// <summary>
+    /// Retrieve account information (title/username) for the provided token.
+    /// </summary>
+    public async Task<PlexAccountInfo?> GetAccountInfoAsync(string token, CancellationToken ct = default)
+    {
+        using var req = CreateRequest(HttpMethod.Get, new Uri($"{BaseUrl}/api/v2/user"), token);
+        using var resp = await _httpClient.SendAsync(req, ct).ConfigureAwait(false);
+        if (!resp.IsSuccessStatusCode)
+            return null;
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false));
+        return new PlexAccountInfo(doc.RootElement.TryGetProperty("title", out var t) ? t.GetString() : null, doc.RootElement.TryGetProperty("username", out var u) ? u.GetString() : null);
+    }
+
+    /// <summary>
+    /// Switch to a Plex Home managed user and return a transient authentication token.
+    /// </summary>
+    public async Task<string?> SwitchHomeUserAsync(int userId, string adminToken, string? pin = null, CancellationToken ct = default)
+    {
+        var url = $"{BaseUrl}/api/home/users/{userId}/switch{(string.IsNullOrEmpty(pin) ? "" : $"?pin={Uri.EscapeDataString(pin)}")}";
+        using var req = CreateRequest(HttpMethod.Post, new Uri(url), adminToken);
+        using var resp = await _httpClient.SendAsync(req, ct).ConfigureAwait(false);
+        if (!resp.IsSuccessStatusCode)
+            return null;
+        var xml = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        var doc = new System.Xml.XmlDocument();
+        doc.LoadXml(xml);
+        var node = doc.SelectSingleNode("//user") ?? doc.DocumentElement;
+        return node?.Attributes?["authToken"]?.Value ?? node?.Attributes?["authenticationToken"]?.Value;
+    }
+
+    /// <summary>
+    /// Discover Shoko-enabled libraries across all accessible Plex servers.
+    /// </summary>
+    public async Task<(bool TokenValid, List<PlexServerInfo> Servers, List<(PlexLibraryInfo Library, PlexServerInfo Server)> ShokoLibraries)> DiscoverShokoLibrariesAsync(
+        string token,
+        string cid,
+        CancellationToken ct = default
+    )
+    {
+        var (TokenValid, Servers, Devices) = await GetPlexServerListAsync(token, cid, ct).ConfigureAwait(false);
+        var list = new List<(PlexLibraryInfo, PlexServerInfo)>();
+        if (TokenValid)
+        {
+            foreach (var srv in Servers.Where(s => !string.IsNullOrEmpty(s.PreferredUri)))
+            {
+                try
+                {
+                    var libs = await GetPlexLibrariesAsync(token, cid, srv.PreferredUri!, ct).ConfigureAwait(false);
+                    foreach (var l in libs.Where(l => string.Equals(l.Agent, ShokoRelayInfo.AgentScheme, StringComparison.OrdinalIgnoreCase)))
+                        list.Add((l, srv));
+                }
+                catch { }
+            }
+        }
+        return (TokenValid, Servers, list);
+    }
+
+    private HttpRequestMessage CreateRequest(HttpMethod method, Uri url, string? token = null, string? cid = null)
+    {
+        var req = new HttpRequestMessage(method, url);
+        req.Headers.TryAddWithoutValidation("X-Plex-Client-Identifier", cid ?? _config.ClientIdentifier);
+        req.Headers.TryAddWithoutValidation("X-Plex-Product", ShokoRelayInfo.Name);
+        req.Headers.TryAddWithoutValidation("X-Plex-Version", ShokoRelayInfo.Version);
+        req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        if (!string.IsNullOrEmpty(token))
+            req.Headers.TryAddWithoutValidation("X-Plex-Token", token);
+        return req;
+    }
+
+    private static async Task<T?> ReadJsonAsync<T>(HttpResponseMessage resp, CancellationToken ct)
+    {
+        return !resp.IsSuccessStatusCode ? default : await JsonSerializer.DeserializeAsync<T>(await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false), JsonOptions, ct).ConfigureAwait(false);
+    }
+
+    public sealed record PlexHomeUser(
+        [property: JsonPropertyName("id")] int Id,
+        [property: JsonPropertyName("title")] string? Title,
+        [property: JsonPropertyName("username")] string? Username,
+        [property: JsonPropertyName("uuid")] string? Uuid
+    );
+
+    private sealed record PlexHomeUsersResponse([property: JsonPropertyName("users")] List<PlexHomeUser>? Users);
+
+    public sealed record PlexAccountInfo(string? Title, string? Username);
+
     private sealed record LibrarySectionsResponse
     {
         public LibrarySectionsContainer? MediaContainer { get; init; }
@@ -199,312 +260,13 @@ public class PlexAuth
         public string? Agent { get; init; }
         public string? Uuid { get; init; }
     }
-
-    /// <summary>
-    /// Query the Plex.tv resources API for all accessible servers and return parsed server information, raw devices, and a token-validity flag.
-    /// </summary>
-    /// <param name="token">Plex authentication token.</param>
-    /// <param name="clientIdentifier">Client identifier string sent in Plex headers.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A tuple of (TokenValid, Servers, Devices).</returns>
-    public async Task<(bool TokenValid, List<PlexServerInfo> Servers, List<PlexDevice> Devices)> GetPlexServerListAsync(string token, string clientIdentifier, CancellationToken cancellationToken = default)
-    {
-        using var request = CreateRequest(HttpMethod.Get, new Uri("https://clients.plex.tv/api/v2/resources"), token, clientIdentifier);
-        using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-
-        bool tokenValid = response.StatusCode != HttpStatusCode.Unauthorized && response.StatusCode != HttpStatusCode.Forbidden;
-        if (!response.IsSuccessStatusCode)
-            return (tokenValid, [], []);
-
-        List<PlexDevice> devices;
-        try
-        {
-            devices = await ReadJsonAsync<List<PlexDevice>>(response, cancellationToken).ConfigureAwait(false) ?? [];
-        }
-        catch (Exception ex)
-        {
-            Logger.Warn($"Failed to parse Plex resources response: {ex.Message}");
-            return (tokenValid, [], []);
-        }
-
-        var servers = new List<PlexServerInfo>();
-        foreach (var device in devices)
-        {
-            if (string.IsNullOrWhiteSpace(device.ClientIdentifier) || string.IsNullOrWhiteSpace(device.Provides) || !device.Provides.Contains("server", StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            var connections = device.Connections ?? [];
-            string? preferred = connections.FirstOrDefault(c => !string.IsNullOrWhiteSpace(c?.Uri) && c.Local && !c.Relay && c.Uri.StartsWith("https://", StringComparison.OrdinalIgnoreCase))?.Uri;
-            if (string.IsNullOrWhiteSpace(preferred))
-                preferred = connections.FirstOrDefault(c => !string.IsNullOrWhiteSpace(c?.Uri) && c.Local && !c.Relay && c.Uri.StartsWith("http://", StringComparison.OrdinalIgnoreCase))?.Uri;
-            if (string.IsNullOrWhiteSpace(preferred))
-                preferred = connections.FirstOrDefault(c => !string.IsNullOrWhiteSpace(c?.Uri) && !c.Relay && c.Uri.StartsWith("https://", StringComparison.OrdinalIgnoreCase))?.Uri;
-            if (string.IsNullOrWhiteSpace(preferred))
-                preferred = connections.FirstOrDefault(c => !string.IsNullOrWhiteSpace(c?.Uri) && !c.Relay && c.Uri.StartsWith("http://", StringComparison.OrdinalIgnoreCase))?.Uri;
-            if (string.IsNullOrWhiteSpace(preferred))
-                preferred = connections.FirstOrDefault(c => !string.IsNullOrWhiteSpace(c?.Uri) && !c.Relay)?.Uri;
-            if (string.IsNullOrWhiteSpace(preferred))
-                preferred = connections.FirstOrDefault(c => !string.IsNullOrWhiteSpace(c?.Uri))?.Uri;
-
-            servers.Add(new PlexServerInfo(device.ClientIdentifier, device.Name ?? device.ClientIdentifier, preferred));
-        }
-
-        return (tokenValid, servers, devices);
-    }
-
-    /// <summary>
-    /// Fetch the list of library sections for a specific Plex server using the given token and client identifier.
-    /// </summary>
-    /// <param name="token">Plex authentication token.</param>
-    /// <param name="clientIdentifier">Client identifier string.</param>
-    /// <param name="serverUrl">Base URL of the target Plex server.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A list of <see cref="PlexLibraryInfo"/> for each library section on the server.</returns>
-    public async Task<List<PlexLibraryInfo>> GetPlexLibrariesAsync(string token, string clientIdentifier, string serverUrl, CancellationToken cancellationToken = default)
-    {
-        var url = new Uri(serverUrl.TrimEnd('/') + "/library/sections");
-        using var request = CreateRequest(HttpMethod.Get, url, token, clientIdentifier);
-        using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        if (!response.IsSuccessStatusCode)
-            return [];
-
-        try
-        {
-            var wrapper = await ReadJsonAsync<LibrarySectionsResponse>(response, cancellationToken).ConfigureAwait(false);
-            var directories = wrapper?.MediaContainer?.Directory;
-            if (directories == null)
-                return [];
-
-            var libraries = new List<PlexLibraryInfo>();
-            foreach (var dir in directories)
-            {
-                if (!int.TryParse(dir.Key, out int sectionId) || sectionId <= 0)
-                    continue;
-                libraries.Add(new PlexLibraryInfo(sectionId, dir.Title ?? $"Library {sectionId}", dir.Type ?? "show", dir.Agent ?? string.Empty, dir.Uuid ?? string.Empty));
-            }
-            return libraries;
-        }
-        catch (Exception ex)
-        {
-            Logger.Warn($"Failed to parse Plex libraries from {url}: {ex.Message}");
-            return [];
-        }
-    }
-
-    /// <summary>
-    /// Revoke (sign out) a Plex authentication token so it can no longer be used.
-    /// </summary>
-    /// <param name="token">The token to revoke.</param>
-    /// <param name="clientIdentifier">Client identifier used during the original authentication.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    public async Task RevokePlexTokenAsync(string token, string clientIdentifier, CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            using var request = CreateRequest(HttpMethod.Delete, new Uri($"{BaseUrl}/api/v2/user/authentication"), token, clientIdentifier);
-            using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-            if (!response.IsSuccessStatusCode)
-                Logger.Warn($"Failed to revoke Plex token. Status: {(int)response.StatusCode} {response.ReasonPhrase}");
-        }
-        catch (Exception ex)
-        {
-            Logger.Warn($"Exception while revoking Plex token: {ex.Message}");
-        }
-    }
-
-    /// <summary>
-    /// Represents a managed/home user returned by the Plex Home users API. Contains the user's numeric ID, display title, username, and UUID.
-    /// </summary>
-    public sealed record PlexHomeUser(
-        [property: JsonPropertyName("id")] int Id,
-        [property: JsonPropertyName("title")] string? Title,
-        [property: JsonPropertyName("username")] string? Username,
-        [property: JsonPropertyName("uuid")] string? Uuid
-    );
-
-    /// <summary>
-    /// Retrieve all managed/home users associated with the Plex Home of the provided admin token.
-    /// </summary>
-    /// <param name="adminToken">Admin-level Plex authentication token.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A list of <see cref="PlexHomeUser"/> records.</returns>
-    public async Task<List<PlexHomeUser>> GetHomeUsersAsync(string adminToken, CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var url = new Uri($"{BaseUrl}/api/v2/home/users");
-            using var request = CreateRequest(HttpMethod.Get, url, adminToken);
-            using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-            if (!response.IsSuccessStatusCode)
-                return [];
-
-            var wrapper = await ReadJsonAsync<PlexHomeUsersResponse>(response, cancellationToken).ConfigureAwait(false);
-            return wrapper?.Users ?? [];
-        }
-        catch (Exception ex)
-        {
-            Logger.Warn($"GetHomeUsersAsync exception: {ex.Message}");
-            return [];
-        }
-    }
-
-    private sealed record PlexHomeUsersResponse([property: JsonPropertyName("users")] List<PlexHomeUser>? Users);
-
-    // Retrieve basic account info (display title and username) for a given Plex token.
-    public sealed record PlexAccountInfo(string? Title, string? Username);
-
-    /// <summary>
-    /// Retrieve the display name and username for the account associated with the given Plex <paramref name="token"/>.
-    /// </summary>
-    /// <param name="token">Plex authentication token to query account info for.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A <see cref="PlexAccountInfo"/> record, or <c>null</c> if the request fails or yields no data.</returns>
-    public async Task<PlexAccountInfo?> GetAccountInfoAsync(string token, CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrWhiteSpace(token))
-            return null;
-
-        try
-        {
-            var url = new Uri($"{BaseUrl}/api/v2/user");
-            using var request = CreateRequest(HttpMethod.Get, url, token);
-            using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                Logger.Warn("GetAccountInfoAsync failed: {Status}", response.StatusCode);
-                return null;
-            }
-
-            var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-            using var doc = JsonDocument.Parse(content);
-            var root = doc.RootElement;
-
-            string? title = root.TryGetProperty("title", out var t) ? t.GetString() : null;
-            string? username = root.TryGetProperty("username", out var u) ? u.GetString() : null;
-
-            return new PlexAccountInfo(title?.Trim(), username?.Trim());
-        }
-        catch (Exception ex)
-        {
-            Logger.Warn($"GetAccountInfoAsync exception: {ex.Message}");
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// Switch to a Plex Home managed user and return a transient authentication token for that user.
-    /// </summary>
-    /// <param name="userId">Numeric ID of the managed user to switch to.</param>
-    /// <param name="adminToken">Admin-level Plex token authorizing the switch.</param>
-    /// <param name="pin">Optional PIN required by the managed user.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A transient auth token string, or <c>null</c> if the switch failed.</returns>
-    public async Task<string?> SwitchHomeUserAsync(int userId, string adminToken, string? pin = null, CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var uriText = $"{BaseUrl}/api/home/users/{userId}/switch";
-            if (!string.IsNullOrWhiteSpace(pin))
-                uriText += $"?pin={Uri.EscapeDataString(pin)}";
-            var url = new Uri(uriText);
-
-            using var request = CreateRequest(HttpMethod.Post, url, adminToken);
-            using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-            if (!response.IsSuccessStatusCode)
-            {
-                Logger.Warn($"SwitchHomeUserAsync failed for user {userId}: status {(int)response.StatusCode}");
-                return null;
-            }
-
-            var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-            if (string.IsNullOrWhiteSpace(content))
-                return null;
-
-            // IMPORTANT: This older Plex endpoint always returns XML; extract authToken from the <user> element attributes.
-            try
-            {
-                var xmlDoc = new System.Xml.XmlDocument();
-                xmlDoc.LoadXml(content);
-                var userNode = xmlDoc.SelectSingleNode("//user") ?? xmlDoc.DocumentElement;
-                var token = userNode?.Attributes?["authToken"]?.Value ?? userNode?.Attributes?["authenticationToken"]?.Value;
-                if (!string.IsNullOrWhiteSpace(token))
-                    return token.Trim();
-            }
-            catch (Exception ex)
-            {
-                var snippet = content.Length > 512 ? content[..512] + "..." : content;
-                Logger.Warn($"SwitchHomeUserAsync: failed to parse XML response for user {userId}: {ex.Message}. Body starts with: {snippet}");
-                return null;
-            }
-
-            var debugSnippet = content.Length > 512 ? content[..512] + "..." : content;
-            Logger.Warn($"SwitchHomeUserAsync: response for user {userId} did not contain an authToken. Body starts with: {debugSnippet}");
-            return null;
-        }
-        catch (Exception ex)
-        {
-            Logger.Warn($"SwitchHomeUserAsync exception: {ex.Message}");
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// Discover Shoko-enabled libraries across Plex servers accessible with the supplied token, optionally filtering by server.
-    /// </summary>
-    /// <param name="token">Plex authentication token.</param>
-    /// <param name="clientIdentifier">Client identifier.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A tuple of (TokenValid, Servers, ShokoLibraries) where ShokoLibraries pairs each matching library with its server.</returns>
-    public async Task<(bool TokenValid, List<PlexServerInfo> Servers, List<(PlexLibraryInfo Library, PlexServerInfo Server)> ShokoLibraries)> DiscoverShokoLibrariesAsync(
-        string token,
-        string clientIdentifier,
-        CancellationToken cancellationToken = default
-    )
-    {
-        var result = await GetPlexServerListAsync(token, clientIdentifier, cancellationToken).ConfigureAwait(false);
-        var shokoList = new List<(PlexLibraryInfo, PlexServerInfo)>();
-        if (!result.TokenValid || result.Servers == null || result.Servers.Count == 0)
-            return (result.TokenValid, result.Servers ?? new List<PlexServerInfo>(), shokoList);
-
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var srv in result.Servers)
-        {
-            if (string.IsNullOrWhiteSpace(srv.PreferredUri))
-                continue;
-
-            try
-            {
-                var libs = await GetPlexLibrariesAsync(token, clientIdentifier, srv.PreferredUri, cancellationToken).ConfigureAwait(false);
-                var shoko = libs.Where(l => string.Equals(l.Agent, ShokoRelayInfo.AgentScheme, StringComparison.OrdinalIgnoreCase));
-                foreach (var l in shoko)
-                {
-                    var key = !string.IsNullOrWhiteSpace(l.Uuid) ? l.Uuid : $"{srv.PreferredUri}::{l.Id}";
-                    if (!seen.Add(key))
-                        continue;
-                    shokoList.Add((l, srv));
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn($"Failed to fetch libraries from server {srv.PreferredUri}: {ex.Message}");
-            }
-        }
-
-        return (result.TokenValid, result.Servers ?? new List<PlexServerInfo>(), shokoList);
-    }
 }
 
-/// <summary>
-/// Response DTO for the Plex PIN request/poll endpoints. Contains the PIN identifier, code, and — once authenticated — an auth token.
-/// </summary>
 public class PlexPinResponse
 {
     [JsonConverter(typeof(StringOrNumberConverter))]
     [JsonPropertyName("id")]
     public string? Id { get; set; }
-
-    [JsonPropertyName("code")]
     public string? Code { get; set; }
 
     [JsonPropertyName("authToken")]
@@ -518,29 +280,17 @@ public class PlexPinResponse
 }
 
 /// <summary>
-/// JSON converter that accepts both string and numeric JSON tokens and always produces a <see cref="string"/> value. Used for Plex fields that may be serialized as either type.
+/// Custom converter to handle Plex IDs which can be returned as either integers or strings.
 /// </summary>
 public sealed class StringOrNumberConverter : JsonConverter<string?>
 {
-    public override string? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-    {
-        return reader.TokenType switch
+    public override string? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
+        reader.TokenType switch
         {
             JsonTokenType.String => reader.GetString(),
-            JsonTokenType.Number => reader.TryGetInt64(out long value) ? value.ToString() : reader.GetDouble().ToString(),
-            JsonTokenType.Null => null,
-            _ => throw new JsonException($"Unexpected token {reader.TokenType} when parsing string."),
+            JsonTokenType.Number => reader.TryGetInt64(out long l) ? l.ToString() : reader.GetDouble().ToString(),
+            _ => null,
         };
-    }
 
-    public override void Write(Utf8JsonWriter writer, string? value, JsonSerializerOptions options)
-    {
-        if (value is null)
-        {
-            writer.WriteNullValue();
-            return;
-        }
-
-        writer.WriteStringValue(value);
-    }
+    public override void Write(Utf8JsonWriter writer, string? value, JsonSerializerOptions options) => writer.WriteStringValue(value);
 }

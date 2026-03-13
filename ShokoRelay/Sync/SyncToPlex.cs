@@ -1,7 +1,6 @@
 using System.Globalization;
 using NLog;
 using Shoko.Abstractions.Services;
-using Shoko.Abstractions.User;
 using ShokoRelay.Config;
 using ShokoRelay.Plex;
 
@@ -10,26 +9,16 @@ namespace ShokoRelay.Sync;
 /// <summary>
 /// Synchronize watched-state (and optional votes) from Shoko -> Plex.
 /// </summary>
-public class SyncToPlex
+public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService, IUserDataService userDataService, IUserService userService, ConfigProvider configProvider, PlexAuth plexAuth)
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private static readonly HttpClient Http = new();
-    private readonly PlexClient _plexClient;
-    private readonly IMetadataService _metadataService;
-    private readonly IUserDataService _userDataService;
-    private readonly IUserService _userService;
-    private readonly ConfigProvider _configProvider;
-    private readonly PlexAuth _plexAuth;
-
-    public SyncToPlex(PlexClient plexClient, IMetadataService metadataService, IUserDataService userDataService, IUserService userService, ConfigProvider configProvider, PlexAuth plexAuth)
-    {
-        _plexClient = plexClient;
-        _metadataService = metadataService;
-        _userDataService = userDataService;
-        _userService = userService;
-        _configProvider = configProvider;
-        _plexAuth = plexAuth;
-    }
+    private readonly PlexClient _plexClient = plexClient;
+    private readonly IMetadataService _metadataService = metadataService;
+    private readonly IUserDataService _userDataService = userDataService;
+    private readonly IUserService _userService = userService;
+    private readonly ConfigProvider _configProvider = configProvider;
+    private readonly PlexAuth _plexAuth = plexAuth;
 
     /// <summary>
     /// Sync watched-state from Shoko into configured Plex libraries.
@@ -51,7 +40,7 @@ public class SyncToPlex
 
         var shokoWatched = _userDataService.GetEpisodeUserDataForUser(shokoUser).Where(e => e.IsWatched).ToList();
         if (sinceHours > 0)
-            shokoWatched = shokoWatched.Where(e => (e.LastPlayedAt ?? DateTime.MinValue) >= DateTime.UtcNow.AddHours(-sinceHours.Value)).ToList();
+            shokoWatched = [.. shokoWatched.Where(e => (e.LastPlayedAt ?? DateTime.MinValue) >= DateTime.UtcNow.AddHours(-sinceHours.Value))];
 
         result = result with { Processed = shokoWatched.Count };
         var extraEntries = _configProvider.GetExtraPlexUserEntries();
@@ -60,11 +49,11 @@ public class SyncToPlex
         var plexUsers = new List<(string Name, string? Token)>();
         if (!actualExclude)
             plexUsers.Add(("admin", null));
-        foreach (var ex in extraEntries)
+        foreach (var (Name, Pin) in extraEntries)
         {
-            var token = await SyncHelper.FetchManagedUserTokenAsync(_plexAuth, _configProvider, ex.Name, ex.Pin, cancellationToken).ConfigureAwait(false);
+            var token = await SyncHelper.FetchManagedUserTokenAsync(_plexAuth, _configProvider, Name, Pin, cancellationToken).ConfigureAwait(false);
             if (token != null)
-                plexUsers.Add((ex.Name, token));
+                plexUsers.Add((Name, token));
         }
 
         var matchedGlobal = new HashSet<int>();
@@ -80,7 +69,7 @@ public class SyncToPlex
 
                 result.PerUser[uName] = result.PerUser[uName] with { Processed = shokoWatched.Count };
                 var unwatched = await _plexClient.GetSectionEpisodesAsync(target, uToken, cancellationToken, true).ConfigureAwait(false);
-                var plexMap = (unwatched ?? new()).ToDictionary(i => i.Guid ?? "", i => i.RatingKey ?? "", StringComparer.OrdinalIgnoreCase);
+                var plexMap = (unwatched ?? []).ToDictionary(i => i.Guid ?? "", i => i.RatingKey ?? "", StringComparer.OrdinalIgnoreCase);
 
                 foreach (var sw in shokoWatched)
                 {

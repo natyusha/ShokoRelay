@@ -12,14 +12,9 @@ namespace ShokoRelay.Plex;
 /// <summary>
 /// Converts Shoko series/episode/season metadata into Plex-compatible property dictionaries. Also constructs external GUID, rating, network, and country arrays.
 /// </summary>
-public class PlexMetadata
+public class PlexMetadata(IMetadataService metadataService)
 {
-    private readonly IMetadataService _metadataService;
-
-    public PlexMetadata(IMetadataService metadataService)
-    {
-        _metadataService = metadataService;
-    }
+    private readonly IMetadataService _metadataService = metadataService;
 
     /// <summary>
     /// Aggregates relevant information about a Shoko series for controller responses.
@@ -97,7 +92,7 @@ public class PlexMetadata
                 items.Add((coordsEp, MapEpisode(ep, coordsEp, ctx.Series, ctx.Titles)));
             }
         }
-        return items.OrderBy(x => x.Coords.Episode).Select(x => x.Meta).ToList();
+        return [.. items.OrderBy(x => x.Coords.Episode).Select(x => x.Meta)];
     }
 
     /// <summary>
@@ -148,13 +143,10 @@ public class PlexMetadata
             return null;
 
         var group = _metadataService.GetShokoGroupByID(groupId);
-        if (group is not IShokoGroup shokoGroup)
-            return null;
-
-        if ((shokoGroup.Series?.Count ?? 0) <= 1)
-            return null;
-
-        return group is IWithTitles titled && !string.IsNullOrWhiteSpace(titled.PreferredTitle?.Value) ? titled.PreferredTitle?.Value : null;
+        return group is not IShokoGroup shokoGroup ? null
+            : (shokoGroup.Series?.Count ?? 0) <= 1 ? null
+            : group is IWithTitles titled && !string.IsNullOrWhiteSpace(titled.PreferredTitle?.Value) ? titled.PreferredTitle?.Value
+            : null;
     }
 
     /// <summary>
@@ -166,7 +158,7 @@ public class PlexMetadata
         var images = (IWithImages)primarySeries;
         var poster = images.GetImages(ImageEntityType.Poster).FirstOrDefault();
         var backdrop = images.GetImages(ImageEntityType.Backdrop).FirstOrDefault();
-        string title = group is IWithTitles titled && !string.IsNullOrWhiteSpace(titled.PreferredTitle?.Value) ? titled.PreferredTitle!.Value : $"Group {group.ID}";
+        string title = group is IWithTitles titled && !string.IsNullOrWhiteSpace(titled.PreferredTitle?.Value) ? titled.PreferredTitle.Value : $"Group {group.ID}";
         // csharpier-ignore-start
         return new Dictionary<string, object?>
         {
@@ -195,7 +187,7 @@ public class PlexMetadata
         var cb = GetCacheBuster(series);
         var images = (IWithImages)series;
         var studios = CastHelper.GetStudioTags(series);
-        var contentRating = RatingHelper.GetContentRatingAndAdult(series);
+        var (Rating, IsAdult) = RatingHelper.GetContentRatingAndAdult(series);
         var plexTheme = ShokoRelay.Settings.PlexThemeMusic && series is IShokoSeries ss && ss.TmdbShows?.FirstOrDefault()?.TvdbShowID is int tvdb && tvdb > 0 ? $"https://tvthemes.plexapp.com/{tvdb}.mp3" : null;
         // csharpier-ignore-start
         return new Dictionary<string, object?>
@@ -208,15 +200,15 @@ public class PlexMetadata
             ["originallyAvailableAt"] = series.AirDate?.ToString("yyyy-MM-dd"),
             ["thumb"]                 = images.GetImages(ImageEntityType.Poster).FirstOrDefault() is { } p ? ImageHelper.GetImageUrl(p, cacheBuster: cb) : null,
             ["art"]                   = images.GetImages(ImageEntityType.Backdrop).FirstOrDefault() is { } a ? ImageHelper.GetImageUrl(a, cacheBuster: cb) : null,
-            ["contentRating"]         = contentRating.Rating,
+            ["contentRating"]         = Rating,
             ["originalTitle"]         = titles.OriginalTitle,
             ["titleSort"]             = titles.SortTitle,
             ["year"]                  = series.AirDate?.Year,
-            ["summary"]               = TextHelper.SanitizeSummaryWithFallback(((IWithDescriptions)series).PreferredDescription?.Value, (series as IShokoSeries)?.TmdbShows?.FirstOrDefault()?.PreferredDescription?.Value, ShokoRelay.Settings.SummaryMode),
-            ["isAdult"]               = contentRating.IsAdult,
+            ["summary"]               = TextHelper.SanitizeSummaryWithFallback(series.PreferredDescription?.Value, (series as IShokoSeries)?.TmdbShows?.FirstOrDefault()?.PreferredDescription?.Value, ShokoRelay.Settings.SummaryMode),
+            ["isAdult"]               = IsAdult,
             ["duration"]              = series.Episodes.Any() ? (int)series.Episodes.Sum(e => e.Runtime.TotalMilliseconds) : (int?)null,
             //["tagline"]             = TMDB has this but it is not exposed
-            ["studio"]                = studios.FirstOrDefault()?.tag,
+            ["studio"]                = studios.FirstOrDefault()?.Tag,
             ["theme"]                 = plexTheme,
 
             ["Image"]                 = ImageHelper.GenerateImageArray(images, titles.DisplayTitle, ShokoRelay.Settings.AddEveryImage, cb),
@@ -245,11 +237,11 @@ public class PlexMetadata
     /// <summary>
     /// Build a Plex-compatible metadata dictionary for a single season.
     /// </summary>
-    public Dictionary<string, object?> MapSeason(ISeries series, int seasonNum, string seriesTitle, CancellationToken cancellationToken = default)
+    public Dictionary<string, object?> MapSeason(ISeries series, int seasonNum, string seriesTitle)
     {
         var ctx = GetSeriesContext(series.ID.ToString());
         if (ctx == null)
-            return new Dictionary<string, object?>();
+            return [];
 
         var ps = ctx.Series;
         var cb = GetCacheBuster(ps);
@@ -269,7 +261,7 @@ public class PlexMetadata
         int nonExtraCount = ctx.FileData.Seasons.Count(s => s >= 0);
         List<string>? posters =
             (ShokoRelay.Settings.TmdbSeasonPosters && nonExtraCount > 1 && tmdbSeason != null)
-                ? tmdbSeason.GetImages(ImageEntityType.Poster).OrderByDescending(i => i.IsPreferred).Select(i => ImageHelper.GetImageUrl(i, cacheBuster: cb)).ToList()
+                ? [.. tmdbSeason.GetImages(ImageEntityType.Poster).OrderByDescending(i => i.IsPreferred).Select(i => ImageHelper.GetImageUrl(i, cacheBuster: cb))]
                 : null;
 
         string? thumb = (posters?.Count > 0) ? posters[0] : (images.GetImages(ImageEntityType.Poster).FirstOrDefault() is { } p ? ImageHelper.GetImageUrl(p, cacheBuster: cb) : null);
@@ -339,7 +331,7 @@ public class PlexMetadata
         string? parentThumb = null;
         if (ShokoRelay.Settings.TmdbSeasonPosters && mapped.Season >= 0 && string.IsNullOrEmpty(MapHelper.GetPreferredTmdbOrderingId(series)))
         {
-            var s = _metadataService.GetShokoSeriesByID(OverrideHelper.GetPrimary(series.ID, _metadataService)) as IShokoSeries;
+            var s = _metadataService.GetShokoSeriesByID(OverrideHelper.GetPrimary(series.ID, _metadataService));
             var seasonObj = s?.TmdbSeasons?.FirstOrDefault(ts => ts.SeasonNumber == mapped.Season);
             parentThumb = seasonObj?.DefaultPoster is not null ? ImageHelper.GetImageUrl(seasonObj.DefaultPoster, cacheBuster: cb) : null;
         }
@@ -381,7 +373,7 @@ public class PlexMetadata
             ["grandparentArt"]        = seriesImages.GetImages(ImageEntityType.Backdrop).FirstOrDefault() is { } ga ? ImageHelper.GetImageUrl(ga, cacheBuster: cb) : null,
             ["parentIndex"]           = mapped.Season,
 
-            ["Image"]                 = ShokoRelay.Settings.TmdbThumbnails ? ImageHelper.GenerateImageArray(images, epTitle, ShokoRelay.Settings.AddEveryImage, cb).Where(img => img.type == "snapshot").ToArray() : Array.Empty<ImageInfo>(),
+            ["Image"]                 = ShokoRelay.Settings.TmdbThumbnails ? [.. ImageHelper.GenerateImageArray(images, epTitle, ShokoRelay.Settings.AddEveryImage, cb).Where(img => img.Type == "snapshot")] : Array.Empty<ImageInfo>(),
             //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
             //["Role"]                = CastHelper.GetCastAndCrew(ep), // Large array not used by Plex clients and present in grandparent series metadata
             ["Director"]              = CastHelper.GetDirectors(ep),
@@ -418,14 +410,13 @@ public class PlexMetadata
             if (s.ID > 0)
                 add($"tmdb://{s.ID}");
         }
-        return guids.ToArray();
+        return [.. guids];
     }
 
     private object[]? BuildNetworkArray(ISeries series)
     {
         var src = (series as IShokoSeries)?.TmdbShows?.FirstOrDefault() ?? (series as ITmdbShow);
-        var list = src?.GetType().GetProperty("TmdbNetworks")?.GetValue(src) as System.Collections.IEnumerable;
-        if (list == null)
+        if (src?.GetType().GetProperty("TmdbNetworks")?.GetValue(src) is not System.Collections.IEnumerable list)
             return null;
 
         var result = new List<object>();
@@ -435,7 +426,7 @@ public class PlexMetadata
             if (!string.IsNullOrWhiteSpace(name))
                 result.Add(new { tag = name });
         }
-        return result.Count > 0 ? result.ToArray() : null;
+        return result.Count > 0 ? [.. result] : null;
     }
 
     private object[]? BuildCountryArray(ISeries series)
@@ -464,7 +455,7 @@ public class PlexMetadata
             if (seen.Add(name))
                 result.Add(new { tag = name });
         }
-        return result.Count > 0 ? result.ToArray() : null;
+        return result.Count > 0 ? [.. result] : null;
     }
 
     private object? BuildRatingArray(double? r) =>
@@ -480,9 +471,9 @@ public class PlexMetadata
             }
             : null;
 
-    private object? BuildRatingArray(ISeries s) => BuildRatingArray(((s as IShokoSeries)?.TmdbShows?.FirstOrDefault()?.Rating ?? (s as ITmdbShow)?.Rating));
+    private object? BuildRatingArray(ISeries s) => BuildRatingArray((s as IShokoSeries)?.TmdbShows?.FirstOrDefault()?.Rating ?? (s as ITmdbShow)?.Rating);
 
-    private object? BuildRatingArray(IEpisode e) => BuildRatingArray(((e as IShokoEpisode)?.TmdbEpisodes?.FirstOrDefault()?.Rating ?? (e as ITmdbEpisode)?.Rating));
+    private object? BuildRatingArray(IEpisode e) => BuildRatingArray((e as IShokoEpisode)?.TmdbEpisodes?.FirstOrDefault()?.Rating ?? (e as ITmdbEpisode)?.Rating);
 
     #endregion
 }

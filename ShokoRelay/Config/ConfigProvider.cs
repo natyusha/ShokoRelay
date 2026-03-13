@@ -20,12 +20,11 @@ public class ConfigProvider
 
     private readonly string _filePath,
         _tokenPath;
-    private readonly object _settingsLock = new();
+    private readonly Lock _settingsLock = new();
     private RelayConfig? _settings;
     private List<(string Name, string? Pin)>? _cachedExtraUsers;
     private List<PlexAvailableServer>? _cachedServers;
-    private string? _cachedAdminUsername,
-        _serverBaseUrl = "http://localhost:8111";
+    private string? _cachedAdminUsername;
 
     public string PluginDirectory { get; }
     public IHttpContextAccessor? HttpContextAccessor { get; set; }
@@ -42,10 +41,10 @@ public class ConfigProvider
             if (!string.IsNullOrWhiteSpace(configUrl))
                 return configUrl.Trim().TrimEnd('/');
             if (HttpContextAccessor?.HttpContext is { } ctx)
-                _serverBaseUrl = $"{ctx.Request.Scheme}://{ctx.Request.Host}";
-            return _serverBaseUrl!;
+                field = $"{ctx.Request.Scheme}://{ctx.Request.Host}";
+            return field;
         }
-    }
+    } = "http://localhost:8111";
 
     /// <summary>
     /// Creates a new ConfigProvider using the specified paths provided by the host application.
@@ -179,12 +178,13 @@ public class ConfigProvider
     /// Parse a comma-separated string of Plex user entries, optionally containing 4-digit PINs.
     /// </summary>
     public static List<(string Name, string? Pin)> ParseExtraPlexUsers(string? raw) =>
-        (raw ?? "")
-            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(s => s.Split(';', 2))
-            .Where(p => p.Length > 0 && !string.IsNullOrWhiteSpace(p[0]))
-            .Select(p => (Name: p[0].Trim(), Pin: (p.Length > 1 && p[1].Trim().Length == 4 && p[1].Trim().All(char.IsDigit)) ? p[1].Trim() : null))
-            .ToList();
+        [
+            .. (raw ?? "")
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(s => s.Split(';', 2))
+                .Where(p => p.Length > 0 && !string.IsNullOrWhiteSpace(p[0]))
+                .Select(p => (Name: p[0].Trim(), Pin: (p.Length > 1 && p[1].Trim().Length == 4 && p[1].Trim().All(char.IsDigit)) ? p[1].Trim() : null)),
+        ];
 
     public List<(string Name, string? Pin)> GetExtraPlexUserEntries() => _cachedExtraUsers ??= ParseExtraPlexUsers(GetSettings().Automation.ExtraPlexUsers);
 
@@ -218,8 +218,8 @@ public class ConfigProvider
                     Token = t ?? "",
                     ClientIdentifier = c ?? "",
                     AdminUsername = a ?? "",
-                    Servers = s ?? new(),
-                    Libraries = l ?? new(),
+                    Servers = s ?? [],
+                    Libraries = l ?? [],
                 },
                 Options
             )
@@ -235,12 +235,12 @@ public class ConfigProvider
             tf.ClientIdentifier = Guid.NewGuid().ToString("N");
             WriteTokenFile(tf.Token, tf.ClientIdentifier, tf.AdminUsername, tf.Servers, tf.Libraries);
         }
-        return tf.ClientIdentifier!;
+        return tf.ClientIdentifier;
     }
 
-    public List<PlexAvailableServer> GetPlexDiscoveredServers() => _cachedServers ??= ReadTokenFile().Servers ?? new();
+    public List<PlexAvailableServer> GetPlexDiscoveredServers() => _cachedServers ??= ReadTokenFile().Servers ?? [];
 
-    public List<PlexAvailableLibrary> GetPlexDiscoveredLibraries() => ReadTokenFile().Libraries ?? new();
+    public List<PlexAvailableLibrary> GetPlexDiscoveredLibraries() => ReadTokenFile().Libraries ?? [];
 
     public string? GetAdminUsername() => _cachedAdminUsername ??= ReadTokenFile().AdminUsername;
 
@@ -274,7 +274,7 @@ public class ConfigProvider
 
     private bool NormalizeCsvFields(RelayConfig s)
     {
-        string Norm(string? r) => string.Join(", ", (r ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase));
+        static string Norm(string? r) => string.Join(", ", (r ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase));
         var (nt, ne) = (Norm(s.TagBlacklist), Norm(s.Automation.ExtraPlexUsers));
         bool c = s.TagBlacklist != nt || s.Automation.ExtraPlexUsers != ne;
         s.TagBlacklist = nt;

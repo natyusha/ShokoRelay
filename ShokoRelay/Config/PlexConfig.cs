@@ -70,10 +70,10 @@ public class PlexLibraryConfig
     public string ClientIdentifier { get; set; } = "";
 
     [Browsable(false)]
-    public List<PlexAvailableServer> DiscoveredServers { get; set; } = new();
+    public List<PlexAvailableServer> DiscoveredServers { get; set; } = [];
 
     [Browsable(false)]
-    public List<PlexAvailableLibrary> DiscoveredLibraries { get; set; } = new();
+    public List<PlexAvailableLibrary> DiscoveredLibraries { get; set; } = [];
 }
 
 /// <summary>

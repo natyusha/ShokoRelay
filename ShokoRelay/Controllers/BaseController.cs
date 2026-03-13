@@ -16,36 +16,29 @@ namespace ShokoRelay.Controllers;
 [ApiVersionNeutral]
 [ApiController]
 [Route(ShokoRelayInfo.BasePath)]
-public abstract class ShokoRelayBaseController : ControllerBase
+public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IMetadataService metadataService, PlexClient plexLibrary) : ControllerBase
 {
     protected static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
     /// <summary>
     /// Service used for reading and persisting plugin settings and secrets.
     /// </summary>
-    protected readonly ConfigProvider _configProvider;
+    protected readonly ConfigProvider _configProvider = configProvider;
 
     /// <summary>
     /// Service for querying the Shoko metadata database.
     /// </summary>
-    protected readonly IMetadataService _metadataService;
+    protected readonly IMetadataService _metadataService = metadataService;
 
     /// <summary>
     /// Client used for interacting with configured Plex server instances.
     /// </summary>
-    protected readonly PlexClient _plexLibrary;
+    protected readonly PlexClient _plexLibrary = plexLibrary;
 
     /// <summary>
     /// Returns the absolute base URL of the plugin's API on the current host.
     /// </summary>
     protected string ApiBase => $"{Request.Scheme}://{Request.Host}{ShokoRelayInfo.BasePath}";
-
-    protected ShokoRelayBaseController(ConfigProvider configProvider, IMetadataService metadataService, PlexClient plexLibrary)
-    {
-        _configProvider = configProvider;
-        _metadataService = metadataService;
-        _plexLibrary = plexLibrary;
-    }
 
     #region Logging Helpers
 
@@ -77,7 +70,7 @@ public abstract class ShokoRelayBaseController : ControllerBase
     /// <param name="resultData">The data object to return in the JSON response.</param>
     /// <param name="reportBuilder">The logic used to format the resultData into a text report.</param>
     /// <returns>An IActionResult containing the status, data, and logUrl.</returns>
-    protected async Task<IActionResult> LogAndReturn<T>(string logName, T resultData, Action<StringBuilder, T> reportBuilder)
+    protected IActionResult LogAndReturn<T>(string logName, T resultData, Action<StringBuilder, T> reportBuilder)
     {
         WriteReportLog(logName, sb => reportBuilder(sb, resultData));
 
@@ -103,11 +96,11 @@ public abstract class ShokoRelayBaseController : ControllerBase
     /// <returns>A list of unique, valid Shoko Series IDs.</returns>
     protected static List<int> ParseFilterIds(string? filter, out List<string> errors)
     {
-        errors = new List<string>();
+        errors = [];
         var ids = new HashSet<int>();
 
         if (string.IsNullOrWhiteSpace(filter))
-            return ids.ToList();
+            return [.. ids];
 
         foreach (var raw in filter.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
@@ -118,7 +111,7 @@ public abstract class ShokoRelayBaseController : ControllerBase
             }
             ids.Add(id);
         }
-        return ids.ToList();
+        return [.. ids];
     }
 
     /// <summary>
@@ -144,7 +137,7 @@ public abstract class ShokoRelayBaseController : ControllerBase
         OverrideHelper.EnsureLoaded();
         if (ShokoRelay.Settings.TmdbEpNumbering)
         {
-            ids = ids.Select(i => OverrideHelper.GetPrimary(i, _metadataService)).Distinct().ToList();
+            ids = [.. ids.Select(i => OverrideHelper.GetPrimary(i, _metadataService)).Distinct()];
         }
         return null;
     }
@@ -160,8 +153,8 @@ public abstract class ShokoRelayBaseController : ControllerBase
     /// <returns>BadRequest if validation fails; otherwise null.</returns>
     protected IActionResult? ValidatePlexFilterRequest(int? seriesId, string? filter, out List<IShokoSeries?> seriesList, out List<int> filterIds)
     {
-        seriesList = new List<IShokoSeries?>();
-        filterIds = new List<int>();
+        seriesList = [];
+        filterIds = [];
 
         if (!_plexLibrary.IsEnabled)
             return BadRequest(new { status = "error", message = "Plex server configuration is missing or no library selected." });
@@ -272,13 +265,9 @@ public abstract class ShokoRelayBaseController : ControllerBase
     /// </summary>
     protected List<IShokoSeries?> ResolveSeriesList(int? seriesId, IReadOnlyCollection<int> filterIds)
     {
-        if (seriesId.HasValue)
-            return new List<IShokoSeries?> { _metadataService.GetShokoSeriesByID(seriesId.Value) };
-
-        if (filterIds.Count > 0)
-            return filterIds.Distinct().Select(id => _metadataService.GetShokoSeriesByID(id)).ToList();
-
-        return _metadataService.GetAllShokoSeries().Cast<IShokoSeries?>().ToList();
+        return seriesId.HasValue ? [_metadataService.GetShokoSeriesByID(seriesId.Value)]
+            : filterIds.Count > 0 ? [.. filterIds.Distinct().Select(id => _metadataService.GetShokoSeriesByID(id))]
+            : [.. _metadataService.GetAllShokoSeries().Cast<IShokoSeries?>()];
     }
 
     /// <summary>
@@ -286,18 +275,18 @@ public abstract class ShokoRelayBaseController : ControllerBase
     /// </summary>
     protected static string? GetCollectionContentTypeForExtension(string ext)
     {
-        if (string.IsNullOrWhiteSpace(ext))
-            return null;
-        return ext.ToLowerInvariant() switch
-        {
-            ".jpg" or ".jpeg" or ".jpe" or ".tbn" => "image/jpeg",
-            ".png" => "image/png",
-            ".webp" => "image/webp",
-            ".gif" => "image/gif",
-            ".bmp" => "image/bmp",
-            ".tif" or ".tiff" => "image/tiff",
-            _ => null,
-        };
+        return string.IsNullOrWhiteSpace(ext)
+            ? null
+            : ext.ToLowerInvariant() switch
+            {
+                ".jpg" or ".jpeg" or ".jpe" or ".tbn" => "image/jpeg",
+                ".png" => "image/png",
+                ".webp" => "image/webp",
+                ".gif" => "image/gif",
+                ".bmp" => "image/bmp",
+                ".tif" or ".tiff" => "image/tiff",
+                _ => null,
+            };
     }
 
     /// <summary>

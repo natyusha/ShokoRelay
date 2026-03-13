@@ -155,7 +155,7 @@ public static class LogHelper
         sb.AppendLine($"  Votes Found:   {result.VotesFound}");
         sb.AppendLine($"  Votes Updated: {result.VotesUpdated}");
         sb.AppendLine($"  Votes Skipped: {result.VotesSkipped}");
-        var missingList = result.MissingMappings ?? new List<int>();
+        var missingList = result.MissingMappings ?? [];
         int missingCount = missingList.Count;
         sb.AppendLine();
         sb.AppendLine($"  Missing Mappings: {missingCount}");

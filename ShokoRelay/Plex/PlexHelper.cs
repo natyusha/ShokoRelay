@@ -27,13 +27,9 @@ public static class PlexHelper
             return null;
 
         var match = _showIdRegex.Match(guid);
-        if (!match.Success)
-            return null;
-
-        if (int.TryParse(match.Groups[1].Value, out var id))
-            return id;
-
-        return null;
+        return !match.Success ? null
+            : int.TryParse(match.Groups[1].Value, out var id) ? id
+            : null;
     }
 
     /// <summary>
@@ -102,7 +98,7 @@ public static class PlexHelper
             return null;
 
         var group = series.TopLevelGroup;
-        string? groupTitle = null;
+        string? groupTitle;
         try
         {
             groupTitle = group?.PreferredTitle?.Value ?? group?.DefaultTitle?.Value;
@@ -174,8 +170,8 @@ public static class PlexHelper
         var seriesList = new List<IShokoSeries> { series };
         if (metadataService != null && ShokoRelay.Settings.TmdbEpNumbering)
         {
-            int primaryId = OverrideHelper.GetPrimary(series.ID, metadataService!);
-            var group = OverrideHelper.GetGroup(primaryId, metadataService!);
+            int primaryId = OverrideHelper.GetPrimary(series.ID, metadataService);
+            var group = OverrideHelper.GetGroup(primaryId, metadataService);
             foreach (var id in group.Skip(1))
             {
                 var s = metadataService.GetShokoSeriesByID(id);

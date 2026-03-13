@@ -12,17 +12,16 @@ namespace ShokoRelay.Controllers;
 /// Provides operations for building AnimeThemes VFS mappings, generating MP3 series themes,
 /// and handling the standalone video player endpoints including favourites.
 /// </summary>
-public class AnimeThemesController : ShokoRelayBaseController
+public class AnimeThemesController(
+    ConfigProvider configProvider,
+    IMetadataService metadataService,
+    PlexClient plexLibrary,
+    AnimeThemesMp3Generator animeThemesMp3Generator,
+    AnimeThemesMapping animeThemesMapping
+) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
 {
-    private readonly AnimeThemesMp3Generator _animeThemesMp3Generator;
-    private readonly AnimeThemesMapping _animeThemesMapping;
-
-    public AnimeThemesController(ConfigProvider configProvider, IMetadataService metadataService, PlexClient plexLibrary, AnimeThemesMp3Generator animeThemesMp3Generator, AnimeThemesMapping animeThemesMapping)
-        : base(configProvider, metadataService, plexLibrary)
-    {
-        _animeThemesMp3Generator = animeThemesMp3Generator;
-        _animeThemesMapping = animeThemesMapping;
-    }
+    private readonly AnimeThemesMp3Generator _animeThemesMp3Generator = animeThemesMp3Generator;
+    private readonly AnimeThemesMapping _animeThemesMapping = animeThemesMapping;
 
     #region VFS Mapping & Build
 
@@ -54,7 +53,7 @@ public class AnimeThemesController : ShokoRelayBaseController
                 var xrefsRaw = System
                     .IO.File.ReadAllLines(resolvedMapPath)
                     .Where(l => !l.StartsWith("#") && !string.IsNullOrWhiteSpace(l))
-                    .Select(l => TextHelper.SplitCsvLine(l))
+                    .Select(TextHelper.SplitCsvLine)
                     .Where(f => f.Length > 1)
                     .ToDictionary(f => f[0], f => f, StringComparer.OrdinalIgnoreCase);
 
@@ -71,9 +70,9 @@ public class AnimeThemesController : ShokoRelayBaseController
                     string lookupKey = string.Empty;
                     int rootIdx = symlinkTarget.IndexOf("/" + themeRoot + "/", StringComparison.OrdinalIgnoreCase);
                     if (rootIdx != -1)
-                        lookupKey = symlinkTarget.Substring(rootIdx + themeRoot.Length + 1);
+                        lookupKey = symlinkTarget[(rootIdx + themeRoot.Length + 1)..];
                     else if (symlinkTarget.Contains(themeRoot + "/"))
-                        lookupKey = symlinkTarget.Substring(symlinkTarget.IndexOf(themeRoot + "/") + themeRoot.Length);
+                        lookupKey = symlinkTarget[(symlinkTarget.IndexOf(themeRoot + "/") + themeRoot.Length)..];
 
                     if (!lookupKey.StartsWith("/"))
                         lookupKey = "/" + lookupKey;
@@ -116,7 +115,7 @@ public class AnimeThemesController : ShokoRelayBaseController
             }
         }
 
-        return await LogAndReturn("at-vfs-build-report.log", result, (sb, r) => LogHelper.BuildAtVfsBuildReport(sb, r, filterIds ?? new List<int>()));
+        return LogAndReturn("at-vfs-build-report.log", result, (sb, r) => LogHelper.BuildAtVfsBuildReport(sb, r, filterIds ?? []));
     }
 
     /// <summary>
@@ -147,13 +146,13 @@ public class AnimeThemesController : ShokoRelayBaseController
                     testPath,
                     generatedFilename,
                     csvLine = entry != null ? AnimeThemesMapping.SerializeMappingEntry(entry) : null,
-                    entry = entry,
+                    entry,
                 }
             );
         }
 
         var result = await _animeThemesMapping.BuildMappingFileAsync(cancellationToken).ConfigureAwait(false);
-        return await LogAndReturn("at-vfs-map-report.log", result, (sb, r) => LogHelper.BuildAtVfsMapReport(sb, r));
+        return LogAndReturn("at-vfs-map-report.log", result, LogHelper.BuildAtVfsMapReport);
     }
 
     /// <summary>
@@ -163,7 +162,7 @@ public class AnimeThemesController : ShokoRelayBaseController
     public async Task<IActionResult> ImportAnimeThemesMapping(CancellationToken cancellationToken = default)
     {
         const string rawUrl = AnimeThemesHelper.AtRawMapUrl + AnimeThemesHelper.AtMapFileName;
-        var (count, log) = await _animeThemesMapping.ImportMappingFromUrlAsync(rawUrl, cancellationToken).ConfigureAwait(false);
+        var (count, _) = await _animeThemesMapping.ImportMappingFromUrlAsync(rawUrl, cancellationToken).ConfigureAwait(false);
         return Ok(new { status = "ok", count });
     }
 
@@ -190,7 +189,7 @@ public class AnimeThemesController : ShokoRelayBaseController
             foreach (var item in batch.Items.Where(i => i.Status == "ok" && !string.IsNullOrWhiteSpace(i.Folder)))
                 _animeThemesMp3Generator.AddToThemeMp3Cache(item.Folder);
 
-            return await LogAndReturn("at-mp3-report.log", batch, (sb, r) => LogHelper.BuildAtMp3Report(sb, r));
+            return LogAndReturn("at-mp3-report.log", batch, LogHelper.BuildAtMp3Report);
         }
 
         var single = await _animeThemesMp3Generator.ProcessSingleAsync(query, cancellationToken);
@@ -211,9 +210,7 @@ public class AnimeThemesController : ShokoRelayBaseController
         if (refresh)
             _animeThemesMp3Generator.RefreshThemeMp3Cache();
         var folders = _animeThemesMp3Generator.GetCachedThemeMp3Folders();
-        if (folders.Count == 0)
-            return NotFound();
-        return Ok(new { status = "ok", path = folders[Random.Shared.Next(folders.Count)] });
+        return folders.Count == 0 ? NotFound() : Ok(new { status = "ok", path = folders[Random.Shared.Next(folders.Count)] });
     }
 
     /// <summary>
@@ -260,7 +257,7 @@ public class AnimeThemesController : ShokoRelayBaseController
         string[] lines;
         try
         {
-            lines = System.IO.File.ReadAllLines(cachePath).Where(l => !string.IsNullOrWhiteSpace(l)).ToArray();
+            lines = [.. System.IO.File.ReadAllLines(cachePath).Where(l => !string.IsNullOrWhiteSpace(l))];
         }
         catch
         {
@@ -295,9 +292,9 @@ public class AnimeThemesController : ShokoRelayBaseController
                 var series = _metadataService.GetShokoSeriesByID(seriesId.Value);
                 if (series != null)
                 {
-                    var res = TextHelper.ResolveFullSeriesTitles(series);
+                    var (DisplayTitle, SortTitle, OriginalTitle) = TextHelper.ResolveFullSeriesTitles(series);
                     var group = _metadataService.GetShokoGroupByID(series.TopLevelGroupID);
-                    titles = (group is IWithTitles titled && !string.IsNullOrWhiteSpace(titled.PreferredTitle?.Value) ? titled.PreferredTitle!.Value : res.DisplayTitle, res.DisplayTitle);
+                    titles = (group is IWithTitles titled && !string.IsNullOrWhiteSpace(titled.PreferredTitle?.Value) ? titled.PreferredTitle.Value : DisplayTitle, DisplayTitle);
                 }
                 else
                     titles = ($"Series {seriesId.Value}", $"Series {seriesId.Value}");
@@ -336,9 +333,7 @@ public class AnimeThemesController : ShokoRelayBaseController
         if (string.IsNullOrWhiteSpace(path))
             return BadRequest();
         string fullPath = Path.GetFullPath(_plexLibrary.MapPlexPathToShokoPath(path));
-        if (!System.IO.File.Exists(fullPath))
-            return NotFound();
-        return File(new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read), "video/webm", enableRangeProcessing: true);
+        return !System.IO.File.Exists(fullPath) ? NotFound() : File(new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read), "video/webm", enableRangeProcessing: true);
     }
 
     /// <summary>

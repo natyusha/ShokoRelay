@@ -9,9 +9,9 @@ namespace ShokoRelay.Helpers;
 /// </summary>
 public sealed class ImageInfo
 {
-    public string alt { get; init; } = "";
-    public string type { get; init; } = "";
-    public string url { get; init; } = "";
+    public string Alt { get; init; } = "";
+    public string Type { get; init; } = "";
+    public string Url { get; init; } = "";
 }
 
 /// <summary>
@@ -52,24 +52,25 @@ public static class ImageHelper
                 return all;
 
             var pref = all.FirstOrDefault(i => i.IsPreferred);
-            return pref is not null ? new[] { pref } : all.Take(1);
+            return pref is not null ? [pref] : all.Take(1);
         }
 
         IEnumerable<ImageInfo> Project(ImageEntityType type, string kind) =>
             Filter(type)
                 .Select(i => new ImageInfo
                 {
-                    alt = title,
-                    type = kind,
-                    url = GetImageUrl(i, cacheBuster: cacheBuster),
+                    Alt = title,
+                    Type = kind,
+                    Url = GetImageUrl(i, cacheBuster: cacheBuster),
                 });
 
-        return Project(ImageEntityType.Backdrop, "background")
-            .Concat(Project(ImageEntityType.Logo, "clearLogo"))
-            .Concat(Project(ImageEntityType.Poster, "coverPoster"))
-            .Concat(Project(ImageEntityType.Thumbnail, "snapshot"))
-            //.Concat(Project(ImageEntityType.Square, "backgroundSquare")) // backgroundSquare excluded as there is no provider for them yet
-            .ToArray();
+        return
+        [
+            .. Project(ImageEntityType.Backdrop, "background"),
+            .. Project(ImageEntityType.Logo, "clearLogo"),
+            .. Project(ImageEntityType.Poster, "coverPoster"),
+            .. Project(ImageEntityType.Thumbnail, "snapshot"),
+        ];
     }
 
     /// <summary>
@@ -85,29 +86,26 @@ public static class ImageHelper
     /// <returns>An array of <see cref="ImageInfo"/> objects containing cover poster entries.</returns>
     public static ImageInfo[] BuildCoverPosterArray(IWithImages seriesImages, string alt, bool addEveryImage, IEnumerable<string>? seasonPosters = null, string? cacheBuster = null)
     {
-        if (seasonPosters != null && seasonPosters.Any())
-        {
-            if (addEveryImage)
-                return seasonPosters
-                    .Select(url => new ImageInfo
+        return seasonPosters != null && seasonPosters.Any()
+            ? addEveryImage
+                ?
+                [
+                    .. seasonPosters.Select(url => new ImageInfo
                     {
-                        alt = alt,
-                        type = "coverPoster",
-                        url = url,
-                    })
-                    .ToArray();
-
-            return new[]
-            {
-                new ImageInfo
-                {
-                    alt = alt,
-                    type = "coverPoster",
-                    url = seasonPosters.First(),
-                },
-            };
-        }
-
-        return GenerateImageArray(seriesImages, alt, addEveryImage, cacheBuster).Where(i => i.type == "coverPoster").ToArray();
+                        Alt = alt,
+                        Type = "coverPoster",
+                        Url = url,
+                    }),
+                ]
+                :
+                [
+                    new ImageInfo
+                    {
+                        Alt = alt,
+                        Type = "coverPoster",
+                        Url = seasonPosters.First(),
+                    },
+                ]
+            : [.. GenerateImageArray(seriesImages, alt, addEveryImage, cacheBuster).Where(i => i.Type == "coverPoster")];
     }
 }

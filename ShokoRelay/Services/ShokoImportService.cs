@@ -7,30 +7,25 @@ namespace ShokoRelay.Services;
 /// <summary>
 /// Helper for triggering server-side import and housekeeping actions using Shoko's internal service abstractions. No API key or HTTP calls are required when running as a plugin.
 /// </summary>
-public class ShokoImportService
+public class ShokoImportService(IVideoService videoService)
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
-    private readonly IVideoService _videoService;
-
-    public ShokoImportService(IVideoService videoService)
-    {
-        _videoService = videoService ?? throw new ArgumentNullException(nameof(videoService));
-    }
+    private readonly IVideoService _videoService = videoService ?? throw new ArgumentNullException(nameof(videoService));
 
     /// <summary>
     /// Trigger import scans for every managed folder marked as a "Source". Returns the names of folders that were scheduled for scanning, which is useful for UI feedback.
     /// </summary>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>A read-only list of folder names that were scheduled for scanning.</returns>
-    public async Task<IReadOnlyList<string>> TriggerImportAsync(CancellationToken ct = default)
+    public async Task<IReadOnlyList<string>> TriggerImportAsync()
     {
-        List<string> folders = new();
+        List<string> folders = [];
         try
         {
             var mf = _videoService.GetAllManagedFolders();
             if (mf != null)
             {
-                folders = mf.Where(f => f.DropFolderType.HasFlag(DropFolderType.Source)).Select(f => f.Name ?? f.Path ?? string.Empty).Where(s => !string.IsNullOrEmpty(s)).ToList();
+                folders = [.. mf.Where(f => f.DropFolderType.HasFlag(DropFolderType.Source)).Select(f => f.Name ?? f.Path ?? string.Empty).Where(s => !string.IsNullOrEmpty(s))];
             }
         }
         catch (Exception ex)
@@ -60,15 +55,15 @@ public class ShokoImportService
     /// <param name="dryRun">When <c>true</c>, list missing files without deleting them.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>A read-only list of paths for files that were identified as missing.</returns>
-    public async Task<IReadOnlyList<string>> RemoveMissingFilesAsync(bool removeFromMyList = false, bool dryRun = false, CancellationToken ct = default)
+    public async Task<IReadOnlyList<string>> RemoveMissingFilesAsync(bool dryRun = false)
     {
-        var all = _videoService.GetAllVideoFiles() ?? Array.Empty<Shoko.Abstractions.Video.IVideoFile>();
+        var all = _videoService.GetAllVideoFiles() ?? [];
         var missing = all.Where(f => !File.Exists(f.Path)).Select(f => f.Path).ToHashSet();
         if (!dryRun && missing.Count > 0)
         {
             var toDelete = all.Where(f => missing.Contains(f.Path)).ToList();
             await _videoService.DeleteVideoFiles(toDelete, removeFiles: false, removeFolders: false).ConfigureAwait(false);
         }
-        return missing.ToList();
+        return [.. missing];
     }
 }

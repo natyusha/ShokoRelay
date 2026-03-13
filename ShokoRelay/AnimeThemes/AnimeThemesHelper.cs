@@ -14,7 +14,7 @@ internal static class AnimeThemesHelper
     internal const string AtApiBase = "https://api.animethemes.moe";
     internal const string AtMapFileName = "anidb_animethemes_xrefs.csv";
     internal const string AtFavsFileName = "favs_animethemes.cache";
-    internal const string AtRawMapUrl = "https://gist.githubusercontent.com/natyusha/bb33a3b3bc95bc7a3869633e23d522bb/raw";
+    internal const string AtRawMapUrl = "https://gist.githubusercontent.com/natyusha/bb33a3b3bc95bc7a3869633e23d522bb/raw/";
 
     internal static readonly FrozenSet<string> VideoFileExtensions = FrozenSet.ToFrozenSet([".mkv", ".avi", ".mp4", ".mov", ".ogm", ".wmv", ".mpg", ".mpeg", ".mk3d", ".m4v"], StringComparer.OrdinalIgnoreCase);
     internal static readonly Regex SlugRegex = new("^(?:op|ed)(?!0)[0-9]{0,2}(?:-(?:bd|web|tv|original))?$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -67,7 +67,7 @@ internal static class AnimeThemesHelper
     internal static List<AnimeThemesMappingEntry> ParseMappingContent(string content)
     {
         if (string.IsNullOrWhiteSpace(content))
-            return new List<AnimeThemesMappingEntry>();
+            return [];
         var result = new List<AnimeThemesMappingEntry>();
         using var reader = new StringReader(content);
         string? line;
@@ -162,7 +162,7 @@ internal static class AnimeThemesHelper
         string title = string.IsNullOrWhiteSpace(lookup.SongTitle) ? "" : " ❯ " + lookup.SongTitle;
         string slugTag = FormatSlugTag(slugSuffix);
 
-        var artistList = !string.IsNullOrWhiteSpace(lookup.ArtistName) ? lookup.ArtistName.Split(new[] { " / " }, StringSplitOptions.RemoveEmptyEntries) : Array.Empty<string>();
+        var artistList = !string.IsNullOrWhiteSpace(lookup.ArtistName) ? lookup.ArtistName.Split([" / "], StringSplitOptions.RemoveEmptyEntries) : [];
         string artistDisplay = artistList.Length switch
         {
             >= 4 => "Various Artists",
@@ -214,7 +214,7 @@ internal static class AnimeThemesHelper
     /// </summary>
     /// <param name="suffix">The variant suffix (e.g., BD).</param>
     /// <returns>A parenthesized tag string.</returns>
-    internal static string FormatSlugTag(string? suffix) => (string.IsNullOrWhiteSpace(suffix)) ? "" : $" ({(SlugFormatting.TryGetValue(suffix.Trim(), out var f) ? f : suffix)})";
+    internal static string FormatSlugTag(string? suffix) => string.IsNullOrWhiteSpace(suffix) ? "" : $" ({(SlugFormatting.TryGetValue(suffix.Trim(), out var f) ? f : suffix)})";
 
     /// <summary>
     /// Ensures a filename has the correct extension.
