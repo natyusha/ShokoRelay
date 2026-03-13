@@ -7,6 +7,67 @@ using ShokoRelay.Vfs;
 namespace ShokoRelay.AnimeThemes;
 
 /// <summary>
+/// Represents a single theme mapping between a local file and AnimeThemes identifiers.
+/// </summary>
+public sealed record AnimeThemesMappingEntry(
+    string FilePath,
+    int VideoId,
+    int AniDbId,
+    bool NC,
+    string Slug,
+    int Version,
+    string ArtistName,
+    string SongTitle,
+    bool Lyrics,
+    bool Subbed,
+    bool Uncen,
+    bool NSFW,
+    bool Spoiler,
+    string Source,
+    int Resolution,
+    string Episodes,
+    string Overlap
+);
+
+/// <summary>
+/// Result returned by a mapping file build operation.
+/// </summary>
+public sealed record AnimeThemesMappingBuildResult(string MapPath, int EntriesWritten, int Reused, int Errors, IReadOnlyList<string> Messages);
+
+/// <summary>
+/// Represents an entry for the WebM VFS cache used by the video player.
+/// </summary>
+public sealed record WebmCacheEntry(string VfsPath, int VideoId, int Bitmask);
+
+/// <summary>
+/// Outcome of applying a mapping file to create VFS links.
+/// </summary>
+public sealed record AnimeThemesMappingApplyResult(int LinksCreated, int Skipped, int SeriesMatched, IReadOnlyList<string> Errors, IReadOnlyList<WebmCacheEntry> CacheEntries, TimeSpan Elapsed);
+
+/// <summary>
+/// Internal helper record used when looking up theme metadata by video identifier.
+/// </summary>
+internal sealed record AnimeThemesVideoLookup(
+    int VideoId,
+    int ThemeId,
+    int AniDbId,
+    bool NC,
+    string Slug,
+    int Version,
+    string ArtistName,
+    string SongTitle,
+    bool Lyrics,
+    bool Subbed,
+    bool Uncen,
+    bool NSFW,
+    bool Spoiler,
+    string Source,
+    int Resolution,
+    string Episodes,
+    string Overlap
+);
+
+/// <summary>
 /// Shared constants and helper utilities used throughout the AnimeThemes subcomponent.
 /// </summary>
 internal static class AnimeThemesHelper
@@ -106,7 +167,7 @@ internal static class AnimeThemesHelper
     }
 
     /// <summary>
-    /// Serializes a list of mapping entries into a CSV string with a standard header.
+    /// Serializes a list of mapping entries into a CSV string with standard header.
     /// </summary>
     /// <param name="entries">The list of entries to serialize.</param>
     /// <returns>A formatted CSV string.</returns>
@@ -139,15 +200,40 @@ internal static class AnimeThemesHelper
     #region Naming & Path Logic
 
     /// <summary>
+    /// Calculates a bitmask for metadata flags.
+    /// </summary>
+    /// <param name="e">The mapping entry.</param>
+    /// <returns>An integer bitmask.</returns>
+    internal static int CalculateBitmask(AnimeThemesMappingEntry e)
+    {
+        int flags = 0;
+        if (e.NC)
+            flags |= 1;
+        if (e.Lyrics)
+            flags |= 2;
+        if (e.Subbed)
+            flags |= 4;
+        if (e.Uncen)
+            flags |= 8;
+        if (e.NSFW)
+            flags |= 16;
+        if (e.Spoiler)
+            flags |= 32;
+        if (e.Overlap == "Transition")
+            flags |= 64;
+        else if (e.Overlap == "Over")
+            flags |= 128;
+        return flags;
+    }
+
+    /// <summary>
     /// Constructs a sanitized filename from theme metadata.
-    /// Format: {nc}{slug}{version} ❯ {songTitle}{slugTag} ❯ {artist} [{attributes}]
     /// </summary>
     /// <param name="lookup">The metadata lookup object.</param>
     /// <param name="extension">The file extension to append.</param>
     /// <returns>A formatted and sanitized filename.</returns>
     internal static string BuildNewFileName(AnimeThemesVideoLookup lookup, string extension)
     {
-        var nc = lookup.NC ? "NC" : "";
         var (baseSlug, slugSuffix) = ParseSlug(lookup.Slug ?? "");
         string slug = string.IsNullOrWhiteSpace(baseSlug) ? "Theme" : baseSlug;
         const string zwsp = "\u200B",
@@ -190,14 +276,12 @@ internal static class AnimeThemesHelper
             attr.Add("OVER");
 
         string attrStr = (ShokoRelay.Settings.Advanced.AnimeThemesAppendTags && attr.Count > 0) ? $" [{string.Join(", ", attr)}]" : "";
-        return VfsHelper.CleanEpisodeTitleForFilename($"{nc}{slug}{ver}{title}{slugTag}{artistStr}{attrStr}{extension}");
+        return VfsHelper.CleanEpisodeTitleForFilename($"{(lookup.NC ? "NC" : "")}{slug}{ver}{title}{slugTag}{artistStr}{attrStr}{extension}");
     }
 
     /// <summary>
     /// Parses a theme slug into base and suffix components.
     /// </summary>
-    /// <param name="slug">The raw slug from the API.</param>
-    /// <returns>A tuple containing the base slug and optional suffix.</returns>
     internal static (string baseSlug, string? suffix) ParseSlug(string slug)
     {
         if (string.IsNullOrWhiteSpace(slug))
@@ -212,27 +296,16 @@ internal static class AnimeThemesHelper
     /// <summary>
     /// Formats a slug variant suffix into a human-readable tag.
     /// </summary>
-    /// <param name="suffix">The variant suffix (e.g., BD).</param>
-    /// <returns>A parenthesized tag string.</returns>
     internal static string FormatSlugTag(string? suffix) => string.IsNullOrWhiteSpace(suffix) ? "" : $" ({(SlugFormatting.TryGetValue(suffix.Trim(), out var f) ? f : suffix)})";
 
-    /// <summary>
-    /// Ensures a filename has the correct extension.
-    /// </summary>
     internal static string EnsureExtension(string fileName, string ext) => string.IsNullOrWhiteSpace(Path.GetExtension(fileName)) ? fileName + ext : fileName;
 
-    /// <summary>
-    /// Resolves the absolute path to a theme source file.
-    /// </summary>
     internal static string? ResolveThemeSourcePath(string relativeFilePath, string importRoot, string themeRootFolder)
     {
         string path = Path.Combine(importRoot, themeRootFolder, relativeFilePath.TrimStart('/', '\\').Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar));
         return File.Exists(path) ? Path.GetFullPath(path) : null;
     }
 
-    /// <summary>
-    /// Constructs the relative symlink target string for VFS themes.
-    /// </summary>
     internal static string BuildThemeRelativeTarget(string relativeFilePath, string themeRootFolder) =>
         Path.Combine("..", "..", "..", themeRootFolder, relativeFilePath.TrimStart('/', '\\')).Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
 

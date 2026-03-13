@@ -255,13 +255,24 @@
     playerVideo.src = `${base}/animethemes/webm/stream?path=${encodeURIComponent(path)}`;
     playerVideo.play().catch(() => {});
 
-    // Update UI Header
     const item = webmTreeData.find((i) => i.path === path);
     const themeName = item ? decodeUnicode(item.file) : "Video Player";
-    const animeName = item ? item.series : "";
+    const animeName = item ? item.series : "Select a theme to begin...";
 
     if (playerTitle) playerTitle.textContent = playerTitle.title = themeName;
-    if (playerAnime) playerAnime.textContent = playerAnime.title = animeName;
+
+    if (playerAnime) {
+      playerAnime.textContent = playerAnime.title = animeName;
+
+      if (item && item.seriesId) {
+        const shokoBase = base.split("/api/")[0];
+        playerAnime.href = `${shokoBase}/webui/collection/series/${item.seriesId}/overview`;
+        playerAnime.style.pointerEvents = "auto";
+      } else {
+        playerAnime.href = "#";
+        playerAnime.style.pointerEvents = "none";
+      }
+    }
 
     playerTree?.querySelectorAll(".leaf").forEach((el) => el.classList.toggle("active", el.dataset.path === path));
   }

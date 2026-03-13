@@ -11,6 +11,9 @@ namespace ShokoRelay.Controllers;
 /// Provides the core Metadata Provider endpoints for the Plex Agent.
 /// Handles series matching, detailed metadata retrieval, and artwork enumeration.
 /// </summary>
+[ApiVersionNeutral]
+[ApiController]
+[Route(ShokoRelayInfo.BasePath)]
 public class MetadataController(IMetadataService metadataService, PlexMetadata mapper, ConfigProvider configProvider, PlexClient plexLibrary)
     : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
 {

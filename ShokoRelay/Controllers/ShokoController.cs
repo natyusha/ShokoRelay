@@ -10,8 +10,12 @@ using ShokoRelay.Vfs;
 namespace ShokoRelay.Controllers;
 
 /// <summary>
-/// Handles Shoko-specific automation tasks, including Virtual File System (VFS) construction, file database maintenance, source imports, and watched-state synchronization with Plex.
+/// Handles Shoko-specific automation tasks, including Virtual File System (VFS) construction,
+/// file database maintenance, source imports, and watched-state synchronization with Plex.
 /// </summary>
+[ApiVersionNeutral]
+[ApiController]
+[Route(ShokoRelayInfo.BasePath)]
 public class ShokoController(
     ConfigProvider configProvider,
     IMetadataService metadataService,
@@ -36,6 +40,7 @@ public class ShokoController(
     /// <param name="run">Must be true to actually execute the link creation.</param>
     /// <param name="filter">Optional comma-separated list of Shoko series IDs to restrict processing.</param>
     /// <returns>A summary of series processed and links created.</returns>
+    [HttpGet("vfs")]
     public IActionResult BuildVfs([FromQuery] bool clean = true, [FromQuery] bool run = false, [FromQuery] string? filter = null)
     {
         var validation = ValidateFilterOrBadRequest(filter, out var filterIds);
@@ -62,7 +67,14 @@ public class ShokoController(
             _ = SchedulePlexRefreshForSeriesAsync(toProcess);
         }
 
-        return LogAndReturn("vfs-report.log", result, (sb, r) => { });
+        // Use the synchronous LogAndReturn helper
+        return LogAndReturn(
+            "vfs-report.log",
+            result,
+            (sb, r) => {
+                // Note: VfsBuilder handles its own internal logging reports.
+            }
+        );
     }
 
     /// <summary>
@@ -75,7 +87,8 @@ public class ShokoController(
     {
         try
         {
-            System.IO.File.WriteAllText(Path.Combine(ShokoRelay.ConfigDirectory, "anidb_vfs_overrides.csv"), content ?? string.Empty);
+            string path = Path.Combine(ShokoRelay.ConfigDirectory, "anidb_vfs_overrides.csv");
+            System.IO.File.WriteAllText(path, content ?? string.Empty);
             OverrideHelper.EnsureLoaded();
             return Ok(new { status = "ok" });
         }
@@ -97,18 +110,34 @@ public class ShokoController(
     [HttpPost("shoko/remove-missing")]
     public async Task<IActionResult> RemoveMissingFiles([FromQuery] bool? dryRun = null)
     {
-        var (data, error) = await PerformRemoveMissingFilesAsync(dryRun);
-        return error != null ? StatusCode(500, new { status = "error", message = error }) : Ok(data);
+        bool doDry = dryRun ?? true;
+        var removed = await _shokoImportService.RemoveMissingFilesAsync(doDry).ConfigureAwait(false);
+
+        var result = new
+        {
+            status = "ok",
+            dryRun = doDry,
+            removed,
+            count = removed?.Count ?? 0,
+        };
+        return LogAndReturn("remove-missing-report.log", result, (sb, r) => LogHelper.BuildRemoveMissingReport(sb, r.dryRun, r.removed));
     }
 
     /// <summary>
-    /// Triggers a Shoko source import scan.
+    /// Triggers a Shoko import scan.
     /// </summary>
     [HttpPost("shoko/import")]
     public async Task<IActionResult> RunShokoImport()
     {
-        var (data, error) = await PerformShokoImportAsync(false);
-        return error != null ? StatusCode(500, new { status = "error", message = error }) : Ok(data);
+        var scanned = await _shokoImportService.TriggerImportAsync().ConfigureAwait(false);
+        return Ok(
+            new
+            {
+                status = "ok",
+                scanned,
+                scannedCount = scanned?.Count ?? 0,
+            }
+        );
     }
 
     /// <summary>
@@ -117,18 +146,18 @@ public class ShokoController(
     [HttpGet("shoko/import/start")]
     public async Task<IActionResult> StartShokoImportNow()
     {
-        var (data, error) = await PerformShokoImportAsync(true);
-        if (error != null)
-            return StatusCode(500, new { status = "error", message = error });
-        var freq = ShokoRelay.Settings.Automation.ShokoImportFrequencyHours;
+        var scanned = await _shokoImportService.TriggerImportAsync().ConfigureAwait(false);
+        ShokoRelay.MarkImportRunNow();
+
+        var freqHours = ShokoRelay.Settings.Automation.ShokoImportFrequencyHours;
         return Ok(
             new
             {
                 status = "ok",
                 triggered = true,
-                scheduled = freq > 0,
-                nextRunInHours = freq,
-                ((dynamic)data!).scanned,
+                scheduled = freqHours > 0,
+                nextRunInHours = freqHours,
+                scanned,
             }
         );
     }
@@ -140,11 +169,6 @@ public class ShokoController(
     /// <summary>
     /// Synchronizes watched status between Plex and Shoko.
     /// </summary>
-    /// <param name="dryRun">If true, no changes are written.</param>
-    /// <param name="sinceHours">Optional window to limit syncing to recent changes.</param>
-    /// <param name="ratings">If true, syncs user ratings/votes.</param>
-    /// <param name="import">If true, direction is Plex &lt;- Shoko.</param>
-    /// <param name="excludeAdmin">If true, ignores owner activity.</param>
     [HttpGet("sync-watched")]
     [HttpPost("sync-watched")]
     public async Task<IActionResult> SyncPlexWatched(
@@ -156,7 +180,7 @@ public class ShokoController(
     )
     {
         if (!_plexLibrary.IsEnabled)
-            return BadRequest(new { status = "error", message = "Plex missing." });
+            return BadRequest(new { status = "error", message = "Plex configuration missing." });
         var (parsedDry, err) = ParseDryRunParam(dryRun);
         if (err != null)
             return err;
@@ -167,13 +191,12 @@ public class ShokoController(
 
         try
         {
+            // Use named parameters for the CancellationToken to avoid type mismatches
             PlexWatchedSyncResult result = doImport
-                ? await _syncToPlexService.SyncWatchedAsync(parsedDry, sinceHours, ratings, excludeAdmin, HttpContext.RequestAborted)
-                : await _watchedSyncService.SyncWatchedAsync(parsedDry, sinceHours, ratings, excludeAdmin, HttpContext.RequestAborted);
+                ? await _syncToPlexService.SyncWatchedAsync(parsedDry, sinceHours, ratings, excludeAdmin, cancellationToken: HttpContext.RequestAborted).ConfigureAwait(false)
+                : await _watchedSyncService.SyncWatchedAsync(parsedDry, sinceHours, ratings, excludeAdmin, cancellationToken: HttpContext.RequestAborted).ConfigureAwait(false);
 
-            // Set the direction in the result so it is included in the 'data' payload
             result.Direction = direction;
-
             return LogAndReturn("sync-watched-report.log", result, (sb, r) => LogHelper.BuildSyncWatchedReport(sb, r, r.Direction, r.DryRun, includeRatings));
         }
         catch (Exception ex)
@@ -188,18 +211,19 @@ public class ShokoController(
     [HttpGet("sync-watched/start")]
     public async Task<IActionResult> StartWatchedSyncNow()
     {
-        int freq = ShokoRelay.Settings.Automation.ShokoSyncWatchedFrequencyHours;
+        int freqHours = ShokoRelay.Settings.Automation.ShokoSyncWatchedFrequencyHours;
         try
         {
-            var result = await _watchedSyncService.SyncWatchedAsync(false, freq, cancellationToken: HttpContext.RequestAborted).ConfigureAwait(false);
+            // Named parameter fix for sync start
+            var result = await _watchedSyncService.SyncWatchedAsync(false, freqHours, cancellationToken: HttpContext.RequestAborted).ConfigureAwait(false);
             ShokoRelay.MarkSyncRunNow();
             return Ok(
                 new
                 {
                     status = "ok",
                     triggered = true,
-                    scheduled = freq > 0,
-                    nextRunInHours = freq,
+                    scheduled = freqHours > 0,
+                    nextRunInHours = freqHours,
                     result,
                 }
             );
@@ -214,58 +238,30 @@ public class ShokoController(
 
     #region Private Helpers
 
-    private async Task<(object? Data, string? Error)> PerformRemoveMissingFilesAsync(bool? dryRun)
-    {
-        bool doDry = dryRun ?? true;
-        var removed = await _shokoImportService.RemoveMissingFilesAsync(doDry);
-        return (
-            new
-            {
-                status = "ok",
-                dryRun = doDry,
-                removed,
-                count = removed?.Count ?? 0,
-            },
-            null
-        );
-    }
-
-    private async Task<(object? Data, string? Error)> PerformShokoImportAsync(bool markSchedule)
-    {
-        var scanned = await _shokoImportService.TriggerImportAsync();
-        if (markSchedule)
-            ShokoRelay.MarkImportRunNow();
-        return (
-            new
-            {
-                status = "ok",
-                scanned,
-                scannedCount = scanned?.Count ?? 0,
-            },
-            null
-        );
-    }
-
     private Task SchedulePlexRefreshForSeriesAsync(IEnumerable<IShokoSeries> series)
     {
         return Task.Run(async () =>
         {
-            string rootName = VfsShared.ResolveRootFolderName();
             foreach (var s in series)
             {
-                var roots = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
-                var data = MapHelper.GetSeriesFileData(s);
-                foreach (var m in data.Mappings)
+                try
                 {
-                    var loc = m.Video.Files.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l.Path)) ?? m.Video.Files.FirstOrDefault();
-                    if (loc == null)
-                        continue;
-                    string? ir = VfsShared.ResolveImportRootPath(loc);
-                    if (!string.IsNullOrWhiteSpace(ir))
-                        roots.Add(Path.Combine(ir, rootName, s.ID.ToString()));
+                    var roots = new HashSet<string>(VfsShared.PathComparer);
+                    string rootName = VfsShared.ResolveRootFolderName();
+                    var fileData = MapHelper.GetSeriesFileData(s);
+                    foreach (var mapping in fileData.Mappings)
+                    {
+                        var location = mapping.Video.Files.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l.Path)) ?? mapping.Video.Files.FirstOrDefault();
+                        if (location == null)
+                            continue;
+                        string? importRoot = VfsShared.ResolveImportRootPath(location);
+                        if (!string.IsNullOrWhiteSpace(importRoot))
+                            roots.Add(Path.Combine(importRoot, rootName, s.ID.ToString()));
+                    }
+                    foreach (var path in roots)
+                        await _plexLibrary.RefreshSectionPathAsync(path).ConfigureAwait(false);
                 }
-                foreach (var path in roots)
-                    await _plexLibrary.RefreshSectionPathAsync(path);
+                catch { }
             }
         });
     }

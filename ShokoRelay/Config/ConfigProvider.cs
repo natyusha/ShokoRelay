@@ -30,8 +30,7 @@ public class ConfigProvider
     public IHttpContextAccessor? HttpContextAccessor { get; set; }
 
     /// <summary>
-    /// The externally-reachable base URL of the Shoko server.
-    /// Priority: 1. Advanced.ShokoServerUrl setting, 2. Current HTTP Context, 3. Last known good value.
+    /// The externally-reachable base URL of the Shoko server. Priority: 1. Advanced.ShokoServerUrl setting, 2. Current HTTP Context, 3. Last known good value.
     /// </summary>
     public string ServerBaseUrl
     {

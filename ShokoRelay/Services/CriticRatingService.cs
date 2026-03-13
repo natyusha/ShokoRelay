@@ -22,217 +22,151 @@ public interface ICriticRatingService
 }
 
 /// <summary>
-/// Aggregated status returned by <see cref="ICriticRatingService.ApplyRatingsAsync"/>, containing counters and any error messages.
+/// Represents a specific rating update for the report log.
 /// </summary>
-public sealed record ApplyRatingsResult(int ProcessedShows, int UpdatedShows, int ProcessedEpisodes, int UpdatedEpisodes, int Errors, List<string> ErrorsList);
+/// <param name="Title">Display title of the item.</param>
+/// <param name="Type">Type of item (Show or Episode).</param>
+/// <param name="RatingKey">Plex rating key.</param>
+/// <param name="OldRating">Previous rating in Plex.</param>
+/// <param name="NewRating">New rating applied from Shoko.</param>
+public sealed record RatingChange(string Title, string Type, string RatingKey, double? OldRating, double? NewRating);
 
 /// <summary>
-/// Default implementation of <see cref="ICriticRatingService"/>, which queries Plex for shows/episodes and applies ratings based on Shoko metadata.
+/// Aggregated status returned by <see cref="ICriticRatingService.ApplyRatingsAsync"/>.
 /// </summary>
+public sealed record ApplyRatingsResult(int ProcessedShows, int UpdatedShows, int ProcessedEpisodes, int UpdatedEpisodes, int Errors, List<string> ErrorsList, List<RatingChange> AppliedChanges);
+
+/// <summary>
+/// Default implementation of <see cref="ICriticRatingService"/>.
+/// </summary>
+/// <param name="httpClient">HTTP client for Plex API calls.</param>
+/// <param name="plexClient">Plex client for metadata queries.</param>
+/// <param name="metadataService">Shoko metadata service.</param>
 public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, IMetadataService metadataService) : ICriticRatingService
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
-    private readonly HttpClient _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-    private readonly PlexClient _plexClient = plexClient ?? throw new ArgumentNullException(nameof(plexClient));
-    private readonly IMetadataService _metadataService = metadataService ?? throw new ArgumentNullException(nameof(metadataService));
-
+    /// <inheritdoc/>
     public async Task<ApplyRatingsResult> ApplyRatingsAsync(IEnumerable<int>? allowedSeriesIds = null, CancellationToken cancellationToken = default)
     {
-        int processedShows = 0,
-            updatedShows = 0;
-        int processedEpisodes = 0,
-            updatedEpisodes = 0;
-        int errors = 0;
+        var (pS, uS, pE, uE, errs) = (0, 0, 0, 0, 0);
         var errorsList = new List<string>();
+        var appliedChanges = new List<RatingChange>();
 
-        if (!_plexClient.IsEnabled)
+        if (!plexClient.IsEnabled)
+            return new ApplyRatingsResult(0, 0, 0, 0, 0, errorsList, appliedChanges);
+
+        foreach (var target in plexClient.GetConfiguredTargets())
         {
-            Logger.Info("CriticRatingService: Plex not enabled, nothing to do");
-            return new ApplyRatingsResult(0, 0, 0, 0, 0, errorsList);
-        }
-
-        var targets = _plexClient.GetConfiguredTargets();
-        if (targets == null || targets.Count == 0)
-        {
-            Logger.Info("CriticRatingService: no configured Plex targets");
-            return new ApplyRatingsResult(0, 0, 0, 0, 0, errorsList);
-        }
-
-        foreach (var target in targets)
-        {
-            // process shows
-            List<PlexMetadataItem> shows;
-            try
-            {
-                shows = await _plexClient.GetSectionShowsAsync(target, cancellationToken).ConfigureAwait(false) ?? [];
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(ex, "CriticRatingService: failed to list shows for {Server}/{Section}", target.ServerUrl, target.SectionId);
-                errors++;
-                errorsList.Add($"Failed to list shows in section {target.SectionId}: {ex.Message}");
-                continue;
-            }
-
+            // Process Shows
+            var shows = await plexClient.GetSectionShowsAsync(target, cancellationToken) ?? [];
             foreach (var item in shows)
             {
                 if (string.IsNullOrWhiteSpace(item.Guid))
                     continue;
-
                 var shokoId = PlexHelper.ExtractShokoSeriesIdFromGuid(item.Guid);
-                if (!shokoId.HasValue)
+                if (!shokoId.HasValue || (allowedSeriesIds != null && !allowedSeriesIds.Contains(shokoId.Value)))
                     continue;
 
-                if (allowedSeriesIds != null && allowedSeriesIds.Any() && !allowedSeriesIds.Contains(shokoId.Value))
-                    continue;
-
-                processedShows++;
-                var series = _metadataService.GetShokoSeriesByID(shokoId.Value);
+                pS++;
+                var series = metadataService.GetShokoSeriesByID(shokoId.Value);
                 if (series == null)
                 {
-                    errors++;
-                    errorsList.Add($"Series {shokoId.Value} not found for Plex item {item.RatingKey}");
+                    errs++;
+                    errorsList.Add($"Series {shokoId.Value} not found for Plex key {item.RatingKey}");
                     continue;
                 }
 
                 var rating = ComputeSeriesRating(series);
                 if (!NeedsRatingUpdate(item.Rating, rating))
                 {
-                    Logger.Trace("CriticRatingService: skipping show {RatingKey} because rating {Rating} already matches current Plex rating", item.RatingKey, item.Rating);
+                    Logger.Trace("CriticRatingService: skipping show {0} ({1}) because rating {2} matches Plex", item.RatingKey, series.PreferredTitle?.Value, item.Rating);
                     continue;
                 }
 
-                try
+                if (await ApplyRatingAsync(item.RatingKey!, rating, target, cancellationToken))
                 {
-                    string requestPath = BuildRatingRequestPath(item.RatingKey!, rating);
-                    var logRating = ShokoRelay.Settings.CriticRatingMode == CriticRatingMode.None || rating == null ? "0 (cleared)" : rating.Value.ToString(CultureInfo.InvariantCulture);
-                    Logger.Debug("CriticRatingService: updating show {RatingKey} -> {Rating} on {Server}", item.RatingKey, logRating, target.ServerUrl);
-                    using var req = _plexClient.CreateRequest(HttpMethod.Put, requestPath, target.ServerUrl);
-                    using var resp = await _httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
-                    if (resp.IsSuccessStatusCode)
-                        updatedShows++;
-                    else
-                    {
-                        errors++;
-                        errorsList.Add($"Failed to update show {shokoId.Value} rating (status {resp.StatusCode})");
-                    }
+                    uS++;
+                    appliedChanges.Add(new RatingChange(series.PreferredTitle?.Value ?? "Unknown", "Show", item.RatingKey!, item.Rating, rating));
                 }
-                catch (Exception ex)
+                else
                 {
-                    errors++;
-                    errorsList.Add(ex.Message);
-                    Logger.Warn(ex, "CriticRatingService: error applying show rating for {Series}", shokoId.Value);
+                    errs++;
+                    errorsList.Add($"Failed update for show {shokoId.Value}");
                 }
             }
 
-            // process episodes
-            List<PlexMetadataItem> episodes;
-            try
-            {
-                episodes = await _plexClient.GetSectionEpisodesAsync(target, null, cancellationToken).ConfigureAwait(false) ?? [];
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(ex, "CriticRatingService: failed to list episodes for {Server}/{Section}", target.ServerUrl, target.SectionId);
-                errors++;
-                errorsList.Add($"Failed to list episodes in section {target.SectionId}: {ex.Message}");
-                continue;
-            }
-
+            // Process Episodes
+            var episodes = await plexClient.GetSectionEpisodesAsync(target, null, cancellationToken) ?? [];
             foreach (var item in episodes)
             {
                 if (string.IsNullOrWhiteSpace(item.Guid))
                     continue;
-
                 var epId = Sync.SyncHelper.TryParseShokoEpisodeIdFromGuid(item.Guid);
                 if (!epId.HasValue)
                     continue;
 
-                var episode = _metadataService.GetShokoEpisodeByID(epId.Value);
-                if (episode == null)
+                var episode = metadataService.GetShokoEpisodeByID(epId.Value);
+                if (episode == null || (allowedSeriesIds != null && !allowedSeriesIds.Contains(episode.SeriesID)))
                     continue;
 
-                if (allowedSeriesIds != null && allowedSeriesIds.Any() && !allowedSeriesIds.Contains(episode.SeriesID))
-                    continue;
-
-                processedEpisodes++;
+                pE++;
                 var rating = ComputeEpisodeRating(episode);
                 if (!NeedsRatingUpdate(item.Rating, rating))
                 {
-                    Logger.Trace("CriticRatingService: skipping episode {RatingKey} because rating {Rating} already matches current Plex rating", item.RatingKey, item.Rating);
+                    Logger.Trace("CriticRatingService: skipping episode {0} because rating {1} matches Plex", item.RatingKey, item.Rating);
                     continue;
                 }
 
-                try
+                if (await ApplyRatingAsync(item.RatingKey!, rating, target, cancellationToken))
                 {
-                    string requestPath = BuildRatingRequestPath(item.RatingKey!, rating);
-                    var logRating = ShokoRelay.Settings.CriticRatingMode == CriticRatingMode.None || rating == null ? "0 (cleared)" : rating.Value.ToString(CultureInfo.InvariantCulture);
-                    Logger.Debug("CriticRatingService: updating episode {RatingKey} -> {Rating} on {Server}", item.RatingKey, logRating, target.ServerUrl);
-                    using var req = _plexClient.CreateRequest(HttpMethod.Put, requestPath, target.ServerUrl);
-                    using var resp = await _httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
-                    if (resp.IsSuccessStatusCode)
-                        updatedEpisodes++;
-                    else
-                    {
-                        errors++;
-                        errorsList.Add($"Failed to update episode {epId} rating (status {resp.StatusCode})");
-                    }
+                    uE++;
+                    appliedChanges.Add(new RatingChange($"{episode.Series?.PreferredTitle?.Value} - S{episode.SeasonNumber}E{episode.EpisodeNumber}", "Episode", item.RatingKey!, item.Rating, rating));
                 }
-                catch (Exception ex)
+                else
                 {
-                    errors++;
-                    errorsList.Add(ex.Message);
-                    Logger.Warn(ex, "CriticRatingService: error applying episode rating for ep {Ep}", epId);
+                    errs++;
+                    errorsList.Add($"Failed update for episode {epId}");
                 }
             }
         }
-
-        return new ApplyRatingsResult(processedShows, updatedShows, processedEpisodes, updatedEpisodes, errors, errorsList);
+        return new ApplyRatingsResult(pS, uS, pE, uE, errs, errorsList, appliedChanges);
     }
 
-    /// <summary>
-    /// Compare the current Plex rating against the computed value and return true when an update PUT is needed.
-    /// </summary>
-    private static bool NeedsRatingUpdate(double? plexRating, double? computedRating)
+    private async Task<bool> ApplyRatingAsync(string key, double? val, PlexLibraryTarget target, CancellationToken ct)
     {
-        return !computedRating.HasValue ? plexRating.HasValue && plexRating.Value > 0.05 : !plexRating.HasValue || Math.Abs(plexRating.Value - computedRating.Value) > 0.05;
-    }
+        string path =
+            (val == null || ShokoRelay.Settings.CriticRatingMode == CriticRatingMode.None)
+                ? $"/library/metadata/{key}?rating=0&rating.locked=0"
+                : $"/library/metadata/{key}?rating={val.Value.ToString(CultureInfo.InvariantCulture)}&rating.locked=1";
 
-    private double? ComputeSeriesRating(IShokoSeries series)
-    {
-        var tmdbShow = series.TmdbShows?.FirstOrDefault();
-        return ShokoRelay.Settings.CriticRatingMode switch
+        try
         {
-            CriticRatingMode.TMDB => tmdbShow?.Rating > 0 ? tmdbShow.Rating : null,
-            CriticRatingMode.AniDB => series.Rating > 0 ? series.Rating : null,
-            _ => null,
-        };
-    }
-
-    private double? ComputeEpisodeRating(IShokoEpisode ep)
-    {
-        double? tmdbVal = null;
-        if (ep.TmdbEpisodes?.FirstOrDefault()?.Rating > 0)
-            tmdbVal = ep.TmdbEpisodes.First().Rating;
-
-        return ShokoRelay.Settings.CriticRatingMode switch
-        {
-            CriticRatingMode.TMDB => tmdbVal,
-            CriticRatingMode.AniDB => ep.Rating > 0 ? ep.Rating : null,
-            _ => null,
-        };
-    }
-
-    private string BuildRatingRequestPath(string ratingKey, double? rating)
-    {
-        // if we don't have a value (for any mode), clear the rating
-        if (rating == null || ShokoRelay.Settings.CriticRatingMode == CriticRatingMode.None)
-        {
-            return $"/library/metadata/{ratingKey}?rating=0&rating.locked=0";
+            using var req = plexClient.CreateRequest(HttpMethod.Put, path, target.ServerUrl);
+            using var resp = await httpClient.SendAsync(req, ct);
+            return resp.IsSuccessStatusCode;
         }
-
-        string ratingStr = rating.Value.ToString(CultureInfo.InvariantCulture);
-        return $"/library/metadata/{ratingKey}?rating={ratingStr}&rating.locked=1";
+        catch
+        {
+            return false;
+        }
     }
+
+    private static bool NeedsRatingUpdate(double? plex, double? shoko) => shoko.HasValue ? (!plex.HasValue || Math.Abs(plex.Value - shoko.Value) > 0.05) : (plex.HasValue && plex.Value > 0.05);
+
+    private static double? ComputeSeriesRating(IShokoSeries s) =>
+        ShokoRelay.Settings.CriticRatingMode switch
+        {
+            CriticRatingMode.TMDB => s.TmdbShows?.FirstOrDefault()?.Rating > 0 ? s.TmdbShows.First().Rating : null,
+            CriticRatingMode.AniDB => s.Rating > 0 ? s.Rating : null,
+            _ => null,
+        };
+
+    private static double? ComputeEpisodeRating(IShokoEpisode e) =>
+        ShokoRelay.Settings.CriticRatingMode switch
+        {
+            CriticRatingMode.TMDB => e.TmdbEpisodes?.FirstOrDefault()?.Rating > 0 ? e.TmdbEpisodes.First().Rating : null,
+            CriticRatingMode.AniDB => e.Rating > 0 ? e.Rating : null,
+            _ => null,
+        };
 }

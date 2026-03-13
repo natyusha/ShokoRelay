@@ -12,6 +12,9 @@ namespace ShokoRelay.Controllers;
 /// Handles the plugin's frontend components, including serving static assets,
 /// generating the dynamic configuration schema, and providing log access.
 /// </summary>
+[ApiVersionNeutral]
+[ApiController]
+[Route(ShokoRelayInfo.BasePath)]
 public class DashboardController(ConfigProvider configProvider, IMetadataService metadataService, PlexClient plexLibrary) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
 {
     private static readonly Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider ContentTypeProvider = new();

@@ -6,17 +6,13 @@ namespace ShokoRelay.Plex;
 /// <summary>
 /// HTTP client wrapper that communicates with one or more Plex servers. Handles library target discovery, section refreshes, metadata queries, and path mapping.
 /// </summary>
-/// <param name="httpClient">HTTP client used for communication with local or remote Plex servers.</param>
-/// <param name="configProvider">Plugin configuration provider for retrieving paths and tokens.</param>
 public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
-    private readonly HttpClient _httpClient = httpClient;
-    private readonly ConfigProvider _configProvider = configProvider;
 
-    private string Token => _configProvider.GetPlexToken();
-    private string ClientIdentifier => _configProvider.GetPlexClientIdentifier();
-    private IReadOnlyList<PlexAvailableLibrary> DiscoveredLibraries => _configProvider.GetPlexDiscoveredLibraries();
+    private string Token => configProvider.GetPlexToken();
+    private string ClientIdentifier => configProvider.GetPlexClientIdentifier();
+    private IReadOnlyList<PlexAvailableLibrary> DiscoveredLibraries => configProvider.GetPlexDiscoveredLibraries();
 
     /// <summary>
     /// True when a Plex token exists and at least one library target has been discovered.
@@ -43,7 +39,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         {
             string mapped = MapShokoPathToPlexPath(path);
             using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/refresh?path={Uri.EscapeDataString(mapped)}", target.ServerUrl);
-            using var resp = await _httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+            using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
             if (resp.IsSuccessStatusCode)
             {
                 anyOk = true;
@@ -78,6 +74,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
     /// <summary>
     /// Expose configured targets for external callers to make per-target decisions.
     /// </summary>
+    /// <returns>A read-only list of configured library targets.</returns>
     public IReadOnlyList<PlexLibraryTarget> GetConfiguredTargets() =>
         [
             .. DiscoveredLibraries.Select(l => new PlexLibraryTarget
@@ -100,29 +97,12 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         ];
 
     /// <summary>
-    /// Find the Plex ratingKey for a Shoko series within the given Plex section.
-    /// </summary>
-    public async Task<int?> FindRatingKeyForShokoSeriesInSectionAsync(int shokoSeriesId, PlexLibraryTarget target, CancellationToken cancellationToken = default)
-    {
-        if (!IsEnabled || shokoSeriesId <= 0 || target == null)
-            return null;
-        try
-        {
-            string guid = $"{ShokoRelayInfo.AgentScheme}://show/{shokoSeriesId}";
-            using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/search?guid={Uri.EscapeDataString(guid)}", target.ServerUrl);
-            using var resp = await _httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
-            var item = (await PlexApi.ReadContainerAsync(resp, cancellationToken).ConfigureAwait(false))?.Metadata?.FirstOrDefault();
-            return int.TryParse(item?.RatingKey, out int key) ? key : null;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    /// <summary>
     /// Check whether a given ratingKey exists in the provided target section.
     /// </summary>
+    /// <param name="ratingKey">Plex rating key.</param>
+    /// <param name="target">Target server/section.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>True if the item is present in the section.</returns>
     public async Task<bool> ItemExistsInSectionAsync(int ratingKey, PlexLibraryTarget target, CancellationToken cancellationToken = default)
     {
         if (!IsEnabled || ratingKey <= 0 || target == null)
@@ -130,7 +110,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         try
         {
             using var req = CreateRequest(HttpMethod.Get, $"/library/metadata/{ratingKey}?X-Plex-Container-Size=1", target.ServerUrl);
-            using var resp = await _httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+            using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
             if (!resp.IsSuccessStatusCode)
                 return false;
             var meta = (await PlexApi.ReadContainerAsync(resp, cancellationToken).ConfigureAwait(false))?.Metadata?.FirstOrDefault();
@@ -144,15 +124,48 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
     }
 
     /// <summary>
+    /// Find the Plex ratingKey for a Shoko series within the given Plex section.
+    /// </summary>
+    /// <param name="shokoSeriesId">Shoko series ID.</param>
+    /// <param name="target">Target server/section.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The numeric rating key if found, otherwise null.</returns>
+    public async Task<int?> FindRatingKeyForShokoSeriesInSectionAsync(int shokoSeriesId, PlexLibraryTarget target, CancellationToken cancellationToken = default)
+    {
+        if (!IsEnabled || shokoSeriesId <= 0 || target == null)
+            return null;
+        try
+        {
+            string guid = $"{ShokoRelayInfo.AgentScheme}://show/{shokoSeriesId}";
+            using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/search?guid={Uri.EscapeDataString(guid)}", target.ServerUrl);
+            using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+            var item = (await PlexApi.ReadContainerAsync(resp, cancellationToken).ConfigureAwait(false))?.Metadata?.FirstOrDefault();
+            return int.TryParse(item?.RatingKey, out int key) ? key : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     /// List items in the given section. Uses paging and supports optional filters.
     /// </summary>
+    /// <param name="target">Target server/section.</param>
+    /// <param name="token">Plex token (optional override).</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <param name="onlyUnwatched">Filter for unwatched state.</param>
+    /// <param name="guidFilter">Filter for a specific metadata GUID.</param>
+    /// <param name="minLastViewed">Filter for items viewed after this timestamp.</param>
+    /// <param name="type">Plex media type ID.</param>
+    /// <returns>A list of Plex metadata items.</returns>
     public async Task<List<PlexMetadataItem>> GetSectionItemsAsync(
         PlexLibraryTarget target,
         string? token = null,
         CancellationToken ct = default,
         bool? onlyUnwatched = null,
-        string? guid = null,
-        long? minLast = null,
+        string? guidFilter = null,
+        long? minLastViewed = null,
         int? type = null
     )
     {
@@ -167,13 +180,13 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
                 q.Add($"type={type.Value}");
             if (onlyUnwatched.HasValue)
                 q.Add($"unwatched={(onlyUnwatched.Value ? 1 : 0)}");
-            if (!string.IsNullOrEmpty(guid))
-                q.Add($"guid={Uri.EscapeDataString(guid)}");
-            if (minLast.HasValue)
-                q.Add($"lastViewedAt>={minLast.Value}");
+            if (!string.IsNullOrEmpty(guidFilter))
+                q.Add($"guid={Uri.EscapeDataString(guidFilter)}");
+            if (minLastViewed.HasValue)
+                q.Add($"lastViewedAt>={minLastViewed.Value}");
 
             using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?{string.Join("&", q)}", target.ServerUrl, token);
-            using var resp = await _httpClient.SendAsync(req, ct).ConfigureAwait(false);
+            using var resp = await httpClient.SendAsync(req, ct).ConfigureAwait(false);
             var cont = resp.IsSuccessStatusCode ? await PlexApi.ReadContainerAsync(resp, ct).ConfigureAwait(false) : null;
             if (cont?.Metadata == null || cont.Metadata.Count == 0)
                 break;
@@ -185,8 +198,14 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         return results;
     }
 
+    /// <summary>
+    /// List all shows in the given section.
+    /// </summary>
     public Task<List<PlexMetadataItem>> GetSectionShowsAsync(PlexLibraryTarget target, CancellationToken ct = default) => GetSectionItemsAsync(target, null, ct, type: PlexConstants.TypeShow);
 
+    /// <summary>
+    /// List all episodes in the given section with optional filters.
+    /// </summary>
     public Task<List<PlexMetadataItem>> GetSectionEpisodesAsync(
         PlexLibraryTarget target,
         string? token = null,
@@ -210,31 +229,26 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
     {
         if (string.IsNullOrWhiteSpace(path) || mappings == null || mappings.Count == 0)
             return path;
-        string input = Normalize(path);
+
+        // Standardize input path separators for comparison. Do NOT use Path.GetFullPath
+        // here as it will prepend the local OS directory to foreign OS paths.
+        string input = path.Replace('\\', '/').TrimEnd('/');
+
         var match = mappings
-            .Select(m => new { Shoko = Normalize(m.Key), Plex = m.Value.Replace('\\', '/').TrimEnd('/') })
+            .Select(m => new { Shoko = m.Key.Replace('\\', '/').TrimEnd('/'), Plex = m.Value.Replace('\\', '/').TrimEnd('/') })
             .OrderByDescending(m => (shokoToPlex ? m.Shoko : m.Plex).Length)
-            .FirstOrDefault(m => input.StartsWith(shokoToPlex ? m.Shoko : m.Plex, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
+            .FirstOrDefault(m => input.StartsWith(shokoToPlex ? m.Shoko : m.Plex, StringComparison.OrdinalIgnoreCase));
 
         if (match == null)
             return path;
-        string baseIn = shokoToPlex ? match.Shoko : match.Plex,
-            baseOut = shokoToPlex ? match.Plex : match.Shoko;
-        string rem = input.Length > baseIn.Length ? input[baseIn.Length..].TrimStart('/', '\\') : "";
-        return string.IsNullOrEmpty(rem)
-            ? baseOut
-            : $"{baseOut.TrimEnd('/', '\\')}{(shokoToPlex ? "/" : Path.DirectorySeparatorChar.ToString())}{rem.Replace(shokoToPlex ? Path.DirectorySeparatorChar : '/', shokoToPlex ? '/' : Path.DirectorySeparatorChar)}";
-    }
 
-    private static string Normalize(string p)
-    {
-        try
-        {
-            return Path.GetFullPath(p.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar)).TrimEnd(Path.DirectorySeparatorChar);
-        }
-        catch
-        {
-            return p.TrimEnd('/', '\\');
-        }
+        string baseIn = shokoToPlex ? match.Shoko : match.Plex;
+        string baseOut = shokoToPlex ? match.Plex : match.Shoko;
+        string remainder = input.Length > baseIn.Length ? input[baseIn.Length..].TrimStart('/') : "";
+
+        string result = string.IsNullOrEmpty(remainder) ? baseOut : $"{baseOut.TrimEnd('/')}/{remainder}";
+
+        // If we are mapping back to Shoko, restore the local OS separators
+        return shokoToPlex ? result : result.Replace('/', Path.DirectorySeparatorChar);
     }
 }

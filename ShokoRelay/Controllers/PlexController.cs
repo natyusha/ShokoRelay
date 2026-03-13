@@ -10,6 +10,9 @@ namespace ShokoRelay.Controllers;
 /// <summary>
 /// Manages Plex-specific integrations, including OAuth authentication, discovered library discovery, collection/rating automation, and real-time scrobble webhooks.
 /// </summary>
+[ApiVersionNeutral]
+[ApiController]
+[Route(ShokoRelayInfo.BasePath)]
 public class PlexController(
     ConfigProvider configProvider,
     IMetadataService metadataService,

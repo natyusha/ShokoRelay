@@ -41,7 +41,11 @@
 
     // Persist toast if no filter is applied (full generation)
     const hideOnSucceed = filter ? TOAST_MS : 0;
-    toastOperation(res, `VFS (clean=${clean})`, { hideOnSucceed });
+
+    // Use custom summary to handle the PascalCase properties from VfsBuildResult
+    const summary = res.ok ? `processed ${res.data.data.SeriesProcessed}, created ${res.data.data.CreatedLinks}` : undefined;
+
+    toastOperation(res, `VFS (clean=${clean})`, { summary, hideOnSucceed });
   });
 
   // Wire up the VFS Overrides Editor modal.
@@ -90,8 +94,10 @@
   withButtonAction("shoko-remove-missing", async () => {
     showToast("Remove Missing: Processing...", "info", TOAST_MS);
     const res = await fetchJson(base + "/shoko/remove-missing?dryRun=false", { method: "POST" });
+    // result is nested in res.data.data
+    const count = res.data?.data?.count ?? res.data?.data?.Count;
     toastOperation(res, "Remove Missing", {
-      summary: typeof res.data?.count === "number" ? `removed ${res.data.count}` : undefined,
+      summary: typeof count === "number" ? `removed ${count}` : undefined,
     });
   });
 
@@ -99,9 +105,8 @@
   withButtonAction("shoko-import-run", async () => {
     showToast("Shoko Import: Scanning...", "info", TOAST_MS);
     const res = await fetchJson(base + "/shoko/import", { method: "POST" });
-    toastOperation(res, "Shoko Import", {
-      summary: summarizeResult(res) || `scanned ${res.data?.scannedCount ?? ""}`,
-    });
+    // summarizeResult handles the envelope internally
+    toastOperation(res, "Shoko Import");
   });
 
   // Managed User and Admin Watched-State Synchronization Modal.
@@ -148,7 +153,9 @@
         setButtonLoading(startBtn, false);
 
         if (res.ok) {
-          const summaryText = `${summarizeResult(res) || `processed ${res.data?.processed ?? 0}`}${res.data?.votesFound ? `, votes: ${res.data.votesFound}` : ""}`;
+          // Drill into nested PascalCase properties for the sync result
+          const d = res.data.data;
+          const summaryText = `${summarizeResult(res) || `processed ${d.Processed ?? 0}`}${d.VotesFound ? `, votes: ${d.VotesFound}` : ""}`;
           toastOperation(res, "Sync", { summary: summaryText });
           close();
         } else {

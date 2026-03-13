@@ -12,6 +12,9 @@ namespace ShokoRelay.Controllers;
 /// Provides operations for building AnimeThemes VFS mappings, generating MP3 series themes,
 /// and handling the standalone video player endpoints including favourites.
 /// </summary>
+[ApiVersionNeutral]
+[ApiController]
+[Route(ShokoRelayInfo.BasePath)]
 public class AnimeThemesController(
     ConfigProvider configProvider,
     IMetadataService metadataService,
@@ -38,10 +41,6 @@ public class AnimeThemesController(
         if (validation != null)
             return validation;
 
-        string resolvedMapPath = Path.Combine(_configProvider.ConfigDirectory, AnimeThemesHelper.AtMapFileName);
-        if (!System.IO.File.Exists(resolvedMapPath))
-            return BadRequest(new { status = "error", message = "Mapping file not found" });
-
         var result = await _animeThemesMapping.ApplyMappingAsync(filterIds, cancellationToken).ConfigureAwait(false);
 
         // Save the WebM cache for the standalone player during unfiltered builds
@@ -49,64 +48,7 @@ public class AnimeThemesController(
         {
             try
             {
-                string themeRoot = Vfs.VfsShared.ResolveAnimeThemesFolderName();
-                var xrefsRaw = System
-                    .IO.File.ReadAllLines(resolvedMapPath)
-                    .Where(l => !l.StartsWith("#") && !string.IsNullOrWhiteSpace(l))
-                    .Select(TextHelper.SplitCsvLine)
-                    .Where(f => f.Length > 1)
-                    .ToDictionary(f => f[0], f => f, StringComparer.OrdinalIgnoreCase);
-
-                var cacheLines = new List<string>();
-                foreach (var plan in result.Planned)
-                {
-                    var parts = plan.Split(" <- ");
-                    if (parts.Length < 2)
-                        continue;
-
-                    string vfsPath = parts[0];
-                    string symlinkTarget = parts[1].Replace('\\', '/');
-
-                    string lookupKey = string.Empty;
-                    int rootIdx = symlinkTarget.IndexOf("/" + themeRoot + "/", StringComparison.OrdinalIgnoreCase);
-                    if (rootIdx != -1)
-                        lookupKey = symlinkTarget[(rootIdx + themeRoot.Length + 1)..];
-                    else if (symlinkTarget.Contains(themeRoot + "/"))
-                        lookupKey = symlinkTarget[(symlinkTarget.IndexOf(themeRoot + "/") + themeRoot.Length)..];
-
-                    if (!lookupKey.StartsWith("/"))
-                        lookupKey = "/" + lookupKey;
-
-                    if (xrefsRaw.TryGetValue(lookupKey, out var fields))
-                    {
-                        int flags = 0;
-                        string videoId = fields.Length > 1 ? fields[1] : "0";
-                        if (fields.Length > 12)
-                        {
-                            if (fields[3] == "1")
-                                flags |= 1; // nc
-                            if (fields[8] == "1")
-                                flags |= 2; // lyrics
-                            if (fields[9] == "1")
-                                flags |= 4; // subs
-                            if (fields[10] == "1")
-                                flags |= 8; // uncen
-                            if (fields[11] == "1")
-                                flags |= 16; // nsfw
-                            if (fields[12] == "1")
-                                flags |= 32; // spoiler
-
-                            // Overlap bits
-                            if (fields[16] == "Transition")
-                                flags |= 64;
-                            if (fields[16] == "Over")
-                                flags |= 128;
-                        }
-                        cacheLines.Add($"{vfsPath}|{videoId}|{flags}");
-                    }
-                    else
-                        cacheLines.Add($"{vfsPath}|0|0");
-                }
+                var cacheLines = result.CacheEntries.Select(ce => $"{ce.VfsPath.Replace('\\', '/')}|{ce.VideoId}|{ce.Bitmask}");
                 System.IO.File.WriteAllLines(Path.Combine(_configProvider.ConfigDirectory, "webm_animethemes.cache"), cacheLines);
             }
             catch (Exception ex)
@@ -119,16 +61,14 @@ public class AnimeThemesController(
     }
 
     /// <summary>
-    /// Generates the anime‑themes mapping CSV or tests a single filename.
+    /// Generates the anime‑themes mapping CSV or tests a single filename mapping.
     /// </summary>
-    /// <param name="testPath">Optional filename to test against the API without writing to the CSV.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
     [HttpGet("animethemes/vfs/map")]
     public async Task<IActionResult> AnimeThemesVfsMap(string? testPath = null, CancellationToken cancellationToken = default)
     {
         if (!string.IsNullOrWhiteSpace(testPath))
         {
-            var (entry, error, generatedFilename) = await _animeThemesMapping.TestMappingEntryAsync(testPath, cancellationToken).ConfigureAwait(false);
+            var (entry, error, gen) = await _animeThemesMapping.TestMappingEntryAsync(testPath, cancellationToken).ConfigureAwait(false);
             if (error != null)
                 return Ok(
                     new
@@ -138,13 +78,12 @@ public class AnimeThemesController(
                         error,
                     }
                 );
-
             return Ok(
                 new
                 {
                     status = "ok",
                     testPath,
-                    generatedFilename,
+                    generatedFilename = gen,
                     csvLine = entry != null ? AnimeThemesMapping.SerializeMappingEntry(entry) : null,
                     entry,
                 }
@@ -178,7 +117,6 @@ public class AnimeThemesController(
     {
         if (string.IsNullOrWhiteSpace(query.Path))
             return BadRequest(new { status = "error", message = "path is required" });
-
         string reverse = _plexLibrary.MapPlexPathToShokoPath(query.Path);
         if (!string.Equals(reverse, query.Path, StringComparison.Ordinal))
             query = query with { Path = reverse };
@@ -197,7 +135,6 @@ public class AnimeThemesController(
             return BadRequest(single);
         if (single.Status == "ok" && !string.IsNullOrWhiteSpace(single.Folder))
             _animeThemesMp3Generator.AddToThemeMp3Cache(single.Folder);
-
         return Ok(single);
     }
 
@@ -242,7 +179,7 @@ public class AnimeThemesController(
 
     #endregion
 
-    #region WebM & Favourites
+    #region WebM Player & Favourites
 
     /// <summary>
     /// Returns the hierarchical tree of WebM files for the standalone player.
@@ -274,8 +211,7 @@ public class AnimeThemesController(
             int videoId = (pipeParts.Length > 1 && int.TryParse(pipeParts[1], out var vid)) ? vid : 0;
             int flags = (pipeParts.Length > 2 && int.TryParse(pipeParts[2], out var f)) ? f : 0;
 
-            string normalized = pathRaw.Replace('\\', '/').Trim();
-            var segments = normalized.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            var segments = pathRaw.Replace('\\', '/').Trim().Split('/', StringSplitOptions.RemoveEmptyEntries);
             int? seriesId = null;
             for (int i = 0; i < segments.Length; i++)
                 if (int.TryParse(segments[i], out int sid))
@@ -292,7 +228,7 @@ public class AnimeThemesController(
                 var series = _metadataService.GetShokoSeriesByID(seriesId.Value);
                 if (series != null)
                 {
-                    var (DisplayTitle, SortTitle, OriginalTitle) = TextHelper.ResolveFullSeriesTitles(series);
+                    var (DisplayTitle, _, _) = TextHelper.ResolveFullSeriesTitles(series);
                     var group = _metadataService.GetShokoGroupByID(series.TopLevelGroupID);
                     titles = (group is IWithTitles titled && !string.IsNullOrWhiteSpace(titled.PreferredTitle?.Value) ? titled.PreferredTitle.Value : DisplayTitle, DisplayTitle);
                 }
@@ -306,6 +242,7 @@ public class AnimeThemesController(
                 {
                     group = titles.GroupTitle,
                     series = titles.SeriesTitle,
+                    seriesId = seriesId.Value,
                     file = Path.GetFileNameWithoutExtension(segments[^1]),
                     path = pathRaw.Replace('\\', '/').Trim(),
                     videoId,
@@ -370,14 +307,13 @@ public class AnimeThemesController(
                 if (int.TryParse(l.Trim(), out int id))
                     ids.Add(id);
 
-        bool isFav = !ids.Remove(videoId);
-        if (isFav)
+        if (!ids.Remove(videoId))
             ids.Add(videoId);
 
         try
         {
             System.IO.File.WriteAllLines(path, ids.Select(i => i.ToString()));
-            return Ok(new { videoId, isFavourite = isFav });
+            return Ok(new { videoId, isFavourite = ids.Contains(videoId) });
         }
         catch (Exception ex)
         {

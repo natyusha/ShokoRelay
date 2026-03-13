@@ -39,30 +39,27 @@ internal sealed record ThemeSelection(string AudioUrl, string SlugRaw, string Sl
 /// <summary>
 /// Provides functionality for fetching, converting and previewing anime theme audio from the AnimeThemes API.
 /// </summary>
-public class AnimeThemesMp3Generator
+/// <param name="metadataService">Shoko metadata service.</param>
+/// <param name="videoService">Shoko video service.</param>
+/// <param name="configProvider">Plugin configuration provider.</param>
+public class AnimeThemesMp3Generator(IMetadataService metadataService, IVideoService videoService, ConfigProvider configProvider)
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private static readonly HttpClient Http = new();
-    private readonly FfmpegService _ffmpegService;
-    private readonly AnimeThemesApi _apiClient;
-    private readonly IVideoService _videoService;
-    private readonly IMetadataService _metadataService;
+    private readonly FfmpegService _ffmpegService = new(configProvider.PluginDirectory);
+    private readonly AnimeThemesApi _apiClient = new();
     private List<string>? _themeMp3Cache;
     private readonly Lock _cacheLock = new();
 
-    public AnimeThemesMp3Generator(IMetadataService metadataService, IVideoService videoService, ConfigProvider configProvider)
+    private string ThemeCacheFilePath
     {
-        (_metadataService, _videoService, ThemeCacheFilePath) = (metadataService, videoService, configProvider.ConfigDirectory);
-        _ffmpegService = new FfmpegService(configProvider.PluginDirectory);
-        _apiClient = new AnimeThemesApi();
-        AnimeThemesHelper.EnsureUserAgent(Http);
-    }
-
-    private string ThemeCacheFilePath => Path.Combine(field, "mp3_animethemes.cache");
+        get => Path.Combine(field, "mp3_animethemes.cache");
+    } = configProvider.ConfigDirectory;
 
     /// <summary>
     /// Returns the cached list of folders containing Theme.mp3 files.
     /// </summary>
+    /// <returns>A read-only list of cached folder paths.</returns>
     public IReadOnlyList<string> GetCachedThemeMp3Folders()
     {
         lock (_cacheLock)
@@ -85,6 +82,7 @@ public class AnimeThemesMp3Generator
     /// <summary>
     /// Adds a folder path to the Theme.mp3 cache if it is not already present.
     /// </summary>
+    /// <param name="folderPath">Absolute path of the folder to add.</param>
     public void AddToThemeMp3Cache(string folderPath)
     {
         if (string.IsNullOrWhiteSpace(folderPath))
@@ -93,7 +91,7 @@ public class AnimeThemesMp3Generator
         {
             if (_themeMp3Cache == null)
                 LoadCacheFromFile();
-            _themeMp3Cache ??= [];
+            _themeMp3Cache ??= []; // Null-safe initialization
             if (!_themeMp3Cache.Contains(folderPath, VfsShared.PathComparer))
             {
                 _themeMp3Cache.Add(folderPath);
@@ -106,10 +104,9 @@ public class AnimeThemesMp3Generator
     {
         Logger.Info("Building Theme.mp3 cache — scanning all managed import folders...");
         var excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { VfsShared.ResolveRootFolderName(), VfsShared.ResolveCollectionPostersFolderName(), VfsShared.ResolveAnimeThemesFolderName() };
-
         try
         {
-            var roots = (_videoService.GetAllManagedFolders() ?? [])
+            var roots = (videoService.GetAllManagedFolders() ?? [])
                 .Select(mf => mf.Path?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
                 .Where(p => !string.IsNullOrWhiteSpace(p) && Directory.Exists(p))
                 .Distinct(VfsShared.PathComparer)
@@ -169,9 +166,12 @@ public class AnimeThemesMp3Generator
     /// <summary>
     /// Processes a folder (and optionally subfolders) to generate MP3s for anime themes.
     /// </summary>
+    /// <param name="query">Query parameters.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A batch result object.</returns>
     public async Task<ThemeMp3BatchResult> ProcessBatchAsync(AnimeThemesMp3Query query, CancellationToken ct)
     {
-        string root = Path.GetFullPath(query.Path ?? "");
+        string root = query.Path ?? "";
         if (!Directory.Exists(root))
             return new ThemeMp3BatchResult(root, [new(root, "error", "Batch root not found.")], 0, 0, 1);
 
@@ -212,6 +212,9 @@ public class AnimeThemesMp3Generator
     /// <summary>
     /// Handles a single folder request, downloading and converting the selected theme to an MP3.
     /// </summary>
+    /// <param name="query">Query parameters.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>An operation result object.</returns>
     public async Task<ThemeMp3OperationResult> ProcessSingleAsync(AnimeThemesMp3Query query, CancellationToken ct)
     {
         var (Error, Data) = PrepareContext(query, false);
@@ -231,7 +234,7 @@ public class AnimeThemesMp3Generator
             string title = dur.TotalSeconds < 100 && !string.IsNullOrEmpty(sel.SongTitle) ? sel.SongTitle + " (TV Size)" : sel.SongTitle;
 
             await _ffmpegService.ConvertToMp3FileAsync(temp, themePath, title, sel.SlugDisplay, sel.Artist, sel.AnimeTitle, ct);
-            int primaryId = OverrideHelper.GetPrimary(series.ID, _metadataService);
+            int primaryId = OverrideHelper.GetPrimary(series.ID, metadataService);
             return new(folder, "ok", null, themePath, TryLinkIntoVfs(videoFile, primaryId, themePath), sel.AnimeTitle, sel.AnimeSlug, series.ID, sel.SlugDisplay, dur.TotalSeconds);
         }
         catch (Exception ex)
@@ -248,6 +251,9 @@ public class AnimeThemesMp3Generator
     /// <summary>
     /// Returns an in‑memory MP3 stream rather than writing a file.
     /// </summary>
+    /// <param name="query">Query parameters.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A preview result or an error result.</returns>
     public async Task<(ThemePreviewResult? Preview, ThemeMp3OperationResult? Error)> PreviewAsync(AnimeThemesMp3Query query, CancellationToken ct)
     {
         var (Error, Data) = PrepareContext(query, true);
@@ -279,17 +285,20 @@ public class AnimeThemesMp3Generator
     {
         if (string.IsNullOrWhiteSpace(q.Path))
             return (new("", "error", "Path is required."), null);
-        string folder = Path.GetFullPath(q.Path),
-            themePath = Path.Combine(folder, "Theme.mp3");
+
+        // Use the path provided (which should already be reverse-mapped by the controller)
+        string folder = q.Path;
         if (!Directory.Exists(folder))
             return (new(folder, "error", "Folder not found."), null);
+
+        string themePath = Path.Combine(folder, "Theme.mp3");
         if (!preview && !q.Force && File.Exists(themePath))
             return (new(folder, "skipped", "Theme.mp3 already exists."), null);
 
         string? vid = Directory.EnumerateFiles(folder).FirstOrDefault(f => AnimeThemesHelper.VideoFileExtensions.Contains(Path.GetExtension(f)));
         if (vid == null)
             return (new(folder, "error", "No video files found."), null);
-        var vf = _videoService.GetVideoFileByAbsolutePath(vid);
+        var vf = videoService.GetVideoFileByAbsolutePath(vid);
         var s = vf?.Video?.Episodes?.FirstOrDefault()?.Series;
         return (s == null) ? (new(folder, "error", vf == null ? "Video not recognized." : "Series lookup failed."), null) : (null, (folder, themePath, vf!, s));
     }

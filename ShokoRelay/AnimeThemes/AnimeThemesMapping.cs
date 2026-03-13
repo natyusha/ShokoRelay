@@ -8,59 +8,6 @@ using ShokoRelay.Vfs;
 namespace ShokoRelay.AnimeThemes;
 
 /// <summary>
-/// Represents a single theme mapping between a local file and AnimeThemes identifiers.
-/// </summary>
-public sealed record AnimeThemesMappingEntry(
-    string FilePath,
-    int VideoId,
-    int AniDbId,
-    bool NC,
-    string Slug,
-    int Version,
-    string ArtistName,
-    string SongTitle,
-    bool Lyrics,
-    bool Subbed,
-    bool Uncen,
-    bool NSFW,
-    bool Spoiler,
-    string Source,
-    int Resolution,
-    string Episodes,
-    string Overlap
-);
-
-/// <summary>
-/// Result returned by a mapping file build operation.
-/// </summary>
-public sealed record AnimeThemesMappingBuildResult(string MapPath, int EntriesWritten, int Reused, int Errors, IReadOnlyList<string> Messages);
-
-/// <summary>
-/// Outcome of applying a mapping file to create VFS links.
-/// </summary>
-public sealed record AnimeThemesMappingApplyResult(int LinksCreated, int Skipped, int SeriesMatched, IReadOnlyList<string> Errors, IReadOnlyList<string> Planned, TimeSpan Elapsed);
-
-internal sealed record AnimeThemesVideoLookup(
-    int VideoId,
-    int ThemeId,
-    int AniDbId,
-    bool NC,
-    string Slug,
-    int Version,
-    string ArtistName,
-    string SongTitle,
-    bool Lyrics,
-    bool Subbed,
-    bool Uncen,
-    bool NSFW,
-    bool Spoiler,
-    string Source,
-    int Resolution,
-    string Episodes,
-    string Overlap
-);
-
-/// <summary>
 /// Provides operations for building and applying mappings between anime theme files and AniDB/video identifiers.
 /// </summary>
 /// <param name="metadataService">Service for accessing Shoko metadata.</param>
@@ -82,11 +29,11 @@ public class AnimeThemesMapping(IMetadataService metadataService, IVideoService 
     public static string SerializeMappingEntry(AnimeThemesMappingEntry entry) => AnimeThemesHelper.SerializeEntry(entry);
 
     /// <summary>
-    /// Download the mapping file from a direct raw URL and save it.
+    /// Download the mapping file from a direct raw URL (e.g. gist raw link) and save it.
     /// </summary>
-    /// <param name="rawUrl">Raw URL to download from.</param>
+    /// <param name="rawUrl">Raw URL to download the mapping content from.</param>
     /// <param name="ct">Cancellation token.</param>
-    /// <returns>The number of entries parsed and a log message.</returns>
+    /// <returns>A tuple of (Count, Log) with the number of entries parsed and a human-readable log message.</returns>
     public async Task<(int Count, string Log)> ImportMappingFromUrlAsync(string rawUrl, CancellationToken ct = default)
     {
         try
@@ -98,7 +45,8 @@ public class AnimeThemesMapping(IMetadataService metadataService, IVideoService 
                 return (0, "Downloaded content empty");
 
             await File.WriteAllTextAsync(Path.Combine(_configDirectory, AnimeThemesHelper.AtMapFileName), content, ct).ConfigureAwait(false);
-            return (AnimeThemesHelper.ParseMappingContent(content).Count, $"AnimeThemes mapping import - {DateTime.Now:yyyy-MM-dd HH:mm:ss}\nUrl: {rawUrl}\nEntries: {content.Length}");
+            int count = AnimeThemesHelper.ParseMappingContent(content).Count;
+            return (count, $"AnimeThemes mapping import - {DateTime.Now:yyyy-MM-dd HH:mm:ss}\nUrl: {rawUrl}\nEntries: {count}");
         }
         catch (Exception ex)
         {
@@ -109,9 +57,10 @@ public class AnimeThemesMapping(IMetadataService metadataService, IVideoService 
 
     /// <summary>
     /// Scan configured import roots for AnimeThemes files and write a mapping CSV.
+    /// The resulting file is always written to the standard location in the configuration directory and any existing file will be read to perform incremental updates.
     /// </summary>
     /// <param name="ct">Cancellation token.</param>
-    /// <returns>A build result containing statistics and any error messages.</returns>
+    /// <returns>An <see cref="AnimeThemesMappingBuildResult"/> with statistics and the output file path.</returns>
     public async Task<AnimeThemesMappingBuildResult> BuildMappingFileAsync(CancellationToken ct = default)
     {
         string themeFolder = VfsShared.ResolveAnimeThemesFolderName();
@@ -126,6 +75,7 @@ public class AnimeThemesMapping(IMetadataService metadataService, IVideoService 
         if (roots.Count == 0)
             throw new DirectoryNotFoundException("AnimeThemes root folder not found");
 
+        var sw = Stopwatch.StartNew();
         string mapPath = Path.Combine(_configDirectory, AnimeThemesHelper.AtMapFileName);
         var entries = new List<AnimeThemesMappingEntry>();
         var existing = new Dictionary<string, AnimeThemesMappingEntry>(StringComparer.OrdinalIgnoreCase);
@@ -216,11 +166,12 @@ public class AnimeThemesMapping(IMetadataService metadataService, IVideoService 
     }
 
     /// <summary>
-    /// Test the mapping process for a single webm filename.
+    /// Test the mapping process for a single webm filename without adding it to the CSV.
+    /// Returns the metadata that would be created for the file, useful for verifying API integration and filename generation.
     /// </summary>
-    /// <param name="webmFileName">The filename to test.</param>
+    /// <param name="webmFileName">The webm filename to test (e.g., "OP1.webm" or "ED2v3.webm").</param>
     /// <param name="ct">Cancellation token.</param>
-    /// <returns>The generated entry and prospective filename.</returns>
+    /// <returns>A result object containing the generated entry, any errors, and status information.</returns>
     public async Task<(AnimeThemesMappingEntry? entry, string? error, string filename)> TestMappingEntryAsync(string webmFileName, CancellationToken ct = default)
     {
         var (lookup, idMissing) = await FetchMetadataAsync(webmFileName, ct);
@@ -249,11 +200,11 @@ public class AnimeThemesMapping(IMetadataService metadataService, IVideoService 
     }
 
     /// <summary>
-    /// Applies the mapping file to create VFS symlinks for matching theme files.
+    /// Read a previously built mapping file and create/update VFS links for matching theme files. If multiple entries result in the exact same filename, BD sources are kept and others are excluded.
     /// </summary>
-    /// <param name="seriesFilter">Optional set of Shoko series IDs to restrict processing.</param>
+    /// <param name="seriesFilter">Optional set of Shoko series IDs to limit processing to.</param>
     /// <param name="ct">Cancellation token.</param>
-    /// <returns>An apply result containing link statistics.</returns>
+    /// <returns>An <see cref="AnimeThemesMappingApplyResult"/> with counts and results.</returns>
     public async Task<AnimeThemesMappingApplyResult> ApplyMappingAsync(IReadOnlyCollection<int>? seriesFilter = null, CancellationToken ct = default)
     {
         string mapPath = Path.Combine(_configDirectory, AnimeThemesHelper.AtMapFileName);
@@ -325,14 +276,14 @@ public class AnimeThemesMapping(IMetadataService metadataService, IVideoService 
                     if (VfsShared.TryCreateLink(src, destPath, Logger, targetOverride: AnimeThemesHelper.BuildThemeRelativeTarget(relPath, themeRoot)))
                     {
                         state.Created++;
-                        state.Planned.Add($"{destPath} <- {entry.FilePath}");
+                        state.CacheEntries.Add(new WebmCacheEntry(destPath, entry.VideoId, AnimeThemesHelper.CalculateBitmask(entry)));
                     }
                     else
                         state.Errors.Add($"Link failed: {destPath}");
                 }
             }
         }
-        return new AnimeThemesMappingApplyResult(state.Created, state.Skipped, state.Matched, state.Errors, state.Planned, sw.Elapsed);
+        return new AnimeThemesMappingApplyResult(state.Created, state.Skipped, state.Matched, state.Errors, state.CacheEntries, sw.Elapsed);
     }
 
     /// <summary>
@@ -360,21 +311,22 @@ public class AnimeThemesMapping(IMetadataService metadataService, IVideoService 
                 Entry = e,
                 Year = e.Year ?? 9999,
                 SVal = e.Season != null ? Array.IndexOf(seasonOrder, e.Season) : 9999,
-                ids = e.Resources?.Where(r => r.Site == "AniDB" && r.ExternalId.HasValue).Select(r => r.ExternalId!.Value).OrderBy(i => i).ToList(),
+                ids = e.Resources?.Where(r => string.Equals(r.Site, "aniDB", StringComparison.OrdinalIgnoreCase) && r.ExternalId.HasValue).Select(r => r.ExternalId!.Value).OrderBy(i => i).ToList(),
             })
+            .Where(x => x.ids?.Count > 0)
             .OrderBy(x => x.Year)
             .ThenBy(x => x.SVal)
             .ThenBy(x => x.ids?.FirstOrDefault() ?? 9999)
             .FirstOrDefault();
 
-        if (best?.ids?.Count > 0)
+        if (best != null)
         {
             var theme = first.Animetheme;
             return (
                 new AnimeThemesVideoLookup(
                     v.Video.Id,
                     theme.Id,
-                    best.ids[0],
+                    best.ids![0],
                     v.Video.NC,
                     theme.Slug ?? "",
                     first.Version,
@@ -401,7 +353,7 @@ public class AnimeThemesMapping(IMetadataService metadataService, IVideoService 
         public int Created,
             Skipped,
             Matched;
-        public List<string> Errors = [],
-            Planned = [];
+        public List<string> Errors = [];
+        public List<WebmCacheEntry> CacheEntries = [];
     }
 }

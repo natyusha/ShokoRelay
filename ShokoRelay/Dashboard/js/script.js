@@ -33,20 +33,22 @@
 
   /**
    * Build a human-readable summary string from common API response fields.
-   * @param {{ok: boolean, data: *}} res - The fetchJson response object.
-   * @returns {string} A comma-separated summary (e.g. "processed: 5, created: 3") or empty string.
+   * Standardized to PascalCase to match the C# backend records.
    */
   function summarizeResult(res) {
     if (!res?.data) return "";
-    const d = res.data,
-      parts = [];
+
+    // Access nested result data if present (LogAndReturn envelope), otherwise use root
+    const d = res.data.data !== undefined && res.data.data !== null ? res.data.data : res.data;
+
+    const parts = [];
     const keys = {
-      processed: ["seriesProcessed", "processed", "scannedCount"],
-      created: ["linksCreated", "created", "createdLinks", "LinksCreated"],
-      marked: ["marked", "markedWatched"],
-      skipped: ["skipped"],
-      errors: ["errors", "Errors", "errorsList", "ErrorsList"],
-      uploaded: ["uploaded"],
+      processed: ["SeriesProcessed", "Processed", "ScannedCount", "ProcessedShows"],
+      created: ["LinksCreated", "Created", "UpdatedShows"],
+      marked: ["Marked", "MarkedWatched", "UpdatedEpisodes"],
+      skipped: ["Skipped"],
+      errors: ["Errors", "ErrorsList"],
+      uploaded: ["Uploaded"],
     };
 
     Object.entries(keys).forEach(([label, aliases]) => {
@@ -506,12 +508,10 @@
    * @returns {number} The number of errors found, or 0 if none.
    */
   function getErrorCount(res) {
-    const d = res?.data || {};
-    for (const k of ["errors", "Errors", "errorsList"]) {
-      if (Array.isArray(d[k])) return d[k].length;
-      if (Number(d[k])) return Number(d[k]);
-    }
-    return 0;
+    const d = res.data && res.data.data !== undefined ? res.data.data : res.data || {};
+    const errs = d.Errors || d.ErrorsList;
+    if (Array.isArray(errs)) return errs.length;
+    return Number(errs) || 0;
   }
 
   /**

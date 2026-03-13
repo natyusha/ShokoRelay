@@ -184,9 +184,14 @@
       startToast?.remove();
 
       if (res.ok && res.data?.status === "ok") {
-        toastOperation(res, label, { summary: summarizeFn(res.data) });
+        const resultStats = res.data.data;
+
+        toastOperation(res, label, {
+          summary: summarizeFn(resultStats),
+          hideOnSucceed: 0,
+        });
       } else {
-        toastOperation({ ok: false, data: res.data || res }, label, { summary: res.data?.message || JSON.stringify(res.data) });
+        toastOperation({ ok: false, data: res.data || res }, label, { hideOnSucceed: 0 });
       }
     });
   }
@@ -196,7 +201,7 @@
     "Collections",
     "Generating Collections...",
     "/plex/collections/build",
-    (d) => `processed ${d.processed}, created ${d.created}${d.uploaded ? `, uploaded ${d.uploaded}` : ""}, skipped ${d.skipped}, errors ${d.errors}`,
+    (d) => `processed ${d.Processed}, assigned ${d.Created}${d.Uploaded ? `, uploaded ${d.Uploaded}` : ""}, skipped ${d.Skipped}, errors ${d.Errors}`,
   );
 
   plexBuildAction(
@@ -204,7 +209,7 @@
     "Critic Ratings",
     "Applying Critic Ratings...",
     "/plex/ratings/apply",
-    (d) => `shows ${d.processedShows}/${d.updatedShows}, episodes ${d.processedEpisodes}/${d.updatedEpisodes}`,
+    (d) => `shows ${d.ProcessedShows}/${d.UpdatedShows}, episodes ${d.ProcessedEpisodes}/${d.UpdatedEpisodes}`,
   );
   // #endregion
 

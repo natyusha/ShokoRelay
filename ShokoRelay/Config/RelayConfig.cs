@@ -280,13 +280,13 @@ public class AdvancedConfig
     [Display(Name = "Path Mappings", Description = "Mappings for Plex base paths to Shoko base paths. Enter one mapping per line")]
     public Dictionary<string, string> PathMappings { get; set; } = [];
 
-    [Display(Name = "AnimeThemes Overlap Level", Description = "The amount of overlap allowed for AnimeThemes .webm files to be added to the VFS")]
-    [DefaultValue(OverlapLevel.All)]
-    public OverlapLevel AnimeThemesOverlapLevel { get; set; } = OverlapLevel.All;
-
     [Display(Name = "Append AnimeThemes Tags", Description = "Enable to append attributes like [SPOIL, SUBS] to AnimeThemes VFS filenames")]
     [DefaultValue(true)]
     public bool AnimeThemesAppendTags { get; set; } = true;
+
+    [Display(Name = "AnimeThemes Overlap Level", Description = "The amount of overlap allowed for AnimeThemes .webm files to be added to the VFS")]
+    [DefaultValue(OverlapLevel.All)]
+    public OverlapLevel AnimeThemesOverlapLevel { get; set; } = OverlapLevel.All;
 
     [Display(Name = "VFS Root Path", Description = "The location of the virtual links inside each import root")]
     [DefaultValue("!ShokoRelayVFS")]

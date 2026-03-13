@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using NLog;
 using Shoko.Abstractions.Metadata.Shoko;
 using Shoko.Abstractions.Services;
@@ -16,22 +15,16 @@ public interface ICollectionService
     /// <summary>
     /// Create or update Plex collections for the supplied series list.
     /// </summary>
-    /// <param name="seriesList">List of series to process (nullable entries ignored).</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A <see cref="BuildCollectionsResult"/> with counters and error details.</returns>
     Task<BuildCollectionsResult> BuildCollectionsAsync(IEnumerable<IShokoSeries?> seriesList, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Apply collection posters for the given series list.
     /// </summary>
-    /// <param name="seriesList">Series to update posters for.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>An <see cref="ApplyPostersResult"/> with counters and error details.</returns>
     Task<ApplyPostersResult> ApplyCollectionPostersAsync(IEnumerable<IShokoSeries?> seriesList, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
-/// Result returned by <see cref="ICollectionService.BuildCollectionsAsync"/>, containing counts of various actions and any errors encountered.
+/// Result returned by <see cref="ICollectionService.BuildCollectionsAsync"/>.
 /// </summary>
 public sealed record BuildCollectionsResult(
     int Processed,
@@ -51,340 +44,127 @@ public sealed record BuildCollectionsResult(
 public sealed record ApplyPostersResult(int Processed, int Uploaded, int Skipped, int Errors, List<string> ErrorsList);
 
 /// <summary>
-/// Default implementation of <see cref="ICollectionService"/>, using Plex API calls to create collections and upload posters based on Shoko series data.
+/// Default implementation of <see cref="ICollectionService"/>.
 /// </summary>
-public class CollectionService(PlexClient plexClient, PlexCollections plexCollections, IMetadataService metadataService, PlexMetadata mapper, ConfigProvider configProvider) : ICollectionService
+public class CollectionService(PlexClient plexClient, PlexCollections plexCollections, IMetadataService metadataService, PlexMetadata mapper) : ICollectionService
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
-    private readonly PlexClient _plexClient = plexClient;
-    private readonly PlexCollections _plexCollections = plexCollections;
-    private readonly IMetadataService _metadataService = metadataService;
-    private readonly PlexMetadata _mapper = mapper;
-    private readonly ConfigProvider _configProvider = configProvider;
-
+    /// <inheritdoc/>
     public async Task<BuildCollectionsResult> BuildCollectionsAsync(IEnumerable<IShokoSeries?> seriesList, CancellationToken cancellationToken = default)
     {
-        var createdCollections = new List<object>();
-        var errorsList = new List<string>();
+        var (created, uploaded, errs, uniqueSeries) = (0, 0, 0, new HashSet<int>());
+        var (createdList, errorsList) = (new List<object>(), new List<string>());
+        var allowedIds = new HashSet<int>(seriesList?.Where(s => s != null).Select(s => OverrideHelper.GetPrimary(s!.ID, metadataService)) ?? []);
+        var targets = plexClient.GetConfiguredTargets();
 
-        int created = 0,
-            uploaded = 0,
-            seasonPostersUploaded = 0,
-            errors = 0;
-        var addedSeries = new HashSet<int>();
-        var presentSeriesUnique = new HashSet<int>();
-
-        // collapse any provided series IDs through overrides so secondaries map to their primary. This keeps the filter set minimal and skips secondary‑only library items during processing.
-        var allowedIds = new HashSet<int>(seriesList?.Where(s => s != null).Select(s => OverrideHelper.GetPrimary(s!.ID, _metadataService)) ?? []);
-        var targets = _plexClient.GetConfiguredTargets();
-
-        var totalSw = Stopwatch.StartNew();
-        Logger.Info("BuildCollectionsAsync: starting collection build (allowedIds={AllowedCount}, targets={TargetCount})", allowedIds.Count, targets?.Count ?? 0);
-
-        if (targets == null || targets.Count == 0)
-        {
-            totalSw.Stop();
-            Logger.Info("BuildCollectionsAsync: no Plex targets configured — exiting (elapsed={Elapsed}ms)", totalSw.ElapsedMilliseconds);
-            return new BuildCollectionsResult(Processed: 0, Created: 0, Uploaded: 0, SeasonPostersUploaded: 0, Skipped: 0, Errors: 0, DeletedEmptyCollections: 0, createdCollections, errorsList);
-        }
-
-        var preFetchedSeries = new HashSet<int>();
+        if (targets.Count == 0)
+            return new BuildCollectionsResult(0, 0, 0, 0, 0, 0, 0, createdList, errorsList);
 
         foreach (var target in targets)
         {
-            var targetSw = Stopwatch.StartNew();
-            int createdBeforeTarget = created;
-            int uploadedBeforeTarget = uploaded;
-            int errorsBeforeTarget = errors;
-            int processedForTarget = 0;
-
-            List<PlexMetadataItem> items;
-            try
-            {
-                items = await _plexClient.GetSectionShowsAsync(target, cancellationToken).ConfigureAwait(false);
-                Logger.Info("BuildCollectionsAsync: target {Server}:{Section} returned {Count} shows", target.ServerUrl, target.SectionId, items?.Count ?? 0);
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(ex, "Failed to list section {SectionId} on {Server}", target.SectionId, target.ServerUrl);
-                errors++;
-                errorsList.Add($"Failed to list series in section {target.SectionId}: {ex.Message}");
-                continue;
-            }
-
-            // defensive: ensure items is never null for the foreach below
-            items ??= [];
-
-            var postedCollections = new HashSet<int>();
+            var items = await plexClient.GetSectionShowsAsync(target, cancellationToken) ?? [];
+            var posted = new HashSet<int>();
 
             foreach (var item in items)
             {
-                processedForTarget++;
                 if (string.IsNullOrWhiteSpace(item.Guid))
                     continue;
-
-                var shokoId = PlexHelper.ExtractShokoSeriesIdFromGuid(item.Guid);
-                if (!shokoId.HasValue)
+                var sid = PlexHelper.ExtractShokoSeriesIdFromGuid(item.Guid);
+                if (!sid.HasValue || (allowedIds.Count > 0 && !allowedIds.Contains(sid.Value)))
                     continue;
 
-                // Allowed ids check: if allowedIds empty => process all, otherwise only process allowed ones
-                if (allowedIds.Count > 0 && !allowedIds.Contains(shokoId.Value))
+                uniqueSeries.Add(sid.Value);
+                var series = metadataService.GetShokoSeriesByID(sid.Value);
+                var collectionName = series != null ? mapper.GetCollectionName(series) : null;
+                if (string.IsNullOrEmpty(collectionName) || !int.TryParse(item.RatingKey, out int plexKey))
                     continue;
 
-                presentSeriesUnique.Add(shokoId.Value);
-
-                var series = _metadataService.GetShokoSeriesByID(shokoId.Value);
-                if (series == null)
+                Logger.Trace("CollectionService: Processing series {0} (Plex Key: {1})", sid.Value, item.RatingKey);
+                if (await plexCollections.AssignCollectionToItemByMetadataAsync(plexKey, collectionName, target, cancellationToken))
                 {
-                    errors++;
-                    errorsList.Add($"Shoko series {shokoId.Value} not found for Plex item {item.RatingKey} in section {target.SectionId}");
-                    continue;
-                }
-
-                var collectionName = _mapper.GetCollectionName(series);
-                if (string.IsNullOrWhiteSpace(collectionName))
-                    continue;
-
-                if (!int.TryParse(item.RatingKey, out int plexRatingKey))
-                {
-                    errors++;
-                    errorsList.Add($"Unable to parse Plex ratingKey '{item.RatingKey}' for Shoko series {shokoId.Value} in section {target.SectionId}");
-                    continue;
-                }
-
-                try
-                {
-                    bool ok = await _plexCollections.AssignCollectionToItemByMetadataAsync(plexRatingKey, collectionName, target, cancellationToken).ConfigureAwait(false);
-
-                    if (ok)
-                    {
-                        created++;
-                        addedSeries.Add(shokoId.Value);
-                        createdCollections.Add(
-                            new
-                            {
-                                seriesId = shokoId.Value,
-                                ratingKey = plexRatingKey,
-                                collectionName,
-                                sectionId = target.SectionId,
-                            }
-                        );
-
-                        try
+                    created++;
+                    Logger.Debug("CollectionService: Assigned '{0}' to {1}", collectionName, item.Title);
+                    createdList.Add(
+                        new
                         {
-                            int? collectionId = await _plexCollections.GetOrCreateCollectionIdAsync(collectionName, target, cancellationToken).ConfigureAwait(false);
-
-                            // Add to set before attempting upload so failures don't cause retries for every item in the same collection
-                            if (collectionId.HasValue && postedCollections.Add(collectionId.Value))
-                            {
-                                bool posterApplied = await TryApplyCollectionPosterAsync(series, collectionName, collectionId.Value, target, cancellationToken).ConfigureAwait(false);
-
-                                if (posterApplied)
-                                    uploaded++;
-                            }
+                            seriesId = sid.Value,
+                            ratingKey = plexKey,
+                            collectionName,
+                            sectionId = target.SectionId,
                         }
-                        catch (Exception ex)
+                    );
+
+                    if (await plexCollections.GetOrCreateCollectionIdAsync(collectionName, target, cancellationToken) is { } cid && posted.Add(cid))
+                    {
+                        Logger.Trace("CollectionService: Triggering poster upload for '{0}'", collectionName);
+                        if (await TryApplyPoster(series!, collectionName, cid, target, cancellationToken))
                         {
-                            Logger.Warn(ex, "Failed to get/create collection id for '{CollectionName}' on {Server}:{Section}", collectionName, target.ServerUrl, target.SectionId);
+                            uploaded++;
+                            Logger.Debug("CollectionService: Uploaded poster for '{0}'", collectionName);
                         }
                     }
-                    else
-                    {
-                        errors++;
-                        errorsList.Add($"Failed to assign collection '{collectionName}' to series {shokoId.Value} (Plex ratingKey {plexRatingKey}) in section {target.SectionId}");
-                    }
                 }
-                catch (Exception ex)
+                else
                 {
-                    errors++;
-                    errorsList.Add($"Exception assigning collection to series {shokoId.Value} in section {target.SectionId}: {ex.Message}");
-                    Logger.Warn(ex, "AssignCollection exception for series {Series} ratingKey {RatingKey} on {Section}", shokoId.Value, item.RatingKey, target.SectionId);
+                    errs++;
+                    errorsList.Add($"Failed assignment: {sid.Value}");
                 }
             }
-
-            // per-target summary
-            targetSw.Stop();
-            var createdInTarget = created - createdBeforeTarget;
-            var uploadedInTarget = uploaded - uploadedBeforeTarget;
-            var errorsInTarget = errors - errorsBeforeTarget;
-            Logger.Info(
-                "BuildCollectionsAsync: finished target {Server}:{Section} — processed {Processed}, created {Created}, postersUploaded {Uploaded}, errors {Errors}, elapsed={Elapsed}ms",
-                target.ServerUrl,
-                target.SectionId,
-                processedForTarget,
-                createdInTarget,
-                uploadedInTarget,
-                errorsInTarget,
-                targetSw.ElapsedMilliseconds
-            );
         }
-
-        int processed = presentSeriesUnique.Count;
-        int deletedEmptyCollections = await _plexCollections.DeleteEmptyCollectionsAsync(cancellationToken).ConfigureAwait(false);
-        if (deletedEmptyCollections > 0)
-            Logger.Info("Deleted {Count} empty Plex collections after building.", deletedEmptyCollections);
-
-        int skipped = processed - addedSeries.Count;
-
-        totalSw.Stop();
-        Logger.Info(
-            "BuildCollectionsAsync: completed — processed={Processed}, created={Created}, uploaded={Uploaded}, skipped={Skipped}, errors={Errors}, deletedEmptyCollections={Deleted}, elapsedMs={Elapsed}",
-            processed,
-            created,
-            uploaded,
-            skipped,
-            errors,
-            deletedEmptyCollections,
-            totalSw.ElapsedMilliseconds
-        );
-
-        return new BuildCollectionsResult(
-            Processed: processed,
-            Created: created,
-            Uploaded: uploaded,
-            SeasonPostersUploaded: seasonPostersUploaded,
-            Skipped: skipped,
-            Errors: errors,
-            DeletedEmptyCollections: deletedEmptyCollections,
-            CreatedCollections: createdCollections,
-            ErrorsList: errorsList
-        );
+        int deleted = await plexCollections.DeleteEmptyCollectionsAsync(cancellationToken);
+        return new BuildCollectionsResult(uniqueSeries.Count, created, uploaded, 0, uniqueSeries.Count - created, errs, deleted, createdList, errorsList);
     }
 
+    /// <inheritdoc/>
     public async Task<ApplyPostersResult> ApplyCollectionPostersAsync(IEnumerable<IShokoSeries?> seriesList, CancellationToken cancellationToken = default)
     {
-        var errorsList = new List<string>();
-        int processed = 0,
-            uploaded = 0,
-            skipped = 0,
-            errors = 0;
-
-        // apply same override normalization for poster-only runs
-        var allowedIds = new HashSet<int>(seriesList?.Where(s => s != null).Select(s => OverrideHelper.GetPrimary(s!.ID, _metadataService)) ?? []);
-        var targets = _plexClient.GetConfiguredTargets();
-
-        if (targets == null || targets.Count == 0)
-            return new ApplyPostersResult(Processed: 0, Uploaded: 0, Skipped: 0, Errors: 0, ErrorsList: errorsList);
+        var (processed, uploaded, skipped, errs, errorsList) = (0, 0, 0, 0, new List<string>());
+        var allowedIds = new HashSet<int>(seriesList?.Where(s => s != null).Select(s => OverrideHelper.GetPrimary(s!.ID, metadataService)) ?? []);
+        var targets = plexClient.GetConfiguredTargets();
 
         foreach (var target in targets)
         {
-            List<PlexMetadataItem> items;
-            try
-            {
-                items = await _plexClient.GetSectionShowsAsync(target, cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(ex, "Failed to list section {SectionId} on {Server}", target.SectionId, target.ServerUrl);
-                errors++;
-                errorsList.Add($"Failed to list series in section {target.SectionId}: {ex.Message}");
-                continue;
-            }
-
-            items ??= [];
-            var postedCollections = new HashSet<int>();
+            var items = await plexClient.GetSectionShowsAsync(target, cancellationToken) ?? [];
+            var posted = new HashSet<int>();
 
             foreach (var item in items)
             {
                 if (string.IsNullOrWhiteSpace(item.Guid))
                     continue;
-
-                var shokoId = PlexHelper.ExtractShokoSeriesIdFromGuid(item.Guid);
-                if (!shokoId.HasValue)
-                    continue;
-
-                if (allowedIds.Count > 0 && !allowedIds.Contains(shokoId.Value))
+                var sid = PlexHelper.ExtractShokoSeriesIdFromGuid(item.Guid);
+                if (!sid.HasValue || (allowedIds.Count > 0 && !allowedIds.Contains(sid.Value)))
                     continue;
 
                 processed++;
-
-                var series = _metadataService.GetShokoSeriesByID(shokoId.Value);
-                if (series == null)
-                {
-                    errors++;
-                    errorsList.Add($"Shoko series {shokoId.Value} not found for Plex item {item.RatingKey} in section {target.SectionId}");
-                    continue;
-                }
-
-                var collectionName = _mapper.GetCollectionName(series);
-                if (string.IsNullOrWhiteSpace(collectionName))
+                var series = metadataService.GetShokoSeriesByID(sid.Value);
+                var name = series != null ? mapper.GetCollectionName(series) : null;
+                if (string.IsNullOrEmpty(name))
                 {
                     skipped++;
                     continue;
                 }
 
-                int? collectionId = null;
-                try
+                if (await plexCollections.GetOrCreateCollectionIdAsync(name, target, cancellationToken) is { } cid && posted.Add(cid))
                 {
-                    collectionId = await _plexCollections.GetOrCreateCollectionIdAsync(collectionName, target, cancellationToken).ConfigureAwait(false);
-                    if (collectionId == null)
-                    {
-                        errors++;
-                        errorsList.Add($"Failed to get/create collection '{collectionName}' for series {shokoId.Value} in section {target.SectionId}");
-                        continue;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    errors++;
-                    errorsList.Add($"Exception getting/creating collection '{collectionName}' for series {shokoId.Value} in section {target.SectionId}: {ex.Message}");
-                    continue;
-                }
-
-                // Only attempt poster upload once per collection per target
-                if (!postedCollections.Add(collectionId.Value))
-                {
-                    skipped++;
-                    continue;
-                }
-
-                string? posterUrl = PlexHelper.GetCollectionPosterUrl(series, collectionName, collectionId.Value, _metadataService, _configProvider.GetSettings().CollectionPosters);
-
-                if (string.IsNullOrWhiteSpace(posterUrl))
-                {
-                    skipped++;
-                    continue;
-                }
-
-                try
-                {
-                    bool ok = await _plexCollections.UploadCollectionPosterByUrlAsync(collectionId.Value, posterUrl, target, cancellationToken).ConfigureAwait(false);
-                    if (ok)
-                    {
+                    if (await TryApplyPoster(series!, name, cid, target, cancellationToken))
                         uploaded++;
-                    }
                     else
                     {
-                        errors++;
-                        errorsList.Add($"Failed to upload poster for collection {collectionId} in section {target.SectionId}");
+                        errs++;
+                        errorsList.Add($"Poster failed: {name}");
                     }
                 }
-                catch (Exception ex)
-                {
-                    errors++;
-                    errorsList.Add($"Exception uploading poster for collection {collectionId} in section {target.SectionId}: {ex.Message}");
-                }
+                else
+                    skipped++;
             }
         }
-
-        return new ApplyPostersResult(Processed: processed, Uploaded: uploaded, Skipped: skipped, Errors: errors, ErrorsList: errorsList);
+        return new ApplyPostersResult(processed, uploaded, skipped, errs, errorsList);
     }
 
-    private async Task<bool> TryApplyCollectionPosterAsync(IShokoSeries series, string collectionName, int collectionId, PlexLibraryTarget target, CancellationToken cancellationToken)
+    private async Task<bool> TryApplyPoster(IShokoSeries series, string name, int cid, PlexLibraryTarget target, CancellationToken ct)
     {
-        string? posterUrl = PlexHelper.GetCollectionPosterUrl(series, collectionName, collectionId, _metadataService, _configProvider.GetSettings().CollectionPosters);
-        if (string.IsNullOrWhiteSpace(posterUrl))
-            return false;
-
-        try
-        {
-            return await _plexCollections.UploadCollectionPosterByUrlAsync(collectionId, posterUrl, target, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            Logger.Warn(ex, "UploadCollectionPosterByUrlAsync failed for collection {CollectionId} on {Server}:{Section}", collectionId, target.ServerUrl, target.SectionId);
-            return false;
-        }
+        string? url = PlexHelper.GetCollectionPosterUrl(series, name, cid, metadataService, ShokoRelay.Settings.CollectionPosters);
+        return !string.IsNullOrEmpty(url) && await plexCollections.UploadCollectionPosterByUrlAsync(cid, url, target, ct);
     }
 }
