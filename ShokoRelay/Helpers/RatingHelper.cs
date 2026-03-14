@@ -4,9 +4,7 @@ using Shoko.Abstractions.Metadata.Shoko;
 
 namespace ShokoRelay.Helpers;
 
-/// <summary>
-/// Utility functions for deriving content rating and adult flag from series metadata.
-/// </summary>
+/// <summary>Utility functions for deriving content rating and adult flag from series metadata.</summary>
 public static class RatingHelper
 {
     private static readonly FrozenSet<string> RatingTags = new[]
@@ -25,11 +23,9 @@ public static class RatingHelper
         "sexual humour",
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>
-    /// Determine a combined rating string and an "is adult" flag for a series. Preferences in <see cref="ShokoRelay.Settings"/> influence the resulting text.
-    /// </summary>
-    /// <param name="series">Series to evaluate; may be null.</param>
-    /// <returns>A tuple of (Rating, IsAdult) where Rating is a TV-guideline string (e.g. "TV-14") and IsAdult indicates explicit content.</returns>
+    /// <summary>Determine a combined rating string and an adult flag for a series based on metadata and tags.</summary>
+    /// <param name="series">Series to evaluate.</param>
+    /// <returns>A tuple of (Rating, IsAdult).</returns>
     public static (string? Rating, bool IsAdult) GetContentRatingAndAdult(ISeries? series)
     {
         var tagSet = BuildTagSet(series);
@@ -46,7 +42,7 @@ public static class RatingHelper
                 if (string.IsNullOrWhiteSpace(name))
                     continue;
                 if (!RatingTags.Contains(name))
-                    continue; // only track rating-related tags here
+                    continue;
                 anidbWeights[name.ToLowerInvariant()] = t.Weight;
             }
         }
@@ -54,7 +50,6 @@ public static class RatingHelper
         // 18 restricted => X (adult) immediately
         if (tagSet.Contains("18 restricted"))
             return ("X", true);
-
         if (!ShokoRelay.Settings.AssumedContentRatings)
             return (null, false);
 
@@ -68,21 +63,19 @@ public static class RatingHelper
 
         string? c_rating = null;
 
-        // Consolidated helper: iterate tags in order, check AniDB weight thresholds
+        // Iterate tags in order, check AniDB weight thresholds
         (string Rating, bool IsAdult)? ApplyWeightedChecks(params (string Key, int Tv14, int TvMa)[] checks)
         {
             foreach (var (key, tv14, tvma) in checks)
             {
                 if (!tagSet.Contains(key))
                     continue;
-
                 var w = anidbWeights.TryGetValue(key, out var ww) ? ww : 0;
                 if (w >= tvma)
                     return ("TV-MA" + descriptor, false);
                 if (w >= tv14 && c_rating != "TV-MA")
                     c_rating = "TV-14";
             }
-
             return null;
         }
 
@@ -110,7 +103,6 @@ public static class RatingHelper
 
         if (!string.IsNullOrEmpty(c_rating) && c_rating != "X")
             c_rating += descriptor;
-
         return (c_rating, false);
     }
 
@@ -128,7 +120,6 @@ public static class RatingHelper
             var name = t.Name?.Trim();
             if (string.IsNullOrWhiteSpace(name))
                 continue;
-
             var srcProp = t.GetType().GetProperty("Source");
             if (srcProp != null)
             {
@@ -136,10 +127,8 @@ public static class RatingHelper
                 if (!string.IsNullOrEmpty(srcVal) && srcVal.Equals("User", StringComparison.OrdinalIgnoreCase))
                     continue;
             }
-
             if (!RatingTags.Contains(name))
                 continue;
-
             set.Add(name);
         }
 
@@ -156,7 +145,6 @@ public static class RatingHelper
                 set.Add(name.ToLowerInvariant());
             }
         }
-
         return set;
     }
 }

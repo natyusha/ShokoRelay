@@ -5,14 +5,10 @@ using ShokoRelay.Sync;
 
 namespace ShokoRelay.Helpers;
 
-/// <summary>
-/// Utility methods for writing plugin-specific diagnostic logs and structured reports.
-/// </summary>
+/// <summary>Utility methods for writing plugin-specific diagnostic logs and structured reports.</summary>
 public static class LogHelper
 {
-    /// <summary>
-    /// Write content to a log file inside the plugin's logs directory.
-    /// </summary>
+    /// <summary>Write content to a log file inside the plugin's logs directory.</summary>
     /// <param name="pluginDir">Root plugin directory.</param>
     /// <param name="fileName">Target filename.</param>
     /// <param name="content">Text content.</param>
@@ -36,6 +32,8 @@ public static class LogHelper
     }
 
     /// <summary>Build the report content for collections-report.log.</summary>
+    /// <param name="sb">Target builder.</param>
+    /// <param name="r">Build result data.</param>
     public static void BuildCollectionsReport(StringBuilder sb, BuildCollectionsResult r)
     {
         AppendHeader(sb, "Collection Build Report");
@@ -44,7 +42,6 @@ public static class LogHelper
         sb.AppendLine($"  Posters Uploaded:          {r.Uploaded}");
         sb.AppendLine($"  Empty Collections Deleted: {r.DeletedEmptyCollections}");
         sb.AppendLine($"  Errors:                    {r.Errors}");
-
         if (r.CreatedCollections.Count > 0)
         {
             sb.AppendLine("\nAssignments:");
@@ -60,6 +57,8 @@ public static class LogHelper
     }
 
     /// <summary>Build the report content for ratings-report.log.</summary>
+    /// <param name="sb">Target builder.</param>
+    /// <param name="result">Rating result data.</param>
     public static void BuildRatingsReport(StringBuilder sb, ApplyRatingsResult result)
     {
         AppendHeader(sb, "Audience Rating Report");
@@ -68,7 +67,6 @@ public static class LogHelper
         sb.AppendLine($"  Episodes Processed: {result.ProcessedEpisodes}");
         sb.AppendLine($"  Episodes Updated:   {result.UpdatedEpisodes}");
         sb.AppendLine($"  Errors:             {result.Errors}");
-
         if (result.AppliedChanges.Count > 0)
         {
             sb.AppendLine("\nApplied Updates:");
@@ -88,6 +86,9 @@ public static class LogHelper
     }
 
     /// <summary>Build the report content for remove-missing-report.log.</summary>
+    /// <param name="sb">Target builder.</param>
+    /// <param name="dryRun">Dry run flag.</param>
+    /// <param name="removed">List of removed paths.</param>
     public static void BuildRemoveMissingReport(StringBuilder sb, bool dryRun, IReadOnlyList<string>? removed)
     {
         AppendHeader(sb, "Remove Missing Files Report");
@@ -99,6 +100,11 @@ public static class LogHelper
     }
 
     /// <summary>Build the report content for sync-watched-report.log.</summary>
+    /// <param name="sb">Target builder.</param>
+    /// <param name="result">Sync result data.</param>
+    /// <param name="dir">Sync direction string.</param>
+    /// <param name="dry">Dry run flag.</param>
+    /// <param name="ratings">Whether ratings were synced.</param>
     public static void BuildSyncWatchedReport(StringBuilder sb, PlexWatchedSyncResult result, string dir, bool dry, bool ratings)
     {
         AppendHeader(sb, "Sync Watched Report");
@@ -106,7 +112,6 @@ public static class LogHelper
         sb.AppendLine($"  Mode:             {(dry ? "Dry Run" : "Live")}");
         sb.AppendLine($"  Include Ratings:  {ratings}");
         sb.AppendLine($"\n  Processed: {result.Processed} | Marked: {result.MarkedWatched} | Skipped: {result.Skipped}");
-
         foreach (var kv in result.PerUserChanges)
         {
             sb.AppendLine($"\nUser: {kv.Key}");
@@ -116,6 +121,9 @@ public static class LogHelper
     }
 
     /// <summary>Build the report content for at-vfs-build-report.log.</summary>
+    /// <param name="sb">Target builder.</param>
+    /// <param name="result">Build result data.</param>
+    /// <param name="filter">Series filter list.</param>
     public static void BuildAtVfsBuildReport(StringBuilder sb, AnimeThemesMappingApplyResult result, List<int> filter)
     {
         AppendHeader(sb, "AnimeThemes: VFS Build Report");
@@ -123,11 +131,9 @@ public static class LogHelper
         sb.AppendLine($"  Links Created:  {result.LinksCreated}");
         if (filter.Count > 0)
             sb.AppendLine($"  Filter: {string.Join(", ", filter)}");
-
         sb.AppendLine("\nPlanned Links:");
         foreach (var ce in result.CacheEntries)
             sb.AppendLine($"  {ce.VfsPath} (VideoID: {ce.VideoId})");
-
         if (result.Errors?.Count > 0)
         {
             sb.AppendLine("\nErrors:");
@@ -137,6 +143,8 @@ public static class LogHelper
     }
 
     /// <summary>Build the report content for at-vfs-map-report.log.</summary>
+    /// <param name="sb">Target builder.</param>
+    /// <param name="result">Map result data.</param>
     public static void BuildAtVfsMapReport(StringBuilder sb, AnimeThemesMappingBuildResult result)
     {
         AppendHeader(sb, "AnimeThemes: Mapping Build Report");
@@ -147,6 +155,8 @@ public static class LogHelper
     }
 
     /// <summary>Build the report content for at-mp3-report.log.</summary>
+    /// <param name="sb">Target builder.</param>
+    /// <param name="result">Batch result data.</param>
     public static void BuildAtMp3Report(StringBuilder sb, ThemeMp3BatchResult result)
     {
         AppendHeader(sb, "AnimeThemes: MP3 Batch Report");

@@ -1,16 +1,16 @@
 /* #region MARK: Toggle Buttons
 */
 .w46-button {
+  fill: var(--bg-color);
   display: inline-flex;
-  align-items: center;
   justify-content: center;
+  align-items: center;
   max-width: 46px;
   padding: 12px 16px;
-  fill: var(--bg-color);
 }
 .w46-button .icon-svg {
-  height: 2em;
   width: 2em;
+  height: 2em;
   margin: -2em;
 }
 .w46-button.toggle[aria-pressed="true"] {
@@ -29,21 +29,21 @@ button.loading {
   cursor: not-allowed;
 }
 .button-spinner {
+  pointer-events: none;
   position: absolute;
+  z-index: 2;
   top: 50%;
   left: 50%;
-  z-index: 2;
-  height: 20px;
-  width: 20px;
   transform: translate(-50%, -50%);
-  pointer-events: none;
+  width: 20px;
+  height: 20px;
 }
 .button-spinner svg {
-  display: block;
-  height: 100%;
-  width: 100%;
   fill: var(--bg-color);
   transform-origin: center center;
+  display: block;
+  width: 100%;
+  height: 100%;
   animation: spin 900ms linear infinite;
 }
 .w46-button .button-spinner {
@@ -62,22 +62,22 @@ button.loading {
 /* #region MARK: Styled Checkboxes
 */
 label.shoko-checkbox {
+  user-select: none;
   display: inline-flex;
   align-items: flex-start;
   gap: 0.6rem;
   padding: 0.25rem 0;
   cursor: pointer;
-  user-select: none;
 }
 label.shoko-checkbox input[type="checkbox"] {
   position: absolute;
-  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
   width: 1px;
+  height: 1px;
   margin: -1px;
   padding: 0;
   border: 0;
-  clip: rect(0 0 0 0);
-  overflow: hidden;
   white-space: nowrap;
 }
 .shoko-checkbox-text {
@@ -89,15 +89,15 @@ label.shoko-checkbox input[type="checkbox"] {
   font-weight: 500;
 }
 .shoko-checkbox-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   fill: var(--highlight-color);
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
   transition: all 0.3s ease-in-out;
 }
 .shoko-checkbox-icon svg {
-  height: 1.5rem;
   width: 1.5rem;
+  height: 1.5rem;
 }
 label.shoko-checkbox:hover .shoko-checkbox-icon {
   fill: var(--hover-color);
@@ -123,13 +123,13 @@ label.plex-auth.shoko-checkbox input:disabled ~ .shoko-checkbox-text {
 /* #region MARK: Floating Links
 */
 .floating-actions {
-  position: fixed;
-  right: 12px;
-  bottom: 12px;
-  z-index: 1000;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  position: fixed;
+  z-index: 1000;
+  bottom: 12px;
+  right: 12px;
 }
 .floating-actions .icon-svg,
 .floating-actions .at-svg {
@@ -137,30 +137,30 @@ label.plex-auth.shoko-checkbox input:disabled ~ .shoko-checkbox-text {
 }
 .float-link {
   display: inline-flex;
-  align-items: center;
   justify-content: center;
-  height: 40px;
+  align-items: center;
   width: 40px;
-  color: var(--text-color);
+  height: 40px;
   transition: all 0.3s ease-in-out;
+  color: var(--text-color);
 }
 button.float-link {
   appearance: none;
   -webkit-appearance: none;
   display: inline-flex;
-  align-items: center;
   justify-content: center;
-  height: 40px;
+  align-items: center;
   width: 40px;
+  height: 40px;
   margin: 0;
   padding: 0;
-  color: var(--text-color);
   background: transparent;
   border: none;
+  color: var(--text-color);
 }
 .float-link:hover {
-  color: var(--hover-color);
   transform: translateY(-1px);
+  color: var(--hover-color);
 }
 .float-link.theme-toggle[aria-pressed="false"] {
   color: var(--highlight-color);
@@ -176,24 +176,24 @@ button.float-link {
   transform: translateY(4px) rotate(-135deg);
 }
 .details-anim > summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin: 6px 12px 6px 0;
-  font-weight: 500;
-  cursor: pointer;
   outline: none;
   user-select: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 6px 12px 6px 0;
   transition: all 0.3s ease-in-out;
+  cursor: pointer;
+  font-weight: 500;
 }
 .details-anim > summary::after {
   content: "";
   display: inline-block;
+  transform: rotate(45deg);
   padding: 4px;
+  transition: transform 0.3s ease;
   border: solid;
   border-width: 0 3px 3px 0;
-  transform: rotate(45deg);
-  transition: transform 0.3s ease;
 }
 .details-anim > summary:hover {
   color: var(--hover-color);
@@ -203,32 +203,32 @@ button.float-link {
 /* #region MARK: Toasts
 */
 #toast-container {
-  position: fixed;
-  right: auto;
-  bottom: 12px;
-  left: 12px;
-  top: auto;
-  z-index: 2000;
   display: flex;
   flex-direction: column-reverse;
   gap: 8px;
+  position: fixed;
+  z-index: 2000;
+  top: auto;
+  bottom: 12px;
+  left: 12px;
+  right: auto;
 }
 .toast {
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  transform: translateX(-18px) translateZ(0);
   min-width: 220px;
   max-width: 420px;
   padding: 10px 14px;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
-  font-size: 0.95em;
-  color: var(--text-color);
-  background: var(--panel-color);
-  opacity: 0;
-  cursor: pointer;
-  transform: translateX(-18px) translateZ(0);
   transition:
     transform 260ms cubic-bezier(0.2, 0.9, 0.2, 1),
     opacity 220ms ease;
+  background: var(--panel-color);
+  cursor: pointer;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 0.95em;
+  color: var(--text-color);
 }
 .toast.visible {
   opacity: 1;
@@ -252,20 +252,20 @@ button.float-link {
 .np-line {
   display: block;
   overflow: hidden;
-  white-space: nowrap;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* #endregion */
 
 /* #region MARK: Modals
 */
 .modal-overlay {
-  position: fixed;
   inset: 0;
-  z-index: 1500;
   display: none;
-  align-items: center;
   justify-content: center;
+  align-items: center;
+  position: fixed;
+  z-index: 1500;
   padding: 24px;
   background: rgba(0, 0, 0, 0.45);
 }
@@ -273,14 +273,14 @@ button.float-link {
   display: flex;
 }
 .modal {
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
   width: 390px;
   max-width: calc(100% - 48px);
-  overflow: hidden;
-  color: var(--text-color);
   background: var(--panel-color);
   border: 1px solid var(--border-color);
   border-radius: 10px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  color: var(--text-color);
 }
 .modal.overrides {
   width: 870px;
@@ -289,22 +289,22 @@ button.float-link {
   padding: 0;
 }
 .modal textarea {
-  height: 470px;
   width: 100%;
+  height: 470px;
   margin: 0;
   border-radius: 0;
-  font-family: monospace;
   font-size: 1.1em;
+  font-family: monospace;
 }
 header {
   display: flex;
-  align-items: center;
   justify-content: space-between;
+  align-items: center;
   padding: 1rem;
-  font-size: 1.2em;
-  font-weight: 500;
   background: var(--bg-color);
   border-bottom: 1px solid var(--border-color);
+  font-size: 1.2em;
+  font-weight: 500;
 }
 footer {
   display: flex;
@@ -314,8 +314,8 @@ footer {
 }
 #sync-direction-arrow {
   display: inline-flex;
-  align-items: center;
   justify-content: center;
+  align-items: center;
   line-height: 1;
 }
 .modal-body {
@@ -325,17 +325,17 @@ footer {
   margin-top: 10px;
 }
 .direction-toggle {
+  appearance: none;
+  -webkit-appearance: none;
+  box-shadow: 0 0 4px 2px rgba(148, 170, 209, 0.3);
+  user-select: none;
   display: inline-flex;
   margin-bottom: 16px;
   padding: 10px 6px;
-  appearance: none;
-  -webkit-appearance: none;
-  color: var(--text-color);
   background: var(--inset-color);
-  border: 1px solid var(--border-color);
-  box-shadow: 0 0 4px 2px rgba(148, 170, 209, 0.3);
   cursor: pointer;
-  user-select: none;
+  border: 1px solid var(--border-color);
+  color: var(--text-color);
 }
 .direction-toggle:hover {
   background: color-mix(in srgb, var(--inset-color), white 5%);
@@ -347,23 +347,23 @@ footer {
 }
 .dir-label {
   margin-top: 9px;
-  text-align: center;
   font-size: 1.1em;
   color: var(--text-color);
+  text-align: center;
 }
 .dir-icon {
-  position: absolute;
-  height: 28px;
-  width: 28px;
-  display: inline-block;
   fill: var(--highlight-color);
+  display: inline-block;
+  position: absolute;
   visibility: visible;
+  width: 28px;
+  height: 28px;
   transition:
     opacity 0.4s ease-out,
     visibility 0.4s steps(2, end);
 }
 .dir-icon.hidden {
-  opacity: 0;
   visibility: hidden;
+  opacity: 0;
 }
 /* #endregion */

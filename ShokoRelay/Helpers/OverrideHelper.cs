@@ -3,26 +3,19 @@ using Shoko.Abstractions.Services;
 
 namespace ShokoRelay.Helpers;
 
-/// <summary>
-/// Parses an optional "anidb_vfs_overrides.csv" file placed in the plugin's config directory.
-/// The file allows a user to group multiple Shoko series IDs together so that one primary ID is treated as the canonical series and the rest are merged for VFS and metadata operations.
-/// </summary>
+/// <summary>Parses an optional "anidb_vfs_overrides.csv" file to group multiple Shoko series IDs together.</summary>
 public static class OverrideHelper
 {
-    // map AniDB id -> list of AniDB ids in group (first is primary AniDB id)
     private static readonly Dictionary<int, List<int>> _groups = [];
     private static DateTime _lastWriteUtc = DateTime.MinValue;
     private static string? _loadedPath;
     private const string OverridesFileName = "anidb_vfs_overrides.csv";
     private static string OverridesPath => Path.Combine(ShokoRelay.ConfigDirectory, OverridesFileName);
 
-    /// <summary>
-    /// Load override groups from the optional <c>anidb_vfs_overrides.csv</c> file located in the config directory. Refreshes if the file has changed since the last load.
-    /// </summary>
+    /// <summary>Load override groups from the CSV file if it has changed since the last load.</summary>
     public static void EnsureLoaded()
     {
         var configDir = ShokoRelay.ConfigDirectory;
-        // require config directory; nothing to do otherwise
         if (string.IsNullOrWhiteSpace(configDir))
             return;
 
@@ -76,13 +69,10 @@ public static class OverrideHelper
         catch { }
     }
 
-    /// <summary>
-    /// Return the primary series id for the given <paramref name="shokoSeriesId"/> according to the loaded override groups.
-    /// If numbering overrides are disabled or no mapping exists, the original id is returned.
-    /// </summary>
-    /// <param name="shokoSeriesId">Input series ID.</param>
-    /// <param name="metadataService">Service used to resolve series/anidb mappings.</param>
-    /// <returns>The primary Shoko series ID for the override group, or <paramref name="shokoSeriesId"/> if no override exists.</returns>
+    /// <summary>Return the primary series id for the given Shoko series ID according to overrides.</summary>
+    /// <param name="shokoSeriesId">The input series ID.</param>
+    /// <param name="metadataService">Service used to resolve series mappings.</param>
+    /// <returns>The primary Shoko series ID, or the original ID if no override exists.</returns>
     public static int GetPrimary(int shokoSeriesId, IMetadataService metadataService)
     {
         if (!ShokoRelay.Settings.TmdbEpNumbering || metadataService == null)
@@ -101,13 +91,10 @@ public static class OverrideHelper
         return shokoSeriesId;
     }
 
-    /// <summary>
-    /// Retrieve the full group of series IDs associated with the specified <paramref name="shokoSeriesId"/>, including the primary and any secondaries.
-    /// Returns a singleton list if no override applies.
-    /// </summary>
-    /// <param name="shokoSeriesId">Series id to look up.</param>
-    /// <param name="metadataService">Metadata service.</param>
-    /// <returns>A list of Shoko series IDs in the group (primary first), or a singleton list if no override applies.</returns>
+    /// <summary>Retrieve the full group of series IDs associated with the specified series ID.</summary>
+    /// <param name="shokoSeriesId">The input series ID.</param>
+    /// <param name="metadataService">Service used to resolve series mappings.</param>
+    /// <returns>A list of Shoko series IDs in the group (primary first).</returns>
     public static IReadOnlyList<int> GetGroup(int shokoSeriesId, IMetadataService metadataService)
     {
         if (!ShokoRelay.Settings.TmdbEpNumbering || metadataService == null)

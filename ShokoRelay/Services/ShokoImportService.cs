@@ -4,19 +4,14 @@ using Shoko.Abstractions.Services;
 
 namespace ShokoRelay.Services;
 
-/// <summary>
-/// Helper for triggering server-side import and housekeeping actions using Shoko's internal service abstractions. No API key or HTTP calls are required when running as a plugin.
-/// </summary>
+/// <summary>Helper for triggering import actions using internal service abstractions.</summary>
 public class ShokoImportService(IVideoService videoService)
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private readonly IVideoService _videoService = videoService ?? throw new ArgumentNullException(nameof(videoService));
 
-    /// <summary>
-    /// Trigger import scans for every managed folder marked as a "Source". Returns the names of folders that were scheduled for scanning, which is useful for UI feedback.
-    /// </summary>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>A read-only list of folder names that were scheduled for scanning.</returns>
+    /// <summary>Trigger import scans for all managed folder sources.</summary>
+    /// <returns>A list of folders scheduled for scanning.</returns>
     public async Task<IReadOnlyList<string>> TriggerImportAsync()
     {
         List<string> folders = [];
@@ -24,17 +19,13 @@ public class ShokoImportService(IVideoService videoService)
         {
             var mf = _videoService.GetAllManagedFolders();
             if (mf != null)
-            {
                 folders = [.. mf.Where(f => f.DropFolderType.HasFlag(DropFolderType.Source)).Select(f => f.Name ?? f.Path ?? string.Empty).Where(s => !string.IsNullOrEmpty(s))];
-            }
         }
         catch (Exception ex)
         {
             Logger.Warn(ex, "TriggerImportAsync: failed to query managed folders");
-            // fall through with empty list; no import will be scheduled but caller will see no folders
         }
 
-        // schedule the scan; the work executes asynchronously inside Shoko
         try
         {
             await _videoService.ScheduleScanForManagedFolders(onlyDropSources: true).ConfigureAwait(false);
@@ -43,18 +34,12 @@ public class ShokoImportService(IVideoService videoService)
         {
             Logger.Warn(ex, "TriggerImportAsync: failed to schedule folder scan");
         }
-
         return folders;
     }
 
-    /// <summary>
-    /// Scan for video file entries whose physical file has disappeared and optionally remove those records from the database.
-    /// The <paramref name="dryRun"/> flag controls whether deletion occurs; in either case the list of missing paths is returned. Database deletions never touch disk files.
-    /// </summary>
-    /// <param name="removeFromMyList">Whether to also remove the entry from AniDB MyList.</param>
-    /// <param name="dryRun">When <c>true</c>, list missing files without deleting them.</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>A read-only list of paths for files that were identified as missing.</returns>
+    /// <summary>Scans for and removes records for missing video files.</summary>
+    /// <param name="dryRun">If true, skip deletion.</param>
+    /// <returns>A list of identified missing paths.</returns>
     public async Task<IReadOnlyList<string>> RemoveMissingFilesAsync(bool dryRun = false)
     {
         var all = _videoService.GetAllVideoFiles() ?? [];

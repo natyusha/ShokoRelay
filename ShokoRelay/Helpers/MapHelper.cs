@@ -7,43 +7,43 @@ using static ShokoRelay.Plex.PlexMapping;
 
 namespace ShokoRelay.Helpers;
 
-/// <summary>
-/// Provides utility methods for mapping Shoko series and video files to Plex-compatible structures.
-/// </summary>
+/// <summary>Provides utility methods for mapping Shoko series and video files to Plex-compatible structures.</summary>
 public static class MapHelper
 {
-    /// <summary>
-    /// Represents a mapping between a video file and one or more Shoko episodes.
-    /// </summary>
+    /// <summary>Represents a mapping between a video file and one or more Shoko episodes.</summary>
+    /// <param name="Video">The video object.</param>
+    /// <param name="Episodes">All episodes in the file.</param>
+    /// <param name="PrimaryEpisode">The episode used for coordinate resolution.</param>
+    /// <param name="Coords">Plex coordinates.</param>
+    /// <param name="FileName">Original filename.</param>
+    /// <param name="PartIndex">Optional index for split files.</param>
+    /// <param name="PartCount">Total parts for split files.</param>
+    /// <param name="TmdbEpisode">Optional TMDB metadata override.</param>
     public record FileMapping(IVideo Video, IReadOnlyList<IEpisode> Episodes, IEpisode PrimaryEpisode, PlexCoords Coords, string FileName, int? PartIndex, int PartCount, object? TmdbEpisode);
 
-    /// <summary>
-    /// Aggregates file mapping information and available seasons for a series.
-    /// </summary>
+    /// <summary>Aggregates file mapping information and available seasons for a series.</summary>
+    /// <param name="Mappings">List of individual file mappings.</param>
+    /// <param name="Seasons">List of unique season numbers.</param>
     public record SeriesFileData(List<FileMapping> Mappings, List<int> Seasons)
     {
-        /// <summary>
-        /// Retrieves mappings specific to a given season.
-        /// </summary>
+        /// <summary>Retrieves mappings specific to a given season.</summary>
+        /// <param name="season">The season number.</param>
+        /// <returns>A filtered list of mappings.</returns>
         public List<FileMapping> GetForSeason(int season) => [.. Mappings.Where(m => m.Coords.Season == season).OrderBy(m => m.Coords.Episode)];
     }
 
-    /// <summary>
-    /// Generate <see cref="SeriesFileData"/> for the given series by building file mappings and enumerating seasons.
-    /// </summary>
+    /// <summary>Generate SeriesFileData for the given series by building file mappings and seasons.</summary>
     /// <param name="series">The series to process.</param>
-    /// <returns>A SeriesFileData object containing mappings and sorted season numbers.</returns>
+    /// <returns>A SeriesFileData object.</returns>
     public static SeriesFileData GetSeriesFileData(ISeries series)
     {
         var mappings = BuildFileMappings(series);
         return new SeriesFileData(mappings, [.. mappings.Select(m => m.Coords.Season).Distinct().OrderBy(s => s)]);
     }
 
-    /// <summary>
-    /// Returns the TMDB ordering ID that should be used for episode numbering, or <c>null</c> if none applies.
-    /// </summary>
+    /// <summary>Returns the TMDB ordering ID that should be used for episode numbering.</summary>
     /// <param name="series">The series to inspect.</param>
-    /// <returns>The alternate TMDB ordering ID, or null if default.</returns>
+    /// <returns>Ordering ID or null.</returns>
     public static string? GetPreferredTmdbOrderingId(ISeries series)
     {
         if (!ShokoRelay.Settings.TmdbEpNumbering)
@@ -53,11 +53,9 @@ public static class MapHelper
         return (string.IsNullOrWhiteSpace(pref) || string.Equals(pref, tmdbShow?.ID.ToString(), StringComparison.OrdinalIgnoreCase)) ? null : pref;
     }
 
-    /// <summary>
-    /// Return merged file data for a primary series and any additional series in the same logical group.
-    /// </summary>
+    /// <summary>Return merged file data for a primary series and any additional series in the group.</summary>
     /// <param name="primary">The primary series.</param>
-    /// <param name="extras">Secondary series to merge in.</param>
+    /// <param name="extras">Secondary series to merge.</param>
     /// <returns>A combined SeriesFileData object.</returns>
     public static SeriesFileData GetSeriesFileDataMerged(ISeries primary, IEnumerable<ISeries> extras)
     {
@@ -80,7 +78,6 @@ public static class MapHelper
         var videoToEps = new ConcurrentDictionary<int, ConcurrentBag<(IEpisode Episode, PlexCoords Coords)>>();
         var seasonsSet = new ConcurrentDictionary<int, byte>();
 
-        // Parallel pre-computation of coordinates and video-episode relationships
         Parallel.ForEach(
             seriesEpisodes,
             p =>
@@ -102,7 +99,6 @@ public static class MapHelper
         {
             if (!videoToEps.TryGetValue(video.ID, out var epList) || epList.Count == 0)
                 continue;
-
             // Handle multi-type tiebreaks using cross-reference ordering
             var sortedEps = epList.OrderBy(x => x.Coords.Season).ThenBy(x => x.Coords.Episode).ToList();
             if (sortedEps.Count > 1 && sortedEps.Select(x => x.Episode.Type).Distinct().Count() > 1 && video.CrossReferences?.Count > 0)
@@ -118,17 +114,13 @@ public static class MapHelper
             var deduped = DeduplicateByCoords(sortedEps, video);
             if (deduped.Count == 0)
                 continue;
-
             var firstEp = deduped[0].Episode;
             var fileList = episodeFileLists.GetValueOrDefault(firstEp.ID);
             int fIdx = fileList?.FindIndex(x => x.ID == video.ID) ?? 0,
                 fCount = fileList?.Count ?? 1;
             string fileName = Path.GetFileName(video.Files?.FirstOrDefault()?.Path ?? "");
-
             bool allowPt = fCount > 1 && TextHelper.HasPlexSplitTag(fileName) && deduped.Select(d => d.Episode.Type).Distinct().Count() <= 1;
             int? partIdx = allowPt ? fIdx + 1 : null;
-
-            // Coordinate resolution
             PlexCoords coords = (deduped.Count == 1) ? deduped[0].Coords : GetPlexCoordinatesForFile(deduped.Select(x => x.Episode), allowPt ? fIdx : null);
             if (coords.Season == PlexConstants.SeasonOther)
                 coords = ApplyFeaturettesFallback(coords, s1, s0);
@@ -154,9 +146,9 @@ public static class MapHelper
         return result;
     }
 
-    /// <summary>
-    /// Indicates whether an episode should be treated as hidden.
-    /// </summary>
+    /// <summary>Indicates whether an episode should be treated as hidden.</summary>
+    /// <param name="e">The episode to check.</param>
+    /// <returns>True if hidden.</returns>
     public static bool IsHidden(IEpisode e) => e is IShokoEpisode shokoEp && shokoEp.IsHidden;
 
     private static List<(IEpisode Episode, PlexCoords Coords)> DeduplicateByCoords(List<(IEpisode Episode, PlexCoords Coords)> eps, IVideo video)
@@ -164,7 +156,6 @@ public static class MapHelper
         var deduped = new List<(IEpisode Episode, PlexCoords Coords)>();
         var index = new Dictionary<(int, int), int>();
         var xrefPos = video.CrossReferences?.Where(cr => cr.ShokoEpisode != null).Select((cr, i) => (id: cr.ShokoEpisode!.ID, i)).ToDictionary(t => t.id, t => t.i);
-
         foreach (var entry in eps)
         {
             var key = (entry.Coords.Season, entry.Coords.Episode);
@@ -181,8 +172,7 @@ public static class MapHelper
             if (enPos >= 0 && (exPos == -1 || enPos < exPos))
                 deduped[existingIdx] = entry;
         }
-
-        // Reorder list so the first cross-referenced episode is the Primary (deduped[0])
+        // Reorder list so the first cross-referenced episode is the Primary
         if (xrefPos != null && deduped.Count > 1)
         {
             var best = deduped.Select((d, i) => (d, i, pos: xrefPos.GetValueOrDefault(d.Episode.ID, int.MaxValue))).OrderBy(x => x.pos).First();

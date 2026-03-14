@@ -8,9 +8,7 @@ using ShokoRelay.Plex;
 
 namespace ShokoRelay.Vfs;
 
-/// <summary>
-/// Watches for Shoko video-file events (hashed, relocated, deleted) and triggers incremental VFS rebuilds plus Plex section refreshes.
-/// </summary>
+/// <summary>Watches for Shoko video-file events (hashed, relocated, deleted) and triggers incremental VFS rebuilds plus Plex section refreshes.</summary>
 public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadataService metadataService, PlexMetadata plexMetadata, PlexClient plexLibrary, PlexCollections plexCollections)
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
@@ -25,9 +23,7 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
     private bool _processing;
     private readonly Lock _gate = new();
 
-    /// <summary>
-    /// Subscribe to Shoko video-file events and begin watching for changes.
-    /// </summary>
+    /// <summary>Subscribe to Shoko video-file events and begin watching for changes.</summary>
     public void Start()
     {
         _videoService.VideoFileHashed += OnVideoFileHashed;
@@ -37,9 +33,7 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
         Logger.Info("VFS watcher started (auto-refresh on file changes).");
     }
 
-    /// <summary>
-    /// Unsubscribe from Shoko video-file events and stop watching.
-    /// </summary>
+    /// <summary>Unsubscribe from Shoko video-file events and stop watching.</summary>
     public void Stop()
     {
         try
@@ -139,9 +133,8 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
         }
     }
 
-    /// <summary>
-    /// Refresh Plex library paths and collection metadata for a single series after its VFS links have been created or updated.
-    /// </summary>
+    /// <summary>Refresh Plex library paths and collection metadata for a single series after its VFS links have been created or updated.</summary>
+    /// <param name="seriesId">The Shoko Series ID to update in Plex.</param>
     private async Task TriggerPlexUpdatesAsync(int seriesId)
     {
         if (!_plexLibrary.IsEnabled)

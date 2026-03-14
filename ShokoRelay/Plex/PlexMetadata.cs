@@ -9,23 +9,19 @@ using static ShokoRelay.Plex.PlexMapping;
 
 namespace ShokoRelay.Plex;
 
-/// <summary>
-/// Converts Shoko series/episode/season metadata into Plex-compatible property dictionaries. Also constructs external GUID, rating, network, and country arrays.
-/// </summary>
+/// <summary>Converts Shoko series/episode/season metadata into Plex-compatible property dictionaries.</summary>
 public class PlexMetadata(IMetadataService metadataService)
 {
     private readonly IMetadataService _metadataService = metadataService;
 
-    /// <summary>
-    /// Aggregates relevant information about a Shoko series for controller responses.
-    /// Includes the series metadata, API base URL, resolved titles, content rating string, and file data used when building VFS links.
-    /// </summary>
+    /// <summary>Aggregates relevant information about a Shoko series for controller responses.</summary>
+    /// <param name="Series">The primary series metadata.</param>
+    /// <param name="Titles">A tuple containing Display, Sort, and Original titles.</param>
+    /// <param name="ContentRating">The resolved content rating string.</param>
+    /// <param name="FileData">The mapping data for the series' files.</param>
     public record SeriesContext(IShokoSeries Series, (string DisplayTitle, string SortTitle, string? OriginalTitle) Titles, string ContentRating, MapHelper.SeriesFileData FileData);
 
-    /// <summary>
-    /// Convert a Plex-style ratingKey into a SeriesContext.
-    /// This resolves the underlying Shoko series, applies any merge overrides, and gathers file data and titles.
-    /// </summary>
+    /// <summary>Resolves a Plex-style ratingKey into a <see cref="SeriesContext"/>.</summary>
     /// <param name="ratingKey">Plex rating key representing show, season or episode.</param>
     /// <returns>A SeriesContext containing resolved series data and mappings, or null if not found.</returns>
     public SeriesContext? GetSeriesContext(string ratingKey)
@@ -56,9 +52,7 @@ public class PlexMetadata(IMetadataService metadataService)
         return new SeriesContext(primarySeries, TextHelper.ResolveFullSeriesTitles(primarySeries), RatingHelper.GetContentRatingAndAdult(primarySeries).Rating ?? "", fileData);
     }
 
-    /// <summary>
-    /// Build a sorted list of mapped episode metadata objects for a given season number.
-    /// </summary>
+    /// <summary>Builds a sorted list of mapped episode metadata objects for a given season.</summary>
     /// <param name="ctx">Series context containing file data and title information.</param>
     /// <param name="seasonNum">Season number whose episodes should be returned.</param>
     /// <returns>An ordered list of episode metadata objects for the season.</returns>
@@ -95,14 +89,14 @@ public class PlexMetadata(IMetadataService metadataService)
         return [.. items.OrderBy(x => x.Coords.Episode).Select(x => x.Meta)];
     }
 
-    /// <summary>
-    /// Derive a cache-busting token from the entity's LastUpdatedAt timestamp.
-    /// </summary>
     private static string? GetCacheBuster(object? entity) => entity is IWithUpdateDate upd ? new DateTimeOffset(upd.LastUpdatedAt).ToUnixTimeSeconds().ToString() : null;
 
-    /// <summary>
-    /// Compose a Plex rating key string from a metadata type and numeric identifiers.
-    /// </summary>
+    /// <summary>Composes a Plex rating key string from a metadata type and numeric identifiers.</summary>
+    /// <param name="type">The metadata type (collection, show, season, episode).</param>
+    /// <param name="id">The Shoko identifier.</param>
+    /// <param name="season">Optional season number.</param>
+    /// <param name="part">Optional part index.</param>
+    /// <returns>A Plex-style rating key.</returns>
     public string GetRatingKey(string type, int id, int? season = null, int? part = null) =>
         type switch
         {
@@ -113,9 +107,12 @@ public class PlexMetadata(IMetadataService metadataService)
             _ => id.ToString(),
         };
 
-    /// <summary>
-    /// Compose a Plex GUID URI from a metadata type and numeric identifiers.
-    /// </summary>
+    /// <summary>Composes a Plex GUID URI from a metadata type and numeric identifiers.</summary>
+    /// <param name="type">The metadata type.</param>
+    /// <param name="id">The Shoko identifier.</param>
+    /// <param name="season">Optional season number.</param>
+    /// <param name="part">Optional part index.</param>
+    /// <returns>A fully qualified metadata GUID string.</returns>
     public string GetGuid(string type, int id, int? season = null, int? part = null) =>
         type switch
         {
@@ -128,11 +125,9 @@ public class PlexMetadata(IMetadataService metadataService)
             _ => $"{ShokoRelayInfo.AgentScheme}://{id}",
         };
 
-    /// <summary>
-    /// Get the collection name for a series based on its top-level Shoko group, returning <c>null</c> when the group contains only one series.
-    /// </summary>
+    /// <summary>Returns the collection name for a series based on its top-level Shoko group.</summary>
     /// <param name="series">The series to check.</param>
-    /// <returns>The group's preferred title, or <c>null</c> if no collection applies.</returns>
+    /// <returns>The group's preferred title, or null if no collection applies.</returns>
     public string? GetCollectionName(ISeries series)
     {
         if (series is not IShokoSeries shokoSeries)
@@ -149,9 +144,10 @@ public class PlexMetadata(IMetadataService metadataService)
             : null;
     }
 
-    /// <summary>
-    /// Build a Plex-compatible metadata dictionary for a collection backed by a Shoko group.
-    /// </summary>
+    /// <summary>Builds a Plex-compatible metadata dictionary for a Shoko group collection.</summary>
+    /// <param name="group">The Shoko group.</param>
+    /// <param name="primarySeries">The series providing the artwork.</param>
+    /// <returns>A dictionary of Plex metadata properties.</returns>
     public Dictionary<string, object?> MapCollection(IShokoGroup group, ISeries primarySeries)
     {
         var cb = GetCacheBuster(primarySeries);
@@ -179,9 +175,10 @@ public class PlexMetadata(IMetadataService metadataService)
 
     #region Shows
 
-    /// <summary>
-    /// Build a Plex-compatible metadata dictionary for a series (show).
-    /// </summary>
+    /// <summary>Builds a Plex-compatible metadata dictionary for a series (show).</summary>
+    /// <param name="series">The series metadata.</param>
+    /// <param name="titles">The resolved title tuple.</param>
+    /// <returns>A dictionary of Plex metadata properties.</returns>
     public Dictionary<string, object?> MapSeries(ISeries series, (string DisplayTitle, string SortTitle, string? OriginalTitle) titles)
     {
         var cb = GetCacheBuster(series);
@@ -234,9 +231,11 @@ public class PlexMetadata(IMetadataService metadataService)
 
     #region Seasons
 
-    /// <summary>
-    /// Build a Plex-compatible metadata dictionary for a single season.
-    /// </summary>
+    /// <summary>Builds a Plex-compatible metadata dictionary for a single season.</summary>
+    /// <param name="series">The series metadata.</param>
+    /// <param name="seasonNum">The season index.</param>
+    /// <param name="seriesTitle">The title of the parent series.</param>
+    /// <returns>A dictionary of Plex metadata properties.</returns>
     public Dictionary<string, object?> MapSeason(ISeries series, int seasonNum, string seriesTitle)
     {
         var ctx = GetSeriesContext(series.ID.ToString());
@@ -302,9 +301,14 @@ public class PlexMetadata(IMetadataService metadataService)
 
     #region Episodes
 
-    /// <summary>
-    /// Build a Plex-compatible metadata dictionary for a single episode.
-    /// </summary>
+    /// <summary>Builds a Plex-compatible metadata dictionary for a single episode.</summary>
+    /// <param name="ep">The episode metadata.</param>
+    /// <param name="mapped">The resolved Plex coordinates.</param>
+    /// <param name="series">The primary series metadata.</param>
+    /// <param name="titles">The resolved title tuple.</param>
+    /// <param name="partIndex">Optional index for multi-part files.</param>
+    /// <param name="tmdbEpisode">Optional TMDB episode metadata override.</param>
+    /// <returns>A dictionary of Plex metadata properties.</returns>
     public Dictionary<string, object?> MapEpisode(
         IEpisode ep,
         PlexCoords mapped,

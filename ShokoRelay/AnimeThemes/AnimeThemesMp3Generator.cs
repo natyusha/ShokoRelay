@@ -8,15 +8,36 @@ using ShokoRelay.Vfs;
 
 namespace ShokoRelay.AnimeThemes;
 
+/// <summary>Query parameters for MP3 generation requests.</summary>
 public record AnimeThemesMp3Query
 {
+    /// <summary>The filesystem path to the folder or root directory.</summary>
     public string? Path { get; init; }
+
+    /// <summary>Optional specific theme slug filter (e.g., OP1, ED).</summary>
     public string? Slug { get; init; }
+
+    /// <summary>The index offset to use when multiple themes match the filter.</summary>
     public int Offset { get; init; } = 0;
+
+    /// <summary>Whether to process all subfolders recursively.</summary>
     public bool Batch { get; init; }
+
+    /// <summary>Whether to force generation even if Theme.mp3 already exists.</summary>
     public bool Force { get; init; }
 }
 
+/// <summary>Result of a single Theme.mp3 generation attempt.</summary>
+/// <param name="Folder">The directory processed.</param>
+/// <param name="Status">The status code (ok, skipped, error).</param>
+/// <param name="Message">Optional error or status message.</param>
+/// <param name="ThemePath">The local path to the generated MP3.</param>
+/// <param name="VfsLinkPath">The path where the VFS symlink was created.</param>
+/// <param name="AnimeTitle">The resolved anime title.</param>
+/// <param name="AnimeSlug">The internal AnimeThemes slug for the anime.</param>
+/// <param name="SeriesId">The Shoko Series ID.</param>
+/// <param name="Slug">The specific theme slug (e.g. Opening 1).</param>
+/// <param name="DurationSeconds">The duration of the resulting audio file.</param>
 public record ThemeMp3OperationResult(
     string Folder,
     string Status,
@@ -30,18 +51,25 @@ public record ThemeMp3OperationResult(
     double? DurationSeconds = null
 );
 
+/// <summary>Aggregated results of a batch MP3 generation operation.</summary>
+/// <param name="Root">The root directory for the batch.</param>
+/// <param name="Items">List of individual operation results.</param>
+/// <param name="Processed">Count of successful generations.</param>
+/// <param name="Skipped">Count of skipped folders.</param>
+/// <param name="Errors">Count of encountered errors.</param>
 public record ThemeMp3BatchResult(string Root, IReadOnlyList<ThemeMp3OperationResult> Items, int Processed, int Skipped, int Errors);
 
+/// <summary>Result of an in-memory theme conversion for preview.</summary>
+/// <param name="Stream">The audio data stream.</param>
+/// <param name="FileName">Suggested filename for the response.</param>
+/// <param name="ContentType">MIME type (audio/mpeg).</param>
+/// <param name="Title">The song title metadata.</param>
 public record ThemePreviewResult(Stream Stream, string FileName, string ContentType, string? Title);
 
+/// <summary>Internal record representing a selected theme's metadata and audio link.</summary>
 internal sealed record ThemeSelection(string AudioUrl, string SlugRaw, string SlugDisplay, string SongTitle, string Artist, string AnimeTitle, string AnimeSlug);
 
-/// <summary>
-/// Provides functionality for fetching, converting and previewing anime theme audio from the AnimeThemes API.
-/// </summary>
-/// <param name="metadataService">Shoko metadata service.</param>
-/// <param name="videoService">Shoko video service.</param>
-/// <param name="configProvider">Plugin configuration provider.</param>
+/// <summary>Provides functionality for fetching, converting and previewing anime theme audio from the AnimeThemes API.</summary>
 public class AnimeThemesMp3Generator(IMetadataService metadataService, IVideoService videoService, ConfigProvider configProvider)
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
@@ -56,10 +84,8 @@ public class AnimeThemesMp3Generator(IMetadataService metadataService, IVideoSer
         get => Path.Combine(field, "mp3_animethemes.cache");
     } = configProvider.ConfigDirectory;
 
-    /// <summary>
-    /// Returns the cached list of folders containing Theme.mp3 files.
-    /// </summary>
-    /// <returns>A read-only list of cached folder paths.</returns>
+    /// <summary>Returns the cached list of folders containing Theme.mp3 files.</summary>
+    /// <returns>A read-only list of folder paths.</returns>
     public IReadOnlyList<string> GetCachedThemeMp3Folders()
     {
         lock (_cacheLock)
@@ -70,18 +96,14 @@ public class AnimeThemesMp3Generator(IMetadataService metadataService, IVideoSer
         }
     }
 
-    /// <summary>
-    /// Forces a re-scan of all managed import folder roots and rebuilds the cache.
-    /// </summary>
+    /// <summary>Forces a re-scan of all managed import folder roots and rebuilds the cache.</summary>
     public void RefreshThemeMp3Cache()
     {
         lock (_cacheLock)
             RefreshThemeMp3CacheInternal();
     }
 
-    /// <summary>
-    /// Adds a folder path to the Theme.mp3 cache if it is not already present.
-    /// </summary>
+    /// <summary>Adds a folder path to the Theme.mp3 cache if it is not already present.</summary>
     /// <param name="folderPath">Absolute path of the folder to add.</param>
     public void AddToThemeMp3Cache(string folderPath)
     {
@@ -91,7 +113,7 @@ public class AnimeThemesMp3Generator(IMetadataService metadataService, IVideoSer
         {
             if (_themeMp3Cache == null)
                 LoadCacheFromFile();
-            _themeMp3Cache ??= []; // Null-safe initialization
+            _themeMp3Cache ??= [];
             if (!_themeMp3Cache.Contains(folderPath, VfsShared.PathComparer))
             {
                 _themeMp3Cache.Add(folderPath);
@@ -163,9 +185,7 @@ public class AnimeThemesMp3Generator(IMetadataService metadataService, IVideoSer
         catch { }
     }
 
-    /// <summary>
-    /// Processes a folder (and optionally subfolders) to generate MP3s for anime themes.
-    /// </summary>
+    /// <summary>Processes a folder (and optionally subfolders) to generate MP3s for anime themes.</summary>
     /// <param name="query">Query parameters.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>A batch result object.</returns>
@@ -174,7 +194,6 @@ public class AnimeThemesMp3Generator(IMetadataService metadataService, IVideoSer
         string root = query.Path ?? "";
         if (!Directory.Exists(root))
             return new ThemeMp3BatchResult(root, [new(root, "error", "Batch root not found.")], 0, 0, 1);
-
         var (results, p, s, e) = (new List<ThemeMp3OperationResult>(), 0, 0, 0);
         var folders = Directory.EnumerateDirectories(root).Prepend(root).Where(f => query.Force || !File.Exists(Path.Combine(f, "Theme.mp3"))).ToList();
         var excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { VfsShared.ResolveRootFolderName(), VfsShared.ResolveCollectionPostersFolderName(), VfsShared.ResolveAnimeThemesFolderName() };
@@ -209,9 +228,7 @@ public class AnimeThemesMp3Generator(IMetadataService metadataService, IVideoSer
         return new ThemeMp3BatchResult(root, results, p, s, e);
     }
 
-    /// <summary>
-    /// Handles a single folder request, downloading and converting the selected theme to an MP3.
-    /// </summary>
+    /// <summary>Handles a single folder request, downloading and converting the selected theme to an MP3.</summary>
     /// <param name="query">Query parameters.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>An operation result object.</returns>
@@ -221,18 +238,15 @@ public class AnimeThemesMp3Generator(IMetadataService metadataService, IVideoSer
         if (Error != null)
             return Error;
         var (folder, themePath, videoFile, series) = Data!.Value;
-
         string? temp = null;
         try
         {
             var sel = await FetchThemeAsync(series.AnidbAnimeID, query.Slug, query.Offset, ct);
             if (sel == null)
                 return new(folder, "skipped", string.IsNullOrWhiteSpace(query.Slug) ? "Entry not found." : $"No entry for slug '{query.Slug}'.");
-
             temp = await DownloadAudioAsync(sel.AudioUrl, ct);
             var dur = await _ffmpegService.ProbeDurationAsync(temp, ct);
             string title = dur.TotalSeconds < 100 && !string.IsNullOrEmpty(sel.SongTitle) ? sel.SongTitle + " (TV Size)" : sel.SongTitle;
-
             await _ffmpegService.ConvertToMp3FileAsync(temp, themePath, title, sel.SlugDisplay, sel.Artist, sel.AnimeTitle, ct);
             int primaryId = OverrideHelper.GetPrimary(series.ID, metadataService);
             return new(folder, "ok", null, themePath, TryLinkIntoVfs(videoFile, primaryId, themePath), sel.AnimeTitle, sel.AnimeSlug, series.ID, sel.SlugDisplay, dur.TotalSeconds);
@@ -248,19 +262,16 @@ public class AnimeThemesMp3Generator(IMetadataService metadataService, IVideoSer
         }
     }
 
-    /// <summary>
-    /// Returns an in‑memory MP3 stream rather than writing a file.
-    /// </summary>
+    /// <summary>Returns an in‑memory MP3 stream rather than writing a file.</summary>
     /// <param name="query">Query parameters.</param>
     /// <param name="ct">Cancellation token.</param>
-    /// <returns>A preview result or an error result.</returns>
+    /// <returns>A tuple containing a preview result or an error result.</returns>
     public async Task<(ThemePreviewResult? Preview, ThemeMp3OperationResult? Error)> PreviewAsync(AnimeThemesMp3Query query, CancellationToken ct)
     {
         var (Error, Data) = PrepareContext(query, true);
         if (Error != null)
             return (null, Error);
         var (folder, _, _, series) = Data!.Value;
-
         string? temp = null;
         try
         {
@@ -281,20 +292,17 @@ public class AnimeThemesMp3Generator(IMetadataService metadataService, IVideoSer
         }
     }
 
+    /// <summary>Validates the directory and resolves the Shoko series for the request.</summary>
     private (ThemeMp3OperationResult? Error, (string Folder, string ThemePath, IVideoFile VideoFile, IShokoSeries Series)? Data) PrepareContext(AnimeThemesMp3Query q, bool preview)
     {
         if (string.IsNullOrWhiteSpace(q.Path))
             return (new("", "error", "Path is required."), null);
-
-        // Use the path provided (which should already be reverse-mapped by the controller)
         string folder = q.Path;
         if (!Directory.Exists(folder))
             return (new(folder, "error", "Folder not found."), null);
-
         string themePath = Path.Combine(folder, "Theme.mp3");
         if (!preview && !q.Force && File.Exists(themePath))
             return (new(folder, "skipped", "Theme.mp3 already exists."), null);
-
         string? vid = Directory.EnumerateFiles(folder).FirstOrDefault(f => AnimeThemesHelper.VideoFileExtensions.Contains(Path.GetExtension(f)));
         if (vid == null)
             return (new(folder, "error", "No video files found."), null);
@@ -303,31 +311,27 @@ public class AnimeThemesMp3Generator(IMetadataService metadataService, IVideoSer
         return (s == null) ? (new(folder, "error", vf == null ? "Video not recognized." : "Series lookup failed."), null) : (null, (folder, themePath, vf!, s));
     }
 
+    /// <summary>Queries the AnimeThemes API for a specific series theme.</summary>
     private async Task<ThemeSelection?> FetchThemeAsync(int aid, string? slugArg, int offset, CancellationToken ct)
     {
         if (!string.IsNullOrWhiteSpace(slugArg) && !AnimeThemesHelper.SlugRegex.IsMatch(slugArg))
             throw new ArgumentException("Invalid slug format.");
         var (parsedBase, _) = AnimeThemesHelper.ParseSlug(slugArg ?? "");
-
         string filter = string.IsNullOrEmpty(slugArg)
             ? "&filter[animetheme][type]=OP,ED"
             : $"&filter[animetheme][slug]={Uri.EscapeDataString(parsedBase is "OP" or "ED" ? $"{parsedBase},{parsedBase}1" : parsedBase)}";
-
         var anime = await _apiClient.FetchAnimeThemesAsync(aid, filter, ct);
         var entry = anime?.Anime?.ElementAtOrDefault(offset);
         if (entry?.Animethemes == null || entry.Animethemes.Count == 0)
             return null;
-
         int idx = (string.IsNullOrEmpty(slugArg) && entry.Animethemes.Count > 1 && string.Equals(entry.Animethemes[1].Slug, "OP1", StringComparison.OrdinalIgnoreCase)) ? 1 : 0;
         var themeDetail = await _apiClient.FetchAnimeThemeWithArtistsAsync(entry.Animethemes[idx].Id, ct);
         var audio = themeDetail?.Animetheme?.Animethemeentries?.FirstOrDefault()?.Videos?.FirstOrDefault()?.Audio?.Link;
         if (string.IsNullOrEmpty(audio))
             return null;
-
         var (bp, sp) = AnimeThemesHelper.ParseSlug(themeDetail!.Animetheme!.Slug ?? "");
         string display = $"{(bp.StartsWith("OP", StringComparison.OrdinalIgnoreCase) ? "Opening" : "Ending")} {bp[2..]}".Trim() + AnimeThemesHelper.FormatSlugTag(sp);
         var artists = themeDetail.Animetheme.Song?.Artists;
-
         return new ThemeSelection(
             audio,
             themeDetail.Animetheme.Slug ?? "",
@@ -339,6 +343,7 @@ public class AnimeThemesMp3Generator(IMetadataService metadataService, IVideoSer
         );
     }
 
+    /// <summary>Downloads an audio file to a temporary location.</summary>
     private async Task<string> DownloadAudioAsync(string url, CancellationToken ct)
     {
         using var resp = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
@@ -350,6 +355,7 @@ public class AnimeThemesMp3Generator(IMetadataService metadataService, IVideoSer
         return temp;
     }
 
+    /// <summary>Creates a symbolic link for the Theme.mp3 in the Shoko VFS directory.</summary>
     private string? TryLinkIntoVfs(IVideoFile loc, int sid, string src)
     {
         string? root = VfsShared.ResolveImportRootPath(loc);
@@ -361,6 +367,7 @@ public class AnimeThemesMp3Generator(IMetadataService metadataService, IVideoSer
         return VfsShared.TryCreateLink(src, dest, Logger) ? dest : null;
     }
 
+    /// <summary>Deletes a temporary file from disk.</summary>
     private static void CleanupTempFile(string? path)
     {
         try

@@ -170,11 +170,11 @@ POST /plex/webhook                                             -> PluginPlexWebh
 ```
 
 - `PluginPlexWebhook` handles Plex `media.scrobble` and `media.rate` events.
-- **Strict Validation:**
+- Strict Validation:
   - Validates the `Server.uuid` against known servers to prevent leaks from shared libraries.
   - Distinguishes between the actual Admin account and managed users.
   - Managed users are only permitted to scrobble if listed in `Automation.ExtraPlexUsers`.
-- **Improved Logging:** Success logs use the format: `user='Name', series='Title', episode='S01E01'`.
+- Success logs use the format: `user='Name', series='Title', episode='S01E01'`.
 - Rating events update Shoko episode ratings via `IUserDataService.RateEpisode` if `Automation.ShokoSyncWatchedIncludeRatings` is enabled.
 
 ---
@@ -212,7 +212,7 @@ POST /vfs/overrides                                            -> SaveVfsOverrid
 GET  /shoko/remove-missing?dryRun={true|false}                 -> RemoveMissingFiles
 POST /shoko/remove-missing?dryRun={true|false}                 -> RemoveMissingFiles
 
-POST /shoko/import?onlyUnrecognized={true|false}               -> RunShokoImport
+POST /shoko/import                                             -> RunShokoImport
 GET  /shoko/import/start                                       -> StartShokoImportNow
 
 GET  /sync-watched                                             -> SyncPlexWatched (for preview/testing)
@@ -222,10 +222,10 @@ POST /sync-watched                                             -> SyncPlexWatche
 GET  /sync-watched/start                                       -> StartWatchedSyncNow
 ```
 
-- `RemoveMissingFiles` removes missing files from Shoko and the AniDB MyList.
+- `RemoveMissingFiles` removes missing files from Shoko and the AniDB MyList (physical files are never touched).
 - `RunShokoImport` triggers a scan of managed folders marked as "Source".
 - `SyncPlexWatched` synchronizes watched state between Plex and Shoko (Bi-directional).
-  - Default direction is **Plex→Shoko**. Set `import=true` for **Plex←Shoko**.
+  - Default direction is `Plex→Shoko`. Set `import=true` for `Plex←Shoko`.
   - Direction and exclusion settings are read from `Automation` config.
 
 ---
@@ -252,7 +252,7 @@ POST /animethemes/vfs/import                                   -> ImportAnimeThe
 ```
 
 - `AnimeThemesVfsBuild` applies the mapping and generates `webm_animethemes.cache`.
-  - **Cache Format:** `VfsPath|VideoId|Bitmask`.
+  - Cache Format: `VfsPath|VideoId|Bitmask`.
   - Bitmask flags: `1:NC, 2:Lyrics, 4:Subs, 8:Uncen, 16:NSFW, 32:Spoil, 64:Trans, 128:Over`.
 - `AnimeThemesVfsMap` generates the mapping CSV or tests a single filename mapping.
   - The filename generation respects the `Advanced.AnimeThemesAppendTags` setting.
@@ -284,7 +284,8 @@ GET  /animethemes/mp3/random?refresh={true|false}              -> AnimeThemesMp3
 ```
 
 - `AnimeThemesMp3` generates or batches Theme.mp3 files using parallelism.
-- `AnimeThemesMp3Stream` embeds ID3v2 tags in response headers (`X-Theme-Title`, `X-Theme-Artist`, etc.).
+- `AnimeThemesMp3Stream` embeds ID3v2 tags in response headers.
+  - Headers: `X-Theme-Title`, `X-Theme-Slug`, `X-Theme-Artist`, `X-Theme-Album`.
 - `AnimeThemesMp3Random` uses a startup cache persisted in `mp3_animethemes.cache`.
 
 ---
@@ -292,4 +293,6 @@ GET  /animethemes/mp3/random?refresh={true|false}              -> AnimeThemesMp3
 **Notes:**
 
 - All paths may be Plex or Shoko relative; the controller translates them via `Advanced.PathMappings`.
-- Mapping deduplication prioritizes **BD** (Blu-ray) sources in the event of filename collisions.
+- Mapping deduplication prioritizes `BD` (Blu-ray) sources in the event of filename collisions.
+
+---

@@ -7,23 +7,17 @@ using ShokoRelay.Plex;
 
 namespace ShokoRelay.Services;
 
-/// <summary>
-/// Service for applying critic ratings from Shoko metadata to Plex libraries.
-/// </summary>
+/// <summary>Service for applying critic ratings from Shoko metadata to Plex libraries.</summary>
 public interface ICriticRatingService
 {
-    /// <summary>
-    /// Compute and push ratings for shows and episodes, optionally restricted to a subset of series IDs.
-    /// </summary>
+    /// <summary>Compute and push ratings for shows and episodes, optionally restricted to a subset of series IDs.</summary>
     /// <param name="allowedSeriesIds">If provided, only these series will be processed.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>An <see cref="ApplyRatingsResult"/> with counters and error details.</returns>
     Task<ApplyRatingsResult> ApplyRatingsAsync(IEnumerable<int>? allowedSeriesIds = null, CancellationToken cancellationToken = default);
 }
 
-/// <summary>
-/// Represents a specific rating update for the report log.
-/// </summary>
+/// <summary>Represents a specific rating update for the report log.</summary>
 /// <param name="Title">Display title of the item.</param>
 /// <param name="Type">Type of item (Show or Episode).</param>
 /// <param name="RatingKey">Plex rating key.</param>
@@ -31,17 +25,17 @@ public interface ICriticRatingService
 /// <param name="NewRating">New rating applied from Shoko.</param>
 public sealed record RatingChange(string Title, string Type, string RatingKey, double? OldRating, double? NewRating);
 
-/// <summary>
-/// Aggregated status returned by <see cref="ICriticRatingService.ApplyRatingsAsync"/>.
-/// </summary>
+/// <summary>Aggregated status returned by <see cref="ICriticRatingService.ApplyRatingsAsync"/>.</summary>
+/// <param name="ProcessedShows">Total shows processed.</param>
+/// <param name="UpdatedShows">Count of shows where ratings changed.</param>
+/// <param name="ProcessedEpisodes">Total episodes processed.</param>
+/// <param name="UpdatedEpisodes">Count of episodes where ratings changed.</param>
+/// <param name="Errors">Count of encountered errors.</param>
+/// <param name="ErrorsList">List of specific error messages.</param>
+/// <param name="AppliedChanges">List of detailed rating changes.</param>
 public sealed record ApplyRatingsResult(int ProcessedShows, int UpdatedShows, int ProcessedEpisodes, int UpdatedEpisodes, int Errors, List<string> ErrorsList, List<RatingChange> AppliedChanges);
 
-/// <summary>
-/// Default implementation of <see cref="ICriticRatingService"/>.
-/// </summary>
-/// <param name="httpClient">HTTP client for Plex API calls.</param>
-/// <param name="plexClient">Plex client for metadata queries.</param>
-/// <param name="metadataService">Shoko metadata service.</param>
+/// <summary>Default implementation of <see cref="ICriticRatingService"/>.</summary>
 public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, IMetadataService metadataService) : ICriticRatingService
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();

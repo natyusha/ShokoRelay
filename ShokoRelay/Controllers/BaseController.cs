@@ -18,35 +18,26 @@ namespace ShokoRelay.Controllers;
 [Route(ShokoRelayInfo.BasePath)]
 public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IMetadataService metadataService, PlexClient plexLibrary) : ControllerBase
 {
+    /// <summary>Shared logger instance for ShokoRelay controllers.</summary>
     protected static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
-    /// <summary>
-    /// Service used for reading and persisting plugin settings and secrets.
-    /// </summary>
+    /// <summary>Service used for reading and persisting plugin settings and secrets.</summary>
     protected readonly ConfigProvider _configProvider = configProvider;
 
-    /// <summary>
-    /// Service for querying the Shoko metadata database.
-    /// </summary>
+    /// <summary>Service for querying the Shoko metadata database.</summary>
     protected readonly IMetadataService _metadataService = metadataService;
 
-    /// <summary>
-    /// Client used for interacting with configured Plex server instances.
-    /// </summary>
+    /// <summary>Client used for interacting with configured Plex server instances.</summary>
     protected readonly PlexClient _plexLibrary = plexLibrary;
 
-    /// <summary>
-    /// Returns the absolute base URL of the plugin's API on the current host.
-    /// </summary>
+    /// <summary>Returns the absolute base URL of the plugin's API on the current host.</summary>
     protected string ApiBase => $"{Request.Scheme}://{Request.Host}{ShokoRelayInfo.BasePath}";
 
     #region Logging Helpers
 
-    /// <summary>
-    /// Write a structured report to a log file inside the plugin's <c>logs</c> directory.
-    /// </summary>
+    /// <summary>Write a structured report to a log file inside the plugin's logs directory.</summary>
     /// <param name="fileName">Name of the log file to create or overwrite.</param>
-    /// <param name="buildReport">Callback that populates the report content via a <see cref="StringBuilder"/>.</param>
+    /// <param name="buildReport">Callback that populates the report content via a StringBuilder.</param>
     protected void WriteReportLog(string fileName, Action<StringBuilder> buildReport)
     {
         try
@@ -61,10 +52,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
         }
     }
 
-    /// <summary>
-    /// Standardized helper for long-running tasks. Executes logic, writes a report log,
-    /// and returns an OK result containing the data and a URL to view the generated log.
-    /// </summary>
+    /// <summary>Standardized helper for long-running tasks: executes logic, writes a report, and returns a JSON response with a log link.</summary>
     /// <typeparam name="T">The type of the result data object.</typeparam>
     /// <param name="logName">The name of the log file to generate (e.g., vfs-report.log).</param>
     /// <param name="resultData">The data object to return in the JSON response.</param>
@@ -88,9 +76,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
 
     #region Validation Helpers
 
-    /// <summary>
-    /// Parse a comma-separated filter string into a list of valid positive integers.
-    /// </summary>
+    /// <summary>Parse a comma-separated filter string into a list of valid positive integers.</summary>
     /// <param name="filter">Raw filter string from query parameter.</param>
     /// <param name="errors">Output list of collected parse error messages.</param>
     /// <returns>A list of unique, valid Shoko Series IDs.</returns>
@@ -114,10 +100,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
         return [.. ids];
     }
 
-    /// <summary>
-    /// Validates a filter query string and resolves any secondary IDs to their primary
-    /// equivalents based on VFS overrides.
-    /// </summary>
+    /// <summary>Validates a filter query string and resolves any secondary IDs to their primary equivalents.</summary>
     /// <param name="filter">Raw comma-separated filter string.</param>
     /// <param name="ids">Parsed and resolved list of series IDs (output).</param>
     /// <returns>BadRequest if any ID is invalid; otherwise null.</returns>
@@ -142,10 +125,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
         return null;
     }
 
-    /// <summary>
-    /// Combined guard for Plex automation: checks Plex is enabled, validates filter/seriesId,
-    /// and resolves the target series list.
-    /// </summary>
+    /// <summary>Combined guard for Plex automation requests: checks Plex configuration, validates filter/seriesId, and resolves the target series list.</summary>
     /// <param name="seriesId">Optional single series ID.</param>
     /// <param name="filter">Optional filter string.</param>
     /// <param name="seriesList">Resolved Shoko series objects (output).</param>
@@ -174,9 +154,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
 
     #region Response Formatting
 
-    /// <summary>
-    /// Wrap a single metadata object in the standard Plex <c>MediaContainer</c> envelope.
-    /// </summary>
+    /// <summary>Wrap a single metadata object in the standard Plex MediaContainer envelope.</summary>
     /// <param name="metadata">The metadata item to embed.</param>
     /// <returns>Plex-compatible JSON response.</returns>
     protected IActionResult WrapInContainer(object metadata) =>
@@ -194,10 +172,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
             }
         );
 
-    /// <summary>
-    /// Wrap a list of metadata objects in a paged <c>MediaContainer</c>, honouring
-    /// Plex pagination headers or query parameters.
-    /// </summary>
+    /// <summary>Wrap a list of metadata objects in a paged MediaContainer, honouring Plex pagination headers or query parameters.</summary>
     /// <param name="metadataList">Collection of metadata items to page.</param>
     /// <returns>Paged Plex-compatible JSON response.</returns>
     protected IActionResult WrapInPagedContainer(IEnumerable<object> metadataList)
@@ -229,16 +204,13 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
         );
     }
 
-    /// <summary>
-    /// Return an empty Plex match response (zero results).
-    /// </summary>
+    /// <summary>Return an empty Plex match response (zero results).</summary>
+    /// <returns>Plex-compatible empty MediaContainer result.</returns>
     protected IActionResult EmptyMatch() => Ok(new { MediaContainer = new { size = 0, Metadata = Array.Empty<object>() } });
 
-    /// <summary>
-    /// Return a no-op success response used when an operation is requested but no
-    /// Plex library targets are configured.
-    /// </summary>
+    /// <summary>Return a no-op success response used when an operation is requested but no Plex library targets are configured.</summary>
     /// <param name="seriesList">List of series that would have been processed.</param>
+    /// <returns>Success status with counts indicating items were skipped.</returns>
     protected IActionResult NoPlexTargetsResponse(IEnumerable<IShokoSeries?> seriesList)
     {
         int processedNone = seriesList.Count(s => s != null);
@@ -259,10 +231,10 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
 
     #region Shared Logic Helpers
 
-    /// <summary>
-    /// Given an optional <paramref name="seriesId"/> or a set of <paramref name="filterIds"/>,
-    /// returns the corresponding list of Shoko series objects from the database.
-    /// </summary>
+    /// <summary>Given an optional seriesId or a set of filterIds, returns the corresponding list of Shoko series objects from the database.</summary>
+    /// <param name="seriesId">Optional single series ID.</param>
+    /// <param name="filterIds">Optional collection of series IDs.</param>
+    /// <returns>A list of Shoko series objects.</returns>
     protected List<IShokoSeries?> ResolveSeriesList(int? seriesId, IReadOnlyCollection<int> filterIds)
     {
         return seriesId.HasValue ? [_metadataService.GetShokoSeriesByID(seriesId.Value)]
@@ -270,9 +242,9 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
             : [.. _metadataService.GetAllShokoSeries().Cast<IShokoSeries?>()];
     }
 
-    /// <summary>
-    /// Maps a file extension to its corresponding MIME content type for collection poster images.
-    /// </summary>
+    /// <summary>Maps a file extension to its corresponding MIME content type for collection poster images.</summary>
+    /// <param name="ext">The file extension string.</param>
+    /// <returns>A MIME type string or null if unsupported.</returns>
     protected static string? GetCollectionContentTypeForExtension(string ext)
     {
         return string.IsNullOrWhiteSpace(ext)
@@ -289,9 +261,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
             };
     }
 
-    /// <summary>
-    /// Parses a query parameter into a boolean dry-run flag.
-    /// </summary>
+    /// <summary>Parses a query parameter into a boolean dry-run flag.</summary>
     /// <param name="dryRun">String value ("true" or "false").</param>
     /// <returns>A tuple containing the parsed bool and an error IActionResult if parsing failed.</returns>
     protected static (bool Parsed, IActionResult? Error) ParseDryRunParam(string? dryRun)
@@ -310,11 +280,9 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
 
     #region Plex Helper Logic
 
-    /// <summary>
-    /// De-duplicates and cleans discovered Plex library entries obtained from multiple servers.
-    /// </summary>
+    /// <summary>De-duplicates and cleans discovered Plex library entries obtained from multiple servers.</summary>
     /// <param name="pairs">Tuples of Library and Server information.</param>
-    /// <returns>A clean, unique list of available libraries.</returns>
+    /// <returns>A unique list of available libraries.</returns>
     protected static List<PlexAvailableLibrary> CollectDiscoveredLibraries(IEnumerable<(PlexLibraryInfo Library, PlexServerInfo Server)>? pairs)
     {
         var collected = new List<PlexAvailableLibrary>();
@@ -345,10 +313,8 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
         return collected;
     }
 
-    /// <summary>
-    /// Persists the results of a Plex discovery run (Servers and Libraries) into the plugin secrets file.
-    /// </summary>
-    /// <param name="discovery">The discovery result payload.</param>
+    /// <summary>Persists the results of a Plex discovery run into the plugin secrets file.</summary>
+    /// <param name="discovery">The discovery result payload containing servers and libraries.</param>
     protected void PersistDiscoveryResults((bool TokenValid, List<PlexServerInfo> Servers, List<(PlexLibraryInfo Library, PlexServerInfo Server)> ShokoLibraries) discovery)
     {
         if (discovery.TokenValid && discovery.Servers?.Count > 0)

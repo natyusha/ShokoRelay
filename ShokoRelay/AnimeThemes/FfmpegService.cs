@@ -5,9 +5,7 @@ using NLog;
 
 namespace ShokoRelay.AnimeThemes;
 
-/// <summary>
-/// Wrapper around FFmpeg/FFprobe CLI tools used by the AnimeThemes subsystem. Provides duration probing and MP3 conversion helpers that run the external binaries.
-/// </summary>
+/// <summary>Wrapper around FFmpeg/FFprobe CLI tools used by the AnimeThemes subsystem.</summary>
 internal sealed class FfmpegService
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
@@ -18,21 +16,19 @@ internal sealed class FfmpegService
     private static string _pluginDirectory = string.Empty;
     private static string _workingDirectory = string.Empty;
 
-    /// <summary>
-    /// Construct the service, supplying the path to the plugin directory which will be searched for FFmpeg/FFprobe binaries when auto‑configuring.
-    /// </summary>
+    /// <summary>Construct the service, supplying the path to the plugin directory which will be searched for binaries.</summary>
+    /// <param name="pluginDirectory">The root directory for the plugin.</param>
     public FfmpegService(string pluginDirectory)
     {
         _pluginDirectory = pluginDirectory;
         _workingDirectory = _pluginDirectory;
     }
 
-    /// <summary>
-    /// Probe a media file's duration using <c>ffprobe</c> and return the result as a <see cref="TimeSpan"/>. Throws if the output cannot be parsed.
-    /// </summary>
-    /// <param name="inputPath">Path to the media file to probe.</param>
+    /// <summary>Probe a media file's duration using ffprobe and return the result as a TimeSpan.</summary>
+    /// <param name="inputPath">Path to the media file.</param>
     /// <param name="ct">Cancellation token.</param>
-    /// <returns>The duration of the media as a <see cref="TimeSpan"/>.</returns>
+    /// <returns>The duration of the media.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if ffprobe output is unparseable.</exception>
     public async Task<TimeSpan> ProbeDurationAsync(string inputPath, CancellationToken ct)
     {
         EnsureFfmpegConfigured();
@@ -44,14 +40,11 @@ internal sealed class FfmpegService
             : throw new InvalidOperationException("Unable to parse duration from ffprobe output.");
     }
 
-    /// <summary>
-    /// Convert the given <paramref name="inputPath"/> media file to an MP3 file written to <paramref name="outputPath"/>.
-    /// Metadata tags for title, display slug, artist and album will be embedded in the output file.
-    /// </summary>
-    /// <param name="inputPath">Path to the source media file.</param>
-    /// <param name="outputPath">Destination path for the MP3 output.</param>
-    /// <param name="title">Title metadata tag.</param>
-    /// <param name="slugDisplay">TIT3 metadata tag (display slug).</param>
+    /// <summary>Convert a media file to an MP3 with embedded metadata.</summary>
+    /// <param name="inputPath">Source file path.</param>
+    /// <param name="outputPath">Destination path for MP3.</param>
+    /// <param name="title">Song title metadata tag.</param>
+    /// <param name="slugDisplay">Display slug metadata tag (TIT3).</param>
     /// <param name="artist">Artist metadata tag.</param>
     /// <param name="album">Album metadata tag.</param>
     /// <param name="ct">Cancellation token.</param>
@@ -78,12 +71,10 @@ internal sealed class FfmpegService
         await RunProcessAsync(_ffmpegPath, args, null, null, ct);
     }
 
-    /// <summary>
-    /// Convert the given <paramref name="inputPath"/> media file to MP3 audio and return it in a <see cref="MemoryStream"/>. The stream is positioned at the beginning.
-    /// </summary>
-    /// <param name="inputPath">Path to the source media file.</param>
+    /// <summary>Convert a media file to MP3 audio and return it in a MemoryStream.</summary>
+    /// <param name="inputPath">Source file path.</param>
     /// <param name="ct">Cancellation token.</param>
-    /// <returns>A <see cref="MemoryStream"/> containing the MP3-encoded audio, positioned at the start.</returns>
+    /// <returns>A stream containing the MP3-encoded audio.</returns>
     public async Task<MemoryStream> ConvertToMp3StreamAsync(string inputPath, CancellationToken ct)
     {
         EnsureFfmpegConfigured();

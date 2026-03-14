@@ -12,8 +12,9 @@
     <div class="player" role="main">
       <div class="video-container">
         <div id="controls">
-          <button id="next" class="at-btn" title="Next Theme" type="button">
-            <svg class="icon-svg"><use href="img/icons.svg#skip-next"></use></svg>
+          <button id="next" class="at-btn" title="Play / Next" type="button" data-state="idle">
+            <svg class="icon-svg play"><use href="img/icons.svg#play"></use></svg>
+            <svg class="icon-svg next"><use href="img/icons.svg#skip-next"></use></svg>
           </button>
           <button id="mode" class="at-btn" title="Playback Mode" data-mode="off" type="button">
             <svg class="icon-svg mode loop"><use href="img/icons.svg#sync"></use></svg>
@@ -29,14 +30,19 @@
             </button>
           </span>
         </div>
-        <video id="video" controls autoplay></video>
+        <video id="video" autoplay></video>
+        <div id="player-progress-track" class="at-progress-track active">
+          <div id="player-progress-fill" class="at-progress-fill"></div>
+        </div>
       </div>
       <div id="details">
         <div class="header">
           <div class="now-playing">
-            <span id="title" data-tooltip-overflow-only="true">AnimeThemes: VFS Video Player</span>
-            <small><a id="anime" href="#" target="_blank" rel="noopener noreferrer" data-tooltip-overflow-only="true">Select a theme to begin...</a>
-            </small>
+            <div class="np-title-wrap">
+              <span id="now-playing-fav" class="fav-icon">❤</span>
+              <span id="title" data-tooltip-overflow-only="true">AnimeThemes: VFS Video Player</span>
+            </div>
+            <a id="anime" href="#" target="_blank" rel="noopener noreferrer" data-tooltip-overflow-only="true">Select a theme to begin...</a>
           </div>
         </div>
         <div id="tree"></div>

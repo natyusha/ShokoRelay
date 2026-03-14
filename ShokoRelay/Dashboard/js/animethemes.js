@@ -9,7 +9,7 @@
   /**
    * Decode unicode escape sequences (e.g. \\u002C -> ,) in a string.
    * @param {string} s - The string to decode.
-   * @returns {string}
+   * @returns {string} The decoded string.
    */
   const decodeUnicode = (s) => s.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
 
@@ -21,7 +21,10 @@
    */
   const getNextMode = (current, modes) => modes[(modes.indexOf(current) + 1) % modes.length];
 
-  /** Build URLSearchParams for AnimeThemes MP3 requests from the dashboard inputs and toggles. @returns {URLSearchParams} */
+  /**
+   * Build URLSearchParams for AnimeThemes MP3 requests from the dashboard inputs and toggles.
+   * @returns {URLSearchParams} The compiled search parameters.
+   */
   const buildAtParams = () => {
     const ps = new URLSearchParams();
     ["path", "slug", "offset", "filter"].forEach((k) => setIfNotEmpty(ps, k, el(`at-${k}`)?.value));
@@ -30,7 +33,10 @@
     return ps;
   };
 
-  /** Build URLSearchParams for AnimeThemes VFS mapping requests from the filter input. @returns {URLSearchParams} */
+  /**
+   * Build URLSearchParams for AnimeThemes VFS mapping requests from the filter input.
+   * @returns {URLSearchParams} The compiled search parameters.
+   */
   const buildAtMapParams = () => {
     const ps = new URLSearchParams();
     setIfNotEmpty(ps, "filter", el("at-filter-map")?.value);
@@ -73,6 +79,9 @@
     nowPlayingToast = null,
     atCurrentFolder = null;
 
+  /**
+   * Dismiss the currently active 'Now Playing' toast notification if it exists.
+   */
   function dismissNowPlaying() {
     if (nowPlayingToast) {
       nowPlayingToast.click();
@@ -80,6 +89,11 @@
     }
   }
 
+  /**
+   * Fetches metadata for a Theme.mp3 and displays a 'Now Playing' toast.
+   * @param {string} folderPath - The folder path to query for theme headers.
+   * @returns {Promise<void>}
+   */
   async function showNowPlaying(folderPath) {
     try {
       const res = await fetch(`${base}/animethemes/mp3/stream?path=${encodeURIComponent(folderPath)}`, { method: "HEAD" });
@@ -98,6 +112,10 @@
 
   const atTrack = el("at-progress-track"),
     atFill = el("at-progress-fill");
+
+  /**
+   * Synchronizes the MP3 playback UI states (progress bar, play button state) with the audio object.
+   */
   function syncPlaybackUI() {
     const isE = el("at-playback")?.getAttribute("aria-pressed") === "true",
       isA = isE && atAudio?.src && !atAudio.ended;
@@ -109,7 +127,9 @@
   }
 
   if (atTrack) {
+    /** @param {MouseEvent} e */
     atTrack.onclick = (e) => atAudio && (atAudio.currentTime = ((e.clientX - atTrack.getBoundingClientRect().left) / atTrack.offsetWidth) * atAudio.duration);
+    /** @param {MouseEvent} e */
     atTrack.onmousedown = (e) => {
       if (e.button === 1 && atAudio?.src) {
         e.preventDefault();
@@ -167,8 +187,8 @@
 
   /**
    * Initialize AnimeThemes config bindings.
-   * @param {Object} config - The current config object.
-   * @param {Function} persistConfig - Async function to save config changes.
+   * @param {Object} cfg - The current config object.
+   * @param {Function} persist - Async function to save config changes.
    */
   window._sr.initAtConfig = (cfg, persist) => {
     const pb = el("at-playback"),

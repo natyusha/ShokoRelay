@@ -7,9 +7,7 @@ using ShokoRelay.Sync;
 
 namespace ShokoRelay.Controllers;
 
-/// <summary>
-/// Manages Plex-specific integrations, including OAuth authentication, discovered library discovery, collection/rating automation, and real-time scrobble webhooks.
-/// </summary>
+/// <summary>Manages Plex-specific integrations including authentication and automation.</summary>
 [ApiVersionNeutral]
 [ApiController]
 [Route(ShokoRelayInfo.BasePath)]
@@ -32,11 +30,9 @@ public class PlexController(
 
     #region Authentication
 
-    /// <summary>
-    /// Initiates the PIN‑based Plex authentication flow by requesting a PIN from Plex.tv.
-    /// </summary>
+    /// <summary>Initiates the PIN‑based Plex authentication flow.</summary>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A JSON payload containing the PIN id, code, and authorization URL.</returns>
+    /// <returns>Auth response containing code and URL.</returns>
     [HttpGet("plex/auth")]
     public async Task<IActionResult> StartPlexAuth(CancellationToken cancellationToken = default)
     {
@@ -63,12 +59,10 @@ public class PlexController(
         }
     }
 
-    /// <summary>
-    /// Polls the Plex authentication status for a previously created PIN.
-    /// If completed, persists the token and triggers automatic library discovery.
-    /// </summary>
-    /// <param name="pinId">The identifier of the PIN to check.</param>
+    /// <summary>Polls the Plex authentication status for a previously created PIN.</summary>
+    /// <param name="pinId">PIN ID.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Status response.</returns>
     [HttpGet("plex/auth/status")]
     public async Task<IActionResult> GetPlexAuthStatus([FromQuery] string pinId, CancellationToken cancellationToken = default)
     {
@@ -111,9 +105,9 @@ public class PlexController(
         }
     }
 
-    /// <summary>
-    /// Revokes the current Plex token and clears all discovered library information.
-    /// </summary>
+    /// <summary>Revokes the current Plex token.</summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Success status.</returns>
     [HttpPost("plex/auth/unlink")]
     public async Task<IActionResult> UnlinkPlex(CancellationToken cancellationToken = default)
     {
@@ -128,9 +122,9 @@ public class PlexController(
         return Ok(new { status = "ok" });
     }
 
-    /// <summary>
-    /// Forces a rediscovery of servers and library sections using the existing token.
-    /// </summary>
+    /// <summary>Forces a rediscovery of servers and libraries.</summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>New list of libraries.</returns>
     [HttpPost("plex/auth/refresh")]
     public async Task<IActionResult> RefreshPlexLibraries(CancellationToken cancellationToken = default)
     {
@@ -158,9 +152,11 @@ public class PlexController(
 
     #region Automation
 
-    /// <summary>
-    /// Triggers the generation of Plex collections for the specified series or filter.
-    /// </summary>
+    /// <summary>Triggers the generation of Plex collections.</summary>
+    /// <param name="seriesId">Optional single series ID.</param>
+    /// <param name="filter">Optional comma-separated list of IDs.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A collection build report.</returns>
     [HttpGet("plex/collections/build")]
     public async Task<IActionResult> BuildPlexCollections([FromQuery] int? seriesId = null, [FromQuery] string? filter = null, CancellationToken cancellationToken = default)
     {
@@ -176,9 +172,11 @@ public class PlexController(
         return LogAndReturn("collections-report.log", r, LogHelper.BuildCollectionsReport);
     }
 
-    /// <summary>
-    /// Uploads or refreshes posters for Plex collections associated with the specified series.
-    /// </summary>
+    /// <summary>Refreshes posters for Plex collections.</summary>
+    /// <param name="seriesId">Optional single series ID.</param>
+    /// <param name="filter">Optional comma-separated list of IDs.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Apply status result.</returns>
     [HttpGet("plex/collections/posters")]
     public async Task<IActionResult> ApplyCollectionPosters([FromQuery] int? seriesId = null, [FromQuery] string? filter = null, CancellationToken cancellationToken = default)
     {
@@ -203,9 +201,11 @@ public class PlexController(
         );
     }
 
-    /// <summary>
-    /// Updates series and episode ratings in Plex based on the configured source (TMDB/AniDB).
-    /// </summary>
+    /// <summary>Updates ratings in Plex based on Shoko metadata.</summary>
+    /// <param name="seriesId">Optional single series ID.</param>
+    /// <param name="filter">Optional comma-separated list of IDs.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A ratings update report.</returns>
     [HttpGet("plex/ratings/apply")]
     public async Task<IActionResult> ApplyAudienceRatings([FromQuery] int? seriesId = null, [FromQuery] string? filter = null, CancellationToken cancellationToken = default)
     {
@@ -219,9 +219,9 @@ public class PlexController(
         return LogAndReturn("ratings-report.log", result, LogHelper.BuildRatingsReport);
     }
 
-    /// <summary>
-    /// Triggers collection building and rating application back-to-back for all series.
-    /// </summary>
+    /// <summary>Triggers collection and rating automation back-to-back.</summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Success result.</returns>
     [HttpGet("plex/automation/run")]
     public async Task<IActionResult> RunPlexAutomationNow(CancellationToken cancellationToken = default)
     {
@@ -249,9 +249,8 @@ public class PlexController(
 
     #region Webhook
 
-    /// <summary>
-    /// Handles real-time scrobble and rating events delivered by Plex webhooks.
-    /// </summary>
+    /// <summary>Handles scrobble and rating events from Plex webhooks.</summary>
+    /// <returns>Webhook result status.</returns>
     [HttpPost("plex/webhook")]
     public async Task<IActionResult> PluginPlexWebhook()
     {

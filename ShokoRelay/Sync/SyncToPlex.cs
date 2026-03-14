@@ -6,9 +6,7 @@ using ShokoRelay.Plex;
 
 namespace ShokoRelay.Sync;
 
-/// <summary>
-/// Synchronize watched-state (and optional votes) from Shoko -> Plex.
-/// </summary>
+/// <summary>Synchronizes watched-state (and optional votes) from Shoko -> Plex.</summary>
 public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService, IUserDataService userDataService, IUserService userService, ConfigProvider configProvider, PlexAuth plexAuth)
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
@@ -20,9 +18,13 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
     private readonly ConfigProvider _configProvider = configProvider;
     private readonly PlexAuth _plexAuth = plexAuth;
 
-    /// <summary>
-    /// Sync watched-state from Shoko into configured Plex libraries.
-    /// </summary>
+    /// <summary>Sync watched-state from Shoko into configured Plex libraries.</summary>
+    /// <param name="dryRun">If true, skip scrobble execution.</param>
+    /// <param name="sinceHours">Optional window to limit processed items.</param>
+    /// <param name="includeVotes">Include user ratings.</param>
+    /// <param name="excludeAdmin">Ignore admin account.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Execution result result.</returns>
     public async Task<PlexWatchedSyncResult> SyncWatchedAsync(bool dryRun, int? sinceHours, bool? includeVotes = null, bool? excludeAdmin = null, CancellationToken cancellationToken = default)
     {
         var result = new PlexWatchedSyncResult();
@@ -58,7 +60,6 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
 
         var matchedGlobal = new HashSet<int>();
         var accessCache = new Dictionary<string, bool>();
-
         foreach (var target in targets)
         {
             foreach (var (uName, uToken) in plexUsers)
@@ -88,7 +89,6 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
 
                     result = SyncHelper.IncMarkedWatched(result, result.PerUser, uName);
                     Logger.Info("{0}Shoko->Plex: {1} scrobbled ep {2} on {3}", logPrefix, uName, sw.EpisodeID, target.ServerUrl);
-
                     var ep = _metadataService.GetShokoEpisodeByID(sw.EpisodeID);
                     SyncHelper.AddPerUserChange(
                         result.PerUserChanges,
@@ -127,7 +127,6 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
                 }
             }
         }
-
         var notFoundCount = shokoWatched.Count(e => !matchedGlobal.Contains(e.EpisodeID));
         result = result with { Skipped = result.Skipped + notFoundCount };
         return result;

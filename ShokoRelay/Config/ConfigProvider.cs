@@ -26,7 +26,10 @@ public class ConfigProvider
     private List<PlexAvailableServer>? _cachedServers;
     private string? _cachedAdminUsername;
 
+    /// <summary>The absolute path to the plugin's base directory.</summary>
     public string PluginDirectory { get; }
+
+    /// <summary>Service for accessing the current HTTP context, used for URL discovery.</summary>
     public IHttpContextAccessor? HttpContextAccessor { get; set; }
 
     /// <summary>
@@ -48,6 +51,7 @@ public class ConfigProvider
     /// <summary>
     /// Creates a new ConfigProvider using the specified paths provided by the host application.
     /// </summary>
+    /// <param name="applicationPaths">Paths provided by the host application.</param>
     public ConfigProvider(IApplicationPaths applicationPaths)
     {
         PluginDirectory = Path.Combine(applicationPaths.PluginsPath, ConfigConstants.PluginSubfolder);
@@ -82,6 +86,8 @@ public class ConfigProvider
     /// <summary>
     /// Convert any JsonElement trees within <paramref name="obj"/> into plain CLR values.
     /// </summary>
+    /// <param name="obj">The JSON element or object to sanitize.</param>
+    /// <returns>A sanitized object containing only plain CLR types.</returns>
     public object SanitizeConfigObject(object obj) =>
         obj switch
         {
@@ -107,11 +113,13 @@ public class ConfigProvider
     /// <summary>
     /// Return the current settings, loading from disk if not already cached.
     /// </summary>
+    /// <returns>The current <see cref="RelayConfig"/> instance.</returns>
     public RelayConfig GetSettings() => _settings ??= GetSettingsFromFile();
 
     /// <summary>
     /// Construct a sanitized payload of settings plus minimal Plex auth information for the dashboard.
     /// </summary>
+    /// <returns>A sanitized configuration object for dashboard consumption.</returns>
     public object GetDashboardConfig()
     {
         var dict = JsonSerializer.Deserialize<Dictionary<string, object>>(JsonSerializer.Serialize(GetSettings(), Options))!;
@@ -126,11 +134,13 @@ public class ConfigProvider
         return SanitizeConfigObject(dict);
     }
 
+    /// <summary>The absolute path to the plugin's configuration directory.</summary>
     public string ConfigDirectory => Path.GetDirectoryName(_filePath)!;
 
     /// <summary>
     /// Validate, normalize and persist the supplied <paramref name="settings"/> to disk.
     /// </summary>
+    /// <param name="settings">The <see cref="RelayConfig"/> instance to save.</param>
     public void SaveSettings(RelayConfig settings)
     {
         ApplyDefaultValues(settings);
@@ -142,6 +152,7 @@ public class ConfigProvider
         _settings = settings;
     }
 
+    /// <summary>Deletes the Plex token/secrets file from disk.</summary>
     public void DeleteTokenFile()
     {
         try
@@ -176,6 +187,8 @@ public class ConfigProvider
     /// <summary>
     /// Parse a comma-separated string of Plex user entries, optionally containing 4-digit PINs.
     /// </summary>
+    /// <param name="raw">The raw configuration string to parse.</param>
+    /// <returns>A list of tuples containing the username and optional PIN.</returns>
     public static List<(string Name, string? Pin)> ParseExtraPlexUsers(string? raw) =>
         [
             .. (raw ?? "")
@@ -185,6 +198,8 @@ public class ConfigProvider
                 .Select(p => (Name: p[0].Trim(), Pin: (p.Length > 1 && p[1].Trim().Length == 4 && p[1].Trim().All(char.IsDigit)) ? p[1].Trim() : null)),
         ];
 
+    /// <summary>Returns the parsed and cached list of extra Plex users configured in settings.</summary>
+    /// <returns>A list of extra user name and PIN tuples.</returns>
     public List<(string Name, string? Pin)> GetExtraPlexUserEntries() => _cachedExtraUsers ??= ParseExtraPlexUsers(GetSettings().Automation.ExtraPlexUsers);
 
     private sealed class TokenFile
@@ -224,8 +239,12 @@ public class ConfigProvider
             )
         );
 
+    /// <summary>Retrieves the saved Plex authentication token.</summary>
+    /// <returns>The Plex authentication token string.</returns>
     public string GetPlexToken() => ReadTokenFile().Token ?? "";
 
+    /// <summary>Retrieves or generates the unique Plex client identifier.</summary>
+    /// <returns>The Plex client identifier string.</returns>
     public string GetPlexClientIdentifier()
     {
         var tf = ReadTokenFile();
@@ -237,12 +256,24 @@ public class ConfigProvider
         return tf.ClientIdentifier;
     }
 
+    /// <summary>Retrieves the list of discovered Plex servers from the token file.</summary>
+    /// <returns>A list of <see cref="PlexAvailableServer"/> instances.</returns>
     public List<PlexAvailableServer> GetPlexDiscoveredServers() => _cachedServers ??= ReadTokenFile().Servers ?? [];
 
+    /// <summary>Retrieves the list of discovered Plex libraries from the token file.</summary>
+    /// <returns>A list of <see cref="PlexAvailableLibrary"/> instances.</returns>
     public List<PlexAvailableLibrary> GetPlexDiscoveredLibraries() => ReadTokenFile().Libraries ?? [];
 
+    /// <summary>Retrieves the cached Plex admin username.</summary>
+    /// <returns>The admin username, or null if not yet discovered.</returns>
     public string? GetAdminUsername() => _cachedAdminUsername ??= ReadTokenFile().AdminUsername;
 
+    /// <summary>
+    /// Refreshes the admin username from the Plex API and updates the local storage.
+    /// </summary>
+    /// <param name="auth">The <see cref="PlexAuth"/> service to use.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A task representing the refresh operation.</returns>
     public async Task RefreshAdminUsername(PlexAuth auth, CancellationToken ct)
     {
         if (await auth.GetAccountInfoAsync(GetPlexToken(), ct) is { } info)
@@ -252,12 +283,23 @@ public class ConfigProvider
         }
     }
 
+    /// <summary>
+    /// Updates specific fields in the Plex token/secrets file.
+    /// </summary>
+    /// <param name="token">Optional new Plex token.</param>
+    /// <param name="clientIdentifier">Optional new client identifier.</param>
+    /// <param name="adminName">Optional new admin username.</param>
+    /// <param name="servers">Optional list of discovered servers.</param>
+    /// <param name="libraries">Optional list of discovered libraries.</param>
     public void UpdatePlexTokenInfo(string? token = null, string? clientIdentifier = null, string? adminName = null, List<PlexAvailableServer>? servers = null, List<PlexAvailableLibrary>? libraries = null)
     {
         var e = ReadTokenFile();
         WriteTokenFile(token ?? e.Token, clientIdentifier ?? e.ClientIdentifier, adminName ?? e.AdminUsername, servers ?? e.Servers, libraries ?? e.Libraries);
     }
 
+    /// <summary>Checks if the provided server UUID matches a managed server known to the provider.</summary>
+    /// <param name="uuid">The server UUID to check.</param>
+    /// <returns>True if the server is in the discovered list.</returns>
     public bool IsManagedServer(string? uuid) => !string.IsNullOrWhiteSpace(uuid) && GetPlexDiscoveredServers().Any(s => string.Equals(s.Id, uuid, StringComparison.OrdinalIgnoreCase));
 
     private bool NormalizePathMappings(RelayConfig settings)

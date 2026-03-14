@@ -5,9 +5,7 @@ using ShokoRelay.Plex;
 
 namespace ShokoRelay.Sync;
 
-/// <summary>
-/// Synchronizes watched-state (and optional votes/ratings) from Plex into Shoko by querying Plex episodes and marking them watched in Shoko.
-/// </summary>
+/// <summary>Synchronizes watched-state from Plex into Shoko.</summary>
 public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService, IUserDataService userDataService, IUserService userService, ConfigProvider configProvider, PlexAuth plexAuth)
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
@@ -18,9 +16,13 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
     private readonly ConfigProvider _configProvider = configProvider;
     private readonly PlexAuth _plexAuth = plexAuth;
 
-    /// <summary>
-    /// Sync watched-state from Plex into Shoko.
-    /// </summary>
+    /// <summary>Sync watched-state from Plex into Shoko database.</summary>
+    /// <param name="dryRun">If true, skip database writes.</param>
+    /// <param name="sinceHours">Optional window to limit processed items.</param>
+    /// <param name="includeVotes">Include user ratings.</param>
+    /// <param name="excludeAdmin">Ignore admin account.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Execution result result.</returns>
     public async Task<PlexWatchedSyncResult> SyncWatchedAsync(bool dryRun, int? sinceHours, bool? includeVotes = null, bool? excludeAdmin = null, CancellationToken cancellationToken = default)
     {
         var result = new PlexWatchedSyncResult();
@@ -44,7 +46,6 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
             var adminItems = await _plexClient
                 .GetSectionEpisodesAsync(target, null, cancellationToken, false, null, sinceHours > 0 ? DateTimeOffset.UtcNow.ToUnixTimeSeconds() - (sinceHours.Value * 3600) : null)
                 .ConfigureAwait(false);
-
             var userBuckets = new List<(string Name, List<PlexMetadataItem> Items)>();
             if (!actualExclude)
                 userBuckets.Add(("admin", adminItems ?? []));
@@ -65,10 +66,8 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                         result = SyncHelper.IncSkipped(result, result.PerUser, uName);
                         continue;
                     }
-
                     result = SyncHelper.IncProcessed(result, result.PerUser, uName);
                     var ep = SyncHelper.TryParseShokoEpisodeIdFromGuid(item.Guid) is { } id ? _metadataService.GetShokoEpisodeByID(id) : null;
-
                     if (ep == null || appliedIds.Contains(ep.ID))
                     {
                         result = SyncHelper.IncSkipped(result, result.PerUser, uName);

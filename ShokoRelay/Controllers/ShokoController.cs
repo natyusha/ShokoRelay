@@ -9,10 +9,7 @@ using ShokoRelay.Vfs;
 
 namespace ShokoRelay.Controllers;
 
-/// <summary>
-/// Handles Shoko-specific automation tasks, including Virtual File System (VFS) construction,
-/// file database maintenance, source imports, and watched-state synchronization with Plex.
-/// </summary>
+/// <summary>Handles Shoko-specific automation tasks including VFS construction and housekeeping.</summary>
 [ApiVersionNeutral]
 [ApiController]
 [Route(ShokoRelayInfo.BasePath)]
@@ -33,13 +30,11 @@ public class ShokoController(
 
     #region Virtual File System
 
-    /// <summary>
-    /// Builds (or previews) the VFS symlink tree for the configured import folders.
-    /// </summary>
-    /// <param name="clean">If true, clears the existing root before building.</param>
-    /// <param name="run">Must be true to actually execute the link creation.</param>
-    /// <param name="filter">Optional comma-separated list of Shoko series IDs to restrict processing.</param>
-    /// <returns>A summary of series processed and links created.</returns>
+    /// <summary>Builds the VFS symlink tree for configured import folders.</summary>
+    /// <param name="clean">Whether to clear the existing root.</param>
+    /// <param name="run">Flag required to execute build.</param>
+    /// <param name="filter">Optional list of series IDs.</param>
+    /// <returns>A summary of the build outcome.</returns>
     [HttpGet("vfs")]
     public IActionResult BuildVfs([FromQuery] bool clean = true, [FromQuery] bool run = false, [FromQuery] string? filter = null)
     {
@@ -60,28 +55,18 @@ public class ShokoController(
 
         var result = filterIds.Count > 0 ? _vfsBuilder.Build(filterIds, clean) : _vfsBuilder.Build((int?)null, clean);
 
-        // Trigger background Plex scans if enabled
         if (_plexLibrary.IsEnabled && ShokoRelay.Settings.Automation.ScanOnVfsRefresh && filterIds.Count > 0)
         {
             var toProcess = ResolveSeriesList(null, filterIds).Where(s => s != null).Cast<IShokoSeries>().ToList();
             _ = SchedulePlexRefreshForSeriesAsync(toProcess);
         }
 
-        // Use the synchronous LogAndReturn helper
-        return LogAndReturn(
-            "vfs-report.log",
-            result,
-            (sb, r) => {
-                // Note: VfsBuilder handles its own internal logging reports.
-            }
-        );
+        return LogAndReturn("vfs-report.log", result, (sb, r) => { });
     }
 
-    /// <summary>
-    /// Accepts raw text for an anidb_vfs_overrides.csv file and overwrites the local copy.
-    /// </summary>
-    /// <param name="content">The full content of the CSV file.</param>
-    /// <returns>200 OK on success.</returns>
+    /// <summary>Updates the local VFS overrides CSV file.</summary>
+    /// <param name="content">Raw CSV text.</param>
+    /// <returns>Success or error response.</returns>
     [HttpPost("vfs/overrides")]
     public IActionResult SaveVfsOverrides([FromBody] string content)
     {
@@ -102,17 +87,15 @@ public class ShokoController(
 
     #region Automation
 
-    /// <summary>
-    /// Removes records for video files that no longer exist on disk from the Shoko database.
-    /// </summary>
-    /// <param name="dryRun">If true, only returns a report without deleting anything.</param>
+    /// <summary>Removes records for files no longer on disk.</summary>
+    /// <param name="dryRun">Whether to only list changes.</param>
+    /// <returns>Housekeeping report.</returns>
     [HttpGet("shoko/remove-missing")]
     [HttpPost("shoko/remove-missing")]
     public async Task<IActionResult> RemoveMissingFiles([FromQuery] bool? dryRun = null)
     {
         bool doDry = dryRun ?? true;
         var removed = await _shokoImportService.RemoveMissingFilesAsync(doDry).ConfigureAwait(false);
-
         var result = new
         {
             status = "ok",
@@ -123,9 +106,8 @@ public class ShokoController(
         return LogAndReturn("remove-missing-report.log", result, (sb, r) => LogHelper.BuildRemoveMissingReport(sb, r.dryRun, r.removed));
     }
 
-    /// <summary>
-    /// Triggers a Shoko import scan.
-    /// </summary>
+    /// <summary>Triggers an import scan in Shoko.</summary>
+    /// <returns>Scanned folder list.</returns>
     [HttpPost("shoko/import")]
     public async Task<IActionResult> RunShokoImport()
     {
@@ -140,15 +122,13 @@ public class ShokoController(
         );
     }
 
-    /// <summary>
-    /// Triggers a Shoko import and resets the automation schedule.
-    /// </summary>
+    /// <summary>Triggers import and resets automation schedule.</summary>
+    /// <returns>Trigger result.</returns>
     [HttpGet("shoko/import/start")]
     public async Task<IActionResult> StartShokoImportNow()
     {
         var scanned = await _shokoImportService.TriggerImportAsync().ConfigureAwait(false);
         ShokoRelay.MarkImportRunNow();
-
         var freqHours = ShokoRelay.Settings.Automation.ShokoImportFrequencyHours;
         return Ok(
             new
@@ -166,9 +146,13 @@ public class ShokoController(
 
     #region Watched Sync
 
-    /// <summary>
-    /// Synchronizes watched status between Plex and Shoko.
-    /// </summary>
+    /// <summary>Synchronizes watched status between Plex and Shoko.</summary>
+    /// <param name="dryRun">Whether to skip writes.</param>
+    /// <param name="sinceHours">Lookback window.</param>
+    /// <param name="ratings">Include ratings.</param>
+    /// <param name="import">Direction: true for Plex-to-Shoko.</param>
+    /// <param name="excludeAdmin">Ignore admin user.</param>
+    /// <returns>Sync report result.</returns>
     [HttpGet("sync-watched")]
     [HttpPost("sync-watched")]
     public async Task<IActionResult> SyncPlexWatched(
@@ -191,7 +175,6 @@ public class ShokoController(
 
         try
         {
-            // Use named parameters for the CancellationToken to avoid type mismatches
             PlexWatchedSyncResult result = doImport
                 ? await _syncToPlexService.SyncWatchedAsync(parsedDry, sinceHours, ratings, excludeAdmin, cancellationToken: HttpContext.RequestAborted).ConfigureAwait(false)
                 : await _watchedSyncService.SyncWatchedAsync(parsedDry, sinceHours, ratings, excludeAdmin, cancellationToken: HttpContext.RequestAborted).ConfigureAwait(false);
@@ -205,16 +188,14 @@ public class ShokoController(
         }
     }
 
-    /// <summary>
-    /// Triggers an immediate Plex->Shoko sync and resets schedule.
-    /// </summary>
+    /// <summary>Triggers immediate sync and resets schedule.</summary>
+    /// <returns>Trigger result.</returns>
     [HttpGet("sync-watched/start")]
     public async Task<IActionResult> StartWatchedSyncNow()
     {
         int freqHours = ShokoRelay.Settings.Automation.ShokoSyncWatchedFrequencyHours;
         try
         {
-            // Named parameter fix for sync start
             var result = await _watchedSyncService.SyncWatchedAsync(false, freqHours, cancellationToken: HttpContext.RequestAborted).ConfigureAwait(false);
             ShokoRelay.MarkSyncRunNow();
             return Ok(

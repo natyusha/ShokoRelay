@@ -3,22 +3,16 @@ using System.Text.Json.Serialization;
 
 namespace ShokoRelay.Plex;
 
-/// <summary>
-/// Helper routines and data models for interacting with the Plex server API. Contains JSON serialization settings and container parsing logic.
-/// </summary>
+/// <summary>Helper routines and data models for interacting with the Plex server API.</summary>
 public static class PlexApi
 {
-    /// <summary>
-    /// Shared <see cref="JsonSerializerOptions"/> used for deserializing Plex responses. Ignores null values and treats property names case‑insensitively.
-    /// </summary>
+    /// <summary>Shared JsonSerializerOptions used for deserializing Plex responses.</summary>
     public static readonly JsonSerializerOptions JsonOptions = new() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
 
-    /// <summary>
-    /// Read and deserialize a <see cref="PlexMediaContainer"/> from an HTTP response produced by a Plex server. Handles the outer wrapper object used by Plex.
-    /// </summary>
-    /// <param name="response">HTTP response to decode.</param>
-    /// <param name="cancellationToken">Cancellation token for the async I/O operations.</param>
-    /// <returns>The parsed <see cref="PlexMediaContainer"/>, or <c>null</c> if not present.</returns>
+    /// <summary>Read and deserialize a PlexMediaContainer from an HTTP response.</summary>
+    /// <param name="response">The HTTP response message.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The parsed container, or null if deserialization fails.</returns>
     public static async Task<PlexMediaContainer?> ReadContainerAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
@@ -27,89 +21,98 @@ public static class PlexApi
     }
 }
 
-/// <summary>
-/// Internal wrapper type matching the Plex JSON structure where the media container is nested under a top-level <c>MediaContainer</c> property.
-/// </summary>
+/// <summary>Internal wrapper type matching the Plex JSON structure for media containers.</summary>
 public class PlexMediaContainerWrapper
 {
+    /// <summary>The nested media container.</summary>
     [JsonPropertyName("MediaContainer")]
     public PlexMediaContainer? MediaContainer { get; set; }
 }
 
-/// <summary>
-/// Represents the Plex <c>MediaContainer</c> element returned by various API endpoints; contains a list of metadata items and pagination information.
-/// </summary>
+/// <summary>Represents the Plex MediaContainer element returned by API endpoints.</summary>
 public class PlexMediaContainer
 {
+    /// <summary>List of metadata items in the container.</summary>
     [JsonPropertyName("Metadata")]
     public List<PlexMetadataItem>? Metadata { get; set; }
 
+    /// <summary>Number of items in this specific response.</summary>
     [JsonPropertyName("size")]
     public int? Size { get; set; }
 
+    /// <summary>Total number of items across all pages.</summary>
     [JsonPropertyName("totalSize")]
     public int? TotalSize { get; set; }
 }
 
-/// <summary>
-/// Data model for individual items contained in a Plex media container. Many properties are optional depending on the endpoint and query parameters used.
-/// </summary>
+/// <summary>Data model for individual metadata items contained in a Plex response.</summary>
 public class PlexMetadataItem
 {
+    /// <summary>The Plex unique rating key.</summary>
     [JsonPropertyName("ratingKey")]
     public string? RatingKey { get; set; }
 
+    /// <summary>The display title of the item.</summary>
     [JsonPropertyName("title")]
     public string? Title { get; set; }
 
+    /// <summary>The ID of the library section containing this item.</summary>
     [JsonPropertyName("librarySectionID")]
     public int? LibrarySectionId { get; set; }
 
+    /// <summary>The unique metadata GUID.</summary>
     [JsonPropertyName("guid")]
     public string? Guid { get; set; }
 
+    /// <summary>The media type (e.g., show, season, episode).</summary>
     [JsonPropertyName("type")]
     public string? Type { get; set; }
 
+    /// <summary>The index/number (e.g., episode number or season number).</summary>
     [JsonPropertyName("index")]
     public int? Index { get; set; }
 
+    /// <summary>The total number of times this item has been viewed.</summary>
     [JsonPropertyName("viewCount")]
     public int? ViewCount { get; set; }
 
+    /// <summary>Unix timestamp of the last viewing.</summary>
     [JsonPropertyName("lastViewedAt")]
     public long? LastViewedAt { get; set; }
 
+    /// <summary>Number of child items (e.g., episode count in a season).</summary>
     [JsonPropertyName("childCount")]
     public int? ChildCount { get; set; }
 
+    /// <summary>User-specific state information.</summary>
     [JsonPropertyName("User")]
     public PlexMetadataUser? User { get; set; }
 
+    /// <summary>Global critic rating value.</summary>
     [JsonPropertyName("rating")]
     public double? Rating { get; set; }
 
+    /// <summary>Personal user rating value.</summary>
     [JsonPropertyName("userRating")]
     public double? UserRating { get; set; }
 
+    /// <summary>List of collection tags assigned to the item.</summary>
     [JsonPropertyName("Collection")]
     public List<PlexTag>? Collection { get; set; }
 }
 
-/// <summary>
-/// Represents a tag entry (e.g. collection, genre, label) within a <see cref="PlexMetadataItem"/>.
-/// </summary>
+/// <summary>Represents a tag entry within a Plex metadata item.</summary>
 public class PlexTag
 {
+    /// <summary>The tag value.</summary>
     [JsonPropertyName("tag")]
     public string? Tag { get; set; }
 }
 
-/// <summary>
-/// Embedded user-specific information within a <see cref="PlexMetadataItem"/>, e.g. per-user last viewed timestamp.
-/// </summary>
+/// <summary>Embedded user-specific information within a Plex metadata item.</summary>
 public class PlexMetadataUser
 {
+    /// <summary>Unix timestamp of when this specific user last viewed the item.</summary>
     [JsonPropertyName("lastViewedAt")]
     public long? LastViewedAt { get; set; }
 }

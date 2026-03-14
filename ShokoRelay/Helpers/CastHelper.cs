@@ -4,8 +4,10 @@ using Shoko.Abstractions.Metadata.Containers;
 
 namespace ShokoRelay.Helpers;
 
+/// <summary>Represents a metadata tag item for Plex responses.</summary>
 public sealed class TagItem
 {
+    /// <summary>The display string for the tag.</summary>
     public string Tag { get; init; } = "";
 }
 
@@ -93,6 +95,7 @@ public static class CastHelper
     /// Return the first studio name associated with a series, or <c>null</c> if none exist.
     /// </summary>
     /// <param name="series">Series metadata.</param>
+    /// <returns>The primary studio name, or null if not found.</returns>
     public static string? GetStudio(ISeries series) => series.Studios?.FirstOrDefault()?.Name;
 
     private static object[] FilterCrew(IWithCastAndCrew item, CrewRoleType roleType) =>

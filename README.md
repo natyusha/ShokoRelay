@@ -221,6 +221,18 @@ There is a search box included which will filter the treeview based on series, g
 
 You can mark any theme as a favourite by clicking the heart icon `❤` next to its name in the tree view. Once marked as a favourite the icon for a given item will change to be red in colour and it will be persisted to a settings file based on its AnimeThemes VideoID. To quickly view only your marked themes, type `favs` into the search bar. This keyword can be combined with other search terms as well as tags (e.g., `+nc favs gundam`) to find specific favourites.
 
+#### Keybinds
+
+- `Up/Down` (Volume +/- 10%)
+- `Ctrl-Up/Down` (Cycle Playback Mode)
+- `Right/Left` (Seek +/- 5s)
+- `Ctrl-Right/Left` (Play Next/Previous Theme)
+- `L/J` (Seek +/- 10s)
+- `Space/K` (Pause)
+- `F` (Fullscreen)
+- `/` (Focus Filter Box)
+- `L` (Toggle Favourite)
+
 ## Information
 
 ### VFS Mapping

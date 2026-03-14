@@ -7,12 +7,7 @@ using ShokoRelay.Vfs;
 
 namespace ShokoRelay.AnimeThemes;
 
-/// <summary>
-/// Provides operations for building and applying mappings between anime theme files and AniDB/video identifiers.
-/// </summary>
-/// <param name="metadataService">Service for accessing Shoko metadata.</param>
-/// <param name="videoService">Service for resolving video file objects.</param>
-/// <param name="configProvider">Provider for configuration settings.</param>
+/// <summary>Provides operations for building and applying mappings between anime theme files and AniDB/video identifiers.</summary>
 public class AnimeThemesMapping(IMetadataService metadataService, IVideoService videoService, ConfigProvider configProvider)
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
@@ -21,19 +16,15 @@ public class AnimeThemesMapping(IMetadataService metadataService, IVideoService 
     private readonly AnimeThemesApi _apiClient = new();
     private readonly string _configDirectory = configProvider.ConfigDirectory;
 
-    /// <summary>
-    /// Serialize a single AnimeThemesMappingEntry to a CSV line.
-    /// </summary>
+    /// <summary>Serialize a single AnimeThemesMappingEntry to a CSV line.</summary>
     /// <param name="entry">The entry to serialize.</param>
     /// <returns>A comma-separated string.</returns>
     public static string SerializeMappingEntry(AnimeThemesMappingEntry entry) => AnimeThemesHelper.SerializeEntry(entry);
 
-    /// <summary>
-    /// Download the mapping file from a direct raw URL (e.g. gist raw link) and save it.
-    /// </summary>
-    /// <param name="rawUrl">Raw URL to download the mapping content from.</param>
+    /// <summary>Download the mapping file from a direct raw URL and save it.</summary>
+    /// <param name="rawUrl">Raw URL to download from.</param>
     /// <param name="ct">Cancellation token.</param>
-    /// <returns>A tuple of (Count, Log) with the number of entries parsed and a human-readable log message.</returns>
+    /// <returns>A tuple of entry count and a log message.</returns>
     public async Task<(int Count, string Log)> ImportMappingFromUrlAsync(string rawUrl, CancellationToken ct = default)
     {
         try
@@ -55,12 +46,9 @@ public class AnimeThemesMapping(IMetadataService metadataService, IVideoService 
         }
     }
 
-    /// <summary>
-    /// Scan configured import roots for AnimeThemes files and write a mapping CSV.
-    /// The resulting file is always written to the standard location in the configuration directory and any existing file will be read to perform incremental updates.
-    /// </summary>
+    /// <summary>Scan configured import roots for AnimeThemes files and write a mapping CSV.</summary>
     /// <param name="ct">Cancellation token.</param>
-    /// <returns>An <see cref="AnimeThemesMappingBuildResult"/> with statistics and the output file path.</returns>
+    /// <returns>A build result with statistics.</returns>
     public async Task<AnimeThemesMappingBuildResult> BuildMappingFileAsync(CancellationToken ct = default)
     {
         string themeFolder = VfsShared.ResolveAnimeThemesFolderName();
@@ -165,20 +153,17 @@ public class AnimeThemesMapping(IMetadataService metadataService, IVideoService 
         return new AnimeThemesMappingBuildResult(mapPath, finalEntries.Count, entries.Count - toProcess.Count, errors, messages);
     }
 
-    /// <summary>
-    /// Test the mapping process for a single webm filename without adding it to the CSV.
-    /// Returns the metadata that would be created for the file, useful for verifying API integration and filename generation.
-    /// </summary>
-    /// <param name="webmFileName">The webm filename to test (e.g., "OP1.webm" or "ED2v3.webm").</param>
+    /// <summary>Test the mapping process for a single webm filename without adding it to the CSV.</summary>
+    /// <param name="webmFileName">The webm filename to test.</param>
     /// <param name="ct">Cancellation token.</param>
-    /// <returns>A result object containing the generated entry, any errors, and status information.</returns>
+    /// <returns>A result containing the entry, error, and generated filename.</returns>
     public async Task<(AnimeThemesMappingEntry? entry, string? error, string filename)> TestMappingEntryAsync(string webmFileName, CancellationToken ct = default)
     {
         var (lookup, idMissing) = await FetchMetadataAsync(webmFileName, ct);
         if (lookup == null)
             return (null, idMissing ? "AniDB ID missing" : "Missing metadata", webmFileName);
         var entry = new AnimeThemesMappingEntry(
-            $"/test/{webmFileName}",
+            "/test/" + webmFileName,
             lookup.VideoId,
             lookup.AniDbId,
             lookup.NC,
@@ -199,12 +184,10 @@ public class AnimeThemesMapping(IMetadataService metadataService, IVideoService 
         return (entry, null, AnimeThemesHelper.BuildNewFileName(lookup, Path.GetExtension(webmFileName)));
     }
 
-    /// <summary>
-    /// Read a previously built mapping file and create/update VFS links for matching theme files. If multiple entries result in the exact same filename, BD sources are kept and others are excluded.
-    /// </summary>
-    /// <param name="seriesFilter">Optional set of Shoko series IDs to limit processing to.</param>
+    /// <summary>Read a previously built mapping file and create/update VFS links for matching theme files.</summary>
+    /// <param name="seriesFilter">Optional set of series IDs to limit processing to.</param>
     /// <param name="ct">Cancellation token.</param>
-    /// <returns>An <see cref="AnimeThemesMappingApplyResult"/> with counts and results.</returns>
+    /// <returns>An apply result with stats and error list.</returns>
     public async Task<AnimeThemesMappingApplyResult> ApplyMappingAsync(IReadOnlyCollection<int>? seriesFilter = null, CancellationToken ct = default)
     {
         string mapPath = Path.Combine(_configDirectory, AnimeThemesHelper.AtMapFileName);
@@ -214,7 +197,6 @@ public class AnimeThemesMapping(IMetadataService metadataService, IVideoService 
         var sw = Stopwatch.StartNew();
         var state = new MappingState();
         string themeRoot = VfsShared.ResolveAnimeThemesFolderName();
-        string vfsRoot = VfsShared.ResolveRootFolderName();
 
         var seriesList = (seriesFilter?.Any() == true ? seriesFilter.Distinct().Select(id => _metadataService.GetShokoSeriesByID(id)) : _metadataService.GetAllShokoSeries())
             .Where(s => s?.AnidbAnimeID > 0)
@@ -269,7 +251,7 @@ public class AnimeThemesMapping(IMetadataService metadataService, IVideoService 
                     );
                     string ext = Path.GetExtension(src);
                     string destName = AnimeThemesHelper.EnsureExtension(AnimeThemesHelper.BuildNewFileName(lookup, ext), ext);
-                    string shortsDir = Path.Combine(roots[0]!, vfsRoot, primaryId.ToString(), "Shorts");
+                    string shortsDir = Path.Combine(roots[0]!, VfsShared.ResolveRootFolderName(), primaryId.ToString(), "Shorts");
                     string destPath = Path.Combine(shortsDir, destName);
 
                     Directory.CreateDirectory(shortsDir);
@@ -286,14 +268,10 @@ public class AnimeThemesMapping(IMetadataService metadataService, IVideoService 
         return new AnimeThemesMappingApplyResult(state.Created, state.Skipped, state.Matched, state.Errors, state.CacheEntries, sw.Elapsed);
     }
 
-    /// <summary>
-    /// Checks if a mapping entry is allowed based on user overlap preferences.
-    /// </summary>
+    /// <summary>Checks if a mapping entry is allowed based on user overlap preferences.</summary>
     private static bool IsAllowed(AnimeThemesMappingEntry e, OverlapLevel level) => level == OverlapLevel.All || e.Overlap == "None" || (level == OverlapLevel.TransitionOnly && e.Overlap == "Transition");
 
-    /// <summary>
-    /// Fetches theme metadata from the AnimeThemes API.
-    /// </summary>
+    /// <summary>Fetches theme metadata from the AnimeThemes API.</summary>
     private async Task<(AnimeThemesVideoLookup? lookup, bool idMissing)> FetchMetadataAsync(string fileName, CancellationToken ct)
     {
         var v = await _apiClient.FetchVideoWithArtistsAsync(fileName, ct);

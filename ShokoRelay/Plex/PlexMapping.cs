@@ -5,37 +5,34 @@ using Shoko.Abstractions.Metadata.Tmdb;
 
 namespace ShokoRelay.Plex;
 
-/// <summary>
-/// Maps Shoko episode/season data to Plex-style coordinates, handling TMDB alternate orderings and special season types.
-/// </summary>
+/// <summary>Maps Shoko episode/season data to Plex-style coordinates.</summary>
 public static class PlexMapping
 {
-    /// <summary>
-    /// Simple struct representing season/episode coordinates (and optional end episode) used throughout Plex mapping routines.
-    /// </summary>
+    /// <summary>Simple struct representing season/episode coordinates.</summary>
     public struct PlexCoords
     {
+        /// <summary>Plex season number.</summary>
         public int Season;
+
+        /// <summary>Plex starting episode number.</summary>
         public int Episode;
+
+        /// <summary>Optional ending episode number for ranges.</summary>
         public int? EndEpisode;
     }
 
-    /// <summary>
-    /// Look up information for an "extra" season number (special, credits, etc.) defined in <see cref="PlexConstants.ExtraSeasons"/>.
-    /// </summary>
-    /// <param name="seasonNumber">Season number to query.</param>
-    /// <param name="info">Output tuple containing folder name and subtype.</param>
-    /// <returns><c>true</c> if the season is special; otherwise <c>false</c>.</returns>
+    /// <summary>Look up info for an extra/special season number.</summary>
+    /// <param name="seasonNumber">The season ID.</param>
+    /// <param name="info">Result folder/subtype tuple.</param>
+    /// <returns>True if special.</returns>
     public static bool TryGetExtraSeason(int seasonNumber, out (string Folder, string Subtype) info)
     {
         return PlexConstants.ExtraSeasons.TryGetValue(seasonNumber, out info);
     }
 
-    /// <summary>
-    /// Obtain the Plex folder name corresponding to <paramref name="seasonNumber"/>.
-    /// Handles special seasons via <see cref="TryGetExtraSeason"/>, otherwise returns "Season N" or "Specials" for season 0.
-    /// </summary>
-    /// <param name="seasonNumber">Season number.</param>
+    /// <summary>Obtain the Plex folder name for a season.</summary>
+    /// <param name="seasonNumber">The season ID.</param>
+    /// <returns>Folder name string.</returns>
     public static string GetSeasonFolder(int seasonNumber)
     {
         return TryGetExtraSeason(seasonNumber, out var special) ? special.Folder
@@ -43,33 +40,22 @@ public static class PlexMapping
             : $"Season {seasonNumber}";
     }
 
-    /// <summary>
-    /// Calculate Plex-style season/episode coordinates for an <paramref name="e"/> episode. Takes into account TMDB numbering overrides when enabled.
-    /// </summary>
-    /// <param name="e">Episode metadata.</param>
-    /// <param name="seriesPreferredOrderingId">Optional TMDB ordering id to avoid repeated lookups.</param>
+    /// <summary>Calculate Plex coordinates for an episode.</summary>
+    /// <param name="e">The episode metadata.</param>
+    /// <param name="seriesPreferredOrderingId">Optional TMDB ordering ID.</param>
+    /// <returns>Resolved coordinates.</returns>
     public static PlexCoords GetPlexCoordinates(IEpisode e, string? seriesPreferredOrderingId = null)
     {
         if (e == null)
             return new PlexCoords { Season = PlexConstants.SeasonStandard, Episode = 1 };
-
-        // Allow callers to pass the series-level preferred ordering id so it is resolved once per series
-        // Do NOT probe the episode->series PreferredOrdering here — callers that are mapping many
-        // episodes (MapHelper/VFS) should pass the seriesPreferredOrderingId to avoid repeated lookups.
         string? showPrefId = seriesPreferredOrderingId;
-
-        // Compute coordinates (original logic)
         PlexCoords result;
 
-        // Apply TMDB episode-numbering for any Shoko episode that has TMDB links when enabled.
         if (ShokoRelay.Settings.TmdbEpNumbering && e is IShokoEpisode shokoEpisode && shokoEpisode.TmdbEpisodes != null && shokoEpisode.TmdbEpisodes.Any())
         {
-            // Only evaluate alternate-ordering logic when a series-level preferred ordering id is present.
-            // Otherwise use the fast default ordering (season -> episode) to avoid touching AllOrderings.
             var tmdbEpisodes = string.IsNullOrWhiteSpace(showPrefId)
                 ? [.. shokoEpisode.TmdbEpisodes.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber)]
                 : SelectPreferredTmdbOrdering(shokoEpisode.TmdbEpisodes, showPrefId);
-
             if (tmdbEpisodes.Count > 0)
             {
                 var first = tmdbEpisodes.First();
@@ -83,14 +69,12 @@ public static class PlexMapping
                         if (lastCoords.Season == Season)
                             endEp = lastCoords.Episode;
                     }
-
                     result = new PlexCoords
                     {
                         Season = Season.Value,
                         Episode = Episode,
                         EndEpisode = endEp,
                     };
-
                     return result;
                 }
             }
@@ -98,7 +82,6 @@ public static class PlexMapping
 
         int epNum = e.EpisodeNumber;
         int seasonNum = ResolveSeasonNumber(e);
-
         result = e.Type switch
         {
             EpisodeType.Other => new PlexCoords { Season = PlexConstants.SeasonOther, Episode = epNum },
@@ -107,15 +90,13 @@ public static class PlexMapping
             EpisodeType.Parody => new PlexCoords { Season = PlexConstants.SeasonParody, Episode = epNum },
             _ => new PlexCoords { Season = seasonNum, Episode = epNum },
         };
-
         return result;
     }
 
-    /// <summary>
-    /// Determine Plex coordinates for a collection of episodes that share a single file. Optionally specify the file index within the episode list for multi-episode files.
-    /// </summary>
-    /// <param name="episodes">List of episodes contained in the file.</param>
-    /// <param name="fileIndexWithinEpisode">Zero-based index of this file when multiple files map to the same episode.</param>
+    /// <summary>Determine Plex coordinates for episodes sharing a file.</summary>
+    /// <param name="episodes">Episode list.</param>
+    /// <param name="fileIndexWithinEpisode">Optional file index.</param>
+    /// <returns>Resolved coordinates.</returns>
     public static PlexCoords GetPlexCoordinatesForFile(IEnumerable<IEpisode> episodes, int? fileIndexWithinEpisode = null)
     {
         var eps = (episodes ?? []).ToList();
@@ -126,29 +107,19 @@ public static class PlexMapping
                 Episode = 1,
                 EndEpisode = null,
             };
-
-        // If TMDB numbering is enabled and all episodes in the file are the same type (e.g. all Episode, all Special, all Other, etc.),
-        // collect any TMDB entries present among those episodes and apply TMDB-driven coordinates when available.
-        // We do NOT apply TMDB numbering for mixed-type files (MapHelper filters mixed types earlier).
         if (ShokoRelay.Settings.TmdbEpNumbering && eps.Select(ep => ep.Type).Distinct().Count() == 1)
         {
             var tmdbEntriesRaw = eps.OfType<IShokoEpisode>().Where(se => se.TmdbEpisodes != null && se.TmdbEpisodes.Any()).SelectMany(se => se.TmdbEpisodes).ToList();
-
-            // If the series defines a preferred ordering, pass it so TMDB alternate orderings are respected.
             string? showPrefId = eps.OfType<IShokoEpisode>().Select(se => se.Series).FirstOrDefault()?.TmdbShows?.FirstOrDefault()?.PreferredOrdering?.OrderingID;
-
             var tmdbEntries = string.IsNullOrWhiteSpace(showPrefId)
                 ? [.. tmdbEntriesRaw.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber)]
                 : SelectPreferredTmdbOrdering(tmdbEntriesRaw, showPrefId);
-
             if (tmdbEntries.Any())
             {
                 var first = tmdbEntries.First();
                 var (Season, Episode) = GetOrderingCoords(first, showPrefId);
                 if (Season.HasValue)
                 {
-                    // If fileIndex is provided and within range, pick the specific offset
-                    // Otherwise, return the full range (for single files mapping to multiple TMDB episodes)
                     if (fileIndexWithinEpisode.HasValue && fileIndexWithinEpisode.Value < tmdbEntries.Count)
                     {
                         var tmdbEp = tmdbEntries[fileIndexWithinEpisode.Value];
@@ -162,7 +133,6 @@ public static class PlexMapping
                     }
                     else if (!fileIndexWithinEpisode.HasValue || tmdbEntries.Count == 1)
                     {
-                        // No fileIndex provided (single file) or only one TMDB entry: return the range
                         var last = tmdbEntries.Last();
                         var lastCoords = GetOrderingCoords(last, showPrefId);
                         int? endEpisode = (tmdbEntries.Count > 1 && lastCoords.Season == Season) ? lastCoords.Episode : null;
@@ -176,16 +146,11 @@ public static class PlexMapping
                 }
             }
         }
-
         if (eps.Count == 1)
-        {
             return GetPlexCoordinates(eps[0]);
-        }
-
         var start = GetPlexCoordinates(eps.First());
         var end = GetPlexCoordinates(eps.Last());
         int? endEpisodeFinal = start.Season == end.Season ? end.Episode : null;
-
         return new PlexCoords
         {
             Season = start.Season,
@@ -194,38 +159,27 @@ public static class PlexMapping
         };
     }
 
-    // Determine if a TMDB Alternate ordering is preferred for the show
-    // Lightweight caches to avoid repeated expensive access to TMDB alternate-ordering data (AllOrderings)
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<(int EpId, string? OrderingId), bool> _tmdbAllOrderingsContainsCache = new();
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<(int EpId, string? OrderingId), (int? Season, int Episode)> _orderingCoordsCache = new();
 
-    /// <summary>
-    /// Filter a list of TMDB episode entries to the ordering preferred by the show, if any. Used when TMDB alternate numbering is enabled.
-    /// </summary>
-    /// <param name="entries">TMDB episode entries.</param>
-    /// <param name="showPreferredOrderingId">Optional show-level ordering id.</param>
-    /// <returns>The entries reordered so that those matching the preferred ordering come first, followed by the remainder.</returns>
+    /// <summary>Filter a list of TMDB episode entries to the preferred ordering.</summary>
+    /// <param name="entries">TMDB episodes.</param>
+    /// <param name="showPreferredOrderingId">Preferred ordering ID.</param>
+    /// <returns>Reordered list.</returns>
     public static List<ITmdbEpisode> SelectPreferredTmdbOrdering(IEnumerable<ITmdbEpisode>? entries, string? showPreferredOrderingId = null)
     {
         if (entries == null)
             return [];
-
         var list = entries.ToList();
         if (!list.Any())
             return list;
-
-        // If the caller supplied a show-preferred ordering id, prefer episodes that include that ordering id in their AllOrderings.
         if (!string.IsNullOrWhiteSpace(showPreferredOrderingId))
         {
-            // Fast-path: check the episode's own OrderingID (cheap) before probing AllOrderings (which can be expensive/lazy-loaded)
             var preferredDirect = list.Where(te => string.Equals(te.OrderingID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase))
                 .OrderBy(te => te.SeasonNumber ?? 0)
                 .ThenBy(te => te.EpisodeNumber)
                 .ToList();
-
             var remainder = list.Except(preferredDirect).ToList();
-
-            // Only enumerate AllOrderings for the remainder (rare path). Use a small memo to avoid repeated DB enumerations.
             var preferredFromAll = remainder
                 .Where(te =>
                 {
@@ -234,7 +188,6 @@ public static class PlexMapping
                         var key = (EpId: te.ID, OrderingId: showPreferredOrderingId);
                         if (_tmdbAllOrderingsContainsCache.TryGetValue(key, out var cached))
                             return cached;
-
                         bool found = te.AllOrderings != null && te.AllOrderings.Any(o => string.Equals(o.OrderingID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase));
                         _tmdbAllOrderingsContainsCache[key] = found;
                         return found;
@@ -247,33 +200,26 @@ public static class PlexMapping
                 .OrderBy(te => te.SeasonNumber ?? 0)
                 .ThenBy(te => te.EpisodeNumber)
                 .ToList();
-
             var preferred = preferredDirect.Concat(preferredFromAll).ToList();
             var others = list.Except(preferred).OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber);
             return [.. preferred, .. others];
         }
-
-        // Default: canonical season/episode ordering (fast and deterministic).
         return [.. list.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber)];
     }
 
-    /// <summary>
-    /// Convert a TMDB episode entry into season/episode coordinates, taking into account any show-level preferred (alternate) ordering.
-    /// </summary>
+    /// <summary>Convert a TMDB episode into season/episode coordinates.</summary>
     /// <param name="ep">TMDB episode.</param>
-    /// <param name="showPreferredOrderingId">Optional preferred ordering id.</param>
-    /// <returns>A tuple of (Season, Episode) where Season is <c>null</c> if undetermined.</returns>
+    /// <param name="showPreferredOrderingId">Ordering ID.</param>
+    /// <returns>Season and Episode tuple.</returns>
     public static (int? Season, int Episode) GetOrderingCoords(ITmdbEpisode ep, string? showPreferredOrderingId = null)
     {
         if (ep == null)
             return (null, 0);
-
         if (!string.IsNullOrWhiteSpace(showPreferredOrderingId))
         {
             var key = (EpId: ep.ID, OrderingId: showPreferredOrderingId);
             if (_orderingCoordsCache.TryGetValue(key, out var cachedCoords))
                 return cachedCoords;
-
             if (ep.AllOrderings != null)
             {
                 var byAll = ep.AllOrderings.FirstOrDefault(o => string.Equals(o.OrderingID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase));

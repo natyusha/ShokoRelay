@@ -6,59 +6,32 @@ using ShokoRelay.Config;
 
 namespace ShokoRelay.Helpers;
 
-/// <summary>
-/// Utilities for filtering and formatting tag strings obtained from Shoko series metadata. Includes logic for blacklists and title-casing.
-/// </summary>
+/// <summary>Utilities for filtering and formatting tag strings from Shoko metadata.</summary>
 public static class TagHelper
 {
     private static readonly Regex _wordRegex = new(@"[\'\w\d-]+\b", RegexOptions.Compiled);
 
     // csharpier-ignore-start
-    // https://github.com/ShokoAnime/ShokoServer/blob/9c0ae9208479420dea3b766156435d364794e809/Shoko.Server/Utilities/TagFilter.cs#L37
-    private static readonly FrozenSet<string> TagBlacklistAniDBHelpers = new[]
-    {
-        "asia", "awards", "body and host", "breasts", "cast missing", "cast", "complete manga adaptation", "content indicators", "delayed 16-9 broadcast",
-        "description missing", "description needs improvement", "development hell", "dialogue driven", "dynamic", "earth", "elements", "ending",
-        "ensemble cast", "family life", "fast-paced", "fetishes", "maintenance tags", "meta tags", "motifs", "no english subs available",
-        "origin", "pic needs improvement", "place", "pornography", "season", "setting", "some weird shit goin' on", "source material",
-        "staff missing", "storytelling", "tales", "target audience",  "technical aspects", "themes", "time",
-        "to be moved to character","to be moved to episode", "translation convention", "tropes", "unsorted",
-    }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
-    private static readonly FrozenSet<string> _forceLower = new[]
-    {
-        "a", "an", "the", "and", "but", "or", "nor", "at", "by", "for", "from", "in", "into", "of", "off", "on", "onto", "out",
-        "over", "per", "to", "up", "with", "as", "4-koma", "-hime","-kei", "-kousai", "-sama", "-warashi", "no", "vs", "x",
-    }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
-    private static readonly FrozenSet<string> _forceUpper = new[] { "3d", "bdsm", "cg", "cgi", "ed", "fff", "ffm", "ii", "milf", "mmf", "mmm", "npc", "op", "rpg", "tbs", "tv" }.ToFrozenSet(
-        StringComparer.OrdinalIgnoreCase
-    );
-    private static readonly FrozenDictionary<string, string> _forceSpecial = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-    {
-        { "comicfesta", "ComicFesta" }, { "d'etat", "d'Etat" }, { "noitamina", "noitaminA" },
-    }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+    private static readonly FrozenSet<string> TagBlacklistAniDBHelpers = new[] { "asia", "awards", "body and host", "breasts", "cast missing", "cast", "complete manga adaptation", "content indicators", "delayed 16-9 broadcast", "description missing", "description needs improvement", "development hell", "dialogue driven", "dynamic", "earth", "elements", "ending", "ensemble cast", "family life", "fast-paced", "fetishes", "maintenance tags", "meta tags", "motifs", "no english subs available", "origin", "pic needs improvement", "place", "pornography", "season", "setting", "some weird shit goin' on", "source material", "staff missing", "storytelling", "tales", "target audience", "technical aspects", "themes", "time", "to be moved to character","to be moved to episode", "translation convention", "tropes", "unsorted" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+    private static readonly FrozenSet<string> _forceLower = new[] { "a", "an", "the", "and", "but", "or", "nor", "at", "by", "for", "from", "in", "into", "of", "off", "on", "onto", "out", "over", "per", "to", "up", "with", "as", "4-koma", "-hime","-kei", "-kousai", "-sama", "-warashi", "no", "vs", "x" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+    private static readonly FrozenSet<string> _forceUpper = new[] { "3d", "bdsm", "cg", "cgi", "ed", "fff", "ffm", "ii", "milf", "mmf", "mmm", "npc", "op", "rpg", "tbs", "tv" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+    private static readonly FrozenDictionary<string, string> _forceSpecial = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { { "comicfesta", "ComicFesta" }, { "d'etat", "d'Etat" }, { "noitamina", "noitaminA" } }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
     // csharpier-ignore-end
 
-    /// <summary>
-    /// Return an array of tag objects derived from the provided <paramref name="series"/>, applying blacklist rules and combining sources (Shoko, AniDB, TMDB) based on configuration.
-    /// </summary>
-    /// <param name="series">Series to extract tags from.</param>
-    /// <returns>An array of anonymous objects each containing a <c>tag</c> property with a title-cased tag name.</returns>
+    /// <summary>Return an array of tag objects derived from a series, applying filters and sources.</summary>
+    /// <param name="series">The series to extract tags from.</param>
+    /// <returns>An array of tag metadata objects.</returns>
     public static object[] GetFilteredTags(ISeries series)
     {
         var shokoSeries = series as Shoko.Abstractions.Metadata.Shoko.IShokoSeries;
         var shokoTags = shokoSeries?.Tags;
         if (shokoTags == null)
             return [];
-
         var userBlacklist = ShokoRelay.Settings.TagBlacklist.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         var sourceSetting = ShokoRelay.Settings.TagSources;
-
-        // compute list of custom shoko tag names once for reuse
         var shokoNames = shokoTags.Select(t => t.Name).Where(n => !string.IsNullOrWhiteSpace(n)).Cast<string>().ToList();
 
-        // if user-only, skip all external sources
         if (sourceSetting == TagSources.UserOnly)
-        {
             return
             [
                 .. shokoNames
@@ -66,9 +39,7 @@ public static class TagHelper
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .Select(tagName => new { tag = TitleCase(tagName) }),
             ];
-        }
 
-        // build AniDB names list if source permits
         var anidbNames = new List<string>();
         int minWeight = (int)ShokoRelay.Settings.MinimumTagWeight;
         if (
@@ -80,15 +51,11 @@ public static class TagHelper
         {
             foreach (var t in anidbTags)
             {
-                if (string.IsNullOrWhiteSpace(t.Name))
-                    continue;
-                if (minWeight > 0 && t.Weight < minWeight)
+                if (string.IsNullOrWhiteSpace(t.Name) || (minWeight > 0 && t.Weight < minWeight))
                     continue;
                 anidbNames.Add(t.Name);
             }
         }
-
-        // build TMDB names list if requested
         var tmdbNames = new List<string>();
         if ((sourceSetting == TagSources.Combined || sourceSetting == TagSources.TMDB) && shokoSeries != null)
         {
@@ -101,10 +68,7 @@ public static class TagHelper
                     tmdbNames.AddRange(tmdb.Genres.Where(g => !string.IsNullOrWhiteSpace(g)));
             }
         }
-
-        // always include Shoko custom tags (already computed)
         var combined = anidbNames.Concat(tmdbNames).Concat(shokoNames);
-
         return
         [
             .. combined
@@ -114,17 +78,15 @@ public static class TagHelper
         ];
     }
 
-    /// <summary>
-    /// Convert the given <paramref name="text"/> to title case, honoring special words that should always be upper- or lowercase according to AniDB rules.
-    /// </summary>
-    /// <param name="text">Text to convert.</param>
-    /// <returns>Title‑cased string; original input returned if null/whitespace.</returns>
+    /// <summary>Convert text to title case, honouring special word list logic.</summary>
+    /// <param name="text">Input text.</param>
+    /// <returns>Formatted string.</returns>
     public static string TitleCase(string text)
     {
         if (string.IsNullOrWhiteSpace(text))
             return text;
 
-        // Primary Pass: Capitalize words and apply Upper/Lower lists
+        // Capitalize words and apply Upper/Lower lists
         string result = _wordRegex.Replace(
             text.ToLower(),
             m =>
@@ -146,19 +108,9 @@ public static class TagHelper
         // Force capitalise the first character of the last word no matter what
         int lastSpaceIndex = result.LastIndexOf(' ');
         if (lastSpaceIndex >= 0 && lastSpaceIndex < result.Length - 1)
-        {
             result = result[..(lastSpaceIndex + 1)] + char.ToUpper(result[lastSpaceIndex + 1]) + result[(lastSpaceIndex + 2)..];
-        }
-
         // Apply special cases as a last step (where a specific capitalisation style is preferred)
-        result = _wordRegex.Replace(
-            result,
-            m =>
-            {
-                return _forceSpecial.TryGetValue(m.Value, out var special) ? special : m.Value;
-            }
-        );
-
+        result = _wordRegex.Replace(result, m => _forceSpecial.TryGetValue(m.Value, out var special) ? special : m.Value);
         return result;
     }
 }

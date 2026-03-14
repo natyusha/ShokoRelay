@@ -9,136 +9,97 @@ using ShokoRelay.Helpers;
 
 namespace ShokoRelay.Plex;
 
-/// <summary>
-/// Miscellaneous utility routines used by Plex-facing code such as poster resolution and GUID parsing.
-/// </summary>
+/// <summary>Miscellaneous utility routines used by Plex-facing code.</summary>
 public static class PlexHelper
 {
     private static readonly Regex _showIdRegex = new(@"/show/(\d+)", RegexOptions.Compiled);
 
-    /// <summary>
-    /// Parse a Plex GUID string and return the embedded Shoko series ID if present. The GUID contains a "/show/{id}" segment when it maps to a series.
-    /// </summary>
-    /// <param name="guid">The Plex GUID string to parse.</param>
-    /// <returns>The extracted series ID, or <c>null</c> if the GUID does not contain a valid series reference.</returns>
+    /// <summary>Parse a Plex GUID string and return the embedded Shoko series ID.</summary>
+    /// <param name="guid">Plex GUID.</param>
+    /// <returns>Extracted ID or null.</returns>
     public static int? ExtractShokoSeriesIdFromGuid(string? guid)
     {
         if (string.IsNullOrWhiteSpace(guid))
             return null;
-
         var match = _showIdRegex.Match(guid);
         return !match.Success ? null
             : int.TryParse(match.Groups[1].Value, out var id) ? id
             : null;
     }
 
-    /// <summary>
-    /// Search configured import roots for a custom collection poster image that matches either the group ID, collection ID, or normalized collection title.
-    /// Returns the first matching file path or <c>null</c> if none found.
-    /// </summary>
-    /// <param name="series">Series whose import roots are searched for poster files.</param>
-    /// <param name="collectionName">Display name of the collection (used for fuzzy filename matching).</param>
-    /// <param name="collectionId">Numeric collection ID to match against poster filenames.</param>
-    /// <param name="metadataService">Optional metadata service for override-aware root resolution.</param>
-    /// <returns>The full path to the matching poster file, or <c>null</c>.</returns>
+    /// <summary>Search for a custom collection poster image matching the series context.</summary>
+    /// <param name="series">Target series.</param>
+    /// <param name="collectionName">Collection name.</param>
+    /// <param name="collectionId">Collection ID.</param>
+    /// <param name="metadataService">Optional metadata service.</param>
+    /// <returns>Path to poster file or null.</returns>
     public static string? FindCollectionPosterPath(IShokoSeries series, string collectionName, int collectionId, IMetadataService? metadataService = null)
     {
         if (series == null)
             return null;
-
         int groupId = series.TopLevelGroupID;
         if (groupId <= 0)
             return null;
-
         string? normalizedTitle = NormalizeCollectionKey(collectionName);
         if (string.IsNullOrWhiteSpace(normalizedTitle))
             return null;
-
         var roots = ResolveImportRoots(series, metadataService);
         if (roots.Count == 0)
             return null;
 
         string postersFolderName = Vfs.VfsShared.ResolveCollectionPostersFolderName();
-
         foreach (var root in roots)
         {
             string postersPath = Path.Combine(root, postersFolderName);
             if (!Directory.Exists(postersPath))
                 continue;
-
             foreach (var file in Directory.EnumerateFiles(postersPath))
             {
                 string extension = Path.GetExtension(file);
                 if (string.IsNullOrWhiteSpace(extension) || !PlexConstants.LocalMediaAssets.Artwork.Contains(extension))
                     continue;
-
                 string baseName = Path.GetFileNameWithoutExtension(file);
                 if (string.IsNullOrWhiteSpace(baseName))
                     continue;
-
                 if (IsIdMatch(baseName, groupId) || IsIdMatch(baseName, collectionId) || NormalizeCollectionKey(baseName) == normalizedTitle)
                     return file;
             }
         }
-
         return null;
     }
 
-    /// <summary>
-    /// Locate a local collection poster by matching against the specified group ID (and optionally the group's title).
-    /// </summary>
-    /// <param name="series">Series whose import roots are searched.</param>
-    /// <param name="groupId">The Shoko group ID to match against poster filenames.</param>
-    /// <returns>The full path to the matching poster file, or <c>null</c>.</returns>
+    /// <summary>Locate a local collection poster by matching against a group ID.</summary>
+    /// <param name="series">Target series.</param>
+    /// <param name="groupId">Shoko group ID.</param>
+    /// <returns>Path to poster or null.</returns>
     public static string? FindCollectionPosterPathByGroup(IShokoSeries series, int groupId)
     {
-        if (series == null)
+        if (series == null || groupId <= 0)
             return null;
-        if (groupId <= 0)
-            return null;
-
         var group = series.TopLevelGroup;
-        string? groupTitle;
-        try
-        {
-            groupTitle = group?.PreferredTitle?.Value ?? group?.DefaultTitle?.Value;
-        }
-        catch
-        {
-            groupTitle = null;
-        }
-
+        string? groupTitle = group?.PreferredTitle?.Value ?? group?.DefaultTitle?.Value;
         var roots = ResolveImportRoots(series);
         if (roots.Count == 0)
             return null;
 
         string postersFolderName = Vfs.VfsShared.ResolveCollectionPostersFolderName();
-
         foreach (var root in roots)
         {
             string postersPath = Path.Combine(root, postersFolderName);
             if (!Directory.Exists(postersPath))
                 continue;
-
             foreach (var file in Directory.EnumerateFiles(postersPath))
             {
                 string extension = Path.GetExtension(file);
                 if (string.IsNullOrWhiteSpace(extension) || !PlexConstants.LocalMediaAssets.Artwork.Contains(extension))
                     continue;
-
                 string baseName = Path.GetFileNameWithoutExtension(file);
                 if (string.IsNullOrWhiteSpace(baseName))
                     continue;
-
-                // 1) ID match (e.g., "25932.png" or "c25932.png")
                 if (IsIdMatch(baseName, groupId))
                     return file;
-
-                // 2) Exact title match (case-insensitive)
                 if (!string.IsNullOrWhiteSpace(groupTitle) && string.Equals(baseName, groupTitle, StringComparison.OrdinalIgnoreCase))
                     return file;
-
-                // 3) Stripped invalid Windows filename characters match (e.g. "My: Group" -> "My Group")
                 if (!string.IsNullOrWhiteSpace(groupTitle))
                 {
                     var strippedGroup = TextHelper.StripInvalidWindowsChars(groupTitle).ToLowerInvariant();
@@ -148,25 +109,17 @@ public static class PlexHelper
                 }
             }
         }
-
         return null;
     }
 
-    /// <summary>
-    /// Determine the set of filesystem import root folders that contain files for the provided <paramref name="series"/>.
-    /// Optionally pass a <paramref name="metadataService"/> for override-aware series grouping.
-    /// </summary>
-    /// <param name="series">Series whose video files are inspected for import roots.</param>
-    /// <param name="metadataService">Optional metadata service for override-aware series grouping.</param>
-    /// <returns>A set of unique import root directory paths.</returns>
+    /// <summary>Determine the filesystem import roots for a series.</summary>
+    /// <param name="series">Shoko series.</param>
+    /// <param name="metadataService">Optional metadata service.</param>
+    /// <returns>Unique set of root paths.</returns>
     public static HashSet<string> ResolveImportRoots(IShokoSeries series, IMetadataService? metadataService = null)
     {
         var roots = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
-
-        // make sure overrides are loaded so mapping decisions use latest data
         OverrideHelper.EnsureLoaded();
-
-        // gather list of series to consider (primary + extras)
         var seriesList = new List<IShokoSeries> { series };
         if (metadataService != null && ShokoRelay.Settings.TmdbEpNumbering)
         {
@@ -179,7 +132,6 @@ public static class PlexHelper
                     seriesList.Add(s);
             }
         }
-
         foreach (var s in seriesList)
         {
             var fileData = MapHelper.GetSeriesFileData(s);
@@ -188,15 +140,11 @@ public static class PlexHelper
                 var location = mapping.Video.Files.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l.Path)) ?? mapping.Video.Files.FirstOrDefault();
                 if (location == null)
                     continue;
-
                 string? importRoot = Vfs.VfsShared.ResolveImportRootPath(location);
-                if (string.IsNullOrWhiteSpace(importRoot))
-                    continue;
-
-                roots.Add(importRoot);
+                if (!string.IsNullOrWhiteSpace(importRoot))
+                    roots.Add(importRoot);
             }
         }
-
         return roots;
     }
 
@@ -204,11 +152,9 @@ public static class PlexHelper
     {
         if (id <= 0)
             return false;
-
         string trimmed = value.Trim();
         if (trimmed.StartsWith("c", StringComparison.OrdinalIgnoreCase))
             trimmed = trimmed[1..];
-
         return int.TryParse(trimmed, out int parsed) && parsed == id;
     }
 
@@ -216,25 +162,25 @@ public static class PlexHelper
     {
         if (string.IsNullOrWhiteSpace(value))
             return null;
-
         var invalid = Path.GetInvalidFileNameChars();
         var sb = new StringBuilder(value.Length);
         foreach (char c in value)
         {
-            if (invalid.Contains(c))
-                continue;
-            sb.Append(c);
+            if (!invalid.Contains(c))
+                sb.Append(c);
         }
-
         string cleaned = TextHelper.CondenseSpaces(sb.ToString().Trim());
-
         return cleaned.Length == 0 ? null : cleaned.ToLowerInvariant();
     }
 
-    /// <summary>
-    /// Build a URL suitable for serving a collection poster image. Prefers a locally stored poster (using <see cref="FindCollectionPosterPath"/>).
-    /// Will optionally fall back to the primary series poster via <paramref name="metadataService"/>.
-    /// </summary>
+    /// <summary>Build a URL for serving a collection poster image.</summary>
+    /// <param name="series">Series.</param>
+    /// <param name="collectionName">Collection name.</param>
+    /// <param name="collectionId">Collection ID.</param>
+    /// <param name="metadataService">Optional metadata service.</param>
+    /// <param name="allowPrimarySeriesFallback">Whether to use primary series poster as fallback.</param>
+    /// <param name="baseUrl">Base URL override.</param>
+    /// <returns>URL string or null.</returns>
     public static string? GetCollectionPosterUrl(
         IShokoSeries series,
         string collectionName,
@@ -246,17 +192,12 @@ public static class PlexHelper
     {
         if (series == null)
             return null;
-
-        // 1) Check for local poster file for the collection
         var posterPath = FindCollectionPosterPath(series, collectionName, collectionId, metadataService);
         if (!string.IsNullOrWhiteSpace(posterPath))
         {
             string b = string.IsNullOrWhiteSpace(baseUrl) ? ShokoRelay.ServerBaseUrl : baseUrl?.TrimEnd('/') ?? string.Empty;
-            // Prefer the plugin-style provider base for generated collection poster URLs
             return $"{b}{ShokoRelayInfo.BasePath}/collections/user/{series.TopLevelGroupID}";
         }
-
-        // 2) Fallback to the primary series poster if allowed
         if (allowPrimarySeriesFallback && metadataService != null)
         {
             var group = metadataService.GetShokoGroupByID(series.TopLevelGroupID);
@@ -268,84 +209,93 @@ public static class PlexHelper
                     return ImageHelper.GetImageUrl(posterImage);
             }
         }
-
         return null;
     }
 }
 
-/// <summary>
-/// Data transfer object representing the JSON payload delivered by Plex webhooks. Only the fields used by the plugin are included.
-/// </summary>
+/// <summary>Payload delivered by Plex webhooks.</summary>
 public class PlexWebhookPayload
 {
-    /// <summary>
-    /// Server information supplied in a webhook payload. Used to avoid checking webhook events from extraneous Plex servers
-    /// </summary>
+    /// <summary>Information about the Plex server.</summary>
     [JsonPropertyName("Server")]
     public PlexServer? Server { get; set; }
 
+    /// <summary>Plex server identity details.</summary>
     public class PlexServer
     {
+        /// <summary>Server title.</summary>
         [JsonPropertyName("title")]
         public string? Title { get; set; }
 
+        /// <summary>Server unique UUID.</summary>
         [JsonPropertyName("uuid")]
         public string? Uuid { get; set; }
     }
 
+    /// <summary>The event type.</summary>
     [JsonPropertyName("event")]
     public string? Event { get; set; }
 
+    /// <summary>True if triggered by a user.</summary>
     [JsonPropertyName("user")]
     public bool? User { get; set; }
 
+    /// <summary>True if triggered by the server owner.</summary>
     [JsonPropertyName("owner")]
     public bool? Owner { get; set; }
 
+    /// <summary>Account info.</summary>
     [JsonPropertyName("Account")]
     public PlexAccount? Account { get; set; }
 
+    /// <summary>Metadata associated with the item.</summary>
     [JsonPropertyName("Metadata")]
     public PlexMetadata? Metadata { get; set; }
 
-    /// <summary>
-    /// Account information supplied in a webhook payload.
-    /// </summary>
+    /// <summary>Plex user account info.</summary>
     public class PlexAccount
     {
+        /// <summary>User account title.</summary>
         [JsonPropertyName("title")]
         public string? Title { get; set; }
     }
 
-    /// <summary>
-    /// Metadata section of a Plex webhook payload. Includes GUID, title, viewed timestamp, section ID and other episode/show identifiers.
-    /// </summary>
+    /// <summary>Metadata section of a Plex webhook payload.</summary>
     public class PlexMetadata
     {
+        /// <summary>Unique metadata GUID.</summary>
         [JsonPropertyName("guid")]
         public string? Guid { get; set; }
 
+        /// <summary>Grandparent (Show) title.</summary>
         [JsonPropertyName("grandparentTitle")]
         public string? GrandparentTitle { get; set; }
 
+        /// <summary>Parent (Season) index.</summary>
         [JsonPropertyName("parentIndex")]
         public int? ParentIndex { get; set; }
 
+        /// <summary>Item title.</summary>
         [JsonPropertyName("title")]
         public string? Title { get; set; }
 
+        /// <summary>Item index (episode number).</summary>
         [JsonPropertyName("index")]
         public int? Index { get; set; }
 
+        /// <summary>Unix timestamp of viewing.</summary>
         [JsonPropertyName("lastViewedAt")]
         public long? LastViewedAt { get; set; }
 
+        /// <summary>Library section numeric ID.</summary>
         [JsonPropertyName("librarySectionId")]
         public int? LibrarySectionId { get; set; }
 
+        /// <summary>Metadata type string.</summary>
         [JsonPropertyName("type")]
         public string? Type { get; set; }
 
+        /// <summary>Rating value from 0-10.</summary>
         [JsonPropertyName("userRating")]
         public double? UserRating { get; set; }
     }

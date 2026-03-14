@@ -8,10 +8,7 @@ using ShokoRelay.Plex;
 
 namespace ShokoRelay.Controllers;
 
-/// <summary>
-/// Provides operations for building AnimeThemes VFS mappings, generating MP3 series themes,
-/// and handling the standalone video player endpoints including favourites.
-/// </summary>
+/// <summary>Provides operations for building AnimeThemes VFS mappings, generating MP3 series themes, and handling the standalone video player endpoints.</summary>
 [ApiVersionNeutral]
 [ApiController]
 [Route(ShokoRelayInfo.BasePath)]
@@ -28,9 +25,7 @@ public class AnimeThemesController(
 
     #region VFS Mapping & Build
 
-    /// <summary>
-    /// Applies the anime‑themes mapping file to the directory structure.
-    /// </summary>
+    /// <summary>Applies the anime‑themes mapping file to the directory structure.</summary>
     /// <param name="filter">Optional comma-separated Shoko Series IDs to restrict the build.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Statistics on links created and errors encountered.</returns>
@@ -43,7 +38,6 @@ public class AnimeThemesController(
 
         var result = await _animeThemesMapping.ApplyMappingAsync(filterIds, cancellationToken).ConfigureAwait(false);
 
-        // Save the WebM cache for the standalone player during unfiltered builds
         if (filterIds == null || filterIds.Count == 0)
         {
             try
@@ -60,9 +54,10 @@ public class AnimeThemesController(
         return LogAndReturn("at-vfs-build-report.log", result, (sb, r) => LogHelper.BuildAtVfsBuildReport(sb, r, filterIds ?? []));
     }
 
-    /// <summary>
-    /// Generates the anime‑themes mapping CSV or tests a single filename mapping.
-    /// </summary>
+    /// <summary>Generates the anime‑themes mapping CSV or tests a single filename mapping.</summary>
+    /// <param name="testPath">Optional webm filename to test mapping logic against.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The mapping report or a test result.</returns>
     [HttpGet("animethemes/vfs/map")]
     public async Task<IActionResult> AnimeThemesVfsMap(string? testPath = null, CancellationToken cancellationToken = default)
     {
@@ -94,9 +89,9 @@ public class AnimeThemesController(
         return LogAndReturn("at-vfs-map-report.log", result, LogHelper.BuildAtVfsMapReport);
     }
 
-    /// <summary>
-    /// Downloads and imports the curated mapping CSV from GitHub.
-    /// </summary>
+    /// <summary>Downloads and imports the curated mapping CSV from GitHub.</summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The number of entries imported.</returns>
     [HttpPost("animethemes/vfs/import")]
     public async Task<IActionResult> ImportAnimeThemesMapping(CancellationToken cancellationToken = default)
     {
@@ -109,9 +104,10 @@ public class AnimeThemesController(
 
     #region MP3 Generation
 
-    /// <summary>
-    /// Generates Theme.mp3 files for anime series.
-    /// </summary>
+    /// <summary>Generates Theme.mp3 files for anime series.</summary>
+    /// <param name="query">Parameters for the MP3 generation request.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>An operation result or batch report.</returns>
     [HttpGet("animethemes/mp3")]
     public async Task<IActionResult> AnimeThemesMp3([FromQuery] AnimeThemesMp3Query query, CancellationToken cancellationToken = default)
     {
@@ -138,9 +134,9 @@ public class AnimeThemesController(
         return Ok(single);
     }
 
-    /// <summary>
-    /// Returns a random Theme.mp3 path from the current cache.
-    /// </summary>
+    /// <summary>Returns a random Theme.mp3 path from the current cache.</summary>
+    /// <param name="refresh">If true, forces a cache refresh before selecting.</param>
+    /// <returns>A JSON object containing the random path.</returns>
     [HttpGet("animethemes/mp3/random")]
     public IActionResult AnimeThemesMp3Random([FromQuery] bool refresh = false)
     {
@@ -150,9 +146,9 @@ public class AnimeThemesController(
         return folders.Count == 0 ? NotFound() : Ok(new { status = "ok", path = folders[Random.Shared.Next(folders.Count)] });
     }
 
-    /// <summary>
-    /// Streams an existing Theme.mp3 with ID3 tags embedded in response headers.
-    /// </summary>
+    /// <summary>Streams an existing Theme.mp3 with ID3 tags embedded in response headers.</summary>
+    /// <param name="path">The folder path containing the Theme.mp3.</param>
+    /// <returns>A file stream result.</returns>
     [HttpGet("animethemes/mp3/stream")]
     [HttpHead("animethemes/mp3/stream")]
     public IActionResult AnimeThemesMp3Stream([FromQuery] string? path)
@@ -181,9 +177,8 @@ public class AnimeThemesController(
 
     #region WebM Player & Favourites
 
-    /// <summary>
-    /// Returns the hierarchical tree of WebM files for the standalone player.
-    /// </summary>
+    /// <summary>Returns the hierarchical tree of WebM files for the standalone player.</summary>
+    /// <returns>A flat list of objects describing available WebM themes and their metadata.</returns>
     [HttpGet("animethemes/webm/tree")]
     public IActionResult AnimeThemesWebmTree()
     {
@@ -260,9 +255,9 @@ public class AnimeThemesController(
         return Ok(new { status = "ok", items });
     }
 
-    /// <summary>
-    /// Streams a WebM theme file from the VFS.
-    /// </summary>
+    /// <summary>Streams a WebM theme file from the VFS.</summary>
+    /// <param name="path">The relative VFS path to the WebM file.</param>
+    /// <returns>A file stream result.</returns>
     [HttpGet("animethemes/webm/stream")]
     [HttpHead("animethemes/webm/stream")]
     public IActionResult AnimeThemesWebmStream([FromQuery] string? path)
@@ -273,9 +268,8 @@ public class AnimeThemesController(
         return !System.IO.File.Exists(fullPath) ? NotFound() : File(new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read), "video/webm", enableRangeProcessing: true);
     }
 
-    /// <summary>
-    /// Returns the list of videoIds marked as favourites.
-    /// </summary>
+    /// <summary>Returns the list of videoIds marked as favourites.</summary>
+    /// <returns>An array of video IDs.</returns>
     [HttpGet("animethemes/webm/favourites")]
     public IActionResult GetAnimeThemesFavourites()
     {
@@ -292,9 +286,9 @@ public class AnimeThemesController(
         }
     }
 
-    /// <summary>
-    /// Toggles a VideoId in the favourites list.
-    /// </summary>
+    /// <summary>Toggles a VideoId in the favourites list.</summary>
+    /// <param name="videoId">The AnimeThemes video ID to toggle.</param>
+    /// <returns>A JSON object with the new favourite status.</returns>
     [HttpPost("animethemes/webm/favourites")]
     public IActionResult UpdateAnimeThemesFavourite([FromBody] int videoId)
     {
@@ -325,6 +319,9 @@ public class AnimeThemesController(
 
     #region Private Helpers
 
+    /// <summary>Reads specific ID3v2 tags from an MP3 file without external dependencies.</summary>
+    /// <param name="filePath">Absolute path to the MP3 file.</param>
+    /// <returns>A dictionary of tag names and values.</returns>
     private static Dictionary<string, string> ReadId3v2Tags(string filePath)
     {
         var tags = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

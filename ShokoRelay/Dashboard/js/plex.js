@@ -5,7 +5,10 @@
 (() => {
   const { base, el, fetchJson, showToast, toastOperation, withButtonAction, unwrapConfig } = window._sr;
 
-  /** Enable or disable all Plex-dependent automation controls on the dashboard. */
+  /**
+   * Enable or disable all Plex-dependent automation controls on the dashboard.
+   * @param {boolean} enabled - True to enable, false to disable.
+   */
   const setPlexAutomationControls = (enabled) =>
     document.querySelectorAll(".plex-auth").forEach((e) => {
       e.disabled = !enabled;
@@ -15,16 +18,26 @@
   let plexPinId = "",
     plexPollTimer = null;
 
+  /**
+   * Set the HTML content of the Plex authentication container.
+   * @param {string} html - HTML string.
+   */
   const setPlexAction = (html) => {
     const c = el("plex-auth-action");
     if (c) c.innerHTML = html;
   };
 
+  /**
+   * Resets the Plex section to show the 'Start Auth' button.
+   */
   const setPlexStartAction = () => {
     setPlexAction('<button id="plex-start">Start Plex Auth</button>');
     withButtonAction(el("plex-start"), startPlexAuth);
   };
 
+  /**
+   * Updates the Plex section to show 'Unlink' and 'Refresh' buttons.
+   */
   const setPlexUnlinkAction = () => {
     setPlexAction(
       '<button id="plex-unlink" class="danger">Unlink Plex</button><button id="plex-refresh" class="w46-button" title="Refresh Plex Libraries"><svg class="icon-svg"><use href="img/icons.svg#refresh"></use></svg></button>',
@@ -33,6 +46,9 @@
     withButtonAction(el("plex-refresh"), refreshPlexLibraries);
   };
 
+  /**
+   * Stops the active Plex authentication polling timer.
+   */
   const stopPlexPolling = () => {
     if (plexPollTimer) {
       clearInterval(plexPollTimer);
@@ -40,7 +56,10 @@
     }
   };
 
-  /** Initiate the Plex OAuth flow by fetching a pin and redirecting the user to the auth URL. */
+  /**
+   * Initiate the Plex OAuth flow by fetching a pin and redirecting the user to the auth URL.
+   * @returns {Promise<void>}
+   */
   async function startPlexAuth() {
     const res = await fetchJson(base + "/plex/auth");
     if (!res.ok || !res.data.pinId || !res.data.authUrl) return setPlexStartAction();
@@ -58,12 +77,18 @@
     }, 2000);
   }
 
-  /** Poll the server for Plex OAuth completion; stops polling and refreshes state on success. */
+  /**
+   * Poll the server for Plex OAuth completion; stops polling and refreshes state on success.
+   * @returns {Promise<void>}
+   */
   async function checkPlexAuthStatus() {
     /* Integrated into polling loop above for conciseness */
   }
 
-  /** POST to the server to rediscover Plex libraries, then refresh the dashboard state. */
+  /**
+   * POST to the server to rediscover Plex libraries, then refresh the dashboard state.
+   * @returns {Promise<void>}
+   */
   async function refreshPlexLibraries() {
     try {
       const rr = await fetchJson(base + "/plex/auth/refresh", { method: "POST" });
@@ -76,7 +101,10 @@
     }
   }
 
-  /** @param {Array} libraries - Array of discovered Plex library objects. */
+  /**
+   * Updates the UI text indicating the number of discovered libraries.
+   * @param {Array} [libs=[]] - Array of discovered Plex library objects.
+   */
   const updateLibraryCount = (libs = []) => {
     if (el("plex-libraries-count")) el("plex-libraries-count").textContent = libs.length;
   };
@@ -103,7 +131,10 @@
     }
   }
 
-  /** Refresh the full Plex authentication state (token, libraries, settings bindings) from the server config.  */
+  /**
+   * Refresh the full Plex authentication state (token, libraries, settings bindings) from the server config.
+   * @returns {Promise<void>}
+   */
   async function refreshPlexState() {
     updateLibraryCount();
     const res = await fetchJson(base + "/config");
@@ -119,7 +150,10 @@
     // Enable or disable automation buttons based on whether we have a token
     setPlexAutomationControls(!!plex.HasToken);
 
-    // Shared persistence function for plex.js that strips UI-only metadata
+    /**
+     * Shared persistence function for plex.js that strips UI-only metadata.
+     * @param {Object} cfg - The config object to save.
+     */
     const persistPlex = async (cfg) => {
       const cleanCfg = JSON.parse(JSON.stringify(cfg));
       // Remove properties that the backend doesn't expect in the POST body
@@ -159,7 +193,10 @@
     updateLibraryCount(libs);
   }
 
-  /** Unlink the Plex account by posting to the server and refreshing the dashboard state. */
+  /**
+   * Unlink the Plex account by posting to the server and refreshing the dashboard state.
+   * @returns {Promise<void>}
+   */
   async function unlinkPlex() {
     await fetchJson(base + "/plex/auth/unlink", { method: "POST" });
     refreshPlexState();

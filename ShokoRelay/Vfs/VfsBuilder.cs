@@ -9,20 +9,16 @@ using ShokoRelay.Plex;
 
 namespace ShokoRelay.Vfs;
 
-/// <summary>
-/// Result returned by <see cref="VfsBuilder"/> after a build or clean operation.
-/// </summary>
-/// <param name="RootPath">The virtual name of the VFS root folder.</param>
-/// <param name="SeriesProcessed">Total number of series processed during the run.</param>
-/// <param name="CreatedLinks">Total number of symbolic links successfully created.</param>
-/// <param name="Skipped">Number of items skipped due to missing files or configuration.</param>
-/// <param name="Errors">List of error messages encountered during the build.</param>
-/// <param name="PlannedLinks">Total number of links intended to be created.</param>
+/// <summary>Detailed outcome of a VFS build or clean run.</summary>
+/// <param name="RootPath">VFS root folder name.</param>
+/// <param name="SeriesProcessed">Processed series count.</param>
+/// <param name="CreatedLinks">Successful links created.</param>
+/// <param name="Skipped">Skipped items count.</param>
+/// <param name="Errors">Encountered errors.</param>
+/// <param name="PlannedLinks">Target link count.</param>
 public record VfsBuildResult(string RootPath, int SeriesProcessed, int CreatedLinks, int Skipped, List<string> Errors, int PlannedLinks);
 
-/// <summary>
-/// Builds a virtual filesystem tree of symlinks for Plex by mapping Shoko series/episode metadata to Plex-style folder/file naming conventions.
-/// </summary>
+/// <summary>Builds a virtual filesystem tree for Plex mapping metadata to conventions.</summary>
 public class VfsBuilder
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
@@ -38,11 +34,7 @@ public class VfsBuilder
     private static readonly HashSet<string> MetadataExtensions = PlexConstants.LocalMediaAssets.Artwork.Union(PlexConstants.LocalMediaAssets.ThemeSongs).ToHashSet(StringComparer.OrdinalIgnoreCase);
     private static readonly IReadOnlySet<string> SubtitleExtensions = PlexConstants.LocalMediaAssets.Subtitles;
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="VfsBuilder"/> class.
-    /// </summary>
-    /// <param name="metadataService">Service for accessing Shoko metadata.</param>
-    /// <param name="configProvider">Provider for plugin configuration paths.</param>
+    /// <summary>Initializes a VfsBuilder.</summary>
     public VfsBuilder(IMetadataService metadataService, ConfigProvider configProvider)
     {
         _metadataService = metadataService;
@@ -55,41 +47,18 @@ public class VfsBuilder
         OverrideHelper.EnsureLoaded();
     }
 
-    /// <summary>
-    /// Build (or clean) the VFS for a single optional series.
-    /// </summary>
-    /// <param name="seriesId">Optional series ID to restrict the build.</param>
-    /// <param name="cleanRoot">If true, delete existing root before building.</param>
-    /// <param name="pruneSeries">If true, remove empty per-series folders.</param>
-    /// <returns>A result describing the build outcome.</returns>
+    /// <summary>Build or clean VFS for a single series ID.</summary>
     public VfsBuildResult Build(int? seriesId = null, bool cleanRoot = true, bool pruneSeries = false) => BuildInternal(seriesId.HasValue ? [seriesId.Value] : null, cleanRoot, pruneSeries, false);
 
-    /// <summary>
-    /// Build (or clean) the VFS for the given collection of series IDs.
-    /// </summary>
-    /// <param name="seriesIds">Set of series IDs to process.</param>
-    /// <param name="cleanRoot">If true, delete existing root before building.</param>
-    /// <param name="pruneSeries">If true, remove empty per-series folders.</param>
-    /// <returns>A result describing the build outcome.</returns>
+    /// <summary>Build or clean VFS for multiple series IDs.</summary>
     public VfsBuildResult Build(IReadOnlyCollection<int> seriesIds, bool cleanRoot = true, bool pruneSeries = false) => BuildInternal(seriesIds, cleanRoot, pruneSeries, false);
 
-    /// <summary>
-    /// Perform a clean operation without generating any VFS links.
-    /// </summary>
-    /// <param name="seriesId">Optional series ID to restrict the clean scope.</param>
-    /// <returns>A result with zero created links.</returns>
+    /// <summary>Clean VFS for a series without building.</summary>
     public VfsBuildResult Clean(int? seriesId = null) => BuildInternal(seriesId.HasValue ? [seriesId.Value] : null, true, false, true);
 
-    /// <summary>
-    /// Clean the VFS for the given collection of series IDs.
-    /// </summary>
-    /// <param name="seriesIds">Set of series IDs whose VFS folders should be deleted.</param>
-    /// <returns>A result with zero created links.</returns>
+    /// <summary>Clean VFS for multiple series without building.</summary>
     public VfsBuildResult Clean(IReadOnlyCollection<int> seriesIds) => BuildInternal(seriesIds, true, false, true);
 
-    /// <summary>
-    /// Internal core logic for orchestrating a VFS build or clean run.
-    /// </summary>
     private VfsBuildResult BuildInternal(IReadOnlyCollection<int>? seriesIds, bool cleanRoot, bool pruneSeries, bool cleanOnly)
     {
         var (sw, created, skipped, seriesProcessed, planned) = (Stopwatch.StartNew(), 0, 0, 0, 0);
@@ -100,7 +69,6 @@ public class VfsBuilder
             [],
             new(VfsShared.PathComparer)
         );
-
         string rootName = VfsShared.ResolveRootFolderName();
         var (cleanedRoots, cleanedSeries, rootTasks, seriesTasks) = (
             new ConcurrentDictionary<string, byte>(VfsShared.PathComparer),
@@ -126,7 +94,6 @@ public class VfsBuilder
                         }),
                 ]
                 : (_metadataService.GetAllShokoSeries() ?? []);
-
         OverrideHelper.EnsureLoaded();
         if (ShokoRelay.Settings.TmdbEpNumbering)
             seriesList = [.. seriesList.GroupBy(s => OverrideHelper.GetPrimary(s.ID, _metadataService)).Select(g => g.FirstOrDefault(s => s.ID == g.Key) ?? g.First())];
@@ -157,7 +124,6 @@ public class VfsBuilder
         sw.Stop();
         var (errors, warnings) = (errorsBag.ToList(), _warningsForBuild.ToList());
         WriteFinalReport(sw, seriesProcessed, _createdDirsForBuild.Count, created, planned, skipped, warnings, errors);
-
         (_seriesFileDataCacheForBuild, _subtitleFileCacheForBuild, _metadataFileCacheForBuild, _warningsForBuild, _createdDirsForBuild) = (null, null, null, null, null);
         Logger.Info(
             "VFS BuildInternal completed in {Elapsed}ms: processed={Processed}, created={Created}, skipped={Skipped}, errors={Errors}",
@@ -170,9 +136,6 @@ public class VfsBuilder
         return new VfsBuildResult(rootName, seriesProcessed, created, skipped, errors, planned);
     }
 
-    /// <summary>
-    /// Processes a single series to generate VFS symlinks and link associated metadata.
-    /// </summary>
     private (int Created, int Skipped, List<string> Errors, int Planned) BuildSeries(
         IShokoSeries series,
         string rootFolderName,
@@ -186,7 +149,7 @@ public class VfsBuilder
     )
     {
         var (created, skipped, planned, errors, sSw) = (0, 0, 0, new List<string>(), Stopwatch.StartNew());
-        var (DisplayTitle, SortTitle, OriginalTitle) = TextHelper.ResolveFullSeriesTitles(series);
+        var (DisplayTitle, _, _) = TextHelper.ResolveFullSeriesTitles(series);
         int folderId = ShokoRelay.Settings.TmdbEpNumbering ? OverrideHelper.GetPrimary(series.ID, _metadataService) : series.ID;
         var fileData = GetSeriesFileDataCached(series);
         if (!fileData.Mappings.Any())
@@ -237,7 +200,6 @@ public class VfsBuilder
                 errors.Add($"No accessible file for {series.PreferredTitle?.Value} S{mapping.Coords.Season}E{mapping.Coords.Episode}");
                 continue;
             }
-
             string seasonPath = Path.Combine(seriesPath, VfsHelper.SanitizeName(PlexMapping.GetSeasonFolder(mapping.Coords.Season)));
             if (_createdDirsForBuild?.TryAdd(seasonPath, 0) == true)
                 Directory.CreateDirectory(seasonPath);
@@ -245,7 +207,6 @@ public class VfsBuilder
             var key = (mapping.Coords.Season, mapping.Coords.Episode);
             bool hasPeer = coordCounts.TryGetValue(key, out var count) && count > 1;
             int? vIdx = (hasPeer && !mapping.PartIndex.HasValue && versionCounters.TryGetValue(key, out var v)) ? (versionCounters[key] = v + 1) - 1 : null;
-
             string fileName = VfsHelper.SanitizeName(
                 PlexMapping.TryGetExtraSeason(mapping.Coords.Season, out var ex)
                     ? VfsHelper.BuildExtrasFileName(
@@ -269,7 +230,6 @@ public class VfsBuilder
                         vIdx
                     )
             );
-
             string destPath = Path.Combine(seasonPath, fileName);
             if (VfsShared.TryCreateLink(src, destPath, Logger))
             {
@@ -289,13 +249,9 @@ public class VfsBuilder
                 errors.Add($"Link failed: {src} -> {destPath}");
             }
         }
-        Logger.Debug("BuildSeries {SeriesId} completed in {Elapsed}ms: created={Created}, errors={Errors}", series.ID, sSw.ElapsedMilliseconds, created, errors.Count);
         return (created, skipped, errors, planned);
     }
 
-    /// <summary>
-    /// Handles the thread-safe deletion of a directory during a build.
-    /// </summary>
     private void HandleCleanup(string path, ConcurrentDictionary<string, byte> cleaned, ConcurrentDictionary<string, Task> tasks, List<string> errors)
     {
         if (!cleaned.TryAdd(path, 0))
@@ -327,9 +283,6 @@ public class VfsBuilder
         tcs.SetResult();
     }
 
-    /// <summary>
-    /// Links local metadata (posters, banners, etc.) from the source directory to the VFS.
-    /// </summary>
     private void LinkMetadata(string sourceDir, string destDir)
     {
         if (string.IsNullOrWhiteSpace(sourceDir) || !Directory.Exists(sourceDir))
@@ -343,19 +296,12 @@ public class VfsBuilder
         }
     }
 
-    /// <summary>
-    /// Links sidecar subtitle files from the source directory to the VFS, renaming them to match the linked video.
-    /// </summary>
     private void LinkSubtitles(string sourceFile, string sourceDir, string destBase, string destDir, ref int planned, ref int skipped, List<string> errors, ref int created)
     {
         if (string.IsNullOrWhiteSpace(sourceDir) || !Directory.Exists(sourceDir))
             return;
         string originalBase = Path.GetFileNameWithoutExtension(sourceFile);
-        var dirSw = Stopwatch.StartNew();
         var candidates = _subtitleFileCacheForBuild?.GetOrAdd(sourceDir, _ => [.. Directory.GetFiles(sourceDir).Where(f => SubtitleExtensions.Contains(Path.GetExtension(f)))]) ?? [];
-        dirSw.Stop();
-        if (dirSw.ElapsedMilliseconds > 50)
-            Logger.Debug("Directory.GetFiles({SourceDir}) took {Elapsed}ms and returned {Count} entries", sourceDir, dirSw.ElapsedMilliseconds, candidates.Length);
         foreach (var sub in candidates)
         {
             string name = Path.GetFileName(sub);
@@ -374,9 +320,6 @@ public class VfsBuilder
         }
     }
 
-    /// <summary>
-    /// Deletes the per-series VFS folder for the specified series across all import roots.
-    /// </summary>
     private void PruneSeries(string rootFolderName, IShokoSeries series)
     {
         var paths = new HashSet<string>(VfsShared.PathComparer);
@@ -399,9 +342,6 @@ public class VfsBuilder
         }
     }
 
-    /// <summary>
-    /// Retrieves file mapping data for a series, utilizing the build-session cache.
-    /// </summary>
     private MapHelper.SeriesFileData GetSeriesFileDataCached(IShokoSeries series)
     {
         if (!ShokoRelay.Settings.TmdbEpNumbering)
@@ -420,9 +360,6 @@ public class VfsBuilder
             ?? MapHelper.GetSeriesFileData(series);
     }
 
-    /// <summary>
-    /// Writes the final text report to the plugin's logs directory and logs a summary to the server.
-    /// </summary>
     private void WriteFinalReport(Stopwatch sw, int processed, int dirs, int created, int planned, int skipped, List<string> warnings, List<string> errors)
     {
         var sb = new System.Text.StringBuilder();

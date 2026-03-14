@@ -13,8 +13,11 @@
   const playerModeBtn = el("mode");
   const playerTitle = el("title");
   const playerAnime = el("anime");
+  const playerFill = el("player-progress-fill");
+  const playerTrack = el("player-progress-track");
+  const playerNowPlayingFav = el("now-playing-fav"); // Reference to header heart
 
-  /** @type {Array<{group: string, series: string, file: string, path: string, videoId: number}>} */
+  /** @type {Array<{group: string, series: string, file: string, path: string, videoId: number, _searchIndex: string}>} */
   let webmTreeData = [];
   let currentWebmPath = "";
   let favourites = new Set();
@@ -26,17 +29,17 @@
   // #region Utilities
   /**
    * Decode unicode escape sequences in a string.
-   * @param {string} s
-   * @returns {string}
+   * @param {string} s - The encoded string.
+   * @returns {string} The decoded string.
    */
   const decodeUnicode = (s) => s.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
 
   /**
    * Get next or previous mode in sequence.
-   * @param {string} current
-   * @param {string[]} modes
-   * @param {number} dir - 1 for forward, -1 for backward
-   * @returns {string}
+   * @param {string} current - Current mode string.
+   * @param {string[]} modes - Array of modes to cycle through.
+   * @param {number} [dir=1] - 1 for forward, -1 for backward.
+   * @returns {string} The next mode string.
    */
   const cycleMode = (current, modes, dir = 1) => {
     const idx = modes.indexOf(current);
@@ -44,7 +47,10 @@
   };
 
   /**
-   * Debounce helper to prevent lag during rapid typing
+   * Debounce helper to prevent lag during rapid typing.
+   * @param {Function} fn - The function to debounce.
+   * @param {number} ms - The debounce delay in milliseconds.
+   * @returns {Function} The debounced function.
    */
   const debounce = (fn, ms) => {
     let timeout;
@@ -56,9 +62,7 @@
 
   /**
    * Filters the tree data based on query words. Each word in the query must be found in either the group, series, or filename.
-   * If the keyword "favs" is present, the result is restricted to favourited items. Invisible characters (ZWSP, Hair Space) are stripped before matching.
-   * Tags can be excluded or included by prepending with "-", e.g. "-spoil" or a a "+", e.g. "+spoil" for inclusions.
-   * @returns {Object[]}
+   * @returns {Object[]} The filtered list of items.
    */
   const getFilteredItems = () => {
     const rawFt = (playerFilter?.value || "").toLowerCase().trim();
@@ -103,22 +107,13 @@
     };
 
     return webmTreeData.filter((item) => {
-      // 1. Favourites check
       if (isFavQuery && (!item.videoId || !favourites.has(item.videoId))) return false;
-
-      // 2. Metadata exclusion checks (-spoil, -nsfw, etc)
-      // Returns false if the item HAS a tag the user wants to exclude
       for (const tag of tagExclusions) {
         if (matchesTag(tag, item)) return false;
       }
-
-      // 3. Metadata inclusion checks (+lyrics, +subs, etc)
-      // Returns false if the item is MISSING a tag the user explicitly requested
       for (const tag of tagInclusions) {
         if (!matchesTag(tag, item)) return false;
       }
-
-      // 4. Inclusion text search (using pre-calculated index)
       return searchTerms.every((word) => item._searchIndex.includes(word));
     });
   };
@@ -127,8 +122,9 @@
   // #region Tree
   /**
    * Toggles the favourite status of a videoId on the server and updates local state.
-   * @param {number} videoId
-   * @param {HTMLElement} heartEl
+   * @param {number} videoId - The AnimeThemes video ID.
+   * @param {HTMLElement} [heartEl] - The heart icon element.
+   * @returns {Promise<void>}
    */
   async function toggleFavourite(videoId, heartEl) {
     if (!videoId || videoId <= 0) {
@@ -144,15 +140,22 @@
 
     if (res.ok) {
       const isFav = res.data.isFavourite;
-      if (isFav) {
-        favourites.add(videoId);
-      } else {
-        favourites.delete(videoId);
+      if (isFav) favourites.add(videoId);
+      else favourites.delete(videoId);
+
+      // 1. Sync the heart that was clicked (if any)
+      if (heartEl) heartEl.classList.toggle("favourited", isFav);
+
+      // 2. Sync the "Now Playing" header heart if this video is currently playing
+      const currentItem = webmTreeData.find((i) => i.path === currentWebmPath);
+      if (currentItem && currentItem.videoId === videoId) {
+        playerNowPlayingFav?.classList.toggle("favourited", isFav);
       }
 
-      heartEl.classList.toggle("favourited", isFav);
+      // 3. Sync the tree leaf icon (especially important if hotkey was used)
+      const treeHeart = playerTree.querySelector(`.leaf[data-path="${CSS.escape(currentWebmPath)}"] .fav-icon`);
+      if (treeHeart) treeHeart.classList.toggle("favourited", isFav);
 
-      // Re-run filter if current view is "favs"
       if (playerFilter?.value.toLowerCase().includes("favs")) {
         renderTree(getFilteredItems());
       }
@@ -161,7 +164,7 @@
 
   /**
    * Renders the VFS items into a hierarchical tree.
-   * @param {Object[]} items
+   * @param {Object[]} items - The filtered items to display.
    */
   function renderTree(items) {
     if (!playerTree) return;
@@ -211,7 +214,6 @@
             leaf.className = `leaf ${f.path === currentWebmPath ? "active" : ""}`;
             leaf.dataset.path = f.path;
 
-            // Favourites Heart Icon
             const heart = document.createElement("span");
             const isFavourited = favourites.has(f.videoId);
             heart.className = `fav-icon ${isFavourited ? "favourited" : ""}`;
@@ -221,7 +223,6 @@
               toggleFavourite(f.videoId, heart);
             };
 
-            // Theme Name Text
             const text = document.createElement("span");
             text.textContent = name;
             text.title = name;
@@ -230,7 +231,6 @@
             text.style.textOverflow = "ellipsis";
 
             leaf.onclick = () => playFile(f.path);
-
             leaf.append(heart, text);
             li.appendChild(leaf);
             return li;
@@ -247,7 +247,7 @@
   // #region Player
   /**
    * Sets the video source and starts playback.
-   * @param {string} path
+   * @param {string} path - The relative VFS path to the WebM file.
    */
   function playFile(path) {
     if (!playerVideo) return;
@@ -261,9 +261,18 @@
 
     if (playerTitle) playerTitle.textContent = playerTitle.title = themeName;
 
+    // Header Favorite Heart Logic
+    if (playerNowPlayingFav && item) {
+      playerNowPlayingFav.style.display = "inline-block";
+      playerNowPlayingFav.classList.toggle("favourited", favourites.has(item.videoId));
+      playerNowPlayingFav.onclick = (e) => {
+        e.stopPropagation();
+        toggleFavourite(item.videoId, playerNowPlayingFav);
+      };
+    }
+
     if (playerAnime) {
       playerAnime.textContent = playerAnime.title = animeName;
-
       if (item && item.seriesId) {
         const shokoBase = base.split("/api/")[0];
         playerAnime.href = `${shokoBase}/webui/collection/series/${item.seriesId}/overview`;
@@ -279,14 +288,13 @@
 
   /**
    * Advances or reverses playback based on mode.
-   * @param {boolean} isShuffle
-   * @param {number} direction - 1 for next, -1 for previous
+   * @param {boolean} isShuffle - Whether shuffle mode is active.
+   * @param {number} [direction=1] - 1 for next, -1 for previous.
    */
   function playMove(isShuffle = false, direction = 1) {
     const items = getFilteredItems();
     if (items.length === 0) return;
 
-    // Reset history if the filter has changed
     const currentFilter = (playerFilter?.value || "").trim();
     if (currentFilter !== lastFilterValue) {
       shuffleHistory.clear();
@@ -295,38 +303,37 @@
 
     let idx;
     if (isShuffle) {
-      // Identify items that haven't been played yet in this cycle
       let pool = items.filter((item) => !shuffleHistory.has(item.path));
-
-      // If everything has been played, reset the cycle
       if (pool.length === 0) {
         shuffleHistory.clear();
         pool = items;
       }
-
-      // Avoid playing the current song again immediately if other options exist
-      if (pool.length > 1) {
-        pool = pool.filter((item) => item.path !== currentWebmPath);
-      }
-
-      // Pick random item from the remaining pool
+      if (pool.length > 1) pool = pool.filter((item) => item.path !== currentWebmPath);
       const selectedItem = pool[Math.floor(Math.random() * pool.length)];
       idx = items.indexOf(selectedItem);
-
-      // Record this item in history
       shuffleHistory.add(selectedItem.path);
     } else {
-      shuffleHistory.clear(); // Clear history when leaving shuffle mode
+      shuffleHistory.clear();
       const currentIdx = items.findIndex((i) => i.path === currentWebmPath);
-      idx = (currentIdx + direction + items.length) % items.length; // Handle direction for sequential play
+      idx = (currentIdx + direction + items.length) % items.length;
     }
-
     playFile(items[idx].path);
   }
 
   /**
+   * Synchronizes the Play/Next button appearance and progress bar with the video playback state.
+   */
+  function syncPlaybackUI() {
+    if (playerNextBtn) {
+      const isPlaying = playerVideo && !playerVideo.paused && !playerVideo.ended;
+      playerNextBtn.setAttribute("data-state", isPlaying ? "playing" : "idle");
+    }
+  }
+
+  /**
    * Updates and persists the playback mode.
-   * @param {number} direction - 1 for forward, -1 for backward
+   * @param {number} [direction=1] - 1 for forward, -1 for backward.
+   * @returns {Promise<void>}
    */
   async function updateMode(direction = 1) {
     if (!playerModeBtn) return;
@@ -348,39 +355,72 @@
 
   // #region Initialization
   if (playerVideo) {
-    // Filter Input (Debounced)
+    ["play", "pause", "ended", "loadstart"].forEach((ev) => playerVideo.addEventListener(ev, syncPlaybackUI));
+
+    playerVideo.ontimeupdate = () => {
+      if (playerFill && playerVideo.duration) {
+        playerFill.style.width = (playerVideo.currentTime / playerVideo.duration) * 100 + "%";
+      }
+    };
+
+    playerVideo.onclick = () => {
+      if (!playerVideo.src) return;
+      playerVideo.paused ? playerVideo.play() : playerVideo.pause();
+    };
+
+    if (playerTrack) {
+      playerTrack.onclick = (e) => {
+        if (playerVideo.duration) {
+          playerVideo.currentTime = ((e.clientX - playerTrack.getBoundingClientRect().left) / playerTrack.offsetWidth) * playerVideo.duration;
+        }
+      };
+
+      playerTrack.onmousedown = (e) => {
+        if (e.button === 1 && playerVideo.src) {
+          e.preventDefault();
+          playerVideo.paused ? playerVideo.play() : playerVideo.pause();
+        }
+      };
+    }
+
     if (playerFilter) {
       const debouncedRender = debounce(() => {
         renderTree(getFilteredItems());
-      }, 250); // 250ms delay
-
+      }, 250);
       playerFilter.oninput = () => {
-        if (playerFilterClear) playerFilterClear.hidden = !playerFilter.value; // Toggle the 'x' button visibility based on content
+        if (playerFilterClear) playerFilterClear.hidden = !playerFilter.value;
         debouncedRender();
       };
     }
 
-    // Mode Toggle
-    if (playerModeBtn) {
-      playerModeBtn.onclick = () => updateMode(1);
-    }
+    if (playerModeBtn) playerModeBtn.onclick = () => updateMode(1);
 
-    // Filter Clear Action
     if (playerFilterClear) {
       playerFilterClear.onclick = () => {
         playerFilter.value = "";
         playerFilterClear.hidden = true;
-        renderTree(getFilteredItems()); // Re-render the full tree immediately
+        renderTree(getFilteredItems());
         playerFilter.focus();
       };
     }
 
-    // Controls
     if (playerNextBtn) {
-      playerNextBtn.onclick = () => playMove(playerModeBtn?.getAttribute("data-mode") === "shuffle", 1);
+      playerNextBtn.onclick = () => {
+        if (playerVideo.src) {
+          if (playerVideo.ended) {
+            playerVideo.currentTime = 0;
+            playerVideo.play();
+            return;
+          }
+          if (playerVideo.paused) {
+            playerVideo.play();
+            return;
+          }
+        }
+        playMove(playerModeBtn?.getAttribute("data-mode") === "shuffle", 1);
+      };
     }
 
-    // Video Events
     playerVideo.addEventListener("ended", () => {
       const m = playerModeBtn?.getAttribute("data-mode");
       if (m === "loop") {
@@ -391,54 +431,92 @@
       }
     });
 
-    // Hotkeys
     window.addEventListener("keydown", (e) => {
-      if (!e.ctrlKey) return;
+      if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA") return;
       const isShuffle = playerModeBtn?.getAttribute("data-mode") === "shuffle";
 
+      if (e.ctrlKey) {
+        switch (e.key) {
+          case "ArrowRight":
+            e.preventDefault();
+            playMove(isShuffle, 1);
+            break;
+          case "ArrowLeft":
+            e.preventDefault();
+            playMove(isShuffle, -1);
+            break;
+          case "ArrowUp":
+            e.preventDefault();
+            updateMode(1);
+            break;
+          case "ArrowDown":
+            e.preventDefault();
+            updateMode(-1);
+            break;
+        }
+        return;
+      }
+
       switch (e.key) {
-        case "ArrowRight":
-          e.preventDefault();
-          playMove(isShuffle, 1);
-          break;
-        case "ArrowLeft":
-          e.preventDefault();
-          playMove(isShuffle, -1);
-          break;
         case "ArrowUp":
           e.preventDefault();
-          updateMode(1);
+          playerVideo.volume = Math.min(1, playerVideo.volume + 0.1);
           break;
         case "ArrowDown":
           e.preventDefault();
-          updateMode(-1);
+          playerVideo.volume = Math.max(0, playerVideo.volume - 0.1);
           break;
+        case "ArrowRight":
+          e.preventDefault();
+          playerVideo.currentTime += 5;
+          break;
+        case "ArrowLeft":
+          e.preventDefault();
+          playerVideo.currentTime -= 5;
+          break;
+        case "j":
+        case "J":
+          e.preventDefault();
+          playerVideo.currentTime -= 10;
+          break;
+        case " ":
         case "k":
         case "K":
           e.preventDefault();
+          if (playerVideo.src) playerVideo.paused ? playerVideo.play() : playerVideo.pause();
+          else playMove(isShuffle, 1);
+          break;
+        case "f":
+        case "F":
+          e.preventDefault();
+          if (!document.fullscreenElement) playerVideo.requestFullscreen().catch(() => {});
+          else document.exitFullscreen();
+          break;
+        case "/":
+          e.preventDefault();
           playerFilter?.focus();
+          break;
+        case "l":
+        case "L":
+          e.preventDefault();
+          const item = webmTreeData.find((i) => i.path === currentWebmPath);
+          if (item) toggleFavourite(item.videoId);
           break;
       }
     });
 
-    // Initial Data Load
     (async () => {
       const [treeRes, cfgRes, favRes] = await Promise.all([fetchJson(base + "/animethemes/webm/tree"), fetchJson(base + "/config"), fetchJson(base + "/animethemes/webm/favourites")]);
-
       if (favRes.ok) favourites = new Set(favRes.data);
-
       if (treeRes.ok) {
-        // Pre-calculate search index for every item for speed
         webmTreeData = (treeRes.data?.items || [])
           .map((item) => {
             item._searchIndex = `${item.group} ${item.series} ${decodeUnicode(item.file)}`.toLowerCase().replace(/[\u200B\u200A]/g, "");
             return item;
           })
           .sort((a, b) => a.path.localeCompare(b.path));
-
         renderTree(getFilteredItems());
       }
-
       if (cfgRes.ok && playerModeBtn) {
         const mode = unwrapConfig(cfgRes.data).Playback.AnimeThemesWebmMode || "off";
         playerModeBtn.setAttribute("data-mode", mode);

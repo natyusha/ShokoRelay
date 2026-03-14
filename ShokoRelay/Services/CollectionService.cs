@@ -7,25 +7,32 @@ using ShokoRelay.Plex;
 
 namespace ShokoRelay.Services;
 
-/// <summary>
-/// Service responsible for building and managing Plex collections based on Shoko series metadata.
-/// </summary>
+/// <summary>Service responsible for building and managing Plex collections based on Shoko series metadata.</summary>
 public interface ICollectionService
 {
-    /// <summary>
-    /// Create or update Plex collections for the supplied series list.
-    /// </summary>
+    /// <summary>Create or update Plex collections for the supplied series list.</summary>
+    /// <param name="seriesList">The collection of series to process.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A result object containing statistics on the operation.</returns>
     Task<BuildCollectionsResult> BuildCollectionsAsync(IEnumerable<IShokoSeries?> seriesList, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Apply collection posters for the given series list.
-    /// </summary>
+    /// <summary>Apply collection posters for the given series list.</summary>
+    /// <param name="seriesList">The collection of series to process.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A result object containing statistics on the operation.</returns>
     Task<ApplyPostersResult> ApplyCollectionPostersAsync(IEnumerable<IShokoSeries?> seriesList, CancellationToken cancellationToken = default);
 }
 
-/// <summary>
-/// Result returned by <see cref="ICollectionService.BuildCollectionsAsync"/>.
-/// </summary>
+/// <summary>Result returned by <see cref="ICollectionService.BuildCollectionsAsync"/>.</summary>
+/// <param name="Processed">Number of series processed.</param>
+/// <param name="Created">Number of collections successfully assigned.</param>
+/// <param name="Uploaded">Number of posters uploaded.</param>
+/// <param name="SeasonPostersUploaded">Number of season-specific posters uploaded.</param>
+/// <param name="Skipped">Number of items skipped.</param>
+/// <param name="Errors">Count of errors encountered.</param>
+/// <param name="DeletedEmptyCollections">Number of empty collections removed.</param>
+/// <param name="CreatedCollections">List of metadata objects for created collections.</param>
+/// <param name="ErrorsList">List of specific error messages.</param>
 public sealed record BuildCollectionsResult(
     int Processed,
     int Created,
@@ -38,14 +45,15 @@ public sealed record BuildCollectionsResult(
     List<string> ErrorsList
 );
 
-/// <summary>
-/// Outcome of applying collection posters via <see cref="ICollectionService.ApplyCollectionPostersAsync"/>.
-/// </summary>
+/// <summary>Outcome of applying collection posters via <see cref="ICollectionService.ApplyCollectionPostersAsync"/>.</summary>
+/// <param name="Processed">Number of series processed.</param>
+/// <param name="Uploaded">Number of posters successfully uploaded.</param>
+/// <param name="Skipped">Number of series skipped.</param>
+/// <param name="Errors">Count of errors encountered.</param>
+/// <param name="ErrorsList">List of specific error messages.</param>
 public sealed record ApplyPostersResult(int Processed, int Uploaded, int Skipped, int Errors, List<string> ErrorsList);
 
-/// <summary>
-/// Default implementation of <see cref="ICollectionService"/>.
-/// </summary>
+/// <summary>Default implementation of <see cref="ICollectionService"/>.</summary>
 public class CollectionService(PlexClient plexClient, PlexCollections plexCollections, IMetadataService metadataService, PlexMetadata mapper) : ICollectionService
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();

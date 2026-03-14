@@ -46,13 +46,13 @@
   --ok-color: #10c469;
 }
 .brand-header {
-  height: 100px;
+  filter: drop-shadow(0 0 5px rgb(from var(--hover-color) r g b / 0.25));
   width: 100%;
+  height: 100px;
   background-image: url("../img/shoko-relay-header-dark.png");
   background-repeat: no-repeat;
   background-position: left center;
   background-size: contain;
-  filter: drop-shadow(0 0 5px rgb(from var(--hover-color) r g b / 0.25));
 }
 :root[data-theme="light"] .brand-header {
   background-image: url("../img/shoko-relay-header-light.png");
@@ -68,26 +68,26 @@
 */
 @font-face {
   font-display: swap;
+  src: url("../fonts/sora-v17-latin-regular.woff2") format("woff2");
   font-family: "Sora";
   font-style: normal;
   font-weight: 400;
-  src: url("../fonts/sora-v17-latin-regular.woff2") format("woff2");
 }
 @font-face {
   font-display: swap;
+  src: url("../fonts/sora-v17-latin-500.woff2") format("woff2");
   font-family: "Sora";
   font-style: normal;
   font-weight: 500;
-  src: url("../fonts/sora-v17-latin-500.woff2") format("woff2");
 }
 html {
   scrollbar-gutter: stable;
 }
 body {
   margin: 20px;
+  background: var(--bg-color);
   font-family: "Sora", sans-serif;
   color: var(--text-color);
-  background: var(--bg-color);
 }
 section {
   margin: 12px 2px 0 2px;
@@ -110,15 +110,15 @@ hr {
 button,
 .plex-login-link {
   padding: 12px 16px;
+  transition: all 0.3s ease-in-out;
+  background: var(--button-color);
+  cursor: pointer;
   border: 2px solid var(--bg-color);
   border-radius: 0.5rem;
   font-size: 0.9em;
   font-weight: 500;
-  text-align: center;
   color: var(--bg-color);
-  background: var(--button-color);
-  cursor: pointer;
-  transition: all 0.3s ease-in-out;
+  text-align: center;
 }
 button.danger {
   background: var(--danger-color);
@@ -127,8 +127,8 @@ button.danger:hover {
   background: color-mix(in srgb, var(--danger-color), white 25%);
 }
 button.cancel {
-  color: var(--text-color);
   background: var(--bg-color);
+  color: var(--text-color);
 }
 button.cancel:hover {
   background: color-mix(in srgb, var(--bg-color), white 15%);
@@ -148,18 +148,18 @@ select {
 input:not([type="checkbox"]),
 select,
 textarea {
+  outline: none;
+  box-sizing: border-box;
   width: 100%;
   margin: 2px 0 6px;
   padding: 6px;
+  transition: all 0.3s ease-in-out;
+  background: var(--inset-color);
   border: 1px solid var(--bg-color);
   border-radius: 0.25em;
-  box-sizing: border-box;
-  font-family: "Sora", sans-serif;
   font-size: 0.9em;
+  font-family: "Sora", sans-serif;
   color: var(--text-color);
-  background: var(--inset-color);
-  outline: none;
-  transition: all 0.3s ease-in-out;
 }
 button {
   font-family: "Sora", sans-serif;
@@ -167,12 +167,12 @@ button {
 input:not([type="checkbox"]):focus,
 select:focus,
 textarea:focus {
-  border-color: var(--highlight-color);
   box-shadow: 0 0 4px 2px rgba(148, 170, 209, 0.3);
+  border-color: var(--highlight-color);
 }
 textarea {
-  height: 6em;
   resize: none;
+  height: 6em;
 }
 label {
   display: inline-block;
@@ -183,12 +183,12 @@ small {
   opacity: 0.6;
 }
 a {
-  color: var(--highlight-color);
   text-decoration-style: dotted;
+  color: var(--highlight-color);
 }
 #container {
-  margin: 0 auto;
   max-width: 900px;
+  margin: 0 auto;
 }
 .full {
   display: flex;
@@ -200,8 +200,8 @@ a {
 }
 .two-cols {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(442px, 1fr));
   gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(442px, 1fr));
 }
 .w46 {
   max-width: 46px;
@@ -229,8 +229,8 @@ button.plex-auth:disabled:hover {
 /* #region MARK: Icons
 */
 svg {
-  height: 1.282em;
   width: 1.282em;
+  height: 1.282em;
 }
 h3 .icon-svg {
   fill: var(--highlight-color);
@@ -239,9 +239,9 @@ h3 .icon-svg {
   margin: 0 2px -4px 2px;
 }
 .at-svg {
+  fill: var(--at-color);
   width: 1.6em;
   margin-bottom: -4px;
-  fill: var(--at-color);
 }
 label > small::before,
 .plex::before {
@@ -261,14 +261,14 @@ label > small::before {
 /* #region MARK: Tooltips
 */
 .tooltip-core {
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: 2000;
-  opacity: 0;
-  overflow: visible;
   pointer-events: none;
   will-change: opacity;
+  position: absolute;
+  z-index: 2000;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  overflow: visible;
 }
 .tooltip-show {
   opacity: 0.9;
@@ -287,11 +287,11 @@ label > small::before {
   word-wrap: break-word;
 }
 .tooltip-arrow {
-  position: absolute;
-  height: 8px;
-  width: 8px;
-  background: inherit;
   pointer-events: none;
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: inherit;
 }
 .tooltip-place-top > .tooltip-arrow {
   bottom: -4px;
@@ -314,8 +314,8 @@ label > small::before {
   transform: translateY(-50%) rotate(135deg);
 }
 .tooltip-dark {
-  color: var(--text-color);
   background: var(--tooltip-color);
+  color: var(--text-color);
 }
 /* #endregion */
 
@@ -323,11 +323,11 @@ label > small::before {
 */
 .at-btn {
   all: unset;
+  fill: var(--highlight-color);
   float: right;
   margin: 0 3px 5px 0;
-  fill: var(--highlight-color);
-  cursor: pointer;
   transition: all 0.3s ease-in-out;
+  cursor: pointer;
 }
 .at-btn[hidden],
 .at-btn[data-state="playing"] .play,
@@ -338,8 +338,8 @@ label > small::before {
   display: none;
 }
 .at-btn:hover {
-  background: none;
   fill: var(--hover-color);
+  background: none;
 }
 .at-btn[data-state="idle"] .play,
 .at-btn[data-state="playing"] .next,
@@ -362,24 +362,24 @@ label > small::before {
 }
 .at-progress-track {
   position: absolute;
-  top: 0;
-  right: 0;
-  left: 0;
   z-index: 2;
-  height: 4px;
+  top: 0;
+  left: 0;
+  right: 0;
   opacity: 0;
-  cursor: pointer;
+  height: 4px;
   transition: opacity 0.3s ease;
+  cursor: pointer;
 }
 .at-progress-track.active {
   opacity: 1;
 }
 .at-progress-fill {
-  height: 100%;
   width: 0%;
+  height: 100%;
+  transition: width 0.15s linear;
   background: var(--highlight-color);
   border-radius: 0 0.5rem 0 0;
-  transition: width 0.15s linear;
 }
 .at-progress-track.paused .at-progress-fill {
   filter: grayscale(1);

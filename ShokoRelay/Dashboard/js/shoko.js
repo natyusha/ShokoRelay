@@ -16,7 +16,7 @@
 
   /**
    * Build URLSearchParams for VFS generation requests from the dashboard filter and toggle state.
-   * @returns {URLSearchParams}
+   * @returns {URLSearchParams} The compiled search parameters.
    */
   const buildVfsParams = () => {
     const ps = new URLSearchParams();

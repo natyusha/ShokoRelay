@@ -10,7 +10,10 @@
   const TOAST_MS = 5000;
 
   // #region Helpers
-  /** @param {string} url - The log URL to wrap in an anchor tag. @returns {string} An HTML anchor link or an empty string if no URL was provided. */
+  /**
+   * @param {string} url - The log URL to wrap in an anchor tag.
+   * @returns {string} An HTML anchor link or an empty string if no URL was provided.
+   */
   const makeLogLink = (url) => (url ? `[<a href="${url}" target="_blank" class="log-link">view log</a>]` : "");
 
   /**
@@ -34,6 +37,8 @@
   /**
    * Build a human-readable summary string from common API response fields.
    * Standardized to PascalCase to match the C# backend records.
+   * @param {Object} res - The response object containing data.
+   * @returns {string} A comma-separated summary string.
    */
   function summarizeResult(res) {
     if (!res?.data) return "";
@@ -166,10 +171,20 @@
     });
   }
 
-  /** @param {Object} obj @param {string} path - Dot-separated key path. @returns {*} The resolved value, or undefined. */
+  /**
+   * Get a value from a nested object using a dot-separated path.
+   * @param {Object} obj - The source object.
+   * @param {string} path - Dot-separated key path.
+   * @returns {*} The resolved value, or undefined.
+   */
   const getValueByPath = (obj, path) => path.split(".").reduce((o, k) => o?.[k], obj);
 
-  /** @param {Object} obj @param {string} path - Dot-separated key path. @param {*} value - The value to set at the resolved path. */
+  /**
+   * Set a value in a nested object using a dot-separated path.
+   * @param {Object} obj - The target object.
+   * @param {string} path - Dot-separated key path.
+   * @param {*} value - The value to set at the resolved path.
+   */
   function setValueByPath(obj, path, value) {
     const parts = path.split("."),
       last = parts.pop();
@@ -183,7 +198,7 @@
    * @param {string} path - The dot-notation path in the config (e.g., "Automation.UtcOffsetHours").
    * @param {Object} config - The global config object.
    * @param {Function} persistFn - The function that POSTs the config to the server.
-   * @param {"text"|"number"|"check"} type - The type of input handling.
+   * @param {"text"|"number"|"check"} [type="text"] - The type of input handling.
    */
   const bindConfig = (id, path, config, persistFn, type = "text") => {
     const e = el(id);
@@ -202,7 +217,11 @@
     };
   };
 
-  /** Unwrap a config response that may contain a payload wrapper. @param {Object} data @returns {Object} The inner config object. */
+  /**
+   * Unwrap a config response that may contain a payload wrapper.
+   * @param {Object} data - Response data.
+   * @returns {Object} The inner config object.
+   */
   const unwrapConfig = (data) => (data?.payload !== undefined ? data.payload || {} : data || {});
 
   /**
@@ -226,7 +245,11 @@
     return close;
   }
 
-  /** Centralized modal opener logic. @param {HTMLElement} modal */
+  /**
+   * Centralized modal opener logic.
+   * @param {HTMLElement} modal - The modal element to open.
+   * @returns {Function} The close handler for the modal.
+   */
   function openModal(modal) {
     modal.setAttribute("aria-hidden", "false");
     modal.classList.add("open");
@@ -263,6 +286,7 @@
   /**
    * Fetch the config schema and current values from the server, then dynamically build
    * the settings form with appropriate input types (bool, enum, number, textarea, etc.).
+   * @returns {Promise<void>}
    */
   async function loadConfig() {
     if (!el("config-form")) return;
@@ -292,6 +316,8 @@
 
     /**
      * POST the updated config object to the server.
+     * @param {Object} updated - The updated config object.
+     * @returns {Promise<Object>} The fetch response.
      */
     async function persistConfig(updated) {
       const res = await fetchJson(base + "/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updated) });
@@ -401,11 +427,23 @@
 
   // #region Theme Toggle
   const THEME_KEY = "dashboard-theme";
+  /**
+   * @returns {string} The preferred theme name ('dark' or 'light').
+   */
   const getSavedTheme = () => localStorage.getItem(THEME_KEY) || (window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+
+  /**
+   * Apply a theme name to the document root and update toggle state.
+   * @param {string} theme - Theme name.
+   */
   function applyTheme(theme) {
     document.documentElement.setAttribute("data-theme", theme);
     el("theme-toggle")?.setAttribute("aria-pressed", String(theme === "dark"));
   }
+
+  /**
+   * Initializes the theme toggle button and sets initial theme.
+   */
   function initTheme() {
     applyTheme(getSavedTheme());
     if (el("theme-toggle"))
@@ -418,7 +456,10 @@
   // #endregion
 
   // #region Tooltips
-  /** Create the shared tooltip element and attach show/hide listeners to all elements with a title attribute. Observes the DOM for dynamically added elements. */
+  /**
+   * Create the shared tooltip element and attach show/hide listeners to all elements with a title attribute.
+   * Observes the DOM for dynamically added elements.
+   */
   function initTooltips() {
     if (el("shoko-tooltip")) return;
     const tpl = document.createElement("div");
@@ -431,6 +472,7 @@
     const content = tpl.querySelector(".rt-content");
     let showTimer, hideTimer;
 
+    /** @param {HTMLElement} target */
     const show = (target) => {
       const text = target.dataset.tooltipText || target.getAttribute("data-tooltip") || target.getAttribute("title");
       if (target.disabled || !text) return;
@@ -467,6 +509,7 @@
       setTimeout(() => tpl.classList.remove("tooltip-closing"), 150);
     };
 
+    /** @param {HTMLElement} t */
     const attach = (t) => {
       if (!t.title) return;
       t.dataset.tooltipText = t.title;

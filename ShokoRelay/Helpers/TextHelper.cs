@@ -7,10 +7,7 @@ using ShokoRelay.Config;
 
 namespace ShokoRelay.Helpers;
 
-/// <summary>
-/// Provides a centralized collection of text processing utilities including Regex-based cleaning,
-/// language-based title resolution, and summary sanitization.
-/// </summary>
+/// <summary>Provides a centralized collection of text processing utilities including Regex-based cleaning, language-based title resolution, and summary sanitization.</summary>
 public static class TextHelper
 {
     #region Compiled Regex
@@ -37,24 +34,24 @@ public static class TextHelper
 
     #region General Text Helpers
 
-    /// <summary>
-    /// Replace runs of two or more whitespace characters with a single space.
-    /// </summary>
+    /// <summary>Replace runs of two or more whitespace characters with a single space.</summary>
+    /// <param name="input">The string to process.</param>
+    /// <returns>The condensed string.</returns>
     public static string CondenseSpaces(string input) => _condenseSpacesRegex.Replace(input, " ");
 
-    /// <summary>
-    /// Replace literal commas with the unicode escape \u002C.
-    /// </summary>
+    /// <summary>Replace literal commas with the unicode escape \u002C.</summary>
+    /// <param name="value">The string to escape.</param>
+    /// <returns>A CSV-safe string.</returns>
     public static string EscapeCsvCommas(string value) => value?.Replace(",", "\\u002C") ?? string.Empty;
 
-    /// <summary>
-    /// Decode \uXXXX escape sequences back into their actual Unicode characters.
-    /// </summary>
+    /// <summary>Decode \uXXXX escape sequences back into their actual Unicode characters.</summary>
+    /// <param name="value">The string containing escape sequences.</param>
+    /// <returns>A decoded string.</returns>
     public static string UnescapeUnicode(string value) => string.IsNullOrEmpty(value) ? value : _unicodeEscapeRegex.Replace(value, m => ((char)Convert.ToInt32(m.Groups[1].Value, 16)).ToString());
 
-    /// <summary>
-    /// Splits a CSV line on commas.
-    /// </summary>
+    /// <summary>Splits a CSV line on commas.</summary>
+    /// <param name="line">The raw CSV line.</param>
+    /// <returns>An array of fields.</returns>
     public static string[] SplitCsvLine(string line) => line?.Split(',') ?? [];
 
     #endregion
@@ -66,9 +63,7 @@ public static class TextHelper
         StringComparer.OrdinalIgnoreCase
     );
 
-    /// <summary>
-    /// Return an item's title according to a comma-separated list of preferred language codes.
-    /// </summary>
+    /// <summary>Return an item's title according to a comma-separated list of preferred language codes.</summary>
     /// <param name="item">Object that exposes a Titles collection.</param>
     /// <param name="languageSetting">Comma-separated preferred language codes.</param>
     /// <returns>The best matching title string.</returns>
@@ -89,9 +84,7 @@ public static class TextHelper
         return item.PreferredTitle?.Value ?? "";
     }
 
-    /// <summary>
-    /// Determine display, sortable, and original titles for a series based on preferences and prefix reordering settings.
-    /// </summary>
+    /// <summary>Determine display, sortable, and original titles for a series based on preferences and prefix reordering settings.</summary>
     /// <param name="series">Series metadata.</param>
     /// <returns>A tuple of (DisplayTitle, SortTitle, OriginalTitle).</returns>
     public static (string DisplayTitle, string SortTitle, string? OriginalTitle) ResolveFullSeriesTitles(ISeries series)
@@ -115,9 +108,7 @@ public static class TextHelper
         return (display, sortTitle, finalAlt);
     }
 
-    /// <summary>
-    /// Compute the best title to display for an episode, handling ambiguous names and TMDB reassignments.
-    /// </summary>
+    /// <summary>Compute the best title to display for an episode, handling ambiguous names and TMDB reassignments.</summary>
     /// <param name="ep">Episode metadata.</param>
     /// <param name="displaySeriesTitle">Resolved series title for fallback.</param>
     /// <returns>The resolved episode title string.</returns>
@@ -157,18 +148,21 @@ public static class TextHelper
 
     #region Summaries
 
-    /// <summary>
-    /// Sanitize AniDB summary and, if the result is empty, fall back to TMDB.
-    /// </summary>
+    /// <summary>Sanitize AniDB summary and, if the result is empty, fall back to TMDB.</summary>
+    /// <param name="summary">Primary summary.</param>
+    /// <param name="tmdbSummary">Fallback summary.</param>
+    /// <param name="mode">Sanitization level.</param>
+    /// <returns>The cleanest available summary string.</returns>
     public static string SanitizeSummaryWithFallback(string? summary, string? tmdbSummary, SummaryMode mode)
     {
         var result = SummarySanitizer(summary, mode);
         return string.IsNullOrWhiteSpace(result) ? SummarySanitizer(tmdbSummary, mode) : result;
     }
 
-    /// <summary>
-    /// Clean up a summary string according to the configured sanitization mode (stripping notes, indicators, etc).
-    /// </summary>
+    /// <summary>Clean up a summary string according to the configured sanitization mode (stripping notes, indicators, etc).</summary>
+    /// <param name="s">The string to sanitize.</param>
+    /// <param name="mode">The sanitization mode.</param>
+    /// <returns>A sanitized summary string.</returns>
     public static string SummarySanitizer(string? s, SummaryMode mode)
     {
         if (string.IsNullOrWhiteSpace(s))
@@ -193,9 +187,7 @@ public static class TextHelper
 
     #region VFS/Plex Utils
 
-    /// <summary>
-    /// Maps invalid Windows filename characters to visually similar Unicode replacements.
-    /// </summary>
+    /// <summary>Maps invalid Windows filename characters to visually similar Unicode replacements.</summary>
     public static readonly FrozenDictionary<char, char> ReplacementCharMap = new Dictionary<char, char>
     {
         ['\\'] = '⧵',
@@ -208,20 +200,20 @@ public static class TextHelper
         ['|'] = '｜',
     }.ToFrozenDictionary();
 
-    /// <summary>
-    /// Remove characters that are invalid in Windows filenames by replacing them with visually similar unicode characters.
-    /// </summary>
+    /// <summary>Remove characters that are invalid in Windows filenames by replacing them with visually similar unicode characters.</summary>
+    /// <param name="value">The string to clean.</param>
+    /// <returns>A filename-safe string.</returns>
     public static string StripInvalidWindowsChars(string value) =>
         string.IsNullOrWhiteSpace(value) ? "" : _condenseSpacesRegex.Replace(new string([.. value.Where(c => !ReplacementCharMap.ContainsKey(c))]).Trim(), " ");
 
-    /// <summary>
-    /// Determine if a filename contains a Plex-style split tag (e.g. "pt1").
-    /// </summary>
+    /// <summary>Determine if a filename contains a Plex-style split tag (e.g. "pt1").</summary>
+    /// <param name="fileName">The filename to check.</param>
+    /// <returns>True if a split tag is found.</returns>
     public static bool HasPlexSplitTag(string fileName) => !string.IsNullOrWhiteSpace(fileName) && _plexSplitTagRegex.IsMatch(Path.GetFileNameWithoutExtension(fileName).Replace('[', ' ').Replace(']', ' '));
 
-    /// <summary>
-    /// Extracts the first sequence of digits from a string (Series ID lookup).
-    /// </summary>
+    /// <summary>Extracts the first sequence of digits from a string (Series ID lookup).</summary>
+    /// <param name="text">The string to parse.</param>
+    /// <returns>The extracted integer, or null.</returns>
     public static int? ExtractSeriesId(string? text) => (text != null && _numbersRegex.Match(text) is { Success: true } m && int.TryParse(m.Value, out var id)) ? id : null;
 
     #endregion
