@@ -234,7 +234,7 @@
   }
 
   plexBuildAction(
-    el("col-build"),
+    el("plex-collections-build"),
     "Collections",
     "Generating Collections...",
     "/plex/collections/build",
@@ -242,7 +242,7 @@
   );
 
   plexBuildAction(
-    el("rtg-build"),
+    el("plex-ratings-apply"),
     "Critic Ratings",
     "Applying Critic Ratings...",
     "/plex/ratings/apply",

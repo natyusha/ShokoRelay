@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Newtonsoft.Json;
 using Shoko.Abstractions.Enums;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Services;
@@ -101,7 +102,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     /// <param name="Filename">The filename of the media being matched.</param>
     /// <param name="Title">The title string, often used for manual Shoko ID entry in Plex.</param>
     /// <param name="Manual">Flag indicating if the match was triggered manually (1 for true).</param>
-    public record PlexMatchBody(string? Filename, string? Title = null, int? Manual = null);
+    public record PlexMatchBody([property: JsonProperty("filename")] string? Filename, [property: JsonProperty("title")] string? Title = null, [property: JsonProperty("manual")] int? Manual = null);
 
     #endregion
 

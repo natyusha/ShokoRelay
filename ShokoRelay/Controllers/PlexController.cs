@@ -155,21 +155,29 @@ public class PlexController(
     /// <summary>Triggers the generation of Plex collections.</summary>
     /// <param name="seriesId">Optional single series ID.</param>
     /// <param name="filter">Optional comma-separated list of IDs.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A collection build report.</returns>
     [HttpGet("plex/collections/build")]
-    public async Task<IActionResult> BuildPlexCollections([FromQuery] int? seriesId = null, [FromQuery] string? filter = null, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> BuildPlexCollections([FromQuery] int? seriesId = null, [FromQuery] string? filter = null)
     {
         var guard = ValidatePlexFilterRequest(seriesId, filter, out var seriesList, out _);
         if (guard != null)
             return guard;
 
-        var targets = _plexLibrary.GetConfiguredTargets();
-        if (targets == null || targets.Count == 0)
-            return NoPlexTargetsResponse(seriesList);
-
-        var r = await _collectionService.BuildCollectionsAsync(seriesList, cancellationToken).ConfigureAwait(false);
-        return LogAndReturn("collections-report.log", r, LogHelper.BuildCollectionsReport);
+        const string taskName = "plex-collections-build";
+        TaskHelper.StartTask(taskName);
+        try
+        {
+            var r = await _collectionService.BuildCollectionsAsync(seriesList, CancellationToken.None).ConfigureAwait(false);
+            var actionResult = LogAndReturn("collections-report.log", r, LogHelper.BuildCollectionsReport);
+            TaskHelper.CompleteTask(taskName, (actionResult as OkObjectResult)?.Value!);
+            return actionResult;
+        }
+        catch (Exception ex)
+        {
+            var err = new { status = "error", message = ex.Message };
+            TaskHelper.CompleteTask(taskName, err);
+            return BadRequest(err);
+        }
     }
 
     /// <summary>Refreshes posters for Plex collections.</summary>
@@ -204,19 +212,30 @@ public class PlexController(
     /// <summary>Updates ratings in Plex based on Shoko metadata.</summary>
     /// <param name="seriesId">Optional single series ID.</param>
     /// <param name="filter">Optional comma-separated list of IDs.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A ratings update report.</returns>
     [HttpGet("plex/ratings/apply")]
-    public async Task<IActionResult> ApplyAudienceRatings([FromQuery] int? seriesId = null, [FromQuery] string? filter = null, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> ApplyAudienceRatings([FromQuery] int? seriesId = null, [FromQuery] string? filter = null)
     {
         var guard = ValidatePlexFilterRequest(seriesId, filter, out var seriesList, out _);
         if (guard != null)
             return guard;
 
-        var allowedIds = new HashSet<int>(seriesList.Select(s => s?.ID ?? 0));
-        var result = await _criticRatingService.ApplyRatingsAsync(allowedIds, cancellationToken).ConfigureAwait(false);
-
-        return LogAndReturn("ratings-report.log", result, LogHelper.BuildRatingsReport);
+        const string taskName = "plex-ratings-apply";
+        TaskHelper.StartTask(taskName);
+        try
+        {
+            var allowedIds = new HashSet<int>(seriesList.Select(s => s?.ID ?? 0));
+            var result = await _criticRatingService.ApplyRatingsAsync(allowedIds, CancellationToken.None).ConfigureAwait(false);
+            var actionResult = LogAndReturn("ratings-report.log", result, LogHelper.BuildRatingsReport);
+            TaskHelper.CompleteTask(taskName, (actionResult as OkObjectResult)?.Value!);
+            return actionResult;
+        }
+        catch (Exception ex)
+        {
+            var err = new { status = "error", message = ex.Message };
+            TaskHelper.CompleteTask(taskName, err);
+            return BadRequest(err);
+        }
     }
 
     /// <summary>Triggers collection and rating automation back-to-back.</summary>

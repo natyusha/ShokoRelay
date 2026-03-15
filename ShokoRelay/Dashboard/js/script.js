@@ -9,7 +9,71 @@
   /** Default auto-dismiss duration (ms) for transient toasts. Use 0 for persistent toasts that require manual dismissal. */
   const TOAST_MS = 5000;
 
+  /** Standardized labels for playback controls used by both MP3 and Video players. */
+  const PLAYBACK_LABELS = {
+    loop: "Loop",
+    shuffle: "Shuffle",
+    next: "Next",
+    off: "Once",
+    idle: "Play",
+    playing: "Next",
+  };
+
+  /** List of button IDs that correspond exactly to server task names */
+  const MANAGED_TASK_IDS = ["vfs-build", "at-vfs-build", "at-map-build", "plex-collections-build", "plex-ratings-apply", "shoko-remove-missing", "at-mp3-build"];
+
   // #region Helpers
+  /**
+   * Polls the server for active tasks and syncs the UI button states.
+   * This ensures that if the page is refreshed or opened in a new tab, the "Loading" state and spinners are restored for running operations.
+   */
+  async function syncActiveTasks() {
+    /** Check Active Tasks for spinners */
+    const res = await fetchJson(window._sr.base + "/tasks/active");
+    if (!res.ok) return;
+    const activeTasks = res.data || [];
+    MANAGED_TASK_IDS.forEach((id) => {
+      const btn = el(id);
+      if (!btn) return;
+      const isActive = activeTasks.includes(id);
+      if (!isActive && !btn.classList.contains("clicking")) {
+        setButtonLoading(btn, false);
+      } else if (isActive) {
+        setButtonLoading(btn, true);
+      }
+    });
+
+    /** Check Completed Tasks for toasts */
+    const completeRes = await fetchJson(window._sr.base + "/tasks/completed");
+    if (completeRes.ok && completeRes.data) {
+      for (const [taskName, result] of Object.entries(completeRes.data)) {
+        const label = taskName.replace(/-/g, " "); // Use default label if friendly label can't be found
+        toastOperation({ ok: result.status === "ok", data: result }, label);
+        await fetch(window._sr.base + `/tasks/clear/${taskName}`, { method: "POST" });
+      }
+    }
+  }
+
+  /**
+   * Wrap a button's click handler so it automatically shows/hides a loading spinner. Adds 'clicking' class to manage race conditions between manual clicks and background polling.
+   * @param {HTMLElement|string} btn - The button element or its DOM id.
+   * @param {Function} handler - Async click handler to execute while the button is in a loading state.
+   */
+  function withButtonAction(btn, handler) {
+    const elBtn = typeof btn === "string" ? el(btn) : btn;
+    if (!elBtn) return;
+    elBtn.onclick = async (...args) => {
+      elBtn.classList.add("clicking");
+      setButtonLoading(elBtn, true);
+      try {
+        await handler.apply(elBtn, args);
+      } finally {
+        elBtn.classList.remove("clicking");
+        window._sr.syncActiveTasks();
+      }
+    };
+  }
+
   /**
    * @param {string} url - The log URL to wrap in an anchor tag.
    * @returns {string} An HTML anchor link or an empty string if no URL was provided.
@@ -51,8 +115,8 @@
       processed: ["SeriesProcessed", "Processed", "ScannedCount", "ProcessedShows"],
       created: ["LinksCreated", "Created", "UpdatedShows"],
       marked: ["Marked", "MarkedWatched", "UpdatedEpisodes"],
-      skipped: ["Skipped"],
-      errors: ["Errors", "ErrorsList"],
+      skipped: ["Skipped", "SkippedCount"],
+      errors: ["Errors", "ErrorsList", "Message"],
       uploaded: ["Uploaded"],
     };
 
@@ -259,7 +323,20 @@
     return attachModalCloseHandlers(modal);
   }
 
-  /** Expose shared helpers for animethemes.js */
+  /**
+   * Updates an element's title attribute based on its current data-mode or data-state.
+   * This triggers the MutationObserver to update the custom project tooltip.
+   * @param {HTMLElement} el - The element to update.
+   */
+  const updatePlaybackTooltip = (el) => {
+    if (!el) return;
+    const key = el.getAttribute("data-mode") || el.getAttribute("data-state");
+    if (PLAYBACK_LABELS[key]) {
+      el.title = PLAYBACK_LABELS[key];
+    }
+  };
+
+  /** Expose shared helpers */
   window._sr = {
     base,
     el,
@@ -279,6 +356,8 @@
     unwrapConfig,
     openModal,
     setButtonLoading,
+    updatePlaybackTooltip,
+    syncActiveTasks,
   };
   // #endregion
 
@@ -472,32 +551,51 @@
     const content = tpl.querySelector(".rt-content");
     let showTimer, hideTimer;
 
-    /** @param {HTMLElement} target */
     const show = (target) => {
       const text = target.dataset.tooltipText || target.getAttribute("data-tooltip") || target.getAttribute("title");
       if (target.disabled || !text) return;
 
-      // Check if we should only show tooltip on text overflow
       if (target.dataset.tooltipOverflowOnly === "true") {
         if (target.scrollWidth <= target.clientWidth) return;
       }
 
-      content.textContent = target.dataset.tooltipText || target.getAttribute("data-tooltip");
+      content.textContent = text;
+
+      tpl.className = "tooltip-core tooltip-box tooltip-dark tooltip-show";
       tpl.setAttribute("aria-hidden", "false");
-      tpl.classList.add("tooltip-show");
-      target.setAttribute("aria-describedby", "shoko-tooltip");
-      const rect = target.getBoundingClientRect(),
-        vw = document.documentElement.clientWidth,
-        margin = 8;
-      let top = rect.top - tpl.offsetHeight - margin,
-        place = "top";
-      if (top < 8) {
-        top = rect.bottom + margin;
-        place = "bottom";
+
+      const rect = target.getBoundingClientRect();
+      const vw = document.documentElement.clientWidth;
+      const vh = document.documentElement.clientHeight;
+      const margin = 10;
+
+      let place = "top";
+      let top = rect.top - tpl.offsetHeight - margin;
+      const left = rect.left + rect.width / 2 - tpl.offsetWidth / 2;
+
+      if (top < margin) {
+        const spaceBelow = vh - rect.bottom;
+        if (spaceBelow > tpl.offsetHeight + margin) {
+          top = rect.bottom + margin;
+          place = "bottom";
+        }
       }
-      tpl.style.left = `${Math.round(Math.max(margin, Math.min(rect.left + (rect.width - tpl.offsetWidth) / 2, vw - tpl.offsetWidth - margin)) + window.scrollX)}px`;
+
+      const minLeft = margin;
+      const maxLeft = vw - tpl.offsetWidth - margin;
+      const clampedLeft = Math.max(minLeft, Math.min(left, maxLeft));
+
+      const arrow = tpl.querySelector(".tooltip-arrow");
+      if (arrow) {
+        arrow.style.marginLeft = `${left - clampedLeft}px`;
+        arrow.style.marginTop = "0px";
+      }
+
+      tpl.classList.add(`tooltip-place-${place}`);
+      tpl.style.left = `${Math.round(clampedLeft + window.scrollX)}px`;
       tpl.style.top = `${Math.round(top + window.scrollY)}px`;
-      tpl.className = `tooltip-core tooltip-box tooltip-dark tooltip-show tooltip-place-${place}`;
+
+      target.setAttribute("aria-describedby", "shoko-tooltip");
     };
 
     const hide = () => {
@@ -509,7 +607,9 @@
       setTimeout(() => tpl.classList.remove("tooltip-closing"), 150);
     };
 
-    /** @param {HTMLElement} t */
+    window.addEventListener("blur", hide);
+    document.addEventListener("mouseleave", hide);
+
     const attach = (t) => {
       if (!t.title) return;
       t.dataset.tooltipText = t.title;
@@ -517,7 +617,9 @@
 
       t.addEventListener("mouseenter", () => {
         clearTimeout(hideTimer);
-        showTimer = setTimeout(() => show(t), 100);
+        showTimer = setTimeout(() => {
+          if (t.matches(":hover")) show(t);
+        }, 100);
       });
 
       // Immediate hide on leave or click
@@ -591,4 +693,6 @@
   initTooltips();
   initTheme();
   loadConfig();
+  setInterval(syncActiveTasks, 3000); // Sync Tasks
+  syncActiveTasks();
 })();

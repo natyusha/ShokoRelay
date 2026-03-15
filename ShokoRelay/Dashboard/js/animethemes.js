@@ -3,7 +3,7 @@
  * @description Dedicated logic for the AnimeThemes VFS and Theme.mp3 generation on the Shoko Relay dashboard.
  */
 (() => {
-  const { base, el, TOAST_MS, fetchJson, showToast, toastOperation, summarizeResult, withButtonAction, initToggle, setIfNotEmpty } = window._sr;
+  const { base, el, TOAST_MS, fetchJson, showToast, toastOperation, summarizeResult, withButtonAction, initToggle, setIfNotEmpty, updatePlaybackTooltip } = window._sr;
 
   // #region Helpers
   /**
@@ -28,8 +28,8 @@
   const buildAtParams = () => {
     const ps = new URLSearchParams();
     ["path", "slug", "offset", "filter"].forEach((k) => setIfNotEmpty(ps, k, el(`at-${k}`)?.value));
-    if (el("at-force")?.getAttribute("aria-pressed") === "true") ps.set("force", "true");
-    if (el("at-batch")?.getAttribute("aria-pressed") === "true") ps.set("batch", "true");
+    if (el("at-mp3-force")?.getAttribute("aria-pressed") === "true") ps.set("force", "true");
+    if (el("at-mp3-batch")?.getAttribute("aria-pressed") === "true") ps.set("batch", "true");
     return ps;
   };
 
@@ -45,7 +45,7 @@
   // #endregion
 
   // #region VFS
-  withButtonAction(el("at-import"), async () => {
+  withButtonAction(el("at-map-import"), async () => {
     showToast("AnimeThemes: Importing Mapping...", "info", TOAST_MS);
     const res = await fetchJson(base + "/animethemes/vfs/import", { method: "POST" });
     toastOperation(res, "AnimeThemes Import", { summary: res.ok ? `mapping imported (${res.data?.count ?? 0} entries)` : undefined });
@@ -68,20 +68,18 @@
       toastOperation(res, `AnimeThemes ${label}`, { summary: summarizeResult(res) || "complete", hideOnSucceed });
     });
   }
-  atBuildAction(el("at-mapping"), "Mapping", "/animethemes/vfs/map");
-  atBuildAction(el("at-apply"), "Generation", "/animethemes/vfs/build");
+  atBuildAction(el("at-map-build"), "Mapping", "/animethemes/vfs/map");
+  atBuildAction(el("at-vfs-build"), "Generation", "/animethemes/vfs/build");
   // #endregion
 
   // #region Theme MP3
-  initToggle("at-force", false);
-  initToggle("at-batch", false);
+  initToggle("at-mp3-force", false);
+  initToggle("at-mp3-batch", false);
   let atAudio = null,
     nowPlayingToast = null,
     atCurrentFolder = null;
 
-  /**
-   * Dismiss the currently active 'Now Playing' toast notification if it exists.
-   */
+  /** Dismiss the currently active 'Now Playing' toast notification if it exists. */
   function dismissNowPlaying() {
     if (nowPlayingToast) {
       nowPlayingToast.click();
@@ -113,9 +111,7 @@
   const atTrack = el("at-progress-track"),
     atFill = el("at-progress-fill");
 
-  /**
-   * Synchronizes the MP3 playback UI states (progress bar, play button state) with the audio object.
-   */
+  /** Synchronizes the MP3 playback UI states (progress bar, play button state) with the audio object. */
   function syncPlaybackUI() {
     const isE = el("at-playback")?.getAttribute("aria-pressed") === "true",
       isA = isE && atAudio?.src && !atAudio.ended;
@@ -123,7 +119,12 @@
     atTrack?.classList.toggle("paused", atAudio?.paused);
     if (!isA && atFill) atFill.style.width = "0%";
     const pBtn = el("at-play");
-    if (pBtn) pBtn.setAttribute("data-state", atAudio && !atAudio.paused && !atAudio.ended ? "playing" : "idle");
+    if (pBtn) {
+      const isPlaying = atAudio && !atAudio.paused && !atAudio.ended;
+      pBtn.setAttribute("data-state", isPlaying ? "playing" : "idle");
+      // Trigger the shared tooltip update logic
+      updatePlaybackTooltip(pBtn);
+    }
   }
 
   if (atTrack) {
@@ -164,24 +165,52 @@
     showNowPlaying(folderPath);
   }
 
-  withButtonAction(el("at-single"), async () => {
+  withButtonAction(el("at-mp3-build"), async () => {
     const startToast = showToast("AnimeThemes MP3: Generating...", "info", 0);
     const ps = buildAtParams();
     const isBatch = ps.get("batch") === "true";
     const res = await fetchJson(`${base}/animethemes/mp3?${ps}`);
     startToast?.remove();
 
-    const status = res.data?.status || res.data?.Status;
+    const d = res.data || {};
+    const status = d.status || d.Status;
+    const message = d.message || d.Message;
+    const folder = d.folder || d.Folder || ps.get("path");
     const hideOnSucceed = isBatch ? 0 : TOAST_MS;
 
+    // Custom summary mapping for friendly UI messages
+    let summary = summarizeResult(res);
+
+    if (status === "skipped") {
+      if (message === "Theme.mp3 already exists.") {
+        summary = `Skipped: "${folder}" already contains a Theme.mp3`;
+      } else if (message === "Entry not found." || (message && message.includes("No entry for slug"))) {
+        summary = `Skipped: No theme found for this series`;
+      } else {
+        summary = message || "Skipped";
+      }
+    } else if (status === "error") {
+      if (message === "No video files found.") {
+        summary = `A Shoko matched video was not found in "${folder}"`;
+      } else if (message === "Folder not found.") {
+        summary = `Folder not found: "${folder}"`;
+      } else {
+        summary = message || "Unknown error";
+      }
+    }
+
     if (res.ok || status === "skipped") {
-      toastOperation(res, "AnimeThemes MP3", { summary: summarizeResult(res) || status || "Complete", hideOnSucceed });
+      toastOperation(res, "AnimeThemes MP3", {
+        summary: summary || status || "Complete",
+        hideOnSucceed,
+      });
+
       if (!isBatch && (status === "ok" || status === "skipped")) {
-        const folder = res.data?.folder || res.data?.Folder || ps.get("path");
-        if (folder) playThemeMp3(folder);
+        const playPath = d.folder || d.Folder || ps.get("path");
+        if (playPath) playThemeMp3(playPath);
       }
     } else {
-      toastOperation(res, "AnimeThemes MP3", { hideOnSucceed: 0 });
+      toastOperation(res, "AnimeThemes MP3", { summary, hideOnSucceed: 0 });
     }
   });
 
@@ -227,10 +256,16 @@
     }
 
     if (mBtn) {
-      mBtn.setAttribute("data-mode", getVal("Playback.AnimeThemesMp3Mode") || "loop");
+      const currentMode = getVal("Playback.AnimeThemesMp3Mode") || "loop";
+      mBtn.setAttribute("data-mode", currentMode);
+      // Ensure initial tooltip is correct on page load
+      updatePlaybackTooltip(mBtn);
+
       mBtn.onclick = async () => {
         const n = getNextMode(mBtn.getAttribute("data-mode"), ["loop", "shuffle", "off"]);
         mBtn.setAttribute("data-mode", n);
+        // Refresh tooltip on click
+        updatePlaybackTooltip(mBtn);
         if (atAudio) atAudio.loop = n === "loop";
         window._sr.setValueByPath(cfg, "Playback.AnimeThemesMp3Mode", n);
         await persist(cfg);

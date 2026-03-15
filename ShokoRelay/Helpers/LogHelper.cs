@@ -2,6 +2,7 @@ using System.Text;
 using ShokoRelay.AnimeThemes;
 using ShokoRelay.Services;
 using ShokoRelay.Sync;
+using ShokoRelay.Vfs;
 
 namespace ShokoRelay.Helpers;
 
@@ -85,6 +86,42 @@ public static class LogHelper
         }
     }
 
+    /// <summary>Build the report content for vfs-report.log.</summary>
+    /// <param name="sb">Target builder.</param>
+    /// <param name="r">Build result data.</param>
+    public static void BuildVfsReport(StringBuilder sb, VfsBuildResult r)
+    {
+        AppendHeader(sb, "VFS Generation Report");
+        sb.AppendLine($"  Elapsed Time:       {r.TotalElapsed.TotalSeconds:F2}s");
+        sb.AppendLine($"  Series Processed:   {r.SeriesProcessed}");
+        sb.AppendLine($"  Links Created:      {r.CreatedLinks}");
+        sb.AppendLine($"  Links Planned:      {r.PlannedLinks}");
+        sb.AppendLine($"  Links Skipped:      {r.Skipped}");
+        sb.AppendLine();
+
+        if (r.CleanupDetails.Any())
+        {
+            sb.AppendLine("Cleanup Details:");
+            foreach (var c in r.CleanupDetails)
+                sb.AppendLine($"  [{c.ElapsedMs.ToString().PadLeft(5)}ms] {c.Path}");
+            sb.AppendLine();
+        }
+
+        if (r.SeriesDetails != null && r.SeriesDetails.Count > 0)
+        {
+            sb.AppendLine("Processed Series Details:");
+            foreach (var detail in r.SeriesDetails.OrderByDescending(x => x.ElapsedMs))
+                sb.AppendLine($"  [{detail.ElapsedMs.ToString().PadLeft(5)}ms] {detail.Name} ({detail.CreatedLinks} links)");
+        }
+
+        if (r.Errors.Count > 0)
+        {
+            sb.AppendLine("\nErrors:");
+            foreach (var e in r.Errors)
+                sb.AppendLine($"  {e}");
+        }
+    }
+
     /// <summary>Build the report content for remove-missing-report.log.</summary>
     /// <param name="sb">Target builder.</param>
     /// <param name="dryRun">Dry run flag.</param>
@@ -127,6 +164,7 @@ public static class LogHelper
     public static void BuildAtVfsBuildReport(StringBuilder sb, AnimeThemesMappingApplyResult result, List<int> filter)
     {
         AppendHeader(sb, "AnimeThemes: VFS Build Report");
+        sb.AppendLine($"  Elapsed Time:   {result.Elapsed.TotalSeconds:F2}s");
         sb.AppendLine($"  Series Matched: {result.SeriesMatched}");
         sb.AppendLine($"  Links Created:  {result.LinksCreated}");
         if (filter.Count > 0)

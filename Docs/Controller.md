@@ -21,13 +21,15 @@ Endpoints managed by `DashboardController`
 ---
 
 ```
-GET  /dashboard/{*path}                                        -> GetControllerPage (serve dashboard index, player & assets)
+GET  /dashboard/{*path}                                        -> GetControllerPage
 
 GET  /config                                                   -> GetConfig
 POST /config                                                   -> SaveConfig
 GET  /config/schema                                            -> GetConfigSchema
 
-GET  /logs/{fileName}                                          -> GetLog (download any report from logs folder)
+GET  /logs/{fileName}                                          -> GetLog
+
+GET tasks/active                                               -> GetActiveTasks
 ```
 
 - `GetControllerPage` Serves the plugin's frontend components and static assets from the `dashboard` folder.
@@ -64,6 +66,10 @@ GET  /logs/{fileName}                                          -> GetLog (downlo
 
 ---
 
+- `GetActiveTasks` returns a list of currently running tasks for the dashboard UI
+
+---
+
 ## Metadata Provider
 
 Endpoints managed by `MetadataController`
@@ -71,8 +77,8 @@ Endpoints managed by `MetadataController`
 ---
 
 ```
-GET  /                                                         -> GetMediaProvider (agent descriptor / supported types)
-GET  /matches?name={name}&title={id}&manual=1                  -> Match (title is a ShokoSeriesID)
+GET  /                                                         -> GetMediaProvider
+GET  /matches?name={name}&title={id}&manual=1                  -> Match
 POST /matches                                                  -> Match
 
 GET  /collections/{groupId}                                    -> GetCollection
@@ -81,11 +87,12 @@ GET  /collections/user/{groupId}                               -> GetCollectionP
 GET  /metadata/{ratingKey}?includeChildren=0|1                 -> GetMetadata
 GET  /metadata/{ratingKey}/children                            -> GetChildren
 GET  /metadata/{ratingKey}/grandchildren                       -> GetGrandchildren
-GET  /metadata/{ratingKey}/images                              -> GetImages (all image assets for the item)
+GET  /metadata/{ratingKey}/images                              -> GetImages
 ```
 
 - `GetMediaProvider` returns the agent descriptor describing supported types and features.
 - `Match` looks up a series by filename or title. Priority is given to IDs found in the path.
+  - The title lookup uses `ShokoSeriesID` only
 
 ---
 
@@ -119,10 +126,10 @@ Endpoints are managed by `PlexController`
 ### Plex: Authentication
 
 ```
-GET  /plex/auth                                                -> StartPlexAuth (returns pin + authUrl)
-GET  /plex/auth/status?pinId={id}                              -> GetPlexAuthStatus (poll for pin completion)
-POST /plex/auth/unlink                                         -> UnlinkPlex (revoke & clear saved token)
-POST /plex/auth/refresh                                        -> RefreshPlexLibraries (re-discover Shoko libraries)
+GET  /plex/auth                                                -> StartPlexAuth             (returns pin + authUrl)
+GET  /plex/auth/status?pinId={id}                              -> GetPlexAuthStatus         (poll for pin completion)
+POST /plex/auth/unlink                                         -> UnlinkPlex                (revoke & clear saved token)
+POST /plex/auth/refresh                                        -> RefreshPlexLibraries      (re-discover Shoko libraries)
 ```
 
 - `StartPlexAuth` begins the PIN-based pairing flow via Plex.tv.
@@ -209,13 +216,13 @@ POST /vfs/overrides                                            -> SaveVfsOverrid
 ### Shoko: Automation
 
 ```
-GET  /shoko/remove-missing?dryRun={true|false}                 -> RemoveMissingFiles
+GET  /shoko/remove-missing?dryRun={true|false}                 -> RemoveMissingFiles       (for preview/testing)
 POST /shoko/remove-missing?dryRun={true|false}                 -> RemoveMissingFiles
 
 POST /shoko/import                                             -> RunShokoImport
 GET  /shoko/import/start                                       -> StartShokoImportNow
 
-GET  /sync-watched                                             -> SyncPlexWatched (for preview/testing)
+GET  /sync-watched                                             -> SyncPlexWatched           (for preview/testing)
 POST /sync-watched                                             -> SyncPlexWatched
      [?dryRun={true|false}&sinceHours={int}&ratings={true|false}&import={true|false}&excludeAdmin={true|false}]
 

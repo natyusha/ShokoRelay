@@ -27,43 +27,54 @@ public class AnimeThemesController(
 
     /// <summary>Applies the anime‑themes mapping file to the directory structure.</summary>
     /// <param name="filter">Optional comma-separated Shoko Series IDs to restrict the build.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Statistics on links created and errors encountered.</returns>
     [HttpGet("animethemes/vfs/build")]
-    public async Task<IActionResult> AnimeThemesVfsBuild([FromQuery] string? filter = null, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> AnimeThemesVfsBuild([FromQuery] string? filter = null)
     {
         var validation = ValidateFilterOrBadRequest(filter, out var filterIds);
         if (validation != null)
             return validation;
 
-        var result = await _animeThemesMapping.ApplyMappingAsync(filterIds, cancellationToken).ConfigureAwait(false);
-
-        if (filterIds == null || filterIds.Count == 0)
+        const string taskName = "at-vfs-build";
+        TaskHelper.StartTask(taskName);
+        try
         {
-            try
-            {
-                var cacheLines = result.CacheEntries.Select(ce => $"{ce.VfsPath.Replace('\\', '/')}|{ce.VideoId}|{ce.Bitmask}");
-                System.IO.File.WriteAllLines(Path.Combine(_configProvider.ConfigDirectory, "webm_animethemes.cache"), cacheLines);
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(ex, "Failed to save webm cache");
-            }
-        }
+            var result = await _animeThemesMapping.ApplyMappingAsync(filterIds, CancellationToken.None).ConfigureAwait(false);
 
-        return LogAndReturn("at-vfs-build-report.log", result, (sb, r) => LogHelper.BuildAtVfsBuildReport(sb, r, filterIds ?? []));
+            if (filterIds == null || filterIds.Count == 0)
+            {
+                try
+                {
+                    var cacheLines = result.CacheEntries.Select(ce => $"{ce.VfsPath.Replace('\\', '/')}|{ce.VideoId}|{ce.Bitmask}");
+                    System.IO.File.WriteAllLines(Path.Combine(_configProvider.ConfigDirectory, "webm_animethemes.cache"), cacheLines);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn(ex, "Failed to save webm cache");
+                }
+            }
+
+            var actionResult = LogAndReturn("at-vfs-build-report.log", result, (sb, r) => LogHelper.BuildAtVfsBuildReport(sb, r, filterIds ?? []));
+            TaskHelper.CompleteTask(taskName, (actionResult as OkObjectResult)?.Value!);
+            return actionResult;
+        }
+        catch (Exception ex)
+        {
+            var err = new { status = "error", message = ex.Message };
+            TaskHelper.CompleteTask(taskName, err);
+            return BadRequest(err);
+        }
     }
 
     /// <summary>Generates the anime‑themes mapping CSV or tests a single filename mapping.</summary>
     /// <param name="testPath">Optional webm filename to test mapping logic against.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The mapping report or a test result.</returns>
     [HttpGet("animethemes/vfs/map")]
-    public async Task<IActionResult> AnimeThemesVfsMap(string? testPath = null, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> AnimeThemesVfsMap(string? testPath = null)
     {
         if (!string.IsNullOrWhiteSpace(testPath))
         {
-            var (entry, error, gen) = await _animeThemesMapping.TestMappingEntryAsync(testPath, cancellationToken).ConfigureAwait(false);
+            var (entry, error, gen) = await _animeThemesMapping.TestMappingEntryAsync(testPath, CancellationToken.None).ConfigureAwait(false);
             if (error != null)
                 return Ok(
                     new
@@ -85,8 +96,21 @@ public class AnimeThemesController(
             );
         }
 
-        var result = await _animeThemesMapping.BuildMappingFileAsync(cancellationToken).ConfigureAwait(false);
-        return LogAndReturn("at-vfs-map-report.log", result, LogHelper.BuildAtVfsMapReport);
+        const string taskName = "at-map-build";
+        TaskHelper.StartTask(taskName);
+        try
+        {
+            var result = await _animeThemesMapping.BuildMappingFileAsync(CancellationToken.None).ConfigureAwait(false);
+            var actionResult = LogAndReturn("at-vfs-map-report.log", result, LogHelper.BuildAtVfsMapReport);
+            TaskHelper.CompleteTask(taskName, (actionResult as OkObjectResult)?.Value!);
+            return actionResult;
+        }
+        catch (Exception ex)
+        {
+            var err = new { status = "error", message = ex.Message };
+            TaskHelper.CompleteTask(taskName, err);
+            return BadRequest(err);
+        }
     }
 
     /// <summary>Downloads and imports the curated mapping CSV from GitHub.</summary>
@@ -106,10 +130,9 @@ public class AnimeThemesController(
 
     /// <summary>Generates Theme.mp3 files for anime series.</summary>
     /// <param name="query">Parameters for the MP3 generation request.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>An operation result or batch report.</returns>
     [HttpGet("animethemes/mp3")]
-    public async Task<IActionResult> AnimeThemesMp3([FromQuery] AnimeThemesMp3Query query, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> AnimeThemesMp3([FromQuery] AnimeThemesMp3Query query)
     {
         if (string.IsNullOrWhiteSpace(query.Path))
             return BadRequest(new { status = "error", message = "path is required" });
@@ -119,14 +142,27 @@ public class AnimeThemesController(
 
         if (query.Batch)
         {
-            var batch = await _animeThemesMp3Generator.ProcessBatchAsync(query, cancellationToken);
-            foreach (var item in batch.Items.Where(i => i.Status == "ok" && !string.IsNullOrWhiteSpace(i.Folder)))
-                _animeThemesMp3Generator.AddToThemeMp3Cache(item.Folder);
+            const string taskName = "at-mp3-build";
+            TaskHelper.StartTask(taskName);
+            try
+            {
+                var batch = await _animeThemesMp3Generator.ProcessBatchAsync(query, CancellationToken.None);
+                foreach (var item in batch.Items.Where(i => i.Status == "ok" && !string.IsNullOrWhiteSpace(i.Folder)))
+                    _animeThemesMp3Generator.AddToThemeMp3Cache(item.Folder);
 
-            return LogAndReturn("at-mp3-report.log", batch, LogHelper.BuildAtMp3Report);
+                var actionResult = LogAndReturn("at-mp3-report.log", batch, LogHelper.BuildAtMp3Report);
+                TaskHelper.CompleteTask(taskName, (actionResult as OkObjectResult)?.Value!);
+                return actionResult;
+            }
+            catch (Exception ex)
+            {
+                var err = new { status = "error", message = ex.Message };
+                TaskHelper.CompleteTask(taskName, err);
+                return BadRequest(err);
+            }
         }
 
-        var single = await _animeThemesMp3Generator.ProcessSingleAsync(query, cancellationToken);
+        var single = await _animeThemesMp3Generator.ProcessSingleAsync(query, CancellationToken.None);
         if (single.Status == "error")
             return BadRequest(single);
         if (single.Status == "ok" && !string.IsNullOrWhiteSpace(single.Folder))

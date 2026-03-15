@@ -1,3 +1,4 @@
+using Newtonsoft.Json;
 using Shoko.Abstractions.Enums;
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Containers;
@@ -8,6 +9,7 @@ namespace ShokoRelay.Helpers;
 public sealed class TagItem
 {
     /// <summary>The display string for the tag.</summary>
+    [JsonProperty("tag")]
     public string Tag { get; init; } = "";
 }
 

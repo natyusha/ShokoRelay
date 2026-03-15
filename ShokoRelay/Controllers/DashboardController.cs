@@ -4,6 +4,7 @@ using System.Reflection;
 using Microsoft.AspNetCore.Mvc;
 using Shoko.Abstractions.Services;
 using ShokoRelay.Config;
+using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
 
 namespace ShokoRelay.Controllers;
@@ -108,7 +109,28 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
             return BadRequest(new { status = "error", message = "fileName is required" });
         string logsDir = Path.Combine(_configProvider.PluginDirectory, "logs");
         string path = Path.Combine(logsDir, fileName);
-        return !System.IO.File.Exists(path) ? NotFound(new { status = "error", message = "log not found" }) : PhysicalFile(path, "text/plain", fileName);
+        return !System.IO.File.Exists(path) ? NotFound(new { status = "error", message = "log not found" }) : PhysicalFile(path, "text/plain");
+    }
+
+    #endregion
+
+    #region Tasks
+
+    /// <summary>Returns a list of currently running tasks for the dashboard UI.</summary>
+    [HttpGet("tasks/active")]
+    public IActionResult GetActiveTasks() => Ok(TaskHelper.ActiveTasks.Keys);
+
+    /// <summary>Returns results of tasks completed since the last check.</summary>
+    [HttpGet("tasks/completed")]
+    public IActionResult GetCompletedTasks() => Ok(TaskHelper.TaskResults);
+
+    /// <summary>Acknowledges and clears a completed task result so it isn't displayed again.</summary>
+    /// <param name="taskName">The unique identifier for the task.</param>
+    [HttpPost("tasks/clear/{taskName}")]
+    public IActionResult ClearTaskResult(string taskName)
+    {
+        TaskHelper.TaskResults.TryRemove(taskName, out _);
+        return Ok();
     }
 
     #endregion

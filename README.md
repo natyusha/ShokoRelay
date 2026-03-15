@@ -174,15 +174,15 @@ As a bonus this supports using the primary series poster as the collection poste
 
 This plugin includes full [AnimeThemes](https://animethemes.moe/) integration. It will look for '.webm' theme files in a folder called `!AnimeThemes` (or the configured `AnimeThemes Root Path`) which is located in the root of your anime library (this works for any "destination" type folder managed by Shoko). These files must have the same name as they do on the AnimeThemes website and then a mapping must be generated for them, in what is essentially a 3 step process. Simply navigate to the "AnimeThemes: VFS" section of the dashboard page to get started.
 
+> [!IMPORTANT]
+> Similar to the VFS you must exclude the `!AnimeThemes` folder from Shoko scans using the `Exclude` server option. An example `settings-server.json` entry is shown [above](#shoko).
+
 1. Download anime theme videos and place them in the `!AnimeThemes` folder
    - There is a torrent available with over 19000+ themes
 2. Generate a mapping for the the videos by clicking the `Build` button:
    - If you have the torrent click the `Import` button to download the [current torrent mapping](https://gist.github.com/natyusha/bb33a3b3bc95bc7a3869633e23d522bb)
    - Mapping the torrent takes ~8 hours (due to rate limits) and generated mappings will be appended to it
 3. Apply the mapping to the VFS by clicking the `Generate` button
-
-> [!IMPORTANT]
-> Similar to the VFS you must exclude the `!AnimeThemes` folder from Shoko scans using the `Exclude` server option. An example `settings-server.json` entry is shown [above](#shoko).
 
 > [!TIP]
 > By default, the plugin appends metadata attributes to the filename, such as `[SPOIL, SUBS]`. If you prefer a cleaner look, you can disable this by unchecking `Advanced Settings > Append AnimeThemes Tags` in the dashboard's Provider Settings. Note that a fresh "Generate" run is required to rename existing links after changing this setting.
@@ -202,36 +202,14 @@ Any subfolder named after the configured `VFS Root Path`, `Collection Posters Ro
 
 ### AnimeThemes Video Player
 
-Shoko Relay includes a stand-alone, browser-based video player designed specifically for your AnimeThemes collection. It can be accessed via the `Open Video Player` icon (clap board) within the "AnimeThemes: VFS" section of the dashboard (or by a dedicated url: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/dashboard/player`). There is a included tree view which allows you to browse your themes by Group and Series as they would appear in Plex. Support for Loop, Shuffle, and Sequential playback is also available via a 4 stage toggle button.
+Shoko Relay includes a stand-alone, browser-based video player designed specifically for your AnimeThemes collection. It can be accessed via the `Open Video Player` icon (clap board) within the "AnimeThemes: VFS" section of the dashboard (or by a dedicated url: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/dashboard/player`). There is a included tree view which allows you to browse your themes by Group and Series as they would appear in Plex. Support for Loop, Shuffle, and Sequential playback is also available via a 4 stage toggle button. A search box is included which will filter the treeview based on series, group, or filename level queries. The filter supports tag-based filtering syntax using `+` (inclusion) and `-` (exclusion) operators.
 
-#### Filter
-
-There is a search box included which will filter the treeview based on series, group, or filename level queries. The filter supports tag-based filtering syntax using `+` (inclusion) and `-` (exclusion) operators. and the following metadata tags:
-
-- `spoil` (Spoiler content)
-- `nsfw` (Not Safe For Work)
-- `lyrics` (Includes timed lyrics)
-- `subs` (Includes subtitles)
-- `uncen` (Uncensored version)
-- `nc` (No Credits version)
-- `trans` (Transition overlap)
-- `over` (Full overlap)
+> [!TIP]
+> There is a help button in the top right of the video player which will show a full list of keybinds and filters.
 
 #### Favourites
 
 You can mark any theme as a favourite by clicking the heart icon `❤` next to its name in the tree view. Once marked as a favourite the icon for a given item will change to be red in colour and it will be persisted to a settings file based on its AnimeThemes VideoID. To quickly view only your marked themes, type `favs` into the search bar. This keyword can be combined with other search terms as well as tags (e.g., `+nc favs gundam`) to find specific favourites.
-
-#### Keybinds
-
-- `Up/Down` (Volume +/- 10%)
-- `Ctrl-Up/Down` (Cycle Playback Mode)
-- `Right/Left` (Seek +/- 5s)
-- `Ctrl-Right/Left` (Play Next/Previous Theme)
-- `L/J` (Seek +/- 10s)
-- `Space/K` (Pause)
-- `F` (Fullscreen)
-- `/` (Focus Filter Box)
-- `L` (Toggle Favourite)
 
 ## Information
 
@@ -362,4 +340,3 @@ Due to this plugin relying on Plex's metadata provider feature (which is still u
   - Add custom or generic series/episode ratings directly through the provider
   - Add rich cast info (bios) for cast and crew
   - Include generic ratings for "old experience" Plex clients without using the HTTP API
-- Add a way to distinguish between AnimeThemes of the same slug index that are grouped due to VFS overrides

@@ -31,11 +31,11 @@
 
   // Initialize the VFS Clean toggle (broom icon) and bind the Generate button action.
   initToggle("vfs-clean", true);
-  withButtonAction("vfs-exec", async () => {
+  withButtonAction("vfs-build", async () => {
     const clean = el("vfs-clean")?.getAttribute("aria-pressed") === "true";
     const filter = el("vfs-filter")?.value.trim();
 
-    const startToast = showToast(`VFS: Generating (clean=${clean})...`, "info", 0);
+    const startToast = showToast(`VFS: Generating... [clean=${clean}]`, "info", 0);
     const res = await fetchJson(`${base}/vfs?${buildVfsParams()}`);
     startToast?.remove();
 
@@ -45,7 +45,7 @@
     // Use custom summary to handle the PascalCase properties from VfsBuildResult
     const summary = res.ok ? `processed ${res.data.data.SeriesProcessed}, created ${res.data.data.CreatedLinks}` : undefined;
 
-    toastOperation(res, `VFS (clean=${clean})`, { summary, hideOnSucceed });
+    toastOperation(res, `VFS [clean=${clean}]`, { summary, hideOnSucceed });
   });
 
   // Wire up the VFS Overrides Editor modal.
@@ -91,15 +91,28 @@
   // #region Shoko: Automation
 
   // Remove records for files no longer present on disk.
-  withButtonAction("shoko-remove-missing", async () => {
-    showToast("Remove Missing: Processing...", "info", TOAST_MS);
-    const res = await fetchJson(base + "/shoko/remove-missing?dryRun=false", { method: "POST" });
-    // result is nested in res.data.data
-    const count = res.data?.data?.count ?? res.data?.data?.Count;
-    toastOperation(res, "Remove Missing", {
-      summary: typeof count === "number" ? `removed ${count}` : undefined,
-    });
-  });
+  const removeBtn = el("shoko-remove-missing");
+  if (removeBtn) {
+    removeBtn.onclick = () => {
+      const modal = el("confirm-modal");
+      const msg = el("confirm-message");
+      const execBtn = el("confirm-exec");
+      msg.innerHTML = "Are you sure you want to remove all records for missing files?<br><br><small>This will permanently remove them from Shoko's database and your AniDB MyList.</small>";
+      execBtn.textContent = "Remove Files";
+      const close = openModal(modal);
+      el("confirm-cancel").onclick = close;
+      execBtn.onclick = async () => {
+        close();
+        
+        // Trigger withButtonAction logic on the main dashboard button to show the spinner and register the task.
+        withButtonAction(removeBtn, async () => {
+          showToast("Remove Missing: Processing...", "info", TOAST_MS);
+          const res = await fetchJson(base + "/shoko/remove-missing?dryRun=false", { method: "POST" });
+          toastOperation(res, "Remove Missing");
+        })();
+      };
+    };
+  }
 
   // Trigger a Shoko import detection scan on managed folders.
   withButtonAction("shoko-import-run", async () => {

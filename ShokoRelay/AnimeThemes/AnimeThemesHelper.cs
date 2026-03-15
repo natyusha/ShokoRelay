@@ -204,13 +204,18 @@ internal static class AnimeThemesHelper
         return flags;
     }
 
-    /// <summary>Constructs a sanitized filename from theme metadata for the VFS.</summary>
+    /// <summary>
+    /// Constructs a sanitized filename from theme metadata.
+    /// </summary>
     /// <param name="lookup">The metadata lookup object.</param>
     /// <param name="extension">The file extension to append.</param>
+    /// <param name="overrideIndex">The 0-based index of the series within an override group.</param>
     /// <returns>A formatted and sanitized filename.</returns>
-    internal static string BuildNewFileName(AnimeThemesVideoLookup lookup, string extension)
+    internal static string BuildNewFileName(AnimeThemesVideoLookup lookup, string extension, int overrideIndex = 0)
     {
         var (baseSlug, slugSuffix) = ParseSlug(lookup.Slug ?? "");
+        string overridePrefix = overrideIndex > 0 ? $"P{overrideIndex + 1} ❯ " : "";
+        string nc = lookup.NC ? "NC" : "";
         string slug = string.IsNullOrWhiteSpace(baseSlug) ? "Theme" : baseSlug;
         const string zwsp = "\u200B",
             hsp = "\u200A";
@@ -252,7 +257,7 @@ internal static class AnimeThemesHelper
             attr.Add("OVER");
 
         string attrStr = (ShokoRelay.Settings.Advanced.AnimeThemesAppendTags && attr.Count > 0) ? $" [{string.Join(", ", attr)}]" : "";
-        return VfsHelper.CleanEpisodeTitleForFilename($"{(lookup.NC ? "NC" : "")}{slug}{ver}{title}{slugTag}{artistStr}{attrStr}{extension}");
+        return VfsHelper.CleanEpisodeTitleForFilename($"{overridePrefix}{nc}{slug}{ver}{title}{slugTag}{artistStr}{attrStr}{extension}");
     }
 
     /// <summary>Parses a theme slug into base and suffix components.</summary>

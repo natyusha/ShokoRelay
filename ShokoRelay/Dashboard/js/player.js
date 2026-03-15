@@ -3,8 +3,13 @@
  * @description Dedicated logic for the Shoko Relay stand-alone AnimeThemes VFS video player.
  */
 (() => {
-  const { base, el, fetchJson, unwrapConfig, setValueByPath } = window._sr;
+  const { base, el, fetchJson, unwrapConfig, setValueByPath, openModal, updatePlaybackTooltip } = window._sr;
 
+  const playerTime = el("time-display");
+  const playerVolText = el("volume-text");
+  const playerFullscreenBtn = el("fullscreen");
+  const playerMuteBtn = el("volume-mute-btn");
+  const playerContainer = el("video").parentElement;
   const playerVideo = el("video");
   const playerTree = el("tree");
   const playerFilter = el("filter");
@@ -15,7 +20,10 @@
   const playerAnime = el("anime");
   const playerFill = el("player-progress-fill");
   const playerTrack = el("player-progress-track");
-  const playerNowPlayingFav = el("now-playing-fav"); // Reference to header heart
+  const playerNowPlayingFav = el("now-playing-fav");
+  const playerLocateBtn = el("locate-current");
+  const helpModal = el("help-modal");
+  const helpOpenBtn = el("help-open");
 
   /** @type {Array<{group: string, series: string, file: string, path: string, videoId: number, _searchIndex: string}>} */
   let webmTreeData = [];
@@ -27,6 +35,41 @@
   let lastFilterValue = "";
 
   // #region Utilities
+  /**
+   * Converts seconds to M:SS format
+   * @param {number} seconds
+   * @returns {string}
+   */
+  const formatTime = (seconds) => {
+    if (isNaN(seconds)) return "0:00";
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${s < 10 ? "0" : ""}${s}`;
+  };
+
+  /** Synchronizes the volume percentage and mute icon classes */
+  const syncVolumeUI = () => {
+    if (!playerVideo) return;
+    const vol = playerVideo.volume;
+    const isMuted = playerVideo.muted || vol === 0;
+
+    if (playerVolText) {
+      playerVolText.textContent = isMuted ? "Muted" : `${Math.round(vol * 100)}%`;
+    }
+    if (playerMuteBtn) {
+      playerMuteBtn.title = isMuted ? "Unmute" : "Mute";
+    }
+    let level = "mute";
+    if (!isMuted) {
+      if (vol > 0.66) level = "high";
+      else if (vol > 0.33) level = "med";
+      else level = "low";
+    }
+    if (playerContainer) {
+      playerContainer.dataset.volumeLevel = level;
+    }
+  };
+
   /**
    * Decode unicode escape sequences in a string.
    * @param {string} s - The encoded string.
@@ -143,16 +186,16 @@
       if (isFav) favourites.add(videoId);
       else favourites.delete(videoId);
 
-      // 1. Sync the heart that was clicked (if any)
+      // Sync the heart that was clicked (if any)
       if (heartEl) heartEl.classList.toggle("favourited", isFav);
 
-      // 2. Sync the "Now Playing" header heart if this video is currently playing
+      // Sync the "Now Playing" header heart if this video is currently playing
       const currentItem = webmTreeData.find((i) => i.path === currentWebmPath);
       if (currentItem && currentItem.videoId === videoId) {
         playerNowPlayingFav?.classList.toggle("favourited", isFav);
       }
 
-      // 3. Sync the tree leaf icon (especially important if hotkey was used)
+      // Sync the tree leaf icon (especially important if hotkey was used)
       const treeHeart = playerTree.querySelector(`.leaf[data-path="${CSS.escape(currentWebmPath)}"] .fav-icon`);
       if (treeHeart) treeHeart.classList.toggle("favourited", isFav);
 
@@ -245,6 +288,32 @@
   // #endregion
 
   // #region Player
+  /** Expands all parent details elements of the currently playing theme and scrolls it into view. */
+  function locateCurrentInTree() {
+    if (!currentWebmPath) return;
+    const leaf = playerTree.querySelector(`.leaf[data-path="${CSS.escape(currentWebmPath)}"]`);
+    if (!leaf) return;
+
+    // Expand all parent <details> elements to make the leaf visible
+    let parent = leaf.closest("details");
+    while (parent) {
+      parent.open = true;
+      parent = parent.parentElement.closest("details");
+    }
+
+    // Scroll the tree container to the element
+    leaf.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  /** Toggles fullscreen mode on the video container. */
+  function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+      playerContainer.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen();
+    }
+  }
+
   /**
    * Sets the video source and starts playback.
    * @param {string} path - The relative VFS path to the WebM file.
@@ -262,13 +331,17 @@
     if (playerTitle) playerTitle.textContent = playerTitle.title = themeName;
 
     // Header Favorite Heart Logic
-    if (playerNowPlayingFav && item) {
-      playerNowPlayingFav.style.display = "inline-block";
-      playerNowPlayingFav.classList.toggle("favourited", favourites.has(item.videoId));
-      playerNowPlayingFav.onclick = (e) => {
-        e.stopPropagation();
-        toggleFavourite(item.videoId, playerNowPlayingFav);
-      };
+    if (item) {
+      if (playerLocateBtn) playerLocateBtn.style.visibility = "visible";
+
+      if (playerNowPlayingFav) {
+        playerNowPlayingFav.style.visibility = "visible";
+        playerNowPlayingFav.classList.toggle("favourited", favourites.has(item.videoId));
+        playerNowPlayingFav.onclick = (e) => {
+          e.stopPropagation();
+          toggleFavourite(item.videoId, playerNowPlayingFav);
+        };
+      }
     }
 
     if (playerAnime) {
@@ -320,13 +393,13 @@
     playFile(items[idx].path);
   }
 
-  /**
-   * Synchronizes the Play/Next button appearance and progress bar with the video playback state.
-   */
+  /** Synchronizes the Play/Next button appearance and progress bar with the video playback state. */
   function syncPlaybackUI() {
     if (playerNextBtn) {
       const isPlaying = playerVideo && !playerVideo.paused && !playerVideo.ended;
       playerNextBtn.setAttribute("data-state", isPlaying ? "playing" : "idle");
+      // Use the centralized script.js tooltip update logic
+      updatePlaybackTooltip(playerNextBtn);
     }
   }
 
@@ -342,6 +415,8 @@
     const next = cycleMode(current, modes, direction);
 
     playerModeBtn.setAttribute("data-mode", next);
+    // Refresh tooltip label
+    updatePlaybackTooltip(playerModeBtn);
     shuffleHistory.clear();
 
     const res = await fetchJson(base + "/config");
@@ -355,19 +430,23 @@
 
   // #region Initialization
   if (playerVideo) {
+    // Sync UI on video state changes
     ["play", "pause", "ended", "loadstart"].forEach((ev) => playerVideo.addEventListener(ev, syncPlaybackUI));
 
+    /** Handle progress bar updates */
     playerVideo.ontimeupdate = () => {
       if (playerFill && playerVideo.duration) {
         playerFill.style.width = (playerVideo.currentTime / playerVideo.duration) * 100 + "%";
       }
     };
 
+    /** Toggle play/pause when clicking the video element directly */
     playerVideo.onclick = () => {
       if (!playerVideo.src) return;
       playerVideo.paused ? playerVideo.play() : playerVideo.pause();
     };
 
+    /** Handle progress bar clicking/seeking */
     if (playerTrack) {
       playerTrack.onclick = (e) => {
         if (playerVideo.duration) {
@@ -375,6 +454,7 @@
         }
       };
 
+      /** Toggle play/pause on middle-click (button 1) to match dashboard MP3 player */
       playerTrack.onmousedown = (e) => {
         if (e.button === 1 && playerVideo.src) {
           e.preventDefault();
@@ -383,44 +463,105 @@
       };
     }
 
-    if (playerFilter) {
-      const debouncedRender = debounce(() => {
-        renderTree(getFilteredItems());
-      }, 250);
-      playerFilter.oninput = () => {
-        if (playerFilterClear) playerFilterClear.hidden = !playerFilter.value;
-        debouncedRender();
+    /** Toggle Mute */
+    if (playerMuteBtn) {
+      playerMuteBtn.onclick = (e) => {
+        e.stopPropagation(); // Prevent the video click-to-pause logic from firing
+        if (playerVideo.src) {
+          playerVideo.muted = !playerVideo.muted;
+        }
       };
     }
 
-    if (playerModeBtn) playerModeBtn.onclick = () => updateMode(1);
+    /** Synchronizes the fullscreen button icon and title. Listens to the document-level event to catch 'Esc' key exits. */
+    document.addEventListener("fullscreenchange", () => {
+      if (!playerFullscreenBtn) return;
 
+      const isFS = !!document.fullscreenElement;
+      playerFullscreenBtn.setAttribute("data-state", isFS ? "fullscreen" : "idle");
+      playerFullscreenBtn.title = isFS ? "Exit Fullscreen" : "Fullscreen";
+    });
+
+    // Filter Input (Debounced)
+    if (playerFilter) {
+      const debouncedRender = debounce(() => {
+        renderTree(getFilteredItems());
+      }, 250); // 250ms delay
+
+      playerFilter.oninput = () => {
+        if (playerFilterClear) playerFilterClear.hidden = !playerFilter.value; // Toggle the 'x' button visibility based on content
+        debouncedRender();
+      };
+
+      /** Handle specific keys while input is focused */
+      playerFilter.onkeydown = (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          playerFilter.blur();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          playerFilter.value = "";
+          if (playerFilterClear) playerFilterClear.hidden = true;
+          renderTree(getFilteredItems());
+          playerFilter.blur();
+        }
+      };
+    }
+
+    // Mode Toggle
+    if (playerModeBtn) {
+      playerModeBtn.onclick = () => updateMode(1);
+    }
+
+    // Filter Clear Action
     if (playerFilterClear) {
       playerFilterClear.onclick = () => {
         playerFilter.value = "";
         playerFilterClear.hidden = true;
-        renderTree(getFilteredItems());
+        renderTree(getFilteredItems()); // Re-render the full tree immediately
         playerFilter.focus();
       };
     }
 
+    // Controls
     if (playerNextBtn) {
+      /** @returns {void} */
       playerNextBtn.onclick = () => {
         if (playerVideo.src) {
+          // If video has finished, restart it from the beginning
           if (playerVideo.ended) {
             playerVideo.currentTime = 0;
             playerVideo.play();
             return;
           }
+          // If video is loaded and paused, resume playback
           if (playerVideo.paused) {
             playerVideo.play();
             return;
           }
         }
+        // Otherwise, proceed to the next video based on playback mode
         playMove(playerModeBtn?.getAttribute("data-mode") === "shuffle", 1);
       };
     }
 
+    if (playerFullscreenBtn) {
+      playerFullscreenBtn.onclick = () => {
+        if (!document.fullscreenElement) {
+          playerContainer.requestFullscreen().catch(() => {});
+        } else {
+          document.exitFullscreen();
+        }
+      };
+    }
+    if (playerLocateBtn) {
+      playerLocateBtn.onclick = locateCurrentInTree;
+    }
+    if (helpOpenBtn) {
+      helpOpenBtn.onclick = () => openModal(helpModal);
+    }
+
+    // Video Events
     playerVideo.addEventListener("ended", () => {
       const m = playerModeBtn?.getAttribute("data-mode");
       if (m === "loop") {
@@ -431,95 +572,73 @@
       }
     });
 
-    window.addEventListener("keydown", (e) => {
-      if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA") return;
-      const isShuffle = playerModeBtn?.getAttribute("data-mode") === "shuffle";
-
-      if (e.ctrlKey) {
-        switch (e.key) {
-          case "ArrowRight":
-            e.preventDefault();
-            playMove(isShuffle, 1);
-            break;
-          case "ArrowLeft":
-            e.preventDefault();
-            playMove(isShuffle, -1);
-            break;
-          case "ArrowUp":
-            e.preventDefault();
-            updateMode(1);
-            break;
-          case "ArrowDown":
-            e.preventDefault();
-            updateMode(-1);
-            break;
-        }
-        return;
-      }
-
-      switch (e.key) {
-        case "ArrowUp":
-          e.preventDefault();
-          playerVideo.volume = Math.min(1, playerVideo.volume + 0.1);
-          break;
-        case "ArrowDown":
-          e.preventDefault();
-          playerVideo.volume = Math.max(0, playerVideo.volume - 0.1);
-          break;
-        case "ArrowRight":
-          e.preventDefault();
-          playerVideo.currentTime += 5;
-          break;
-        case "ArrowLeft":
-          e.preventDefault();
-          playerVideo.currentTime -= 5;
-          break;
-        case "j":
-        case "J":
-          e.preventDefault();
-          playerVideo.currentTime -= 10;
-          break;
-        case " ":
-        case "k":
-        case "K":
-          e.preventDefault();
-          if (playerVideo.src) playerVideo.paused ? playerVideo.play() : playerVideo.pause();
-          else playMove(isShuffle, 1);
-          break;
-        case "f":
-        case "F":
-          e.preventDefault();
-          if (!document.fullscreenElement) playerVideo.requestFullscreen().catch(() => {});
-          else document.exitFullscreen();
-          break;
-        case "/":
-          e.preventDefault();
-          playerFilter?.focus();
-          break;
-        case "l":
-        case "L":
-          e.preventDefault();
-          const item = webmTreeData.find((i) => i.path === currentWebmPath);
-          if (item) toggleFavourite(item.videoId);
-          break;
+    /** Handle Time/Duration Updates */
+    playerVideo.addEventListener("timeupdate", () => {
+      if (playerTime && playerVideo.duration) {
+        playerTime.textContent = `${formatTime(playerVideo.currentTime)} / ${formatTime(playerVideo.duration)}`;
       }
     });
 
+    /** Handle Volume/Mute Changes */
+    playerVideo.addEventListener("volumechange", syncVolumeUI);
+
+    // Initialize Volume UI on load
+    syncVolumeUI();
+
+    // Hotkeys
+    window.addEventListener("keydown", (e) => {
+      // Prevent hotkeys if typing in inputs
+      if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA") return;
+
+      const isShuffle = playerModeBtn?.getAttribute("data-mode") === "shuffle";
+
+      // prettier-ignore
+      switch (e.key) {
+        case " ": case "k": case "K": e.preventDefault(); if (playerVideo.src) playerVideo.paused ? playerVideo.play() : playerVideo.pause(); else playMove(isShuffle, 1); break;
+        case ".": e.preventDefault(); if (playerVideo.src) { playerVideo.pause(); playerVideo.currentTime = Math.min(playerVideo.duration, playerVideo.currentTime + 1 / 24); } break;
+        case ",": e.preventDefault(); if (playerVideo.src) { playerVideo.pause(); playerVideo.currentTime = Math.max(0, playerVideo.currentTime - 1 / 24); } break;
+        case "ArrowRight": e.preventDefault(); playerVideo.currentTime += 5; break;
+        case "ArrowLeft": e.preventDefault(); playerVideo.currentTime -= 5; break;
+        case "l": case "L": e.preventDefault(); playerVideo.currentTime += 10; break;
+        case "j": case "J": e.preventDefault(); playerVideo.currentTime -= 10; break;
+        case "n": case "N": e.preventDefault(); playMove(isShuffle, 1); break;
+        case "b": case "B": e.preventDefault(); playMove(isShuffle, -1); break;
+        case "m": case "M": e.preventDefault(); if (playerVideo.src) playerVideo.muted = !playerVideo.muted; break;
+        case "ArrowUp": e.preventDefault(); playerVideo.volume = Math.min(1, playerVideo.volume + 0.1); break;
+        case "ArrowDown": e.preventDefault(); playerVideo.volume = Math.max(0, playerVideo.volume - 0.1); break;
+        case "f": case "F": e.preventDefault(); toggleFullscreen(); break;
+        case "'": e.preventDefault(); updateMode(1); break;
+        case ";": e.preventDefault(); updateMode(-1); break;
+        case "g": case "G": e.preventDefault(); locateCurrentInTree(); break;
+        case "h": case "H": e.preventDefault(); let hItem = webmTreeData.find((i) => i.path === currentWebmPath); if (hItem) toggleFavourite(hItem.videoId); break;
+        case "/": e.preventDefault(); playerFilter?.focus(); break;
+        case "?": e.preventDefault(); openModal(helpModal); break;
+      }
+    });
+
+    // Initial Data Load
     (async () => {
       const [treeRes, cfgRes, favRes] = await Promise.all([fetchJson(base + "/animethemes/webm/tree"), fetchJson(base + "/config"), fetchJson(base + "/animethemes/webm/favourites")]);
+
       if (favRes.ok) favourites = new Set(favRes.data);
+
       if (treeRes.ok) {
+        // Pre-calculate search index for every item for speed
         webmTreeData = (treeRes.data?.items || [])
           .map((item) => {
             item._searchIndex = `${item.group} ${item.series} ${decodeUnicode(item.file)}`.toLowerCase().replace(/[\u200B\u200A]/g, "");
             return item;
           })
           .sort((a, b) => a.path.localeCompare(b.path));
+
         renderTree(getFilteredItems());
       }
+
       if (cfgRes.ok && playerModeBtn) {
         const mode = unwrapConfig(cfgRes.data).Playback.AnimeThemesWebmMode || "off";
         playerModeBtn.setAttribute("data-mode", mode);
+        // Refresh tooltip for initial state
+        updatePlaybackTooltip(playerModeBtn);
       }
     })();
   }

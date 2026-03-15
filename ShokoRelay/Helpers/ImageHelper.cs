@@ -1,3 +1,4 @@
+using Newtonsoft.Json;
 using Shoko.Abstractions.Enums;
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Containers;
@@ -8,12 +9,15 @@ namespace ShokoRelay.Helpers;
 public sealed class ImageInfo
 {
     /// <summary>Alternate text for the image.</summary>
+    [JsonProperty("alt")]
     public string Alt { get; init; } = "";
 
     /// <summary>The type of image (e.g., coverPoster, background).</summary>
+    [JsonProperty("type")]
     public string Type { get; init; } = "";
 
     /// <summary>The fully qualified URL to the image.</summary>
+    [JsonProperty("url")]
     public string Url { get; init; } = "";
 }
 

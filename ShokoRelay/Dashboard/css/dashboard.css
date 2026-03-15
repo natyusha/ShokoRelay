@@ -159,7 +159,6 @@ button.float-link {
   color: var(--text-color);
 }
 .float-link:hover {
-  transform: translateY(-1px);
   color: var(--hover-color);
 }
 .float-link.theme-toggle[aria-pressed="false"] {
@@ -249,121 +248,18 @@ button.float-link {
 .toast[role="status"] {
   outline: none;
 }
+.toast-message {
+  overflow-wrap: break-word;
+  display: block;
+  overflow-y: auto;
+  max-height: 150px;
+  padding-right: 4px;
+  word-break: break-word;
+}
 .np-line {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-/* #endregion */
-
-/* #region MARK: Modals
-*/
-.modal-overlay {
-  inset: 0;
-  display: none;
-  justify-content: center;
-  align-items: center;
-  position: fixed;
-  z-index: 1500;
-  padding: 24px;
-  background: rgba(0, 0, 0, 0.45);
-}
-.modal-overlay.open {
-  display: flex;
-}
-.modal {
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
-  overflow: hidden;
-  width: 390px;
-  max-width: calc(100% - 48px);
-  background: var(--panel-color);
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  color: var(--text-color);
-}
-.modal.overrides {
-  width: 870px;
-}
-.modal.overrides .modal-body {
-  padding: 0;
-}
-.modal textarea {
-  width: 100%;
-  height: 470px;
-  margin: 0;
-  border-radius: 0;
-  font-size: 1.1em;
-  font-family: monospace;
-}
-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem;
-  background: var(--bg-color);
-  border-bottom: 1px solid var(--border-color);
-  font-size: 1.2em;
-  font-weight: 500;
-}
-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 12px 16px;
-}
-#sync-direction-arrow {
-  display: inline-flex;
-  justify-content: center;
-  align-items: center;
-  line-height: 1;
-}
-.modal-body {
-  padding: 14px 16px;
-}
-.modal-body .shoko-checkbox {
-  margin-top: 10px;
-}
-.direction-toggle {
-  appearance: none;
-  -webkit-appearance: none;
-  box-shadow: 0 0 4px 2px rgba(148, 170, 209, 0.3);
-  user-select: none;
-  display: inline-flex;
-  margin-bottom: 16px;
-  padding: 10px 6px;
-  background: var(--inset-color);
-  cursor: pointer;
-  border: 1px solid var(--border-color);
-  color: var(--text-color);
-}
-.direction-toggle:hover {
-  background: color-mix(in srgb, var(--inset-color), white 5%);
-}
-.direction-toggle .dir-label {
-  min-width: 100px;
-  margin-top: 0;
-  font-size: 1em;
-}
-.dir-label {
-  margin-top: 9px;
-  font-size: 1.1em;
-  color: var(--text-color);
-  text-align: center;
-}
-.dir-icon {
-  fill: var(--highlight-color);
-  display: inline-block;
-  position: absolute;
-  visibility: visible;
-  width: 28px;
-  height: 28px;
-  transition:
-    opacity 0.4s ease-out,
-    visibility 0.4s steps(2, end);
-}
-.dir-icon.hidden {
-  visibility: hidden;
-  opacity: 0;
 }
 /* #endregion */

@@ -53,15 +53,28 @@ public class ShokoController(
                 }
             );
 
-        var result = filterIds.Count > 0 ? _vfsBuilder.Build(filterIds, clean) : _vfsBuilder.Build((int?)null, clean);
-
-        if (_plexLibrary.IsEnabled && ShokoRelay.Settings.Automation.ScanOnVfsRefresh && filterIds.Count > 0)
+        const string taskName = "vfs-build";
+        TaskHelper.StartTask(taskName);
+        try
         {
-            var toProcess = ResolveSeriesList(null, filterIds).Where(s => s != null).Cast<IShokoSeries>().ToList();
-            _ = SchedulePlexRefreshForSeriesAsync(toProcess);
-        }
+            var result = filterIds.Count > 0 ? _vfsBuilder.Build(filterIds, clean) : _vfsBuilder.Build((int?)null, clean);
 
-        return LogAndReturn("vfs-report.log", result, (sb, r) => { });
+            if (_plexLibrary.IsEnabled && ShokoRelay.Settings.Automation.ScanOnVfsRefresh && filterIds.Count > 0)
+            {
+                var toProcess = ResolveSeriesList(null, filterIds).Where(s => s != null).Cast<IShokoSeries>().ToList();
+                _ = SchedulePlexRefreshForSeriesAsync(toProcess);
+            }
+
+            var actionResult = LogAndReturn("vfs-report.log", result, LogHelper.BuildVfsReport);
+            TaskHelper.CompleteTask(taskName, (actionResult as OkObjectResult)?.Value!);
+            return actionResult;
+        }
+        catch (Exception ex)
+        {
+            var err = new { status = "error", message = ex.Message };
+            TaskHelper.CompleteTask(taskName, err);
+            return BadRequest(err);
+        }
     }
 
     /// <summary>Updates the local VFS overrides CSV file.</summary>
@@ -87,23 +100,42 @@ public class ShokoController(
 
     #region Automation
 
-    /// <summary>Removes records for files no longer on disk.</summary>
-    /// <param name="dryRun">Whether to only list changes.</param>
-    /// <returns>Housekeeping report.</returns>
+    /// <summary>
+    /// Removes records for video files that no longer exist on disk from the Shoko database and Anidb MyList.
+    /// </summary>
     [HttpGet("shoko/remove-missing")]
     [HttpPost("shoko/remove-missing")]
     public async Task<IActionResult> RemoveMissingFiles([FromQuery] bool? dryRun = null)
     {
         bool doDry = dryRun ?? true;
-        var removed = await _shokoImportService.RemoveMissingFilesAsync(doDry).ConfigureAwait(false);
-        var result = new
+        const string taskName = "shoko-remove-missing";
+        // ShokoImportService now calls StartTask/FinishTask internally
+
+        try
         {
-            status = "ok",
-            dryRun = doDry,
-            removed,
-            count = removed?.Count ?? 0,
-        };
-        return LogAndReturn("remove-missing-report.log", result, (sb, r) => LogHelper.BuildRemoveMissingReport(sb, r.dryRun, r.removed));
+            var removed = await _shokoImportService.RemoveMissingFilesAsync(doDry).ConfigureAwait(false);
+
+            // Map 'count' to 'Processed' so toastOperation/summarizeResult works out of the box
+            var resultData = new
+            {
+                dryRun = doDry,
+                Processed = removed?.Count ?? 0,
+                removed,
+            };
+
+            var actionResult = LogAndReturn("remove-missing-report.log", resultData, (sb, r) => LogHelper.BuildRemoveMissingReport(sb, r.dryRun, r.removed));
+
+            if (!doDry)
+                TaskHelper.CompleteTask(taskName, (actionResult as OkObjectResult)?.Value!);
+            return actionResult;
+        }
+        catch (Exception ex)
+        {
+            var err = new { status = "error", message = ex.Message };
+            if (!doDry)
+                TaskHelper.CompleteTask(taskName, err);
+            return BadRequest(err);
+        }
     }
 
     /// <summary>Triggers an import scan in Shoko.</summary>
