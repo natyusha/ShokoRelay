@@ -239,12 +239,19 @@
       <!-- #region MARK: Provider Settings
       -->
       <section>
-        <h3>
-          <svg class="icon-svg">
-            <use href="img/icons.svg#cog-outline"></use>
-          </svg>
-          Provider Settings
-        </h3>
+        <div class="full">
+          <h3>
+            <svg class="icon-svg">
+              <use href="img/icons.svg#cog-outline"></use>
+            </svg>
+            Provider Settings
+          </h3>
+          <button id="settings-help-open" class="at-btn" title="Settings Help" aria-label="Settings Help">
+            <svg class="icon-svg">
+              <use href="img/icons.svg#help-box"></use>
+            </svg>
+          </button>
+        </div>
         <div id="config-form"></div>
         <hr />
         <small>All provider settings are saved automatically</small>
@@ -368,7 +375,52 @@
     </div>
     <!-- #endregion -->
 
+    <!--#region MARK: Settings Help Modal
+  -->
+    <div id="settings-help-modal" class="modal-overlay" aria-hidden="true" role="dialog" aria-modal="true">
+      <div class="modal help" role="document">
+        <header>Settings Help</header>
+        <div class="modal-body">
+          <h3>Language Tag Examples</h3>
+          <div class="full">
+            <ul class="help-list">
+              <li><code>SHOKO</code><small>Shoko's Preferred Title</small></li>
+              <li><code>X-JAT</code><small>Romanized Japanese</small></li>
+              <li><code>EN</code><small>English</small></li>
+              <li><code>JA</code><small>Japanese</small></li>
+              <li><code>ZH</code><small>Chinese</small></li>
+              <li><code>KO</code><small>Korean</small></li>
+            </ul>
+            <ul class="help-list">
+              <li><code>ES</code><small>Spanish</small></li>
+              <li><code>FR</code><small>French</small></li>
+              <li><code>PT</code><small>Portuguese</small></li>
+              <li><code>RU</code><small>Russian</small></li>
+              <li><code>DE</code><small>German</small></li>
+              <li><code>IT</code><small>Italian</small></li>
+            </ul>
+          </div>
+          <br />
+          <h3>Tag Weights</h3>
+          <small>
+            Many tags on AniDB use a <a href="https://wiki.anidb.net/Tags#Star-rating_-_the_Weight_system" target="_blank" rel="noopener noreferrer" title="AniDB Wiki">3 Star Weight System</a> which represents
+            a value from 0 (no stars) to 600 (3 stars) and determines how relevant the tag is to the series it is applied to. By setting this value you can filter out tags below a certain star threshold.
+          </small>
+          <br />
+          <br />
+          <h3>Path Mappings</h3>
+          <p>Required if Plex and Shoko see your files via different paths</p>
+          <ul class="help-list inline-help">
+            <li><code>Left</code> <small>Paths as seen by Plex</small></li>
+            <li><code>Right</code> <small>Paths as seen by Shoko</small></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <!-- #endregion -->
+
     <script src="js/script.js"></script>
+    <script src="js/settings.js"></script>
     <script src="js/plex.js"></script>
     <script src="js/shoko.js"></script>
     <script src="js/animethemes.js"></script>

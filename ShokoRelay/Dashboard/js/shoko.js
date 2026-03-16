@@ -15,7 +15,7 @@
   const setBoolParam = (ps, k, v) => ps.set(k, v ? "true" : "false");
 
   /**
-   * Build URLSearchParams for VFS generation requests from the dashboard filter and toggle state.
+   * Build URLSearchParams for VFS generation requests from dashboard state.
    * @returns {URLSearchParams} The compiled search parameters.
    */
   const buildVfsParams = () => {

@@ -51,7 +51,7 @@
   };
 
   /**
-   * Initiate the Plex OAuth flow by fetching a pin and redirecting the user to the auth URL.
+   * Initiate the Plex OAuth flow and start polling for status.
    * @returns {Promise<void>}
    */
   async function startPlexAuth() {
@@ -72,15 +72,7 @@
   }
 
   /**
-   * Poll the server for Plex OAuth completion; stops polling and refreshes state on success.
-   * @returns {Promise<void>}
-   */
-  async function checkPlexAuthStatus() {
-    /* Integrated into polling loop above for conciseness */
-  }
-
-  /**
-   * POST to the server to rediscover Plex libraries, then refresh the dashboard state.
+   * Rediscover Plex libraries and refresh the dashboard state.
    * @returns {Promise<void>}
    */
   async function refreshPlexLibraries() {
@@ -104,8 +96,8 @@
   };
 
   /**
-   * Validate that Plex is linked and libraries are available before running automation.
-   * @returns {Promise<boolean>} True if Plex is ready for automation, false otherwise.
+   * Validate that Plex is linked and libraries are available.
+   * @returns {Promise<boolean>} True if Plex is ready for automation.
    */
   async function ensurePlexEnabled() {
     const fail = (msg) => {
@@ -126,7 +118,7 @@
   }
 
   /**
-   * Refresh the full Plex authentication state (token, libraries, settings bindings) from the server config.
+   * Refresh the full Plex authentication and settings state from the server.
    * @returns {Promise<void>}
    */
   async function refreshPlexState() {
@@ -188,7 +180,7 @@
   }
 
   /**
-   * Unlink the Plex account by posting to the server and refreshing the dashboard state.
+   * Unlink the Plex account and refresh dashboard state.
    * @returns {Promise<void>}
    */
   async function unlinkPlex() {
@@ -199,12 +191,12 @@
 
   // #region Automation
   /**
-   * Create a click handler for Plex automation buttons (collections, ratings) with toast feedback.
-   * @param {HTMLElement} btn - The button element to bind the action to.
+   * Create a click handler for Plex automation buttons with toast feedback.
+   * @param {HTMLElement} btn - The button element.
    * @param {string} label - Display label for toast messages.
    * @param {string} startMsg - Toast message shown when the action begins.
    * @param {string} endpoint - Server API endpoint to call.
-   * @param {Function} summarizeFn - Callback that receives response data and returns a summary string.
+   * @param {Function} summarizeFn - Callback to format result stats.
    */
   function plexBuildAction(btn, label, startMsg, endpoint, summarizeFn) {
     withButtonAction(btn, async () => {

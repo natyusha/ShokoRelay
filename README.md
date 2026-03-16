@@ -45,7 +45,7 @@ Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File Sy
     - Once clicked it will change to a `Login` link which will redirect you to `app.plex.tv/auth`
     - From there you can login to Plex as normal using your credentials and then close the tab
     - This will enable: Auto Scanning, Scrobbling (webhooks) and enhanced collection/ratings support
-- There are additional options similar to what the legacy agent had at the bottom under "Provider Settings"
+- There are additional options at the bottom under "Provider Settings" which also contains a "Help" button in the top right.
 
 > [!TIP]
 > If you are sharing the symlinks over an SMB share they may not appear depending on the [Samba Configuration](https://www.samba.org/samba/docs/current/man-html/smb.conf.5.html). An example entry for `smb.conf` that may help to mitigate this is listed below:
@@ -313,6 +313,28 @@ If `Assumed Content Ratings` are enabled in the Provider Settings the [target au
 | ★★⯪ Nudity, ★★☆ Sex        | TV-MA-S |
 | ★★⯪ Violence               | TV-MA-V |
 | 18 Restricted (override)   | X       |
+
+### Task Reports & Logs
+
+Most manual actions performed via the dashboard generate a detailed report. These reports help you verify which items were processed and troubleshoot any skipped files or errors. A list of the actions which generate a log is provided below:
+
+| Dashboard Action                      | Log Filename                |
+| :------------------------------------ | :-------------------------- |
+| **Plex:** Generate Collections        | `collections-report.log`    |
+| **Plex:** Apply Critic Ratings        | `ratings-report.log`        |
+| **Shoko:** Generate VFS               | `vfs-report.log`            |
+| **Shoko:** Remove Missing             | `remove-missing-report.log` |
+| **Shoko:** Sync Watched States        | `sync-watched-report.log`   |
+| **AnimeThemes:** Generate VFS         | `at-vfs-report.log`         |
+| **AnimeThemes:** Build Mapping        | `at-map-report.log`         |
+| **AnimeThemes:** Generate MP3 (Batch) | `at-mp3-report.log`         |
+
+#### How Logs Work
+
+- Logs are stored in the `logs/` subfolder within the plugin directory.
+- When a task completes, a toast notification appears on the dashboard with a `[view log]` link.
+- These files are overwritten each time the corresponding task is run.
+- To save a specific report, you must download or copy the text before running that task again.
 
 ### Plugin API
 

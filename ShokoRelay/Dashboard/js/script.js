@@ -1,6 +1,6 @@
 /**
  * @file script.js
- * @description The main dashboard script, responsible for wiring up UI interactions, fetching data from the server, and managing shared utilities like toasts and modals.
+ * @description Main dashboard script for UI interactions, server fetching, and shared utilities like toasts/modals.
  */
 (() => {
   const base = location.pathname.split("/dashboard")[0];
@@ -9,7 +9,7 @@
   // Initialize global namespace immediately so subsequent scripts can see it
   window._sr = { base };
 
-  /** Default auto-dismiss duration (ms) for transient toasts. Use 0 for persistent toasts that require manual dismissal. */
+  /** Default auto-dismiss duration (ms) for transient toasts. Use 0 for persistent toasts. */
   const TOAST_MS = 5000;
 
   /** Standardized labels for playback controls used by both MP3 and Video players. */
@@ -35,7 +35,7 @@
   const getData = (res) => (res?.data?.data !== undefined && res?.data?.data !== null ? res.data.data : res?.data);
 
   /**
-   * Helper to append a key-value pair to a URLSearchParams object only if the value is provided and non-empty.
+   * Helper to append a key-value pair to a URLSearchParams object if the value is non-empty.
    * @param {URLSearchParams} ps - The search parameters object to modify.
    * @param {string} k - The parameter key.
    * @param {*} v - The value to check and potentially append.
@@ -65,7 +65,11 @@
     const completeRes = await fetchJson(window._sr.base + "/tasks/completed");
     if (completeRes.ok && completeRes.data) {
       for (const [taskName, result] of Object.entries(completeRes.data)) {
-        const label = taskName.replace(/-/g, " "); // Use default label if friendly label can't be found
+        const btn = el(taskName);
+        // If the button for this task is currently active, the button handler will manage the toast/clearing.
+        if (btn && btn.classList.contains("clicking")) continue;
+
+        const label = taskName.replace(/-/g, " ");
         toastOperation({ ok: result.status === "ok", data: result }, label);
         await fetch(window._sr.base + `/tasks/clear/${taskName}`, { method: "POST" });
       }
@@ -85,6 +89,10 @@
       setButtonLoading(elBtn, true);
       try {
         await handler.apply(elBtn, args);
+        // Explicitly clear the task immediately if it's a managed ID to prevent the poller from double-toasting
+        if (MANAGED_TASK_IDS.includes(elBtn.id)) {
+          await fetch(window._sr.base + `/tasks/clear/${elBtn.id}`, { method: "POST" });
+        }
       } finally {
         elBtn.classList.remove("clicking");
         syncActiveTasks();
@@ -93,13 +101,14 @@
   }
 
   /**
-   * @param {string} url - The log URL to wrap in an anchor tag.
-   * @returns {string} An HTML anchor link or an empty string if no URL was provided.
+   * Wraps a log URL in an anchor tag if provided.
+   * @param {string} url - The log URL to wrap.
+   * @returns {string} An HTML anchor link or empty string.
    */
   const makeLogLink = (url) => (url ? `[<a href="${url}" target="_blank" class="log-link">view log</a>]` : "");
 
   /**
-   * Show success/error toasts for HTTP responses with automatic log-link injection and result summarization.
+   * Show success/error toasts for HTTP responses with log-link injection and summary.
    * @param {{ok: boolean, data: *}} res - The fetchJson response object.
    * @param {string} label - Identifies the operation.
    * @param {{summary?: string, hideOnSucceed?: number}} [opts] - Display options.
@@ -153,8 +162,8 @@
   /**
    * Fetch a URL and parse the response as JSON, returning a normalized result object.
    * @param {string} url - The URL to fetch.
-   * @param {RequestInit} [opts] - Optional fetch options (method, headers, body, etc.).
-   * @returns {Promise<{ok: boolean, data: *}>} Normalized response with parsed data.
+   * @param {RequestInit} [opts] - Optional fetch options.
+   * @returns {Promise<{ok: boolean, data: *}>} Normalized response.
    */
   const fetchJson = async (url, opts) => {
     try {
@@ -172,10 +181,10 @@
   };
 
   /**
-   * Initialize a button as an aria-pressed toggle with a click handler that flips its state.
+   * Initialize a button as an aria-pressed toggle with a click handler.
    * @param {HTMLElement|string} btn - The button element or its DOM id.
    * @param {boolean} [defaultState=false] - Initial pressed state.
-   * @returns {HTMLElement|null} The resolved button element, or null if not found.
+   * @returns {HTMLElement|null} The resolved button element.
    */
   function initToggle(btn, defaultState = false) {
     const elBtn = typeof btn === "string" ? el(btn) : btn;
@@ -186,7 +195,7 @@
   }
 
   /**
-   * Toggle a button's loading state by adding/removing a spinner overlay and disabled attribute.
+   * Toggle a button's loading state by adding/removing a spinner overlay.
    * @param {HTMLElement} btn - The button element to modify.
    * @param {boolean} isLoading - Whether to enable or disable the loading state.
    */
@@ -202,35 +211,33 @@
     } else if (!isLoading) btn.querySelector(".button-spinner")?.remove();
   }
 
-  /** Attach a smooth open/close animation to a &lt;details&gt; element using the Web Animations API. */
-  function initDetailsAnimation(details, content, duration = 300) {
-    let anim = null;
-    details.querySelector("summary")?.addEventListener("click", (e) => {
-      e.preventDefault();
-      if (anim) anim.cancel();
-      const isOpening = !details.open;
-      if (isOpening) details.open = true;
-      const startH = isOpening ? "0px" : content.offsetHeight + "px";
-      const endH = isOpening ? content.offsetHeight + "px" : "0px";
-      anim = content.animate({ height: [startH, endH] }, { duration, easing: "ease" });
-      anim.onfinish = anim.oncancel = () => {
-        if (!isOpening) details.open = false;
-        anim = null;
-        content.style.height = "";
-      };
-    });
-  }
-
-  /** @param {Object} obj @param {string} path - Dot-separated key path. @returns {*} The resolved value, or undefined. */
+  /**
+   * Resolves a value from an object using a dot-separated key path.
+   * @param {Object} obj - The source object.
+   * @param {string} path - Dot-separated key path.
+   * @returns {*} The resolved value.
+   */
   const getValueByPath = (obj, path) => path.split(".").reduce((o, k) => o?.[k], obj);
 
-  /** @param {Object} obj @param {string} path - Dot-separated key path. @param {*} value - The value to set at the resolved path. */
+  /**
+   * Sets a value in an object at the specified dot-separated path.
+   * @param {Object} obj - The target object.
+   * @param {string} path - Dot-separated key path.
+   * @param {*} value - The value to set.
+   */
   function setValueByPath(obj, path, value) {
     const parts = path.split("."),
       last = parts.pop();
     const target = parts.reduce((o, k) => ((o[k] ??= {}), o[k]), obj);
     target[last] = value;
   }
+
+  /**
+   * Unwrap a config response that may contain a payload wrapper.
+   * @param {Object} data - The raw config response.
+   * @returns {Object} The inner config object.
+   */
+  const unwrapConfig = (data) => (data?.payload !== undefined ? data.payload || {} : data || {});
 
   /**
    * Binds a UI element to a config path with automatic persistence.
@@ -255,11 +262,8 @@
     };
   };
 
-  /** Unwrap a config response that may contain a payload wrapper. @param {Object} data @returns {Object} The inner config object. */
-  const unwrapConfig = (data) => (data?.payload !== undefined ? data.payload || {} : data || {});
-
   /**
-   * Opens a modal and attaches automated close handlers for overlay clicks and Escape key.
+   * Opens a modal and attaches automated close handlers.
    * @param {HTMLElement} modal - The modal element.
    * @returns {Function} Close function.
    */
@@ -288,7 +292,10 @@
     return close;
   }
 
-  /** Updates element title from data-mode or data-state for tooltips. @param {HTMLElement} el */
+  /**
+   * Updates element title from data-mode or data-state for tooltips.
+   * @param {HTMLElement} el - The target element.
+   */
   const updatePlaybackTooltip = (el) => {
     if (!el) return;
     const key = el.getAttribute("data-mode") || el.getAttribute("data-state");
@@ -296,18 +303,11 @@
   };
 
   /**
-   * Extract the error count from an API response by checking common error fields.
-   * @param {{ok: boolean, data: *}} res - The fetchJson response object.
-   * @returns {number} The number of errors found, or 0 if none.
-   */
-  const getErrorCount = (res) => summarizeResult(res).errorCount;
-
-  /**
    * Displays a toast notification.
    * @param {string} message - HTML message content.
-   * @param {"info"|"success"|"warning"|"error"} [type="info"] - Toast severity/style.
+   * @param {"info"|"success"|"warning"|"error"} [type="info"] - Toast severity.
    * @param {number} [timeout=5000] - Auto-dismiss delay in ms.
-   * @returns {HTMLElement|null}
+   * @returns {HTMLElement|null} The toast element.
    */
   function showToast(message, type = "info", timeout = 5000) {
     const container = el("toast-container");
@@ -344,150 +344,13 @@
     setIfNotEmpty,
     getValueByPath,
     setValueByPath,
-    bindConfig,
     unwrapConfig,
+    bindConfig,
     openModal,
     setButtonLoading,
     updatePlaybackTooltip,
     syncActiveTasks,
-    getErrorCount,
   });
-  // #endregion
-
-  // #region Provider Settings
-  /**
-   * Builds the configuration settings form dynamically based on server schema.
-   */
-  async function loadConfig() {
-    if (!el("config-form")) return;
-    const [schemaRes, configRes] = await Promise.all([fetchJson(base + "/config/schema"), fetchJson(base + "/config")]);
-    if (!schemaRes.ok || !configRes.ok) return showToast("Failed To Load Config", "error", 0);
-
-    const schema = schemaRes.data.properties || [],
-      rawCfg = configRes.data || {},
-      config = unwrapConfig(rawCfg);
-    const overridesBtn = el("vfs-overrides");
-    const tmdbEnabled = getValueByPath(config, "TmdbEpNumbering") ?? getValueByPath(config, "Advanced.TmdbEpNumbering");
-    if (overridesBtn) overridesBtn.disabled = !tmdbEnabled;
-
-    el("config-form").innerHTML = "";
-    el("overrides-text") && (el("overrides-text").value = rawCfg.overrides || "");
-
-    const advSection = document.createElement("details"),
-      advContent = document.createElement("div");
-    advSection.className = "details-anim";
-    advContent.className = "details-content";
-    advSection.innerHTML = "<summary>Advanced Settings</summary>";
-    advContent.appendChild(document.createElement("hr"));
-
-    const persistConfig = async (updated) => {
-      const res = await fetchJson(base + "/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updated) });
-      if (!res.ok) toastOperation(res, "Config Save");
-      return res;
-    };
-
-    schema.forEach((p) => {
-      const wrap = document.createElement("div"),
-        label = document.createElement("label");
-      let input,
-        value = getValueByPath(config, p.Path);
-
-      if (p.Type === "bool") {
-        wrap.innerHTML = `<label class="shoko-checkbox"><input type="checkbox">
-          <span class="shoko-checkbox-icon" aria-hidden="true"><svg class="unchecked"><use href="img/icons.svg#checkbox-blank-circle-outline"></use></svg><svg class="checked"><use href="img/icons.svg#checkbox-marked-circle-outline"></use></svg></span>
-          <span class="shoko-checkbox-text"><span class="shoko-checkbox-title">${p.Display || p.Path}</span><small class="shoko-checkbox-desc" style="display:block">${p.Description || ""}</small></span></label>`;
-        input = wrap.querySelector("input");
-        bindConfig(input, p.Path, config, persistConfig, "check");
-      } else if (p.Path.endsWith("PathMappings")) {
-        label.innerHTML = `<span>${p.Display || p.Path.split(".").pop()}</span>${p.Description ? `<small>${p.Description}</small>` : ""}`;
-        wrap.appendChild(label);
-        const mappingContainer = document.createElement("div");
-        mappingContainer.innerHTML = `<div class="full"><div><small>Plex Base Paths</small><textarea id="path-mappings-left"></textarea></div><div><small>Shoko Base Paths</small><textarea id="path-mappings-right"></textarea></div></div>`;
-        wrap.appendChild(mappingContainer);
-        const l = mappingContainer.querySelector("#path-mappings-left"),
-          r = mappingContainer.querySelector("#path-mappings-right"),
-          m = value || {};
-        const keys = Object.keys(m).sort();
-        l.value = keys.map((k) => m[k]).join("\n");
-        r.value = keys.join("\n");
-        const onMapChange = async () => {
-          const val = {};
-          const lLines = l.value.split("\n"),
-            rLines = r.value.split("\n");
-          lLines.forEach((lv, idx) => {
-            if (lv.trim() && rLines[idx]?.trim()) val[rLines[idx].trim()] = lv.trim();
-          });
-          setValueByPath(config, p.Path, val);
-          await persistConfig(config);
-        };
-        l.onchange = r.onchange = onMapChange;
-      } else {
-        label.innerHTML = `<span>${p.Display || p.Path.split(".").pop()}</span>${p.Description ? `<small>${p.Description}</small>` : ""}`;
-        wrap.appendChild(label);
-        input = document.createElement(p.Type === "enum" ? "select" : p.Type === "json" || p.Path.endsWith("TagBlacklist") ? "textarea" : "input");
-
-        if (p.Type === "enum") {
-          (p.EnumValues || []).forEach((ev) => {
-            const opt = new Option(ev.name, ev.value);
-            opt.selected = String(ev.value) === String(value);
-            input.add(opt);
-          });
-        } else if (p.Type === "number") {
-          input.type = "number";
-        } else if (p.Type === "json") {
-          input.placeholder = "JSON object";
-        } else {
-          input.type = "text";
-          // Placeholder for Shoko URL
-          if (p.Path.endsWith("ShokoServerUrl")) {
-            input.placeholder = "e.g. http://localhost:8111";
-          }
-        }
-
-        wrap.appendChild(input);
-
-        // Custom validation for ShokoServerUrl
-        if (p.Path.endsWith("ShokoServerUrl")) {
-          input.value = value ?? "";
-          input.onchange = async () => {
-            const urlRegex = /^https?:\/\/[a-zA-Z0-9.-]+(:\d+)?$/;
-            const cleanVal = input.value.trim().replace(/\/+$/, "");
-
-            if (cleanVal && !urlRegex.test(cleanVal)) {
-              showToast("Invalid Shoko URL. Use http(s)://HOST:PORT", "error", 5000);
-              input.value = getValueByPath(config, p.Path) || "";
-              return;
-            }
-
-            input.value = cleanVal;
-            setValueByPath(config, p.Path, cleanVal);
-            await persistConfig(config);
-          };
-        } else {
-          // Standard binding for all other generic fields
-          bindConfig(input, p.Path, config, persistConfig, p.Type === "bool" ? "check" : p.Type === "number" ? "number" : "text");
-        }
-      }
-      (p.Advanced ? advContent : el("config-form")).appendChild(wrap);
-    });
-
-    if (advContent.children.length > 1) {
-      el("config-form").appendChild(advSection);
-      advSection.appendChild(advContent);
-      initDetailsAnimation(advSection, advContent);
-    }
-
-    const b = (id, path, type) => bindConfig(id, path, config, persistConfig, type);
-    b("shoko-utc-offset", "Automation.UtcOffsetHours", "number");
-    b("shoko-import-frequency", "Automation.ShokoImportFrequencyHours", "number");
-    b("shoko-sync-frequency", "Automation.ShokoSyncWatchedFrequencyHours", "number");
-    b("plex-auto-frequency", "Automation.PlexAutomationFrequencyHours", "number");
-    b("sync-ratings", "Automation.ShokoSyncWatchedIncludeRatings", "check");
-    b("sync-exclude-admin", "Automation.ShokoSyncWatchedExcludeAdmin", "check");
-    b("plex-scrobble", "Automation.AutoScrobble", "check");
-
-    window._sr.initAtConfig?.(config, persistConfig);
-  }
   // #endregion
 
   // #region Theme Toggle
@@ -599,7 +462,6 @@
 
   initTooltips();
   initTheme();
-  loadConfig();
   setInterval(syncActiveTasks, 3000);
   syncActiveTasks();
 })();

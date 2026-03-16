@@ -115,9 +115,14 @@ GET  /metadata/{ratingKey}/images                              -> GetImages
 
 **Notes:**
 
-- TMDB episode‑numbering is honoured when enabled (uses `IShokoEpisode.TmdbEpisodes`).
+- TMDB episode-numbering is honoured when enabled (uses `IShokoEpisode.TmdbEpisodes`).
 - Hidden episodes are excluded from all metadata results.
-- RatingKey formats supported: `123` (series), `123s4` (season 4), `e56789` (episode), and `a123` (AniDB series alias).
+- RatingKey formats supported:
+  - `123` (Series)
+  - `123s4` (Season 4 of series 123)
+  - `e56789` (Episode)
+  - `e56789p2` (Episode 56789, Part 2)
+  - `a123` (AniDB ID 123 alias, resolves to Shoko Series)
 - Crossover episodes (files belonging to multiple series) are skipped for local metadata/subtitle linking to avoid conflicts.
 
 ---
@@ -276,6 +281,7 @@ POST /animethemes/vfs/import                                   -> ImportAnimeThe
 ```
 GET  /animethemes/webm/tree                                    -> AnimeThemesWebmTree
 GET  /animethemes/webm/stream?path={path}                      -> AnimeThemesWebmStream
+HEAD /animethemes/webm/stream?path={path}                      -> AnimeThemesWebmStream
 GET  /animethemes/webm/favourites                              -> GetAnimeThemesFavourites
 POST /animethemes/webm/favourites                              -> UpdateAnimeThemesFavourite
 ```
@@ -292,6 +298,7 @@ POST /animethemes/webm/favourites                              -> UpdateAnimeThe
 ```
 GET  /animethemes/mp3                                          -> AnimeThemesMp3
 GET  /animethemes/mp3/stream?path={path}                       -> AnimeThemesMp3Stream
+HEAD /animethemes/mp3/stream?path={path}                       -> AnimeThemesMp3Stream
 GET  /animethemes/mp3/random?refresh={true|false}              -> AnimeThemesMp3Random
 ```
 

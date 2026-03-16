@@ -1,6 +1,6 @@
 /**
  * @file animethemes.js
- * @description Dedicated logic for the AnimeThemes VFS and Theme.mp3 generation on the Shoko Relay dashboard.
+ * @description Dedicated logic for AnimeThemes VFS and Theme.mp3 generation on the Shoko Relay dashboard.
  */
 (() => {
   const { base, el, TOAST_MS, fetchJson, showToast, toastOperation, summarizeResult, withButtonAction, initToggle, setIfNotEmpty, updatePlaybackTooltip } = window._sr;
@@ -15,7 +15,7 @@
   const getNextMode = (current, modes) => modes[(modes.indexOf(current) + 1) % modes.length];
 
   /**
-   * Build URLSearchParams for AnimeThemes MP3 requests from the dashboard inputs and toggles.
+   * Build URLSearchParams for AnimeThemes MP3 requests from dashboard inputs.
    * @returns {URLSearchParams} The compiled search parameters.
    */
   const buildAtParams = () => {
@@ -27,7 +27,7 @@
   };
 
   /**
-   * Build URLSearchParams for AnimeThemes VFS mapping requests from the filter input.
+   * Build URLSearchParams for AnimeThemes VFS mapping requests.
    * @returns {URLSearchParams} The compiled search parameters.
    */
   const buildAtMapParams = () => {
@@ -46,7 +46,7 @@
 
   /**
    * Create a click handler for AnimeThemes map/build buttons with toast feedback.
-   * @param {HTMLElement} btn - The button element to bind the action to.
+   * @param {HTMLElement} btn - The button element.
    * @param {string} label - Display label for toast messages.
    * @param {string} endpoint - Server API endpoint to call.
    */
@@ -105,7 +105,7 @@
     } catch {}
   }
 
-  /** Synchronizes the MP3 playback UI states (progress bar, play button state) with the audio object. */
+  /** Synchronizes the MP3 playback UI states with the audio object. */
   function syncPlaybackUI() {
     const isE = el("at-playback")?.getAttribute("aria-pressed") === "true",
       isA = isE && atAudio?.src && !atAudio.ended;
@@ -135,7 +135,7 @@
 
   // #region MP3 - Playback
   /**
-   * Stream and play a Theme.mp3 in the background using the streaming endpoint.
+   * Stream and play a Theme.mp3 in the background.
    * @param {string} folderPath - The folder containing the Theme.mp3 to stream.
    */
   function playThemeMp3(folderPath) {
