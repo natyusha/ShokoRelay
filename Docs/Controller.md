@@ -29,7 +29,9 @@ GET  /config/schema                                            -> GetConfigSchem
 
 GET  /logs/{fileName}                                          -> GetLog
 
-GET tasks/active                                               -> GetActiveTasks
+GET  /tasks/active                                             -> GetActiveTasks
+GET  /tasks/completed                                          -> GetCompletedTasks
+POST /tasks/clear/{taskName}                                   -> ClearTaskResult
 ```
 
 - `GetControllerPage` Serves the plugin's frontend components and static assets from the `dashboard` folder.
@@ -50,7 +52,8 @@ GET tasks/active                                               -> GetActiveTasks
 
 ---
 
-- `GetLog` serves any report file created under the plugin's `logs` directory.
+- `GetLog` serves report files created under the plugin's `logs` directory.
+  - This endpoint serves the file as `text/plain` without a download name, allowing it to be viewed directly in a browser tab.
 - All automation endpoints utilize the `LogAndReturn` helper to provide a direct `logUrl` in the response. Reports include:
 
 ```
@@ -59,14 +62,16 @@ GET tasks/active                                               -> GetActiveTasks
 /vfs                                                           -> vfs-report.log
 /shoko/remove-missing                                          -> remove-missing-report.log
 /sync-watched                                                  -> sync-watched-report.log
-/animethemes/vfs/build                                         -> at-vfs-build-report.log
-/animethemes/vfs/map                                           -> at-vfs-map-report.log
+/animethemes/vfs/build                                         -> at-vfs-report.log
+/animethemes/vfs/map                                           -> at-map-report.log
 /animethemes/mp3?batch=true                                    -> at-mp3-report.log
 ```
 
 ---
 
-- `GetActiveTasks` returns a list of currently running tasks for the dashboard UI
+- `GetActiveTasks` returns a list of unique task identifiers currently running on the server.
+- `GetCompletedTasks` returns a dictionary of results for tasks that finished while the dashboard was disconnected or before a refresh.
+- `ClearTaskResult` acknowledges and removes a stored result from the server's memory.
 
 ---
 
@@ -92,7 +97,7 @@ GET  /metadata/{ratingKey}/images                              -> GetImages
 
 - `GetMediaProvider` returns the agent descriptor describing supported types and features.
 - `Match` looks up a series by filename or title. Priority is given to IDs found in the path.
-  - The title lookup uses `ShokoSeriesID` only
+  - The title lookup uses `ShokoSeriesID` only.
 
 ---
 
@@ -300,6 +305,10 @@ GET  /animethemes/mp3/random?refresh={true|false}              -> AnimeThemesMp3
 **Notes:**
 
 - All paths may be Plex or Shoko relative; the controller translates them via `Advanced.PathMappings`.
-- Mapping deduplication prioritizes `BD` (Blu-ray) sources in the event of filename collisions.
+- Mapping de-duplication logic:
+  - BD Prioritization: If metadata for multiple video files results in the same filename, BD (Blu-ray) sources are prioritized.
+    - If a BD source is available, all non-BD sources (TV, Web, etc.) for that specific filename are skipped.
+  - Numbering: If multiple sources of the same priority (e.g., multiple BDs or multiple TV rips) result in the same filename, they are de-duplicated by appending ` (2)`, ` (3)`, etc.
+  - Overrides: Themes originating from secondary series in an override group receive a prefix (e.g., `P2 ❯ `, `P3 ❯ `) to distinguish them from the primary series themes.
 
 ---

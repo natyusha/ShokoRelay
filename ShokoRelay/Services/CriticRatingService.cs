@@ -8,6 +8,8 @@ using ShokoRelay.Plex;
 
 namespace ShokoRelay.Services;
 
+#region Interface and Models
+
 /// <summary>Service for applying critic ratings from Shoko metadata to Plex libraries.</summary>
 public interface ICriticRatingService
 {
@@ -36,10 +38,18 @@ public sealed record RatingChange(string Title, string Type, string RatingKey, d
 /// <param name="AppliedChanges">List of detailed rating changes.</param>
 public sealed record ApplyRatingsResult(int ProcessedShows, int UpdatedShows, int ProcessedEpisodes, int UpdatedEpisodes, int Errors, List<string> ErrorsList, List<RatingChange> AppliedChanges);
 
+#endregion
+
 /// <summary>Default implementation of <see cref="ICriticRatingService"/>.</summary>
 public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, IMetadataService metadataService) : ICriticRatingService
 {
+    #region Fields & Constructor
+
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+
+    #endregion
+
+    #region Public API
 
     /// <inheritdoc/>
     public async Task<ApplyRatingsResult> ApplyRatingsAsync(IEnumerable<int>? allowedSeriesIds = null, CancellationToken cancellationToken = default)
@@ -142,6 +152,10 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
         }
     }
 
+    #endregion
+
+    #region Internal Rating Logic
+
     private async Task<bool> ApplyRatingAsync(string key, double? val, PlexLibraryTarget target, CancellationToken ct)
     {
         string path =
@@ -178,4 +192,6 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
             CriticRatingMode.AniDB => e.Rating > 0 ? e.Rating : null,
             _ => null,
         };
+
+    #endregion
 }

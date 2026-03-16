@@ -47,12 +47,12 @@
 }
 .brand-header {
   filter: drop-shadow(0 0 5px rgb(from var(--hover-color) r g b / 0.25));
-  width: 100%;
-  height: 100px;
   background-image: url("../img/shoko-relay-header-dark.png");
-  background-repeat: no-repeat;
   background-position: left center;
   background-size: contain;
+  background-repeat: no-repeat;
+  width: 100%;
+  height: 100px;
 }
 :root[data-theme="light"] .brand-header {
   background-image: url("../img/shoko-relay-header-light.png");
@@ -67,18 +67,18 @@
 /* #region MARK: Base Styles
 */
 @font-face {
-  font-display: swap;
-  src: url("../fonts/sora-v17-latin-regular.woff2") format("woff2");
-  font-family: "Sora";
   font-style: normal;
   font-weight: 400;
+  src: url("../fonts/sora-v17-latin-regular.woff2") format("woff2");
+  font-family: "Sora";
+  font-display: swap;
 }
 @font-face {
-  font-display: swap;
-  src: url("../fonts/sora-v17-latin-500.woff2") format("woff2");
-  font-family: "Sora";
   font-style: normal;
   font-weight: 500;
+  src: url("../fonts/sora-v17-latin-500.woff2") format("woff2");
+  font-family: "Sora";
+  font-display: swap;
 }
 html {
   scrollbar-gutter: stable;
@@ -86,38 +86,38 @@ html {
 body {
   margin: 20px;
   background: var(--bg-color);
-  font-family: "Sora", sans-serif;
   color: var(--text-color);
+  font-family: "Sora", sans-serif;
 }
 section {
   margin: 12px 2px 0 2px;
-  padding: 12px;
-  background: var(--panel-color);
   border: 1px solid var(--border-color);
   border-radius: 0.5rem;
+  background: var(--panel-color);
+  padding: 12px;
 }
 h3 {
   margin: 0 0 8px 0;
   font-weight: 500;
 }
 hr {
-  height: 1px;
   margin: 0 0 4px 0;
-  padding: 0;
-  background: var(--inset-color);
   border: none;
+  background: var(--inset-color);
+  padding: 0;
+  height: 1px;
 }
 button,
 .plex-login-link {
-  padding: 12px 16px;
   transition: all 0.3s ease-in-out;
-  background: var(--button-color);
   cursor: pointer;
   border: 2px solid var(--bg-color);
   border-radius: 0.5rem;
-  font-size: 0.9em;
-  font-weight: 500;
+  background: var(--button-color);
+  padding: 12px 16px;
   color: var(--bg-color);
+  font-weight: 500;
+  font-size: 0.9em;
   text-align: center;
 }
 button.danger {
@@ -148,18 +148,18 @@ select {
 input:not([type="checkbox"]),
 select,
 textarea {
-  outline: none;
-  box-sizing: border-box;
-  width: 100%;
-  margin: 2px 0 6px;
-  padding: 6px;
   transition: all 0.3s ease-in-out;
-  background: var(--inset-color);
+  box-sizing: border-box;
+  margin: 2px 0 6px;
+  outline: none;
   border: 1px solid var(--bg-color);
   border-radius: 0.25em;
+  background: var(--inset-color);
+  padding: 6px;
+  width: 100%;
+  color: var(--text-color);
   font-size: 0.9em;
   font-family: "Sora", sans-serif;
-  color: var(--text-color);
 }
 button {
   font-family: "Sora", sans-serif;
@@ -171,8 +171,8 @@ textarea:focus {
   border-color: var(--highlight-color);
 }
 textarea {
-  resize: none;
   height: 6em;
+  resize: none;
 }
 label {
   display: inline-block;
@@ -183,12 +183,12 @@ small {
   opacity: 0.6;
 }
 a {
-  text-decoration-style: dotted;
   color: var(--highlight-color);
+  text-decoration-style: dotted;
 }
 #container {
-  max-width: 900px;
   margin: 0 auto;
+  max-width: 900px;
 }
 .full {
   display: flex;
@@ -200,8 +200,8 @@ a {
 }
 .two-cols {
   display: grid;
-  gap: 8px;
   grid-template-columns: repeat(auto-fit, minmax(442px, 1fr));
+  gap: 8px;
 }
 .w46 {
   max-width: 46px;
@@ -240,8 +240,8 @@ h3 .icon-svg {
 }
 .at-svg {
   fill: var(--at-color);
-  width: 1.6em;
   margin-bottom: -4px;
+  width: 1.6em;
 }
 label > small::before,
 .plex::before {
@@ -261,14 +261,14 @@ label > small::before {
 /* #region MARK: Tooltips
 */
 .tooltip-core {
-  pointer-events: none;
-  will-change: opacity;
   position: absolute;
-  z-index: 2000;
   top: 0;
   left: 0;
   opacity: 0;
+  z-index: 2000;
+  will-change: opacity;
   overflow: visible;
+  pointer-events: none;
 }
 .tooltip-show {
   opacity: 0.9;
@@ -279,19 +279,19 @@ label > small::before {
   transition: opacity 0.15s ease-in;
 }
 .tooltip-box {
+  border-radius: 3px;
+  padding: 8px 16px;
   width: max-content;
   max-width: calc(100vw - 32px);
-  padding: 8px 16px;
-  border-radius: 3px;
   font-size: 0.9em;
   word-wrap: break-word;
 }
 .tooltip-arrow {
-  pointer-events: none;
   position: absolute;
+  background: inherit;
   width: 8px;
   height: 8px;
-  background: inherit;
+  pointer-events: none;
 }
 .tooltip-place-top > .tooltip-arrow {
   bottom: -4px;
@@ -323,11 +323,11 @@ label > small::before {
 */
 .at-btn {
   all: unset;
-  fill: var(--highlight-color);
   float: right;
-  margin: 0 3px 5px 0;
   transition: all 0.3s ease-in-out;
   cursor: pointer;
+  fill: var(--highlight-color);
+  margin: 0 3px 5px 0;
 }
 .at-btn[hidden],
 .at-btn[data-state="playing"] .play,
@@ -362,53 +362,55 @@ label > small::before {
 }
 .at-progress-track {
   position: absolute;
-  z-index: 2;
   top: 0;
-  left: 0;
   right: 0;
+  left: 0;
   opacity: 0;
-  height: 4px;
+  z-index: 2;
   transition: opacity 0.3s ease;
   cursor: pointer;
+  height: 4px;
 }
 .at-progress-track.active {
   opacity: 1;
 }
 .at-progress-fill {
+  transition:
+    width 0.15s linear,
+    filter 0.3s ease-in-out;
+  border-radius: 0 0.5rem 0 0;
+  background: var(--hover-color);
   width: 0%;
   height: 100%;
-  transition: width 0.15s linear;
-  background: var(--highlight-color);
-  border-radius: 0 0.5rem 0 0;
 }
 .at-progress-track.paused .at-progress-fill {
-  filter: grayscale(1);
+  filter: grayscale(0.5);
 }
 /* #endregion */
 
 /* #region MARK: Modals
 */
 .modal-overlay {
-  inset: 0;
   display: none;
+  position: fixed;
   justify-content: center;
   align-items: center;
-  position: fixed;
   z-index: 1500;
-  padding: 24px;
+  inset: 0;
   background: rgba(0, 0, 0, 0.45);
+  padding: 24px;
 }
 .modal-overlay.open {
   display: flex;
 }
 .modal {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
-  overflow: hidden;
-  width: 390px;
-  max-width: calc(100% - 48px);
-  background: var(--panel-color);
   border: 1px solid var(--border-color);
   border-radius: 10px;
+  background: var(--panel-color);
+  width: 390px;
+  max-width: calc(100% - 48px);
+  overflow: hidden;
   color: var(--text-color);
 }
 .modal.overrides {
@@ -421,10 +423,10 @@ label > small::before {
   width: 600px;
 }
 .modal textarea {
-  width: 100%;
-  height: 470px;
   margin: 0;
   border-radius: 0;
+  width: 100%;
+  height: 470px;
   font-size: 1.1em;
   font-family: monospace;
 }
@@ -432,11 +434,11 @@ header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem;
-  background: var(--bg-color);
   border-bottom: 1px solid var(--border-color);
-  font-size: 1.2em;
+  background: var(--bg-color);
+  padding: 1rem;
   font-weight: 500;
+  font-size: 1.2em;
 }
 footer {
   display: flex;
@@ -459,40 +461,40 @@ footer {
 .direction-toggle {
   appearance: none;
   -webkit-appearance: none;
-  box-shadow: 0 0 4px 2px rgba(148, 170, 209, 0.3);
-  user-select: none;
   display: inline-flex;
-  margin-bottom: 16px;
-  padding: 10px 6px;
-  background: var(--inset-color);
   cursor: pointer;
+  margin-bottom: 16px;
+  box-shadow: 0 0 4px 2px rgba(148, 170, 209, 0.3);
   border: 1px solid var(--border-color);
+  background: var(--inset-color);
+  padding: 10px 6px;
   color: var(--text-color);
+  user-select: none;
 }
 .direction-toggle:hover {
   background: color-mix(in srgb, var(--inset-color), white 5%);
 }
 .direction-toggle .dir-label {
-  min-width: 100px;
   margin-top: 0;
+  min-width: 100px;
   font-size: 1em;
 }
 .dir-label {
   margin-top: 9px;
-  font-size: 1.1em;
   color: var(--text-color);
+  font-size: 1.1em;
   text-align: center;
 }
 .dir-icon {
-  fill: var(--highlight-color);
   display: inline-block;
   position: absolute;
   visibility: visible;
-  width: 28px;
-  height: 28px;
   transition:
     opacity 0.4s ease-out,
     visibility 0.4s steps(2, end);
+  fill: var(--highlight-color);
+  width: 28px;
+  height: 28px;
 }
 .dir-icon.hidden {
   visibility: hidden;

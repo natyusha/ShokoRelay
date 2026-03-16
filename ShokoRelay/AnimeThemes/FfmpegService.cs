@@ -8,6 +8,8 @@ namespace ShokoRelay.AnimeThemes;
 /// <summary>Wrapper around FFmpeg/FFprobe CLI tools used by the AnimeThemes subsystem.</summary>
 internal sealed class FfmpegService
 {
+    #region Fields & Constructor
+
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private static readonly Lock FfmpegLock = new();
     private static bool _ffmpegConfigured;
@@ -23,6 +25,10 @@ internal sealed class FfmpegService
         _pluginDirectory = pluginDirectory;
         _workingDirectory = _pluginDirectory;
     }
+
+    #endregion
+
+    #region Public API
 
     /// <summary>Probe a media file's duration using ffprobe and return the result as a TimeSpan.</summary>
     /// <param name="inputPath">Path to the media file.</param>
@@ -86,7 +92,9 @@ internal sealed class FfmpegService
         return ms;
     }
 
-    private static string EscapeMetadata(string value) => value?.Replace("\"", "'") ?? string.Empty;
+    #endregion
+
+    #region Configuration Logic
 
     private static void EnsureFfmpegConfigured()
     {
@@ -189,6 +197,10 @@ internal sealed class FfmpegService
         return Directory.Exists(preferred) ? preferred : _pluginDirectory;
     }
 
+    #endregion
+
+    #region Process Execution
+
     private static async Task RunProcessAsync(string fileName, IReadOnlyList<string> args, Stream? stdIn, Stream? stdOut, CancellationToken ct)
     {
         var psi = CreateProcessStartInfo(fileName, args);
@@ -272,4 +284,12 @@ internal sealed class FfmpegService
 
         return psi;
     }
+
+    #endregion
+
+    #region Helpers
+
+    private static string EscapeMetadata(string value) => value?.Replace("\"", "'") ?? string.Empty;
+
+    #endregion
 }

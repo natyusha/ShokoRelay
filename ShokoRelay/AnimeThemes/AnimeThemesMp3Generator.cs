@@ -8,6 +8,8 @@ using ShokoRelay.Vfs;
 
 namespace ShokoRelay.AnimeThemes;
 
+#region Data Models
+
 /// <summary>Query parameters for MP3 generation requests.</summary>
 public record AnimeThemesMp3Query
 {
@@ -69,9 +71,13 @@ public record ThemePreviewResult(Stream Stream, string FileName, string ContentT
 /// <summary>Internal record representing a selected theme's metadata and audio link.</summary>
 internal sealed record ThemeSelection(string AudioUrl, string SlugRaw, string SlugDisplay, string SongTitle, string Artist, string AnimeTitle, string AnimeSlug);
 
+#endregion
+
 /// <summary>Provides functionality for fetching, converting and previewing anime theme audio from the AnimeThemes API.</summary>
 public class AnimeThemesMp3Generator(IMetadataService metadataService, IVideoService videoService, ConfigProvider configProvider)
 {
+    #region Fields & Constructor
+
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private static readonly HttpClient Http = new();
     private readonly FfmpegService _ffmpegService = new(configProvider.PluginDirectory);
@@ -83,6 +89,10 @@ public class AnimeThemesMp3Generator(IMetadataService metadataService, IVideoSer
     {
         get => Path.Combine(field, "mp3_animethemes.cache");
     } = configProvider.ConfigDirectory;
+
+    #endregion
+
+    #region Cache Management
 
     /// <summary>Returns the cached list of folders containing Theme.mp3 files.</summary>
     /// <returns>A read-only list of folder paths.</returns>
@@ -184,6 +194,10 @@ public class AnimeThemesMp3Generator(IMetadataService metadataService, IVideoSer
         }
         catch { }
     }
+
+    #endregion
+
+    #region MP3 Generation
 
     /// <summary>Processes a folder (and optionally subfolders) to generate MP3s for anime themes.</summary>
     /// <param name="query">Query parameters.</param>
@@ -292,6 +306,10 @@ public class AnimeThemesMp3Generator(IMetadataService metadataService, IVideoSer
         }
     }
 
+    #endregion
+
+    #region Internal Helpers
+
     /// <summary>Validates the directory and resolves the Shoko series for the request.</summary>
     private (ThemeMp3OperationResult? Error, (string Folder, string ThemePath, IVideoFile VideoFile, IShokoSeries Series)? Data) PrepareContext(AnimeThemesMp3Query q, bool preview)
     {
@@ -377,4 +395,6 @@ public class AnimeThemesMp3Generator(IMetadataService metadataService, IVideoSer
         }
         catch { }
     }
+
+    #endregion
 }

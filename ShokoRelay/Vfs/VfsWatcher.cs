@@ -11,6 +11,8 @@ namespace ShokoRelay.Vfs;
 /// <summary>Watches for Shoko video-file events (hashed, relocated, deleted) and triggers incremental VFS rebuilds plus Plex section refreshes.</summary>
 public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadataService metadataService, PlexMetadata plexMetadata, PlexClient plexLibrary, PlexCollections plexCollections)
 {
+    #region Fields & Constructor
+
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private readonly IVideoService _videoService = videoService;
     private readonly VfsBuilder _builder = builder;
@@ -22,6 +24,10 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
     private readonly ConcurrentDictionary<int, byte> _pending = new();
     private bool _processing;
     private readonly Lock _gate = new();
+
+    #endregion
+
+    #region Lifecycle Management
 
     /// <summary>Subscribe to Shoko video-file events and begin watching for changes.</summary>
     public void Start()
@@ -47,6 +53,10 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
         Logger.Info("VFS watcher stopped.");
     }
 
+    #endregion
+
+    #region Event Handlers
+
     private void OnFileChanged(object? sender, FileEventArgs e)
     {
         if (e?.Series == null || e.Series.Count == 0)
@@ -65,6 +75,10 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
     private void OnVideoFileRelocated(object? sender, FileRelocatedEventArgs e) => OnFileChanged(sender, e);
 
     private void OnVideoFileDeleted(object? sender, FileEventArgs e) => OnFileChanged(sender, e);
+
+    #endregion
+
+    #region Processing Logic
 
     private void KickProcessLoop()
     {
@@ -132,6 +146,10 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
             }
         }
     }
+
+    #endregion
+
+    #region Plex Update Logic
 
     /// <summary>Refresh Plex library paths and collection metadata for a single series after its VFS links have been created or updated.</summary>
     /// <param name="seriesId">The Shoko Series ID to update in Plex.</param>
@@ -213,4 +231,6 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
 
         return roots;
     }
+
+    #endregion
 }

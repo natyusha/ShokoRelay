@@ -4,6 +4,8 @@ using ShokoRelay.Plex;
 
 namespace ShokoRelay.Sync;
 
+#region Data Models
+
 /// <summary>Per-Plex-user counters used during synchronization.</summary>
 public record PlexWatchedUserResult
 {
@@ -120,6 +122,8 @@ public record PlexWatchedSyncResult
     /// <summary>Encountered error messages.</summary>
     public List<string> ErrorsList { get; init; } = [];
 }
+
+#endregion
 
 /// <summary>Shared helpers used by sync services.</summary>
 public static class SyncHelper

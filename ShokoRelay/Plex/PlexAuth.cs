@@ -7,6 +7,8 @@ using ShokoRelay.Config;
 
 namespace ShokoRelay.Plex;
 
+#region Data Models
+
 /// <summary>Represents a single connection endpoint for a Plex device.</summary>
 /// <param name="Uri">Connection URI.</param>
 /// <param name="Local">Whether the connection is on the local network.</param>
@@ -35,9 +37,13 @@ public sealed record PlexServerInfo(string Id, string Name, string? PreferredUri
 /// <param name="Uuid">Section unique ID.</param>
 public sealed record PlexLibraryInfo(int Id, string Title, string Type, string Agent, string Uuid);
 
+#endregion
+
 /// <summary>Handles authentication with Plex.tv, including PIN generation and user switching.</summary>
 public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
 {
+    #region Fields and Constructor
+
     private const string BaseUrl = "https://plex.tv";
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -49,6 +55,10 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
 
     private readonly HttpClient _httpClient = httpClient;
     private readonly PlexAuthConfig _config = config;
+
+    #endregion
+
+    #region PIN Operations
 
     /// <summary>Request a new Plex authentication PIN from the Plex.tv API.</summary>
     /// <param name="strong">Whether to request a high-entropy PIN.</param>
@@ -86,6 +96,10 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
         using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
         return await ReadJsonAsync<PlexPinResponse>(response, cancellationToken).ConfigureAwait(false) ?? throw new InvalidOperationException("Plex pin response was empty.");
     }
+
+    #endregion
+
+    #region Server and Library Discovery
 
     /// <summary>Query the Plex.tv resources API for all accessible servers.</summary>
     /// <param name="token">Plex authentication token.</param>
@@ -129,22 +143,38 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
             ?? [];
     }
 
-    /// <summary>Revokes an authentication token at Plex.tv.</summary>
-    /// <param name="token">Token to revoke.</param>
-    /// <param name="cid">Client identifier.</param>
+    /// <summary>Discover Shoko-enabled libraries across all accessible Plex servers.</summary>
+    /// <param name="token">Admin token.</param>
+    /// <param name="cid">Client ID.</param>
     /// <param name="ct">Cancellation token.</param>
-    public async Task RevokePlexTokenAsync(string token, string cid, CancellationToken ct = default)
+    /// <returns>Discovery results containing server and library pairs.</returns>
+    public async Task<(bool TokenValid, List<PlexServerInfo> Servers, List<(PlexLibraryInfo Library, PlexServerInfo Server)> ShokoLibraries)> DiscoverShokoLibrariesAsync(
+        string token,
+        string cid,
+        CancellationToken ct = default
+    )
     {
-        try
+        var (TokenValid, Servers, _) = await GetPlexServerListAsync(token, cid, ct).ConfigureAwait(false);
+        var list = new List<(PlexLibraryInfo, PlexServerInfo)>();
+        if (TokenValid)
         {
-            using var req = CreateRequest(HttpMethod.Delete, new Uri($"{BaseUrl}/api/v2/user/authentication"), token, cid);
-            await _httpClient.SendAsync(req, ct).ConfigureAwait(false);
+            foreach (var srv in Servers.Where(s => !string.IsNullOrEmpty(s.PreferredUri)))
+            {
+                try
+                {
+                    var libs = await GetPlexLibrariesAsync(token, cid, srv.PreferredUri!, ct).ConfigureAwait(false);
+                    foreach (var l in libs.Where(l => string.Equals(l.Agent, ShokoRelayInfo.AgentScheme, StringComparison.OrdinalIgnoreCase)))
+                        list.Add((l, srv));
+                }
+                catch { }
+            }
         }
-        catch
-        {
-            Logger.Warn("Failed to revoke Plex token.");
-        }
+        return (TokenValid, Servers, list);
     }
+
+    #endregion
+
+    #region Account and User Management
 
     /// <summary>Retrieve all managed/home users associated with the account.</summary>
     /// <param name="adminToken">Admin authentication token.</param>
@@ -152,7 +182,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
     /// <returns>A list of home users.</returns>
     public async Task<List<PlexHomeUser>> GetHomeUsersAsync(string adminToken, CancellationToken ct = default)
     {
-        using var req = CreateRequest(HttpMethod.Get, new Uri($"{BaseUrl}/api/v2/home/users"), adminToken);
+        using var req = CreateRequest(HttpMethod.Get, new Uri($"{BaseUrl}/api/home/users"), adminToken);
         using var resp = await _httpClient.SendAsync(req, ct).ConfigureAwait(false);
         return (await ReadJsonAsync<PlexHomeUsersResponse>(resp, ct).ConfigureAwait(false))?.Users ?? [];
     }
@@ -191,34 +221,30 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
         return node?.Attributes?["authToken"]?.Value ?? node?.Attributes?["authenticationToken"]?.Value;
     }
 
-    /// <summary>Discover Shoko-enabled libraries across all accessible Plex servers.</summary>
-    /// <param name="token">Admin token.</param>
-    /// <param name="cid">Client ID.</param>
+    #endregion
+
+    #region Token Management
+
+    /// <summary>Revokes an authentication token at Plex.tv.</summary>
+    /// <param name="token">Token to revoke.</param>
+    /// <param name="cid">Client identifier.</param>
     /// <param name="ct">Cancellation token.</param>
-    /// <returns>Discovery results containing server and library pairs.</returns>
-    public async Task<(bool TokenValid, List<PlexServerInfo> Servers, List<(PlexLibraryInfo Library, PlexServerInfo Server)> ShokoLibraries)> DiscoverShokoLibrariesAsync(
-        string token,
-        string cid,
-        CancellationToken ct = default
-    )
+    public async Task RevokePlexTokenAsync(string token, string cid, CancellationToken ct = default)
     {
-        var (TokenValid, Servers, _) = await GetPlexServerListAsync(token, cid, ct).ConfigureAwait(false);
-        var list = new List<(PlexLibraryInfo, PlexServerInfo)>();
-        if (TokenValid)
+        try
         {
-            foreach (var srv in Servers.Where(s => !string.IsNullOrEmpty(s.PreferredUri)))
-            {
-                try
-                {
-                    var libs = await GetPlexLibrariesAsync(token, cid, srv.PreferredUri!, ct).ConfigureAwait(false);
-                    foreach (var l in libs.Where(l => string.Equals(l.Agent, ShokoRelayInfo.AgentScheme, StringComparison.OrdinalIgnoreCase)))
-                        list.Add((l, srv));
-                }
-                catch { }
-            }
+            using var req = CreateRequest(HttpMethod.Delete, new Uri($"{BaseUrl}/api/v2/user/authentication"), token, cid);
+            await _httpClient.SendAsync(req, ct).ConfigureAwait(false);
         }
-        return (TokenValid, Servers, list);
+        catch
+        {
+            Logger.Warn("Failed to revoke Plex token.");
+        }
     }
+
+    #endregion
+
+    #region Internal Helpers
 
     private HttpRequestMessage CreateRequest(HttpMethod method, Uri url, string? token = null, string? cid = null)
     {
@@ -236,6 +262,10 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
     {
         return !resp.IsSuccessStatusCode ? default : await JsonSerializer.DeserializeAsync<T>(await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false), JsonOptions, ct).ConfigureAwait(false);
     }
+
+    #endregion
+
+    #region Response Wrapper Models
 
     /// <summary>Record representing a Plex Home user.</summary>
     /// <param name="Id">The user's numeric ID.</param>
@@ -274,7 +304,11 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
         public string? Agent { get; init; }
         public string? Uuid { get; init; }
     }
+
+    #endregion
 }
+
+#region PIN Response and Converters
 
 /// <summary>Response from the Plex PIN API.</summary>
 public class PlexPinResponse
@@ -315,3 +349,5 @@ public sealed class StringOrNumberConverter : JsonConverter<string?>
     /// <inheritdoc/>
     public override void Write(Utf8JsonWriter writer, string? value, JsonSerializerOptions options) => writer.WriteStringValue(value);
 }
+
+#endregion

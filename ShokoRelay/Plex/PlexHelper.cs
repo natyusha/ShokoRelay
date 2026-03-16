@@ -12,7 +12,13 @@ namespace ShokoRelay.Plex;
 /// <summary>Miscellaneous utility routines used by Plex-facing code.</summary>
 public static class PlexHelper
 {
+    #region Fields
+
     private static readonly Regex _showIdRegex = new(@"/show/(\d+)", RegexOptions.Compiled);
+
+    #endregion
+
+    #region GUID Parsing
 
     /// <summary>Parse a Plex GUID string and return the embedded Shoko series ID.</summary>
     /// <param name="guid">Plex GUID.</param>
@@ -26,6 +32,10 @@ public static class PlexHelper
             : int.TryParse(match.Groups[1].Value, out var id) ? id
             : null;
     }
+
+    #endregion
+
+    #region Poster Discovery
 
     /// <summary>Search for a custom collection poster image matching the series context.</summary>
     /// <param name="series">Target series.</param>
@@ -112,6 +122,10 @@ public static class PlexHelper
         return null;
     }
 
+    #endregion
+
+    #region Path Resolution
+
     /// <summary>Determine the filesystem import roots for a series.</summary>
     /// <param name="series">Shoko series.</param>
     /// <param name="metadataService">Optional metadata service.</param>
@@ -148,30 +162,9 @@ public static class PlexHelper
         return roots;
     }
 
-    private static bool IsIdMatch(string value, int id)
-    {
-        if (id <= 0)
-            return false;
-        string trimmed = value.Trim();
-        if (trimmed.StartsWith("c", StringComparison.OrdinalIgnoreCase))
-            trimmed = trimmed[1..];
-        return int.TryParse(trimmed, out int parsed) && parsed == id;
-    }
+    #endregion
 
-    private static string? NormalizeCollectionKey(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return null;
-        var invalid = Path.GetInvalidFileNameChars();
-        var sb = new StringBuilder(value.Length);
-        foreach (char c in value)
-        {
-            if (!invalid.Contains(c))
-                sb.Append(c);
-        }
-        string cleaned = TextHelper.CondenseSpaces(sb.ToString().Trim());
-        return cleaned.Length == 0 ? null : cleaned.ToLowerInvariant();
-    }
+    #region URL Building
 
     /// <summary>Build a URL for serving a collection poster image.</summary>
     /// <param name="series">Series.</param>
@@ -211,7 +204,40 @@ public static class PlexHelper
         }
         return null;
     }
+
+    #endregion
+
+    #region Internal Helpers
+
+    private static bool IsIdMatch(string value, int id)
+    {
+        if (id <= 0)
+            return false;
+        string trimmed = value.Trim();
+        if (trimmed.StartsWith("c", StringComparison.OrdinalIgnoreCase))
+            trimmed = trimmed[1..];
+        return int.TryParse(trimmed, out int parsed) && parsed == id;
+    }
+
+    private static string? NormalizeCollectionKey(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+        var invalid = Path.GetInvalidFileNameChars();
+        var sb = new StringBuilder(value.Length);
+        foreach (char c in value)
+        {
+            if (!invalid.Contains(c))
+                sb.Append(c);
+        }
+        string cleaned = TextHelper.CondenseSpaces(sb.ToString().Trim());
+        return cleaned.Length == 0 ? null : cleaned.ToLowerInvariant();
+    }
+
+    #endregion
 }
+
+#region Webhook Models
 
 /// <summary>Payload delivered by Plex webhooks.</summary>
 public class PlexWebhookPayload
@@ -300,3 +326,5 @@ public class PlexWebhookPayload
         public double? UserRating { get; set; }
     }
 }
+
+#endregion

@@ -27,17 +27,13 @@
     if (c) c.innerHTML = html;
   };
 
-  /**
-   * Resets the Plex section to show the 'Start Auth' button.
-   */
+  /** Resets the Plex section to show the 'Start Auth' button. */
   const setPlexStartAction = () => {
     setPlexAction('<button id="plex-start">Start Plex Auth</button>');
     withButtonAction(el("plex-start"), startPlexAuth);
   };
 
-  /**
-   * Updates the Plex section to show 'Unlink' and 'Refresh' buttons.
-   */
+  /** Updates the Plex section to show 'Unlink' and 'Refresh' buttons. */
   const setPlexUnlinkAction = () => {
     setPlexAction(
       '<button id="plex-unlink" class="danger">Unlink Plex</button><button id="plex-refresh" class="w46-button" title="Refresh Plex Libraries"><svg class="icon-svg"><use href="img/icons.svg#refresh"></use></svg></button>',
@@ -46,9 +42,7 @@
     withButtonAction(el("plex-refresh"), refreshPlexLibraries);
   };
 
-  /**
-   * Stops the active Plex authentication polling timer.
-   */
+  /** Stops the active Plex authentication polling timer. */
   const stopPlexPolling = () => {
     if (plexPollTimer) {
       clearInterval(plexPollTimer);

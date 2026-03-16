@@ -6,6 +6,8 @@ namespace ShokoRelay.Plex;
 /// <summary>Provides utilities for working with Plex collections.</summary>
 public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
 {
+    #region Fields and Data Types
+
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private readonly HttpClient _httpClient = httpClient;
     private readonly PlexClient _plexClient = plexClient;
@@ -17,6 +19,10 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
     /// <param name="Target">The library target.</param>
     /// <param name="CollectionId">The numeric collection ID.</param>
     public sealed record PlexLibraryCollectionTarget(PlexLibraryTarget Target, int CollectionId);
+
+    #endregion
+
+    #region Collection Discovery
 
     /// <summary>Looks up or creates a collection in a specific library target.</summary>
     /// <param name="collectionName">The collection name.</param>
@@ -54,6 +60,10 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
         return results;
     }
 
+    #endregion
+
+    #region Poster Operations
+
     /// <summary>Uploads a poster to a collection via URL.</summary>
     /// <param name="collectionId">Collection ID.</param>
     /// <param name="posterUrl">Poster URL.</param>
@@ -62,6 +72,10 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
     /// <returns>True on success.</returns>
     public async Task<bool> UploadCollectionPosterByUrlAsync(int collectionId, string posterUrl, PlexLibraryTarget target, CancellationToken cancellationToken = default) =>
         await ExecuteActionAsync(HttpMethod.Post, $"/library/metadata/{collectionId}/posters?url={Uri.EscapeDataString(posterUrl)}", target, $"Upload poster for {collectionId}", cancellationToken);
+
+    #endregion
+
+    #region Item Assignment
 
     /// <summary>Assigns an item to a collection by updating metadata.</summary>
     /// <param name="ratingKey">Plex rating key.</param>
@@ -90,6 +104,10 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
                 cancellationToken
             );
     }
+
+    #endregion
+
+    #region Cleanup Operations
 
     /// <summary>Scans Plex libraries and deletes empty collections.</summary>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -135,6 +153,10 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
             && await DeleteCollectionAsync(collectionId, target, cancellationToken).ConfigureAwait(false);
     }
 
+    #endregion
+
+    #region Metadata Updates
+
     /// <summary>Updates the sort title of a collection.</summary>
     /// <param name="collectionId">Collection ID.</param>
     /// <param name="title">New sort title.</param>
@@ -149,6 +171,10 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
             $"Update sort title for {collectionId}",
             cancellationToken
         );
+
+    #endregion
+
+    #region Internal API Helpers
 
     private async Task<int?> FindCollectionIdAsync(string title, PlexLibraryTarget target, CancellationToken ct)
     {
@@ -201,4 +227,6 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
         }
         return false;
     }
+
+    #endregion
 }

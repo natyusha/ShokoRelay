@@ -6,6 +6,9 @@
   const base = location.pathname.split("/dashboard")[0];
   const el = (id) => document.getElementById(id);
 
+  // Initialize global namespace immediately so subsequent scripts can see it
+  window._sr = { base };
+
   /** Default auto-dismiss duration (ms) for transient toasts. Use 0 for persistent toasts that require manual dismissal. */
   const TOAST_MS = 5000;
 
@@ -19,13 +22,30 @@
     playing: "Next",
   };
 
-  /** List of button IDs that correspond exactly to server task names */
+  /** List of button IDs that correspond exactly to server task names for spinner synchronization. */
   const MANAGED_TASK_IDS = ["vfs-build", "at-vfs-build", "at-map-build", "plex-collections-build", "plex-ratings-apply", "shoko-remove-missing", "at-mp3-build"];
 
   // #region Helpers
+
   /**
-   * Polls the server for active tasks and syncs the UI button states.
-   * This ensures that if the page is refreshed or opened in a new tab, the "Loading" state and spinners are restored for running operations.
+   * Extracts the inner data object from a standardized server response envelope.
+   * @param {Object} res - The normalized fetch response.
+   * @returns {*} The actual result data.
+   */
+  const getData = (res) => (res?.data?.data !== undefined && res?.data?.data !== null ? res.data.data : res?.data);
+
+  /**
+   * Helper to append a key-value pair to a URLSearchParams object only if the value is provided and non-empty.
+   * @param {URLSearchParams} ps - The search parameters object to modify.
+   * @param {string} k - The parameter key.
+   * @param {*} v - The value to check and potentially append.
+   */
+  const setIfNotEmpty = (ps, k, v) => {
+    if (v != null && String(v) !== "") ps.set(k, String(v));
+  };
+
+  /**
+   * Polls the server for active tasks and completed results, synchronizing the UI state.
    */
   async function syncActiveTasks() {
     /** Check Active Tasks for spinners */
@@ -36,11 +56,9 @@
       const btn = el(id);
       if (!btn) return;
       const isActive = activeTasks.includes(id);
-      if (!isActive && !btn.classList.contains("clicking")) {
-        setButtonLoading(btn, false);
-      } else if (isActive) {
-        setButtonLoading(btn, true);
-      }
+      // Only set idle if not currently in the middle of a click event
+      if (!isActive && !btn.classList.contains("clicking")) setButtonLoading(btn, false);
+      else if (isActive) setButtonLoading(btn, true);
     });
 
     /** Check Completed Tasks for toasts */
@@ -55,9 +73,9 @@
   }
 
   /**
-   * Wrap a button's click handler so it automatically shows/hides a loading spinner. Adds 'clicking' class to manage race conditions between manual clicks and background polling.
+   * Wrap a button's click handler to manage loading states and task synchronization.
    * @param {HTMLElement|string} btn - The button element or its DOM id.
-   * @param {Function} handler - Async click handler to execute while the button is in a loading state.
+   * @param {Function} handler - Async click handler.
    */
   function withButtonAction(btn, handler) {
     const elBtn = typeof btn === "string" ? el(btn) : btn;
@@ -69,7 +87,7 @@
         await handler.apply(elBtn, args);
       } finally {
         elBtn.classList.remove("clicking");
-        window._sr.syncActiveTasks();
+        syncActiveTasks();
       }
     };
   }
@@ -81,36 +99,35 @@
   const makeLogLink = (url) => (url ? `[<a href="${url}" target="_blank" class="log-link">view log</a>]` : "");
 
   /**
-   * Show success/error toasts for HTTP responses with automatic log-link injection.
+   * Show success/error toasts for HTTP responses with automatic log-link injection and result summarization.
    * @param {{ok: boolean, data: *}} res - The fetchJson response object.
-   * @param {string} label - A short label identifying the operation (e.g. "Collection build").
-   * @param {{hasFilter?: boolean, summary?: string, hideOnSucceed?: number}} [opts] - Display options.
+   * @param {string} label - Identifies the operation.
+   * @param {{summary?: string, hideOnSucceed?: number}} [opts] - Display options.
    */
   function toastOperation(res, label, opts = {}) {
     const { summary, hideOnSucceed } = opts;
+    const { text, errorCount } = summarizeResult(res);
     const logLink = makeLogLink(res.data?.logUrl);
+
     if (res.ok) {
-      const errs = getErrorCount(res);
-      const text = summary || summarizeResult(res) || `${label} Complete`;
-      showToast(`${label}: ${text} ${logLink}`, errs > 0 ? "error" : "success", errs > 0 ? 0 : (hideOnSucceed ?? TOAST_MS));
+      const display = summary || text || `${label} Complete`;
+      showToast(`${label}: ${display} ${logLink}`, errorCount > 0 ? "error" : "success", errorCount > 0 ? 0 : (hideOnSucceed ?? TOAST_MS));
     } else {
       showToast(`${label} Failed: ${summary || res.data?.message || JSON.stringify(res.data)} ${logLink}`, "error", 0);
     }
   }
 
   /**
-   * Build a human-readable summary string from common API response fields.
-   * Standardized to PascalCase to match the C# backend records.
-   * @param {Object} res - The response object containing data.
-   * @returns {string} A comma-separated summary string.
+   * Build a human-readable summary string and error count from common API response fields.
+   * @param {Object} res - The response object.
+   * @returns {{text: string, errorCount: number}} Summarized details.
    */
   function summarizeResult(res) {
-    if (!res?.data) return "";
-
-    // Access nested result data if present (LogAndReturn envelope), otherwise use root
-    const d = res.data.data !== undefined && res.data.data !== null ? res.data.data : res.data;
+    const d = getData(res);
+    if (!d) return { text: "", errorCount: 0 };
 
     const parts = [];
+    let errorCount = 0;
     const keys = {
       processed: ["SeriesProcessed", "Processed", "ScannedCount", "ProcessedShows"],
       created: ["LinksCreated", "Created", "UpdatedShows"],
@@ -125,10 +142,12 @@
       if (match === undefined) return;
       const v = d[match];
       const n = label === "errors" ? (Array.isArray(v) ? v.length : Number(v) || 0) : v;
+      if (label === "errors") errorCount = n;
       if (label !== "errors" || n > 0) parts.push(`${label}: ${n}`);
     });
 
-    return parts.length ? parts.join(", ") : typeof d === "string" ? (d.length > 200 ? d.substring(0, 200) + "..." : d) : "";
+    const text = parts.length ? parts.join(", ") : typeof d === "string" ? (d.length > 200 ? d.substring(0, 200) + "..." : d) : "";
+    return { text, errorCount };
   }
 
   /**
@@ -153,16 +172,6 @@
   };
 
   /**
-   * Helper to append a key-value pair to a URLSearchParams object only if the value is provided and non-empty.
-   * @param {URLSearchParams} ps - The search parameters object to modify.
-   * @param {string} k - The parameter key.
-   * @param {*} v - The value to check and potentially append.
-   */
-  const setIfNotEmpty = (ps, k, v) => {
-    if (v != null && String(v) !== "") ps.set(k, String(v));
-  };
-
-  /**
    * Initialize a button as an aria-pressed toggle with a click handler that flips its state.
    * @param {HTMLElement|string} btn - The button element or its DOM id.
    * @param {boolean} [defaultState=false] - Initial pressed state.
@@ -174,24 +183,6 @@
     if (!elBtn.hasAttribute("aria-pressed")) elBtn.setAttribute("aria-pressed", String(!!defaultState));
     elBtn.onclick = () => elBtn.setAttribute("aria-pressed", elBtn.getAttribute("aria-pressed") === "true" ? "false" : "true");
     return elBtn;
-  }
-
-  /**
-   * Wrap a button's click handler so it automatically shows/hides a loading spinner.
-   * @param {HTMLElement|string} btn - The button element or its DOM id.
-   * @param {Function} handler - Async click handler to execute while the button is in a loading state.
-   */
-  function withButtonAction(btn, handler) {
-    const elBtn = typeof btn === "string" ? el(btn) : btn;
-    if (!elBtn) return;
-    elBtn.onclick = async (...args) => {
-      setButtonLoading(elBtn, true);
-      try {
-        await handler.apply(elBtn, args);
-      } finally {
-        setButtonLoading(elBtn, false);
-      }
-    };
   }
 
   /**
@@ -211,12 +202,7 @@
     } else if (!isLoading) btn.querySelector(".button-spinner")?.remove();
   }
 
-  /**
-   * Attach a smooth open/close animation to a &lt;details&gt; element using the Web Animations API.
-   * @param {HTMLDetailsElement} details - The details element.
-   * @param {HTMLElement} content - The inner content wrapper (`.details-content`).
-   * @param {number} [duration=300] - Animation duration in ms.
-   */
+  /** Attach a smooth open/close animation to a &lt;details&gt; element using the Web Animations API. */
   function initDetailsAnimation(details, content, duration = 300) {
     let anim = null;
     details.querySelector("summary")?.addEventListener("click", (e) => {
@@ -235,20 +221,10 @@
     });
   }
 
-  /**
-   * Get a value from a nested object using a dot-separated path.
-   * @param {Object} obj - The source object.
-   * @param {string} path - Dot-separated key path.
-   * @returns {*} The resolved value, or undefined.
-   */
+  /** @param {Object} obj @param {string} path - Dot-separated key path. @returns {*} The resolved value, or undefined. */
   const getValueByPath = (obj, path) => path.split(".").reduce((o, k) => o?.[k], obj);
 
-  /**
-   * Set a value in a nested object using a dot-separated path.
-   * @param {Object} obj - The target object.
-   * @param {string} path - Dot-separated key path.
-   * @param {*} value - The value to set at the resolved path.
-   */
+  /** @param {Object} obj @param {string} path - Dot-separated key path. @param {*} value - The value to set at the resolved path. */
   function setValueByPath(obj, path, value) {
     const parts = path.split("."),
       last = parts.pop();
@@ -258,22 +234,20 @@
 
   /**
    * Binds a UI element to a config path with automatic persistence.
-   * @param {string} id - The DOM element ID.
-   * @param {string} path - The dot-notation path in the config (e.g., "Automation.UtcOffsetHours").
-   * @param {Object} config - The global config object.
-   * @param {Function} persistFn - The function that POSTs the config to the server.
-   * @param {"text"|"number"|"check"} [type="text"] - The type of input handling.
+   * @param {HTMLElement|string} target - The DOM element or ID.
+   * @param {string} path - Config path.
+   * @param {Object} config - Config object.
+   * @param {Function} persistFn - Save callback.
+   * @param {"text"|"number"|"check"} [type="text"] - Input type.
    */
-  const bindConfig = (id, path, config, persistFn, type = "text") => {
-    const e = el(id);
+  const bindConfig = (target, path, config, persistFn, type = "text") => {
+    const e = typeof target === "string" ? el(target) : target;
     if (!e) return;
 
-    // Set initial state
     const val = getValueByPath(config, path);
     if (type === "check") e.checked = !!val;
     else e.value = val ?? "";
 
-    // Auto-save on change
     e.onchange = async () => {
       let newVal = type === "check" ? e.checked : type === "number" ? Number(e.value) || 0 : e.value;
       setValueByPath(config, path, newVal);
@@ -281,20 +255,20 @@
     };
   };
 
-  /**
-   * Unwrap a config response that may contain a payload wrapper.
-   * @param {Object} data - Response data.
-   * @returns {Object} The inner config object.
-   */
+  /** Unwrap a config response that may contain a payload wrapper. @param {Object} data @returns {Object} The inner config object. */
   const unwrapConfig = (data) => (data?.payload !== undefined ? data.payload || {} : data || {});
 
   /**
-   * Attach overlay-click and Escape-key close listeners to a modal element.
-   * @param {HTMLElement} modal - The modal element to attach handlers to.
-   * @returns {Function} A close() function that hides the modal and removes its listeners.
+   * Opens a modal and attaches automated close handlers for overlay clicks and Escape key.
+   * @param {HTMLElement} modal - The modal element.
+   * @returns {Function} Close function.
    */
-  function attachModalCloseHandlers(modal) {
+  function openModal(modal) {
     if (!modal) return () => {};
+    modal.setAttribute("aria-hidden", "false");
+    modal.classList.add("open");
+    document.body.style.overflow = "hidden";
+
     const close = () => {
       modal.setAttribute("aria-hidden", "true");
       modal.classList.remove("open");
@@ -302,43 +276,62 @@
       modal.removeEventListener("click", onOverlay);
       document.removeEventListener("keydown", onKey);
     };
+
     const onOverlay = (ev) => ev.target === modal && close();
     const onKey = (ev) => ev.key === "Escape" && close();
     modal.addEventListener("click", onOverlay);
     document.addEventListener("keydown", onKey);
+
+    const firstInput = modal.querySelector("button, textarea, input:not([type='hidden'])");
+    setTimeout(() => firstInput?.focus(), 10);
+
     return close;
   }
 
-  /**
-   * Centralized modal opener logic.
-   * @param {HTMLElement} modal - The modal element to open.
-   * @returns {Function} The close handler for the modal.
-   */
-  function openModal(modal) {
-    modal.setAttribute("aria-hidden", "false");
-    modal.classList.add("open");
-    document.body.style.overflow = "hidden";
-    const firstBtn = modal.querySelector("button, textarea, input");
-    setTimeout(() => firstBtn?.focus(), 10);
-    return attachModalCloseHandlers(modal);
-  }
-
-  /**
-   * Updates an element's title attribute based on its current data-mode or data-state.
-   * This triggers the MutationObserver to update the custom project tooltip.
-   * @param {HTMLElement} el - The element to update.
-   */
+  /** Updates element title from data-mode or data-state for tooltips. @param {HTMLElement} el */
   const updatePlaybackTooltip = (el) => {
     if (!el) return;
     const key = el.getAttribute("data-mode") || el.getAttribute("data-state");
-    if (PLAYBACK_LABELS[key]) {
-      el.title = PLAYBACK_LABELS[key];
-    }
+    if (PLAYBACK_LABELS[key]) el.title = PLAYBACK_LABELS[key];
   };
 
-  /** Expose shared helpers */
-  window._sr = {
-    base,
+  /**
+   * Extract the error count from an API response by checking common error fields.
+   * @param {{ok: boolean, data: *}} res - The fetchJson response object.
+   * @returns {number} The number of errors found, or 0 if none.
+   */
+  const getErrorCount = (res) => summarizeResult(res).errorCount;
+
+  /**
+   * Displays a toast notification.
+   * @param {string} message - HTML message content.
+   * @param {"info"|"success"|"warning"|"error"} [type="info"] - Toast severity/style.
+   * @param {number} [timeout=5000] - Auto-dismiss delay in ms.
+   * @returns {HTMLElement|null}
+   */
+  function showToast(message, type = "info", timeout = 5000) {
+    const container = el("toast-container");
+    if (!container) return null;
+    const t = document.createElement("div");
+    t.className = `toast ${type || "info"}`;
+    t.tabIndex = 0;
+    t.innerHTML = `<span class="toast-message">${message}</span>`;
+    container.appendChild(t);
+    requestAnimationFrame(() => t.classList.add("visible"));
+    const dismiss = () => {
+      t.classList.remove("visible");
+      setTimeout(() => t.remove(), 300);
+    };
+    let timer = timeout > 0 ? setTimeout(dismiss, timeout) : null;
+    t.onclick = () => {
+      clearTimeout(timer);
+      dismiss();
+    };
+    return t;
+  }
+
+  // Populate shared global object
+  Object.assign(window._sr, {
     el,
     TOAST_MS,
     fetchJson,
@@ -352,34 +345,28 @@
     getValueByPath,
     setValueByPath,
     bindConfig,
-    getErrorCount,
     unwrapConfig,
     openModal,
     setButtonLoading,
     updatePlaybackTooltip,
     syncActiveTasks,
-  };
+    getErrorCount,
+  });
   // #endregion
 
   // #region Provider Settings
   /**
-   * Fetch the config schema and current values from the server, then dynamically build
-   * the settings form with appropriate input types (bool, enum, number, textarea, etc.).
-   * @returns {Promise<void>}
+   * Builds the configuration settings form dynamically based on server schema.
    */
   async function loadConfig() {
     if (!el("config-form")) return;
-
     const [schemaRes, configRes] = await Promise.all([fetchJson(base + "/config/schema"), fetchJson(base + "/config")]);
     if (!schemaRes.ok || !configRes.ok) return showToast("Failed To Load Config", "error", 0);
 
     const schema = schemaRes.data.properties || [],
       rawCfg = configRes.data || {},
       config = unwrapConfig(rawCfg);
-
     const overridesBtn = el("vfs-overrides");
-
-    // Disable overrides button if TMDB Ep Numbering is off.
     const tmdbEnabled = getValueByPath(config, "TmdbEpNumbering") ?? getValueByPath(config, "Advanced.TmdbEpNumbering");
     if (overridesBtn) overridesBtn.disabled = !tmdbEnabled;
 
@@ -393,16 +380,11 @@
     advSection.innerHTML = "<summary>Advanced Settings</summary>";
     advContent.appendChild(document.createElement("hr"));
 
-    /**
-     * POST the updated config object to the server.
-     * @param {Object} updated - The updated config object.
-     * @returns {Promise<Object>} The fetch response.
-     */
-    async function persistConfig(updated) {
+    const persistConfig = async (updated) => {
       const res = await fetchJson(base + "/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updated) });
       if (!res.ok) toastOperation(res, "Config Save");
       return res;
-    }
+    };
 
     schema.forEach((p) => {
       const wrap = document.createElement("div"),
@@ -411,75 +393,81 @@
         value = getValueByPath(config, p.Path);
 
       if (p.Type === "bool") {
-        wrap.innerHTML = `<label class="shoko-checkbox"><input type="checkbox" ${value ? "checked" : ""}>
+        wrap.innerHTML = `<label class="shoko-checkbox"><input type="checkbox">
           <span class="shoko-checkbox-icon" aria-hidden="true"><svg class="unchecked"><use href="img/icons.svg#checkbox-blank-circle-outline"></use></svg><svg class="checked"><use href="img/icons.svg#checkbox-marked-circle-outline"></use></svg></span>
           <span class="shoko-checkbox-text"><span class="shoko-checkbox-title">${p.Display || p.Path}</span><small class="shoko-checkbox-desc" style="display:block">${p.Description || ""}</small></span></label>`;
         input = wrap.querySelector("input");
+        bindConfig(input, p.Path, config, persistConfig, "check");
       } else if (p.Path.endsWith("PathMappings")) {
         label.innerHTML = `<span>${p.Display || p.Path.split(".").pop()}</span>${p.Description ? `<small>${p.Description}</small>` : ""}`;
         wrap.appendChild(label);
         const mappingContainer = document.createElement("div");
-        mappingContainer.innerHTML = `<div class="full"><div><small>Plex Base Paths</small><textarea id="path-mappings-left" placeholder="e.g. M:\\Anime"></textarea></div><div><small>Shoko Base Paths</small><textarea id="path-mappings-right" placeholder="e.g. /anime"></textarea></div></div>`;
+        mappingContainer.innerHTML = `<div class="full"><div><small>Plex Base Paths</small><textarea id="path-mappings-left"></textarea></div><div><small>Shoko Base Paths</small><textarea id="path-mappings-right"></textarea></div></div>`;
         wrap.appendChild(mappingContainer);
-        const l = wrap.querySelector("#path-mappings-left"),
-          r = wrap.querySelector("#path-mappings-right"),
+        const l = mappingContainer.querySelector("#path-mappings-left"),
+          r = mappingContainer.querySelector("#path-mappings-right"),
           m = value || {};
         const keys = Object.keys(m).sort();
         l.value = keys.map((k) => m[k]).join("\n");
         r.value = keys.join("\n");
-        input = [l, r];
+        const onMapChange = async () => {
+          const val = {};
+          const lLines = l.value.split("\n"),
+            rLines = r.value.split("\n");
+          lLines.forEach((lv, idx) => {
+            if (lv.trim() && rLines[idx]?.trim()) val[rLines[idx].trim()] = lv.trim();
+          });
+          setValueByPath(config, p.Path, val);
+          await persistConfig(config);
+        };
+        l.onchange = r.onchange = onMapChange;
       } else {
         label.innerHTML = `<span>${p.Display || p.Path.split(".").pop()}</span>${p.Description ? `<small>${p.Description}</small>` : ""}`;
         wrap.appendChild(label);
         input = document.createElement(p.Type === "enum" ? "select" : p.Type === "json" || p.Path.endsWith("TagBlacklist") ? "textarea" : "input");
-        if (p.Type === "enum")
+
+        if (p.Type === "enum") {
           (p.EnumValues || []).forEach((ev) => {
             const opt = new Option(ev.name, ev.value);
             opt.selected = String(ev.value) === String(value);
             input.add(opt);
           });
-        else if (p.Type === "number") {
+        } else if (p.Type === "number") {
           input.type = "number";
-          input.value = value ?? p.DefaultValue ?? "";
-        } else if (p.Type === "json") input.value = value ? JSON.stringify(value, null, 2) : p.DefaultValue ? JSON.stringify(p.DefaultValue, null, 2) : "";
-        else {
+        } else if (p.Type === "json") {
+          input.placeholder = "JSON object";
+        } else {
           input.type = "text";
-          input.value = value ?? p.DefaultValue ?? "";
+          // Placeholder for Shoko URL
+          if (p.Path.endsWith("ShokoServerUrl")) {
+            input.placeholder = "e.g. http://localhost:8111";
+          }
         }
-        wrap.appendChild(input);
-      }
 
-      const inputs = Array.isArray(input) ? input : [input];
-      inputs.forEach((i) => {
-        i.onchange = async () => {
-          let val = p.Type === "bool" ? i.checked : i.value;
-          if (p.Path.endsWith("PathMappings")) {
-            val = {};
-            const lLines = inputs[0].value.split("\n"),
-              rLines = inputs[1].value.split("\n");
-            lLines.forEach((l, idx) => {
-              if (l.trim() && rLines[idx]?.trim()) val[rLines[idx].trim()] = l.trim();
-            });
-          } else if (p.Type === "number") val = val === "" ? (p.DefaultValue ?? 0) : Number(val);
-          else if (p.Type === "json")
-            try {
-              val = val === "" ? p.DefaultValue : JSON.parse(val);
-            } catch {
-              val = null;
+        wrap.appendChild(input);
+
+        // Custom validation for ShokoServerUrl
+        if (p.Path.endsWith("ShokoServerUrl")) {
+          input.value = value ?? "";
+          input.onchange = async () => {
+            const urlRegex = /^https?:\/\/[a-zA-Z0-9.-]+(:\d+)?$/;
+            const cleanVal = input.value.trim().replace(/\/+$/, "");
+
+            if (cleanVal && !urlRegex.test(cleanVal)) {
+              showToast("Invalid Shoko URL. Use http(s)://HOST:PORT", "error", 5000);
+              input.value = getValueByPath(config, p.Path) || "";
+              return;
             }
 
-          setValueByPath(config, p.Path, val);
-          await persistConfig(config);
-
-          // Update overrides button state if numbering changed
-          if (p.Path.endsWith("TmdbEpNumbering")) {
-            const btn = el("vfs-overrides");
-            if (btn) btn.disabled = !val;
-          }
-        };
-      });
-
-      // Place in advanced or standard container
+            input.value = cleanVal;
+            setValueByPath(config, p.Path, cleanVal);
+            await persistConfig(config);
+          };
+        } else {
+          // Standard binding for all other generic fields
+          bindConfig(input, p.Path, config, persistConfig, p.Type === "bool" ? "check" : p.Type === "number" ? "number" : "text");
+        }
+      }
       (p.Advanced ? advContent : el("config-form")).appendChild(wrap);
     });
 
@@ -489,9 +477,7 @@
       initDetailsAnimation(advSection, advContent);
     }
 
-    // Static bindings for automation fields (outside the main preferences)
-    const b = (id, path, type) => window._sr.bindConfig(id, path, config, persistConfig, type);
-
+    const b = (id, path, type) => bindConfig(id, path, config, persistConfig, type);
     b("shoko-utc-offset", "Automation.UtcOffsetHours", "number");
     b("shoko-import-frequency", "Automation.ShokoImportFrequencyHours", "number");
     b("shoko-sync-frequency", "Automation.ShokoSyncWatchedFrequencyHours", "number");
@@ -506,23 +492,11 @@
 
   // #region Theme Toggle
   const THEME_KEY = "dashboard-theme";
-  /**
-   * @returns {string} The preferred theme name ('dark' or 'light').
-   */
   const getSavedTheme = () => localStorage.getItem(THEME_KEY) || (window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-
-  /**
-   * Apply a theme name to the document root and update toggle state.
-   * @param {string} theme - Theme name.
-   */
   function applyTheme(theme) {
     document.documentElement.setAttribute("data-theme", theme);
     el("theme-toggle")?.setAttribute("aria-pressed", String(theme === "dark"));
   }
-
-  /**
-   * Initializes the theme toggle button and sets initial theme.
-   */
   function initTheme() {
     applyTheme(getSavedTheme());
     if (el("theme-toggle"))
@@ -535,10 +509,6 @@
   // #endregion
 
   // #region Tooltips
-  /**
-   * Create the shared tooltip element and attach show/hide listeners to all elements with a title attribute.
-   * Observes the DOM for dynamically added elements.
-   */
   function initTooltips() {
     if (el("shoko-tooltip")) return;
     const tpl = document.createElement("div");
@@ -554,23 +524,18 @@
     const show = (target) => {
       const text = target.dataset.tooltipText || target.getAttribute("data-tooltip") || target.getAttribute("title");
       if (target.disabled || !text) return;
-
-      if (target.dataset.tooltipOverflowOnly === "true") {
-        if (target.scrollWidth <= target.clientWidth) return;
-      }
+      if (target.dataset.tooltipOverflowOnly === "true" && target.scrollWidth <= target.clientWidth) return;
 
       content.textContent = text;
-
       tpl.className = "tooltip-core tooltip-box tooltip-dark tooltip-show";
       tpl.setAttribute("aria-hidden", "false");
 
-      const rect = target.getBoundingClientRect();
-      const vw = document.documentElement.clientWidth;
-      const vh = document.documentElement.clientHeight;
-      const margin = 10;
-
-      let place = "top";
-      let top = rect.top - tpl.offsetHeight - margin;
+      const rect = target.getBoundingClientRect(),
+        vw = document.documentElement.clientWidth,
+        vh = document.documentElement.clientHeight,
+        margin = 10;
+      let place = "top",
+        top = rect.top - tpl.offsetHeight - margin;
       const left = rect.left + rect.width / 2 - tpl.offsetWidth / 2;
 
       if (top < margin) {
@@ -580,9 +545,8 @@
           place = "bottom";
         }
       }
-
-      const minLeft = margin;
-      const maxLeft = vw - tpl.offsetWidth - margin;
+      const minLeft = margin,
+        maxLeft = vw - tpl.offsetWidth - margin;
       const clampedLeft = Math.max(minLeft, Math.min(left, maxLeft));
 
       const arrow = tpl.querySelector(".tooltip-arrow");
@@ -594,7 +558,6 @@
       tpl.classList.add(`tooltip-place-${place}`);
       tpl.style.left = `${Math.round(clampedLeft + window.scrollX)}px`;
       tpl.style.top = `${Math.round(top + window.scrollY)}px`;
-
       target.setAttribute("aria-describedby", "shoko-tooltip");
     };
 
@@ -611,18 +574,15 @@
     document.addEventListener("mouseleave", hide);
 
     const attach = (t) => {
-      if (!t.title) return;
+      if (!t.title || t.dataset.tooltipText) return;
       t.dataset.tooltipText = t.title;
       t.removeAttribute("title");
-
       t.addEventListener("mouseenter", () => {
         clearTimeout(hideTimer);
         showTimer = setTimeout(() => {
           if (t.matches(":hover")) show(t);
         }, 100);
       });
-
-      // Immediate hide on leave or click
       t.addEventListener("mouseleave", hide);
       t.addEventListener("mousedown", hide);
     };
@@ -631,68 +591,15 @@
     new MutationObserver((ms) => {
       ms.forEach((m) => {
         m.addedNodes.forEach((n) => n.nodeType === 1 && (n.title ? attach(n) : n.querySelectorAll("[title]").forEach(attach)));
-
-        // Watch for title attribute changes on existing elements (like the Player Header)
-        if (m.type === "attributes" && m.attributeName === "title" && m.target.title) {
-          attach(m.target);
-        }
+        if (m.type === "attributes" && m.attributeName === "title" && m.target.title) attach(m.target);
       });
-    }).observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ["title"],
-    });
+    }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["title"] });
   }
   // #endregion
 
-  // #region Toasts
-  /**
-   * Extract the error count from an API response by checking common error fields.
-   * @param {{ok: boolean, data: *}} res - The fetchJson response object.
-   * @returns {number} The number of errors found, or 0 if none.
-   */
-  function getErrorCount(res) {
-    const d = res.data && res.data.data !== undefined ? res.data.data : res.data || {};
-    const errs = d.Errors || d.ErrorsList;
-    if (Array.isArray(errs)) return errs.length;
-    return Number(errs) || 0;
-  }
-
-  /**
-   * Display a dismissible toast notification in the toast container.
-   * @param {string} message - HTML message content.
-   * @param {"info"|"success"|"warning"|"error"} [type="info"] - Toast severity/style.
-   * @param {number} [timeout=5000] - Auto-dismiss delay in ms; use 0 to keep the toast visible until manually dismissed.
-   * @returns {HTMLElement|null} The created toast element, or null if the container is missing.
-   */
-  function showToast(message, type = "info", timeout = 5000) {
-    const container = el("toast-container");
-    if (!container) return null;
-    const t = document.createElement("div");
-    t.className = `toast ${type || "info"}`;
-    t.setAttribute("role", "status");
-    t.tabIndex = 0;
-    t.innerHTML = `<span class="toast-message">${message}</span>`;
-    container.appendChild(t);
-    requestAnimationFrame(() => t.classList.add("visible"));
-    const dismiss = () => {
-      t.classList.remove("visible");
-      setTimeout(() => t.remove(), 300);
-    };
-    let timer = timeout > 0 ? setTimeout(dismiss, timeout) : null;
-    t.onclick = () => {
-      clearTimeout(timer);
-      dismiss();
-    };
-    return t;
-  }
-  // #endregion
-
-  // Initialize
   initTooltips();
   initTheme();
   loadConfig();
-  setInterval(syncActiveTasks, 3000); // Sync Tasks
+  setInterval(syncActiveTasks, 3000);
   syncActiveTasks();
 })();

@@ -3,14 +3,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace ShokoRelay.Config;
 
-/// <summary>Credentials required to initiate Plex authentication flows from the dashboard.</summary>
-public class PlexAuthConfig
-{
-    /// <summary>Plex client identifier.</summary>
-    [Display(Name = "Client Identifier", Description = "Plex client identifier.")]
-    [DefaultValue("")]
-    public string ClientIdentifier { get; set; } = "";
-}
+#region Enums
 
 /// <summary>Plex library section types used when filtering or identifying libraries.</summary>
 public enum PlexLibraryType
@@ -27,6 +20,47 @@ public enum PlexLibraryType
     /// <summary>Photo library.</summary>
     Photo = 13,
 }
+
+#endregion
+
+#region Configuration
+
+/// <summary>Credentials required to initiate Plex authentication flows from the dashboard.</summary>
+public class PlexAuthConfig
+{
+    /// <summary>Plex client identifier.</summary>
+    [Display(Name = "Client Identifier", Description = "Plex client identifier.")]
+    [DefaultValue("")]
+    public string ClientIdentifier { get; set; } = "";
+}
+
+/// <summary>Configuration options specific to an individual Plex library.</summary>
+public class PlexLibraryConfig
+{
+    /// <summary>Plex token used for server API calls.</summary>
+    [Display(Name = "Plex Token", Description = "Plex token used for server API calls.")]
+    [DefaultValue("")]
+    [Browsable(false)]
+    public string Token { get; set; } = "";
+
+    /// <summary>Optional X-Plex-Client-Identifier header value.</summary>
+    [Display(Name = "Client Identifier", Description = "Optional X-Plex-Client-Identifier header value.")]
+    [DefaultValue("")]
+    [Browsable(false)]
+    public string ClientIdentifier { get; set; } = "";
+
+    /// <summary>Cached list of discovered servers.</summary>
+    [Browsable(false)]
+    public List<PlexAvailableServer> DiscoveredServers { get; set; } = [];
+
+    /// <summary>Cached list of discovered libraries.</summary>
+    [Browsable(false)]
+    public List<PlexAvailableLibrary> DiscoveredLibraries { get; set; } = [];
+}
+
+#endregion
+
+#region Targets
 
 /// <summary>Runtime representation of a Plex library section discovered on a server.</summary>
 public class PlexLibraryTarget
@@ -64,29 +98,9 @@ public class PlexLibraryTarget
     public string ServerUrl { get; set; } = "";
 }
 
-/// <summary>Configuration options specific to an individual Plex library.</summary>
-public class PlexLibraryConfig
-{
-    /// <summary>Plex token used for server API calls.</summary>
-    [Display(Name = "Plex Token", Description = "Plex token used for server API calls.")]
-    [DefaultValue("")]
-    [Browsable(false)]
-    public string Token { get; set; } = "";
+#endregion
 
-    /// <summary>Optional X-Plex-Client-Identifier header value.</summary>
-    [Display(Name = "Client Identifier", Description = "Optional X-Plex-Client-Identifier header value.")]
-    [DefaultValue("")]
-    [Browsable(false)]
-    public string ClientIdentifier { get; set; } = "";
-
-    /// <summary>Cached list of discovered servers.</summary>
-    [Browsable(false)]
-    public List<PlexAvailableServer> DiscoveredServers { get; set; } = [];
-
-    /// <summary>Cached list of discovered libraries.</summary>
-    [Browsable(false)]
-    public List<PlexAvailableLibrary> DiscoveredLibraries { get; set; } = [];
-}
+#region Discovery
 
 /// <summary>Information about a Plex server discovered during authentication.</summary>
 public class PlexAvailableServer
@@ -131,3 +145,5 @@ public class PlexAvailableLibrary
     [Browsable(false)]
     public string ServerUrl { get; set; } = "";
 }
+
+#endregion

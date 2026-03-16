@@ -11,6 +11,7 @@ namespace ShokoRelay.Helpers;
 public static class TextHelper
 {
     #region Compiled Regex
+
     private static readonly Regex _seriesPrefixRegex = new(@"^(Gekijou ?(?:ban(?: 3D)?|Tanpen|Remix Ban|Henshuuban|Soushuuhen)|Eiga|OVA) (.*$)", RegexOptions.Compiled);
     private static readonly Regex _movieDescriptorRegex = new(@"(?i)(:? The)?( Movie| Motion Picture)", RegexOptions.Compiled);
     private static readonly Regex _defaultTitleRegex = new(@"^(Episode|Volume|Special|Short|(Short )?Movie) [S0]?[1-9][0-9]*$", RegexOptions.Compiled);
@@ -30,6 +31,7 @@ public static class TextHelper
     private static readonly Regex _plexSplitTagRegex = new(@"(?ix)(?:^|[\s._-])(cd|disc|disk|dvd|part|pt)[\s._-]*([1-8])(?!\d)", RegexOptions.Compiled);
     private static readonly Regex _numbersRegex = new(@"\d+", RegexOptions.Compiled);
     private static readonly Regex _unicodeEscapeRegex = new(@"\\u([0-9a-fA-F]{4})", RegexOptions.Compiled);
+
     #endregion
 
     #region General Text Helpers

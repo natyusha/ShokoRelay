@@ -6,6 +6,8 @@ namespace ShokoRelay.Vfs;
 /// <summary>Utilities used during VFS generation including filename sanitization.</summary>
 public static class VfsHelper
 {
+    #region Regex and Mappings
+
     private static readonly Regex _quotedTextRegex = new("\"(.*?)\"", RegexOptions.Compiled);
     private static readonly Regex _whitespaceRegex = new(@"((?![\u200A\u200B])\s)+", RegexOptions.Compiled);
     private static readonly (string Find, string Replace)[] _styledReplacements = [("1/2", "½"), ("1/6", "⅙"), ("-->", "→"), ("<--", "←"), ("->", "→"), ("<-", "←")];
@@ -18,6 +20,10 @@ public static class VfsHelper
         ["other"] = "U",
     };
 
+    #endregion
+
+    #region Sanitization
+
     /// <summary>Sanitizes a string for use as a filename.</summary>
     public static string SanitizeName(string name)
     {
@@ -27,6 +33,22 @@ public static class VfsHelper
         string cleaned = TextHelper.CondenseSpaces(new string([.. name.Select(c => invalid.Contains(c) ? ' ' : c)])).Trim().TrimEnd('.');
         return cleaned.Length == 0 ? "Unknown" : cleaned;
     }
+
+    /// <summary>Cleans episode titles for filename use.</summary>
+    public static string CleanEpisodeTitleForFilename(string? title)
+    {
+        if (string.IsNullOrWhiteSpace(title))
+            return "";
+        string c = title;
+        foreach (var (f, r) in _styledReplacements)
+            c = c.Replace(f, r, StringComparison.Ordinal);
+        c = _quotedTextRegex.Replace(c, "“$1”");
+        return _whitespaceRegex.Replace(new string([.. c.Select(ch => TextHelper.ReplacementCharMap.TryGetValue(ch, out var m) ? m : ch)]), " ").Trim(' ');
+    }
+
+    #endregion
+
+    #region Naming Logic
 
     /// <summary>Builds a standard episode filename.</summary>
     public static string BuildStandardFileName(MapHelper.FileMapping mapping, int pad, string ext, int fileId, bool omitFileId = false, int? partIdx = null, int? partCount = null, int? vIdx = null)
@@ -50,15 +72,5 @@ public static class VfsHelper
         return SanitizeName($"{ep}{part} ❯ {CleanEpisodeTitleForFilename(TextHelper.ResolveEpisodeTitle(m.PrimaryEpisode, seriesTitle))}{ext}");
     }
 
-    /// <summary>Cleans episode titles for filename use.</summary>
-    public static string CleanEpisodeTitleForFilename(string? title)
-    {
-        if (string.IsNullOrWhiteSpace(title))
-            return "";
-        string c = title;
-        foreach (var (f, r) in _styledReplacements)
-            c = c.Replace(f, r, StringComparison.Ordinal);
-        c = _quotedTextRegex.Replace(c, "“$1”");
-        return _whitespaceRegex.Replace(new string([.. c.Select(ch => TextHelper.ReplacementCharMap.TryGetValue(ch, out var m) ? m : ch)]), " ").Trim(' ');
-    }
+    #endregion
 }

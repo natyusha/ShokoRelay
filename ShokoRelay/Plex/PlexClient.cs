@@ -6,6 +6,8 @@ namespace ShokoRelay.Plex;
 /// <summary>HTTP client wrapper that communicates with one or more Plex servers.</summary>
 public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
 {
+    #region Fields and Properties
+
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
     private string Token => configProvider.GetPlexToken();
@@ -17,6 +19,10 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
 
     /// <summary>Expose the configuration setting controlling automatic library scans.</summary>
     public bool ScanOnVfsRefresh => ShokoRelay.Settings.Automation.ScanOnVfsRefresh;
+
+    #endregion
+
+    #region Library and Section Actions
 
     /// <summary>Request Plex to refresh the specified library section path.</summary>
     /// <param name="path">Filesystem path to refresh.</param>
@@ -43,6 +49,10 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         return anyOk;
     }
 
+    #endregion
+
+    #region Request Construction
+
     /// <summary>Create an HttpRequestMessage pre-configured with Plex authentication headers.</summary>
     /// <param name="method">HTTP method.</param>
     /// <param name="path">Relative API path.</param>
@@ -60,6 +70,10 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         req.Headers.TryAddWithoutValidation("Accept", "application/json");
         return req;
     }
+
+    #endregion
+
+    #region Target Discovery
 
     /// <summary>Returns a list of library targets based on discovered configuration.</summary>
     /// <returns>A read-only list of configured library targets.</returns>
@@ -83,6 +97,10 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
                 },
             }),
         ];
+
+    #endregion
+
+    #region Metadata Queries
 
     /// <summary>Check whether a given ratingKey exists in the provided target section.</summary>
     /// <param name="ratingKey">Plex rating key.</param>
@@ -203,6 +221,10 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         long? minLastViewed = null
     ) => GetSectionItemsAsync(target, token, ct, onlyUnwatched, guidFilter, minLastViewed, PlexConstants.TypeEpisode);
 
+    #endregion
+
+    #region Path Mapping
+
     /// <summary>Map a Shoko path to the Plex path using configured mappings.</summary>
     /// <param name="path">Input Shoko path.</param>
     /// <returns>The mapped Plex path.</returns>
@@ -236,4 +258,6 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
 
         return shokoToPlex ? result : result.Replace('/', Path.DirectorySeparatorChar);
     }
+
+    #endregion
 }

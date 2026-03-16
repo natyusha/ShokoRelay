@@ -9,6 +9,8 @@ namespace ShokoRelay.Sync;
 /// <summary>Synchronizes watched-state (and optional votes) from Shoko -> Plex.</summary>
 public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService, IUserDataService userDataService, IUserService userService, ConfigProvider configProvider, PlexAuth plexAuth)
 {
+    #region Fields & Constructor
+
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private static readonly HttpClient Http = new();
     private readonly PlexClient _plexClient = plexClient;
@@ -17,6 +19,10 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
     private readonly IUserService _userService = userService;
     private readonly ConfigProvider _configProvider = configProvider;
     private readonly PlexAuth _plexAuth = plexAuth;
+
+    #endregion
+
+    #region Synchronization Logic
 
     /// <summary>Sync watched-state from Shoko into configured Plex libraries.</summary>
     /// <param name="dryRun">If true, skip scrobble execution.</param>
@@ -131,4 +137,6 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
         result = result with { Skipped = result.Skipped + notFoundCount };
         return result;
     }
+
+    #endregion
 }

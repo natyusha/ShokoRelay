@@ -8,6 +8,8 @@ namespace ShokoRelay.Plex;
 /// <summary>Maps Shoko episode/season data to Plex-style coordinates.</summary>
 public static class PlexMapping
 {
+    #region Data Types
+
     /// <summary>Simple struct representing season/episode coordinates.</summary>
     public struct PlexCoords
     {
@@ -20,6 +22,10 @@ public static class PlexMapping
         /// <summary>Optional ending episode number for ranges.</summary>
         public int? EndEpisode;
     }
+
+    #endregion
+
+    #region Season and Folder Logic
 
     /// <summary>Look up info for an extra/special season number.</summary>
     /// <param name="seasonNumber">The season ID.</param>
@@ -39,6 +45,10 @@ public static class PlexMapping
             : seasonNumber == 0 ? "Specials"
             : $"Season {seasonNumber}";
     }
+
+    #endregion
+
+    #region Coordinate Calculation
 
     /// <summary>Calculate Plex coordinates for an episode.</summary>
     /// <param name="e">The episode metadata.</param>
@@ -159,6 +169,10 @@ public static class PlexMapping
         };
     }
 
+    #endregion
+
+    #region TMDB Ordering and Cache Logic
+
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<(int EpId, string? OrderingId), bool> _tmdbAllOrderingsContainsCache = new();
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<(int EpId, string? OrderingId), (int? Season, int Episode)> _orderingCoordsCache = new();
 
@@ -241,6 +255,10 @@ public static class PlexMapping
         return (ep.SeasonNumber, ep.EpisodeNumber);
     }
 
+    #endregion
+
+    #region Private Helpers
+
     private static int ResolveSeasonNumber(IEpisode e)
     {
         // Prefer provider season numbers when available (covers regular episodes and specials).
@@ -256,4 +274,6 @@ public static class PlexMapping
                 _ => PlexConstants.SeasonUnknown,
             };
     }
+
+    #endregion
 }

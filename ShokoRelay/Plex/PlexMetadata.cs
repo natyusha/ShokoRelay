@@ -12,7 +12,13 @@ namespace ShokoRelay.Plex;
 /// <summary>Converts Shoko series/episode/season metadata into Plex-compatible property dictionaries.</summary>
 public class PlexMetadata(IMetadataService metadataService)
 {
+    #region Fields & Constructor
+
     private readonly IMetadataService _metadataService = metadataService;
+
+    #endregion
+
+    #region Series Context
 
     /// <summary>Aggregates relevant information about a Shoko series for controller responses.</summary>
     /// <param name="Series">The primary series metadata.</param>
@@ -52,126 +58,7 @@ public class PlexMetadata(IMetadataService metadataService)
         return new SeriesContext(primarySeries, TextHelper.ResolveFullSeriesTitles(primarySeries), RatingHelper.GetContentRatingAndAdult(primarySeries).Rating ?? "", fileData);
     }
 
-    /// <summary>Builds a sorted list of mapped episode metadata objects for a given season.</summary>
-    /// <param name="ctx">Series context containing file data and title information.</param>
-    /// <param name="seasonNum">Season number whose episodes should be returned.</param>
-    /// <returns>An ordered list of episode metadata objects for the season.</returns>
-    public List<object> BuildEpisodeList(SeriesContext ctx, int seasonNum)
-    {
-        var items = new List<(PlexCoords Coords, object Meta)>();
-
-        foreach (var m in ctx.FileData.GetForSeason(seasonNum))
-        {
-            if (m.Episodes.Count == 1)
-            {
-                items.Add((m.Coords, MapEpisode(m.PrimaryEpisode, m.Coords, ctx.Series, ctx.Titles, m.PartIndex, m.TmdbEpisode)));
-                continue;
-            }
-
-            foreach (var ep in m.Episodes)
-            {
-                var coordsEp = GetPlexCoordinates(ep);
-                if (coordsEp.Season != seasonNum)
-                {
-                    if (coordsEp.Season == PlexConstants.SeasonOther && m.Coords.Season == seasonNum)
-                        coordsEp = new PlexCoords
-                        {
-                            Season = m.Coords.Season,
-                            Episode = coordsEp.Episode,
-                            EndEpisode = coordsEp.EndEpisode,
-                        };
-                    else
-                        continue;
-                }
-                items.Add((coordsEp, MapEpisode(ep, coordsEp, ctx.Series, ctx.Titles)));
-            }
-        }
-        return [.. items.OrderBy(x => x.Coords.Episode).Select(x => x.Meta)];
-    }
-
-    private static string? GetCacheBuster(object? entity) => entity is IWithUpdateDate upd ? new DateTimeOffset(upd.LastUpdatedAt).ToUnixTimeSeconds().ToString() : null;
-
-    /// <summary>Composes a Plex rating key string from a metadata type and numeric identifiers.</summary>
-    /// <param name="type">The metadata type (collection, show, season, episode).</param>
-    /// <param name="id">The Shoko identifier.</param>
-    /// <param name="season">Optional season number.</param>
-    /// <param name="part">Optional part index.</param>
-    /// <returns>A Plex-style rating key.</returns>
-    public string GetRatingKey(string type, int id, int? season = null, int? part = null) =>
-        type switch
-        {
-            "collection" => $"{PlexConstants.CollectionPrefix}{id}",
-            "show" => id.ToString(),
-            "season" => $"{id}{PlexConstants.SeasonPrefix}{season}",
-            "episode" => part.HasValue ? $"{PlexConstants.EpisodePrefix}{id}{PlexConstants.PartPrefix}{part}" : $"{PlexConstants.EpisodePrefix}{id}",
-            _ => id.ToString(),
-        };
-
-    /// <summary>Composes a Plex GUID URI from a metadata type and numeric identifiers.</summary>
-    /// <param name="type">The metadata type.</param>
-    /// <param name="id">The Shoko identifier.</param>
-    /// <param name="season">Optional season number.</param>
-    /// <param name="part">Optional part index.</param>
-    /// <returns>A fully qualified metadata GUID string.</returns>
-    public string GetGuid(string type, int id, int? season = null, int? part = null) =>
-        type switch
-        {
-            "collection" => $"{ShokoRelayInfo.AgentScheme}://collections/{id}",
-            "show" => $"{ShokoRelayInfo.AgentScheme}://show/{id}",
-            "season" => $"{ShokoRelayInfo.AgentScheme}://season/{id}{PlexConstants.SeasonPrefix}{season}",
-            "episode" => part.HasValue
-                ? $"{ShokoRelayInfo.AgentScheme}://episode/{PlexConstants.EpisodePrefix}{id}{PlexConstants.PartPrefix}{part}"
-                : $"{ShokoRelayInfo.AgentScheme}://episode/{PlexConstants.EpisodePrefix}{id}",
-            _ => $"{ShokoRelayInfo.AgentScheme}://{id}",
-        };
-
-    /// <summary>Returns the collection name for a series based on its top-level Shoko group.</summary>
-    /// <param name="series">The series to check.</param>
-    /// <returns>The group's preferred title, or null if no collection applies.</returns>
-    public string? GetCollectionName(ISeries series)
-    {
-        if (series is not IShokoSeries shokoSeries)
-            return null;
-
-        var groupId = shokoSeries.TopLevelGroupID;
-        if (groupId <= 0)
-            return null;
-
-        var group = _metadataService.GetShokoGroupByID(groupId);
-        return group is not IShokoGroup shokoGroup ? null
-            : (shokoGroup.Series?.Count ?? 0) <= 1 ? null
-            : group is IWithTitles titled && !string.IsNullOrWhiteSpace(titled.PreferredTitle?.Value) ? titled.PreferredTitle?.Value
-            : null;
-    }
-
-    /// <summary>Builds a Plex-compatible metadata dictionary for a Shoko group collection.</summary>
-    /// <param name="group">The Shoko group.</param>
-    /// <param name="primarySeries">The series providing the artwork.</param>
-    /// <returns>A dictionary of Plex metadata properties.</returns>
-    public Dictionary<string, object?> MapCollection(IShokoGroup group, ISeries primarySeries)
-    {
-        var cb = GetCacheBuster(primarySeries);
-        var images = (IWithImages)primarySeries;
-        var poster = images.GetImages(ImageEntityType.Poster).FirstOrDefault();
-        var backdrop = images.GetImages(ImageEntityType.Backdrop).FirstOrDefault();
-        string title = group is IWithTitles titled && !string.IsNullOrWhiteSpace(titled.PreferredTitle?.Value) ? titled.PreferredTitle.Value : $"Group {group.ID}";
-        // csharpier-ignore-start
-        return new Dictionary<string, object?>
-        {
-            ["ratingKey"]             = GetRatingKey("collection", group.ID),
-            ["guid"]                  = GetGuid("collection", group.ID),
-            ["key"]                   = $"/collection/{group.ID}",
-            ["type"]                  = "collection",
-            ["subtype"]               = "show",
-            ["title"]                 = title,
-            ["thumb"]                 = poster != null ? ImageHelper.GetImageUrl(poster, cacheBuster: cb) : null,
-            ["art"]                   = backdrop != null ? ImageHelper.GetImageUrl(backdrop, cacheBuster: cb) : null,
-            ["titleSort"]             = title,
-            //["summary"]             = There is no summary source for groups
-            //["Image"]               = Likely an image array will be used here
-        };
-        // csharpier-ignore-end
-    }
+    #endregion
 
     #region Shows
 
@@ -230,6 +117,43 @@ public class PlexMetadata(IMetadataService metadataService)
     #endregion
 
     #region Seasons
+
+    /// <summary>Builds a sorted list of mapped episode metadata objects for a given season.</summary>
+    /// <param name="ctx">Series context containing file data and title information.</param>
+    /// <param name="seasonNum">Season number whose episodes should be returned.</param>
+    /// <returns>An ordered list of episode metadata objects for the season.</returns>
+    public List<object> BuildEpisodeList(SeriesContext ctx, int seasonNum)
+    {
+        var items = new List<(PlexCoords Coords, object Meta)>();
+
+        foreach (var m in ctx.FileData.GetForSeason(seasonNum))
+        {
+            if (m.Episodes.Count == 1)
+            {
+                items.Add((m.Coords, MapEpisode(m.PrimaryEpisode, m.Coords, ctx.Series, ctx.Titles, m.PartIndex, m.TmdbEpisode)));
+                continue;
+            }
+
+            foreach (var ep in m.Episodes)
+            {
+                var coordsEp = GetPlexCoordinates(ep);
+                if (coordsEp.Season != seasonNum)
+                {
+                    if (coordsEp.Season == PlexConstants.SeasonOther && m.Coords.Season == seasonNum)
+                        coordsEp = new PlexCoords
+                        {
+                            Season = m.Coords.Season,
+                            Episode = coordsEp.Episode,
+                            EndEpisode = coordsEp.EndEpisode,
+                        };
+                    else
+                        continue;
+                }
+                items.Add((coordsEp, MapEpisode(ep, coordsEp, ctx.Series, ctx.Titles)));
+            }
+        }
+        return [.. items.OrderBy(x => x.Coords.Episode).Select(x => x.Meta)];
+    }
 
     /// <summary>Builds a Plex-compatible metadata dictionary for a single season.</summary>
     /// <param name="series">The series metadata.</param>
@@ -390,7 +314,96 @@ public class PlexMetadata(IMetadataService metadataService)
 
     #endregion
 
-    #region Array Builders
+    #region Collections
+
+    /// <summary>Returns the collection name for a series based on its top-level Shoko group.</summary>
+    /// <param name="series">The series to check.</param>
+    /// <returns>The group's preferred title, or null if no collection applies.</returns>
+    public string? GetCollectionName(ISeries series)
+    {
+        if (series is not IShokoSeries shokoSeries)
+            return null;
+
+        var groupId = shokoSeries.TopLevelGroupID;
+        if (groupId <= 0)
+            return null;
+
+        var group = _metadataService.GetShokoGroupByID(groupId);
+        return group is not IShokoGroup shokoGroup ? null
+            : (shokoGroup.Series?.Count ?? 0) <= 1 ? null
+            : group is IWithTitles titled && !string.IsNullOrWhiteSpace(titled.PreferredTitle?.Value) ? titled.PreferredTitle?.Value
+            : null;
+    }
+
+    /// <summary>Builds a Plex-compatible metadata dictionary for a Shoko group collection.</summary>
+    /// <param name="group">The Shoko group.</param>
+    /// <param name="primarySeries">The series providing the artwork.</param>
+    /// <returns>A dictionary of Plex metadata properties.</returns>
+    public Dictionary<string, object?> MapCollection(IShokoGroup group, ISeries primarySeries)
+    {
+        var cb = GetCacheBuster(primarySeries);
+        var images = (IWithImages)primarySeries;
+        var poster = images.GetImages(ImageEntityType.Poster).FirstOrDefault();
+        var backdrop = images.GetImages(ImageEntityType.Backdrop).FirstOrDefault();
+        string title = group is IWithTitles titled && !string.IsNullOrWhiteSpace(titled.PreferredTitle?.Value) ? titled.PreferredTitle.Value : $"Group {group.ID}";
+        // csharpier-ignore-start
+        return new Dictionary<string, object?>
+        {
+            ["ratingKey"]             = GetRatingKey("collection", group.ID),
+            ["guid"]                  = GetGuid("collection", group.ID),
+            ["key"]                   = $"/collection/{group.ID}",
+            ["type"]                  = "collection",
+            ["subtype"]               = "show",
+            ["title"]                 = title,
+            ["thumb"]                 = poster != null ? ImageHelper.GetImageUrl(poster, cacheBuster: cb) : null,
+            ["art"]                   = backdrop != null ? ImageHelper.GetImageUrl(backdrop, cacheBuster: cb) : null,
+            ["titleSort"]             = title,
+            //["summary"]             = There is no summary source for groups
+            //["Image"]               = Likely an image array will be used here
+        };
+        // csharpier-ignore-end
+    }
+
+    #endregion
+
+    #region Key / Array Builders
+
+    private static string? GetCacheBuster(object? entity) => entity is IWithUpdateDate upd ? new DateTimeOffset(upd.LastUpdatedAt).ToUnixTimeSeconds().ToString() : null;
+
+    /// <summary>Composes a Plex rating key string from a metadata type and numeric identifiers.</summary>
+    /// <param name="type">The metadata type (collection, show, season, episode).</param>
+    /// <param name="id">The Shoko identifier.</param>
+    /// <param name="season">Optional season number.</param>
+    /// <param name="part">Optional part index.</param>
+    /// <returns>A Plex-style rating key.</returns>
+    public string GetRatingKey(string type, int id, int? season = null, int? part = null) =>
+        type switch
+        {
+            "collection" => $"{PlexConstants.CollectionPrefix}{id}",
+            "show" => id.ToString(),
+            "season" => $"{id}{PlexConstants.SeasonPrefix}{season}",
+            "episode" => part.HasValue ? $"{PlexConstants.EpisodePrefix}{id}{PlexConstants.PartPrefix}{part}" : $"{PlexConstants.EpisodePrefix}{id}",
+            _ => id.ToString(),
+        };
+
+    /// <summary>Composes a Plex GUID URI from a metadata type and numeric identifiers.</summary>
+    /// <param name="type">The metadata type.</param>
+    /// <param name="id">The Shoko identifier.</param>
+    /// <param name="season">Optional season number.</param>
+    /// <param name="part">Optional part index.</param>
+    /// <returns>A fully qualified metadata GUID string.</returns>
+    public string GetGuid(string type, int id, int? season = null, int? part = null) =>
+        type switch
+        {
+            "collection" => $"{ShokoRelayInfo.AgentScheme}://collections/{id}",
+            "show" => $"{ShokoRelayInfo.AgentScheme}://show/{id}",
+            "season" => $"{ShokoRelayInfo.AgentScheme}://season/{id}{PlexConstants.SeasonPrefix}{season}",
+            "episode" => part.HasValue
+                ? $"{ShokoRelayInfo.AgentScheme}://episode/{PlexConstants.EpisodePrefix}{id}{PlexConstants.PartPrefix}{part}"
+                : $"{ShokoRelayInfo.AgentScheme}://episode/{PlexConstants.EpisodePrefix}{id}",
+            _ => $"{ShokoRelayInfo.AgentScheme}://{id}",
+        };
+
     private object[] BuildXrefGuidArray(ISeries series)
     {
         var guids = new List<object>();

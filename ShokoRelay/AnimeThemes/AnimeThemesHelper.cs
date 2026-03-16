@@ -6,6 +6,8 @@ using ShokoRelay.Vfs;
 
 namespace ShokoRelay.AnimeThemes;
 
+#region Data Models
+
 /// <summary>Represents a single theme mapping between a local file and AnimeThemes identifiers.</summary>
 public sealed record AnimeThemesMappingEntry(
     string FilePath,
@@ -34,6 +36,12 @@ public sealed record AnimeThemesMappingBuildResult(string MapPath, int EntriesWr
 public sealed record WebmCacheEntry(string VfsPath, int VideoId, int Bitmask);
 
 /// <summary>Outcome of applying a mapping file to create VFS links.</summary>
+/// <param name="LinksCreated">Count of successful symlinks.</param>
+/// <param name="Skipped">Count of themes skipped due to missing files.</param>
+/// <param name="SeriesMatched">Count of Shoko series that found theme matches.</param>
+/// <param name="Errors">List of error messages.</param>
+/// <param name="CacheEntries">Data generated for the standalone video player cache.</param>
+/// <param name="Elapsed">Total time taken for the operation.</param>
 public sealed record AnimeThemesMappingApplyResult(int LinksCreated, int Skipped, int SeriesMatched, IReadOnlyList<string> Errors, IReadOnlyList<WebmCacheEntry> CacheEntries, TimeSpan Elapsed);
 
 /// <summary>Internal helper record used when looking up theme metadata by video identifier.</summary>
@@ -57,9 +65,13 @@ internal sealed record AnimeThemesVideoLookup(
     string Overlap
 );
 
+#endregion
+
 /// <summary>Shared constants and helper utilities used throughout the AnimeThemes subcomponent.</summary>
 internal static class AnimeThemesHelper
 {
+    #region Constants and Fields
+
     internal const string AtApiBase = "https://api.animethemes.moe";
     internal const string AtMapFileName = "anidb_animethemes_xrefs.csv";
     internal const string AtFavsFileName = "favs_animethemes.cache";
@@ -96,6 +108,10 @@ internal static class AnimeThemesHelper
         { "YorinukiGintamaSan", "Yorinuki Gintama-san" },
     };
 
+    #endregion
+
+    #region Initialization
+
     /// <summary>Add a default User-Agent header to the client if none is present.</summary>
     /// <param name="client">The HttpClient to configure.</param>
     internal static void EnsureUserAgent(HttpClient client)
@@ -103,6 +119,8 @@ internal static class AnimeThemesHelper
         if (!client.DefaultRequestHeaders.UserAgent.Any())
             client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("ShokoRelay", ShokoRelayInfo.Version));
     }
+
+    #endregion
 
     #region CSV Logic
 

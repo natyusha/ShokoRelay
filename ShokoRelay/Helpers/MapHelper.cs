@@ -10,6 +10,8 @@ namespace ShokoRelay.Helpers;
 /// <summary>Provides utility methods for mapping Shoko series and video files to Plex-compatible structures.</summary>
 public static class MapHelper
 {
+    #region Data Models
+
     /// <summary>Represents a mapping between a video file and one or more Shoko episodes.</summary>
     /// <param name="Video">The video object.</param>
     /// <param name="Episodes">All episodes in the file.</param>
@@ -31,6 +33,10 @@ public static class MapHelper
         /// <returns>A filtered list of mappings.</returns>
         public List<FileMapping> GetForSeason(int season) => [.. Mappings.Where(m => m.Coords.Season == season).OrderBy(m => m.Coords.Episode)];
     }
+
+    #endregion
+
+    #region Public API
 
     /// <summary>Generate SeriesFileData for the given series by building file mappings and seasons.</summary>
     /// <param name="series">The series to process.</param>
@@ -65,6 +71,15 @@ public static class MapHelper
                 all.AddRange(BuildFileMappings(s));
         return new SeriesFileData(all, [.. all.Select(m => m.Coords.Season).Distinct().OrderBy(s => s)]);
     }
+
+    /// <summary>Indicates whether an episode should be treated as hidden.</summary>
+    /// <param name="e">The episode to check.</param>
+    /// <returns>True if hidden.</returns>
+    public static bool IsHidden(IEpisode e) => e is IShokoEpisode shokoEp && shokoEp.IsHidden;
+
+    #endregion
+
+    #region Mapping Logic
 
     private static List<FileMapping> BuildFileMappings(ISeries series)
     {
@@ -146,11 +161,6 @@ public static class MapHelper
         return result;
     }
 
-    /// <summary>Indicates whether an episode should be treated as hidden.</summary>
-    /// <param name="e">The episode to check.</param>
-    /// <returns>True if hidden.</returns>
-    public static bool IsHidden(IEpisode e) => e is IShokoEpisode shokoEp && shokoEp.IsHidden;
-
     private static List<(IEpisode Episode, PlexCoords Coords)> DeduplicateByCoords(List<(IEpisode Episode, PlexCoords Coords)> eps, IVideo video)
     {
         var deduped = new List<(IEpisode Episode, PlexCoords Coords)>();
@@ -199,4 +209,6 @@ public static class MapHelper
         }
         return coords;
     }
+
+    #endregion
 }

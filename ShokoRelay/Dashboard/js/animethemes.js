@@ -7,13 +7,6 @@
 
   // #region Helpers
   /**
-   * Decode unicode escape sequences (e.g. \\u002C -> ,) in a string.
-   * @param {string} s - The string to decode.
-   * @returns {string} The decoded string.
-   */
-  const decodeUnicode = (s) => s.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
-
-  /**
    * Generic helper to cycle through an array of modes.
    * @param {string} current - The current mode value.
    * @param {string[]} modes - Array of available modes.
@@ -44,7 +37,7 @@
   };
   // #endregion
 
-  // #region VFS
+  // #region VFS Mapping
   withButtonAction(el("at-map-import"), async () => {
     showToast("AnimeThemes: Importing Mapping...", "info", TOAST_MS);
     const res = await fetchJson(base + "/animethemes/vfs/import", { method: "POST" });
@@ -65,19 +58,23 @@
       startToast?.remove();
       // Persistent toast if no filter is applied (unfiltered generation)
       const hideOnSucceed = p.get("filter") ? TOAST_MS : 0;
-      toastOperation(res, `AnimeThemes ${label}`, { summary: summarizeResult(res) || "complete", hideOnSucceed });
+      toastOperation(res, `AnimeThemes ${label}`, { summary: summarizeResult(res).text || "complete", hideOnSucceed });
     });
   }
   atBuildAction(el("at-map-build"), "Mapping", "/animethemes/vfs/map");
   atBuildAction(el("at-vfs-build"), "Generation", "/animethemes/vfs/build");
   // #endregion
 
-  // #region Theme MP3
+  // #region MP3 - State and UI
   initToggle("at-mp3-force", false);
   initToggle("at-mp3-batch", false);
+
   let atAudio = null,
     nowPlayingToast = null,
     atCurrentFolder = null;
+
+  const atTrack = el("at-progress-track"),
+    atFill = el("at-progress-fill");
 
   /** Dismiss the currently active 'Now Playing' toast notification if it exists. */
   function dismissNowPlaying() {
@@ -108,9 +105,6 @@
     } catch {}
   }
 
-  const atTrack = el("at-progress-track"),
-    atFill = el("at-progress-fill");
-
   /** Synchronizes the MP3 playback UI states (progress bar, play button state) with the audio object. */
   function syncPlaybackUI() {
     const isE = el("at-playback")?.getAttribute("aria-pressed") === "true",
@@ -122,7 +116,6 @@
     if (pBtn) {
       const isPlaying = atAudio && !atAudio.paused && !atAudio.ended;
       pBtn.setAttribute("data-state", isPlaying ? "playing" : "idle");
-      // Trigger the shared tooltip update logic
       updatePlaybackTooltip(pBtn);
     }
   }
@@ -138,7 +131,9 @@
       }
     };
   }
+  // #endregion
 
+  // #region MP3 - Playback
   /**
    * Stream and play a Theme.mp3 in the background using the streaming endpoint.
    * @param {string} folderPath - The folder containing the Theme.mp3 to stream.
@@ -164,7 +159,9 @@
     atCurrentFolder = folderPath;
     showNowPlaying(folderPath);
   }
+  // #endregion
 
+  // #region MP3 - Generation
   withButtonAction(el("at-mp3-build"), async () => {
     const startToast = showToast("AnimeThemes MP3: Generating...", "info", 0);
     const ps = buildAtParams();
@@ -179,7 +176,7 @@
     const hideOnSucceed = isBatch ? 0 : TOAST_MS;
 
     // Custom summary mapping for friendly UI messages
-    let summary = summarizeResult(res);
+    let summary = summarizeResult(res).text;
 
     if (status === "skipped") {
       if (message === "Theme.mp3 already exists.") {
@@ -213,33 +210,35 @@
       toastOperation(res, "AnimeThemes MP3", { summary, hideOnSucceed: 0 });
     }
   });
+  // #endregion
 
+  // #region MP3 - Configuration
   /**
    * Initialize AnimeThemes config bindings.
    * @param {Object} cfg - The current config object.
    * @param {Function} persist - Async function to save config changes.
    */
   window._sr.initAtConfig = (cfg, persist) => {
-    const pb = el("at-playback"),
-      mBtn = el("at-mode"),
-      pBtn = el("at-play");
+    const playback = el("at-playback"),
+      modeButton = el("at-mode"),
+      playButton = el("at-play");
 
     const getVal = (path) => window._sr.getValueByPath(cfg, path);
 
-    if (pb) {
+    if (playback) {
       const sync = (v) => {
-        if (pBtn) pBtn.hidden = !v;
-        if (mBtn) mBtn.hidden = !v;
+        if (playButton) playButton.hidden = !v;
+        if (modeButton) modeButton.hidden = !v;
         syncPlaybackUI();
       };
 
       const isEnabled = !!getVal("Playback.AnimeThemesMp3Playback");
-      pb.setAttribute("aria-pressed", isEnabled);
+      playback.setAttribute("aria-pressed", isEnabled);
       sync(isEnabled);
 
-      pb.onclick = async () => {
-        const n = pb.getAttribute("aria-pressed") !== "true";
-        pb.setAttribute("aria-pressed", n);
+      playback.onclick = async () => {
+        const n = playback.getAttribute("aria-pressed") !== "true";
+        playback.setAttribute("aria-pressed", n);
         sync(n);
 
         if (!n && atAudio) {
@@ -255,25 +254,23 @@
       };
     }
 
-    if (mBtn) {
+    if (modeButton) {
       const currentMode = getVal("Playback.AnimeThemesMp3Mode") || "loop";
-      mBtn.setAttribute("data-mode", currentMode);
-      // Ensure initial tooltip is correct on page load
-      updatePlaybackTooltip(mBtn);
+      modeButton.setAttribute("data-mode", currentMode);
+      updatePlaybackTooltip(modeButton);
 
-      mBtn.onclick = async () => {
-        const n = getNextMode(mBtn.getAttribute("data-mode"), ["loop", "shuffle", "off"]);
-        mBtn.setAttribute("data-mode", n);
-        // Refresh tooltip on click
-        updatePlaybackTooltip(mBtn);
+      modeButton.onclick = async () => {
+        const n = getNextMode(modeButton.getAttribute("data-mode"), ["loop", "shuffle", "off"]);
+        modeButton.setAttribute("data-mode", n);
+        updatePlaybackTooltip(modeButton);
         if (atAudio) atAudio.loop = n === "loop";
         window._sr.setValueByPath(cfg, "Playback.AnimeThemesMp3Mode", n);
         await persist(cfg);
       };
     }
 
-    if (pBtn) {
-      pBtn.onclick = async () => {
+    if (playButton) {
+      playButton.onclick = async () => {
         if (atAudio?.src && (atAudio.paused || atAudio.ended)) {
           if (atAudio.ended) atAudio.currentTime = 0;
           atAudio.play();
@@ -282,15 +279,6 @@
           const d = await (await fetch(base + "/animethemes/mp3/random")).json();
           d?.path ? playThemeMp3(d.path) : showToast("No Theme.mp3 Files Found", "error", window._sr.TOAST_MS);
         }
-      };
-    }
-
-    const webmModeEl = el("webm-mode");
-    if (webmModeEl) {
-      webmModeEl.setAttribute("data-mode", getVal("Playback.AnimeThemesWebmMode") || "loop");
-      webmModeEl._persist = (m) => {
-        window._sr.setValueByPath(cfg, "Playback.AnimeThemesWebmMode", m);
-        persist(cfg);
       };
     }
   };

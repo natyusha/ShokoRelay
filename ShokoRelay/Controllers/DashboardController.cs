@@ -15,7 +15,11 @@ namespace ShokoRelay.Controllers;
 [Route(ShokoRelayInfo.BasePath)]
 public class DashboardController(ConfigProvider configProvider, IMetadataService metadataService, PlexClient plexLibrary) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
 {
+    #region Fields and Constructor
+
     private static readonly Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider ContentTypeProvider = new();
+
+    #endregion
 
     #region Pages & Assets
 
@@ -143,6 +147,13 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
         : "application/octet-stream";
 
     /// <summary>Schema definition for a configuration property.</summary>
+    /// <param name="Path">The JSON path to the property.</param>
+    /// <param name="Type">The UI data type.</param>
+    /// <param name="Display">The display name.</param>
+    /// <param name="Description">The descriptive tooltip text.</param>
+    /// <param name="DefaultValue">The hardcoded default value.</param>
+    /// <param name="EnumValues">Possible values for enums.</param>
+    /// <param name="Advanced">Whether this is an advanced setting.</param>
     private sealed record ConfigPropertySchema(string Path, string Type, string? Display, string? Description, object? DefaultValue, object? EnumValues, bool Advanced);
 
     private static List<ConfigPropertySchema> BuildConfigSchema(Type type, string prefix, bool isAdvancedBranch = false)

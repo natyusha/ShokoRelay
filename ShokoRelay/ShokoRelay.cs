@@ -12,6 +12,8 @@ using ShokoRelay.Vfs;
 
 namespace ShokoRelay;
 
+#region Service Registration
+
 /// <summary>Registers plugin services and background workers into the DI container.</summary>
 public class ServiceRegistration : IPluginServiceRegistration
 {
@@ -49,6 +51,10 @@ public class ServiceRegistration : IPluginServiceRegistration
     }
 }
 
+#endregion
+
+#region Plugin Descriptor
+
 /// <summary>Plugin entry point and descriptor for Shoko Server.</summary>
 public class Plugin : IPlugin
 {
@@ -65,9 +71,13 @@ public class Plugin : IPlugin
     public string? EmbeddedThumbnailResourceName => "ShokoRelay.dashboard.img.shoko-relay-thumbnail.png";
 }
 
+#endregion
+
 /// <summary>Hosted service managing the VFS watcher and automation schedules.</summary>
 public class ShokoRelay : BackgroundService
 {
+    #region Fields & Constructor
+
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private static ConfigProvider? _configProvider;
 
@@ -91,15 +101,6 @@ public class ShokoRelay : BackgroundService
     private static DateTime? _lastImportRunUtc;
     private static DateTime? _lastPlexAutomationUtc;
     private static DateTime? _lastSyncWatchedUtc;
-
-    /// <summary>Manually mark import as run.</summary>
-    public static void MarkImportRunNow() => _lastImportRunUtc = DateTime.UtcNow;
-
-    /// <summary>Manually mark automation as run.</summary>
-    public static void MarkPlexAutomationRunNow() => _lastPlexAutomationUtc = DateTime.UtcNow;
-
-    /// <summary>Manually mark sync as run.</summary>
-    public static void MarkSyncRunNow() => _lastSyncWatchedUtc = DateTime.UtcNow;
 
     /// <summary>Initializes the Relay hosted service.</summary>
     public ShokoRelay(
@@ -125,6 +126,10 @@ public class ShokoRelay : BackgroundService
         _criticRatingService = criticRatingService;
         Logger.Info($"ShokoRelay v{ShokoRelayInfo.Version} initialized.");
     }
+
+    #endregion
+
+    #region Background Service Lifecycle
 
     /// <inheritdoc/>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -169,6 +174,19 @@ public class ShokoRelay : BackgroundService
         _watcher.Stop();
         await base.StopAsync(cancellationToken).ConfigureAwait(false);
     }
+
+    #endregion
+
+    #region Automation Scheduling
+
+    /// <summary>Manually mark import as run.</summary>
+    public static void MarkImportRunNow() => _lastImportRunUtc = DateTime.UtcNow;
+
+    /// <summary>Manually mark automation as run.</summary>
+    public static void MarkPlexAutomationRunNow() => _lastPlexAutomationUtc = DateTime.UtcNow;
+
+    /// <summary>Manually mark sync as run.</summary>
+    public static void MarkSyncRunNow() => _lastSyncWatchedUtc = DateTime.UtcNow;
 
     private static (DateTime LastScheduled, DateTime NextRun) ComputeSchedule(DateTime now, int offsetHours, int frequencyHours)
     {
@@ -247,4 +265,6 @@ public class ShokoRelay : BackgroundService
             }
         }
     }
+
+    #endregion
 }

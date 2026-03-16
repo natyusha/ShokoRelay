@@ -6,8 +6,14 @@ namespace ShokoRelay.Plex;
 /// <summary>Helper routines and data models for interacting with the Plex server API.</summary>
 public static class PlexApi
 {
+    #region JSON Configuration
+
     /// <summary>Shared JsonSerializerOptions used for deserializing Plex responses.</summary>
     public static readonly JsonSerializerOptions JsonOptions = new() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
+
+    #endregion
+
+    #region Deserialization Logic
 
     /// <summary>Read and deserialize a PlexMediaContainer from an HTTP response.</summary>
     /// <param name="response">The HTTP response message.</param>
@@ -19,7 +25,11 @@ public static class PlexApi
         var wrapper = await JsonSerializer.DeserializeAsync<PlexMediaContainerWrapper>(stream, JsonOptions, cancellationToken).ConfigureAwait(false);
         return wrapper?.MediaContainer;
     }
+
+    #endregion
 }
+
+#region Data Models
 
 /// <summary>Internal wrapper type matching the Plex JSON structure for media containers.</summary>
 public class PlexMediaContainerWrapper
@@ -116,3 +126,5 @@ public class PlexMetadataUser
     [JsonPropertyName("lastViewedAt")]
     public long? LastViewedAt { get; set; }
 }
+
+#endregion

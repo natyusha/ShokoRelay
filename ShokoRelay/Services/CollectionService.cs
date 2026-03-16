@@ -7,6 +7,8 @@ using ShokoRelay.Plex;
 
 namespace ShokoRelay.Services;
 
+#region Interface and Models
+
 /// <summary>Service responsible for building and managing Plex collections based on Shoko series metadata.</summary>
 public interface ICollectionService
 {
@@ -53,10 +55,18 @@ public sealed record BuildCollectionsResult(
 /// <param name="ErrorsList">List of specific error messages.</param>
 public sealed record ApplyPostersResult(int Processed, int Uploaded, int Skipped, int Errors, List<string> ErrorsList);
 
+#endregion
+
 /// <summary>Default implementation of <see cref="ICollectionService"/>.</summary>
 public class CollectionService(PlexClient plexClient, PlexCollections plexCollections, IMetadataService metadataService, PlexMetadata mapper) : ICollectionService
 {
+    #region Fields & Constructor
+
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+
+    #endregion
+
+    #region Collection Building
 
     /// <inheritdoc/>
     public async Task<BuildCollectionsResult> BuildCollectionsAsync(IEnumerable<IShokoSeries?> seriesList, CancellationToken cancellationToken = default)
@@ -136,6 +146,10 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
         }
     }
 
+    #endregion
+
+    #region Poster Application
+
     /// <inheritdoc/>
     public async Task<ApplyPostersResult> ApplyCollectionPostersAsync(IEnumerable<IShokoSeries?> seriesList, CancellationToken cancellationToken = default)
     {
@@ -182,9 +196,15 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
         return new ApplyPostersResult(processed, uploaded, skipped, errs, errorsList);
     }
 
+    #endregion
+
+    #region Internal Helpers
+
     private async Task<bool> TryApplyPoster(IShokoSeries series, string name, int cid, PlexLibraryTarget target, CancellationToken ct)
     {
         string? url = PlexHelper.GetCollectionPosterUrl(series, name, cid, metadataService, ShokoRelay.Settings.CollectionPosters);
         return !string.IsNullOrEmpty(url) && await plexCollections.UploadCollectionPosterByUrlAsync(cid, url, target, ct);
     }
+
+    #endregion
 }

@@ -9,72 +9,70 @@ body {
 */
 .player {
   display: flex;
-  flex-direction: column;
   position: relative;
-  overflow: hidden;
+  flex-direction: column;
+  border: none;
+  background-color: var(--panel-color);
   max-width: 100vw;
   max-height: 100vh;
-  background-color: var(--panel-color);
-  border: none;
+  overflow: hidden;
 }
 .player .video-container {
-  aspect-ratio: 16 / 9;
   position: relative;
+  background: black;
+  aspect-ratio: 16 / 9;
   width: 100%;
-  background: #000;
 }
 .player .video-container video {
-  object-fit: contain;
   width: 100.5%;
   height: 100%;
+  object-fit: contain;
 }
-.video-container .at-progress-track {
+.at-progress-track {
   position: absolute;
-  top: auto !important;
+  top: auto;
   bottom: 0;
-  height: 4px;
   transition: height 0.2s ease-in-out;
   background: var(--inset-color);
 }
-.video-container .at-progress-track::before {
-  content: "";
+.at-progress-track::before {
   position: absolute;
   top: -24px;
+  right: 0;
   bottom: 0;
   left: 0;
-  right: 0;
+  content: "";
 }
-.video-container .at-progress-fill {
-  transition: width 0.1s linear;
-  background: var(--hover-color);
+.at-progress-fill {
+  transition: filter 0.3s ease-in-out;
   border-radius: 0;
 }
-.video-container .at-progress-track:hover {
+.at-progress-track:hover {
   height: 24px;
 }
 #controls {
   display: flex;
   position: absolute;
-  z-index: 1;
-  bottom: -56px;
   right: 8px;
+  bottom: -56px;
+  z-index: 3;
 }
 #controls .at-btn svg {
+  margin-right: 8px;
   width: 1.7em;
   height: 1.7em;
-  margin-right: 8px;
 }
 #details {
   display: flex;
-  flex-direction: column;
   flex: 1;
+  flex-direction: column;
   min-height: 0;
 }
 .header {
   flex-shrink: 0;
-  height: 61px;
-  padding: 0 6px;
   border-bottom: 1px solid var(--border-color);
+  padding: 0 6px;
+  height: 61px;
 }
 .np-wrap {
   display: flex;
@@ -82,10 +80,10 @@ body {
   margin-bottom: -5px;
 }
 .now-playing {
-  overflow: hidden;
-  max-width: calc(100vw - 395px);
-  margin-top: 0.35em;
   cursor: default;
+  margin-top: 0.35em;
+  max-width: calc(100vw - 395px);
+  overflow: hidden;
   font-size: 1.3em;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -97,22 +95,22 @@ body {
 #title {
   display: block;
   flex: 1;
-  overflow: hidden;
   min-width: 0;
+  overflow: hidden;
   font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 #anime {
-  pointer-events: none;
   display: inline-block;
   opacity: 0.6;
-  overflow: hidden;
-  max-width: 100%;
-  margin-top: 0.15em;
   transition: all 0.3s ease-in-out;
-  font-size: 0.9em;
+  margin-top: 0.15em;
+  max-width: 100%;
+  overflow: hidden;
+  pointer-events: none;
   color: var(--text-color);
+  font-size: 0.9em;
   text-decoration: none;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -124,22 +122,22 @@ body {
 }
 .filter-wrap {
   display: flex;
-  align-items: center;
   position: relative;
+  align-items: center;
   max-width: 295px;
 }
 .filter-icon {
-  fill: var(--text-color);
   opacity: 0.6;
+  transition: all 0.3s ease-in-out;
+  fill: var(--text-color);
   width: 24px;
   height: 24px;
-  transition: all 0.3s ease-in-out;
 }
 .magnify {
-  pointer-events: none;
   position: absolute;
   top: 10px;
   left: 6px;
+  pointer-events: none;
 }
 .filter-wrap input {
   padding: 0 2.2em;
@@ -147,16 +145,16 @@ body {
 }
 #filter-clear {
   display: flex;
-  justify-content: center;
-  align-items: center;
   position: absolute;
-  z-index: 2;
   top: 5px;
   right: 3px;
-  padding: 4px;
-  background: none;
+  justify-content: center;
+  align-items: center;
+  z-index: 4;
   cursor: pointer;
   border: none;
+  background: none;
+  padding: 4px;
 }
 #filter-clear:hover {
   background: none;
@@ -171,16 +169,31 @@ body {
 
 /* #region MARK: Video UI Overlay
 */
-.video-ui-overlay {
-  inset: 0;
-  pointer-events: none;
+.video-container::after {
   position: absolute;
-  z-index: 15;
   opacity: 0;
+  z-index: 1;
   transition: opacity 0.3s ease-in-out;
-  font-size: 1em;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.6) 0%, transparent 15%), linear-gradient(to top, rgba(0, 0, 0, 0.6) 0%, transparent 15%);
+  pointer-events: none;
+  content: "";
   color: var(--text-color);
-  text-shadow: 0 0 4px var(--bg-color);
+}
+.ui-left,
+#volume-text {
+  pointer-events: none;
+}
+.ui-top-row,
+.ui-left,
+#volume-text {
+  z-index: 2;
+}
+.at-progress-track {
+  z-index: 3;
+}
+#volume-icon {
+  z-index: 4;
 }
 .ui-top-row,
 .ui-bottom-row {
@@ -190,45 +203,46 @@ body {
   padding: 0 15px;
 }
 .ui-top-row {
-  gap: 8px;
   top: 12px;
+  gap: 8px;
 }
 .ui-bottom-row {
-  font-variant-numeric: tabular-nums;
-  justify-content: space-between;
   bottom: 26px;
   left: 6px;
+  justify-content: space-between;
+  font-variant-numeric: tabular-nums;
 }
 .video-container:hover .video-ui-overlay,
 .video-container[data-volume-level="mute"] .video-ui-overlay {
-  opacity: 0.9;
+  opacity: 1;
 }
 .ui-top-row,
 .ui-left,
 #volume-text,
-#volume-mute-btn {
+#volume-icon {
   opacity: 0;
+
   transition: opacity 0.3s ease-in-out;
 }
+.video-container:hover::after,
 .video-container:hover .ui-top-row,
 .video-container:hover .ui-left,
 .video-container:hover #volume-text,
-.video-container:hover #volume-mute-btn,
-.video-container[data-volume-level="mute"] #volume-mute-btn {
-  opacity: 0.9;
+.video-container:hover #volume-icon,
+.video-container[data-volume-level="mute"] #volume-icon {
+  opacity: 1;
 }
 .ui-btn {
   all: unset;
-  pointer-events: auto;
   transition: color 0.3s ease-in-out;
   cursor: pointer;
+  pointer-events: auto;
   color: var(--text-color);
 }
 .ui-btn .icon-svg {
   fill: currentColor;
-  filter: drop-shadow(0 0 6px var(--bg-color));
-  width: 1.4em;
-  height: 1.4em;
+  width: 1.5em;
+  height: 1.5em;
 }
 .ui-btn:hover {
   opacity: 1;
@@ -251,7 +265,7 @@ body {
 }
 #fullscreen[data-state="fullscreen"] .fs-enter,
 #fullscreen .fs-exit,
-#volume-mute-btn .icon-svg {
+#volume-icon .icon-svg {
   display: none;
 }
 #fullscreen[data-state="fullscreen"] .fs-exit,
@@ -272,8 +286,8 @@ body {
   --spacing: 1.3rem;
   --radius: 6px;
   flex: 1;
-  overflow-y: auto;
   padding: 0 8px;
+  overflow-y: auto;
   font-size: 0.9em;
 }
 #tree .placeholder {
@@ -305,27 +319,27 @@ body {
   border-color: transparent;
 }
 #tree ul li::before {
-  content: "";
   display: block;
   position: absolute;
   top: calc(var(--spacing) / -2);
   left: -2px;
-  width: calc(var(--spacing) + 2px);
-  height: calc(var(--spacing) + 1px);
   border: solid var(--button-color);
   border-width: 0 0 2px 2px;
   border-bottom-left-radius: 3px;
+  width: calc(var(--spacing) + 2px);
+  height: calc(var(--spacing) + 1px);
+  content: "";
 }
 #tree summary {
-  user-select: none;
   display: block;
-  overflow: hidden;
-  padding: 2px 4px;
   cursor: pointer;
   border-radius: 3px;
+  padding: 2px 4px;
+  overflow: hidden;
+  list-style: none;
+  user-select: none;
   text-overflow: ellipsis;
   white-space: nowrap;
-  list-style: none;
 }
 #tree summary::marker,
 #tree summary::-webkit-details-marker,
@@ -340,28 +354,28 @@ body {
   position: absolute;
   top: calc(var(--spacing) / 2 - var(--radius));
   left: calc(var(--spacing) - var(--radius) - 1px);
+  border-radius: 50%;
+  background: var(--border-color);
   width: calc(2 * var(--radius));
   height: calc(2 * var(--radius));
-  background: var(--border-color);
-  border-radius: 50%;
 }
 #tree summary .tree-icon {
   display: block;
   z-index: 1;
-  background: var(--inset-color);
   border: 1px solid var(--text-color);
   border-radius: 2px;
+  background: var(--inset-color);
 }
 #tree summary .tree-icon::before,
 #tree summary .tree-icon::after {
-  content: "";
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
+  background: var(--text-color);
   width: 8px;
   height: 2px;
-  background: var(--text-color);
+  content: "";
 }
 #tree summary .tree-icon.expand::after {
   transform: translate(-50%, -50%) rotate(90deg);
@@ -372,11 +386,11 @@ body {
 #tree .leaf {
   display: flex;
   align-items: center;
-  overflow: hidden;
-  margin-left: -11px;
-  padding: 2px 4px;
   cursor: pointer;
+  margin-left: -11px;
   border-radius: 3px;
+  padding: 2px 4px;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -397,18 +411,18 @@ ul.tree {
 */
 .fav-icon,
 .loc-icon {
-  user-select: none;
   flex-shrink: 0;
-  width: 1.1em;
   transition: all 0.3s ease-in-out;
   cursor: pointer;
+  width: 1.1em;
+  user-select: none;
 }
 .fav-icon {
   opacity: 0.1;
 }
 .loc-icon {
-  margin-top: -0.1em;
   opacity: 0.6;
+  margin-top: -0.1em;
   color: var(--highlight-color);
 }
 .fav-icon:hover,
@@ -432,8 +446,8 @@ ul.tree {
   width: 500px;
 }
 .modal-body h3 {
-  padding-bottom: 4px;
   border-bottom: 1px solid var(--border-color);
+  padding-bottom: 4px;
   font-size: 1em;
   text-transform: uppercase;
 }
@@ -445,8 +459,8 @@ ul.tree {
 }
 .help-list li {
   display: flex;
-  align-items: center;
   flex: 1;
+  align-items: center;
   margin-bottom: 6px;
 }
 .inline-help {
@@ -456,34 +470,35 @@ ul.tree {
 }
 kbd,
 code {
-  min-width: 30px;
+  cursor: pointer;
   margin-right: 10px;
-  padding: 2px 6px;
   border-radius: 3px;
+  padding: 2px 6px;
+  min-width: 30px;
   text-align: center;
 }
 kbd {
-  box-shadow: 0 2px 0 1px var(--border-color);
-  background: var(--inset-color);
   cursor: default;
+  box-shadow: 0 2px 0 1px var(--border-color);
   border: 1px solid var(--border-color);
-  font-family: monospace;
+  background: var(--inset-color);
   color: var(--highlight-color);
+  font-family: monospace;
 }
 kbd:hover {
-  box-shadow: 0 1px 0 0.5px var(--border-color);
   top: 1px;
+  box-shadow: 0 1px 0 0.5px var(--border-color);
 }
 code {
-  background: var(--bg-color);
   border: 1px solid var(--border-color);
+  background: var(--bg-color);
   color: var(--text-color);
 }
 p {
   opacity: 0.7;
   margin: 10px 0 5px;
-  font-size: 0.8em;
   font-weight: 500;
+  font-size: 0.8em;
   text-transform: uppercase;
 }
 /* #endregion */
@@ -495,8 +510,8 @@ p {
     flex-direction: row;
   }
   .player .video-container {
-    aspect-ratio: auto;
     flex: 1;
+    aspect-ratio: auto;
     height: 100vh;
   }
   .player .video-container video {
@@ -514,8 +529,8 @@ p {
     border-bottom: 1px solid var(--border-color);
   }
   #controls {
-    bottom: 0px;
     right: -384px;
+    bottom: 0px;
   }
 }
 /* #endregion */

@@ -9,6 +9,8 @@ using ShokoRelay.Plex;
 
 namespace ShokoRelay.Vfs;
 
+#region Data Models
+
 /// <summary>Information about a specific series processed during a VFS build.</summary>
 /// <param name="Name">The display name of the series.</param>
 /// <param name="ElapsedMs">Time taken to process in milliseconds.</param>
@@ -42,9 +44,13 @@ public record VfsBuildResult(
     TimeSpan TotalElapsed
 );
 
+#endregion
+
 /// <summary>Builds a virtual filesystem tree for Plex mapping metadata to conventions.</summary>
 public class VfsBuilder
 {
+    #region Fields & Constructor
+
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private readonly IMetadataService _metadataService;
     private readonly string _pluginDataPath;
@@ -71,6 +77,10 @@ public class VfsBuilder
         OverrideHelper.EnsureLoaded();
     }
 
+    #endregion
+
+    #region Public Interface
+
     /// <summary>Build or clean VFS for a single series ID.</summary>
     public VfsBuildResult Build(int? seriesId = null, bool cleanRoot = true, bool pruneSeries = false) => BuildInternal(seriesId.HasValue ? [seriesId.Value] : null, cleanRoot, pruneSeries, false);
 
@@ -82,6 +92,10 @@ public class VfsBuilder
 
     /// <summary>Clean VFS for multiple series without building.</summary>
     public VfsBuildResult Clean(IReadOnlyCollection<int> seriesIds) => BuildInternal(seriesIds, true, false, true);
+
+    #endregion
+
+    #region Core Build Logic
 
     /// <summary> Internal core logic for orchestrating a VFS build or clean run.</summary>
     /// <param name="seriesIds">Optional collection of series IDs to process.</param>
@@ -141,6 +155,9 @@ public class VfsBuilder
                             cleanSw.Stop();
                             cleanupDetails.Add(new RootCleanupDetails(path, cleanSw.ElapsedMilliseconds));
                             Logger.Info("VFS Build: Cleaned root folder '{0}' in {1}ms", path, cleanSw.ElapsedMilliseconds);
+
+                            Directory.CreateDirectory(path);
+                            File.WriteAllText(Path.Combine(path, ".ignore"), ""); // Re-create the folder and add an .ignore file immediately after cleanup for Emby / Jellyin users
                         }
                         catch (Exception ex)
                         {
@@ -284,7 +301,14 @@ public class VfsBuilder
             if (cleanOnly)
                 continue;
             if (_createdDirsForBuild?.TryAdd(rootPath, 0) == true)
+            {
                 Directory.CreateDirectory(rootPath);
+                try
+                {
+                    File.WriteAllText(Path.Combine(rootPath, ".ignore"), ""); // Add an .ignore file immediately after the build starts for Emby / Jellyin users
+                }
+                catch { }
+            }
             if (_createdDirsForBuild?.TryAdd(seriesPath, 0) == true)
                 Directory.CreateDirectory(seriesPath);
 
@@ -378,6 +402,10 @@ public class VfsBuilder
         tcs.SetResult();
     }
 
+    #endregion
+
+    #region Asset Linking
+
     private void LinkMetadata(string sourceDir, string destDir)
     {
         if (string.IsNullOrWhiteSpace(sourceDir) || !Directory.Exists(sourceDir))
@@ -397,7 +425,7 @@ public class VfsBuilder
         if (string.IsNullOrWhiteSpace(sourceDir) || !Directory.Exists(sourceDir))
             return;
         string originalBase = Path.GetFileNameWithoutExtension(sourceFile);
-        var lazyLoader = _subtitleFileCacheForBuild?.GetOrAdd(sourceDir, dir => new Lazy<string[]>(() => [.. Directory.GetFiles(dir).Where(f => SubtitleExtensions.Contains(Path.GetExtension(f)))]));
+        var lazyLoader = _subtitleFileCacheForBuild?.GetOrAdd(sourceDir, dir => new Lazy<string[]>(() => [.. Directory.GetFiles(sourceDir).Where(f => SubtitleExtensions.Contains(Path.GetExtension(f)))]));
         var candidates = lazyLoader?.Value ?? [];
         foreach (var sub in candidates)
         {
@@ -416,6 +444,10 @@ public class VfsBuilder
             }
         }
     }
+
+    #endregion
+
+    #region Internal Helpers
 
     private void PruneSeries(string rootFolderName, IShokoSeries series)
     {
@@ -456,4 +488,6 @@ public class VfsBuilder
             )
             ?? MapHelper.GetSeriesFileData(series);
     }
+
+    #endregion
 }

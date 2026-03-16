@@ -10,9 +10,15 @@ namespace ShokoRelay.Services;
 /// </summary>
 public class ShokoImportService(IVideoService videoService, IVideoReleaseService releaseService)
 {
+    #region Fields & Constructor
+
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private readonly IVideoService _videoService = videoService ?? throw new ArgumentNullException(nameof(videoService));
     private readonly IVideoReleaseService _releaseService = releaseService ?? throw new ArgumentNullException(nameof(releaseService));
+
+    #endregion
+
+    #region Import Logic
 
     /// <summary>
     /// Trigger import scans for every managed folder marked as a "Source".
@@ -45,6 +51,10 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
 
         return folders;
     }
+
+    #endregion
+
+    #region Housekeeping Logic
 
     /// <summary>
     /// Scan for video file entries whose physical file has disappeared and optionally remove those records from the database and release info (MyList).
@@ -83,4 +93,6 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
                 TaskHelper.FinishTask(taskName);
         }
     }
+
+    #endregion
 }

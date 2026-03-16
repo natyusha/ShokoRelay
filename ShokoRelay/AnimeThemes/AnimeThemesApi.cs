@@ -7,6 +7,8 @@ namespace ShokoRelay.AnimeThemes;
 /// <summary>HTTP client for AnimeThemes API interactions with rate limiting and JSON deserialization.</summary>
 public class AnimeThemesApi
 {
+    #region Fields & Constructor
+
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private static readonly TimeSpan RateLimitDelay = TimeSpan.FromSeconds(0.7);
 
@@ -23,6 +25,10 @@ public class AnimeThemesApi
         _jsonOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true, WriteIndented = true };
         AnimeThemesHelper.EnsureUserAgent(_http);
     }
+
+    #endregion
+
+    #region API Methods
 
     /// <summary>Fetch video metadata with included audio, theme info, anime data, and song artists in a single optimized call.</summary>
     /// <param name="videoBaseName">The base name of the video file to query.</param>
@@ -64,6 +70,10 @@ public class AnimeThemesApi
         string url = $"{AnimeThemesHelper.AtApiBase}/animetheme/{themeId}?include=animethemeentries.videos.audio,song.artists";
         return await GetJsonAsync<ThemeWithAudioResponse>(url, ct);
     }
+
+    #endregion
+
+    #region Internal Logic
 
     /// <summary>Generic JSON deserialization with automatic rate limiting and error handling.</summary>
     /// <typeparam name="T">The type to deserialize into.</typeparam>
@@ -107,6 +117,10 @@ public class AnimeThemesApi
             _rateLock.Release();
         }
     }
+
+    #endregion
+
+    #region Data Models
 
     /// <summary>Response wrapper for a video metadata request.</summary>
     public sealed record VideoWithAudioResponse(VideoWithAudioEntry? Video);
@@ -172,4 +186,6 @@ public class AnimeThemesApi
 
     /// <summary>Represents an external resource link.</summary>
     public sealed record ResourceItem([property: JsonPropertyName("external_id")] int? ExternalId, string Site);
+
+    #endregion
 }

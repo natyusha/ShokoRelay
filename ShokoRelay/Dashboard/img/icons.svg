@@ -100,7 +100,7 @@
   </symbol>
   <!-- #endregion -->
 
-  <!-- #region MARK: Playback
+  <!-- #region MARK: Player
   -->
   <symbol id="movie-open" viewBox="0 0 24 24">
     <title>Open Theme Modal</title>

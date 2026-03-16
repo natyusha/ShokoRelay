@@ -5,6 +5,8 @@ namespace ShokoRelay.Plex
     /// <summary>Centralized Plex constants for type codes, rating key prefixes, and supported features.</summary>
     public static class PlexConstants
     {
+        #region Rating Key Prefixes
+
         // csharpier-ignore-start
         /// <summary>Prefix for collection rating keys.</summary>
         public const string CollectionPrefix    = "c";
@@ -14,6 +16,10 @@ namespace ShokoRelay.Plex
         public const string EpisodePrefix       = "e";
         /// <summary>Prefix for multi-part file rating keys.</summary>
         public const string PartPrefix          = "p";
+
+        #endregion
+
+        #region Metadata Type IDs
 
         /// <summary>Plex metadata type ID for movies.</summary>
         public const int TypeMovie              =  1;
@@ -46,6 +52,10 @@ namespace ShokoRelay.Plex
         /// <summary>Plex metadata type ID for collections.</summary>
         public const int TypeCollection         = 18;
 
+        #endregion
+
+        #region Season Numbering
+
         /// <summary>Standard season number (1).</summary>
         public const int SeasonStandard         =  1;
         /// <summary>Specials season number (0).</summary>
@@ -61,6 +71,10 @@ namespace ShokoRelay.Plex
         /// <summary>Unknown season number (-9).</summary>
         public const int SeasonUnknown          = -9;
         // csharpier-ignore-end
+
+        #endregion
+
+        #region Subtypes & Extras
 
         /// <summary>Optional subtype lists (for reference / validation).</summary>
         public static readonly string[] CollectionSubtypes = ["movie", "show", "artist", "album"];
@@ -92,6 +106,10 @@ namespace ShokoRelay.Plex
             { SeasonUnknown, ("Other", "other") },
         };
 
+        #endregion
+
+        #region Local Media Assets
+
         /// <summary>Extension-set lookup for recognized artwork file types.</summary>
         public static class LocalMediaAssets
         {
@@ -116,5 +134,7 @@ namespace ShokoRelay.Plex
             /// <summary>Text-based subtitle extensions supported by Plex.</summary>
             public static readonly FrozenSet<string> Subtitles = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".srt", ".smi", ".ssa", ".ass", ".vtt" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
         }
+
+        #endregion
     }
 }

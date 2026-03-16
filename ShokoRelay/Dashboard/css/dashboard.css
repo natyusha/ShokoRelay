@@ -1,17 +1,17 @@
 /* #region MARK: Toggle Buttons
 */
 .w46-button {
-  fill: var(--bg-color);
   display: inline-flex;
   justify-content: center;
   align-items: center;
-  max-width: 46px;
+  fill: var(--bg-color);
   padding: 12px 16px;
+  max-width: 46px;
 }
 .w46-button .icon-svg {
+  margin: -2em;
   width: 2em;
   height: 2em;
-  margin: -2em;
 }
 .w46-button.toggle[aria-pressed="true"] {
   background: hsl(from var(--hover-color) h 60% l);
@@ -28,23 +28,26 @@ button.loading {
   opacity: 0.6;
   cursor: not-allowed;
 }
+button.loading:hover {
+  background-color: var(--button-color);
+}
 .button-spinner {
-  pointer-events: none;
   position: absolute;
-  z-index: 2;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
+  z-index: 2;
   width: 20px;
   height: 20px;
+  pointer-events: none;
 }
 .button-spinner svg {
-  fill: var(--bg-color);
-  transform-origin: center center;
   display: block;
+  transform-origin: center center;
+  animation: spin 900ms linear infinite;
+  fill: var(--bg-color);
   width: 100%;
   height: 100%;
-  animation: spin 900ms linear infinite;
 }
 .w46-button .button-spinner {
   margin: 24px 0 0 24px;
@@ -62,22 +65,22 @@ button.loading {
 /* #region MARK: Styled Checkboxes
 */
 label.shoko-checkbox {
-  user-select: none;
   display: inline-flex;
   align-items: flex-start;
   gap: 0.6rem;
-  padding: 0.25rem 0;
   cursor: pointer;
+  padding: 0.25rem 0;
+  user-select: none;
 }
 label.shoko-checkbox input[type="checkbox"] {
   position: absolute;
   overflow: hidden;
   clip: rect(0 0 0 0);
+  margin: -1px;
+  border: 0;
+  padding: 0;
   width: 1px;
   height: 1px;
-  margin: -1px;
-  padding: 0;
-  border: 0;
   white-space: nowrap;
 }
 .shoko-checkbox-text {
@@ -89,11 +92,11 @@ label.shoko-checkbox input[type="checkbox"] {
   font-weight: 500;
 }
 .shoko-checkbox-icon {
-  fill: var(--highlight-color);
   display: inline-flex;
   justify-content: center;
   align-items: center;
   transition: all 0.3s ease-in-out;
+  fill: var(--highlight-color);
 }
 .shoko-checkbox-icon svg {
   width: 1.5rem;
@@ -124,12 +127,12 @@ label.plex-auth.shoko-checkbox input:disabled ~ .shoko-checkbox-text {
 */
 .floating-actions {
   display: flex;
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
   flex-direction: column;
   gap: 8px;
-  position: fixed;
   z-index: 1000;
-  bottom: 12px;
-  right: 12px;
 }
 .floating-actions .icon-svg,
 .floating-actions .at-svg {
@@ -139,9 +142,9 @@ label.plex-auth.shoko-checkbox input:disabled ~ .shoko-checkbox-text {
   display: inline-flex;
   justify-content: center;
   align-items: center;
+  transition: all 0.3s ease-in-out;
   width: 40px;
   height: 40px;
-  transition: all 0.3s ease-in-out;
   color: var(--text-color);
 }
 button.float-link {
@@ -150,12 +153,12 @@ button.float-link {
   display: inline-flex;
   justify-content: center;
   align-items: center;
+  margin: 0;
+  border: none;
+  background: transparent;
+  padding: 0;
   width: 40px;
   height: 40px;
-  margin: 0;
-  padding: 0;
-  background: transparent;
-  border: none;
   color: var(--text-color);
 }
 .float-link:hover {
@@ -175,24 +178,24 @@ button.float-link {
   transform: translateY(4px) rotate(-135deg);
 }
 .details-anim > summary {
-  outline: none;
-  user-select: none;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin: 6px 12px 6px 0;
   transition: all 0.3s ease-in-out;
   cursor: pointer;
+  margin: 6px 12px 6px 0;
+  outline: none;
   font-weight: 500;
+  user-select: none;
 }
 .details-anim > summary::after {
-  content: "";
   display: inline-block;
   transform: rotate(45deg);
-  padding: 4px;
   transition: transform 0.3s ease;
   border: solid;
   border-width: 0 3px 3px 0;
+  padding: 4px;
+  content: "";
 }
 .details-anim > summary:hover {
   color: var(--hover-color);
@@ -203,35 +206,35 @@ button.float-link {
 */
 #toast-container {
   display: flex;
-  flex-direction: column-reverse;
-  gap: 8px;
   position: fixed;
-  z-index: 2000;
   top: auto;
+  right: auto;
   bottom: 12px;
   left: 12px;
-  right: auto;
+  flex-direction: column-reverse;
+  gap: 8px;
+  z-index: 2000;
 }
 .toast {
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
-  opacity: 0;
   transform: translateX(-18px) translateZ(0);
-  min-width: 220px;
-  max-width: 420px;
-  padding: 10px 14px;
+  opacity: 0;
   transition:
     transform 260ms cubic-bezier(0.2, 0.9, 0.2, 1),
     opacity 220ms ease;
-  background: var(--panel-color);
   cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
   border: 1px solid var(--border-color);
   border-radius: 6px;
-  font-size: 0.95em;
+  background: var(--panel-color);
+  padding: 10px 14px;
+  min-width: 220px;
+  max-width: 420px;
   color: var(--text-color);
+  font-size: 0.95em;
 }
 .toast.visible {
-  opacity: 1;
   transform: translateX(0) translateZ(0);
+  opacity: 1;
 }
 .toast.info {
   border-left: 4px solid var(--highlight-color);
@@ -249,12 +252,12 @@ button.float-link {
   outline: none;
 }
 .toast-message {
-  overflow-wrap: break-word;
   display: block;
-  overflow-y: auto;
-  max-height: 150px;
   padding-right: 4px;
+  max-height: 150px;
+  overflow-y: auto;
   word-break: break-word;
+  overflow-wrap: break-word;
 }
 .np-line {
   display: block;

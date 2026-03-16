@@ -330,6 +330,7 @@ public class AdvancedConfig
 {
     /// <summary>The base Shoko server URL.</summary>
     [Display(Name = "Shoko Server URL", Description = "A URL and port that Plex can access Shoko server from (e.g. http://localhost:8111)")]
+    [RegularExpression(@"^https?://[a-zA-Z0-9.-]+(:\d+)?$", ErrorMessage = "Invalid URL format. Use http(s)://HOST:PORT")]
     [DefaultValue("")]
     public string ShokoServerUrl { get; set; } = "";
 

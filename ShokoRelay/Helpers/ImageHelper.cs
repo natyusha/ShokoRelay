@@ -5,6 +5,8 @@ using Shoko.Abstractions.Metadata.Containers;
 
 namespace ShokoRelay.Helpers;
 
+#region Data Models
+
 /// <summary>DTO describing an image for the dashboard and Plex endpoints.</summary>
 public sealed class ImageInfo
 {
@@ -21,9 +23,13 @@ public sealed class ImageInfo
     public string Url { get; init; } = "";
 }
 
+#endregion
+
 /// <summary>Utilities for generating image URLs and arrays suitable for Plex metadata and the web dashboard.</summary>
 public static class ImageHelper
 {
+    #region URL Generation
+
     /// <summary>Construct a full URL for the given image, including an optional cache-buster.</summary>
     /// <param name="image">Image metadata object.</param>
     /// <param name="imageTypeOverride">Optional string to override the path type.</param>
@@ -34,6 +40,10 @@ public static class ImageHelper
         var url = $"{ShokoRelay.ServerBaseUrl}/api/v3/Image/{image.Source}/{imageTypeOverride ?? image.ImageType.ToString()}/{image.ID}";
         return string.IsNullOrEmpty(cacheBuster) ? url : $"{url}?t={cacheBuster}";
     }
+
+    #endregion
+
+    #region Array Builders
 
     /// <summary>Build an array of ImageInfo records from the supplied images collection.</summary>
     /// <param name="images">Object providing images.</param>
@@ -100,4 +110,6 @@ public static class ImageHelper
                 ]
             : [.. GenerateImageArray(seriesImages, alt, addEveryImage, cacheBuster).Where(i => i.Type == "coverPoster")];
     }
+
+    #endregion
 }

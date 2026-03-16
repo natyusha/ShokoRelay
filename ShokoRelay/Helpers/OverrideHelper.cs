@@ -6,11 +6,17 @@ namespace ShokoRelay.Helpers;
 /// <summary>Parses an optional "anidb_vfs_overrides.csv" file to group multiple Shoko series IDs together.</summary>
 public static class OverrideHelper
 {
+    #region Fields & Constants
+
     private static readonly Dictionary<int, List<int>> _groups = [];
     private static DateTime _lastWriteUtc = DateTime.MinValue;
     private static string? _loadedPath;
     private const string OverridesFileName = "anidb_vfs_overrides.csv";
     private static string OverridesPath => Path.Combine(ShokoRelay.ConfigDirectory, OverridesFileName);
+
+    #endregion
+
+    #region Loading Logic
 
     /// <summary>Load override groups from the CSV file if it has changed since the last load.</summary>
     public static void EnsureLoaded()
@@ -69,6 +75,10 @@ public static class OverrideHelper
         catch { }
     }
 
+    #endregion
+
+    #region Series Resolution
+
     /// <summary>Return the primary series id for the given Shoko series ID according to overrides.</summary>
     /// <param name="shokoSeriesId">The input series ID.</param>
     /// <param name="metadataService">Service used to resolve series mappings.</param>
@@ -117,4 +127,6 @@ public static class OverrideHelper
         }
         return [shokoSeriesId];
     }
+
+    #endregion
 }

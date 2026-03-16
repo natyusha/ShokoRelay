@@ -23,10 +23,14 @@ public class ShokoController(
     SyncToPlex syncToPlexService
 ) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
 {
+    #region Fields
+
     private readonly VfsBuilder _vfsBuilder = vfsBuilder;
     private readonly Services.ShokoImportService _shokoImportService = shokoImportService;
     private readonly SyncToShoko _watchedSyncService = watchedSyncService;
     private readonly SyncToPlex _syncToPlexService = syncToPlexService;
+
+    #endregion
 
     #region Virtual File System
 

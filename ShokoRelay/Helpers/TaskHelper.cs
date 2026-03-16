@@ -7,6 +7,8 @@ namespace ShokoRelay.Helpers;
 /// </summary>
 public static class TaskHelper
 {
+    #region Fields
+
     /// <summary>
     /// Currently running tasks and their start times.
     /// </summary>
@@ -16,6 +18,10 @@ public static class TaskHelper
     /// Stores the results of completed tasks so the UI can retrieve them after a refresh.
     /// </summary>
     public static readonly ConcurrentDictionary<string, object> TaskResults = new();
+
+    #endregion
+
+    #region Task Lifecycle
 
     /// <summary>Registers a task as active.</summary>
     /// <param name="taskName">The unique identifier for the task.</param>
@@ -37,4 +43,6 @@ public static class TaskHelper
         ActiveTasks.TryRemove(taskName, out _);
         TaskResults[taskName] = result;
     }
+
+    #endregion
 }

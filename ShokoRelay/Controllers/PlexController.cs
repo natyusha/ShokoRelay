@@ -22,11 +22,15 @@ public class PlexController(
     IUserDataService userDataService
 ) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
 {
+    #region Fields
+
     private readonly PlexAuth _plexAuth = plexAuth;
     private readonly Services.ICollectionService _collectionService = collectionService;
     private readonly Services.ICriticRatingService _criticRatingService = criticRatingService;
     private readonly IUserService _userService = userService;
     private readonly IUserDataService _userDataService = userDataService;
+
+    #endregion
 
     #region Authentication
 

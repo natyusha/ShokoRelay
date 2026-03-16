@@ -9,6 +9,8 @@ namespace ShokoRelay.Helpers;
 /// <summary>Utility methods for writing plugin-specific diagnostic logs and structured reports.</summary>
 public static class LogHelper
 {
+    #region Logging Interface
+
     /// <summary>Write content to a log file inside the plugin's logs directory.</summary>
     /// <param name="pluginDir">Root plugin directory.</param>
     /// <param name="fileName">Target filename.</param>
@@ -23,7 +25,11 @@ public static class LogHelper
         return path;
     }
 
-    #region Report Builders
+    #endregion
+
+    #region Report Generation
+
+    #region Internal Helpers
 
     private static void AppendHeader(StringBuilder sb, string title)
     {
@@ -31,6 +37,10 @@ public static class LogHelper
         sb.AppendLine(new string('-', 60));
         sb.AppendLine();
     }
+
+    #endregion
+
+    #region Report Builders
 
     /// <summary>Build the report content for collections-report.log.</summary>
     /// <param name="sb">Target builder.</param>
@@ -157,7 +167,7 @@ public static class LogHelper
         }
     }
 
-    /// <summary>Build the report content for at-vfs-build-report.log.</summary>
+    /// <summary>Build the report content for at-vfs-report.log.</summary>
     /// <param name="sb">Target builder.</param>
     /// <param name="result">Build result data.</param>
     /// <param name="filter">Series filter list.</param>
@@ -180,7 +190,7 @@ public static class LogHelper
         }
     }
 
-    /// <summary>Build the report content for at-vfs-map-report.log.</summary>
+    /// <summary>Build the report content for at-map-report.log.</summary>
     /// <param name="sb">Target builder.</param>
     /// <param name="result">Map result data.</param>
     public static void BuildAtVfsMapReport(StringBuilder sb, AnimeThemesMappingBuildResult result)
@@ -202,6 +212,8 @@ public static class LogHelper
         foreach (var i in result.Items)
             sb.AppendLine($"  [{i.Status}] {i.AnimeTitle ?? i.Folder} - {i.Slug}");
     }
+
+    #endregion
 
     #endregion
 }

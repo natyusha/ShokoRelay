@@ -103,7 +103,7 @@
       el("confirm-cancel").onclick = close;
       execBtn.onclick = async () => {
         close();
-        
+
         // Trigger withButtonAction logic on the main dashboard button to show the spinner and register the task.
         withButtonAction(removeBtn, async () => {
           showToast("Remove Missing: Processing...", "info", TOAST_MS);
@@ -168,7 +168,7 @@
         if (res.ok) {
           // Drill into nested PascalCase properties for the sync result
           const d = res.data.data;
-          const summaryText = `${summarizeResult(res) || `processed ${d.Processed ?? 0}`}${d.VotesFound ? `, votes: ${d.VotesFound}` : ""}`;
+          const summaryText = `${summarizeResult(res).text || `processed ${d.Processed ?? 0}`}${d.VotesFound ? `, votes: ${d.VotesFound}` : ""}`;
           toastOperation(res, "Sync", { summary: summaryText });
           close();
         } else {

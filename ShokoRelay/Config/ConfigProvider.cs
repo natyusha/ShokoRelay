@@ -15,6 +15,8 @@ namespace ShokoRelay.Config;
 /// </summary>
 public class ConfigProvider
 {
+    #region Fields & Constructor
+
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private static readonly JsonSerializerOptions Options = new() { AllowTrailingCommas = true, WriteIndented = true };
 
@@ -64,6 +66,10 @@ public class ConfigProvider
         SetupWatcher(_tokenPath);
     }
 
+    #endregion
+
+    #region Watcher Logic
+
     private void SetupWatcher(string path)
     {
         var watcher = new FileSystemWatcher(Path.GetDirectoryName(path)!, Path.GetFileName(path)) { NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName };
@@ -82,6 +88,10 @@ public class ConfigProvider
         }
         Logger.Info("Settings invalidated due to external file change.");
     }
+
+    #endregion
+
+    #region Sanitization
 
     /// <summary>
     /// Convert any JsonElement trees within <paramref name="obj"/> into plain CLR values.
@@ -109,6 +119,10 @@ public class ConfigProvider
             JsonValueKind.Array => je.EnumerateArray().Select(x => SanitizeConfigObject(x)).ToList(),
             _ => null!,
         };
+
+    #endregion
+
+    #region Settings Management
 
     /// <summary>
     /// Return the current settings, loading from disk if not already cached.
@@ -152,20 +166,6 @@ public class ConfigProvider
         _settings = settings;
     }
 
-    /// <summary>Deletes the Plex token/secrets file from disk.</summary>
-    public void DeleteTokenFile()
-    {
-        try
-        {
-            if (File.Exists(_tokenPath))
-                File.Delete(_tokenPath);
-        }
-        catch (Exception ex)
-        {
-            Logger.Warn(ex, "Failed to delete token file.");
-        }
-    }
-
     private RelayConfig GetSettingsFromFile()
     {
         RelayConfig s;
@@ -184,23 +184,9 @@ public class ConfigProvider
         return s;
     }
 
-    /// <summary>
-    /// Parse a comma-separated string of Plex user entries, optionally containing 4-digit PINs.
-    /// </summary>
-    /// <param name="raw">The raw configuration string to parse.</param>
-    /// <returns>A list of tuples containing the username and optional PIN.</returns>
-    public static List<(string Name, string? Pin)> ParseExtraPlexUsers(string? raw) =>
-        [
-            .. (raw ?? "")
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Select(s => s.Split(';', 2))
-                .Where(p => p.Length > 0 && !string.IsNullOrWhiteSpace(p[0]))
-                .Select(p => (Name: p[0].Trim(), Pin: (p.Length > 1 && p[1].Trim().Length == 4 && p[1].Trim().All(char.IsDigit)) ? p[1].Trim() : null)),
-        ];
+    #endregion
 
-    /// <summary>Returns the parsed and cached list of extra Plex users configured in settings.</summary>
-    /// <returns>A list of extra user name and PIN tuples.</returns>
-    public List<(string Name, string? Pin)> GetExtraPlexUserEntries() => _cachedExtraUsers ??= ParseExtraPlexUsers(GetSettings().Automation.ExtraPlexUsers);
+    #region Plex Secrets and Token Management
 
     private sealed class TokenFile
     {
@@ -209,6 +195,20 @@ public class ConfigProvider
         public string? AdminUsername { get; set; }
         public List<PlexAvailableServer>? Servers { get; set; }
         public List<PlexAvailableLibrary>? Libraries { get; set; }
+    }
+
+    /// <summary>Deletes the Plex token/secrets file from disk.</summary>
+    public void DeleteTokenFile()
+    {
+        try
+        {
+            if (File.Exists(_tokenPath))
+                File.Delete(_tokenPath);
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, "Failed to delete token file.");
+        }
     }
 
     private TokenFile ReadTokenFile()
@@ -302,6 +302,32 @@ public class ConfigProvider
     /// <returns>True if the server is in the discovered list.</returns>
     public bool IsManagedServer(string? uuid) => !string.IsNullOrWhiteSpace(uuid) && GetPlexDiscoveredServers().Any(s => string.Equals(s.Id, uuid, StringComparison.OrdinalIgnoreCase));
 
+    #endregion
+
+    #region User Management
+
+    /// <summary>
+    /// Parse a comma-separated string of Plex user entries, optionally containing 4-digit PINs.
+    /// </summary>
+    /// <param name="raw">The raw configuration string to parse.</param>
+    /// <returns>A list of tuples containing the username and optional PIN.</returns>
+    public static List<(string Name, string? Pin)> ParseExtraPlexUsers(string? raw) =>
+        [
+            .. (raw ?? "")
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(s => s.Split(';', 2))
+                .Where(p => p.Length > 0 && !string.IsNullOrWhiteSpace(p[0]))
+                .Select(p => (Name: p[0].Trim(), Pin: (p.Length > 1 && p[1].Trim().Length == 4 && p[1].Trim().All(char.IsDigit)) ? p[1].Trim() : null)),
+        ];
+
+    /// <summary>Returns the parsed and cached list of extra Plex users configured in settings.</summary>
+    /// <returns>A list of extra user name and PIN tuples.</returns>
+    public List<(string Name, string? Pin)> GetExtraPlexUserEntries() => _cachedExtraUsers ??= ParseExtraPlexUsers(GetSettings().Automation.ExtraPlexUsers);
+
+    #endregion
+
+    #region Normalization and Validation
+
     private bool NormalizePathMappings(RelayConfig settings)
     {
         if (settings.Advanced.PathMappings.Count == 0)
@@ -355,4 +381,6 @@ public class ConfigProvider
         if (!Validator.TryValidateObject(s, new ValidationContext(s), results, true))
             throw new ArgumentException("Config validation failed.");
     }
+
+    #endregion
 }

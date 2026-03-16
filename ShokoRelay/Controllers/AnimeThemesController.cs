@@ -20,10 +20,14 @@ public class AnimeThemesController(
     AnimeThemesMapping animeThemesMapping
 ) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
 {
+    #region Fields
+
     private readonly AnimeThemesMp3Generator _animeThemesMp3Generator = animeThemesMp3Generator;
     private readonly AnimeThemesMapping _animeThemesMapping = animeThemesMapping;
 
-    #region VFS Mapping & Build
+    #endregion
+
+    #region VFS Mapping / Build
 
     /// <summary>Applies the anime‑themes mapping file to the directory structure.</summary>
     /// <param name="filter">Optional comma-separated Shoko Series IDs to restrict the build.</param>
@@ -54,7 +58,7 @@ public class AnimeThemesController(
                 }
             }
 
-            var actionResult = LogAndReturn("at-vfs-build-report.log", result, (sb, r) => LogHelper.BuildAtVfsBuildReport(sb, r, filterIds ?? []));
+            var actionResult = LogAndReturn("at-vfs-report.log", result, (sb, r) => LogHelper.BuildAtVfsBuildReport(sb, r, filterIds ?? []));
             TaskHelper.CompleteTask(taskName, (actionResult as OkObjectResult)?.Value!);
             return actionResult;
         }
@@ -101,7 +105,7 @@ public class AnimeThemesController(
         try
         {
             var result = await _animeThemesMapping.BuildMappingFileAsync(CancellationToken.None).ConfigureAwait(false);
-            var actionResult = LogAndReturn("at-vfs-map-report.log", result, LogHelper.BuildAtVfsMapReport);
+            var actionResult = LogAndReturn("at-map-report.log", result, LogHelper.BuildAtVfsMapReport);
             TaskHelper.CompleteTask(taskName, (actionResult as OkObjectResult)?.Value!);
             return actionResult;
         }
@@ -211,7 +215,7 @@ public class AnimeThemesController(
 
     #endregion
 
-    #region WebM Player & Favourites
+    #region Player / Favourites
 
     /// <summary>Returns the hierarchical tree of WebM files for the standalone player.</summary>
     /// <returns>A flat list of objects describing available WebM themes and their metadata.</returns>

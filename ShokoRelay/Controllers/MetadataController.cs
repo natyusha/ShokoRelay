@@ -15,7 +15,11 @@ namespace ShokoRelay.Controllers;
 public class MetadataController(IMetadataService metadataService, PlexMetadata mapper, ConfigProvider configProvider, PlexClient plexLibrary)
     : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
 {
+    #region Fields & Constructor
+
     private readonly PlexMetadata _mapper = mapper;
+
+    #endregion
 
     #region Provider Descriptor
 

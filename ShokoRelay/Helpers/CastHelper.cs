@@ -5,6 +5,8 @@ using Shoko.Abstractions.Metadata.Containers;
 
 namespace ShokoRelay.Helpers;
 
+#region Data Models
+
 /// <summary>Represents a metadata tag item for Plex responses.</summary>
 public sealed class TagItem
 {
@@ -13,12 +15,14 @@ public sealed class TagItem
     public string Tag { get; init; } = "";
 }
 
+#endregion
+
 /// <summary>
 /// Helper utilities for generating cast, crew and studio tag information suitable for Plex metadata responses.
 /// </summary>
 public static class CastHelper
 {
-    private static string? GetName(ICreator? creator, string fallback) => creator?.Name ?? fallback;
+    #region Cast and Crew Logic
 
     /// <summary>
     /// Return an array of objects representing cast (and optionally crew) for the specified media item. The crew portion is included based on the <c>CrewListings</c> setting.
@@ -85,6 +89,10 @@ public static class CastHelper
     /// <returns>An array of anonymous objects containing producer names.</returns>
     public static object[] GetProducers(IWithCastAndCrew item) => FilterCrew(item, CrewRoleType.Producer);
 
+    #endregion
+
+    #region Studio Logic
+
     /// <summary>
     /// Assemble an array of <see cref="TagItem"/> objects representing the series' studios.
     /// </summary>
@@ -100,6 +108,14 @@ public static class CastHelper
     /// <returns>The primary studio name, or null if not found.</returns>
     public static string? GetStudio(ISeries series) => series.Studios?.FirstOrDefault()?.Name;
 
+    #endregion
+
+    #region Internal Helpers
+
+    private static string? GetName(ICreator? creator, string fallback) => creator?.Name ?? fallback;
+
     private static object[] FilterCrew(IWithCastAndCrew item, CrewRoleType roleType) =>
         item.Crew?.Where(c => c.RoleType == roleType).Select(c => (object)new { tag = GetName(c.Creator, c.Name) }).ToArray() ?? [];
+
+    #endregion
 }

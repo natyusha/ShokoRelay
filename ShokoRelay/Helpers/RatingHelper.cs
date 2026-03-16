@@ -7,6 +7,8 @@ namespace ShokoRelay.Helpers;
 /// <summary>Utility functions for deriving content rating and adult flag from series metadata.</summary>
 public static class RatingHelper
 {
+    #region Constants
+
     private static readonly FrozenSet<string> RatingTags = new[]
     {
         "kodomo",
@@ -22,6 +24,10 @@ public static class RatingHelper
         "violence",
         "sexual humour",
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+    #endregion
+
+    #region Content Rating Logic
 
     /// <summary>Determine a combined rating string and an adult flag for a series based on metadata and tags.</summary>
     /// <param name="series">Series to evaluate.</param>
@@ -106,6 +112,10 @@ public static class RatingHelper
         return (c_rating, false);
     }
 
+    #endregion
+
+    #region Tag Processing
+
     private static HashSet<string> BuildTagSet(ISeries? series)
     {
         var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -147,4 +157,6 @@ public static class RatingHelper
         }
         return set;
     }
+
+    #endregion
 }

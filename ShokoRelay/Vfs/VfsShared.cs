@@ -7,12 +7,18 @@ namespace ShokoRelay.Vfs;
 /// <summary>Shared logic for VFS operations including symlink creation.</summary>
 internal static class VfsShared
 {
+    #region Constants and Properties
+
     private const string DefaultVfsRootName = "!ShokoRelayVFS";
     private const string DefaultCollectionPostersRootName = "!CollectionPosters";
     private const string DefaultAnimeThemesRootName = "!AnimeThemes";
 
     /// <summary>OS-aware path comparer.</summary>
     public static StringComparer PathComparer => OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+
+    #endregion
+
+    #region Path Resolution
 
     /// <summary>Determines the root import path for a video file.</summary>
     public static string? ResolveImportRootPath(IVideoFile location)
@@ -36,8 +42,25 @@ internal static class VfsShared
         return string.IsNullOrWhiteSpace(dir) ? null : dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
     }
 
-    /// <summary>Normalizes directory separators.</summary>
-    public static string NormalizeSeparators(string path) => path.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
+    /// <summary>Resolves the source file path.</summary>
+    public static string? ResolveSourcePath(IVideoFile location, string importRoot)
+    {
+        string original = location.Path;
+        if (!string.IsNullOrWhiteSpace(original) && File.Exists(original))
+            return original;
+        string relative = location.RelativePath?.TrimStart('/', '\\') ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(relative))
+        {
+            string candidate = Path.Combine(importRoot, NormalizeSeparators(relative));
+            if (File.Exists(candidate))
+                return candidate;
+        }
+        return null;
+    }
+
+    #endregion
+
+    #region Folder Name Resolution
 
     /// <summary>Resolves the VFS root folder name.</summary>
     public static string ResolveRootFolderName() => ResolveFolderName(ShokoRelay.Settings.Advanced.VfsRootPath, DefaultVfsRootName);
@@ -60,6 +83,10 @@ internal static class VfsShared
         configured = VfsHelper.SanitizeName(configured);
         return string.IsNullOrWhiteSpace(configured) ? defaultName : configured;
     }
+
+    #endregion
+
+    #region Symlink Operations
 
     /// <summary>Attempts to create a symlink.</summary>
     public static bool TryCreateLink(string source, string dest, Logger logger, string? targetOverride = null, bool useRelativeTarget = true)
@@ -108,21 +135,12 @@ internal static class VfsShared
         }
     }
 
-    /// <summary>Resolves the source file path.</summary>
-    public static string? ResolveSourcePath(IVideoFile location, string importRoot)
-    {
-        string original = location.Path;
-        if (!string.IsNullOrWhiteSpace(original) && File.Exists(original))
-            return original;
-        string relative = location.RelativePath?.TrimStart('/', '\\') ?? string.Empty;
-        if (!string.IsNullOrWhiteSpace(relative))
-        {
-            string candidate = Path.Combine(importRoot, NormalizeSeparators(relative));
-            if (File.Exists(candidate))
-                return candidate;
-        }
-        return null;
-    }
+    #endregion
+
+    #region Validation and Normalization
+
+    /// <summary>Normalizes directory separators.</summary>
+    public static string NormalizeSeparators(string path) => path.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
 
     /// <summary>Checks if a path is safe to delete.</summary>
     public static bool IsSafeToDelete(string path)
@@ -133,4 +151,6 @@ internal static class VfsShared
         string? root = Path.GetPathRoot(full)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         return !string.Equals(full, root, StringComparison.OrdinalIgnoreCase);
     }
+
+    #endregion
 }
