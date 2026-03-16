@@ -151,14 +151,15 @@ As a bonus this supports using the primary series poster as the collection poste
   - Click `Add Webhook` and enter: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/plex/webhook`
   - Click `Save Changes` to complete the process
 - The webhook respects the `Include Ratings` and `Exclude Admin` settings in the Sync Watched States Menu
-- Manages users must be added to `Extra Plex Users` on the dashboard if you wish them to be included
+- Managed users must be added to `Extra Plex Users` on the dashboard if you wish them to be included
 - _Requires a Plex Pass subscription_
 
 ## Shoko: Automation
 
 - `Remove Missing` A button which will remove files that are no longer present from Shoko
+  - Unlike the "Remove Missing Files" action in Shoko's WebUI this will remove all traces of the files from the Shoko DB
   - Entries will _always_ be removed from the AniDB MyList as well
-- `Import` A button which will make shoko rescan "Source" type drop folders
+- `Import` A button which will make shoko rescan all "Source" type drop folders
 - `Sync` A button which opens a modal allowing for watched state syncing from Plex to Shoko or Shoko to Plex
   - This includes any users configured under `Extra Plex Users` in the "Plex: Authentication" section
   - _Requires Plex authentication_
