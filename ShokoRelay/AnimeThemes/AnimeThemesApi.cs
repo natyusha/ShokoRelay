@@ -123,9 +123,20 @@ public class AnimeThemesApi
     #region Data Models
 
     /// <summary>Response wrapper for a video metadata request.</summary>
+    /// <param name="Video">The video metadata entry.</param>
     public sealed record VideoWithAudioResponse(VideoWithAudioEntry? Video);
 
     /// <summary>Entry representing a video file and its associated technical attributes and audio links.</summary>
+    /// <param name="Id">The unique video identifier.</param>
+    /// <param name="NC">No Credits flag.</param>
+    /// <param name="Subbed">Subtitles flag.</param>
+    /// <param name="Lyrics">Lyrics flag.</param>
+    /// <param name="Uncen">Uncensored status.</param>
+    /// <param name="Resolution">Vertical video resolution.</param>
+    /// <param name="Source">Media source (e.g., BD, TV).</param>
+    /// <param name="Overlap">Overlap type status.</param>
+    /// <param name="Animethemeentries">Associated theme entries.</param>
+    /// <param name="Audio">Associated audio link.</param>
     public sealed record VideoWithAudioEntry(
         int Id,
         bool NC,
@@ -140,51 +151,92 @@ public class AnimeThemesApi
     );
 
     /// <summary>Wrapper for a theme entry linked to a specific video version.</summary>
+    /// <param name="Version">Version number of the theme entry.</param>
+    /// <param name="Episodes">Episode range string.</param>
+    /// <param name="NSFW">Not Safe For Work status.</param>
+    /// <param name="Spoiler">Spoiler status.</param>
+    /// <param name="Animetheme">Associated full theme details.</param>
     public sealed record VideoThemeEntryWrapper(int Version, string? Episodes, bool NSFW, bool Spoiler, VideoThemeFull? Animetheme);
 
     /// <summary>Detailed theme metadata including song information and series context.</summary>
+    /// <param name="Id">Theme identifier.</param>
+    /// <param name="Slug">Theme type slug.</param>
+    /// <param name="Song">Song metadata details.</param>
+    /// <param name="Anime">Associated anime details.</param>
     public sealed record VideoThemeFull(int Id, string? Slug, SongInfo? Song, VideoAnimeOnly? Anime);
 
     /// <summary>Minimal anime metadata associated with a theme.</summary>
+    /// <param name="Id">Anime identifier.</param>
+    /// <param name="Name">Anime title.</param>
+    /// <param name="Season">Airing season.</param>
+    /// <param name="Year">Airing year.</param>
     public sealed record VideoAnimeOnly(int Id, string? Name, string? Season, int? Year);
 
     /// <summary>Metadata for a song, including title and participating artists.</summary>
+    /// <param name="Title">Song title.</param>
+    /// <param name="Artists">List of performing artists.</param>
     public sealed record SongInfo(string? Title, List<ArtistInfo>? Artists);
 
     /// <summary>Information about a performing artist.</summary>
+    /// <param name="Name">Artist name.</param>
     public sealed record ArtistInfo(string? Name);
 
     /// <summary>Link to an audio resource.</summary>
+    /// <param name="Link">The direct audio resource URL.</param>
     public sealed record AudioLink(string? Link);
 
     /// <summary>Response wrapper for a theme metadata request.</summary>
+    /// <param name="Animetheme">The theme metadata entry.</param>
     public sealed record ThemeWithAudioResponse(ThemeWithAudioWrapper? Animetheme);
 
     /// <summary>Wrapper for theme metadata including song info and video entries.</summary>
+    /// <param name="Id">Theme identifier.</param>
+    /// <param name="Slug">Theme type slug.</param>
+    /// <param name="Song">Song metadata details.</param>
+    /// <param name="Animethemeentries">Theme entry versions and associations.</param>
     public sealed record ThemeWithAudioWrapper(int Id, string? Slug, SongInfo? Song, List<ThemeAudioEntry>? Animethemeentries);
 
     /// <summary>Entry representing a specific version or episode range for a theme.</summary>
+    /// <param name="Version">Version number of the entry.</param>
+    /// <param name="Episodes">Episode range string.</param>
+    /// <param name="NSFW">Not Safe For Work status.</param>
+    /// <param name="Spoiler">Spoiler status.</param>
+    /// <param name="Videos">Associated video entries.</param>
     public sealed record ThemeAudioEntry(int Version, string? Episodes, bool NSFW, bool Spoiler, List<ThemeVideoEntry>? Videos);
 
     /// <summary>Entry representing a video and its audio link within a theme.</summary>
+    /// <param name="Id">Video identifier.</param>
+    /// <param name="Audio">Associated audio link.</param>
     public sealed record ThemeVideoEntry(int Id, AudioLink? Audio);
 
     /// <summary>Response wrapper for an anime theme list request.</summary>
+    /// <param name="Anime">List of anime entries.</param>
     public sealed record AnimeThemesResponse(List<AnimeThemesEntry>? Anime);
 
     /// <summary>Entry representing an anime and its available themes.</summary>
+    /// <param name="Name">Anime title.</param>
+    /// <param name="Slug">Anime slug identifier.</param>
+    /// <param name="Animethemes">List of themes associated with the anime.</param>
     public sealed record AnimeThemesEntry(string? Name, string? Slug, List<AnimeTheme>? Animethemes);
 
     /// <summary>Minimal theme information containing identifiers.</summary>
+    /// <param name="Id">Theme identifier.</param>
+    /// <param name="Slug">Theme type slug.</param>
     public sealed record AnimeTheme(int Id, string? Slug);
 
     /// <summary>Response wrapper for an anime resource request.</summary>
+    /// <param name="Anime">List of anime entries with resource mappings.</param>
     public sealed record AnimeResourceResponse(List<AnimeResourceEntry>? Anime);
 
     /// <summary>Entry containing resource links and seasonal metadata for an anime.</summary>
+    /// <param name="Resources">External resource items.</param>
+    /// <param name="Season">Airing season.</param>
+    /// <param name="Year">Airing year.</param>
     public sealed record AnimeResourceEntry(List<ResourceItem>? Resources, string? Season, int? Year);
 
     /// <summary>Represents an external resource link.</summary>
+    /// <param name="ExternalId">The external site identifier.</param>
+    /// <param name="Site">The name of the site.</param>
     public sealed record ResourceItem([property: JsonPropertyName("external_id")] int? ExternalId, string Site);
 
     #endregion

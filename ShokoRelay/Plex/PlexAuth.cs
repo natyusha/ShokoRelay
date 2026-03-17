@@ -73,6 +73,9 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
     #region PIN Operations
 
     /// <summary>Request a new Plex authentication PIN from the Plex.tv v2 API.</summary>
+    /// <param name="strong">Whether to request a high-entropy PIN.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A pin response containing ID and Code.</returns>
     public async Task<PlexPinResponse> CreatePinAsync(bool strong = true, CancellationToken cancellationToken = default)
     {
         using var request = CreateRequest(HttpMethod.Post, new Uri($"{BaseUrl}/api/v2/pins{(strong ? "?strong=true" : "")}"));
@@ -81,6 +84,10 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
     }
 
     /// <summary>Construct the URL that the user must visit in order to authenticate the PIN.</summary>
+    /// <param name="pinCode">The pin code string.</param>
+    /// <param name="productName">Product name to show in Plex.</param>
+    /// <param name="forwardUrl">Optional redirection URL.</param>
+    /// <returns>An authorization URL.</returns>
     public string BuildAuthUrl(string pinCode, string productName, string? forwardUrl = null)
     {
         if (pinCode.Length <= 4)
@@ -92,6 +99,9 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
     }
 
     /// <summary>Retrieve the status for a specific Plex PIN from the v2 API.</summary>
+    /// <param name="pinId">The PIN identifier.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A pin response with current status and optional token.</returns>
     public async Task<PlexPinResponse> GetPinAsync(string pinId, CancellationToken cancellationToken = default)
     {
         using var request = CreateRequest(HttpMethod.Get, new Uri($"{BaseUrl}/api/v2/pins/{Uri.EscapeDataString(pinId)}"));
@@ -104,6 +114,10 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
     #region Server/Lib Discovery
 
     /// <summary>Query the Plex.tv v2 resources API for all accessible servers.</summary>
+    /// <param name="token">Plex authentication token.</param>
+    /// <param name="cid">Client identifier.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Tuple of token validity and lists of servers/devices.</returns>
     public async Task<(bool TokenValid, List<PlexServerInfo> Servers, List<PlexDevice> Devices)> GetPlexServerListAsync(string token, string cid, CancellationToken ct = default)
     {
         using var request = CreateRequest(HttpMethod.Get, new Uri("https://clients.plex.tv/api/v2/resources"), token, cid);
@@ -124,6 +138,11 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
     }
 
     /// <summary>Fetch the list of library sections for a specific Plex server.</summary>
+    /// <param name="token">Auth token.</param>
+    /// <param name="cid">Client ID.</param>
+    /// <param name="url">Base server URL.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A list of library info objects.</returns>
     public async Task<List<PlexLibraryInfo>> GetPlexLibrariesAsync(string token, string cid, string url, CancellationToken ct = default)
     {
         using var req = CreateRequest(HttpMethod.Get, new Uri($"{url.TrimEnd('/')}/library/sections"), token, cid);
@@ -144,6 +163,10 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
     }
 
     /// <summary>Discover Shoko-enabled libraries across all accessible Plex servers.</summary>
+    /// <param name="token">Admin token.</param>
+    /// <param name="cid">Client ID.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Discovery results containing server and library pairs.</returns>
     public async Task<(bool TokenValid, List<PlexServerInfo> Servers, List<(PlexLibraryInfo Library, PlexServerInfo Server)> ShokoLibraries)> DiscoverShokoLibrariesAsync(
         string token,
         string cid,
@@ -173,6 +196,9 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
     #region Home & User Mgmt.
 
     /// <summary>Retrieve all managed/home users associated with the account via the v2 API.</summary>
+    /// <param name="adminToken">Admin authentication token.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A list of home users.</returns>
     public async Task<List<PlexHomeUser>> GetHomeUsersAsync(string adminToken, CancellationToken ct = default)
     {
         using var req = CreateRequest(HttpMethod.Get, new Uri($"{BaseUrl}/api/v2/home/users"), adminToken);
@@ -183,6 +209,11 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
 
     /// <summary>Switch to a Plex Home managed user and return a transient token via XML.</summary>
     /// <remarks><b>IMPORTANT</b>: This old Plex endpoint always returns XML.</remarks>
+    /// <param name="userId">Home user ID.</param>
+    /// <param name="adminToken">Admin token.</param>
+    /// <param name="pin">Optional user PIN.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The user token or null.</returns>
     public async Task<string?> SwitchHomeUserAsync(int userId, string adminToken, string? pin = null, CancellationToken ct = default)
     {
         try
@@ -208,6 +239,9 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
     }
 
     /// <summary>Retrieve account information for the provided token via the v2 API.</summary>
+    /// <param name="token">Token to query.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Account info or null.</returns>
     public async Task<PlexAccountInfo?> GetAccountInfoAsync(string token, CancellationToken ct = default)
     {
         using var req = CreateRequest(HttpMethod.Get, new Uri($"{BaseUrl}/api/v2/user"), token);
@@ -224,6 +258,9 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
     #region Token Management
 
     /// <summary>Revokes an authentication token at Plex.tv via the v2 API.</summary>
+    /// <param name="token">The token to revoke.</param>
+    /// <param name="cid">The client identifier.</param>
+    /// <param name="ct">Cancellation token.</param>
     public async Task RevokePlexTokenAsync(string token, string cid, CancellationToken ct = default)
     {
         try
@@ -267,7 +304,8 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
         }
         catch (JsonException ex)
         {
-            Logger.Warn(ex, "PlexAuth: Failed to parse JSON. Body starts with: {0}", content.Length > 512 ? content[..512] : content);
+            string snippet = content.Length > 512 ? content[..512] : content;
+            Logger.Warn(ex, "PlexAuth: Failed to parse JSON. Body starts with: {0}", snippet);
             return default;
         }
     }
@@ -352,7 +390,10 @@ public sealed class StringOrNumberConverter : JsonConverter<string?>
             _ => null,
         };
 
-    /// <inheritdoc/>
+    /// <summary>Writes the string value to the JSON output.</summary>
+    /// <param name="writer">The JSON writer.</param>
+    /// <param name="value">The string value to write.</param>
+    /// <param name="options">Serializer options.</param>
     public override void Write(Utf8JsonWriter writer, string? value, JsonSerializerOptions options) => writer.WriteStringValue(value);
 }
 

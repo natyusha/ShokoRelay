@@ -381,9 +381,9 @@ public class AdvancedConfig
     public string FFmpegPath { get; set; } = "";
 
     /// <summary>Plex RefreshMetadataAsync delay.</summary>
-    [Display(Name = "Plex Fixup Delay", Description = "The delay in seconds after the VFS adds a file to force refresh series metadata. Set to 0 to disable")]
-    [DefaultValue(30)]
-    public int PlexRefreshMetadataDelay { get; set; } = 30;
+    [Display(Name = "Plex Fixup Delay", Description = "The delay (in minutes) after the VFS adds a file to force refresh series metadata. Set to 0 to disable")]
+    [DefaultValue(1)]
+    public int PlexRefreshMetadataDelay { get; set; } = 1;
 
     /// <summary>Task parallelism limit.</summary>
     [Display(Name = "Parallelism", Description = "The maximum number of concurrent operations *used by VFS and AnimeThemes batch operations")]

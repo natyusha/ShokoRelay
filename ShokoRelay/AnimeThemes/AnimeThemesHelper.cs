@@ -9,6 +9,23 @@ namespace ShokoRelay.AnimeThemes;
 #region Data Models
 
 /// <summary>Represents a single theme mapping between a local file and AnimeThemes identifiers.</summary>
+/// <param name="FilePath">Relative path to the theme file.</param>
+/// <param name="VideoId">AnimeThemes video identifier.</param>
+/// <param name="AniDbId">AniDB anime identifier.</param>
+/// <param name="NC">No Credits flag.</param>
+/// <param name="Slug">Theme type slug (e.g., OP1, ED2).</param>
+/// <param name="Version">Version number of the theme entry.</param>
+/// <param name="ArtistName">Name of the performing artist.</param>
+/// <param name="SongTitle">Title of the song.</param>
+/// <param name="Lyrics">Presence of timed lyrics.</param>
+/// <param name="Subbed">Presence of subtitles.</param>
+/// <param name="Uncen">Uncensored status.</param>
+/// <param name="NSFW">Not Safe For Work status.</param>
+/// <param name="Spoiler">Spoiler status.</param>
+/// <param name="Source">Media source type.</param>
+/// <param name="Resolution">Vertical video resolution.</param>
+/// <param name="Episodes">Episode range string.</param>
+/// <param name="Overlap">Theme overlap status.</param>
 public sealed record AnimeThemesMappingEntry(
     string FilePath,
     int VideoId,
@@ -30,9 +47,17 @@ public sealed record AnimeThemesMappingEntry(
 );
 
 /// <summary>Result returned by a mapping file build operation.</summary>
+/// <param name="MapPath">Absolute path to the generated mapping CSV.</param>
+/// <param name="EntriesWritten">Count of entries written to the file.</param>
+/// <param name="Reused">Count of entries reused from an existing mapping.</param>
+/// <param name="Errors">Count of encountered errors.</param>
+/// <param name="Messages">Detailed diagnostic messages.</param>
 public sealed record AnimeThemesMappingBuildResult(string MapPath, int EntriesWritten, int Reused, int Errors, IReadOnlyList<string> Messages);
 
 /// <summary>Represents an entry for the WebM VFS cache used by the video player.</summary>
+/// <param name="VfsPath">Relative path within the VFS.</param>
+/// <param name="VideoId">AnimeThemes video identifier.</param>
+/// <param name="Bitmask">Attribute flags bitmask.</param>
 public sealed record WebmCacheEntry(string VfsPath, int VideoId, int Bitmask);
 
 /// <summary>Outcome of applying a mapping file to create VFS links.</summary>
@@ -70,7 +95,7 @@ internal sealed record AnimeThemesVideoLookup(
 /// <summary>Shared constants and helper utilities used throughout the AnimeThemes subcomponent.</summary>
 internal static class AnimeThemesHelper
 {
-    #region Constants and Fields
+    #region Constants & Fields
 
     internal const string AtApiBase = "https://api.animethemes.moe";
     internal const string AtMapFileName = "anidb_animethemes_xrefs.csv";

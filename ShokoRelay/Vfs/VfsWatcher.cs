@@ -218,8 +218,8 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
     /// <summary>Schedules or resets the timer for a full Plex metadata refresh for the given series.</summary>
     private void ScheduleMetadataFixup(IShokoSeries series)
     {
-        int delaySeconds = ShokoRelay.Settings.Advanced.PlexRefreshMetadataDelay;
-        if (delaySeconds <= 0)
+        int delayMinutes = ShokoRelay.Settings.Advanced.PlexRefreshMetadataDelay;
+        if (delayMinutes <= 0)
             return;
 
         // Cancel any existing pending fixup for this series to reset the timer (Debounce)
@@ -229,7 +229,7 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
             oldCts.Dispose();
         }
 
-        Logger.Debug("VFS: Scheduling metadata fixup for '{0}' (ID: {1}) in {2}s", series.PreferredTitle?.Value, series.ID, delaySeconds);
+        Logger.Debug("VFS: Scheduling metadata fixup for '{0}' (ID: {1}) in {2} minute(s)", series.PreferredTitle?.Value, series.ID, delayMinutes);
 
         var cts = new CancellationTokenSource();
         _pendingMetadataFixups[series.ID] = cts;
@@ -238,8 +238,7 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
         {
             try
             {
-                // The actual debounce wait
-                await Task.Delay(TimeSpan.FromSeconds(delaySeconds), cts.Token).ConfigureAwait(false);
+                await Task.Delay(TimeSpan.FromMinutes(delayMinutes), cts.Token).ConfigureAwait(false);
 
                 var targets = _plexLibrary.GetConfiguredTargets();
                 if (targets.Count == 0)
@@ -251,7 +250,6 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
                 bool foundInAnyTarget = false;
                 foreach (var target in targets)
                 {
-                    // Search Plex for the show by its Shoko GUID
                     var ratingKey = await _plexLibrary.FindRatingKeyForShokoSeriesInSectionAsync(series.ID, target).ConfigureAwait(false);
                     if (ratingKey.HasValue)
                     {
@@ -268,7 +266,7 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
             }
             catch (OperationCanceledException)
             {
-                // Task was reset by a newer file event for the same series - this is normal during debouncing
+                // Task was reset by a newer file event for the same series
             }
             catch (Exception ex)
             {
@@ -276,7 +274,6 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
             }
             finally
             {
-                // Only remove from dictionary if we are the current CTS instance
                 _pendingMetadataFixups.TryRemove(new KeyValuePair<int, CancellationTokenSource>(series.ID, cts));
                 cts.Dispose();
             }
