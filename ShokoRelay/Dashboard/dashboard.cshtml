@@ -414,6 +414,12 @@
             <li><code>Left</code> <small>Paths as seen by Plex</small></li>
             <li><code>Right</code> <small>Paths as seen by Shoko</small></li>
           </ul>
+          <br />
+          <h3>Plex Fixup Delay</h3>
+          <small>
+            Sometimes Shoko may not have acquired all of the metadata for a series when it is first scanned into Plex. This setting attempts to mitigate this by waiting for new files to be added to the VFS then
+            triggering a delayed Plex metadata refresh. This action is debounced so adding multiple episodes within the configured delay will not trigger it multiple times.
+          </small>
         </div>
       </div>
     </div>

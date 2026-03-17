@@ -147,7 +147,7 @@ public class RelayConfig
     public string SeriesTitleLanguage { get; set; } = "SHOKO, X-JAT, EN";
 
     /// <summary>Priority list of languages for alternate series titles.</summary>
-    [Display(Name = "Series Alt Title Language", Description = "Priority, comma separated")]
+    [Display(Name = "Series Alt Title Language", Description = "Priority, comma separated *this field is searchable in Plex")]
     [DefaultValue("EN, X-JAT, SHOKO")]
     public string SeriesAltTitleLanguage { get; set; } = "EN, X-JAT, SHOKO";
 
@@ -155,6 +155,18 @@ public class RelayConfig
     [Display(Name = "Episode Title Language", Description = "Priority, comma separated")]
     [DefaultValue("SHOKO, EN, X-JAT")]
     public string EpisodeTitleLanguage { get; set; } = "SHOKO, EN, X-JAT";
+
+    /// <summary>Priority list of languages for series descriptions.</summary>
+    [Display(Name = "Series Description Language", Description = "Priority, comma separated")]
+    [Browsable(false)]
+    [DefaultValue("SHOKO")]
+    public string SeriesDescriptionLanguage { get; set; } = "SHOKO";
+
+    /// <summary>Priority list of languages for episode descriptions.</summary>
+    [Display(Name = "Episode Description Language", Description = "Priority, comma separated")]
+    [Browsable(false)]
+    [DefaultValue("SHOKO")]
+    public string EpisodeDescriptionLanguage { get; set; } = "SHOKO";
 
     /// <summary>Whether to append prefixes like OVA to the end of titles.</summary>
     [Display(Name = "Move Common Series Title Prefixes", Description = "Enable to append 'Gekijouban', 'OVA', etc. to the end of the series title, after an em dash '—'")]
@@ -368,8 +380,14 @@ public class AdvancedConfig
     [DefaultValue("")]
     public string FFmpegPath { get; set; } = "";
 
+    /// <summary>Plex RefreshMetadataAsync delay.</summary>
+    [Display(Name = "Plex Fixup Delay", Description = "The delay in seconds after the VFS adds a file to force refresh series metadata. Set to 0 to disable")]
+    [DefaultValue(30)]
+    public int PlexRefreshMetadataDelay { get; set; } = 30;
+
     /// <summary>Task parallelism limit.</summary>
     [Display(Name = "Parallelism", Description = "The maximum number of concurrent operations *used by VFS and AnimeThemes batch operations")]
+    [Range(1, 16, ErrorMessage = "Parallelism must be between 1 and 16")]
     [DefaultValue(4)]
     public int Parallelism { get; set; } = 4;
 }

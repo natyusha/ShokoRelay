@@ -177,12 +177,14 @@
 
     // Custom summary mapping for friendly UI messages
     let summary = summarizeResult(res).text;
+    let isNoTheme = false;
 
     if (status === "skipped") {
       if (message === "Theme.mp3 already exists.") {
         summary = `Skipped: "${folder}" already contains a Theme.mp3`;
       } else if (message === "Entry not found." || (message && message.includes("No entry for slug"))) {
         summary = `Skipped: No theme found for this series`;
+        isNoTheme = true;
       } else {
         summary = message || "Skipped";
       }
@@ -200,6 +202,7 @@
       toastOperation(res, "AnimeThemes MP3", {
         summary: summary || status || "Complete",
         hideOnSucceed,
+        type: isNoTheme ? "warning" : undefined,
       });
 
       if (!isBatch && (status === "ok" || status === "skipped")) {

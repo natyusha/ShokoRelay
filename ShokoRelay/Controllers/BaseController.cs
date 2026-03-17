@@ -311,6 +311,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
                     ServerId = srv.Id,
                     ServerName = srv.Name,
                     ServerUrl = srv.PreferredUri ?? string.Empty,
+                    Locations = lib.Locations,
                 }
             );
         }

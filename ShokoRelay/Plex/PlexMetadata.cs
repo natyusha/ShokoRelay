@@ -70,6 +70,8 @@ public class PlexMetadata(IMetadataService metadataService)
     {
         var cb = GetCacheBuster(series);
         var images = (IWithImages)series;
+        var description = TextHelper.GetDescriptionByLanguage(series, ShokoRelay.Settings.SeriesDescriptionLanguage);
+        var tmdbDescription = (series as IShokoSeries)?.TmdbShows?.FirstOrDefault()?.PreferredDescription?.Value;
         var studios = CastHelper.GetStudioTags(series);
         var (Rating, IsAdult) = RatingHelper.GetContentRatingAndAdult(series);
         var plexTheme = ShokoRelay.Settings.PlexThemeMusic && series is IShokoSeries ss && ss.TmdbShows?.FirstOrDefault()?.TvdbShowID is int tvdb && tvdb > 0 ? $"https://tvthemes.plexapp.com/{tvdb}.mp3" : null;
@@ -88,7 +90,7 @@ public class PlexMetadata(IMetadataService metadataService)
             ["originalTitle"]         = titles.OriginalTitle,
             ["titleSort"]             = titles.SortTitle,
             ["year"]                  = series.AirDate?.Year,
-            ["summary"]               = TextHelper.SanitizeSummaryWithFallback(series.PreferredDescription?.Value, (series as IShokoSeries)?.TmdbShows?.FirstOrDefault()?.PreferredDescription?.Value, ShokoRelay.Settings.SummaryMode),
+            ["summary"]               = TextHelper.SanitizeSummaryWithFallback(description, tmdbDescription, ShokoRelay.Settings.SummaryMode),
             ["isAdult"]               = IsAdult,
             ["duration"]              = series.Episodes.Any() ? (int)series.Episodes.Sum(e => e.Runtime.TotalMilliseconds) : (int?)null,
             //["tagline"]             = TMDB has this but it is not exposed
@@ -246,14 +248,14 @@ public class PlexMetadata(IMetadataService metadataService)
         var images = (IWithImages)ep;
         var seriesImages = (IWithImages)series;
         string epTitle = TextHelper.ResolveEpisodeTitle(ep, titles.DisplayTitle);
-        string epSummary = ep.PreferredDescription?.Value ?? "";
+        string epDescription = TextHelper.GetDescriptionByLanguage(ep, ShokoRelay.Settings.EpisodeDescriptionLanguage);
 
         if (partIndex > 1 && tmdbEpisode is not null)
         {
             if (tmdbEpisode is IWithTitles wt && !string.IsNullOrEmpty(wt.PreferredTitle?.Value))
                 epTitle = wt.PreferredTitle.Value;
             if (tmdbEpisode is IWithDescriptions wd && !string.IsNullOrEmpty(wd.PreferredDescription?.Value))
-                epSummary = wd.PreferredDescription.Value;
+                epDescription = wd.PreferredDescription.Value;
         }
 
         string? parentThumb = null;
@@ -279,7 +281,7 @@ public class PlexMetadata(IMetadataService metadataService)
             //["originalTitle"]       = No source for original episode titles
             ["titleSort"]             = epTitle,
             ["year"]                  = ep.AirDate?.Year,
-            ["summary"]               = TextHelper.SanitizeSummaryWithFallback(epSummary, (ep as IShokoEpisode)?.TmdbEpisodes?.FirstOrDefault()?.PreferredDescription?.Value, ShokoRelay.Settings.SummaryMode),
+            ["summary"]               = TextHelper.SanitizeSummaryWithFallback(epDescription, (ep as IShokoEpisode)?.TmdbEpisodes?.FirstOrDefault()?.PreferredDescription?.Value, ShokoRelay.Settings.SummaryMode),
             ["isAdult"]               = RatingHelper.GetContentRatingAndAdult(series).IsAdult,
             ["duration"]              = (int)ep.Runtime.TotalMilliseconds,
 

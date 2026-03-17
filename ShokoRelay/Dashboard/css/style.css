@@ -187,7 +187,7 @@ a {
   color: var(--highlight-color);
   text-decoration-style: dotted;
 }
-a:hover {
+a:hover:not(.plex-login-link) {
   opacity: 1;
   color: var(--hover-color);
 }

@@ -6,7 +6,7 @@ namespace ShokoRelay.Plex;
 /// <summary>HTTP client wrapper that communicates with one or more Plex servers.</summary>
 public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
 {
-    #region Fields and Properties
+    #region Fields & Properties
 
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
@@ -22,31 +22,60 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
 
     #endregion
 
-    #region Library and Section Actions
+    #region Library & Section
 
-    /// <summary>Request Plex to refresh the specified library section path.</summary>
-    /// <param name="path">Filesystem path to refresh.</param>
+    /// <summary>Request Plex to refresh a specific filesystem path, optimized to matching sections with a safety fallback.</summary>
+    /// <param name="path">The Shoko-side filesystem path.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>True if any refresh request was successful.</returns>
+    /// <returns>True if at least one refresh request was successful.</returns>
     public async Task<bool> RefreshSectionPathAsync(string path, CancellationToken cancellationToken = default)
     {
         if (!IsEnabled || string.IsNullOrWhiteSpace(path))
             return false;
+
+        string mapped = MapShokoPathToPlexPath(path);
+        string normMapped = mapped.Replace('\\', '/').TrimEnd('/');
+
+        // Use only the folder name (ShokoSeriesID) for cleaner logging
+        string logFolderName = Path.GetFileName(normMapped);
+
+        var allTargets = GetConfiguredTargets();
+        var matchingTargets = allTargets.Where(target => target.Locations.Any(loc => normMapped.StartsWith(loc.Replace('\\', '/').TrimEnd('/'), StringComparison.OrdinalIgnoreCase))).ToList();
+
+        var targetsToProcess = matchingTargets.Any() ? matchingTargets : allTargets;
+
         bool anyOk = false;
-        foreach (var target in GetConfiguredTargets())
+        foreach (var target in targetsToProcess)
         {
-            string mapped = MapShokoPathToPlexPath(path);
             using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/refresh?path={Uri.EscapeDataString(mapped)}", target.ServerUrl);
             using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
             if (resp.IsSuccessStatusCode)
             {
                 anyOk = true;
-                Logger.Debug("Plex refresh triggered for {0} on {1}:{2}", mapped, target.ServerUrl, target.SectionId);
+                Logger.Debug("Plex refresh triggered for folder '{0}' on {1}:{2} (Match: {3})", logFolderName, target.ServerUrl, target.SectionId, matchingTargets.Any());
             }
             else
-                Logger.Warn("Plex refresh failed ({0}) for {1}", resp.StatusCode, mapped);
+            {
+                Logger.Warn("Plex refresh failed ({0}) for folder '{1}' in section {2}", resp.StatusCode, logFolderName, target.SectionId);
+            }
         }
         return anyOk;
+    }
+
+    /// <summary>Request Plex to re-run the metadata agent for a specific item (e.g., to fix missing initial metadata).</summary>
+    /// <param name="ratingKey">Plex unique rating key.</param>
+    /// <param name="target">Target server/section.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>True if the refresh request was successful.</returns>
+    public async Task<bool> RefreshMetadataAsync(int ratingKey, PlexLibraryTarget target, CancellationToken cancellationToken = default)
+    {
+        if (!IsEnabled || ratingKey <= 0 || target == null)
+            return false;
+
+        using var req = CreateRequest(HttpMethod.Put, $"/library/metadata/{ratingKey}/refresh", target.ServerUrl);
+        using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+
+        return resp.IsSuccessStatusCode;
     }
 
     #endregion
@@ -95,6 +124,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
                     "photo" => PlexLibraryType.Photo,
                     _ => PlexLibraryType.Show,
                 },
+                Locations = l.Locations ?? [],
             }),
         ];
 
@@ -127,11 +157,11 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         }
     }
 
-    /// <summary>Find the Plex ratingKey for a Shoko series within the given Plex section.</summary>
+    /// <summary>Find the Plex ratingKey for a Shoko series within the given Plex section using its metadata GUID.</summary>
     /// <param name="shokoSeriesId">Shoko series ID.</param>
     /// <param name="target">Target server/section.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The numeric rating key if found.</returns>
+    /// <returns>The numeric rating key if found, otherwise null.</returns>
     public async Task<int?> FindRatingKeyForShokoSeriesInSectionAsync(int shokoSeriesId, PlexLibraryTarget target, CancellationToken cancellationToken = default)
     {
         if (!IsEnabled || shokoSeriesId <= 0 || target == null)
@@ -139,13 +169,14 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         try
         {
             string guid = $"{ShokoRelayInfo.AgentScheme}://show/{shokoSeriesId}";
-            using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/search?guid={Uri.EscapeDataString(guid)}", target.ServerUrl);
+            using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?guid={Uri.EscapeDataString(guid)}", target.ServerUrl);
             using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
             var item = (await PlexApi.ReadContainerAsync(resp, cancellationToken).ConfigureAwait(false))?.Metadata?.FirstOrDefault();
             return int.TryParse(item?.RatingKey, out int key) ? key : null;
         }
-        catch
+        catch (Exception ex)
         {
+            Logger.Trace(ex, "Failed to find rating key for Shoko series {0} in section {1}", shokoSeriesId, target.SectionId);
             return null;
         }
     }

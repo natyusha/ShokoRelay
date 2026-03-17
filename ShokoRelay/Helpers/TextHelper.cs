@@ -58,7 +58,7 @@ public static class TextHelper
 
     #endregion
 
-    #region Titles
+    #region Metadata Resolution
 
     private static readonly IReadOnlySet<string> _ambiguousTitles = new HashSet<string>(
         ["Complete Movie", "Music Video", "OAD", "OVA", "Short Movie", "Special", "TV Special", "Web"],
@@ -69,21 +69,39 @@ public static class TextHelper
     /// <param name="item">Object that exposes a Titles collection.</param>
     /// <param name="languageSetting">Comma-separated preferred language codes.</param>
     /// <returns>The best matching title string.</returns>
-    public static string GetTitleByLanguage(IWithTitles item, string languageSetting)
+    public static string GetTitleByLanguage(IWithTitles item, string languageSetting) => GetByLanguage(languageSetting, item.PreferredTitle?.Value, item.Titles, t => t.LanguageCode, t => t.Value);
+
+    /// <summary>Return an item's description according to a comma-separated list of preferred language codes.</summary>
+    /// <param name="item">Object that exposes a Descriptions collection.</param>
+    /// <param name="languageSetting">Comma-separated preferred language codes.</param>
+    /// <returns>The best matching description string.</returns>
+    public static string GetDescriptionByLanguage(IWithDescriptions item, string languageSetting) =>
+        GetByLanguage(languageSetting, item.PreferredDescription?.Value, item.Descriptions, d => d.LanguageCode, d => d.Value);
+
+    /// <summary>Selects the first non-empty value from a collection matching a priority list of language codes.</summary>
+    /// <typeparam name="T">The type of items in the collection.</typeparam>
+    /// <param name="languageSetting">Comma-separated preferred language codes.</param>
+    /// <param name="preferredValue">The default value to return if "shoko" is selected or as a final fallback.</param>
+    /// <param name="collection">The collection of metadata items to search.</param>
+    /// <param name="getLangCode">Function to extract the language code from a collection item.</param>
+    /// <param name="getValue">Function to extract the text value from a collection item.</param>
+    /// <returns>The resolved text value string.</returns>
+    private static string GetByLanguage<T>(string languageSetting, string? preferredValue, IEnumerable<T> collection, Func<T, string> getLangCode, Func<T, string> getValue)
     {
         if (string.IsNullOrWhiteSpace(languageSetting))
-            return item.PreferredTitle?.Value ?? "";
-        var languages = languageSetting.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            return preferredValue ?? "";
 
+        var languages = languageSetting.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         foreach (var lang in languages)
         {
             if (lang.Equals("shoko", StringComparison.OrdinalIgnoreCase))
-                return item.PreferredTitle?.Value ?? "";
-            var match = item.Titles.FirstOrDefault(t => t.LanguageCode.Equals(lang, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(t.Value));
+                return preferredValue ?? "";
+
+            var match = collection.FirstOrDefault(x => getLangCode(x).Equals(lang, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(getValue(x)));
             if (match != null)
-                return match.Value;
+                return getValue(match);
         }
-        return item.PreferredTitle?.Value ?? "";
+        return preferredValue ?? "";
     }
 
     /// <summary>Determine display, sortable, and original titles for a series based on preferences and prefix reordering settings.</summary>
@@ -145,10 +163,6 @@ public static class TextHelper
         // Standard enumeration override (e.g. "Episode 1" -> "Actual Title")
         return (!string.IsNullOrEmpty(tmdbTitle) && _defaultTitleRegex.IsMatch(raw) && !_defaultTitleRegex.IsMatch(tmdbTitle)) ? tmdbTitle : raw;
     }
-
-    #endregion
-
-    #region Summaries
 
     /// <summary>Sanitize AniDB summary and, if the result is empty, fall back to TMDB.</summary>
     /// <param name="summary">Primary summary.</param>

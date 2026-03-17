@@ -435,16 +435,33 @@
     playerVideo.onclick = () => playerVideo.src && (playerVideo.paused ? playerVideo.play() : playerVideo.pause());
 
     if (playerTrack) {
-      playerTrack.onclick = (e) => {
+      /** Calculates and sets the video time based on click/drag horizontal position. */
+      const updateSeek = (e) => {
         if (!playerVideo.duration) return;
         const rect = playerTrack.getBoundingClientRect();
-        playerVideo.currentTime = ((e.clientX - rect.left) / rect.width) * playerVideo.duration;
+        const pos = (e.clientX - rect.left) / rect.width;
+        playerVideo.currentTime = Math.max(0, Math.min(1, pos)) * playerVideo.duration;
         if (playerVideo.paused) syncProgressUI();
       };
+
       playerTrack.onmousedown = (e) => {
+        // Middle Click to toggle play/pause
         if (e.button === 1 && playerVideo.src) {
           e.preventDefault();
           playerVideo.paused ? playerVideo.play() : playerVideo.pause();
+          return;
+        }
+
+        // Left Click + Drag scrubbing logic
+        if (e.button === 0) {
+          updateSeek(e);
+          const onMouseMove = (moveEv) => updateSeek(moveEv);
+          const onMouseUp = () => {
+            window.removeEventListener("mousemove", onMouseMove);
+            window.removeEventListener("mouseup", onMouseUp);
+          };
+          window.addEventListener("mousemove", onMouseMove);
+          window.addEventListener("mouseup", onMouseUp);
         }
       };
     }

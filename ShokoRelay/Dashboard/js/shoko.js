@@ -3,7 +3,7 @@
  * @description Dedicated logic for Shoko VFS and Automation tasks on the Shoko Relay dashboard.
  */
 (() => {
-  const { base, el, TOAST_MS, fetchJson, showToast, toastOperation, summarizeResult, withButtonAction, initToggle, setIfNotEmpty, openModal, setButtonLoading } = window._sr;
+  const { base, el, TOAST_MS, fetchJson, showToast, toastOperation, summarizeResult, withButtonAction, initToggle, setIfNotEmpty, openModal, setButtonLoading, syncActiveTasks } = window._sr;
 
   // #region Helpers
   /**
@@ -93,32 +93,42 @@
   // Remove records for files no longer present on disk.
   const removeBtn = el("shoko-remove-missing");
   if (removeBtn) {
-    withButtonAction(removeBtn, async () => {
-      return new Promise((resolve) => {
-        const modal = el("confirm-modal");
-        const msg = el("confirm-message");
-        const execBtn = el("confirm-exec");
-        const cancelBtn = el("confirm-cancel");
+    removeBtn.onclick = () => {
+      const modal = el("confirm-modal");
+      const msg = el("confirm-message");
+      const execBtn = el("confirm-exec");
+      const cancelBtn = el("confirm-cancel");
 
-        msg.innerHTML = "Are you sure you want to remove all records for missing files?<br><br><small>This will permanently remove them from Shoko's database and your AniDB MyList.</small>";
-        execBtn.textContent = "Remove Files";
+      msg.innerHTML = "Are you sure you want to remove all records for missing files?<br><br><small>This will permanently remove them from Shoko's database and your AniDB MyList.</small>";
+      execBtn.textContent = "Remove Files";
 
-        const close = openModal(modal);
+      const close = openModal(modal);
 
-        execBtn.onclick = async () => {
-          close();
+      execBtn.onclick = async () => {
+        close();
+
+        // Manually trigger the loading state on the dashboard button only after confirmation
+        setButtonLoading(removeBtn, true);
+        removeBtn.classList.add("clicking");
+
+        try {
           showToast("Remove Missing: Processing...", "info", TOAST_MS);
           const res = await fetchJson(base + "/shoko/remove-missing?dryRun=false", { method: "POST" });
-          toastOperation(res, "Remove Missing", { hideOnSucceed: 0 });
-          resolve();
-        };
 
-        cancelBtn.onclick = () => {
-          close();
-          resolve();
-        };
-      });
-    });
+          // Persistent toast for completion
+          toastOperation(res, "Remove Missing", { hideOnSucceed: 0 });
+
+          // Explicitly clear the task on the server to prevent the background poller from showing a second toast
+          await fetch(base + "/tasks/clear/shoko-remove-missing", { method: "POST" });
+        } finally {
+          removeBtn.classList.remove("clicking");
+          setButtonLoading(removeBtn, false);
+          syncActiveTasks();
+        }
+      };
+
+      cancelBtn.onclick = close;
+    };
   }
 
   // Trigger a Shoko import detection scan on managed folders.

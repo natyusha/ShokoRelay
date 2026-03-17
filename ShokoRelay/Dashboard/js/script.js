@@ -111,18 +111,21 @@
    * Show success/error toasts for HTTP responses with log-link injection and summary.
    * @param {{ok: boolean, data: *}} res - The fetchJson response object.
    * @param {string} label - Identifies the operation.
-   * @param {{summary?: string, hideOnSucceed?: number}} [opts] - Display options.
+   * @param {{summary?: string, hideOnSucceed?: number, type?: string}} [opts] - Display options.
    */
   function toastOperation(res, label, opts = {}) {
-    const { summary, hideOnSucceed } = opts;
+    const { summary, hideOnSucceed, type } = opts;
     const { text, errorCount } = summarizeResult(res);
     const logLink = makeLogLink(res.data?.logUrl);
 
     if (res.ok) {
       const display = summary || text || `${label} Complete`;
-      showToast(`${label}: ${display} ${logLink}`, errorCount > 0 ? "error" : "success", errorCount > 0 ? 0 : (hideOnSucceed ?? TOAST_MS));
+      const toastType = type || (errorCount > 0 ? "error" : "success");
+      showToast(`${label}: ${display} ${logLink}`, toastType, errorCount > 0 ? 0 : (hideOnSucceed ?? TOAST_MS));
     } else {
-      showToast(`${label} Failed: ${summary || res.data?.message || JSON.stringify(res.data)} ${logLink}`, "error", 0);
+      // Prioritize the processed 'text' from summarizeResult to avoid raw JSON blobs
+      const display = summary || text || res.data?.message || (typeof res.data === "string" ? res.data : JSON.stringify(res.data));
+      showToast(`${label} Failed: ${display} ${logLink}`, "error", 0);
     }
   }
 
@@ -134,6 +137,17 @@
   function summarizeResult(res) {
     const d = getData(res);
     if (!d) return { text: "", errorCount: 0 };
+
+    // Handle ASP.NET Validation Problem Details
+    if (d.errors && typeof d.errors === "object" && !Array.isArray(d.errors)) {
+      const messages = Object.values(d.errors).flat();
+      if (messages.length > 0) return { text: messages.join(", "), errorCount: messages.length };
+    }
+
+    // Fallback for generic error objects with a title but no specific error array
+    if (res.ok === false && d.title && !d.message) {
+      return { text: d.title, errorCount: 1 };
+    }
 
     const parts = [];
     let errorCount = 0;

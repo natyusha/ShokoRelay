@@ -96,6 +96,10 @@ public class PlexLibraryTarget
     /// <summary>Base server URL.</summary>
     [Browsable(false)]
     public string ServerUrl { get; set; } = "";
+
+    /// <summary>The list of physical root paths assigned to this library in Plex.</summary>
+    [Browsable(false)]
+    public List<string> Locations { get; set; } = [];
 }
 
 #endregion
@@ -144,6 +148,9 @@ public class PlexAvailableLibrary
     /// <summary>Base server URL.</summary>
     [Browsable(false)]
     public string ServerUrl { get; set; } = "";
+
+    /// <summary>The list of physical root paths assigned to this library in Plex.</summary>
+    public List<string> Locations { get; set; } = [];
 }
 
 #endregion
