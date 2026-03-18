@@ -1,4 +1,5 @@
 html {
+  overflow-x: hidden;
   scrollbar-gutter: unset;
 }
 body {
@@ -19,6 +20,7 @@ body {
 }
 .player .video-container {
   position: relative;
+  container-type: inline-size;
   background: black;
   aspect-ratio: 16 / 9;
   width: 100%;
@@ -83,35 +85,28 @@ body {
   cursor: default;
   margin-top: 0.35em;
   max-width: calc(100vw - 395px);
-  overflow: hidden;
   font-size: 1.3em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 #now-playing-fav,
 #locate-current {
-  visibility: hidden;
+  pointer-events: none;
 }
 #title {
-  display: block;
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
   font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 #anime {
-  display: inline-block;
   opacity: 0.6;
   transition: all 0.3s ease-in-out;
   margin-top: 0.15em;
-  max-width: 100%;
-  overflow: hidden;
   pointer-events: none;
   color: var(--text-color);
   font-size: 0.9em;
   text-decoration: none;
+}
+#title,
+#anime {
+  display: inline-block;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -175,7 +170,7 @@ body {
   z-index: 1;
   transition: opacity 0.3s ease-in-out;
   inset: 0;
-  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.6) 0%, transparent 15%), linear-gradient(to top, rgba(0, 0, 0, 0.6) 0%, transparent 15%);
+  background: linear-gradient(to bottom, var(--black-t60), transparent 25%), linear-gradient(to top, var(--black-t60), transparent 25%);
   pointer-events: none;
   content: "";
   color: var(--text-color);
@@ -210,7 +205,9 @@ body {
   bottom: 26px;
   left: 6px;
   justify-content: space-between;
+  font-size: 1.1em;
   font-variant-numeric: tabular-nums;
+  user-select: none;
 }
 .video-container:hover .video-ui-overlay,
 .video-container[data-volume-level="mute"] .video-ui-overlay {
@@ -241,8 +238,8 @@ body {
 }
 .ui-btn .icon-svg {
   fill: currentColor;
-  width: 1.5em;
-  height: 1.5em;
+  width: 1.6em;
+  height: 1.6em;
 }
 .ui-btn:hover {
   opacity: 1;
@@ -254,14 +251,15 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+  white-space: nowrap;
 }
 .ui-right {
   justify-content: flex-end;
-  min-width: 100px;
 }
+#time-display,
 #volume-text {
-  min-width: 45px;
-  text-align: right;
+  flex-shrink: 0;
 }
 #fullscreen[data-state="fullscreen"] .fs-enter,
 #fullscreen .fs-exit,
@@ -460,7 +458,7 @@ ul.tree {
     max-height: calc(100vh - 52px);
   }
   .now-playing {
-    max-width: auto;
+    max-width: 100%;
   }
   #tree {
     border-bottom: 1px solid var(--border-color);
@@ -468,6 +466,16 @@ ul.tree {
   #controls {
     right: -384px;
     bottom: 0px;
+  }
+}
+@container (max-width: 230px) {
+  #volume-text {
+    display: none;
+  }
+}
+@container (max-width: 160px) {
+  #time-display {
+    display: none;
   }
 }
 /* #endregion */

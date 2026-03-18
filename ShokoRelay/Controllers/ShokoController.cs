@@ -104,9 +104,7 @@ public class ShokoController(
 
     #region Automation
 
-    /// <summary>
-    /// Removes records for video files that no longer exist on disk from the Shoko database and Anidb MyList.
-    /// </summary>
+    /// <summary>Removes records for video files that no longer exist on disk from the Shoko database and Anidb MyList.</summary>
     [HttpGet("shoko/remove-missing")]
     [HttpPost("shoko/remove-missing")]
     public async Task<IActionResult> RemoveMissingFiles([FromQuery] bool? dryRun = null)

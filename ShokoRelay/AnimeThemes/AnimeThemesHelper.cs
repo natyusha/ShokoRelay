@@ -70,6 +70,8 @@ public sealed record WebmCacheEntry(string VfsPath, int VideoId, int Bitmask);
 public sealed record AnimeThemesMappingApplyResult(int LinksCreated, int Skipped, int SeriesMatched, IReadOnlyList<string> Errors, IReadOnlyList<WebmCacheEntry> CacheEntries, TimeSpan Elapsed);
 
 /// <summary>Internal helper record used when looking up theme metadata by video identifier.</summary>
+/// <remarks><c>ThemeId</c>: AnimeThemes theme identifier.</remarks>
+/// <inheritdoc cref="AnimeThemesMappingEntry" />
 internal sealed record AnimeThemesVideoLookup(
     int VideoId,
     int ThemeId,
@@ -247,9 +249,7 @@ internal static class AnimeThemesHelper
         return flags;
     }
 
-    /// <summary>
-    /// Constructs a sanitized filename from theme metadata.
-    /// </summary>
+    /// <summary>Constructs a sanitized filename from theme metadata.</summary>
     /// <param name="lookup">The metadata lookup object.</param>
     /// <param name="extension">The file extension to append.</param>
     /// <param name="overrideIndex">The 0-based index of the series within an override group.</param>

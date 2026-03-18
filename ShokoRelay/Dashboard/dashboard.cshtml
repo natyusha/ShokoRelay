@@ -16,7 +16,7 @@
       -->
       <div class="two-cols">
         <section>
-          <h3 class="plex">Plex: Authentication</h3>
+          <h2 class="plex">Plex: Authentication</h2>
           <div class="full" id="plex-auth-action">
             <button id="plex-start">Start Plex Auth</button>
           </div>
@@ -32,7 +32,7 @@
           </div>
         </section>
         <section>
-          <h3 class="plex">Plex: Automation</h3>
+          <h2 class="plex">Plex: Automation</h2>
           <div class="full">
             <button id="plex-collections-build" class="plex-auth">Generate Collections</button>
             <button id="plex-ratings-apply" class="plex-auth">Apply Critic Ratings</button>
@@ -78,12 +78,12 @@
       -->
       <div class="two-cols">
         <section>
-          <h3>
+          <h2>
             <svg class="icon-svg">
               <use href="img/icons.svg#database-refresh-outline"></use>
             </svg>
             Shoko: VFS
-          </h3>
+          </h2>
           <div class="full">
             <div>
               <label for="vfs-filter">Filter by ShokoSeriesID</label>
@@ -105,12 +105,12 @@
           </div>
         </section>
         <section>
-          <h3>
+          <h2>
             <svg class="icon-svg">
               <use href="img/icons.svg#auto-fix"></use>
             </svg>
             Shoko: Automation
-          </h3>
+          </h2>
           <div class="full">
             <div>
               <label for="shoko-utc-offset">Schedule Offset</label>
@@ -126,7 +126,7 @@
             </div>
           </div>
           <div class="full">
-            <button id="shoko-remove-missing" class="danger" title="Removes Missing Files From Shoko and MyList">Remove Missing</button>
+            <button id="shoko-remove-missing" title="Remove Missing Files From Shoko and MyList">Remove Missing</button>
             <div class="w100">
               <button id="shoko-import-run" title="Import From Source folders">Import</button>
             </div>
@@ -143,12 +143,12 @@
       <div class="two-cols">
         <section>
           <div class="full">
-            <h3>
+            <h2>
               <svg class="at-svg">
                 <use href="img/icons.svg#animethemes"></use>
               </svg>
               AnimeThemes: VFS
-            </h3>
+            </h2>
             <a href="player" target="_blank" rel="noopener noreferrer" class="at-btn" title="Open Video Player" aria-label="Open Video Player">
               <svg class="icon-svg">
                 <use href="img/icons.svg#movie-open"></use>
@@ -180,12 +180,12 @@
             <div id="at-progress-fill" class="at-progress-fill"></div>
           </div>
           <div class="full">
-            <h3>
+            <h2>
               <svg class="at-svg">
                 <use href="img/icons.svg#animethemes"></use>
               </svg>
               AnimeThemes: MP3
-            </h3>
+            </h2>
             <button id="at-play" class="at-btn" title="Play" type="button" aria-label="Play" hidden>
               <svg class="icon-svg play">
                 <use href="img/icons.svg#play"></use>
@@ -240,12 +240,12 @@
       -->
       <section>
         <div class="full">
-          <h3>
+          <h2>
             <svg class="icon-svg">
               <use href="img/icons.svg#cog-outline"></use>
             </svg>
             Provider Settings
-          </h3>
+          </h2>
           <button id="settings-help-open" class="at-btn" title="Settings Help" aria-label="Settings Help">
             <svg class="icon-svg">
               <use href="img/icons.svg#help-box"></use>
@@ -381,45 +381,48 @@
       <div class="modal help" role="document">
         <header>Settings Help</header>
         <div class="modal-body">
-          <h3>Language Tag Examples</h3>
-          <div class="full">
-            <ul class="help-list">
-              <li><code>SHOKO</code><small>Shoko's Preferred Title</small></li>
-              <li><code>X-JAT</code><small>Romanized Japanese</small></li>
-              <li><code>EN</code><small>English</small></li>
-              <li><code>JA</code><small>Japanese</small></li>
-              <li><code>ZH</code><small>Chinese</small></li>
-              <li><code>KO</code><small>Korean</small></li>
+          <section>
+            <h3>Primary Settings</h3>
+            <h4>Language Tag Examples</h4>
+            <div class="full">
+              <ul class="help-list">
+                <li><code>SHOKO</code><small>Shoko's Preferred Title</small></li>
+                <li><code>X-JAT</code><small>Romanized Japanese</small></li>
+                <li><code>EN</code><small>English</small></li>
+                <li><code>JA</code><small>Japanese</small></li>
+                <li><code>ZH</code><small>Chinese</small></li>
+                <li><code>KO</code><small>Korean</small></li>
+              </ul>
+              <ul class="help-list">
+                <li><code>ES</code><small>Spanish</small></li>
+                <li><code>FR</code><small>French</small></li>
+                <li><code>PT</code><small>Portuguese</small></li>
+                <li><code>RU</code><small>Russian</small></li>
+                <li><code>DE</code><small>German</small></li>
+                <li><code>IT</code><small>Italian</small></li>
+              </ul>
+            </div>
+            <h4>Tag Weights</h4>
+            <small>
+              Many tags on AniDB use a <a href="https://wiki.anidb.net/Tags#Star-rating_-_the_Weight_system" target="_blank" rel="noopener noreferrer" title="AniDB Wiki">3 Star Weight System</a> which
+              represents a value from 0 (no stars) to 600 (3 stars) and determines how relevant the tag is to the series it is applied to. By setting this value you can filter out tags below a certain star
+              threshold.
+            </small>
+          </section>
+          <section>
+            <h3>Advanced Settings</h3>
+            <h4>Path Mappings</h4>
+            <small><em>Required if Plex and Shoko see your files via different paths</em></small>
+            <ul class="help-list inline-help">
+              <li><code>Left</code> <small>Paths as seen by Plex</small></li>
+              <li><code>Right</code> <small>Paths as seen by Shoko</small></li>
             </ul>
-            <ul class="help-list">
-              <li><code>ES</code><small>Spanish</small></li>
-              <li><code>FR</code><small>French</small></li>
-              <li><code>PT</code><small>Portuguese</small></li>
-              <li><code>RU</code><small>Russian</small></li>
-              <li><code>DE</code><small>German</small></li>
-              <li><code>IT</code><small>Italian</small></li>
-            </ul>
-          </div>
-          <br />
-          <h3>Tag Weights</h3>
-          <small>
-            Many tags on AniDB use a <a href="https://wiki.anidb.net/Tags#Star-rating_-_the_Weight_system" target="_blank" rel="noopener noreferrer" title="AniDB Wiki">3 Star Weight System</a> which represents
-            a value from 0 (no stars) to 600 (3 stars) and determines how relevant the tag is to the series it is applied to. By setting this value you can filter out tags below a certain star threshold.
-          </small>
-          <br />
-          <br />
-          <h3>Path Mappings</h3>
-          <p>Required if Plex and Shoko see your files via different paths</p>
-          <ul class="help-list inline-help">
-            <li><code>Left</code> <small>Paths as seen by Plex</small></li>
-            <li><code>Right</code> <small>Paths as seen by Shoko</small></li>
-          </ul>
-          <br />
-          <h3>Plex Fixup Delay</h3>
-          <small>
-            Sometimes Shoko may not have acquired all of the metadata for a series when it is first scanned into Plex. This setting attempts to mitigate this by waiting for new files to be added to the VFS then
-            triggering a delayed Plex metadata refresh. This action is debounced so adding multiple episodes within the configured delay will not trigger it multiple times.
-          </small>
+            <h4>Plex Fixup Delay</h4>
+            <small>
+              Sometimes Shoko may not have acquired all of the metadata for a series when it is first scanned into Plex. This setting attempts to mitigate this by waiting for new files to be added to the VFS
+              then triggering a delayed Plex metadata refresh. This action is debounced so adding multiple episodes within the configured delay will not trigger it multiple times.
+            </small>
+          </section>
         </div>
       </div>
     </div>

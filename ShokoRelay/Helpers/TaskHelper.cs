@@ -2,21 +2,15 @@ using System.Collections.Concurrent;
 
 namespace ShokoRelay.Helpers;
 
-/// <summary>
-/// Provides a centralized way to track long-running manual tasks for UI feedback.
-/// </summary>
+/// <summary>Provides a centralized way to track long-running manual tasks for UI feedback.</summary>
 public static class TaskHelper
 {
     #region Fields
 
-    /// <summary>
-    /// Currently running tasks and their start times.
-    /// </summary>
+    /// <summary>Currently running tasks and their start times.</summary>
     public static readonly ConcurrentDictionary<string, DateTime> ActiveTasks = new();
 
-    /// <summary>
-    /// Stores the results of completed tasks so the UI can retrieve them after a refresh.
-    /// </summary>
+    /// <summary>Stores the results of completed tasks so the UI can retrieve them after a refresh.</summary>
     public static readonly ConcurrentDictionary<string, object> TaskResults = new();
 
     #endregion

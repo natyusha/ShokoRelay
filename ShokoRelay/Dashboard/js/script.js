@@ -95,7 +95,12 @@
         }
       } finally {
         elBtn.classList.remove("clicking");
-        syncActiveTasks();
+
+        if (!MANAGED_TASK_IDS.includes(elBtn.id)) {
+          setTimeout(() => setButtonLoading(elBtn, false), TOAST_MS); // Instant tasks: Keep the spinner active for TOAST_MS to prevent accidental multi runs
+        } else {
+          syncActiveTasks();
+        }
       }
     };
   }

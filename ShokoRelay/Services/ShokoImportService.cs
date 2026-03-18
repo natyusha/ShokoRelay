@@ -5,9 +5,7 @@ using ShokoRelay.Helpers;
 
 namespace ShokoRelay.Services;
 
-/// <summary>
-/// Helper for triggering server-side import and housekeeping actions using Shoko's internal service abstractions.
-/// </summary>
+/// <summary>Helper for triggering server-side import and housekeeping actions using Shoko's internal service abstractions.</summary>
 public class ShokoImportService(IVideoService videoService, IVideoReleaseService releaseService)
 {
     #region Fields & Constructor
@@ -20,9 +18,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
 
     #region Import Logic
 
-    /// <summary>
-    /// Trigger import scans for every managed folder marked as a "Source".
-    /// </summary>
+    /// <summary>Trigger import scans for every managed folder marked as a "Source".</summary>
     /// <returns>A read-only list of folder names that were scheduled for scanning.</returns>
     public async Task<IReadOnlyList<string>> TriggerImportAsync()
     {
@@ -56,9 +52,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
 
     #region Housekeeping Logic
 
-    /// <summary>
-    /// Scan for video file entries whose physical file has disappeared and optionally remove those records from the database and release info (MyList).
-    /// </summary>
+    /// <summary>Scan for video file entries whose physical file has disappeared and optionally remove those records from the database and release info (MyList).</summary>
     /// <param name="dryRun">When <c>true</c>, list missing files without deleting them.</param>
     /// <returns>A read-only list of paths for files that were identified as missing.</returns>
     public async Task<IReadOnlyList<string>> RemoveMissingFilesAsync(bool dryRun = false)
@@ -80,7 +74,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
                 // Remove the file records from Shoko
                 await _videoService.DeleteVideoFiles(toDelete, removeFiles: false, removeFolders: false).ConfigureAwait(false);
 
-                // Purge unused releases and remove from AniDB MyList
+                // Purge unused releases from DB and remove from AniDB MyList
                 await _releaseService.PurgeUnusedReleases(providerNames: null, removeFromMylist: true).ConfigureAwait(false);
 
                 Logger.Info("Shoko Housekeeping: Database and MyList cleanup complete.");

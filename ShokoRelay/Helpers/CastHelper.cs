@@ -17,16 +17,12 @@ public sealed class TagItem
 
 #endregion
 
-/// <summary>
-/// Helper utilities for generating cast, crew and studio tag information suitable for Plex metadata responses.
-/// </summary>
+/// <summary>Helper utilities for generating cast, crew and studio tag information suitable for Plex metadata responses.</summary>
 public static class CastHelper
 {
     #region Cast and Crew Logic
 
-    /// <summary>
-    /// Return an array of objects representing cast (and optionally crew) for the specified media item. The crew portion is included based on the <c>CrewListings</c> setting.
-    /// </summary>
+    /// <summary>Return an array of objects representing cast (and optionally crew) for the specified media item. The crew portion is included based on the <c>CrewListings</c> setting.</summary>
     /// <param name="item">Item implementing <see cref="IWithCastAndCrew"/>.</param>
     /// <returns>An array of anonymous cast/crew objects suitable for Plex metadata responses.</returns>
     public static object[] GetCastAndCrew(IWithCastAndCrew item)
@@ -67,24 +63,18 @@ public static class CastHelper
         return [.. cast, .. crew];
     }
 
-    /// <summary>
-    /// Return director credits for the given item.
-    /// </summary>
+    /// <summary>Return director credits for the given item.</summary>
     /// <param name="item">Item with cast/crew data.</param>
     /// <returns>An array of anonymous objects containing director names.</returns>
     public static object[] GetDirectors(IWithCastAndCrew item) => FilterCrew(item, CrewRoleType.Director);
 
-    /// <summary>
-    /// Retrieve writing credits (series composers or source work) for the item.
-    /// </summary>
+    /// <summary>Retrieve writing credits (series composers or source work) for the item.</summary>
     /// <param name="item">Source item.</param>
     /// <returns>An array of anonymous objects containing writer names.</returns>
     public static object[] GetWriters(IWithCastAndCrew item) =>
         item.Crew?.Where(c => c.RoleType is CrewRoleType.SeriesComposer or CrewRoleType.SourceWork).Select(c => (object)new { tag = GetName(c.Creator, c.Name) }).ToArray() ?? [];
 
-    /// <summary>
-    /// Retrieve producer credits for the given item.
-    /// </summary>
+    /// <summary>Retrieve producer credits for the given item.</summary>
     /// <param name="item">Item with cast/crew data.</param>
     /// <returns>An array of anonymous objects containing producer names.</returns>
     public static object[] GetProducers(IWithCastAndCrew item) => FilterCrew(item, CrewRoleType.Producer);
@@ -93,17 +83,13 @@ public static class CastHelper
 
     #region Studio Logic
 
-    /// <summary>
-    /// Assemble an array of <see cref="TagItem"/> objects representing the series' studios.
-    /// </summary>
+    /// <summary>Assemble an array of <see cref="TagItem"/> objects representing the series' studios.</summary>
     /// <param name="series">Series metadata.</param>
     /// <returns>An array of <see cref="TagItem"/> instances, one per distinct studio.</returns>
     public static TagItem[] GetStudioTags(ISeries series) =>
         series.Studios?.Where(s => !string.IsNullOrWhiteSpace(s.Name)).Select(s => s.Name).Distinct(StringComparer.OrdinalIgnoreCase).Select(name => new TagItem { Tag = name }).ToArray() ?? [];
 
-    /// <summary>
-    /// Return the first studio name associated with a series, or <c>null</c> if none exist.
-    /// </summary>
+    /// <summary>Return the first studio name associated with a series, or <c>null</c> if none exist.</summary>
     /// <param name="series">Series metadata.</param>
     /// <returns>The primary studio name, or null if not found.</returns>
     public static string? GetStudio(ISeries series) => series.Studios?.FirstOrDefault()?.Name;

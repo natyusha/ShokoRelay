@@ -34,9 +34,7 @@ public class ConfigProvider
     /// <summary>Service for accessing the current HTTP context, used for URL discovery.</summary>
     public IHttpContextAccessor? HttpContextAccessor { get; set; }
 
-    /// <summary>
-    /// The externally-reachable base URL of the Shoko server. Priority: 1. Advanced.ShokoServerUrl setting, 2. Current HTTP Context, 3. Last known good value.
-    /// </summary>
+    /// <summary>The externally-reachable base URL of the Shoko server. Priority: 1. Advanced.ShokoServerUrl setting, 2. Current HTTP Context, 3. Last known good value.</summary>
     public string ServerBaseUrl
     {
         get
@@ -50,9 +48,7 @@ public class ConfigProvider
         }
     } = "http://localhost:8111";
 
-    /// <summary>
-    /// Creates a new ConfigProvider using the specified paths provided by the host application.
-    /// </summary>
+    /// <summary>Creates a new ConfigProvider using the specified paths provided by the host application.</summary>
     /// <param name="applicationPaths">Paths provided by the host application.</param>
     public ConfigProvider(IApplicationPaths applicationPaths)
     {
@@ -93,9 +89,7 @@ public class ConfigProvider
 
     #region Sanitization
 
-    /// <summary>
-    /// Convert any JsonElement trees within <paramref name="obj"/> into plain CLR values.
-    /// </summary>
+    /// <summary>Convert any JsonElement trees within <paramref name="obj"/> into plain CLR values.</summary>
     /// <param name="obj">The JSON element or object to sanitize.</param>
     /// <returns>A sanitized object containing only plain CLR types.</returns>
     public object SanitizeConfigObject(object obj) =>
@@ -124,15 +118,11 @@ public class ConfigProvider
 
     #region Settings Management
 
-    /// <summary>
-    /// Return the current settings, loading from disk if not already cached.
-    /// </summary>
+    /// <summary>Return the current settings, loading from disk if not already cached.</summary>
     /// <returns>The current <see cref="RelayConfig"/> instance.</returns>
     public RelayConfig GetSettings() => _settings ??= GetSettingsFromFile();
 
-    /// <summary>
-    /// Construct a sanitized payload of settings plus minimal Plex auth information for the dashboard.
-    /// </summary>
+    /// <summary>Construct a sanitized payload of settings plus minimal Plex auth information for the dashboard.</summary>
     /// <returns>A sanitized configuration object for dashboard consumption.</returns>
     public object GetDashboardConfig()
     {
@@ -151,9 +141,7 @@ public class ConfigProvider
     /// <summary>The absolute path to the plugin's configuration directory.</summary>
     public string ConfigDirectory => Path.GetDirectoryName(_filePath)!;
 
-    /// <summary>
-    /// Validate, normalize and persist the supplied <paramref name="settings"/> to disk.
-    /// </summary>
+    /// <summary>Validate, normalize and persist the supplied <paramref name="settings"/> to disk.</summary>
     /// <param name="settings">The <see cref="RelayConfig"/> instance to save.</param>
     public void SaveSettings(RelayConfig settings)
     {
@@ -181,12 +169,13 @@ public class ConfigProvider
         ApplyDefaultValues(s);
         NormalizePathMappings(s);
         NormalizeCsvFields(s);
+        NormalizeSettings(s);
         return s;
     }
 
     #endregion
 
-    #region Plex Secrets and Token Management
+    #region Plex Secrets & Tokens
 
     private sealed class TokenFile
     {
@@ -268,9 +257,7 @@ public class ConfigProvider
     /// <returns>The admin username, or null if not yet discovered.</returns>
     public string? GetAdminUsername() => _cachedAdminUsername ??= ReadTokenFile().AdminUsername;
 
-    /// <summary>
-    /// Refreshes the admin username from the Plex API and updates the local storage.
-    /// </summary>
+    /// <summary>Refreshes the admin username from the Plex API and updates the local storage.</summary>
     /// <param name="auth">The <see cref="PlexAuth"/> service to use.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>A task representing the refresh operation.</returns>
@@ -283,9 +270,7 @@ public class ConfigProvider
         }
     }
 
-    /// <summary>
-    /// Updates specific fields in the Plex token/secrets file.
-    /// </summary>
+    /// <summary>Updates specific fields in the Plex token/secrets file.</summary>
     /// <param name="token">Optional new Plex token.</param>
     /// <param name="clientIdentifier">Optional new client identifier.</param>
     /// <param name="adminName">Optional new admin username.</param>
@@ -306,9 +291,7 @@ public class ConfigProvider
 
     #region User Management
 
-    /// <summary>
-    /// Parse a comma-separated string of Plex user entries, optionally containing 4-digit PINs.
-    /// </summary>
+    /// <summary>Parse a comma-separated string of Plex user entries, optionally containing 4-digit PINs.</summary>
     /// <param name="raw">The raw configuration string to parse.</param>
     /// <returns>A list of tuples containing the username and optional PIN.</returns>
     public static List<(string Name, string? Pin)> ParseExtraPlexUsers(string? raw) =>
@@ -326,7 +309,7 @@ public class ConfigProvider
 
     #endregion
 
-    #region Normalization and Validation
+    #region Normalize & Validate
 
     private bool NormalizePathMappings(RelayConfig settings)
     {
@@ -372,6 +355,45 @@ public class ConfigProvider
                 p.SetValue(obj, d.Value);
             else if (p.PropertyType.IsClass && p.PropertyType != typeof(string) && !typeof(System.Collections.IDictionary).IsAssignableFrom(p.PropertyType))
                 ApplyDefaultValues(p.GetValue(obj)!);
+        }
+    }
+
+    /// <summary>Recursively scans an object for properties with [Range] attributes and clamps their values accordingly.</summary>
+    /// <param name="obj">The configuration object to normalize.</param>
+    private static void NormalizeSettings(object obj)
+    {
+        if (obj == null)
+            return;
+        var type = obj.GetType();
+        var props = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+
+        foreach (var prop in props)
+        {
+            if (!prop.CanRead || !prop.CanWrite)
+                continue;
+
+            // Check for the Range attribute
+            var range = prop.GetCustomAttribute<RangeAttribute>();
+            if (range != null && prop.PropertyType == typeof(int))
+            {
+                int currentVal = (int)prop.GetValue(obj)!;
+                int min = Convert.ToInt32(range.Minimum);
+                int max = Convert.ToInt32(range.Maximum);
+
+                int clampedVal = Math.Clamp(currentVal, min, max);
+                if (currentVal != clampedVal)
+                {
+                    prop.SetValue(obj, clampedVal);
+                    Logger.Trace("Config: Clamped {0} from {1} to {2}", prop.Name, currentVal, clampedVal);
+                }
+            }
+            // Recurse into nested config classes (AutomationConfig, AdvancedConfig, etc.)
+            else if (prop.PropertyType.IsClass && prop.PropertyType != typeof(string) && !typeof(System.Collections.IEnumerable).IsAssignableFrom(prop.PropertyType))
+            {
+                var subObj = prop.GetValue(obj);
+                if (subObj != null)
+                    NormalizeSettings(subObj);
+            }
         }
     }
 

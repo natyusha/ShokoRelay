@@ -259,6 +259,7 @@ public class AutomationConfig
 
     /// <summary>Frequency for Plex metadata automation.</summary>
     [Display(Name = "Plex Automation Frequency (hours)", Description = "Run Plex automation tasks every N hours. Set to 0 to disable")]
+    [Range(1, 168, ErrorMessage = "Plex Automation Frequency must be between 0 and 168")]
     [Browsable(false)]
     [DefaultValue(0)]
     public int PlexAutomationFrequencyHours { get; set; } = 0;
@@ -277,19 +278,21 @@ public class AutomationConfig
 
     /// <summary>Anchor hour for scheduling.</summary>
     [Display(Name = "UTC Offset Hours", Description = "Offset from UTC midnight used as the anchor for scheduling (-12 to +14)")]
-    [Browsable(false)]
     [Range(-12, 14, ErrorMessage = "UTC Offset must be between -12 and +14")]
+    [Browsable(false)]
     [DefaultValue(0)]
     public int UtcOffsetHours { get; set; } = 0;
 
     /// <summary>Frequency for Shoko import detection.</summary>
     [Display(Name = "Auto Import Frequency (hours)", Description = "Run Shoko import detection every N hours. Set to 0 to disable")]
+    [Range(0, 24, ErrorMessage = "Auto Import Frequency must be between 0 and 24")]
     [Browsable(false)]
     [DefaultValue(0)]
     public int ShokoImportFrequencyHours { get; set; } = 0;
 
     /// <summary>Frequency for watched-state synchronization.</summary>
     [Display(Name = "Auto Sync Watched Frequency (hours)", Description = "Run watched-state sync every N hours. Set to 0 to disable")]
+    [Range(0, 168, ErrorMessage = "Auto Sync Watched Frequency must be between 0 and 168")]
     [Browsable(false)]
     [DefaultValue(0)]
     public int ShokoSyncWatchedFrequencyHours { get; set; } = 0;
@@ -382,8 +385,9 @@ public class AdvancedConfig
 
     /// <summary>Plex RefreshMetadataAsync delay.</summary>
     [Display(Name = "Plex Fixup Delay", Description = "The delay (in minutes) after the VFS adds a file to force refresh series metadata. Set to 0 to disable")]
-    [DefaultValue(1)]
-    public int PlexRefreshMetadataDelay { get; set; } = 1;
+    [Range(0, 60, ErrorMessage = "Plex Fixup Delay must be between 0 and 60")]
+    [DefaultValue(2)]
+    public int PlexFixupDelay { get; set; } = 2;
 
     /// <summary>Task parallelism limit.</summary>
     [Display(Name = "Parallelism", Description = "The maximum number of concurrent operations *used by VFS and AnimeThemes batch operations")]

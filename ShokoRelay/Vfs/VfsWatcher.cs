@@ -218,7 +218,7 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
     /// <summary>Schedules or resets the timer for a full Plex metadata refresh for the given series.</summary>
     private void ScheduleMetadataFixup(IShokoSeries series)
     {
-        int delayMinutes = ShokoRelay.Settings.Advanced.PlexRefreshMetadataDelay;
+        int delayMinutes = ShokoRelay.Settings.Advanced.PlexFixupDelay;
         if (delayMinutes <= 0)
             return;
 

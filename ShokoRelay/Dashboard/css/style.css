@@ -16,6 +16,8 @@
   --warning-color: #f9c851;
   --at-color: #9f93b8;
   --plex-color: #ffc826;
+  --black-t60: #00000099;
+  --glow: #94aad14d;
 }
 /* Dark Mode:  Shoko NN (https://shokoanime.com/downloads/webui-themes/shoko-nn) */
 :root[data-theme="dark"] {
@@ -96,9 +98,14 @@ section {
   background: var(--panel-color);
   padding: 12px;
 }
-h3 {
+h2,
+h3,
+h4 {
   margin: 0 0 8px 0;
+}
+h2 {
   font-weight: 500;
+  font-size: 1.17em;
 }
 hr {
   margin: 0 0 4px 0;
@@ -167,7 +174,7 @@ button {
 input:not([type="checkbox"]):focus,
 select:focus,
 textarea:focus {
-  box-shadow: 0 0 4px 2px rgba(148, 170, 209, 0.3);
+  box-shadow: 0 0 4px 2px var(--glow);
   border-color: var(--highlight-color);
 }
 textarea {
@@ -237,7 +244,7 @@ svg {
   width: 1.282em;
   height: 1.282em;
 }
-h3 .icon-svg {
+h2 .icon-svg {
   fill: var(--highlight-color);
 }
 .icon-svg {
@@ -402,14 +409,14 @@ label > small::before {
   align-items: center;
   z-index: 1500;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: var(--black-t60);
   padding: 24px;
 }
 .modal-overlay.open {
   display: flex;
 }
 .modal {
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 12px 40px var(--black-t60);
   border: 1px solid var(--border-color);
   border-radius: 10px;
   background: var(--panel-color);
@@ -430,18 +437,30 @@ label > small::before {
 .modal.help {
   width: 500px;
 }
-.modal.help p {
-  opacity: 0.7;
-  margin: 10px 0 5px;
-  font-weight: 500;
-  font-size: 0.8em;
-  text-transform: uppercase;
+.modal section {
+  margin: 0;
+  border: none;
+  padding: 0;
+}
+.modal section:not(:first-of-type) {
+  margin-top: 16px;
 }
 .modal h3 {
+  margin-bottom: 12px;
   border-bottom: 1px solid var(--border-color);
   padding-bottom: 4px;
+  font-weight: 500;
   font-size: 1em;
   text-transform: uppercase;
+}
+.modal h4 {
+  opacity: 0.85;
+  font-weight: 500;
+  font-size: 0.85em;
+  text-transform: uppercase;
+}
+.modal section h4:not(:first-of-type) {
+  padding-top: 16px;
 }
 .modal textarea {
   margin: 0;
@@ -477,6 +496,9 @@ label > small::before {
   background: var(--bg-color);
   color: var(--text-color);
 }
+.modal em {
+  color: var(--ok-color);
+}
 header {
   display: flex;
   justify-content: space-between;
@@ -511,7 +533,7 @@ footer {
   display: inline-flex;
   cursor: pointer;
   margin-bottom: 16px;
-  box-shadow: 0 0 4px 2px rgba(148, 170, 209, 0.3);
+  box-shadow: 0 0 4px 2px var(--glow);
   border: 1px solid var(--border-color);
   background: var(--inset-color);
   padding: 10px 6px;
@@ -547,10 +569,6 @@ footer {
   visibility: hidden;
   opacity: 0;
 }
-/* #endregion */
-
-/* #region MARK: Help
-*/
 .help-list {
   margin: 0;
   padding: 0;

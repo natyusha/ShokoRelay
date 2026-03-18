@@ -294,14 +294,14 @@
     if (playerTitle) playerTitle.textContent = playerTitle.title = item ? decodeUnicode(item.file) : "Video Player";
 
     if (playerNowPlayingFav && item) {
-      playerNowPlayingFav.style.visibility = "visible";
+      playerNowPlayingFav.style.pointerEvents = "auto";
       playerNowPlayingFav.classList.toggle("favourited", favourites.has(item.videoId));
       playerNowPlayingFav.onclick = (e) => {
         e.stopPropagation();
         toggleFavourite(item.videoId, playerNowPlayingFav);
       };
     }
-    if (playerLocateBtn && item) playerLocateBtn.style.visibility = "visible";
+    if (playerLocateBtn && item) playerLocateBtn.style.pointerEvents = "auto";
 
     if (playerAnime) {
       playerAnime.textContent = playerAnime.title = item ? item.series : "Select a theme to begin...";
@@ -329,6 +329,13 @@
     }
 
     if (isShuffle) {
+      // Seed history with the currently playing track if entering shuffle mode fresh
+      if (navigationStack.length === 0 && currentWebmPath) {
+        navigationStack.push(currentWebmPath);
+        shuffleHistory.add(currentWebmPath);
+        stackIndex = 0;
+      }
+
       if (direction === 1) {
         // Move forward in history or pick new random
         if (stackIndex < navigationStack.length - 1) {
@@ -432,7 +439,9 @@
       if (playerVideo.paused) syncProgressUI();
     });
 
+    // Click Handlers
     playerVideo.onclick = () => playerVideo.src && (playerVideo.paused ? playerVideo.play() : playerVideo.pause());
+    playerVideo.ondblclick = toggleFullscreen;
 
     if (playerTrack) {
       /** Calculates and sets the video time based on click/drag horizontal position. */
