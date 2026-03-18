@@ -11,8 +11,7 @@ public static class OverrideHelper
     private static readonly Dictionary<int, List<int>> _groups = [];
     private static DateTime _lastWriteUtc = DateTime.MinValue;
     private static string? _loadedPath;
-    private const string OverridesFileName = "anidb_vfs_overrides.csv";
-    private static string OverridesPath => Path.Combine(ShokoRelay.ConfigDirectory, OverridesFileName);
+    private static string OverridesPath => Path.Combine(ShokoRelay.ConfigDirectory, ShokoRelayConstants.FileVfsOverrides);
 
     #endregion
 

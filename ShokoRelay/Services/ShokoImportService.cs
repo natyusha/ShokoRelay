@@ -57,7 +57,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
     /// <returns>A read-only list of paths for files that were identified as missing.</returns>
     public async Task<IReadOnlyList<string>> RemoveMissingFilesAsync(bool dryRun = false)
     {
-        const string taskName = "shoko-remove-missing";
+        const string taskName = ShokoRelayConstants.TaskShokoRemoveMissing;
         if (!dryRun)
             TaskHelper.StartTask(taskName);
 

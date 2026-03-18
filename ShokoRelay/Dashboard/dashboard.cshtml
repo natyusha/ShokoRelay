@@ -7,6 +7,18 @@
     <link rel="icon" href="favicon.ico" />
     <link rel="stylesheet" href="css/style.css" />
     <link rel="stylesheet" href="css/dashboard.css" />
+    <script>
+      window._sr = window._sr || {};
+      window._sr.tasks = {
+        plexCollectionsBuild: "{{TaskPlexCollectionsBuild}}",
+        plexRatingsApply: "{{TaskPlexRatingsApply}}",
+        vfsBuild: "{{TaskVfsBuild}}",
+        shokoRemoveMissing: "{{TaskShokoRemoveMissing}}",
+        atVfsBuild: "{{TaskAtVfsBuild}}",
+        atMapBuild: "{{TaskAtMapBuild}}",
+        atMp3Build: "{{TaskAtMp3Build}}",
+      };
+    </script>
   </head>
 
   <body>
@@ -34,8 +46,8 @@
         <section>
           <h2 class="plex">Plex: Automation</h2>
           <div class="full">
-            <button id="plex-collections-build" class="plex-auth">Generate Collections</button>
-            <button id="plex-ratings-apply" class="plex-auth">Apply Critic Ratings</button>
+            <button id="{{ TaskPlexCollectionsBuild }}" class="plex-auth">Generate Collections</button>
+            <button id="{{ TaskPlexRatingsApply }}" class="plex-auth">Apply Critic Ratings</button>
           </div>
           <hr class="plex-divider" />
           <div class="full">
@@ -91,7 +103,7 @@
             </div>
           </div>
           <div class="full">
-            <button id="vfs-build">Generate</button>
+            <button id="{{ TaskVfsBuild }}">Generate</button>
             <button id="vfs-overrides" class="w46-button tmdb-ep-num" title="VFS Overrides Editor">
               <svg class="icon-svg">
                 <use href="img/icons.svg#database-edit-outline"></use>
@@ -126,7 +138,7 @@
             </div>
           </div>
           <div class="full">
-            <button id="shoko-remove-missing" title="Remove Missing Files From Shoko and MyList">Remove Missing</button>
+            <button id="{{ TaskShokoRemoveMissing }}" title="Remove Missing Files From Shoko and MyList">Remove Missing</button>
             <div class="w100">
               <button id="shoko-import-run" title="Import From Source folders">Import</button>
             </div>
@@ -162,13 +174,13 @@
             </div>
           </div>
           <div class="full">
-            <button id="at-vfs-build">Generate</button>
+            <button id="{{ TaskAtVfsBuild }}">Generate</button>
             <button id="at-map-import" class="w46-button" title="Import Curated Mapping File">
               <svg class="icon-svg">
                 <use href="img/icons.svg#download"></use>
               </svg>
             </button>
-            <button id="at-map-build" class="w46-button" title="Build Mapping File">
+            <button id="{{ TaskAtMapBuild }}" class="w46-button" title="Build Mapping File">
               <svg class="icon-svg">
                 <use href="img/icons.svg#sitemap"></use>
               </svg>
@@ -220,7 +232,7 @@
             <div class="w46"><label title="Index Override">Off.</label><input id="at-offset" type="number" value="" placeholder="0" /></div>
           </div>
           <div class="full">
-            <button id="at-mp3-build">Generate</button>
+            <button id="{{ TaskAtMp3Build }}">Generate</button>
             <button id="at-mp3-force" class="w46-button toggle" title="Force Overwrite Toggle" aria-pressed="false" type="button" aria-label="Force Overwrite Toggle">
               <svg class="icon-svg">
                 <use href="img/icons.svg#chevron-triple-down"></use>

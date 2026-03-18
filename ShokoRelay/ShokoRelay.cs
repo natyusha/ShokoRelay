@@ -62,10 +62,10 @@ public class Plugin : IPlugin
     public Guid ID => new("2b0f5a7e-3d2b-4f3d-9e6b-7f0a6b2d8c9a");
 
     /// <summary>Plugin display name.</summary>
-    public string Name => ShokoRelayInfo.Name;
+    public string Name => ShokoRelayConstants.Name;
 
     /// <summary>Plugin description.</summary>
-    public string? Description => "A Custom Metadata Provider and Automation Tools for Plex in the form of a Shoko Server plugin";
+    public string? Description => "A Custom Metadata Provider and Automation Tools for Plex and AnimeThemes in the form of a Shoko Server plugin";
 
     /// <summary>Plugin thumbnail resource.</summary>
     public string? EmbeddedThumbnailResourceName => "ShokoRelay.dashboard.img.shoko-relay-thumbnail.png";
@@ -124,12 +124,12 @@ public class ShokoRelay : BackgroundService
         _shokoImportService = shokoImportService;
         _collectionService = collectionService;
         _criticRatingService = criticRatingService;
-        Logger.Info($"ShokoRelay v{ShokoRelayInfo.Version} initialized.");
+        Logger.Info($"ShokoRelay v{ShokoRelayConstants.Version} initialized.");
     }
 
     #endregion
 
-    #region Background Service Lifecycle
+    #region Background Service
 
     /// <inheritdoc/>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -177,7 +177,7 @@ public class ShokoRelay : BackgroundService
 
     #endregion
 
-    #region Automation Scheduling
+    #region Automation Schedule
 
     /// <summary>Manually mark import as run.</summary>
     public static void MarkImportRunNow() => _lastImportRunUtc = DateTime.UtcNow;

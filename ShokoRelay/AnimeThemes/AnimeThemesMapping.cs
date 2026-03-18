@@ -41,7 +41,7 @@ public class AnimeThemesMapping(IMetadataService metadataService, IVideoService 
             if (string.IsNullOrWhiteSpace(content))
                 return (0, "Downloaded content empty");
 
-            await File.WriteAllTextAsync(Path.Combine(_configDirectory, AnimeThemesHelper.AtMapFileName), content, ct).ConfigureAwait(false);
+            await File.WriteAllTextAsync(Path.Combine(_configDirectory, ShokoRelayConstants.FileAtMapping), content, ct).ConfigureAwait(false);
             int count = AnimeThemesHelper.ParseMappingContent(content).Count;
             return (count, $"AnimeThemes mapping import - {DateTime.Now:yyyy-MM-dd HH:mm:ss}\nUrl: {rawUrl}\nEntries: {count}");
         }
@@ -57,7 +57,7 @@ public class AnimeThemesMapping(IMetadataService metadataService, IVideoService 
     /// <returns>A build result with statistics.</returns>
     public async Task<AnimeThemesMappingBuildResult> BuildMappingFileAsync(CancellationToken ct = default)
     {
-        const string taskName = "at-map-build";
+        const string taskName = ShokoRelayConstants.TaskAtMapBuild;
         TaskHelper.StartTask(taskName);
         Logger.Info("AnimeThemes Mapping: Starting scan...");
 
@@ -76,7 +76,7 @@ public class AnimeThemesMapping(IMetadataService metadataService, IVideoService 
                 throw new DirectoryNotFoundException("AnimeThemes root folder not found");
 
             var sw = Stopwatch.StartNew();
-            string mapPath = Path.Combine(_configDirectory, AnimeThemesHelper.AtMapFileName);
+            string mapPath = Path.Combine(_configDirectory, ShokoRelayConstants.FileAtMapping);
             var entries = new List<AnimeThemesMappingEntry>();
             var existing = new Dictionary<string, AnimeThemesMappingEntry>(StringComparer.OrdinalIgnoreCase);
 
@@ -212,13 +212,13 @@ public class AnimeThemesMapping(IMetadataService metadataService, IVideoService 
     /// <returns>An <see cref="AnimeThemesMappingApplyResult"/> with counts and results.</returns>
     public async Task<AnimeThemesMappingApplyResult> ApplyMappingAsync(IReadOnlyCollection<int>? seriesFilter = null, CancellationToken ct = default)
     {
-        const string taskName = "at-apply";
+        const string taskName = ShokoRelayConstants.TaskAtVfsBuild;
         TaskHelper.StartTask(taskName);
         Logger.Info("AnimeThemes VFS: Starting task...");
 
         try
         {
-            string mapPath = Path.Combine(_configDirectory, AnimeThemesHelper.AtMapFileName);
+            string mapPath = Path.Combine(_configDirectory, ShokoRelayConstants.FileAtMapping);
             if (!File.Exists(mapPath))
                 throw new FileNotFoundException("Mapping file not found");
 
@@ -365,7 +365,7 @@ public class AnimeThemesMapping(IMetadataService metadataService, IVideoService 
 
     #endregion
 
-    #region Internal Mapping Logic
+    #region Internal Mapping Chk
 
     /// <summary>Checks if a mapping entry is allowed based on user overlap preferences.</summary>
     private static bool IsAllowed(AnimeThemesMappingEntry e, OverlapLevel level) => level == OverlapLevel.All || e.Overlap == "None" || (level == OverlapLevel.TransitionOnly && e.Overlap == "Transition");

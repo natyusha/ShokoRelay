@@ -42,7 +42,7 @@ public static class LogHelper
 
     #region Report Builders
 
-    /// <summary>Build the report content for collections-report.log.</summary>
+    /// <summary>Build the report content for <see cref="ShokoRelayConstants.LogCollections"/>.</summary>
     /// <param name="sb">Target builder.</param>
     /// <param name="r">Build result data.</param>
     public static void BuildCollectionsReport(StringBuilder sb, BuildCollectionsResult r)
@@ -67,7 +67,7 @@ public static class LogHelper
         }
     }
 
-    /// <summary>Build the report content for ratings-report.log.</summary>
+    /// <summary>Build the report content for <see cref="ShokoRelayConstants.LogRatings"/>.</summary>
     /// <param name="sb">Target builder.</param>
     /// <param name="result">Rating result data.</param>
     public static void BuildRatingsReport(StringBuilder sb, ApplyRatingsResult result)
@@ -96,7 +96,7 @@ public static class LogHelper
         }
     }
 
-    /// <summary>Build the report content for vfs-report.log.</summary>
+    /// <summary>Build the report content for <see cref="ShokoRelayConstants.LogVfs"/>.</summary>
     /// <param name="sb">Target builder.</param>
     /// <param name="r">Build result data.</param>
     public static void BuildVfsReport(StringBuilder sb, VfsBuildResult r)
@@ -132,7 +132,7 @@ public static class LogHelper
         }
     }
 
-    /// <summary>Build the report content for remove-missing-report.log.</summary>
+    /// <summary>Build the report content for <see cref="ShokoRelayConstants.LogRemoveMissing"/>.</summary>
     /// <param name="sb">Target builder.</param>
     /// <param name="dryRun">Dry run flag.</param>
     /// <param name="removed">List of removed paths.</param>
@@ -146,7 +146,7 @@ public static class LogHelper
                 sb.AppendLine($"  - {f}");
     }
 
-    /// <summary>Build the report content for sync-watched-report.log.</summary>
+    /// <summary>Build the report content for <see cref="ShokoRelayConstants.LogSyncWatched"/>.</summary>
     /// <param name="sb">Target builder.</param>
     /// <param name="result">Sync result data.</param>
     /// <param name="dir">Sync direction string.</param>
@@ -167,7 +167,7 @@ public static class LogHelper
         }
     }
 
-    /// <summary>Build the report content for at-vfs-report.log.</summary>
+    /// <summary>Build the report content for <see cref="ShokoRelayConstants.LogAtVfs"/>.</summary>
     /// <param name="sb">Target builder.</param>
     /// <param name="result">Build result data.</param>
     /// <param name="filter">Series filter list.</param>
@@ -190,7 +190,7 @@ public static class LogHelper
         }
     }
 
-    /// <summary>Build the report content for at-map-report.log.</summary>
+    /// <summary>Build the report content for <see cref="ShokoRelayConstants.LogAtMap"/>.</summary>
     /// <param name="sb">Target builder.</param>
     /// <param name="result">Map result data.</param>
     public static void BuildAtVfsMapReport(StringBuilder sb, AnimeThemesMappingBuildResult result)
@@ -202,7 +202,7 @@ public static class LogHelper
             sb.AppendLine($"  {m}");
     }
 
-    /// <summary>Build the report content for at-mp3-report.log.</summary>
+    /// <summary>Build the report content for <see cref="ShokoRelayConstants.LogAtMp3"/>.</summary>
     /// <param name="sb">Target builder.</param>
     /// <param name="result">Batch result data.</param>
     public static void BuildAtMp3Report(StringBuilder sb, ThemeMp3BatchResult result)

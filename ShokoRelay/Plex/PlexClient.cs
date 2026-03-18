@@ -149,7 +149,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
                 return false;
             var meta = (await PlexApi.ReadContainerAsync(resp, cancellationToken).ConfigureAwait(false))?.Metadata?.FirstOrDefault();
             return meta?.LibrarySectionId == target.SectionId
-                || (meta != null && await GetSectionItemsAsync(target, null, cancellationToken, null, $"{ShokoRelayInfo.AgentScheme}://show/{ratingKey}").ContinueWith(t => t.Result.Any()));
+                || (meta != null && await GetSectionItemsAsync(target, null, cancellationToken, null, $"{ShokoRelayConstants.AgentScheme}://show/{ratingKey}").ContinueWith(t => t.Result.Any()));
         }
         catch
         {
@@ -168,7 +168,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
             return null;
         try
         {
-            string guid = $"{ShokoRelayInfo.AgentScheme}://show/{shokoSeriesId}";
+            string guid = $"{ShokoRelayConstants.AgentScheme}://show/{shokoSeriesId}";
             using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?guid={Uri.EscapeDataString(guid)}", target.ServerUrl);
             using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
             var item = (await PlexApi.ReadContainerAsync(resp, cancellationToken).ConfigureAwait(false))?.Metadata?.FirstOrDefault();

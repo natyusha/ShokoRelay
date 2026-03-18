@@ -3,26 +3,6 @@ using System.ComponentModel.DataAnnotations;
 
 namespace ShokoRelay.Config;
 
-#region Constants
-
-/// <summary>Constants describing default file and folder names used by configuration.</summary>
-public static class ConfigConstants
-{
-    /// <summary>Filename for user preferences.</summary>
-    public const string ConfigFileName = "preferences.json";
-
-    /// <summary>Filename for the Plex token.</summary>
-    public const string SecretsFileName = "plex.token";
-
-    /// <summary>Plugin identifier used in paths.</summary>
-    public const string PluginSubfolder = "ShokoRelay";
-
-    /// <summary>Directory name for configuration files.</summary>
-    public const string ConfigSubfolder = "config";
-}
-
-#endregion
-
 #region Enum Definitions
 
 /// <summary>Levels of sanitization to apply when transferring the series summary to Plex.</summary>
@@ -365,18 +345,18 @@ public class AdvancedConfig
 
     /// <summary>Folder name for the ShokoRelay VFS root.</summary>
     [Display(Name = "VFS Root Path", Description = "The location of the virtual links inside each import root")]
-    [DefaultValue("!ShokoRelayVFS")]
-    public string VfsRootPath { get; set; } = "!ShokoRelayVFS";
+    [DefaultValue(ShokoRelayConstants.FolderVfsDefault)]
+    public string VfsRootPath { get; set; } = ShokoRelayConstants.FolderVfsDefault;
 
     /// <summary>Folder name for downloaded themes.</summary>
     [Display(Name = "AnimeThemes Root Path", Description = "The location of AnimeThemes .webm files inside each import root")]
-    [DefaultValue("!AnimeThemes")]
-    public string AnimeThemesRootPath { get; set; } = "!AnimeThemes";
+    [DefaultValue(ShokoRelayConstants.FolderAnimeThemesDefault)]
+    public string AnimeThemesRootPath { get; set; } = ShokoRelayConstants.FolderAnimeThemesDefault;
 
     /// <summary>Folder name for custom collection posters.</summary>
     [Display(Name = "Collection Posters Root Path", Description = "The location of custom local collection posters inside each import root")]
-    [DefaultValue("!CollectionPosters")]
-    public string CollectionPostersRootPath { get; set; } = "!CollectionPosters";
+    [DefaultValue(ShokoRelayConstants.FolderCollectionPostersDefault)]
+    public string CollectionPostersRootPath { get; set; } = ShokoRelayConstants.FolderCollectionPostersDefault;
 
     /// <summary>Path to FFmpeg binaries.</summary>
     [Display(Name = "FFmpeg Path", Description = "An optional folder containing FFmpeg/FFprobe. Leave empty to use the plugin root or PATH")]

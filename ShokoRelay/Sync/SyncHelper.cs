@@ -7,120 +7,96 @@ namespace ShokoRelay.Sync;
 #region Data Models
 
 /// <summary>Per-Plex-user counters used during synchronization.</summary>
-public record PlexWatchedUserResult
-{
-    /// <summary>Total processed.</summary>
-    public int Processed { get; init; }
-
-    /// <summary>Items marked watched.</summary>
-    public int MarkedWatched { get; init; }
-
-    /// <summary>Items skipped.</summary>
-    public int Skipped { get; init; }
-
-    /// <summary>Errors encountered.</summary>
-    public int Errors { get; init; }
-}
+/// <param name="Processed">Total items processed.</param>
+/// <param name="MarkedWatched">Items marked watched.</param>
+/// <param name="Skipped">Items skipped.</param>
+/// <param name="Errors">Errors encountered.</param>
+public record PlexWatchedUserResult(int Processed = 0, int MarkedWatched = 0, int Skipped = 0, int Errors = 0);
 
 /// <summary>Represents a single change during sync.</summary>
-public record PlexWatchedChange
-{
-    /// <summary>Plex username.</summary>
-    public string PlexUser { get; init; } = string.Empty;
-
-    /// <summary>Shoko episode ID.</summary>
-    public int ShokoEpisodeId { get; init; }
-
-    /// <summary>Series title.</summary>
-    public string? SeriesTitle { get; init; }
-
-    /// <summary>Episode title.</summary>
-    public string? EpisodeTitle { get; init; }
-
-    /// <summary>Season number.</summary>
-    public int? SeasonNumber { get; init; }
-
-    /// <summary>Episode number.</summary>
-    public int? EpisodeNumber { get; init; }
-
-    /// <summary>Plex rating key.</summary>
-    public string? RatingKey { get; init; }
-
-    /// <summary>Metadata GUID.</summary>
-    public string? Guid { get; init; }
-
-    /// <summary>Physical file path.</summary>
-    public string? FilePath { get; init; }
-
-    /// <summary>Last viewed timestamp.</summary>
-    public DateTime? LastViewedAt { get; init; }
-
-    /// <summary>Whether it would be marked.</summary>
-    public bool WouldMark { get; init; }
-
-    /// <summary>Existing state in Shoko.</summary>
-    public bool AlreadyWatchedInShoko { get; init; }
-
-    /// <summary>Status reason string.</summary>
-    public string? Reason { get; init; }
-
-    /// <summary>Plex user rating.</summary>
-    public double? PlexUserRating { get; init; }
-
-    /// <summary>Shoko user rating.</summary>
-    public double? ShokoUserRating { get; init; }
-}
+/// <param name="PlexUser">Plex username.</param>
+/// <param name="ShokoEpisodeId">Shoko episode ID.</param>
+/// <param name="SeriesTitle">Series title.</param>
+/// <param name="EpisodeTitle">Episode title.</param>
+/// <param name="SeasonNumber">Season number.</param>
+/// <param name="EpisodeNumber">Episode number.</param>
+/// <param name="RatingKey">Plex rating key.</param>
+/// <param name="Guid">Metadata GUID.</param>
+/// <param name="FilePath">Physical file path.</param>
+/// <param name="LastViewedAt">Last viewed timestamp.</param>
+/// <param name="WouldMark">Whether it would be marked.</param>
+/// <param name="AlreadyWatchedInShoko">Existing state in Shoko.</param>
+/// <param name="Reason">Status reason string.</param>
+/// <param name="PlexUserRating">Plex user rating.</param>
+/// <param name="ShokoUserRating">Shoko user rating.</param>
+public record PlexWatchedChange(
+    string PlexUser = "",
+    int ShokoEpisodeId = 0,
+    string? SeriesTitle = null,
+    string? EpisodeTitle = null,
+    int? SeasonNumber = null,
+    int? EpisodeNumber = null,
+    string? RatingKey = null,
+    string? Guid = null,
+    string? FilePath = null,
+    DateTime? LastViewedAt = null,
+    bool WouldMark = false,
+    bool AlreadyWatchedInShoko = false,
+    string? Reason = null,
+    double? PlexUserRating = null,
+    double? ShokoUserRating = null
+);
 
 /// <summary>Aggregate result of a sync run.</summary>
-public record PlexWatchedSyncResult
+/// <param name="Direction">Sync direction.</param>
+/// <param name="DryRun">Whether this was a dry run.</param>
+/// <param name="Processed">Global process count.</param>
+/// <param name="MarkedWatched">Global mark count.</param>
+/// <param name="Skipped">Global skip count.</param>
+/// <param name="Errors">Global error count.</param>
+/// <param name="ScheduledJobs">Scheduled background jobs count.</param>
+/// <param name="VotesFound">Total votes identified.</param>
+/// <param name="VotesUpdated">Total votes applied.</param>
+/// <param name="VotesSkipped">Total votes matching current state.</param>
+/// <param name="Matched">Total items matched.</param>
+/// <param name="MissingMappings">List of missing series/episodes.</param>
+/// <param name="MissingMappingsDiagnostics">Diagnostics for missing mappings.</param>
+/// <param name="PerUser">Per-user stats.</param>
+/// <param name="PerUserChanges">Detailed per-user change list.</param>
+/// <param name="ErrorsList">Encountered error messages.</param>
+public record PlexWatchedSyncResult(
+    string Direction = "",
+    bool DryRun = false,
+    int Processed = 0,
+    int MarkedWatched = 0,
+    int Skipped = 0,
+    int Errors = 0,
+    int ScheduledJobs = 0,
+    int VotesFound = 0,
+    int VotesUpdated = 0,
+    int VotesSkipped = 0,
+    int Matched = 0,
+    List<int>? MissingMappings = null,
+    Dictionary<int, List<string>>? MissingMappingsDiagnostics = null,
+    Dictionary<string, PlexWatchedUserResult>? PerUser = null,
+    Dictionary<string, List<PlexWatchedChange>>? PerUserChanges = null,
+    List<string>? ErrorsList = null
+)
 {
-    /// <summary>Sync direction.</summary>
-    public string Direction { get; set; } = string.Empty;
+    /// <inheritdoc />
+    public List<int> MissingMappings { get; init; } = MissingMappings ?? [];
 
-    /// <summary>Whether this was a dry run.</summary>
-    public bool DryRun { get; set; }
+    /// <inheritdoc />
+    public Dictionary<int, List<string>> MissingMappingsDiagnostics { get; init; } = MissingMappingsDiagnostics ?? [];
 
-    /// <summary>Global process count.</summary>
-    public int Processed { get; init; }
+    /// <inheritdoc />
+    public Dictionary<string, PlexWatchedUserResult> PerUser { get; init; } = PerUser ?? [];
 
-    /// <summary>Global mark count.</summary>
-    public int MarkedWatched { get; init; }
+    /// <inheritdoc />
+    public Dictionary<string, List<PlexWatchedChange>> PerUserChanges { get; init; } = PerUserChanges ?? [];
 
-    /// <summary>Global skip count.</summary>
-    public int Skipped { get; init; }
-
-    /// <summary>Global error count.</summary>
-    public int Errors { get; init; }
-
-    /// <summary>Scheduled background jobs count.</summary>
-    public int ScheduledJobs { get; init; }
-
-    /// <summary>Total votes identified.</summary>
-    public int VotesFound { get; init; }
-
-    /// <summary>Total votes applied.</summary>
-    public int VotesUpdated { get; init; }
-
-    /// <summary>Total votes matching current state.</summary>
-    public int VotesSkipped { get; init; }
-
-    /// <summary>Total items matched.</summary>
-    public int Matched { get; init; }
-
-    /// <summary>List of missing series/episodes.</summary>
-    public List<int> MissingMappings { get; init; } = [];
-
-    /// <summary>Diagnostics for missing mappings.</summary>
-    public Dictionary<int, List<string>> MissingMappingsDiagnostics { get; init; } = [];
-
-    /// <summary>Per-user stats.</summary>
-    public Dictionary<string, PlexWatchedUserResult> PerUser { get; init; } = [];
-
-    /// <summary>Detailed per-user change list.</summary>
-    public Dictionary<string, List<PlexWatchedChange>> PerUserChanges { get; init; } = [];
-
-    /// <summary>Encountered error messages.</summary>
-    public List<string> ErrorsList { get; init; } = [];
+    /// <inheritdoc />
+    public List<string> ErrorsList { get; init; } = ErrorsList ?? [];
 }
 
 #endregion
@@ -131,10 +107,10 @@ public static class SyncHelper
     #region GUID Parsing
 
     /// <summary>Parse Shoko episode ID from GUID.</summary>
-    public static int? TryParseShokoEpisodeIdFromGuid(string? guid) => ParseGuidId(guid, $"{ShokoRelayInfo.AgentScheme}://episode/{PlexConstants.EpisodePrefix}");
+    public static int? TryParseShokoEpisodeIdFromGuid(string? guid) => ParseGuidId(guid, $"{ShokoRelayConstants.AgentScheme}://episode/{PlexConstants.EpisodePrefix}");
 
     /// <summary>Parse Shoko series ID from GUID.</summary>
-    public static int? TryParseShokoSeriesIdFromGuid(string? guid) => ParseGuidId(guid, $"{ShokoRelayInfo.AgentScheme}://show/");
+    public static int? TryParseShokoSeriesIdFromGuid(string? guid) => ParseGuidId(guid, $"{ShokoRelayConstants.AgentScheme}://show/");
 
     private static int? ParseGuidId(string? guid, string prefix)
     {
@@ -412,10 +388,10 @@ public static class SyncHelper
     public static DateTime? UnixSecondsToDateTime(long? unixSeconds) => (unixSeconds > 0) ? DateTimeOffset.FromUnixTimeSeconds(unixSeconds.Value).UtcDateTime : null;
 
     /// <summary>Makes an episode GUID string.</summary>
-    public static string MakeEpisodeGuid(int episodeId) => $"{ShokoRelayInfo.AgentScheme}://episode/{PlexConstants.EpisodePrefix}{episodeId}";
+    public static string MakeEpisodeGuid(int episodeId) => $"{ShokoRelayConstants.AgentScheme}://episode/{PlexConstants.EpisodePrefix}{episodeId}";
 
     /// <summary>Makes a show GUID string.</summary>
-    public static string MakeShowGuid(int seriesId) => $"{ShokoRelayInfo.AgentScheme}://show/{seriesId}";
+    public static string MakeShowGuid(int seriesId) => $"{ShokoRelayConstants.AgentScheme}://show/{seriesId}";
 
     #endregion
 }

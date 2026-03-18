@@ -182,7 +182,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
                 try
                 {
                     var libs = await GetPlexLibrariesAsync(token, cid, srv.PreferredUri!, ct).ConfigureAwait(false);
-                    foreach (var l in libs.Where(l => string.Equals(l.Agent, ShokoRelayInfo.AgentScheme, StringComparison.OrdinalIgnoreCase)))
+                    foreach (var l in libs.Where(l => string.Equals(l.Agent, ShokoRelayConstants.AgentScheme, StringComparison.OrdinalIgnoreCase)))
                         list.Add((l, srv));
                 }
                 catch { }
@@ -282,11 +282,11 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
     {
         var req = new HttpRequestMessage(method, url);
         req.Headers.TryAddWithoutValidation("X-Plex-Client-Identifier", cid ?? _config.ClientIdentifier);
-        req.Headers.TryAddWithoutValidation("X-Plex-Product", ShokoRelayInfo.Name);
-        req.Headers.TryAddWithoutValidation("X-Plex-Version", ShokoRelayInfo.Version);
+        req.Headers.TryAddWithoutValidation("X-Plex-Product", ShokoRelayConstants.Name);
+        req.Headers.TryAddWithoutValidation("X-Plex-Version", ShokoRelayConstants.Version);
         req.Headers.TryAddWithoutValidation("X-Plex-Platform", "Shoko Relay");
         req.Headers.TryAddWithoutValidation("X-Plex-Device", "Shoko Relay");
-        req.Headers.TryAddWithoutValidation("X-Plex-Device-Name", ShokoRelayInfo.Name);
+        req.Headers.TryAddWithoutValidation("X-Plex-Device-Name", ShokoRelayConstants.Name);
         req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         if (!string.IsNullOrEmpty(token))
             req.Headers.TryAddWithoutValidation("X-Plex-Token", token);
@@ -314,27 +314,22 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
 
     #region Response Wrapper
 
-    private sealed record LibrarySectionsResponse
-    {
-        public LibrarySectionsContainer? MediaContainer { get; init; }
-    }
+    /// <summary>Wrapper for the Plex library sections response.</summary>
+    /// <param name="MediaContainer">The container containing section directories.</param>
+    private sealed record LibrarySectionsResponse(LibrarySectionsContainer? MediaContainer);
 
-    private sealed record LibrarySectionsContainer
-    {
-        public List<LibrarySectionEntry>? Directory { get; init; }
-    }
+    /// <summary>Container for library section directories.</summary>
+    /// <param name="Directory">The list of section entries.</param>
+    private sealed record LibrarySectionsContainer(List<LibrarySectionEntry>? Directory);
 
-    private sealed record LibrarySectionEntry
-    {
-        public string? Key { get; init; }
-        public string? Title { get; init; }
-        public string? Type { get; init; }
-        public string? Agent { get; init; }
-        public string? Uuid { get; init; }
-
-        [JsonPropertyName("Location")]
-        public List<LocationEntry>? Locations { get; init; }
-    }
+    /// <summary>Metadata describing a library section entry from the Plex API.</summary>
+    /// <param name="Key">The unique numeric key for the section.</param>
+    /// <param name="Title">The display title of the library.</param>
+    /// <param name="Type">The media type (e.g., show, movie).</param>
+    /// <param name="Agent">The identifier of the metadata agent.</param>
+    /// <param name="Uuid">The unique identifier for the section.</param>
+    /// <param name="Locations">List of physical filesystem root paths.</param>
+    private sealed record LibrarySectionEntry(string? Key, string? Title, string? Type, string? Agent, string? Uuid, [property: JsonPropertyName("Location")] List<LocationEntry>? Locations);
 
     /// <summary>Represents a physical location entry for a Plex library.</summary>
     /// <param name="Id">Location ID.</param>

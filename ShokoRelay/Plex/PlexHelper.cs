@@ -189,7 +189,7 @@ public static class PlexHelper
         if (!string.IsNullOrWhiteSpace(posterPath))
         {
             string b = string.IsNullOrWhiteSpace(baseUrl) ? ShokoRelay.ServerBaseUrl : baseUrl?.TrimEnd('/') ?? string.Empty;
-            return $"{b}{ShokoRelayInfo.BasePath}/collections/user/{series.TopLevelGroupID}";
+            return $"{b}{ShokoRelayConstants.BasePath}/collections/user/{series.TopLevelGroupID}";
         }
         if (allowPrimarySeriesFallback && metadataService != null)
         {

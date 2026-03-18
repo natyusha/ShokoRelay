@@ -52,11 +52,11 @@ public class ConfigProvider
     /// <param name="applicationPaths">Paths provided by the host application.</param>
     public ConfigProvider(IApplicationPaths applicationPaths)
     {
-        PluginDirectory = Path.Combine(applicationPaths.PluginsPath, ConfigConstants.PluginSubfolder);
-        string configDir = Path.Combine(PluginDirectory, ConfigConstants.ConfigSubfolder);
+        PluginDirectory = Path.Combine(applicationPaths.PluginsPath, ShokoRelayConstants.FolderPluginSubfolder);
+        string configDir = Path.Combine(PluginDirectory, ShokoRelayConstants.FolderConfigSubfolder);
         Directory.CreateDirectory(configDir);
-        _filePath = Path.Combine(configDir, ConfigConstants.ConfigFileName);
-        _tokenPath = Path.Combine(configDir, ConfigConstants.SecretsFileName);
+        _filePath = Path.Combine(configDir, ShokoRelayConstants.FilePreferences);
+        _tokenPath = Path.Combine(configDir, ShokoRelayConstants.FilePlexToken);
 
         SetupWatcher(_filePath);
         SetupWatcher(_tokenPath);

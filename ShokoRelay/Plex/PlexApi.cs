@@ -112,19 +112,11 @@ public class PlexMetadataItem
 }
 
 /// <summary>Represents a tag entry within a Plex metadata item.</summary>
-public class PlexTag
-{
-    /// <summary>The tag value.</summary>
-    [JsonPropertyName("tag")]
-    public string? Tag { get; set; }
-}
+/// <param name="Tag">The tag value.</param>
+public record PlexTag([property: JsonPropertyName("tag")] string? Tag);
 
 /// <summary>Embedded user-specific information within a Plex metadata item.</summary>
-public class PlexMetadataUser
-{
-    /// <summary>Unix timestamp of when this specific user last viewed the item.</summary>
-    [JsonPropertyName("lastViewedAt")]
-    public long? LastViewedAt { get; set; }
-}
+/// <param name="LastViewedAt">Unix timestamp of when this user last viewed the item.</param>
+public record PlexMetadataUser([property: JsonPropertyName("lastViewedAt")] long? LastViewedAt);
 
 #endregion

@@ -71,7 +71,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
     /// <inheritdoc/>
     public async Task<BuildCollectionsResult> BuildCollectionsAsync(IEnumerable<IShokoSeries?> seriesList, CancellationToken cancellationToken = default)
     {
-        const string taskName = "plex-collections-build";
+        const string taskName = ShokoRelayConstants.TaskPlexCollectionsBuild;
         TaskHelper.StartTask(taskName);
         Logger.Info("Plex Collections: Starting task...");
 

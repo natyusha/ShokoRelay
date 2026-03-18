@@ -6,8 +6,8 @@
   const base = location.pathname.split("/dashboard")[0];
   const el = (id) => document.getElementById(id);
 
-  // Initialize global namespace immediately so subsequent scripts can see it
-  window._sr = { base };
+  // Initialize/Merge global namespace immediately
+  window._sr = Object.assign(window._sr || {}, { base, el });
 
   /** Default auto-dismiss duration (ms) for transient toasts. Use 0 for persistent toasts. */
   const TOAST_MS = 5000;
@@ -22,8 +22,8 @@
     playing: "Next",
   };
 
-  /** List of button IDs that correspond exactly to server task names for spinner synchronization. */
-  const MANAGED_TASK_IDS = ["vfs-build", "at-vfs-build", "at-map-build", "plex-collections-build", "plex-ratings-apply", "shoko-remove-missing", "at-mp3-build"];
+  /** List of values that correspond to server task names for spinner synchronization. Fallback to empty if tasks missing. */
+  const MANAGED_TASK_IDS = Object.values(window._sr.tasks || {});
 
   // #region Helpers
 
@@ -90,8 +90,9 @@
       try {
         await handler.apply(elBtn, args);
         // Explicitly clear the task immediately if it's a managed ID to prevent the poller from double-toasting
-        if (MANAGED_TASK_IDS.includes(elBtn.id)) {
-          await fetch(window._sr.base + `/tasks/clear/${elBtn.id}`, { method: "POST" });
+        const taskId = elBtn.id;
+        if (MANAGED_TASK_IDS.includes(taskId)) {
+          await fetch(window._sr.base + `/tasks/clear/${taskId}`, { method: "POST" });
         }
       } finally {
         elBtn.classList.remove("clicking");
@@ -143,7 +144,7 @@
     const d = getData(res);
     if (!d) return { text: "", errorCount: 0 };
 
-    // Handle ASP.NET Validation Problem Details
+    // Handle ASP.NET Validation Problem Details (RFC 7807)
     if (d.errors && typeof d.errors === "object" && !Array.isArray(d.errors)) {
       const messages = Object.values(d.errors).flat();
       if (messages.length > 0) return { text: messages.join(", "), errorCount: messages.length };
@@ -351,7 +352,6 @@
 
   // Populate shared global object
   Object.assign(window._sr, {
-    el,
     TOAST_MS,
     fetchJson,
     showToast,

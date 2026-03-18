@@ -9,10 +9,6 @@ internal static class VfsShared
 {
     #region Constants and Properties
 
-    private const string DefaultVfsRootName = "!ShokoRelayVFS";
-    private const string DefaultCollectionPostersRootName = "!CollectionPosters";
-    private const string DefaultAnimeThemesRootName = "!AnimeThemes";
-
     /// <summary>OS-aware path comparer.</summary>
     public static StringComparer PathComparer => OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
@@ -63,13 +59,13 @@ internal static class VfsShared
     #region Folder Name Resolution
 
     /// <summary>Resolves the VFS root folder name.</summary>
-    public static string ResolveRootFolderName() => ResolveFolderName(ShokoRelay.Settings.Advanced.VfsRootPath, DefaultVfsRootName);
+    public static string ResolveRootFolderName() => ResolveFolderName(ShokoRelay.Settings.Advanced.VfsRootPath, ShokoRelayConstants.FolderVfsDefault);
 
     /// <summary>Resolves the collection posters folder name.</summary>
-    public static string ResolveCollectionPostersFolderName() => ResolveFolderName(ShokoRelay.Settings.Advanced.CollectionPostersRootPath, DefaultCollectionPostersRootName);
+    public static string ResolveCollectionPostersFolderName() => ResolveFolderName(ShokoRelay.Settings.Advanced.CollectionPostersRootPath, ShokoRelayConstants.FolderCollectionPostersDefault);
 
     /// <summary>Resolves the anime themes folder name.</summary>
-    public static string ResolveAnimeThemesFolderName() => ResolveFolderName(ShokoRelay.Settings.Advanced.AnimeThemesRootPath, DefaultAnimeThemesRootName);
+    public static string ResolveAnimeThemesFolderName() => ResolveFolderName(ShokoRelay.Settings.Advanced.AnimeThemesRootPath, ShokoRelayConstants.FolderAnimeThemesDefault);
 
     private static string ResolveFolderName(string configured, string defaultName)
     {

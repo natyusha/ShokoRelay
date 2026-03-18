@@ -14,10 +14,29 @@ public static class TagHelper
     private static readonly Regex _wordRegex = new(@"[\'\w\d-]+\b", RegexOptions.Compiled);
 
     // csharpier-ignore-start
-    private static readonly FrozenSet<string> TagBlacklistAniDBHelpers = new[] { "asia", "awards", "body and host", "breasts", "cast missing", "cast", "complete manga adaptation", "content indicators", "delayed 16-9 broadcast", "description missing", "description needs improvement", "development hell", "dialogue driven", "dynamic", "earth", "elements", "ending", "ensemble cast", "family life", "fast-paced", "fetishes", "maintenance tags", "meta tags", "motifs", "no english subs available", "origin", "pic needs improvement", "place", "pornography", "season", "setting", "some weird shit goin' on", "source material", "staff missing", "storytelling", "tales", "target audience",  "technical aspects", "themes", "time", "to be moved to character","to be moved to episode", "translation convention", "tropes", "unsorted" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
-    private static readonly FrozenSet<string> _forceLower = new[] { "a", "an", "the", "and", "but", "or", "nor", "at", "by", "for", "from", "in", "into", "of", "off", "on", "onto", "out", "over", "per", "to", "up", "with", "as", "4-koma", "-hime","-kei", "-kousai", "-sama", "-warashi", "no", "vs", "x" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
-    private static readonly FrozenSet<string> _forceUpper = new[] { "3d", "bdsm", "cg", "cgi", "ed", "fff", "ffm", "ii", "milf", "mmf", "mmm", "npc", "op", "rpg", "tbs", "tv" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
-    private static readonly FrozenDictionary<string, string> _forceSpecial = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { { "comicfesta", "ComicFesta" }, { "d'etat", "d'Etat" }, { "noitamina", "noitaminA" } }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+    /// <summary><c>TagBlacklistAniDBHelpers</c>: https://github.com/ShokoAnime/ShokoServer/blob/d7c7f6ecdd883c714b15dbef385e19428c8d29cf/Shoko.Server/Utilities/TagFilter.cs#L37C44-L37C68</summary>
+    private static readonly FrozenSet<string> TagBlacklistAniDBHelpers = new[] {
+        "asia", "awards", "body and host", "breasts", "cast missing", "cast", "complete manga adaptation", "content indicators", "delayed 16-9 broadcast", "description missing",
+        "description needs improvement", "development hell", "dialogue driven", "dynamic", "earth", "elements", "ending", "ensemble cast", "family life", "fast-paced", "fetishes", "maintenance tags",
+        "meta tags", "motifs", "no english subs available", "origin", "pic needs improvement", "place", "pornography", "season", "setting", "source material", "staff missing", "storytelling",
+        "tales", "target audience", "technical aspects", "themes", "time", "to be moved to character", "to be moved to episode", "translation convention", "tropes", "unsorted"
+    }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Words to force lowercase in tags to follow AniDB capitalisation rules: https://wiki.anidb.net/Capitalisation</summary>
+    private static readonly FrozenSet<string> _forceLower = new[] {
+        "a", "an", "the", "and", "but", "or", "nor", "at", "by", "for", "from", "in", "into", "of", "off", "on", "onto", "out", "over", "per", "to", "up", "with", "as", "4-koma",
+        "-hime", "-kei", "-kousai", "-sama", "-warashi", "no", "vs", "x"
+    }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Abbreviations or acronyms that should be fully capitalised</summary>
+    private static readonly FrozenSet<string> _forceUpper = new[] {
+        "3d", "bdsm", "cg", "cgi", "ed", "fff", "ffm", "ii", "milf", "mmf", "mmm", "npc", "op", "rpg", "tbs", "tv"
+    }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Special cases where a specific capitalisation style is preferred</summary>
+    private static readonly FrozenDictionary<string, string> _forceSpecial = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
+        { "comicfesta", "ComicFesta" }, { "d'etat", "d'Etat" }, { "noitamina", "noitaminA" }
+    }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
     // csharpier-ignore-end
 
     #endregion
@@ -103,9 +122,9 @@ public static class TagHelper
             {
                 string word = m.Value;
                 if (_forceLower.Contains(word))
-                    return word.ToLower(); // Convert words from force_lower to lowercase (follows AniDB capitalisation rules: https://wiki.anidb.net/Capitalisation)
+                    return word.ToLower();
                 if (_forceUpper.Contains(word))
-                    return word.ToUpper(); // Convert words from force_upper to uppercase (abbreviations or acronyms that should be fully capitalised)
+                    return word.ToUpper();
 
                 // Capitalise all words accounting for apostrophes first
                 return char.ToUpper(word[0]) + word[1..];
@@ -119,7 +138,6 @@ public static class TagHelper
         int lastSpaceIndex = result.LastIndexOf(' ');
         if (lastSpaceIndex >= 0 && lastSpaceIndex < result.Length - 1)
             result = result[..(lastSpaceIndex + 1)] + char.ToUpper(result[lastSpaceIndex + 1]) + result[(lastSpaceIndex + 2)..];
-        // Apply special cases as a last step (where a specific capitalisation style is preferred)
         result = _wordRegex.Replace(result, m => _forceSpecial.TryGetValue(m.Value, out var special) ? special : m.Value);
         return result;
     }

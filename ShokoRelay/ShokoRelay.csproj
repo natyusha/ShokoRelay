@@ -15,8 +15,8 @@
     <Title>Shoko Relay</Title>
     <Authors>natyusha</Authors>
     <VersionRegex>Version\s*=\s*"([^"]+)"</VersionRegex>
-    <ShokoRelayInfoFile>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/ShokoRelayInfo.cs'))</ShokoRelayInfoFile>
-    <Version>$([System.Text.RegularExpressions.Regex]::Match($(ShokoRelayInfoFile), $(VersionRegex)).Groups[1].Value)</Version>
+    <ShokoRelayConstantsFile>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/ShokoRelayConstants.cs'))</ShokoRelayConstantsFile>
+    <Version>$([System.Text.RegularExpressions.Regex]::Match($(ShokoRelayConstantsFile), $(VersionRegex)).Groups[1].Value)</Version>
     <AssemblyVersion>$(Version).0</AssemblyVersion>
     <FileVersion>$(Version).0</FileVersion>
   </PropertyGroup>

@@ -11,7 +11,7 @@ namespace ShokoRelay.Controllers;
 /// <summary>Provides the core Metadata Provider endpoints for the Plex Agent.</summary>
 [ApiVersionNeutral]
 [ApiController]
-[Route(ShokoRelayInfo.BasePath)]
+[Route(ShokoRelayConstants.BasePath)]
 public class MetadataController(IMetadataService metadataService, PlexMetadata mapper, ConfigProvider configProvider, PlexClient plexLibrary)
     : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
 {
@@ -29,16 +29,16 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     public IActionResult GetMediaProvider()
     {
         var supportedTypes = new[] { PlexConstants.TypeShow, PlexConstants.TypeSeason, PlexConstants.TypeEpisode };
-        var typePayload = supportedTypes.Select(t => new { type = t, Scheme = new[] { new { scheme = ShokoRelayInfo.AgentScheme } } });
+        var typePayload = supportedTypes.Select(t => new { type = t, Scheme = new[] { new { scheme = ShokoRelayConstants.AgentScheme } } });
         var featurePayload = new[] { new { type = "metadata", key = "/metadata" }, new { type = "match", key = "/matches" }, new { type = "collection", key = "/collections" } };
         return Ok(
             new
             {
                 MediaProvider = new
                 {
-                    identifier = ShokoRelayInfo.AgentScheme,
-                    title = ShokoRelayInfo.Name,
-                    version = ShokoRelayInfo.Version,
+                    identifier = ShokoRelayConstants.AgentScheme,
+                    title = ShokoRelayConstants.Name,
+                    version = ShokoRelayConstants.Version,
                     Types = typePayload,
                     Feature = featurePayload,
                 },
@@ -85,7 +85,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
                 MediaContainer = new
                 {
                     size = 1,
-                    identifier = ShokoRelayInfo.AgentScheme,
+                    identifier = ShokoRelayConstants.AgentScheme,
                     Metadata = new[]
                     {
                         new
@@ -221,7 +221,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
                 {
                     offset = 0,
                     totalSize = images.Length,
-                    identifier = ShokoRelayInfo.AgentScheme,
+                    identifier = ShokoRelayConstants.AgentScheme,
                     size = images.Length,
                     Image = images,
                 },

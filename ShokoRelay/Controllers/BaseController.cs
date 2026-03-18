@@ -15,7 +15,7 @@ namespace ShokoRelay.Controllers;
 /// </summary>
 [ApiVersionNeutral]
 [ApiController]
-[Route(ShokoRelayInfo.BasePath)]
+[Route(ShokoRelayConstants.BasePath)]
 public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IMetadataService metadataService, PlexClient plexLibrary) : ControllerBase
 {
     #region Fields & Properties
@@ -33,7 +33,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
     protected readonly PlexClient _plexLibrary = plexLibrary;
 
     /// <summary>Returns the absolute base URL of the plugin's API on the current host.</summary>
-    protected string ApiBase => $"{Request.Scheme}://{Request.Host}{ShokoRelayInfo.BasePath}";
+    protected string ApiBase => $"{Request.Scheme}://{Request.Host}{ShokoRelayConstants.BasePath}";
 
     #endregion
 
@@ -170,7 +170,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
                     size = 1,
                     totalSize = 1,
                     offset = 0,
-                    identifier = ShokoRelayInfo.AgentScheme,
+                    identifier = ShokoRelayConstants.AgentScheme,
                     Metadata = new[] { metadata },
                 },
             }
@@ -200,7 +200,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
                 {
                     offset = start,
                     totalSize = allItems.Count,
-                    identifier = ShokoRelayInfo.AgentScheme,
+                    identifier = ShokoRelayConstants.AgentScheme,
                     size = pagedData.Length,
                     Metadata = pagedData,
                 },

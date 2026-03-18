@@ -12,10 +12,10 @@ namespace ShokoRelay.Controllers;
 /// <summary>Handles the plugin's frontend components, serving static assets and dynamic configuration data.</summary>
 [ApiVersionNeutral]
 [ApiController]
-[Route(ShokoRelayInfo.BasePath)]
+[Route(ShokoRelayConstants.BasePath)]
 public class DashboardController(ConfigProvider configProvider, IMetadataService metadataService, PlexClient plexLibrary) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
 {
-    #region Fields and Constructor
+    #region Fields & Constructor
 
     private static readonly Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider ContentTypeProvider = new();
 
@@ -45,6 +45,7 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
             return PhysicalFile(requested, contentType);
 
         var html = System.IO.File.ReadAllText(requested);
+        html = ProcessConstants(html); // Process C# Constants into HTML
         if (html.IndexOf("<base", StringComparison.OrdinalIgnoreCase) < 0)
         {
             var reqPath = Request.Path.Value ?? "";
@@ -68,7 +69,7 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
         var payload = _configProvider.GetDashboardConfig();
         try
         {
-            var path = Path.Combine(ShokoRelay.ConfigDirectory, "anidb_vfs_overrides.csv");
+            var path = Path.Combine(ShokoRelay.ConfigDirectory, ShokoRelayConstants.FileVfsOverrides);
             string overrides = System.IO.File.Exists(path) ? System.IO.File.ReadAllText(path) : string.Empty;
             return Ok(new { payload, overrides });
         }
@@ -145,6 +146,20 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
         filePath.EndsWith(".cshtml") ? "text/html"
         : ContentTypeProvider.TryGetContentType(filePath, out var contentType) ? contentType
         : "application/octet-stream";
+
+    /// <summary>Replaces {{ConstantName}} placeholders with values from ShokoRelayConstants.</summary>
+    private static string ProcessConstants(string html)
+    {
+        var fields = typeof(ShokoRelayConstants).GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy).Where(f => f.IsLiteral && !f.IsInitOnly);
+
+        foreach (var field in fields)
+        {
+            string value = field.GetValue(null)?.ToString() ?? "";
+            string pattern = $@"\{{\{{\s?{field.Name}\s?\}}}}"; // Account for prettier adding a space
+            html = System.Text.RegularExpressions.Regex.Replace(html, pattern, value);
+        }
+        return html;
+    }
 
     /// <summary>Schema definition for a configuration property.</summary>
     /// <param name="Path">The JSON path to the property.</param>

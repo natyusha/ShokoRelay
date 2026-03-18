@@ -54,7 +54,7 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
     /// <inheritdoc/>
     public async Task<ApplyRatingsResult> ApplyRatingsAsync(IEnumerable<int>? allowedSeriesIds = null, CancellationToken cancellationToken = default)
     {
-        const string taskName = "plex-ratings-apply";
+        const string taskName = ShokoRelayConstants.TaskPlexRatingsApply;
         TaskHelper.StartTask(taskName);
         Logger.Info("Plex Ratings: Starting task...");
 

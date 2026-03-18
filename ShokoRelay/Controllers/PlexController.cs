@@ -10,7 +10,7 @@ namespace ShokoRelay.Controllers;
 /// <summary>Manages Plex-specific integrations including authentication and automation.</summary>
 [ApiVersionNeutral]
 [ApiController]
-[Route(ShokoRelayInfo.BasePath)]
+[Route(ShokoRelayConstants.BasePath)]
 public class PlexController(
     ConfigProvider configProvider,
     IMetadataService metadataService,
@@ -46,7 +46,7 @@ public class PlexController(
             if (string.IsNullOrWhiteSpace(pin.Id) || string.IsNullOrWhiteSpace(pin.Code))
                 return StatusCode(502, new { status = "error", message = "Plex pin response missing id/code." });
 
-            string authUrl = _plexAuth.BuildAuthUrl(pin.Code, ShokoRelayInfo.Name);
+            string authUrl = _plexAuth.BuildAuthUrl(pin.Code, ShokoRelayConstants.Name);
             return Ok(
                 new
                 {
@@ -167,12 +167,12 @@ public class PlexController(
         if (guard != null)
             return guard;
 
-        const string taskName = "plex-collections-build";
+        const string taskName = ShokoRelayConstants.TaskPlexCollectionsBuild;
         TaskHelper.StartTask(taskName);
         try
         {
             var r = await _collectionService.BuildCollectionsAsync(seriesList, CancellationToken.None).ConfigureAwait(false);
-            var actionResult = LogAndReturn("collections-report.log", r, LogHelper.BuildCollectionsReport);
+            var actionResult = LogAndReturn(ShokoRelayConstants.LogCollections, r, LogHelper.BuildCollectionsReport);
             TaskHelper.CompleteTask(taskName, (actionResult as OkObjectResult)?.Value!);
             return actionResult;
         }
@@ -224,13 +224,13 @@ public class PlexController(
         if (guard != null)
             return guard;
 
-        const string taskName = "plex-ratings-apply";
+        const string taskName = ShokoRelayConstants.TaskPlexRatingsApply;
         TaskHelper.StartTask(taskName);
         try
         {
             var allowedIds = new HashSet<int>(seriesList.Select(s => s?.ID ?? 0));
             var result = await _criticRatingService.ApplyRatingsAsync(allowedIds, CancellationToken.None).ConfigureAwait(false);
-            var actionResult = LogAndReturn("ratings-report.log", result, LogHelper.BuildRatingsReport);
+            var actionResult = LogAndReturn(ShokoRelayConstants.LogRatings, result, LogHelper.BuildRatingsReport);
             TaskHelper.CompleteTask(taskName, (actionResult as OkObjectResult)?.Value!);
             return actionResult;
         }

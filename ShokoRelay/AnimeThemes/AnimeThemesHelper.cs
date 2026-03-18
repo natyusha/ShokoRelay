@@ -100,8 +100,6 @@ internal static class AnimeThemesHelper
     #region Constants & Fields
 
     internal const string AtApiBase = "https://api.animethemes.moe";
-    internal const string AtMapFileName = "anidb_animethemes_xrefs.csv";
-    internal const string AtFavsFileName = "favs_animethemes.cache";
     internal const string AtRawMapUrl = "https://gist.githubusercontent.com/natyusha/bb33a3b3bc95bc7a3869633e23d522bb/raw/";
 
     internal static readonly FrozenSet<string> VideoFileExtensions = FrozenSet.ToFrozenSet([".mkv", ".avi", ".mp4", ".mov", ".ogm", ".wmv", ".mpg", ".mpeg", ".mk3d", ".m4v"], StringComparer.OrdinalIgnoreCase);
@@ -144,7 +142,7 @@ internal static class AnimeThemesHelper
     internal static void EnsureUserAgent(HttpClient client)
     {
         if (!client.DefaultRequestHeaders.UserAgent.Any())
-            client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("ShokoRelay", ShokoRelayInfo.Version));
+            client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("ShokoRelay", ShokoRelayConstants.Version));
     }
 
     #endregion

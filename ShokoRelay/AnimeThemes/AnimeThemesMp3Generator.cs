@@ -11,23 +11,12 @@ namespace ShokoRelay.AnimeThemes;
 #region Data Models
 
 /// <summary>Query parameters for MP3 generation requests.</summary>
-public record AnimeThemesMp3Query
-{
-    /// <summary>The filesystem path to the folder or root directory.</summary>
-    public string? Path { get; init; }
-
-    /// <summary>Optional specific theme slug filter (e.g., OP1, ED).</summary>
-    public string? Slug { get; init; }
-
-    /// <summary>The index offset to use when multiple themes match the filter.</summary>
-    public int Offset { get; init; } = 0;
-
-    /// <summary>Whether to process all subfolders recursively.</summary>
-    public bool Batch { get; init; }
-
-    /// <summary>Whether to force generation even if Theme.mp3 already exists.</summary>
-    public bool Force { get; init; }
-}
+/// <param name="Path">The filesystem path to the folder or root directory.</param>
+/// <param name="Slug">Optional specific theme slug filter (e.g., OP1, ED).</param>
+/// <param name="Offset">The index offset to use when multiple themes match.</param>
+/// <param name="Batch">Whether to process all subfolders recursively.</param>
+/// <param name="Force">Whether to force generation even if Theme.mp3 exists.</param>
+public record AnimeThemesMp3Query(string? Path, string? Slug, int Offset = 0, bool Batch = false, bool Force = false);
 
 /// <summary>Result of a single Theme.mp3 generation attempt.</summary>
 /// <param name="Folder">The directory processed.</param>
@@ -87,7 +76,7 @@ public class AnimeThemesMp3Generator(IMetadataService metadataService, IVideoSer
 
     private string ThemeCacheFilePath
     {
-        get => Path.Combine(field, "mp3_animethemes.cache");
+        get => Path.Combine(field, ShokoRelayConstants.FileAtMp3Cache);
     } = configProvider.ConfigDirectory;
 
     #endregion
@@ -179,7 +168,7 @@ public class AnimeThemesMp3Generator(IMetadataService metadataService, IVideoSer
             }
             catch
             {
-                Logger.Warn("Failed to read mp3_animethemes.cache, attempting full scan.");
+                Logger.Warn("Failed to read {0}, attempting full scan.", ShokoRelayConstants.FileAtMp3Cache);
             }
         }
         RefreshThemeMp3CacheInternal();

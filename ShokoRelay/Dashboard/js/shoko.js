@@ -31,7 +31,7 @@
 
   // Initialize the VFS Clean toggle (broom icon) and bind the Generate button action.
   initToggle("vfs-clean", true);
-  withButtonAction("vfs-build", async () => {
+  withButtonAction(window._sr.tasks.vfsBuild, async () => {
     const clean = el("vfs-clean")?.getAttribute("aria-pressed") === "true";
     const filter = el("vfs-filter")?.value.trim();
 
@@ -91,7 +91,7 @@
   // #region Shoko: Automation
 
   // Remove records for files no longer present on disk.
-  const removeBtn = el("shoko-remove-missing");
+  const removeBtn = el(window._sr.tasks.shokoRemoveMissing);
   if (removeBtn) {
     removeBtn.onclick = () => {
       const modal = el("confirm-modal");
@@ -119,7 +119,7 @@
           toastOperation(res, "Remove Missing", { hideOnSucceed: 0 });
 
           // Explicitly clear the task on the server to prevent the background poller from showing a second toast
-          await fetch(base + "/tasks/clear/shoko-remove-missing", { method: "POST" });
+          await fetch(base + "/tasks/clear/" + window._sr.tasks.shokoRemoveMissing, { method: "POST" });
         } finally {
           removeBtn.classList.remove("clicking");
           setButtonLoading(removeBtn, false);

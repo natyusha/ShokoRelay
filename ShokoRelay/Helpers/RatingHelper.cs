@@ -9,21 +9,12 @@ public static class RatingHelper
 {
     #region Constants
 
-    private static readonly FrozenSet<string> RatingTags = new[]
-    {
-        "kodomo",
-        "mina",
-        "shoujo",
-        "shounen",
-        "josei",
-        "seinen",
-        "borderline porn",
-        "18 restricted",
-        "nudity",
-        "sex",
-        "violence",
-        "sexual humour",
+    // csharpier-ignore-start
+    /// <summary>Tags used to determine Assumed Content Ratings.</summary>
+    private static readonly FrozenSet<string> RatingTags = new[] {
+        "kodomo", "mina", "shoujo", "shounen", "josei", "seinen", "borderline porn", "18 restricted", "nudity", "sex", "violence", "sexual humour"
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+    // csharpier-ignore-end
 
     #endregion
 

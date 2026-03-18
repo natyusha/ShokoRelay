@@ -161,7 +161,7 @@
 
     b("extra-plex-users", "Automation.ExtraPlexUsers", "text");
     b("plex-scan-vfs", "Automation.ScanOnVfsRefresh", "check");
-    b("plex-watched", "Automation.AutoScrobble", "check");
+    b("plex-scrobble", "Automation.AutoScrobble", "check");
 
     // Toggle between Start Auth and Unlink buttons
     if (!plex.HasToken) return setPlexStartAction();
@@ -220,7 +220,7 @@
   }
 
   plexBuildAction(
-    el("plex-collections-build"),
+    el(window._sr.tasks.plexCollectionsBuild),
     "Collections",
     "Generating Collections...",
     "/plex/collections/build",
@@ -228,7 +228,7 @@
   );
 
   plexBuildAction(
-    el("plex-ratings-apply"),
+    el(window._sr.tasks.plexRatingsApply),
     "Critic Ratings",
     "Applying Critic Ratings...",
     "/plex/ratings/apply",

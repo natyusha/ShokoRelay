@@ -12,7 +12,7 @@ namespace ShokoRelay.Controllers;
 /// <summary>Handles Shoko-specific automation tasks including VFS construction and housekeeping.</summary>
 [ApiVersionNeutral]
 [ApiController]
-[Route(ShokoRelayInfo.BasePath)]
+[Route(ShokoRelayConstants.BasePath)]
 public class ShokoController(
     ConfigProvider configProvider,
     IMetadataService metadataService,
@@ -57,7 +57,7 @@ public class ShokoController(
                 }
             );
 
-        const string taskName = "vfs-build";
+        const string taskName = ShokoRelayConstants.TaskVfsBuild;
         TaskHelper.StartTask(taskName);
         try
         {
@@ -69,7 +69,7 @@ public class ShokoController(
                 _ = SchedulePlexRefreshForSeriesAsync(toProcess);
             }
 
-            var actionResult = LogAndReturn("vfs-report.log", result, LogHelper.BuildVfsReport);
+            var actionResult = LogAndReturn(ShokoRelayConstants.LogVfs, result, LogHelper.BuildVfsReport);
             TaskHelper.CompleteTask(taskName, (actionResult as OkObjectResult)?.Value!);
             return actionResult;
         }
@@ -89,7 +89,7 @@ public class ShokoController(
     {
         try
         {
-            string path = Path.Combine(ShokoRelay.ConfigDirectory, "anidb_vfs_overrides.csv");
+            string path = Path.Combine(ShokoRelay.ConfigDirectory, ShokoRelayConstants.FileVfsOverrides);
             System.IO.File.WriteAllText(path, content ?? string.Empty);
             OverrideHelper.EnsureLoaded();
             return Ok(new { status = "ok" });
@@ -110,7 +110,7 @@ public class ShokoController(
     public async Task<IActionResult> RemoveMissingFiles([FromQuery] bool? dryRun = null)
     {
         bool doDry = dryRun ?? true;
-        const string taskName = "shoko-remove-missing";
+        const string taskName = ShokoRelayConstants.TaskShokoRemoveMissing;
         // ShokoImportService now calls StartTask/FinishTask internally
 
         try
@@ -125,7 +125,7 @@ public class ShokoController(
                 removed,
             };
 
-            var actionResult = LogAndReturn("remove-missing-report.log", resultData, (sb, r) => LogHelper.BuildRemoveMissingReport(sb, r.dryRun, r.removed));
+            var actionResult = LogAndReturn(ShokoRelayConstants.LogRemoveMissing, resultData, (sb, r) => LogHelper.BuildRemoveMissingReport(sb, r.dryRun, r.removed));
 
             if (!doDry)
                 TaskHelper.CompleteTask(taskName, (actionResult as OkObjectResult)?.Value!);
@@ -213,8 +213,8 @@ public class ShokoController(
                 ? await _syncToPlexService.SyncWatchedAsync(parsedDry, sinceHours, ratings, excludeAdmin, cancellationToken: HttpContext.RequestAborted).ConfigureAwait(false)
                 : await _watchedSyncService.SyncWatchedAsync(parsedDry, sinceHours, ratings, excludeAdmin, cancellationToken: HttpContext.RequestAborted).ConfigureAwait(false);
 
-            result.Direction = direction;
-            return LogAndReturn("sync-watched-report.log", result, (sb, r) => LogHelper.BuildSyncWatchedReport(sb, r, r.Direction, r.DryRun, includeRatings));
+            result = result with { Direction = direction };
+            return LogAndReturn(ShokoRelayConstants.LogSyncWatched, result, (sb, r) => LogHelper.BuildSyncWatchedReport(sb, r, r.Direction, r.DryRun, includeRatings));
         }
         catch (Exception ex)
         {

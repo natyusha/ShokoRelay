@@ -11,7 +11,7 @@ namespace ShokoRelay.Controllers;
 /// <summary>Provides operations for building AnimeThemes VFS mappings, generating MP3 series themes, and handling the standalone video player endpoints.</summary>
 [ApiVersionNeutral]
 [ApiController]
-[Route(ShokoRelayInfo.BasePath)]
+[Route(ShokoRelayConstants.BasePath)]
 public class AnimeThemesController(
     ConfigProvider configProvider,
     IMetadataService metadataService,
@@ -39,7 +39,7 @@ public class AnimeThemesController(
         if (validation != null)
             return validation;
 
-        const string taskName = "at-vfs-build";
+        const string taskName = ShokoRelayConstants.TaskAtVfsBuild;
         TaskHelper.StartTask(taskName);
         try
         {
@@ -50,7 +50,7 @@ public class AnimeThemesController(
                 try
                 {
                     var cacheLines = result.CacheEntries.Select(ce => $"{ce.VfsPath.Replace('\\', '/')}|{ce.VideoId}|{ce.Bitmask}");
-                    System.IO.File.WriteAllLines(Path.Combine(_configProvider.ConfigDirectory, "webm_animethemes.cache"), cacheLines);
+                    System.IO.File.WriteAllLines(Path.Combine(_configProvider.ConfigDirectory, ShokoRelayConstants.FileAtWebmCache), cacheLines);
                 }
                 catch (Exception ex)
                 {
@@ -58,7 +58,7 @@ public class AnimeThemesController(
                 }
             }
 
-            var actionResult = LogAndReturn("at-vfs-report.log", result, (sb, r) => LogHelper.BuildAtVfsBuildReport(sb, r, filterIds ?? []));
+            var actionResult = LogAndReturn(ShokoRelayConstants.LogAtVfs, result, (sb, r) => LogHelper.BuildAtVfsBuildReport(sb, r, filterIds ?? []));
             TaskHelper.CompleteTask(taskName, (actionResult as OkObjectResult)?.Value!);
             return actionResult;
         }
@@ -100,12 +100,12 @@ public class AnimeThemesController(
             );
         }
 
-        const string taskName = "at-map-build";
+        const string taskName = ShokoRelayConstants.TaskAtMapBuild;
         TaskHelper.StartTask(taskName);
         try
         {
             var result = await _animeThemesMapping.BuildMappingFileAsync(CancellationToken.None).ConfigureAwait(false);
-            var actionResult = LogAndReturn("at-map-report.log", result, LogHelper.BuildAtVfsMapReport);
+            var actionResult = LogAndReturn(ShokoRelayConstants.LogAtMap, result, LogHelper.BuildAtVfsMapReport);
             TaskHelper.CompleteTask(taskName, (actionResult as OkObjectResult)?.Value!);
             return actionResult;
         }
@@ -123,7 +123,7 @@ public class AnimeThemesController(
     [HttpPost("animethemes/vfs/import")]
     public async Task<IActionResult> ImportAnimeThemesMapping(CancellationToken cancellationToken = default)
     {
-        const string rawUrl = AnimeThemesHelper.AtRawMapUrl + AnimeThemesHelper.AtMapFileName;
+        const string rawUrl = AnimeThemesHelper.AtRawMapUrl + ShokoRelayConstants.FileAtMapping;
         var (count, _) = await _animeThemesMapping.ImportMappingFromUrlAsync(rawUrl, cancellationToken).ConfigureAwait(false);
         return Ok(new { status = "ok", count });
     }
@@ -154,7 +154,7 @@ public class AnimeThemesController(
                 foreach (var item in batch.Items.Where(i => i.Status == "ok" && !string.IsNullOrWhiteSpace(i.Folder)))
                     _animeThemesMp3Generator.AddToThemeMp3Cache(item.Folder);
 
-                var actionResult = LogAndReturn("at-mp3-report.log", batch, LogHelper.BuildAtMp3Report);
+                var actionResult = LogAndReturn(ShokoRelayConstants.LogAtMp3, batch, LogHelper.BuildAtMp3Report);
                 TaskHelper.CompleteTask(taskName, (actionResult as OkObjectResult)?.Value!);
                 return actionResult;
             }
@@ -222,7 +222,7 @@ public class AnimeThemesController(
     [HttpGet("animethemes/webm/tree")]
     public IActionResult AnimeThemesWebmTree()
     {
-        string cachePath = Path.Combine(_configProvider.ConfigDirectory, "webm_animethemes.cache");
+        string cachePath = Path.Combine(_configProvider.ConfigDirectory, ShokoRelayConstants.FileAtWebmCache);
         if (!System.IO.File.Exists(cachePath))
             return Ok(new { status = "empty" });
 
@@ -313,7 +313,7 @@ public class AnimeThemesController(
     [HttpGet("animethemes/webm/favourites")]
     public IActionResult GetAnimeThemesFavourites()
     {
-        string path = Path.Combine(_configProvider.ConfigDirectory, AnimeThemesHelper.AtFavsFileName);
+        string path = Path.Combine(_configProvider.ConfigDirectory, ShokoRelayConstants.FileAtFavsCache);
         if (!System.IO.File.Exists(path))
             return Ok(Array.Empty<int>());
         try
@@ -334,7 +334,7 @@ public class AnimeThemesController(
     {
         if (videoId <= 0)
             return BadRequest();
-        string path = Path.Combine(_configProvider.ConfigDirectory, AnimeThemesHelper.AtFavsFileName);
+        string path = Path.Combine(_configProvider.ConfigDirectory, ShokoRelayConstants.FileAtFavsCache);
         var ids = new HashSet<int>();
         if (System.IO.File.Exists(path))
             foreach (var l in System.IO.File.ReadAllLines(path))

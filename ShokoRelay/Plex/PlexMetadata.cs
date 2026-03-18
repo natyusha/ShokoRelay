@@ -397,13 +397,13 @@ public class PlexMetadata(IMetadataService metadataService)
     public string GetGuid(string type, int id, int? season = null, int? part = null) =>
         type switch
         {
-            "collection" => $"{ShokoRelayInfo.AgentScheme}://collections/{id}",
-            "show" => $"{ShokoRelayInfo.AgentScheme}://show/{id}",
-            "season" => $"{ShokoRelayInfo.AgentScheme}://season/{id}{PlexConstants.SeasonPrefix}{season}",
+            "collection" => $"{ShokoRelayConstants.AgentScheme}://collections/{id}",
+            "show" => $"{ShokoRelayConstants.AgentScheme}://show/{id}",
+            "season" => $"{ShokoRelayConstants.AgentScheme}://season/{id}{PlexConstants.SeasonPrefix}{season}",
             "episode" => part.HasValue
-                ? $"{ShokoRelayInfo.AgentScheme}://episode/{PlexConstants.EpisodePrefix}{id}{PlexConstants.PartPrefix}{part}"
-                : $"{ShokoRelayInfo.AgentScheme}://episode/{PlexConstants.EpisodePrefix}{id}",
-            _ => $"{ShokoRelayInfo.AgentScheme}://{id}",
+                ? $"{ShokoRelayConstants.AgentScheme}://episode/{PlexConstants.EpisodePrefix}{id}{PlexConstants.PartPrefix}{part}"
+                : $"{ShokoRelayConstants.AgentScheme}://episode/{PlexConstants.EpisodePrefix}{id}",
+            _ => $"{ShokoRelayConstants.AgentScheme}://{id}",
         };
 
     private object[] BuildXrefGuidArray(ISeries series)
