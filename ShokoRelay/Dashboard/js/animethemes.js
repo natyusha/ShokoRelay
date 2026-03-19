@@ -3,10 +3,9 @@
  * @description Dedicated logic for AnimeThemes VFS and Theme.mp3 generation on the Shoko Relay dashboard.
  */
 (() => {
-  const { base, el, TOAST_MS, fetchJson, showToast, toastOperation, summarizeResult, initToggle, updatePlaybackTooltip } = window._sr;
+  const { base, el, TOAST_MS, fetchJson, showToast, toastOperation, initToggle, updatePlaybackTooltip, getData, summarizeResult } = window._sr;
 
-  // #region Dispatcher Param Providers
-
+  // #region Param Providers
   /**
    * Collects MP3 generation parameters for the Action Dispatcher.
    * @returns {URLSearchParams} The compiled parameters.
@@ -32,7 +31,6 @@
     if (filter) ps.set("filter", filter);
     return ps;
   };
-
   // #endregion
 
   // #region Actions Registry
@@ -45,20 +43,20 @@
 
       showToast(`${label}: Generating...`, "info", TOAST_MS);
       const res = await fetchJson(`${base}/animethemes/mp3?${ps}`);
+      const d = getData(res);
 
-      const d = res.data || {};
-      const status = d.status || d.Status;
-      const message = d.message || d.Message;
-      const folder = d.folder || d.Folder || ps.get("path");
+      const status = d?.Status || d?.status;
+      const message = d?.Message || d?.message;
+      const folder = d?.Folder || d?.folder || ps.get("path");
 
-      let summary = window._sr.summarizeResult(res).text;
+      let summary = summarizeResult(res).text;
       let isNoTheme = false;
 
-      // Logic for user-friendly summary and warning detection
+      // Handle specific skip scenarios for user-friendly feedback
       if (status === "skipped") {
         if (message === "Theme.mp3 already exists.") {
           summary = `Skipped: "${folder}" already contains a Theme.mp3`;
-        } else if (message === "Entry not found." || (message && message.includes("No entry for slug"))) {
+        } else if (message === "Entry not found." || (message && message.includes("No entry"))) {
           summary = `Skipped: No theme found for this series`;
           isNoTheme = true;
         } else {
@@ -75,9 +73,9 @@
           type: isNoTheme ? "warning" : undefined,
         });
 
-        // side effect: Play the theme if it was just created or already existed
+        // Trigger playback side effect if a theme exists locally
         if (!isBatch && (status === "ok" || (status === "skipped" && message === "Theme.mp3 already exists."))) {
-          const playPath = d.folder || d.Folder || ps.get("path");
+          const playPath = d?.Folder || d?.folder || ps.get("path");
           if (playPath) playThemeMp3(playPath);
         }
       } else {

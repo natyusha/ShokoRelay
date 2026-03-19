@@ -2,6 +2,7 @@ using System.Globalization;
 using NLog;
 using Shoko.Abstractions.Services;
 using ShokoRelay.Config;
+using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
 
 namespace ShokoRelay.Sync;
@@ -80,7 +81,11 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
 
                 foreach (var sw in shokoWatched)
                 {
-                    var guid = SyncHelper.MakeEpisodeGuid(sw.EpisodeID);
+                    var ep = _metadataService.GetShokoEpisodeByID(sw.EpisodeID);
+                    if (ep == null)
+                        continue;
+
+                    var guid = ep.GetPlexGuid();
                     if (!plexMap.TryGetValue(guid, out var rKey))
                         continue;
 
@@ -95,23 +100,23 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
 
                     result = SyncHelper.IncMarkedWatched(result, result.PerUser, uName);
                     Logger.Info("{0}Shoko->Plex: {1} scrobbled ep {2} on {3}", logPrefix, uName, sw.EpisodeID, target.ServerUrl);
-                    var ep = _metadataService.GetShokoEpisodeByID(sw.EpisodeID);
                     SyncHelper.AddPerUserChange(
                         result.PerUserChanges,
                         uName,
                         SyncHelper.MakeChange(
                             uName,
                             sw.EpisodeID,
-                            ep?.Series?.PreferredTitle?.Value,
-                            ep?.PreferredTitle?.Value,
-                            ep?.SeasonNumber,
-                            ep?.EpisodeNumber,
+                            ep.Series?.PreferredTitle?.Value,
+                            ep.PreferredTitle?.Value,
+                            ep.SeasonNumber,
+                            ep.EpisodeNumber,
                             rKey,
                             guid,
                             null,
                             sw.LastPlayedAt,
                             true,
-                            true
+                            true,
+                            plexUserRating: sw.UserRating
                         )
                     );
 

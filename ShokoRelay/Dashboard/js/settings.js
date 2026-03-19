@@ -3,10 +3,9 @@
  * @description Dedicated logic for building and persisting the Provider Settings form on the Shoko Relay dashboard.
  */
 (() => {
-  const { base, el, fetchJson, showToast, getValueByPath, setValueByPath, openModal, bindConfig, unwrapConfig, saveSettings } = window._sr;
+  const { configUrl, el, fetchJson, showToast, getValueByPath, setValueByPath, openModal, bindConfig, unwrapConfig, saveSettings } = window._sr;
 
   // #region Config Helpers
-
   /**
    * Attach a smooth open/close animation to a <details> element using the Web Animations API.
    * @param {HTMLElement} details - The details element.
@@ -30,18 +29,16 @@
       };
     });
   }
-
   // #endregion
 
   // #region Form Generation
-
   /**
    * Builds the configuration settings form dynamically based on the server schema.
    * @returns {Promise<void>}
    */
   async function loadConfig() {
     if (!el("config-form")) return;
-    const [schemaRes, configRes] = await Promise.all([fetchJson(base + "/config/schema"), fetchJson(base + "/config")]);
+    const [schemaRes, configRes] = await Promise.all([fetchJson(configUrl + "/schema"), fetchJson(configUrl)]);
     if (!schemaRes.ok || !configRes.ok) return showToast("Failed To Load Config", "error", 0);
 
     const schema = schemaRes.data.properties || [],
@@ -166,11 +163,9 @@
 
     window._sr.initAtConfig?.(config, saveSettings);
   }
-
   // #endregion
 
   // #region Initialization
-
   // Help Modal Logic
   const helpBtn = el("settings-help-open");
   if (helpBtn) {
@@ -181,6 +176,5 @@
   }
 
   loadConfig();
-
   // #endregion
 })();

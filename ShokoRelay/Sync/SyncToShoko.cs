@@ -1,6 +1,7 @@
 using NLog;
 using Shoko.Abstractions.Services;
 using ShokoRelay.Config;
+using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
 
 namespace ShokoRelay.Sync;
@@ -109,7 +110,7 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                             ep.SeasonNumber,
                             ep.EpisodeNumber,
                             item.RatingKey,
-                            item.Guid,
+                            ep.GetPlexGuid(),
                             null,
                             watchedAt,
                             appliedIds.Contains(ep.ID),

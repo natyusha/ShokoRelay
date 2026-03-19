@@ -37,43 +37,31 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
 
     #endregion
 
-    #region Logging Helpers
+    #region Data Models
 
-    /// <summary>Write a structured report to a log file inside the plugin's logs directory.</summary>
-    /// <param name="fileName">Name of the log file to create or overwrite.</param>
-    /// <param name="buildReport">Callback that populates the report content via a StringBuilder.</param>
-    protected void WriteReportLog(string fileName, Action<StringBuilder> buildReport)
-    {
-        try
-        {
-            var sb = new StringBuilder();
-            buildReport(sb);
-            LogHelper.WriteLog(_configProvider.PluginDirectory, fileName, sb.ToString());
-        }
-        catch (Exception ex)
-        {
-            Logger.Warn(ex, "Failed to write {FileName}", fileName);
-        }
-    }
+    /// <summary>Standardized response envelope for all Shoko Relay API endpoints.</summary>
+    /// <typeparam name="T">The type of the data payload.</typeparam>
+    /// <param name="Status">The result status of the request (e.g., "ok", "error", "skipped").</param>
+    /// <param name="Message">An optional descriptive message or error detail.</param>
+    /// <param name="Data">The actual result data object.</param>
+    /// <param name="LogUrl">An optional URL to a report log file.</param>
+    public record RelayResponse<T>(string Status = "ok", string? Message = null, T? Data = default, string? LogUrl = null);
 
-    /// <summary>Standardized helper for long-running tasks: executes logic, writes a report, and returns a JSON response with a log link.</summary>
+    #endregion
+
+    #region Logging Helper
+
+    /// <summary>Standardized helper for tasks: writes a report and returns a JSON response with a log link.</summary>
     /// <typeparam name="T">The type of the result data object.</typeparam>
-    /// <param name="logName">The name of the log file to generate (e.g., vfs-report.log).</param>
+    /// <param name="logName">The name of the log file to generate.</param>
     /// <param name="resultData">The data object to return in the JSON response.</param>
     /// <param name="reportBuilder">The logic used to format the resultData into a text report.</param>
-    /// <returns>An IActionResult containing the status, data, and logUrl.</returns>
+    /// <returns>An IActionResult containing a RelayResponse with status, data, and logUrl.</returns>
     protected IActionResult LogAndReturn<T>(string logName, T resultData, Action<StringBuilder, T> reportBuilder)
     {
-        WriteReportLog(logName, sb => reportBuilder(sb, resultData));
+        LogHelper.WriteReport(_configProvider.PluginDirectory, logName, resultData, reportBuilder);
 
-        return Ok(
-            new
-            {
-                status = "ok",
-                data = resultData,
-                logUrl = $"{ApiBase}/logs/{logName}",
-            }
-        );
+        return Ok(new RelayResponse<T>(Data: resultData, LogUrl: $"{ApiBase}/logs/{logName}"));
     }
 
     #endregion
@@ -112,14 +100,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
     {
         ids = ParseFilterIds(filter, out var errors);
         if (errors.Count > 0)
-            return BadRequest(
-                new
-                {
-                    status = "error",
-                    message = "Invalid filter values.",
-                    errors,
-                }
-            );
+            return BadRequest(new RelayResponse<object>(Status: "error", Message: "Invalid filter values.", Data: new { errors }));
 
         OverrideHelper.EnsureLoaded();
         if (ShokoRelay.Settings.TmdbEpNumbering)
@@ -141,14 +122,14 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
         filterIds = [];
 
         if (!_plexLibrary.IsEnabled)
-            return BadRequest(new { status = "error", message = "Plex server configuration is missing or no library selected." });
+            return BadRequest(new RelayResponse<object>(Status: "error", Message: "Plex server configuration is missing or no library selected."));
 
         var validation = ValidateFilterOrBadRequest(filter, out filterIds);
         if (validation != null)
             return validation;
 
         if (seriesId.HasValue && filterIds.Count > 0)
-            return BadRequest(new { status = "error", message = "Use either seriesId or filter, not both." });
+            return BadRequest(new RelayResponse<object>(Status: "error", Message: "Use either seriesId or filter, not both."));
 
         seriesList = ResolveSeriesList(seriesId, filterIds);
         return null;
@@ -219,15 +200,16 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
     {
         int processedNone = seriesList.Count(s => s != null);
         return Ok(
-            new
-            {
-                status = "ok",
-                processed = processedNone,
-                created = 0,
-                skipped = processedNone,
-                errors = 0,
-                deletedEmptyCollections = 0,
-            }
+            new RelayResponse<object>(
+                Data: new
+                {
+                    processed = processedNone,
+                    created = 0,
+                    skipped = processedNone,
+                    errors = 0,
+                    deletedEmptyCollections = 0,
+                }
+            )
         );
     }
 

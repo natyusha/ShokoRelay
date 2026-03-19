@@ -3,7 +3,7 @@
  * @description Logic for the Shoko Relay stand-alone AnimeThemes VFS video player.
  */
 (() => {
-  const { base, el, fetchJson, unwrapConfig, setValueByPath, openModal, updatePlaybackTooltip } = window._sr;
+  const { base, configUrl, el, fetchJson, unwrapConfig, setValueByPath, openModal, updatePlaybackTooltip, saveSettings, getData } = window._sr;
 
   // DOM Elements - UI Indicators
   const playerTime = el("time-display");
@@ -174,8 +174,8 @@
       body: JSON.stringify(videoId),
     });
 
-    if (res.ok) {
-      const isFav = res.data.isFavourite;
+    const isFav = getData(res)?.isFavourite;
+    if (res.ok && isFav !== undefined) {
       isFav ? favourites.add(videoId) : favourites.delete(videoId);
 
       if (heartEl) heartEl.classList.toggle("favourited", isFav);
@@ -347,7 +347,7 @@
             pool = items;
           }
           if (pool.length > 1) pool = pool.filter((item) => item.path !== currentWebmPath);
-          const selectedItem = pool[Math.floor(Math.random() * pool.length)];
+          const selectedItem = pool[crypto.getRandomValues(new Uint32Array(1))[0] % pool.length];
           navigationStack.push(selectedItem.path);
           shuffleHistory.add(selectedItem.path);
           stackIndex = navigationStack.length - 1;
@@ -384,11 +384,11 @@
     updatePlaybackTooltip(playerModeBtn);
     resetNavigationHistory();
 
-    const res = await fetchJson(base + "/config");
+    const res = await fetchJson(configUrl);
     if (res.ok) {
-      const cfg = unwrapConfig(res.data);
+      const cfg = unwrapConfig(getData(res));
       setValueByPath(cfg, "Playback.AnimeThemesWebmMode", next);
-      await fetchJson(base + "/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cfg) });
+      await saveSettings(cfg);
     }
   }
 
@@ -439,12 +439,10 @@
       if (playerVideo.paused) syncProgressUI();
     });
 
-    // Click Handlers
     playerVideo.onclick = () => playerVideo.src && (playerVideo.paused ? playerVideo.play() : playerVideo.pause());
     playerVideo.ondblclick = toggleFullscreen;
 
     if (playerTrack) {
-      /** Calculates and sets the video time based on click/drag horizontal position. */
       const updateSeek = (e) => {
         if (!playerVideo.duration) return;
         const rect = playerTrack.getBoundingClientRect();
@@ -452,16 +450,12 @@
         playerVideo.currentTime = Math.max(0, Math.min(1, pos)) * playerVideo.duration;
         if (playerVideo.paused) syncProgressUI();
       };
-
       playerTrack.onmousedown = (e) => {
-        // Middle Click to toggle play/pause
         if (e.button === 1 && playerVideo.src) {
           e.preventDefault();
           playerVideo.paused ? playerVideo.play() : playerVideo.pause();
           return;
         }
-
-        // Left Click + Drag scrubbing logic
         if (e.button === 0) {
           updateSeek(e);
           const onMouseMove = (moveEv) => updateSeek(moveEv);
@@ -568,10 +562,10 @@
     });
 
     (async () => {
-      const [treeRes, cfgRes, favRes] = await Promise.all([fetchJson(base + "/animethemes/webm/tree"), fetchJson(base + "/config"), fetchJson(base + "/animethemes/webm/favourites")]);
-      if (favRes.ok) favourites = new Set(favRes.data);
+      const [treeRes, cfgRes, favRes] = await Promise.all([fetchJson(base + "/animethemes/webm/tree"), fetchJson(configUrl), fetchJson(base + "/animethemes/webm/favourites")]);
+      if (favRes.ok) favourites = new Set(getData(favRes) || []);
       if (treeRes.ok) {
-        webmTreeData = (treeRes.data?.items || [])
+        webmTreeData = (getData(treeRes)?.items || [])
           .map((item) => {
             item._searchIndex = `${item.group} ${item.series} ${decodeUnicode(item.file)}`.toLowerCase().replace(/[\u200B\u200A]/g, "");
             return item;
@@ -586,7 +580,7 @@
         renderTree(getFilteredItems());
       }
       if (cfgRes.ok && playerModeBtn) {
-        const mode = unwrapConfig(cfgRes.data).Playback.AnimeThemesWebmMode || "off";
+        const mode = unwrapConfig(getData(cfgRes)).Playback.AnimeThemesWebmMode || "off";
         playerModeBtn.setAttribute("data-mode", mode);
         updatePlaybackTooltip(playerModeBtn);
       }

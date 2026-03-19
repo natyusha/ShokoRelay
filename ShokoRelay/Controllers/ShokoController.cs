@@ -47,15 +47,7 @@ public class ShokoController(
             return validation;
 
         if (!run)
-            return Ok(
-                new
-                {
-                    status = "skipped",
-                    message = "Set run=true to build the VFS",
-                    filter = filterIds.Count > 0 ? string.Join(',', filterIds) : null,
-                    clean,
-                }
-            );
+            return Ok(new RelayResponse<object>(Status: "skipped", Message: "Set run=true to build the VFS"));
 
         const string taskName = ShokoRelayConstants.TaskVfsBuild;
         TaskHelper.StartTask(taskName);
@@ -77,7 +69,7 @@ public class ShokoController(
         {
             var err = new { status = "error", message = ex.Message };
             TaskHelper.CompleteTask(taskName, err);
-            return BadRequest(err);
+            return BadRequest(new RelayResponse<object>(Status: "error", Message: ex.Message));
         }
     }
 
@@ -92,11 +84,11 @@ public class ShokoController(
             string path = Path.Combine(ShokoRelay.ConfigDirectory, ShokoRelayConstants.FileVfsOverrides);
             System.IO.File.WriteAllText(path, content ?? string.Empty);
             OverrideHelper.EnsureLoaded();
-            return Ok(new { status = "ok" });
+            return Ok(new RelayResponse<object>());
         }
         catch (Exception ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return BadRequest(new RelayResponse<object>(Status: "error", Message: ex.Message));
         }
     }
 
@@ -111,7 +103,6 @@ public class ShokoController(
     {
         bool doDry = dryRun ?? true;
         const string taskName = ShokoRelayConstants.TaskShokoRemoveMissing;
-        // ShokoImportService now calls StartTask/FinishTask internally
 
         try
         {
@@ -136,7 +127,7 @@ public class ShokoController(
             var err = new { status = "error", message = ex.Message };
             if (!doDry)
                 TaskHelper.CompleteTask(taskName, err);
-            return BadRequest(err);
+            return BadRequest(new RelayResponse<object>(Status: "error", Message: ex.Message));
         }
     }
 
@@ -146,14 +137,7 @@ public class ShokoController(
     public async Task<IActionResult> RunShokoImport()
     {
         var scanned = await _shokoImportService.TriggerImportAsync().ConfigureAwait(false);
-        return Ok(
-            new
-            {
-                status = "ok",
-                scanned,
-                scannedCount = scanned?.Count ?? 0,
-            }
-        );
+        return Ok(new RelayResponse<object>(Data: new { scanned, scannedCount = scanned?.Count ?? 0 }));
     }
 
     /// <summary>Triggers import and resets automation schedule.</summary>
@@ -165,14 +149,15 @@ public class ShokoController(
         ShokoRelay.MarkImportRunNow();
         var freqHours = ShokoRelay.Settings.Automation.ShokoImportFrequencyHours;
         return Ok(
-            new
-            {
-                status = "ok",
-                triggered = true,
-                scheduled = freqHours > 0,
-                nextRunInHours = freqHours,
-                scanned,
-            }
+            new RelayResponse<object>(
+                Data: new
+                {
+                    triggered = true,
+                    scheduled = freqHours > 0,
+                    nextRunInHours = freqHours,
+                    scanned,
+                }
+            )
         );
     }
 
@@ -198,7 +183,7 @@ public class ShokoController(
     )
     {
         if (!_plexLibrary.IsEnabled)
-            return BadRequest(new { status = "error", message = "Plex configuration missing." });
+            return BadRequest(new RelayResponse<object>(Status: "error", Message: "Plex configuration missing."));
         var (parsedDry, err) = ParseDryRunParam(dryRun);
         if (err != null)
             return err;
@@ -218,7 +203,7 @@ public class ShokoController(
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { status = "error", message = ex.Message });
+            return StatusCode(500, new RelayResponse<object>(Status: "error", Message: ex.Message));
         }
     }
 
@@ -233,19 +218,20 @@ public class ShokoController(
             var result = await _watchedSyncService.SyncWatchedAsync(false, freqHours, cancellationToken: HttpContext.RequestAborted).ConfigureAwait(false);
             ShokoRelay.MarkSyncRunNow();
             return Ok(
-                new
-                {
-                    status = "ok",
-                    triggered = true,
-                    scheduled = freqHours > 0,
-                    nextRunInHours = freqHours,
-                    result,
-                }
+                new RelayResponse<object>(
+                    Data: new
+                    {
+                        triggered = true,
+                        scheduled = freqHours > 0,
+                        nextRunInHours = freqHours,
+                        result,
+                    }
+                )
             );
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { status = "error", message = ex.Message });
+            return StatusCode(500, new RelayResponse<object>(Status: "error", Message: ex.Message));
         }
     }
 

@@ -66,7 +66,7 @@ public class AnimeThemesController(
         {
             var err = new { status = "error", message = ex.Message };
             TaskHelper.CompleteTask(taskName, err);
-            return BadRequest(err);
+            return BadRequest(new RelayResponse<object>(Status: "error", Message: ex.Message));
         }
     }
 
@@ -80,23 +80,18 @@ public class AnimeThemesController(
         {
             var (entry, error, gen) = await _animeThemesMapping.TestMappingEntryAsync(testPath, CancellationToken.None).ConfigureAwait(false);
             if (error != null)
-                return Ok(
-                    new
-                    {
-                        status = "error",
-                        testPath,
-                        error,
-                    }
-                );
+                return Ok(new RelayResponse<object>(Status: "error", Message: error, Data: new { testPath }));
+
             return Ok(
-                new
-                {
-                    status = "ok",
-                    testPath,
-                    generatedFilename = gen,
-                    csvLine = entry != null ? AnimeThemesMapping.SerializeMappingEntry(entry) : null,
-                    entry,
-                }
+                new RelayResponse<object>(
+                    Data: new
+                    {
+                        testPath,
+                        generatedFilename = gen,
+                        csvLine = entry != null ? AnimeThemesMapping.SerializeMappingEntry(entry) : null,
+                        entry,
+                    }
+                )
             );
         }
 
@@ -113,7 +108,7 @@ public class AnimeThemesController(
         {
             var err = new { status = "error", message = ex.Message };
             TaskHelper.CompleteTask(taskName, err);
-            return BadRequest(err);
+            return BadRequest(new RelayResponse<object>(Status: "error", Message: ex.Message));
         }
     }
 
@@ -125,7 +120,7 @@ public class AnimeThemesController(
     {
         const string rawUrl = AnimeThemesHelper.AtRawMapUrl + ShokoRelayConstants.FileAtMapping;
         var (count, _) = await _animeThemesMapping.ImportMappingFromUrlAsync(rawUrl, cancellationToken).ConfigureAwait(false);
-        return Ok(new { status = "ok", count });
+        return Ok(new RelayResponse<object>(Data: new { count }));
     }
 
     #endregion
@@ -139,14 +134,15 @@ public class AnimeThemesController(
     public async Task<IActionResult> AnimeThemesMp3([FromQuery] AnimeThemesMp3Query query)
     {
         if (string.IsNullOrWhiteSpace(query.Path))
-            return BadRequest(new { status = "error", message = "path is required" });
+            return BadRequest(new RelayResponse<object>(Status: "error", Message: "path is required"));
+
         string reverse = _plexLibrary.MapPlexPathToShokoPath(query.Path);
         if (!string.Equals(reverse, query.Path, StringComparison.Ordinal))
             query = query with { Path = reverse };
 
         if (query.Batch)
         {
-            const string taskName = "at-mp3-build";
+            const string taskName = ShokoRelayConstants.TaskAtMp3Build;
             TaskHelper.StartTask(taskName);
             try
             {
@@ -160,18 +156,12 @@ public class AnimeThemesController(
             }
             catch (Exception ex)
             {
-                var err = new { status = "error", message = ex.Message };
-                TaskHelper.CompleteTask(taskName, err);
-                return BadRequest(err);
+                return BadRequest(new RelayResponse<object>(Status: "error", Message: ex.Message));
             }
         }
 
         var single = await _animeThemesMp3Generator.ProcessSingleAsync(query, CancellationToken.None);
-        if (single.Status == "error")
-            return BadRequest(single);
-        if (single.Status == "ok" && !string.IsNullOrWhiteSpace(single.Folder))
-            _animeThemesMp3Generator.AddToThemeMp3Cache(single.Folder);
-        return Ok(single);
+        return single.Status == "error" ? BadRequest(new RelayResponse<object>(Status: "error", Message: single.Message, Data: single)) : Ok(new RelayResponse<ThemeMp3OperationResult>(Data: single));
     }
 
     /// <summary>Returns a random Theme.mp3 path from the current cache.</summary>
@@ -183,7 +173,9 @@ public class AnimeThemesController(
         if (refresh)
             _animeThemesMp3Generator.RefreshThemeMp3Cache();
         var folders = _animeThemesMp3Generator.GetCachedThemeMp3Folders();
-        return folders.Count == 0 ? NotFound() : Ok(new { status = "ok", path = folders[Random.Shared.Next(folders.Count)] });
+        return folders.Count == 0
+            ? NotFound(new RelayResponse<object>(Status: "error", Message: "No themes found"))
+            : Ok(new RelayResponse<object>(Data: new { path = folders[Random.Shared.Next(folders.Count)] }));
     }
 
     /// <summary>Streams an existing Theme.mp3 with ID3 tags embedded in response headers.</summary>
@@ -224,7 +216,7 @@ public class AnimeThemesController(
     {
         string cachePath = Path.Combine(_configProvider.ConfigDirectory, ShokoRelayConstants.FileAtWebmCache);
         if (!System.IO.File.Exists(cachePath))
-            return Ok(new { status = "empty" });
+            return Ok(new RelayResponse<object>(Status: "empty"));
 
         string[] lines;
         try
@@ -233,7 +225,7 @@ public class AnimeThemesController(
         }
         catch
         {
-            return Ok(new { status = "empty" });
+            return Ok(new RelayResponse<object>(Status: "empty"));
         }
 
         var items = new List<object>();
@@ -292,7 +284,7 @@ public class AnimeThemesController(
                 }
             );
         }
-        return Ok(new { status = "ok", items });
+        return Ok(new RelayResponse<object>(Data: new { items }));
     }
 
     /// <summary>Streams a WebM theme file from the VFS.</summary>
@@ -315,14 +307,15 @@ public class AnimeThemesController(
     {
         string path = Path.Combine(_configProvider.ConfigDirectory, ShokoRelayConstants.FileAtFavsCache);
         if (!System.IO.File.Exists(path))
-            return Ok(Array.Empty<int>());
+            return Ok(new RelayResponse<List<int>>(Data: []));
         try
         {
-            return Ok(System.IO.File.ReadAllLines(path).Select(l => l.Trim()).Where(l => !l.StartsWith("#") && int.TryParse(l, out _)).Select(int.Parse).ToList());
+            var favs = System.IO.File.ReadAllLines(path).Select(l => l.Trim()).Where(l => !l.StartsWith("#") && int.TryParse(l, out _)).Select(int.Parse).ToList();
+            return Ok(new RelayResponse<List<int>>(Data: favs));
         }
         catch
         {
-            return Ok(Array.Empty<int>());
+            return Ok(new RelayResponse<List<int>>(Data: []));
         }
     }
 
@@ -333,7 +326,8 @@ public class AnimeThemesController(
     public IActionResult UpdateAnimeThemesFavourite([FromBody] int videoId)
     {
         if (videoId <= 0)
-            return BadRequest();
+            return BadRequest(new RelayResponse<object>(Status: "error", Message: "Invalid videoId"));
+
         string path = Path.Combine(_configProvider.ConfigDirectory, ShokoRelayConstants.FileAtFavsCache);
         var ids = new HashSet<int>();
         if (System.IO.File.Exists(path))
@@ -347,11 +341,11 @@ public class AnimeThemesController(
         try
         {
             System.IO.File.WriteAllLines(path, ids.Select(i => i.ToString()));
-            return Ok(new { videoId, isFavourite = ids.Contains(videoId) });
+            return Ok(new RelayResponse<object>(Data: new { videoId, isFavourite = ids.Contains(videoId) }));
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ex.Message);
+            return StatusCode(500, new RelayResponse<object>(Status: "error", Message: ex.Message));
         }
     }
 

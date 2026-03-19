@@ -3,7 +3,7 @@ using Shoko.Abstractions.Services;
 
 namespace ShokoRelay.Helpers;
 
-/// <summary>Parses an optional "anidb_vfs_overrides.csv" file to group multiple Shoko series IDs together.</summary>
+/// <summary>Parses an optional <see cref="ShokoRelayConstants.FileVfsOverrides"/> file to group multiple Shoko series IDs together.</summary>
 public static class OverrideHelper
 {
     #region Fields & Constants

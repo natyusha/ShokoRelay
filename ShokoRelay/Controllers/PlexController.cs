@@ -44,22 +44,23 @@ public class PlexController(
         {
             PlexPinResponse pin = await _plexAuth.CreatePinAsync(true, cancellationToken);
             if (string.IsNullOrWhiteSpace(pin.Id) || string.IsNullOrWhiteSpace(pin.Code))
-                return StatusCode(502, new { status = "error", message = "Plex pin response missing id/code." });
+                return StatusCode(502, new RelayResponse<object>(Status: "error", Message: "Plex response missing id/code."));
 
             string authUrl = _plexAuth.BuildAuthUrl(pin.Code, ShokoRelayConstants.Name);
             return Ok(
-                new
-                {
-                    status = "ok",
-                    pinId = pin.Id,
-                    code = pin.Code,
-                    authUrl,
-                }
+                new RelayResponse<object>(
+                    Data: new
+                    {
+                        pinId = pin.Id,
+                        code = pin.Code,
+                        authUrl,
+                    }
+                )
             );
         }
         catch (InvalidOperationException ex)
         {
-            return StatusCode(502, new { status = "error", message = ex.Message });
+            return StatusCode(502, new RelayResponse<object>(Status: "error", Message: ex.Message));
         }
     }
 
@@ -71,13 +72,13 @@ public class PlexController(
     public async Task<IActionResult> GetPlexAuthStatus([FromQuery] string pinId, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(pinId))
-            return BadRequest(new { status = "error", message = "pinId is required" });
+            return BadRequest(new RelayResponse<object>(Status: "error", Message: "pinId is required"));
 
         try
         {
             var pin = await _plexAuth.GetPinAsync(pinId, cancellationToken).ConfigureAwait(false);
             if (string.IsNullOrWhiteSpace(pin.AuthToken))
-                return Ok(new { status = "pending" });
+                return Ok(new RelayResponse<object>(Status: "pending"));
 
             _configProvider.UpdatePlexTokenInfo(token: pin.AuthToken);
 
@@ -101,11 +102,11 @@ public class PlexController(
                 Logger.Warn($"Plex discovery failed: {ex.Message}");
             }
 
-            return Ok(new { status = "ok", tokenSaved = true });
+            return Ok(new RelayResponse<object>(Data: new { tokenSaved = true }));
         }
         catch (InvalidOperationException ex)
         {
-            return StatusCode(502, new { status = "error", message = ex.Message });
+            return StatusCode(502, new RelayResponse<object>(Status: "error", Message: ex.Message));
         }
     }
 
@@ -117,13 +118,13 @@ public class PlexController(
     {
         var token = _configProvider.GetPlexToken();
         if (string.IsNullOrWhiteSpace(token))
-            return Ok(new { status = "ok" });
+            return Ok(new RelayResponse<object>());
 
         string clientIdentifier = _configProvider.GetPlexClientIdentifier();
         await _plexAuth.RevokePlexTokenAsync(token, clientIdentifier, cancellationToken).ConfigureAwait(false);
 
         _configProvider.DeleteTokenFile();
-        return Ok(new { status = "ok" });
+        return Ok(new RelayResponse<object>());
     }
 
     /// <summary>Forces a rediscovery of servers and libraries.</summary>
@@ -134,7 +135,7 @@ public class PlexController(
     {
         var token = _configProvider.GetPlexToken();
         if (string.IsNullOrWhiteSpace(token))
-            return Unauthorized(new { status = "error", message = "Plex token is missing." });
+            return Unauthorized(new RelayResponse<object>(Status: "error", Message: "Plex token is missing."));
 
         await _configProvider.RefreshAdminUsername(_plexAuth, cancellationToken);
         string clientIdentifier = _configProvider.GetPlexClientIdentifier();
@@ -143,12 +144,12 @@ public class PlexController(
         {
             var discovery = await _plexAuth.DiscoverShokoLibrariesAsync(token, clientIdentifier, cancellationToken).ConfigureAwait(false);
             PersistDiscoveryResults(discovery);
-            return Ok(new { status = "ok", libraries = CollectDiscoveredLibraries(discovery.ShokoLibraries) });
+            return Ok(new RelayResponse<object>(Data: new { libraries = CollectDiscoveredLibraries(discovery.ShokoLibraries) }));
         }
         catch (Exception ex)
         {
             Logger.Warn($"Failed to refresh libraries: {ex.Message}");
-            return StatusCode(502, new { status = "error", message = "Failed to refresh Plex libraries." });
+            return StatusCode(502, new RelayResponse<object>(Status: "error", Message: "Failed to refresh Plex libraries."));
         }
     }
 
@@ -180,7 +181,7 @@ public class PlexController(
         {
             var err = new { status = "error", message = ex.Message };
             TaskHelper.CompleteTask(taskName, err);
-            return BadRequest(err);
+            return BadRequest(new RelayResponse<object>(Status: "error", Message: ex.Message));
         }
     }
 
@@ -202,14 +203,15 @@ public class PlexController(
 
         var r = await _collectionService.ApplyCollectionPostersAsync(seriesList, cancellationToken).ConfigureAwait(false);
         return Ok(
-            new
-            {
-                status = "ok",
-                processed = r.Processed,
-                uploaded = r.Uploaded,
-                skipped = r.Skipped,
-                errors = r.Errors,
-            }
+            new RelayResponse<object>(
+                Data: new
+                {
+                    processed = r.Processed,
+                    uploaded = r.Uploaded,
+                    skipped = r.Skipped,
+                    errors = r.Errors,
+                }
+            )
         );
     }
 
@@ -238,7 +240,7 @@ public class PlexController(
         {
             var err = new { status = "error", message = ex.Message };
             TaskHelper.CompleteTask(taskName, err);
-            return BadRequest(err);
+            return BadRequest(new RelayResponse<object>(Status: "error", Message: ex.Message));
         }
     }
 
@@ -249,7 +251,7 @@ public class PlexController(
     public async Task<IActionResult> RunPlexAutomationNow(CancellationToken cancellationToken = default)
     {
         if (!_plexLibrary.IsEnabled)
-            return BadRequest(new { status = "error", message = "Plex configuration missing." });
+            return BadRequest(new RelayResponse<object>(Status: "error", Message: "Plex configuration missing."));
 
         try
         {
@@ -260,11 +262,11 @@ public class PlexController(
                 await _criticRatingService.ApplyRatingsAsync(null, cancellationToken).ConfigureAwait(false);
 
             ShokoRelay.MarkPlexAutomationRunNow();
-            return Ok(new { status = "ok" });
+            return Ok(new RelayResponse<object>());
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { status = "error", message = ex.Message });
+            return StatusCode(500, new RelayResponse<object>(Status: "error", Message: ex.Message));
         }
     }
 

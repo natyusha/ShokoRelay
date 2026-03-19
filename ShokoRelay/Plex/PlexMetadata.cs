@@ -78,9 +78,9 @@ public class PlexMetadata(IMetadataService metadataService)
         // csharpier-ignore-start
         return new Dictionary<string, object?>
         {
-            ["ratingKey"]             = GetRatingKey("show", series.ID),
-            ["key"]                   = $"/metadata/{GetRatingKey("show", series.ID)}/children",
-            ["guid"]                  = GetGuid("show", series.ID),
+            ["ratingKey"]             = series.GetPlexRatingKey(),
+            ["key"]                   = $"/metadata/{series.GetPlexRatingKey()}/children",
+            ["guid"]                  = series.GetPlexGuid(),
             ["type"]                  = "show",
             ["title"]                 = titles.DisplayTitle,
             ["originallyAvailableAt"] = series.AirDate?.ToString("yyyy-MM-dd"),
@@ -194,9 +194,9 @@ public class PlexMetadata(IMetadataService metadataService)
         // csharpier-ignore-start
         return new Dictionary<string, object?>
         {
-            ["ratingKey"]             = GetRatingKey("season", series.ID, seasonNum),
-            ["key"]                   = $"/metadata/{GetRatingKey("season", series.ID, seasonNum)}/children",
-            ["guid"]                  = GetGuid("season", series.ID, seasonNum),
+            ["ratingKey"]             = series.GetPlexRatingKey(seasonNum),
+            ["key"]                   = $"/metadata/{series.GetPlexRatingKey(seasonNum)}/children",
+            ["guid"]                  = series.GetPlexGuid(seasonNum),
             ["type"]                  = "season",
             ["title"]                 = seasonTitle,
             ["originallyAvailableAt"] = seasonDate?.ToString("yyyy-MM-dd"),
@@ -208,9 +208,9 @@ public class PlexMetadata(IMetadataService metadataService)
             ["summary"]               = seasonSummary ?? string.Empty,
             ["isAdult"]               = RatingHelper.GetContentRatingAndAdult(series).IsAdult,
 
-            ["parentRatingKey"]       = GetRatingKey("show", series.ID),
+            ["parentRatingKey"]       = series.GetPlexRatingKey(),
             ["parentKey"]             = $"/metadata/{series.ID}",
-            ["parentGuid"]            = GetGuid("show", series.ID),
+            ["parentGuid"]            = series.GetPlexGuid(),
             ["parentType"]            = "show",
             ["parentTitle"]           = seriesTitle,
             ["parentThumb"]           = images.GetImages(ImageEntityType.Poster).FirstOrDefault() is { } sp ? ImageHelper.GetImageUrl(sp, cacheBuster: cb) : null,
@@ -268,9 +268,9 @@ public class PlexMetadata(IMetadataService metadataService)
         // csharpier-ignore-start
         return new Dictionary<string, object?>
         {
-            ["ratingKey"]             = GetRatingKey("episode", ep.ID, null, partIndex),
-            ["key"]                   = $"/metadata/{GetRatingKey("episode", ep.ID, null, partIndex)}",
-            ["guid"]                  = GetGuid("episode", ep.ID, null, partIndex),
+            ["ratingKey"]             = ep.GetPlexRatingKey(partIndex),
+            ["key"]                   = $"/metadata/{ep.GetPlexRatingKey(partIndex)}",
+            ["guid"]                  = ep.GetPlexGuid(partIndex),
             ["type"]                  = "episode",
             ["subtype"]               = (mapped.Season < 0 && TryGetExtraSeason(mapped.Season, out var ex)) ? ex.Subtype : null,
             ["title"]                 = epTitle,
@@ -285,18 +285,18 @@ public class PlexMetadata(IMetadataService metadataService)
             ["isAdult"]               = RatingHelper.GetContentRatingAndAdult(series).IsAdult,
             ["duration"]              = (int)ep.Runtime.TotalMilliseconds,
 
-            ["parentRatingKey"]       = GetRatingKey("season", series.ID, mapped.Season),
-            ["parentKey"]             = $"/metadata/{GetRatingKey("season", series.ID, mapped.Season)}",
-            ["parentGuid"]            = GetGuid("season", series.ID, mapped.Season),
+            ["parentRatingKey"]       = series.GetPlexRatingKey(mapped.Season),
+            ["parentKey"]             = $"/metadata/{series.GetPlexRatingKey(mapped.Season)}",
+            ["parentGuid"]            = series.GetPlexGuid(mapped.Season),
             ["parentType"]            = "season",
             ["parentTitle"]           = GetSeasonFolder(mapped.Season),
             ["parentThumb"]           = parentThumb ?? (seriesImages.GetImages(ImageEntityType.Poster).FirstOrDefault() is { } p ? ImageHelper.GetImageUrl(p, cacheBuster: cb) : null),
             ["parentArt"]             = seriesImages.GetImages(ImageEntityType.Backdrop).FirstOrDefault() is { } a ? ImageHelper.GetImageUrl(a, cacheBuster: cb) : null,
             ["index"]                 = mapped.Episode,
 
-            ["grandparentRatingKey"]  = GetRatingKey("show", series.ID),
+            ["grandparentRatingKey"]  = series.GetPlexRatingKey(),
             ["grandparentKey"]        = $"/metadata/{series.ID}",
-            ["grandparentGuid"]       = GetGuid("show", series.ID),
+            ["grandparentGuid"]       = series.GetPlexGuid(),
             ["grandparentType"]       = "show",
             ["grandparentTitle"]      = titles.DisplayTitle,
             ["grandparentThumb"]      = seriesImages.GetImages(ImageEntityType.Poster).FirstOrDefault() is { } gp ? ImageHelper.GetImageUrl(gp, cacheBuster: cb) : null,
@@ -351,8 +351,8 @@ public class PlexMetadata(IMetadataService metadataService)
         // csharpier-ignore-start
         return new Dictionary<string, object?>
         {
-            ["ratingKey"]             = GetRatingKey("collection", group.ID),
-            ["guid"]                  = GetGuid("collection", group.ID),
+            ["ratingKey"]             = group.GetPlexRatingKey(),
+            ["guid"]                  = group.GetPlexGuid(),
             ["key"]                   = $"/collection/{group.ID}",
             ["type"]                  = "collection",
             ["subtype"]               = "show",
@@ -371,40 +371,6 @@ public class PlexMetadata(IMetadataService metadataService)
     #region Key / Array Builders
 
     private static string? GetCacheBuster(object? entity) => entity is IWithUpdateDate upd ? new DateTimeOffset(upd.LastUpdatedAt).ToUnixTimeSeconds().ToString() : null;
-
-    /// <summary>Composes a Plex rating key string from a metadata type and numeric identifiers.</summary>
-    /// <param name="type">The metadata type (collection, show, season, episode).</param>
-    /// <param name="id">The Shoko identifier.</param>
-    /// <param name="season">Optional season number.</param>
-    /// <param name="part">Optional part index.</param>
-    /// <returns>A Plex-style rating key.</returns>
-    public string GetRatingKey(string type, int id, int? season = null, int? part = null) =>
-        type switch
-        {
-            "collection" => $"{PlexConstants.CollectionPrefix}{id}",
-            "show" => id.ToString(),
-            "season" => $"{id}{PlexConstants.SeasonPrefix}{season}",
-            "episode" => part.HasValue ? $"{PlexConstants.EpisodePrefix}{id}{PlexConstants.PartPrefix}{part}" : $"{PlexConstants.EpisodePrefix}{id}",
-            _ => id.ToString(),
-        };
-
-    /// <summary>Composes a Plex GUID URI from a metadata type and numeric identifiers.</summary>
-    /// <param name="type">The metadata type.</param>
-    /// <param name="id">The Shoko identifier.</param>
-    /// <param name="season">Optional season number.</param>
-    /// <param name="part">Optional part index.</param>
-    /// <returns>A fully qualified metadata GUID string.</returns>
-    public string GetGuid(string type, int id, int? season = null, int? part = null) =>
-        type switch
-        {
-            "collection" => $"{ShokoRelayConstants.AgentScheme}://collections/{id}",
-            "show" => $"{ShokoRelayConstants.AgentScheme}://show/{id}",
-            "season" => $"{ShokoRelayConstants.AgentScheme}://season/{id}{PlexConstants.SeasonPrefix}{season}",
-            "episode" => part.HasValue
-                ? $"{ShokoRelayConstants.AgentScheme}://episode/{PlexConstants.EpisodePrefix}{id}{PlexConstants.PartPrefix}{part}"
-                : $"{ShokoRelayConstants.AgentScheme}://episode/{PlexConstants.EpisodePrefix}{id}",
-            _ => $"{ShokoRelayConstants.AgentScheme}://{id}",
-        };
 
     private object[] BuildXrefGuidArray(ISeries series)
     {

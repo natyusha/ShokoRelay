@@ -385,13 +385,9 @@ public static class SyncHelper
     #region Utils
 
     /// <summary>Converts unix seconds to DateTime.</summary>
+    /// <param name="unixSeconds">The unix timestamp in seconds.</param>
+    /// <returns>A UTC DateTime or null if the input is invalid.</returns>
     public static DateTime? UnixSecondsToDateTime(long? unixSeconds) => (unixSeconds > 0) ? DateTimeOffset.FromUnixTimeSeconds(unixSeconds.Value).UtcDateTime : null;
-
-    /// <summary>Makes an episode GUID string.</summary>
-    public static string MakeEpisodeGuid(int episodeId) => $"{ShokoRelayConstants.AgentScheme}://episode/{PlexConstants.EpisodePrefix}{episodeId}";
-
-    /// <summary>Makes a show GUID string.</summary>
-    public static string MakeShowGuid(int seriesId) => $"{ShokoRelayConstants.AgentScheme}://show/{seriesId}";
 
     #endregion
 }

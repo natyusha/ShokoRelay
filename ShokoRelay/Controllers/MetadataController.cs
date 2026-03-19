@@ -4,6 +4,7 @@ using Shoko.Abstractions.Enums;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Services;
 using ShokoRelay.Config;
+using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
 
 namespace ShokoRelay.Controllers;
@@ -68,7 +69,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
                 return EmptyMatch();
         }
         else
-            seriesId = Helpers.TextHelper.ExtractSeriesId(rawPath);
+            seriesId = TextHelper.ExtractSeriesId(rawPath);
         if (!seriesId.HasValue)
             return EmptyMatch();
 
@@ -90,11 +91,11 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
                     {
                         new
                         {
-                            guid = _mapper.GetGuid("show", series.ID),
+                            guid = series.GetPlexGuid(),
                             title = series.PreferredTitle?.Value,
                             year = series.AirDate?.Year,
                             score = 100,
-                            thumb = poster != null ? Helpers.ImageHelper.GetImageUrl(poster) : null,
+                            thumb = poster != null ? ImageHelper.GetImageUrl(poster) : null,
                         },
                     },
                 },
