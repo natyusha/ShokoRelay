@@ -3,11 +3,16 @@
  * @description Dedicated logic for building and persisting the Provider Settings form on the Shoko Relay dashboard.
  */
 (() => {
-  const { base, el, fetchJson, showToast, toastOperation, getValueByPath, setValueByPath, openModal, bindConfig, unwrapConfig } = window._sr;
+  const { base, el, fetchJson, showToast, getValueByPath, setValueByPath, openModal, bindConfig, unwrapConfig, saveSettings } = window._sr;
 
   // #region Config Helpers
 
-  /** Attach a smooth open/close animation to a <details> element using the Web Animations API. */
+  /**
+   * Attach a smooth open/close animation to a <details> element using the Web Animations API.
+   * @param {HTMLElement} details - The details element.
+   * @param {HTMLElement} content - The inner content container.
+   * @param {number} [duration=300] - Animation duration in ms.
+   */
   function initDetailsAnimation(details, content, duration = 300) {
     let anim = null;
     details.querySelector("summary")?.addEventListener("click", (e) => {
@@ -30,7 +35,10 @@
 
   // #region Form Generation
 
-  /** Builds the configuration settings form dynamically based on the server schema. */
+  /**
+   * Builds the configuration settings form dynamically based on the server schema.
+   * @returns {Promise<void>}
+   */
   async function loadConfig() {
     if (!el("config-form")) return;
     const [schemaRes, configRes] = await Promise.all([fetchJson(base + "/config/schema"), fetchJson(base + "/config")]);
@@ -53,13 +61,6 @@
     advSection.innerHTML = "<summary>Advanced Settings</summary>";
     advContent.appendChild(document.createElement("hr"));
 
-    /** Persist the configuration object to the server. */
-    const persistConfig = async (updated) => {
-      const res = await fetchJson(base + "/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updated) });
-      if (!res.ok) toastOperation(res, "Config Save");
-      return res;
-    };
-
     schema.forEach((p) => {
       const wrap = document.createElement("div"),
         label = document.createElement("label");
@@ -71,7 +72,14 @@
           <span class="shoko-checkbox-icon" aria-hidden="true"><svg class="unchecked"><use href="img/icons.svg#checkbox-blank-circle-outline"></use></svg><svg class="checked"><use href="img/icons.svg#checkbox-marked-circle-outline"></use></svg></span>
           <span class="shoko-checkbox-text"><span class="shoko-checkbox-title">${p.Display || p.Path}</span><small class="shoko-checkbox-desc" style="display:block">${p.Description || ""}</small></span></label>`;
         input = wrap.querySelector("input");
-        bindConfig(input, p.Path, config, persistConfig, "check");
+        bindConfig(input, p.Path, config, saveSettings, "check");
+
+        // UI Logic: Toggle dependent button states when TMDB Ep numbering changes
+        if (overridesBtn && (p.Path === "TmdbEpNumbering" || p.Path === "Advanced.TmdbEpNumbering")) {
+          input.addEventListener("change", (e) => {
+            overridesBtn.disabled = !e.target.checked;
+          });
+        }
       } else if (p.Path.endsWith("PathMappings")) {
         label.innerHTML = `<span>${p.Display || p.Path.split(".").pop()}</span>${p.Description ? `<small>${p.Description}</small>` : ""}`;
         wrap.appendChild(label);
@@ -92,7 +100,7 @@
             if (lv.trim() && rLines[idx]?.trim()) val[rLines[idx].trim()] = lv.trim();
           });
           setValueByPath(config, p.Path, val);
-          await persistConfig(config);
+          await saveSettings(config);
         };
         l.onchange = r.onchange = onMapChange;
       } else {
@@ -132,10 +140,10 @@
 
             input.value = cleanVal;
             setValueByPath(config, p.Path, cleanVal);
-            await persistConfig(config);
+            await saveSettings(config);
           };
         } else {
-          bindConfig(input, p.Path, config, persistConfig, p.Type === "bool" ? "check" : p.Type === "number" ? "number" : "text");
+          bindConfig(input, p.Path, config, saveSettings, p.Type === "bool" ? "check" : p.Type === "number" ? "number" : "text");
         }
       }
       (p.Advanced ? advContent : el("config-form")).appendChild(wrap);
@@ -147,7 +155,7 @@
       initDetailsAnimation(advSection, advContent);
     }
 
-    const b = (id, path, type) => bindConfig(id, path, config, persistConfig, type);
+    const b = (id, path, type) => bindConfig(id, path, config, saveSettings, type);
     b("shoko-utc-offset", "Automation.UtcOffsetHours", "number");
     b("shoko-import-frequency", "Automation.ShokoImportFrequencyHours", "number");
     b("shoko-sync-frequency", "Automation.ShokoSyncWatchedFrequencyHours", "number");
@@ -156,7 +164,7 @@
     b("sync-exclude-admin", "Automation.ShokoSyncWatchedExcludeAdmin", "check");
     b("plex-scrobble", "Automation.AutoScrobble", "check");
 
-    window._sr.initAtConfig?.(config, persistConfig);
+    window._sr.initAtConfig?.(config, saveSettings);
   }
 
   // #endregion

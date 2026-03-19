@@ -46,20 +46,16 @@
         <section>
           <h2 class="plex">Plex: Automation</h2>
           <div class="full">
-            <button id="{{ TaskPlexCollectionsBuild }}" class="plex-auth">Generate Collections</button>
-            <button id="{{ TaskPlexRatingsApply }}" class="plex-auth">Apply Critic Ratings</button>
+            <button id="{{ TaskPlexCollectionsBuild }}" class="plex-auth" data-relay-endpoint="/plex/collections/build" data-relay-label="Collections" data-relay-persist="true">Generate Collections</button>
+            <button id="{{ TaskPlexRatingsApply }}" class="plex-auth" data-relay-endpoint="/plex/ratings/apply" data-relay-label="Critic Ratings" data-relay-persist="true">Apply Critic Ratings</button>
           </div>
           <hr class="plex-divider" />
           <div class="full">
             <label class="shoko-checkbox plex-auth">
               <input id="plex-scan-vfs" class="plex-auth" type="checkbox" />
               <span class="shoko-checkbox-icon" aria-hidden="true">
-                <svg class="unchecked">
-                  <use href="img/icons.svg#checkbox-blank-circle-outline"></use>
-                </svg>
-                <svg class="checked">
-                  <use href="img/icons.svg#checkbox-marked-circle-outline"></use>
-                </svg>
+                <svg class="unchecked"><use href="img/icons.svg#checkbox-blank-circle-outline"></use></svg>
+                <svg class="checked"><use href="img/icons.svg#checkbox-marked-circle-outline"></use></svg>
               </span>
               <span class="shoko-checkbox-text">
                 <span class="shoko-checkbox-title">Force Partial Scans</span><br />
@@ -69,12 +65,8 @@
             <label class="shoko-checkbox">
               <input id="plex-scrobble" type="checkbox" />
               <span class="shoko-checkbox-icon" aria-hidden="true">
-                <svg class="unchecked">
-                  <use href="img/icons.svg#checkbox-blank-circle-outline"></use>
-                </svg>
-                <svg class="checked">
-                  <use href="img/icons.svg#checkbox-marked-circle-outline"></use>
-                </svg>
+                <svg class="unchecked"><use href="img/icons.svg#checkbox-blank-circle-outline"></use></svg>
+                <svg class="checked"><use href="img/icons.svg#checkbox-marked-circle-outline"></use></svg>
               </span>
               <span class="shoko-checkbox-text">
                 <span class="shoko-checkbox-title">Auto Scrobble</span><br />
@@ -91,9 +83,7 @@
       <div class="two-cols">
         <section>
           <h2>
-            <svg class="icon-svg">
-              <use href="img/icons.svg#database-refresh-outline"></use>
-            </svg>
+            <svg class="icon-svg"><use href="img/icons.svg#database-refresh-outline"></use></svg>
             Shoko: VFS
           </h2>
           <div class="full">
@@ -103,24 +93,18 @@
             </div>
           </div>
           <div class="full">
-            <button id="{{ TaskVfsBuild }}">Generate</button>
+            <button id="{{ TaskVfsBuild }}" data-relay-endpoint="/vfs" data-relay-label="VFS Generation" data-relay-params="getVfsParams" data-relay-persist-if-empty="#vfs-filter">Generate</button>
             <button id="vfs-overrides" class="w46-button tmdb-ep-num" title="VFS Overrides Editor">
-              <svg class="icon-svg">
-                <use href="img/icons.svg#database-edit-outline"></use>
-              </svg>
+              <svg class="icon-svg"><use href="img/icons.svg#database-edit-outline"></use></svg>
             </button>
             <button id="vfs-clean" class="w46-button toggle" title="Clean VFS Toggle" aria-pressed="true" type="button">
-              <svg class="icon-svg">
-                <use href="img/icons.svg#broom"></use>
-              </svg>
+              <svg class="icon-svg"><use href="img/icons.svg#broom"></use></svg>
             </button>
           </div>
         </section>
         <section>
           <h2>
-            <svg class="icon-svg">
-              <use href="img/icons.svg#auto-fix"></use>
-            </svg>
+            <svg class="icon-svg"><use href="img/icons.svg#auto-fix"></use></svg>
             Shoko: Automation
           </h2>
           <div class="full">
@@ -138,9 +122,20 @@
             </div>
           </div>
           <div class="full">
-            <button id="{{ TaskShokoRemoveMissing }}" title="Remove Missing Files From Shoko and MyList">Remove Missing</button>
+            <button
+              id="{{ TaskShokoRemoveMissing }}"
+              title="Remove Missing Files From Shoko and MyList"
+              data-relay-endpoint="/shoko/remove-missing?dryRun=false"
+              data-relay-method="POST"
+              data-relay-label="Remove Missing"
+              data-relay-persist="true"
+              data-relay-confirm="Are you sure you want to remove all records for missing files?<br><br><small>This will permanently remove them from Shoko's database and your AniDB MyList.</small>"
+              data-relay-confirm-button="Remove Files"
+            >
+              Remove Missing
+            </button>
             <div class="w100">
-              <button id="shoko-import-run" title="Import From Source folders">Import</button>
+              <button id="shoko-import-run" title="Import From Source folders" data-relay-endpoint="/shoko/import" data-relay-method="POST" data-relay-label="Shoko Import">Import</button>
             </div>
             <div class="w100">
               <button id="shoko-sync-watched" class="plex-auth" title="Sync Watched States Menu">Sync</button>
@@ -156,15 +151,11 @@
         <section>
           <div class="full">
             <h2>
-              <svg class="at-svg">
-                <use href="img/icons.svg#animethemes"></use>
-              </svg>
+              <svg class="at-svg"><use href="img/icons.svg#animethemes"></use></svg>
               AnimeThemes: VFS
             </h2>
             <a href="player" target="_blank" rel="noopener noreferrer" class="at-btn" title="Open Video Player" aria-label="Open Video Player">
-              <svg class="icon-svg">
-                <use href="img/icons.svg#movie-open"></use>
-              </svg>
+              <svg class="icon-svg"><use href="img/icons.svg#movie-open"></use></svg>
             </a>
           </div>
           <div class="full">
@@ -174,16 +165,20 @@
             </div>
           </div>
           <div class="full">
-            <button id="{{ TaskAtVfsBuild }}">Generate</button>
-            <button id="at-map-import" class="w46-button" title="Import Curated Mapping File">
-              <svg class="icon-svg">
-                <use href="img/icons.svg#download"></use>
-              </svg>
+            <button
+              id="{{ TaskAtVfsBuild }}"
+              data-relay-endpoint="/animethemes/vfs/build"
+              data-relay-label="AnimeThemes Generation"
+              data-relay-params="getAtMapParams"
+              data-relay-persist-if-empty="#at-filter-map"
+            >
+              Generate
             </button>
-            <button id="{{ TaskAtMapBuild }}" class="w46-button" title="Build Mapping File">
-              <svg class="icon-svg">
-                <use href="img/icons.svg#sitemap"></use>
-              </svg>
+            <button id="at-map-import" class="w46-button" title="Import Curated Mapping File" data-relay-endpoint="/animethemes/vfs/import" data-relay-method="POST" data-relay-label="AnimeThemes Import">
+              <svg class="icon-svg"><use href="img/icons.svg#download"></use></svg>
+            </button>
+            <button id="{{ TaskAtMapBuild }}" class="w46-button" title="Build Mapping File" data-relay-endpoint="/animethemes/vfs/map" data-relay-label="AnimeThemes Mapping" data-relay-persist="true">
+              <svg class="icon-svg"><use href="img/icons.svg#sitemap"></use></svg>
             </button>
           </div>
         </section>
@@ -193,37 +188,21 @@
           </div>
           <div class="full">
             <h2>
-              <svg class="at-svg">
-                <use href="img/icons.svg#animethemes"></use>
-              </svg>
+              <svg class="at-svg"><use href="img/icons.svg#animethemes"></use></svg>
               AnimeThemes: MP3
             </h2>
             <button id="at-play" class="at-btn" title="Play" type="button" aria-label="Play" hidden>
-              <svg class="icon-svg play">
-                <use href="img/icons.svg#play"></use>
-              </svg>
-              <svg class="icon-svg next">
-                <use href="img/icons.svg#skip-next"></use>
-              </svg>
+              <svg class="icon-svg play"><use href="img/icons.svg#play"></use></svg>
+              <svg class="icon-svg next"><use href="img/icons.svg#skip-next"></use></svg>
             </button>
             <button id="at-mode" class="at-btn" title="Playback Mode" data-mode="loop" type="button" aria-label="Playback Mode" hidden>
-              <svg class="icon-svg mode loop">
-                <use href="img/icons.svg#sync"></use>
-              </svg>
-              <svg class="icon-svg mode shuffle">
-                <use href="img/icons.svg#shuffle-variant"></use>
-              </svg>
-              <svg class="icon-svg mode off">
-                <use href="img/icons.svg#sync-off"></use>
-              </svg>
+              <svg class="icon-svg mode loop"><use href="img/icons.svg#sync"></use></svg>
+              <svg class="icon-svg mode shuffle"><use href="img/icons.svg#shuffle-variant"></use></svg>
+              <svg class="icon-svg mode off"><use href="img/icons.svg#sync-off"></use></svg>
             </button>
             <button id="at-playback" class="at-btn toggle" title="Playback Toggle" aria-pressed="false" type="button" aria-label="Playback Toggle">
-              <svg class="icon-svg enabled">
-                <use href="img/icons.svg#volume-high"></use>
-              </svg>
-              <svg class="icon-svg disabled">
-                <use href="img/icons.svg#volume-mute"></use>
-              </svg>
+              <svg class="icon-svg enabled"><use href="img/icons.svg#volume-high"></use></svg>
+              <svg class="icon-svg disabled"><use href="img/icons.svg#volume-mute"></use></svg>
             </button>
           </div>
           <div class="full">
@@ -232,16 +211,12 @@
             <div class="w46"><label title="Index Override">Off.</label><input id="at-offset" type="number" value="" placeholder="0" /></div>
           </div>
           <div class="full">
-            <button id="{{ TaskAtMp3Build }}">Generate</button>
+            <button id="{{ TaskAtMp3Build }}" data-relay-action="atMp3Build">Generate</button>
             <button id="at-mp3-force" class="w46-button toggle" title="Force Overwrite Toggle" aria-pressed="false" type="button" aria-label="Force Overwrite Toggle">
-              <svg class="icon-svg">
-                <use href="img/icons.svg#chevron-triple-down"></use>
-              </svg>
+              <svg class="icon-svg"><use href="img/icons.svg#chevron-triple-down"></use></svg>
             </button>
             <button id="at-mp3-batch" class="w46-button toggle" title="Recursive Batch Toggle" aria-pressed="false" type="button" aria-label="Recursive Batch Toggle">
-              <svg class="icon-svg">
-                <use href="img/icons.svg#file-tree"></use>
-              </svg>
+              <svg class="icon-svg"><use href="img/icons.svg#file-tree"></use></svg>
             </button>
           </div>
         </section>
@@ -253,15 +228,11 @@
       <section>
         <div class="full">
           <h2>
-            <svg class="icon-svg">
-              <use href="img/icons.svg#cog-outline"></use>
-            </svg>
+            <svg class="icon-svg"><use href="img/icons.svg#cog-outline"></use></svg>
             Provider Settings
           </h2>
           <button id="settings-help-open" class="at-btn" title="Settings Help" aria-label="Settings Help">
-            <svg class="icon-svg">
-              <use href="img/icons.svg#help-box"></use>
-            </svg>
+            <svg class="icon-svg"><use href="img/icons.svg#help-box"></use></svg>
           </button>
         </div>
         <div id="config-form"></div>
@@ -351,12 +322,8 @@
           <label class="shoko-checkbox">
             <input id="sync-ratings" type="checkbox" />
             <span class="shoko-checkbox-icon" aria-hidden="true">
-              <svg class="unchecked">
-                <use href="img/icons.svg#checkbox-blank-circle-outline"></use>
-              </svg>
-              <svg class="checked">
-                <use href="img/icons.svg#checkbox-marked-circle-outline"></use>
-              </svg>
+              <svg class="unchecked"><use href="img/icons.svg#checkbox-blank-circle-outline"></use></svg>
+              <svg class="checked"><use href="img/icons.svg#checkbox-marked-circle-outline"></use></svg>
             </span>
             <span class="shoko-checkbox-text"
               ><span class="shoko-checkbox-title">Include Ratings</span><br />
@@ -366,12 +333,8 @@
           <label class="shoko-checkbox">
             <input id="sync-exclude-admin" type="checkbox" />
             <span class="shoko-checkbox-icon" aria-hidden="true">
-              <svg class="unchecked">
-                <use href="img/icons.svg#checkbox-blank-circle-outline"></use>
-              </svg>
-              <svg class="checked">
-                <use href="img/icons.svg#checkbox-marked-circle-outline"></use>
-              </svg>
+              <svg class="unchecked"><use href="img/icons.svg#checkbox-blank-circle-outline"></use></svg>
+              <svg class="checked"><use href="img/icons.svg#checkbox-marked-circle-outline"></use></svg>
             </span>
             <span class="shoko-checkbox-text">
               <span class="shoko-checkbox-title">Exclude Admin</span><br />
@@ -426,8 +389,8 @@
             <h4>Path Mappings</h4>
             <small><em>Required if Plex and Shoko see your files via different paths</em></small>
             <ul class="help-list inline-help">
-              <li><code>Left</code> <small>Paths as seen by Plex</small></li>
-              <li><code>Right</code> <small>Paths as seen by Shoko</small></li>
+              <li><code>Left Column</code> <small>Plex Base Paths</small></li>
+              <li><code>Right Column</code> <small>Shoko Base Paths</small></li>
             </ul>
             <h4>Plex Fixup Delay</h4>
             <small>

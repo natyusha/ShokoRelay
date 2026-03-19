@@ -243,6 +243,28 @@ public class AnimeThemesMapping(IMetadataService metadataService, IVideoService 
                 if (!matchedThemes.Any())
                     continue;
 
+                // Remove regular entries if an identical 'No Credits' version exists and the setting is enabled
+                if (ShokoRelay.Settings.Advanced.AnimeThemesPreferNc)
+                {
+                    matchedThemes =
+                    [
+                        .. matchedThemes
+                            .GroupBy(e => new
+                            {
+                                e.SongTitle,
+                                e.ArtistName,
+                                e.Slug,
+                                e.Version,
+                                e.Source,
+                            })
+                            .SelectMany(g =>
+                            {
+                                var ncVersions = g.Where(x => x.NC).ToList();
+                                return ncVersions.Any() ? ncVersions : [.. g];
+                            }),
+                    ];
+                }
+
                 // Further group by the target Primary ID folder (VFS destination)
                 var targetFolders = group.GroupBy(s => OverrideHelper.GetPrimary(s!.ID, _metadataService));
 

@@ -338,6 +338,11 @@ public class AdvancedConfig
     [DefaultValue(true)]
     public bool AnimeThemesAppendTags { get; set; } = true;
 
+    /// <summary>Whether to include duplicate AnimeThemes entries when a version with no credits exists.</summary>
+    [Display(Name = "Prefer NC AnimeThemes Entries", Description = "Enable to remove regular OP/ED entries if the exact same 'No Credits' version exists")]
+    [DefaultValue(true)]
+    public bool AnimeThemesPreferNc { get; set; } = true;
+
     /// <summary>Minimum overlap level for AnimeThemes.</summary>
     [Display(Name = "AnimeThemes Overlap Level", Description = "The amount of overlap allowed for AnimeThemes .webm files to be added to the VFS")]
     [DefaultValue(OverlapLevel.All)]

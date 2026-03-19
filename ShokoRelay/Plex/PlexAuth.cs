@@ -282,11 +282,11 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
     {
         var req = new HttpRequestMessage(method, url);
         req.Headers.TryAddWithoutValidation("X-Plex-Client-Identifier", cid ?? _config.ClientIdentifier);
-        req.Headers.TryAddWithoutValidation("X-Plex-Product", ShokoRelayConstants.Name);
-        req.Headers.TryAddWithoutValidation("X-Plex-Version", ShokoRelayConstants.Version);
-        req.Headers.TryAddWithoutValidation("X-Plex-Platform", "Shoko Relay");
-        req.Headers.TryAddWithoutValidation("X-Plex-Device", "Shoko Relay");
-        req.Headers.TryAddWithoutValidation("X-Plex-Device-Name", ShokoRelayConstants.Name);
+        req.Headers.TryAddWithoutValidation("X-Plex-Device-Name", "Shoko Server"); // Title (Line 1)
+        req.Headers.TryAddWithoutValidation("X-Plex-Version", ShokoRelayConstants.Version); // Label (Line 2)
+        req.Headers.TryAddWithoutValidation("X-Plex-Product", ShokoRelayConstants.Name); // Label (Line 3)
+        req.Headers.TryAddWithoutValidation("X-Plex-Device", System.Runtime.InteropServices.RuntimeInformation.OSDescription); // Label (Line 4)
+        req.Headers.TryAddWithoutValidation("X-Plex-Platform", "Shoko Plugin"); // Not Shown
         req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         if (!string.IsNullOrEmpty(token))
             req.Headers.TryAddWithoutValidation("X-Plex-Token", token);

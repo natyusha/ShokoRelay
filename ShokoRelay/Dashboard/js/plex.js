@@ -3,7 +3,7 @@
  * @description Dedicated logic for the Plex Auth and Automations on the Shoko Relay dashboard.
  */
 (() => {
-  const { base, el, fetchJson, showToast, toastOperation, withButtonAction, unwrapConfig } = window._sr;
+  const { base, el, fetchJson, showToast, unwrapConfig, saveSettings } = window._sr;
 
   /**
    * Enable or disable all Plex-dependent automation controls on the dashboard.
@@ -30,16 +30,16 @@
   /** Resets the Plex section to show the 'Start Auth' button. */
   const setPlexStartAction = () => {
     setPlexAction('<button id="plex-start">Start Plex Auth</button>');
-    withButtonAction(el("plex-start"), startPlexAuth);
+    window._sr.withButtonAction("plex-start", startPlexAuth);
   };
 
   /** Updates the Plex section to show 'Unlink' and 'Refresh' buttons. */
   const setPlexUnlinkAction = () => {
     setPlexAction(
-      '<button id="plex-unlink" class="danger">Unlink Plex</button><button id="plex-refresh" class="w46-button" title="Refresh Plex Libraries"><svg class="icon-svg"><use href="img/icons.svg#refresh"></use></svg></button>',
+      '<button id="plex-unlink" class="danger">Unlink Plex</button>' +
+        '<button id="plex-refresh" class="w46-button" data-relay-endpoint="/plex/auth/refresh" data-relay-method="POST" data-relay-label="Plex Discovery"><svg class="icon-svg"><use href="img/icons.svg#refresh"></use></svg></button>',
     );
     el("plex-unlink").onclick = unlinkPlex;
-    withButtonAction(el("plex-refresh"), refreshPlexLibraries);
   };
 
   /** Stops the active Plex authentication polling timer. */
@@ -72,50 +72,12 @@
   }
 
   /**
-   * Rediscover Plex libraries and refresh the dashboard state.
-   * @returns {Promise<void>}
-   */
-  async function refreshPlexLibraries() {
-    try {
-      const rr = await fetchJson(base + "/plex/auth/refresh", { method: "POST" });
-      if (rr.ok) {
-        await refreshPlexState();
-        showToast("Plex Libraries Refreshed", "success");
-      } else showToast("Failed To Refresh Plex Libraries", "error");
-    } catch (e) {
-      showToast("Failed To Refresh Plex Libraries", "error");
-    }
-  }
-
-  /**
    * Updates the UI text indicating the number of discovered libraries.
    * @param {Array} [libs=[]] - Array of discovered Plex library objects.
    */
   const updateLibraryCount = (libs = []) => {
     if (el("plex-libraries-count")) el("plex-libraries-count").textContent = libs.length;
   };
-
-  /**
-   * Validate that Plex is linked and libraries are available.
-   * @returns {Promise<boolean>} True if Plex is ready for automation.
-   */
-  async function ensurePlexEnabled() {
-    const fail = (msg) => {
-      showToast(msg, "error");
-      setPlexAutomationControls(false);
-      return false;
-    };
-    try {
-      const res = await fetchJson(base + "/config");
-      const plex = unwrapConfig(res.data).PlexLibrary || {};
-      if (!plex.HasToken) return fail("Plex Token Missing - Link Plex First");
-      if (!plex.DiscoveredLibraries?.length) return fail("No Plex Libraries Found - Refresh Libraries");
-      setPlexAutomationControls(true);
-      return true;
-    } catch (e) {
-      return fail("Error checking Plex config");
-    }
-  }
 
   /**
    * Refresh the full Plex authentication and settings state from the server.
@@ -136,28 +98,8 @@
     // Enable or disable automation buttons based on whether we have a token
     setPlexAutomationControls(!!plex.HasToken);
 
-    /**
-     * Shared persistence function for plex.js that strips UI-only metadata.
-     * @param {Object} cfg - The config object to save.
-     */
-    const persistPlex = async (cfg) => {
-      const cleanCfg = JSON.parse(JSON.stringify(cfg));
-      // Remove properties that the backend doesn't expect in the POST body
-      delete cleanCfg.PlexLibrary;
-      delete cleanCfg.PlexAuth;
-
-      const save = await fetchJson(base + "/config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(cleanCfg),
-      });
-
-      if (save.ok) showToast("Plex Settings Saved", "success");
-      else showToast("Plex Settings Save Failed", "error");
-    };
-
     // Helper to bind inputs to the Automation nested object
-    const b = (id, path, type) => window._sr.bindConfig(id, path, settings, persistPlex, type);
+    const b = (id, path, type) => window._sr.bindConfig(id, path, settings, saveSettings, type);
 
     b("extra-plex-users", "Automation.ExtraPlexUsers", "text");
     b("plex-scan-vfs", "Automation.ScanOnVfsRefresh", "check");
@@ -167,16 +109,8 @@
     if (!plex.HasToken) return setPlexStartAction();
     setPlexUnlinkAction();
 
-    // Map discovered library data for the UI count
-    const mapLib = (l) => ({ id: l.Id, title: l.Title, type: l.Type, uuid: l.Uuid });
-    let libs = (plex.DiscoveredLibraries || []).map(mapLib);
-
-    // If no libraries are cached but servers exist, try one automatic background refresh
-    if (!libs.length && plex.DiscoveredServers?.length) {
-      const rr = await fetchJson(base + "/plex/auth/refresh", { method: "POST" });
-      if (rr.ok && rr.data?.libraries) libs = rr.data.libraries.map(mapLib);
-    }
-    updateLibraryCount(libs);
+    const libCount = el("plex-libraries-count");
+    if (libCount) libCount.textContent = (plex.DiscoveredLibraries || []).length;
   }
 
   /**
@@ -187,53 +121,6 @@
     await fetchJson(base + "/plex/auth/unlink", { method: "POST" });
     refreshPlexState();
   }
-  // #endregion
-
-  // #region Automation
-  /**
-   * Create a click handler for Plex automation buttons with toast feedback.
-   * @param {HTMLElement} btn - The button element.
-   * @param {string} label - Display label for toast messages.
-   * @param {string} startMsg - Toast message shown when the action begins.
-   * @param {string} endpoint - Server API endpoint to call.
-   * @param {Function} summarizeFn - Callback to format result stats.
-   */
-  function plexBuildAction(btn, label, startMsg, endpoint, summarizeFn) {
-    withButtonAction(btn, async () => {
-      const startToast = showToast(startMsg, "info", 0);
-      if (!(await ensurePlexEnabled())) return;
-
-      const res = await fetchJson(base + endpoint);
-      startToast?.remove();
-
-      if (res.ok && res.data?.status === "ok") {
-        const resultStats = res.data.data;
-
-        toastOperation(res, label, {
-          summary: summarizeFn(resultStats),
-          hideOnSucceed: 0,
-        });
-      } else {
-        toastOperation({ ok: false, data: res.data || res }, label, { hideOnSucceed: 0 });
-      }
-    });
-  }
-
-  plexBuildAction(
-    el(window._sr.tasks.plexCollectionsBuild),
-    "Collections",
-    "Generating Collections...",
-    "/plex/collections/build",
-    (d) => `processed ${d.Processed}, assigned ${d.Created}${d.Uploaded ? `, uploaded ${d.Uploaded}` : ""}, skipped ${d.Skipped}, errors ${d.Errors}`,
-  );
-
-  plexBuildAction(
-    el(window._sr.tasks.plexRatingsApply),
-    "Critic Ratings",
-    "Applying Critic Ratings...",
-    "/plex/ratings/apply",
-    (d) => `shows ${d.ProcessedShows}/${d.UpdatedShows}, episodes ${d.ProcessedEpisodes}/${d.UpdatedEpisodes}`,
-  );
   // #endregion
 
   // Initialize

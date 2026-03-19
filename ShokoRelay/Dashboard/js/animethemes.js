@@ -3,7 +3,89 @@
  * @description Dedicated logic for AnimeThemes VFS and Theme.mp3 generation on the Shoko Relay dashboard.
  */
 (() => {
-  const { base, el, TOAST_MS, fetchJson, showToast, toastOperation, summarizeResult, withButtonAction, initToggle, setIfNotEmpty, updatePlaybackTooltip } = window._sr;
+  const { base, el, TOAST_MS, fetchJson, showToast, toastOperation, summarizeResult, initToggle, updatePlaybackTooltip } = window._sr;
+
+  // #region Dispatcher Param Providers
+
+  /**
+   * Collects MP3 generation parameters for the Action Dispatcher.
+   * @returns {URLSearchParams} The compiled parameters.
+   */
+  window._sr.getAtParams = () => {
+    const ps = new URLSearchParams();
+    ["path", "slug", "offset"].forEach((k) => {
+      const val = el(`at-${k}`)?.value;
+      if (val != null && String(val) !== "") ps.set(k, String(val));
+    });
+    if (el("at-mp3-force")?.getAttribute("aria-pressed") === "true") ps.set("force", "true");
+    if (el("at-mp3-batch")?.getAttribute("aria-pressed") === "true") ps.set("batch", "true");
+    return ps;
+  };
+
+  /**
+   * Collects VFS mapping parameters for the Action Dispatcher.
+   * @returns {URLSearchParams} The compiled parameters.
+   */
+  window._sr.getAtMapParams = () => {
+    const ps = new URLSearchParams();
+    const filter = el("at-filter-map")?.value;
+    if (filter) ps.set("filter", filter);
+    return ps;
+  };
+
+  // #endregion
+
+  // #region Actions Registry
+  Object.assign(window._sr.actions, {
+    /** Action for generating series Theme.mp3 files and triggering playback. */
+    atMp3Build: async () => {
+      const ps = window._sr.getAtParams();
+      const isBatch = ps.get("batch") === "true";
+      const label = "AnimeThemes MP3";
+
+      showToast(`${label}: Generating...`, "info", TOAST_MS);
+      const res = await fetchJson(`${base}/animethemes/mp3?${ps}`);
+
+      const d = res.data || {};
+      const status = d.status || d.Status;
+      const message = d.message || d.Message;
+      const folder = d.folder || d.Folder || ps.get("path");
+
+      let summary = window._sr.summarizeResult(res).text;
+      let isNoTheme = false;
+
+      // Logic for user-friendly summary and warning detection
+      if (status === "skipped") {
+        if (message === "Theme.mp3 already exists.") {
+          summary = `Skipped: "${folder}" already contains a Theme.mp3`;
+        } else if (message === "Entry not found." || (message && message.includes("No entry for slug"))) {
+          summary = `Skipped: No theme found for this series`;
+          isNoTheme = true;
+        } else {
+          summary = message || "Skipped";
+        }
+      } else if (status === "error") {
+        summary = message || "Unknown error";
+      }
+
+      if (res.ok || status === "skipped") {
+        toastOperation(res, label, {
+          summary: summary || status || "Complete",
+          hideOnSucceed: isBatch ? 0 : TOAST_MS,
+          type: isNoTheme ? "warning" : undefined,
+        });
+
+        // side effect: Play the theme if it was just created or already existed
+        if (!isBatch && (status === "ok" || (status === "skipped" && message === "Theme.mp3 already exists."))) {
+          const playPath = d.folder || d.Folder || ps.get("path");
+          if (playPath) playThemeMp3(playPath);
+        }
+      } else {
+        toastOperation(res, label, { summary, hideOnSucceed: 0 });
+      }
+    },
+  });
+  // #endregion
 
   // #region Helpers
   /**
@@ -13,56 +95,6 @@
    * @returns {string} The next mode in the sequence.
    */
   const getNextMode = (current, modes) => modes[(modes.indexOf(current) + 1) % modes.length];
-
-  /**
-   * Build URLSearchParams for AnimeThemes MP3 requests from dashboard inputs.
-   * @returns {URLSearchParams} The compiled search parameters.
-   */
-  const buildAtParams = () => {
-    const ps = new URLSearchParams();
-    ["path", "slug", "offset", "filter"].forEach((k) => setIfNotEmpty(ps, k, el(`at-${k}`)?.value));
-    if (el("at-mp3-force")?.getAttribute("aria-pressed") === "true") ps.set("force", "true");
-    if (el("at-mp3-batch")?.getAttribute("aria-pressed") === "true") ps.set("batch", "true");
-    return ps;
-  };
-
-  /**
-   * Build URLSearchParams for AnimeThemes VFS mapping requests.
-   * @returns {URLSearchParams} The compiled search parameters.
-   */
-  const buildAtMapParams = () => {
-    const ps = new URLSearchParams();
-    setIfNotEmpty(ps, "filter", el("at-filter-map")?.value);
-    return ps;
-  };
-  // #endregion
-
-  // #region VFS Mapping
-  withButtonAction(el("at-map-import"), async () => {
-    showToast("AnimeThemes: Importing Mapping...", "info", TOAST_MS);
-    const res = await fetchJson(base + "/animethemes/vfs/import", { method: "POST" });
-    toastOperation(res, "AnimeThemes Import", { summary: res.ok ? `mapping imported (${res.data?.count ?? 0} entries)` : undefined });
-  });
-
-  /**
-   * Create a click handler for AnimeThemes map/build buttons with toast feedback.
-   * @param {HTMLElement} btn - The button element.
-   * @param {string} label - Display label for toast messages.
-   * @param {string} endpoint - Server API endpoint to call.
-   */
-  function atBuildAction(btn, label, endpoint) {
-    withButtonAction(btn, async () => {
-      const startToast = showToast(`AnimeThemes: ${label}...`, "info", 0);
-      const p = buildAtMapParams();
-      const res = await fetchJson(`${base}${endpoint}${p.toString() ? "?" + p : ""}`);
-      startToast?.remove();
-      // Persistent toast if no filter is applied (unfiltered generation)
-      const hideOnSucceed = p.get("filter") ? TOAST_MS : 0;
-      toastOperation(res, `AnimeThemes ${label}`, { summary: summarizeResult(res).text || "complete", hideOnSucceed });
-    });
-  }
-  atBuildAction(el("at-map-build"), "Mapping", "/animethemes/vfs/map");
-  atBuildAction(el("at-vfs-build"), "Generation", "/animethemes/vfs/build");
   // #endregion
 
   // #region MP3 - State and UI
@@ -159,60 +191,6 @@
     atCurrentFolder = folderPath;
     showNowPlaying(folderPath);
   }
-  // #endregion
-
-  // #region MP3 - Generation
-  withButtonAction(el("at-mp3-build"), async () => {
-    const startToast = showToast("AnimeThemes MP3: Generating...", "info", 0);
-    const ps = buildAtParams();
-    const isBatch = ps.get("batch") === "true";
-    const res = await fetchJson(`${base}/animethemes/mp3?${ps}`);
-    startToast?.remove();
-
-    const d = res.data || {};
-    const status = d.status || d.Status;
-    const message = d.message || d.Message;
-    const folder = d.folder || d.Folder || ps.get("path");
-    const hideOnSucceed = isBatch ? 0 : TOAST_MS;
-
-    // Custom summary mapping for friendly UI messages
-    let summary = summarizeResult(res).text;
-    let isNoTheme = false;
-
-    if (status === "skipped") {
-      if (message === "Theme.mp3 already exists.") {
-        summary = `Skipped: "${folder}" already contains a Theme.mp3`;
-      } else if (message === "Entry not found." || (message && message.includes("No entry for slug"))) {
-        summary = `Skipped: No theme found for this series`;
-        isNoTheme = true;
-      } else {
-        summary = message || "Skipped";
-      }
-    } else if (status === "error") {
-      if (message === "No video files found.") {
-        summary = `A Shoko matched video was not found in "${folder}"`;
-      } else if (message === "Folder not found.") {
-        summary = `Folder not found: "${folder}"`;
-      } else {
-        summary = message || "Unknown error";
-      }
-    }
-
-    if (res.ok || status === "skipped") {
-      toastOperation(res, "AnimeThemes MP3", {
-        summary: summary || status || "Complete",
-        hideOnSucceed,
-        type: isNoTheme ? "warning" : undefined,
-      });
-
-      if (!isBatch && (status === "ok" || status === "skipped")) {
-        const playPath = d.folder || d.Folder || ps.get("path");
-        if (playPath) playThemeMp3(playPath);
-      }
-    } else {
-      toastOperation(res, "AnimeThemes MP3", { summary, hideOnSucceed: 0 });
-    }
-  });
   // #endregion
 
   // #region MP3 - Configuration

@@ -3,50 +3,30 @@
  * @description Dedicated logic for Shoko VFS and Automation tasks on the Shoko Relay dashboard.
  */
 (() => {
-  const { base, el, TOAST_MS, fetchJson, showToast, toastOperation, summarizeResult, withButtonAction, initToggle, setIfNotEmpty, openModal, setButtonLoading, syncActiveTasks } = window._sr;
+  const { base, el, fetchJson, showToast, toastOperation, initToggle, openModal, setButtonLoading } = window._sr;
 
-  // #region Helpers
-  /**
-   * Helper to set a boolean query parameter as a "true"/"false" string.
-   * @param {URLSearchParams} ps - The search parameters object.
-   * @param {string} k - The parameter key.
-   * @param {boolean} v - The boolean value to convert.
-   */
-  const setBoolParam = (ps, k, v) => ps.set(k, v ? "true" : "false");
+  // #region Param Providers
 
   /**
-   * Build URLSearchParams for VFS generation requests from the dashboard filter and toggle state.
-   * @returns {URLSearchParams} The compiled search parameters.
+   * Collects VFS build parameters for the Action Dispatcher.
+   * @returns {URLSearchParams} The compiled parameters.
    */
-  const buildVfsParams = () => {
+  window._sr.getVfsParams = () => {
     const ps = new URLSearchParams();
-    setIfNotEmpty(ps, "filter", el("vfs-filter")?.value);
-    setBoolParam(ps, "clean", el("vfs-clean")?.getAttribute("aria-pressed") === "true");
-    setBoolParam(ps, "run", true);
+    const filter = el("vfs-filter")?.value;
+    const clean = el("vfs-clean")?.getAttribute("aria-pressed") === "true";
+    if (filter) ps.set("filter", filter);
+    ps.set("clean", clean);
+    ps.set("run", "true");
     return ps;
   };
+
   // #endregion
 
   // #region Shoko: VFS
 
-  // Initialize the VFS Clean toggle (broom icon) and bind the Generate button action.
+  // Initialize the VFS Clean toggle (broom icon).
   initToggle("vfs-clean", true);
-  withButtonAction(window._sr.tasks.vfsBuild, async () => {
-    const clean = el("vfs-clean")?.getAttribute("aria-pressed") === "true";
-    const filter = el("vfs-filter")?.value.trim();
-
-    const startToast = showToast(`VFS: Generating... [clean=${clean}]`, "info", 0);
-    const res = await fetchJson(`${base}/vfs?${buildVfsParams()}`);
-    startToast?.remove();
-
-    // Persist toast if no filter is applied (full generation)
-    const hideOnSucceed = filter ? TOAST_MS : 0;
-
-    // Use custom summary to handle the PascalCase properties from VfsBuildResult
-    const summary = res.ok ? `processed ${res.data.data.SeriesProcessed}, created ${res.data.data.CreatedLinks}` : undefined;
-
-    toastOperation(res, `VFS [clean=${clean}]`, { summary, hideOnSucceed });
-  });
 
   // Wire up the VFS Overrides Editor modal.
   const overridesBtn = el("vfs-overrides");
@@ -78,7 +58,7 @@
         });
 
         if (res.ok) {
-          showToast("VFS Overrides Saved", "success", TOAST_MS);
+          showToast("VFS Overrides Saved", "success");
           close();
         } else {
           toastOperation(res, "VFS Overrides");
@@ -89,55 +69,6 @@
   // #endregion
 
   // #region Shoko: Automation
-
-  // Remove records for files no longer present on disk.
-  const removeBtn = el(window._sr.tasks.shokoRemoveMissing);
-  if (removeBtn) {
-    removeBtn.onclick = () => {
-      const modal = el("confirm-modal");
-      const msg = el("confirm-message");
-      const execBtn = el("confirm-exec");
-      const cancelBtn = el("confirm-cancel");
-
-      msg.innerHTML = "Are you sure you want to remove all records for missing files?<br><br><small>This will permanently remove them from Shoko's database and your AniDB MyList.</small>";
-      execBtn.textContent = "Remove Files";
-
-      const close = openModal(modal);
-
-      execBtn.onclick = async () => {
-        close();
-
-        // Manually trigger the loading state on the dashboard button only after confirmation
-        setButtonLoading(removeBtn, true);
-        removeBtn.classList.add("clicking");
-
-        try {
-          showToast("Remove Missing: Processing...", "info", TOAST_MS);
-          const res = await fetchJson(base + "/shoko/remove-missing?dryRun=false", { method: "POST" });
-
-          // Persistent toast for completion
-          toastOperation(res, "Remove Missing", { hideOnSucceed: 0 });
-
-          // Explicitly clear the task on the server to prevent the background poller from showing a second toast
-          await fetch(base + "/tasks/clear/" + window._sr.tasks.shokoRemoveMissing, { method: "POST" });
-        } finally {
-          removeBtn.classList.remove("clicking");
-          setButtonLoading(removeBtn, false);
-          syncActiveTasks();
-        }
-      };
-
-      cancelBtn.onclick = close;
-    };
-  }
-
-  // Trigger a Shoko import detection scan on managed folders.
-  withButtonAction("shoko-import-run", async () => {
-    showToast("Shoko Import: Scanning...", "info", TOAST_MS);
-    const res = await fetchJson(base + "/shoko/import", { method: "POST" });
-    // summarizeResult handles the envelope internally
-    toastOperation(res, "Shoko Import");
-  });
 
   // Managed User and Admin Watched-State Synchronization Modal.
   if (el("shoko-sync-watched")) {
@@ -167,6 +98,7 @@
       };
 
       startBtn.onclick = async () => {
+        const { setButtonLoading, summarizeResult } = window._sr;
         setButtonLoading(startBtn, true);
         const startToast = showToast(`Sync: Plex ${dirImport ? "←" : "→"} Shoko...`, "info", 0);
 
@@ -186,10 +118,10 @@
           // Drill into nested PascalCase properties for the sync result
           const d = res.data.data;
           const summaryText = `${summarizeResult(res).text || `processed ${d.Processed ?? 0}`}${d.VotesFound ? `, votes: ${d.VotesFound}` : ""}`;
-          toastOperation(res, "Sync", { summary: summaryText });
+          toastOperation(res, "Sync", { summary: summaryText, hideOnSucceed: 0 });
           close();
         } else {
-          toastOperation(res, "Sync");
+          toastOperation(res, "Sync", { hideOnSucceed: 0 });
         }
       };
       el("sync-cancel-button").onclick = close;

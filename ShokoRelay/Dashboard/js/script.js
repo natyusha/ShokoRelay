@@ -6,9 +6,6 @@
   const base = location.pathname.split("/dashboard")[0];
   const el = (id) => document.getElementById(id);
 
-  // Initialize/Merge global namespace immediately
-  window._sr = Object.assign(window._sr || {}, { base, el });
-
   /** Default auto-dismiss duration (ms) for transient toasts. Use 0 for persistent toasts. */
   const TOAST_MS = 5000;
 
@@ -22,162 +19,7 @@
     playing: "Next",
   };
 
-  /** List of values that correspond to server task names for spinner synchronization. Fallback to empty if tasks missing. */
-  const MANAGED_TASK_IDS = Object.values(window._sr.tasks || {});
-
   // #region Helpers
-
-  /**
-   * Extracts the inner data object from a standardized server response envelope.
-   * @param {Object} res - The normalized fetch response.
-   * @returns {*} The actual result data.
-   */
-  const getData = (res) => (res?.data?.data !== undefined && res?.data?.data !== null ? res.data.data : res?.data);
-
-  /**
-   * Helper to append a key-value pair to a URLSearchParams object if the value is non-empty.
-   * @param {URLSearchParams} ps - The search parameters object to modify.
-   * @param {string} k - The parameter key.
-   * @param {*} v - The value to check and potentially append.
-   */
-  const setIfNotEmpty = (ps, k, v) => {
-    if (v != null && String(v) !== "") ps.set(k, String(v));
-  };
-
-  /**
-   * Polls the server for active tasks and completed results, synchronizing the UI state.
-   */
-  async function syncActiveTasks() {
-    /** Check Active Tasks for spinners */
-    const res = await fetchJson(window._sr.base + "/tasks/active");
-    if (!res.ok) return;
-    const activeTasks = res.data || [];
-    MANAGED_TASK_IDS.forEach((id) => {
-      const btn = el(id);
-      if (!btn) return;
-      const isActive = activeTasks.includes(id);
-      // Only set idle if not currently in the middle of a click event
-      if (!isActive && !btn.classList.contains("clicking")) setButtonLoading(btn, false);
-      else if (isActive) setButtonLoading(btn, true);
-    });
-
-    /** Check Completed Tasks for toasts */
-    const completeRes = await fetchJson(window._sr.base + "/tasks/completed");
-    if (completeRes.ok && completeRes.data) {
-      for (const [taskName, result] of Object.entries(completeRes.data)) {
-        const btn = el(taskName);
-        // If the button for this task is currently active, the button handler will manage the toast/clearing.
-        if (btn && btn.classList.contains("clicking")) continue;
-
-        const label = taskName.replace(/-/g, " ");
-        toastOperation({ ok: result.status === "ok", data: result }, label);
-        await fetch(window._sr.base + `/tasks/clear/${taskName}`, { method: "POST" });
-      }
-    }
-  }
-
-  /**
-   * Wrap a button's click handler to manage loading states and task synchronization.
-   * @param {HTMLElement|string} btn - The button element or its DOM id.
-   * @param {Function} handler - Async click handler.
-   */
-  function withButtonAction(btn, handler) {
-    const elBtn = typeof btn === "string" ? el(btn) : btn;
-    if (!elBtn) return;
-    elBtn.onclick = async (...args) => {
-      elBtn.classList.add("clicking");
-      setButtonLoading(elBtn, true);
-      try {
-        await handler.apply(elBtn, args);
-        // Explicitly clear the task immediately if it's a managed ID to prevent the poller from double-toasting
-        const taskId = elBtn.id;
-        if (MANAGED_TASK_IDS.includes(taskId)) {
-          await fetch(window._sr.base + `/tasks/clear/${taskId}`, { method: "POST" });
-        }
-      } finally {
-        elBtn.classList.remove("clicking");
-
-        if (!MANAGED_TASK_IDS.includes(elBtn.id)) {
-          setTimeout(() => setButtonLoading(elBtn, false), TOAST_MS); // Instant tasks: Keep the spinner active for TOAST_MS to prevent accidental multi runs
-        } else {
-          syncActiveTasks();
-        }
-      }
-    };
-  }
-
-  /**
-   * Wraps a log URL in an anchor tag if provided.
-   * @param {string} url - The log URL to wrap.
-   * @returns {string} An HTML anchor link or empty string.
-   */
-  const makeLogLink = (url) => (url ? `[<a href="${url}" target="_blank" class="log-link">view log</a>]` : "");
-
-  /**
-   * Show success/error toasts for HTTP responses with log-link injection and summary.
-   * @param {{ok: boolean, data: *}} res - The fetchJson response object.
-   * @param {string} label - Identifies the operation.
-   * @param {{summary?: string, hideOnSucceed?: number, type?: string}} [opts] - Display options.
-   */
-  function toastOperation(res, label, opts = {}) {
-    const { summary, hideOnSucceed, type } = opts;
-    const { text, errorCount } = summarizeResult(res);
-    const logLink = makeLogLink(res.data?.logUrl);
-
-    if (res.ok) {
-      const display = summary || text || `${label} Complete`;
-      const toastType = type || (errorCount > 0 ? "error" : "success");
-      showToast(`${label}: ${display} ${logLink}`, toastType, errorCount > 0 ? 0 : (hideOnSucceed ?? TOAST_MS));
-    } else {
-      // Prioritize the processed 'text' from summarizeResult to avoid raw JSON blobs
-      const display = summary || text || res.data?.message || (typeof res.data === "string" ? res.data : JSON.stringify(res.data));
-      showToast(`${label} Failed: ${display} ${logLink}`, "error", 0);
-    }
-  }
-
-  /**
-   * Build a human-readable summary string and error count from common API response fields.
-   * @param {Object} res - The response object.
-   * @returns {{text: string, errorCount: number}} Summarized details.
-   */
-  function summarizeResult(res) {
-    const d = getData(res);
-    if (!d) return { text: "", errorCount: 0 };
-
-    // Handle ASP.NET Validation Problem Details (RFC 7807)
-    if (d.errors && typeof d.errors === "object" && !Array.isArray(d.errors)) {
-      const messages = Object.values(d.errors).flat();
-      if (messages.length > 0) return { text: messages.join(", "), errorCount: messages.length };
-    }
-
-    // Fallback for generic error objects with a title but no specific error array
-    if (res.ok === false && d.title && !d.message) {
-      return { text: d.title, errorCount: 1 };
-    }
-
-    const parts = [];
-    let errorCount = 0;
-    const keys = {
-      processed: ["SeriesProcessed", "Processed", "ScannedCount", "ProcessedShows"],
-      created: ["LinksCreated", "Created", "UpdatedShows"],
-      marked: ["Marked", "MarkedWatched", "UpdatedEpisodes"],
-      skipped: ["Skipped", "SkippedCount"],
-      errors: ["Errors", "ErrorsList", "Message"],
-      uploaded: ["Uploaded"],
-    };
-
-    Object.entries(keys).forEach(([label, aliases]) => {
-      const match = aliases.find((k) => d[k] !== undefined && d[k] !== null);
-      if (match === undefined) return;
-      const v = d[match];
-      const n = label === "errors" ? (Array.isArray(v) ? v.length : Number(v) || 0) : v;
-      if (label === "errors") errorCount = n;
-      if (label !== "errors" || n > 0) parts.push(`${label}: ${n}`);
-    });
-
-    const text = parts.length ? parts.join(", ") : typeof d === "string" ? (d.length > 200 ? d.substring(0, 200) + "..." : d) : "";
-    return { text, errorCount };
-  }
 
   /**
    * Fetch a URL and parse the response as JSON, returning a normalized result object.
@@ -201,125 +43,50 @@
   };
 
   /**
-   * Initialize a button as an aria-pressed toggle with a click handler.
-   * @param {HTMLElement|string} btn - The button element or its DOM id.
-   * @param {boolean} [defaultState=false] - Initial pressed state.
-   * @returns {HTMLElement|null} The resolved button element.
+   * Extracts the inner data object from a standardized server response envelope.
+   * @param {Object} res - The normalized fetch response.
+   * @returns {*} The actual result data.
    */
-  function initToggle(btn, defaultState = false) {
-    const elBtn = typeof btn === "string" ? el(btn) : btn;
-    if (!elBtn) return null;
-    if (!elBtn.hasAttribute("aria-pressed")) elBtn.setAttribute("aria-pressed", String(!!defaultState));
-    elBtn.onclick = () => elBtn.setAttribute("aria-pressed", elBtn.getAttribute("aria-pressed") === "true" ? "false" : "true");
-    return elBtn;
-  }
+  const getData = (res) => (res?.data?.data !== undefined && res?.data?.data !== null ? res.data.data : res?.data);
 
   /**
-   * Toggle a button's loading state by adding/removing a spinner overlay.
-   * @param {HTMLElement} btn - The button element to modify.
-   * @param {boolean} isLoading - Whether to enable or disable the loading state.
+   * Build a human-readable summary string and error count from common API response fields.
+   * @param {Object} res - The response object.
+   * @returns {{text: string, errorCount: number}} Summarized details.
    */
-  function setButtonLoading(btn, isLoading) {
-    if (!btn) return;
-    btn.classList.toggle("loading", isLoading);
-    isLoading ? btn.setAttribute("disabled", "") : btn.removeAttribute("disabled");
-    if (isLoading && !btn.querySelector(".button-spinner")) {
-      const s = document.createElement("span");
-      s.className = "button-spinner";
-      s.innerHTML = '<svg class="icon-svg"><use href="img/icons.svg#loading"></use></svg>';
-      btn.appendChild(s);
-    } else if (!isLoading) btn.querySelector(".button-spinner")?.remove();
-  }
+  const summarizeResult = (res) => {
+    const d = getData(res);
+    if (!d) return { text: "", errorCount: 0 };
 
-  /**
-   * Resolves a value from an object using a dot-separated key path.
-   * @param {Object} obj - The source object.
-   * @param {string} path - Dot-separated key path.
-   * @returns {*} The resolved value.
-   */
-  const getValueByPath = (obj, path) => path.split(".").reduce((o, k) => o?.[k], obj);
+    if (d.errors && typeof d.errors === "object" && !Array.isArray(d.errors)) {
+      const messages = Object.values(d.errors).flat();
+      if (messages.length > 0) return { text: messages.join(", "), errorCount: messages.length };
+    }
 
-  /**
-   * Sets a value in an object at the specified dot-separated path.
-   * @param {Object} obj - The target object.
-   * @param {string} path - Dot-separated key path.
-   * @param {*} value - The value to set.
-   */
-  function setValueByPath(obj, path, value) {
-    const parts = path.split("."),
-      last = parts.pop();
-    const target = parts.reduce((o, k) => ((o[k] ??= {}), o[k]), obj);
-    target[last] = value;
-  }
+    if (res.ok === false && d.title && !d.message) return { text: d.title, errorCount: 1 };
 
-  /**
-   * Unwrap a config response that may contain a payload wrapper.
-   * @param {Object} data - The raw config response.
-   * @returns {Object} The inner config object.
-   */
-  const unwrapConfig = (data) => (data?.payload !== undefined ? data.payload || {} : data || {});
-
-  /**
-   * Binds a UI element to a config path with automatic persistence.
-   * @param {HTMLElement|string} target - The DOM element or ID.
-   * @param {string} path - Config path.
-   * @param {Object} config - Config object.
-   * @param {Function} persistFn - Save callback.
-   * @param {"text"|"number"|"check"} [type="text"] - Input type.
-   */
-  const bindConfig = (target, path, config, persistFn, type = "text") => {
-    const e = typeof target === "string" ? el(target) : target;
-    if (!e) return;
-
-    const val = getValueByPath(config, path);
-    if (type === "check") e.checked = !!val;
-    else e.value = val ?? "";
-
-    e.onchange = async () => {
-      let newVal = type === "check" ? e.checked : type === "number" ? Number(e.value) || 0 : e.value;
-      setValueByPath(config, path, newVal);
-      await persistFn(config);
-    };
-  };
-
-  /**
-   * Opens a modal and attaches automated close handlers.
-   * @param {HTMLElement} modal - The modal element.
-   * @returns {Function} Close function.
-   */
-  function openModal(modal) {
-    if (!modal) return () => {};
-    modal.setAttribute("aria-hidden", "false");
-    modal.classList.add("open");
-    document.body.style.overflow = "hidden";
-
-    const close = () => {
-      modal.setAttribute("aria-hidden", "true");
-      modal.classList.remove("open");
-      document.body.style.overflow = "";
-      modal.removeEventListener("click", onOverlay);
-      document.removeEventListener("keydown", onKey);
+    const parts = [];
+    let errorCount = 0;
+    const keys = {
+      processed: ["SeriesProcessed", "Processed", "ScannedCount", "ProcessedShows"],
+      created: ["LinksCreated", "Created", "UpdatedShows"],
+      marked: ["Marked", "MarkedWatched", "UpdatedEpisodes"],
+      skipped: ["Skipped", "SkippedCount"],
+      errors: ["Errors", "ErrorsList", "Message"],
+      uploaded: ["Uploaded"],
     };
 
-    const onOverlay = (ev) => ev.target === modal && close();
-    const onKey = (ev) => ev.key === "Escape" && close();
-    modal.addEventListener("click", onOverlay);
-    document.addEventListener("keydown", onKey);
+    Object.entries(keys).forEach(([label, aliases]) => {
+      const match = aliases.find((k) => d[k] !== undefined && d[k] !== null);
+      if (match === undefined) return;
+      const v = d[match];
+      const n = label === "errors" ? (Array.isArray(v) ? v.length : Number(v) || 0) : v;
+      if (label === "errors") errorCount = n;
+      if (label !== "errors" || n > 0) parts.push(`${label}: ${n}`);
+    });
 
-    const firstInput = modal.querySelector("button, textarea, input:not([type='hidden'])");
-    setTimeout(() => firstInput?.focus(), 10);
-
-    return close;
-  }
-
-  /**
-   * Updates element title from data-mode or data-state for tooltips.
-   * @param {HTMLElement} el - The target element.
-   */
-  const updatePlaybackTooltip = (el) => {
-    if (!el) return;
-    const key = el.getAttribute("data-mode") || el.getAttribute("data-state");
-    if (PLAYBACK_LABELS[key]) el.title = PLAYBACK_LABELS[key];
+    const text = parts.length ? parts.join(", ") : typeof d === "string" ? (d.length > 200 ? d.substring(0, 200) + "..." : d) : "";
+    return { text, errorCount };
   };
 
   /**
@@ -350,26 +117,282 @@
     return t;
   }
 
-  // Populate shared global object
-  Object.assign(window._sr, {
+  /**
+   * Show success/error toasts for HTTP responses with log-link injection and summary.
+   * @param {{ok: boolean, data: *}} res - The fetchJson response object.
+   * @param {string} label - Identifies the operation.
+   * @param {{summary?: string, hideOnSucceed?: number, type?: string}} [opts] - Display options.
+   */
+  function toastOperation(res, label, opts = {}) {
+    const { summary, hideOnSucceed, type } = opts;
+    const { text, errorCount } = summarizeResult(res);
+    const logLink = res.data?.logUrl ? `[<a href="${res.data.logUrl}" target="_blank" class="log-link">view log</a>]` : "";
+
+    if (res.ok) {
+      const display = summary || text || "Complete";
+      const toastType = type || (errorCount > 0 ? "error" : "success");
+      showToast(`${label}: ${display} ${logLink}`, toastType, errorCount > 0 ? 0 : (hideOnSucceed ?? TOAST_MS));
+    } else {
+      const display = summary || text || res.data?.message || (typeof res.data === "string" ? res.data : JSON.stringify(res.data));
+      showToast(`${label} Failed: ${display} ${logLink}`, "error", 0);
+    }
+  }
+
+  /**
+   * Toggle a button's loading state by adding/removing a spinner overlay.
+   * @param {HTMLElement} btn - The button element to modify.
+   * @param {boolean} isLoading - Whether to enable or disable the loading state.
+   */
+  function setButtonLoading(btn, isLoading) {
+    if (!btn) return;
+    btn.classList.toggle("loading", isLoading);
+    isLoading ? btn.setAttribute("disabled", "") : btn.removeAttribute("disabled");
+    if (isLoading && !btn.querySelector(".button-spinner")) {
+      const s = document.createElement("span");
+      s.className = "button-spinner";
+      s.innerHTML = '<svg class="icon-svg"><use href="img/icons.svg#loading"></use></svg>';
+      btn.appendChild(s);
+    } else if (!isLoading) btn.querySelector(".button-spinner")?.remove();
+  }
+
+  /**
+   * Polls the server for active tasks and completed results, synchronizing the UI state.
+   */
+  async function syncActiveTasks() {
+    const MANAGED_TASK_IDS = Object.values(window._sr.tasks || {});
+    const res = await fetchJson(window._sr.base + "/tasks/active");
+    if (!res.ok) return;
+    const activeTasks = res.data || [];
+    MANAGED_TASK_IDS.forEach((id) => {
+      const btn = el(id);
+      if (!btn) return;
+      const isActive = activeTasks.includes(id);
+      if (!isActive && !btn.classList.contains("clicking")) setButtonLoading(btn, false);
+      else if (isActive) setButtonLoading(btn, true);
+    });
+
+    const completeRes = await fetchJson(window._sr.base + "/tasks/completed");
+    if (completeRes.ok && completeRes.data) {
+      for (const [taskName, result] of Object.entries(completeRes.data)) {
+        const btn = el(taskName);
+        if (btn?.classList.contains("clicking")) continue;
+        const label = taskName.replace(/-/g, " ");
+        // Managed tasks completed in the background should always produce a persistent toast
+        toastOperation({ ok: result.status === "ok", data: result }, label, { hideOnSucceed: 0 });
+        await fetch(window._sr.base + `/tasks/clear/${taskName}`, { method: "POST" });
+      }
+    }
+  }
+
+  /**
+   * Core logic to wrap an async action with loading states and task management.
+   * @param {HTMLElement} btn - The button element trigger.
+   * @param {Function} handler - The async function to execute.
+   * @returns {Promise<void>}
+   */
+  async function runAction(btn, handler) {
+    if (!btn || btn.classList.contains("clicking")) return;
+    const MANAGED_TASK_IDS = Object.values(window._sr.tasks || {});
+    btn.classList.add("clicking");
+    setButtonLoading(btn, true);
+    const taskId = btn.id;
+    try {
+      await handler(btn);
+      if (taskId && MANAGED_TASK_IDS.includes(taskId)) {
+        await fetch(window._sr.base + `/tasks/clear/${taskId}`, { method: "POST" });
+      }
+    } finally {
+      btn.classList.remove("clicking");
+      if (taskId && !MANAGED_TASK_IDS.includes(taskId)) {
+        // Lock out instant tasks for TOAST_MS to prevent spamming
+        setTimeout(() => setButtonLoading(btn, false), TOAST_MS);
+      } else {
+        syncActiveTasks();
+      }
+    }
+  }
+
+  /**
+   * Initialize a button as an aria-pressed toggle with a click handler.
+   * @param {HTMLElement|string} btn - The button element or its DOM id.
+   * @param {boolean} [defaultState=false] - Initial pressed state.
+   * @returns {HTMLElement|null} The resolved button element.
+   */
+  function initToggle(btn, defaultState = false) {
+    const elBtn = typeof btn === "string" ? el(btn) : btn;
+    if (!elBtn) return null;
+    if (!elBtn.hasAttribute("aria-pressed")) elBtn.setAttribute("aria-pressed", String(!!defaultState));
+    elBtn.onclick = () => elBtn.setAttribute("aria-pressed", elBtn.getAttribute("aria-pressed") === "true" ? "false" : "true");
+    return elBtn;
+  }
+
+  /**
+   * Opens a modal and attaches automated close handlers.
+   * @param {HTMLElement} modal - The modal element.
+   * @returns {Function} Close function.
+   */
+  function openModal(modal) {
+    if (!modal) return () => {};
+    modal.setAttribute("aria-hidden", "false");
+    modal.classList.add("open");
+    document.body.style.overflow = "hidden";
+    const close = () => {
+      modal.setAttribute("aria-hidden", "true");
+      modal.classList.remove("open");
+      document.body.style.overflow = "";
+      modal.removeEventListener("click", onOverlay);
+      document.removeEventListener("keydown", onKey);
+    };
+    const onOverlay = (ev) => ev.target === modal && close();
+    const onKey = (ev) => ev.key === "Escape" && close();
+    modal.addEventListener("click", onOverlay);
+    document.addEventListener("keydown", onKey);
+    const firstInput = modal.querySelector("button, textarea, input:not([type='hidden'])");
+    setTimeout(() => firstInput?.focus(), 10);
+    return close;
+  }
+
+  /**
+   * Updates element title from data-mode or data-state for tooltips.
+   * @param {HTMLElement} el - The target element.
+   */
+  const updatePlaybackTooltip = (el) => {
+    if (!el) return;
+    const key = el.getAttribute("data-mode") || el.getAttribute("data-state");
+    const label = PLAYBACK_LABELS[key];
+    if (label) {
+      if (el.dataset.tooltipText !== undefined) el.dataset.tooltipText = label;
+      else el.title = label;
+    }
+  };
+
+  /**
+   * Persists the plugin configuration to the server.
+   * @param {Object} config - The configuration object to save.
+   * @returns {Promise<Object>} The server response.
+   */
+  async function saveSettings(config) {
+    const cleanCfg = JSON.parse(JSON.stringify(config));
+    // Remove UI-only metadata that the backend does not expect
+    delete cleanCfg.PlexLibrary;
+    delete cleanCfg.PlexAuth;
+    const res = await fetchJson(base + "/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(cleanCfg),
+    });
+    // Only show a toast if the save fails.
+    if (!res.ok) toastOperation(res, "Settings Save");
+    return res;
+  }
+
+  // Populate shared global object IMMEDIATELY so feature scripts can destructure it
+  window._sr = Object.assign(window._sr || {}, {
+    base,
+    el,
     TOAST_MS,
     fetchJson,
     showToast,
     toastOperation,
     summarizeResult,
-    makeLogLink,
-    withButtonAction,
+    runAction,
     initToggle,
-    setIfNotEmpty,
-    getValueByPath,
-    setValueByPath,
-    unwrapConfig,
-    bindConfig,
     openModal,
     setButtonLoading,
     updatePlaybackTooltip,
     syncActiveTasks,
+    saveSettings,
+    actions: {},
+    unwrapConfig: (data) => (data?.payload !== undefined ? data.payload || {} : data || {}),
+    getValueByPath: (obj, path) => path.split(".").reduce((o, k) => o?.[k], obj),
+    setValueByPath: (obj, path, value) => {
+      const parts = path.split("."),
+        last = parts.pop();
+      const target = parts.reduce((o, k) => ((o[k] ??= {}), o[k]), obj);
+      target[last] = value;
+    },
+    bindConfig: (target, path, config, persistFn, type = "text") => {
+      const e = typeof target === "string" ? el(target) : target;
+      if (!e) return;
+      const val = window._sr.getValueByPath(config, path);
+      if (type === "check") e.checked = !!val;
+      else e.value = val ?? "";
+      e.onchange = async () => {
+        let newVal = type === "check" ? e.checked : type === "number" ? Number(e.value) || 0 : e.value;
+        window._sr.setValueByPath(config, path, newVal);
+        await persistFn(config);
+      };
+    },
+    setIfNotEmpty: (ps, k, v) => {
+      if (v != null && String(v) !== "") ps.set(k, String(v));
+    },
+    withButtonAction: (btn, handler) => {
+      const elBtn = typeof btn === "string" ? el(btn) : btn;
+      if (elBtn) elBtn.onclick = () => runAction(elBtn, handler);
+    },
   });
+
+  // #region Global Dispatcher
+
+  /** Global click listener to handle buttons marked with data-relay-endpoint. Centralizes networking, spinners, and toast lifecycle. */
+  document.addEventListener("click", (e) => {
+    const target = e.target.closest("[data-relay-endpoint], [data-relay-action]");
+    if (!target) return;
+
+    /** Core execution logic for endpoint or registry actions. */
+    const action = async (btn) => {
+      const endpoint = btn.dataset.relayEndpoint;
+      const actionKey = btn.dataset.relayAction;
+      const label = btn.dataset.relayLabel;
+      const paramFnName = btn.dataset.relayParams;
+      const method = btn.dataset.relayMethod || "GET";
+      const persistAttr = btn.dataset.relayPersist === "true";
+      const persistIfEmptySelector = btn.dataset.relayPersistIfEmpty;
+
+      if (endpoint) {
+        let url = base + endpoint;
+        if (paramFnName && typeof window._sr[paramFnName] === "function") {
+          const ps = window._sr[paramFnName]();
+          url += (url.includes("?") ? "&" : "?") + ps.toString();
+        }
+
+        // Logic: determine if toast should persist (timeout=0) or fade (timeout=TOAST_MS)
+        let hideOnSucceed = persistAttr ? 0 : TOAST_MS;
+        if (persistIfEmptySelector) {
+          const input = document.querySelector(persistIfEmptySelector);
+          if (input && !input.value.trim()) hideOnSucceed = 0;
+        }
+
+        showToast(`${label}: Processing...`, "info", TOAST_MS);
+        const res = await fetchJson(url, { method });
+        toastOperation(res, label, { hideOnSucceed });
+      } else if (actionKey) {
+        const handler = window._sr.actions[actionKey];
+        if (handler) await handler(btn);
+      }
+    };
+
+    e.preventDefault();
+    const confirmMsg = target.dataset.relayConfirm;
+    if (confirmMsg) {
+      const modal = el("confirm-modal"),
+        msg = el("confirm-message"),
+        execBtn = el("confirm-exec");
+      msg.innerHTML = confirmMsg;
+      execBtn.textContent = target.dataset.relayConfirmButton || "Confirm";
+      const close = openModal(modal);
+      el("confirm-cancel").onclick = close;
+      execBtn.onclick = () => {
+        close();
+        runAction(target, action);
+      };
+    } else {
+      runAction(target, action);
+    }
+  });
+
+  // #endregion
+
   // #endregion
 
   // #region Theme Toggle
@@ -456,9 +479,14 @@
     document.addEventListener("mouseleave", hide);
 
     const attach = (t) => {
-      if (!t.title || t.dataset.tooltipText) return;
+      if (!t.title) return;
       t.dataset.tooltipText = t.title;
       t.removeAttribute("title");
+
+      // Prevent attaching multiple sets of listeners to the same element.
+      if (t.dataset.tooltipAttached) return;
+      t.dataset.tooltipAttached = "true";
+
       t.addEventListener("mouseenter", () => {
         clearTimeout(hideTimer);
         showTimer = setTimeout(() => {
