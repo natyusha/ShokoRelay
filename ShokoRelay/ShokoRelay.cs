@@ -39,6 +39,7 @@ public class ServiceRegistration : IPluginServiceRegistration
         serviceCollection.AddSingleton<Services.ICollectionService, Services.CollectionService>();
         serviceCollection.AddSingleton<Services.ICriticRatingService, Services.CriticRatingService>();
         serviceCollection.AddSingleton<Services.ShokoImportService>();
+        serviceCollection.AddSingleton(provider => new Services.FfmpegService(provider.GetRequiredService<ConfigProvider>().PluginDirectory));
         serviceCollection.AddSingleton<Sync.SyncToShoko>();
         serviceCollection.AddSingleton<Sync.SyncToPlex>();
 
@@ -151,14 +152,13 @@ public class ShokoRelay : BackgroundService
 
             Logger.Info("Shoko Server started. Initializing Relay scheduling anchors...");
             var now = DateTime.UtcNow;
-            var settings = Settings;
-            int offset = Math.Clamp(settings.Automation.UtcOffsetHours, -12, 14);
-            if (settings.Automation.ShokoImportFrequencyHours > 0)
-                _lastImportRunUtc = ComputeSchedule(now, offset, settings.Automation.ShokoImportFrequencyHours).LastScheduled;
-            if (settings.Automation.ShokoSyncWatchedFrequencyHours > 0)
-                _lastSyncWatchedUtc = ComputeSchedule(now, offset, settings.Automation.ShokoSyncWatchedFrequencyHours).LastScheduled;
-            if (settings.Automation.PlexAutomationFrequencyHours > 0)
-                _lastPlexAutomationUtc = ComputeSchedule(now, offset, settings.Automation.PlexAutomationFrequencyHours).LastScheduled;
+            int offset = Math.Clamp(Settings.Automation.UtcOffsetHours, -12, 14);
+            if (Settings.Automation.ShokoImportFrequencyHours > 0)
+                _lastImportRunUtc = ComputeSchedule(now, offset, Settings.Automation.ShokoImportFrequencyHours).LastScheduled;
+            if (Settings.Automation.ShokoSyncWatchedFrequencyHours > 0)
+                _lastSyncWatchedUtc = ComputeSchedule(now, offset, Settings.Automation.ShokoSyncWatchedFrequencyHours).LastScheduled;
+            if (Settings.Automation.PlexAutomationFrequencyHours > 0)
+                _lastPlexAutomationUtc = ComputeSchedule(now, offset, Settings.Automation.PlexAutomationFrequencyHours).LastScheduled;
 
             _watcher.Start();
             Logger.Info("Relay started with VFS auto-refresh. Automation anchors synchronized to current UTC slots.");
@@ -195,6 +195,11 @@ public class ShokoRelay : BackgroundService
     /// <summary>Manually mark sync as run.</summary>
     public static void MarkSyncRunNow() => _lastSyncWatchedUtc = DateTime.UtcNow;
 
+    /// <summary>Computes the last scheduled time and the next scheduled time for a task based on UTC offsets.</summary>
+    /// <param name="now">Current time context.</param>
+    /// <param name="offsetHours">The anchor offset from UTC midnight.</param>
+    /// <param name="frequencyHours">How often the task should run.</param>
+    /// <returns>A tuple containing the LastScheduled and NextRun timestamps.</returns>
     private static (DateTime LastScheduled, DateTime NextRun) ComputeSchedule(DateTime now, int offsetHours, int frequencyHours)
     {
         DateTime anchor = new DateTime(now.Year, now.Month, now.Day, 0, 0, 0, DateTimeKind.Utc).AddHours(offsetHours);
@@ -205,6 +210,9 @@ public class ShokoRelay : BackgroundService
         return (lastScheduled, lastScheduled.AddHours(frequencyHours));
     }
 
+    /// <summary>The main automation loop that evaluates schedules and triggers background tasks.</summary>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A task representing the long-running loop.</returns>
     private async Task AutomationLoop(CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)

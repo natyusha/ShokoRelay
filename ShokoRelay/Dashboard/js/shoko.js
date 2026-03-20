@@ -5,6 +5,14 @@
 (() => {
   const { base, configUrl, el, fetchJson, showToast, toastOperation, summarizeResult, initToggle, openModal, setButtonLoading, getData } = window._sr;
 
+  /** Placeholder text for the VFS Overrides Editor, concatenated to stay under the column limit. */
+  const OVERRIDES_PLACEHOLDER =
+    "This allows shows which are separated on AniDB but part of the same TMDB listing to be combined into a single entry in Plex.\n" +
+    "Each line should contain a comma separated list of AniDB IDs you wish to merge.\n" +
+    "The first ID is the primary series and the others will be merged into it (for both VFS builds and metadata lookups).\n" +
+    "Lines that are blank or start with a '#' are ignored. An example is shown below:\n\n" +
+    "## Shoko Relay VFS Overrides\n\n# Fairy Tail\n6662,8132,9980,13295\n\n# Bleach\n2369,15449,17765,18220,19079";
+
   // #region Param Providers
 
   /**
@@ -29,9 +37,10 @@
   // Wire up the VFS Overrides Editor modal.
   const overridesBtn = el("vfs-overrides");
   if (overridesBtn) {
+    const txt = el("overrides-text");
+    if (txt) txt.placeholder = OVERRIDES_PLACEHOLDER;
     overridesBtn.onclick = async () => {
-      const modal = el("overrides-modal"),
-        txt = el("overrides-text");
+      const modal = el("overrides-modal");
 
       // Load current overrides content from server config.
       try {

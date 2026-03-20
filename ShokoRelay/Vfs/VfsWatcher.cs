@@ -139,13 +139,9 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
             lock (_gate)
             {
                 if (_pending.IsEmpty)
-                {
                     _processing = false;
-                }
                 else
-                {
                     _ = Task.Run(ProcessQueue);
-                }
             }
         }
     }
@@ -169,9 +165,7 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
         if (_plexLibrary.ScanOnVfsRefresh)
         {
             foreach (var path in ResolveSeriesVfsPaths(series))
-            {
                 await _plexLibrary.RefreshSectionPathAsync(path).ConfigureAwait(false);
-            }
         }
 
         // Handle debounced Metadata Refresh (Mitigation for Plex CMP "empty first pass" bug)

@@ -4,6 +4,7 @@ using Shoko.Abstractions.Services;
 using Shoko.Abstractions.Video;
 using ShokoRelay.Config;
 using ShokoRelay.Helpers;
+using ShokoRelay.Services;
 using ShokoRelay.Vfs;
 
 namespace ShokoRelay.AnimeThemes;
@@ -63,13 +64,13 @@ internal sealed record ThemeSelection(string AudioUrl, string SlugRaw, string Sl
 #endregion
 
 /// <summary>Provides functionality for fetching, converting and previewing anime theme audio from the AnimeThemes API.</summary>
-public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService metadataService, IVideoService videoService, ConfigProvider configProvider)
+public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService metadataService, IVideoService videoService, ConfigProvider configProvider, FfmpegService ffmpegService)
 {
     #region Fields & Constructor
 
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private readonly HttpClient _http = httpClient;
-    private readonly FfmpegService _ffmpegService = new(configProvider.PluginDirectory);
+    private readonly FfmpegService _ffmpegService = ffmpegService;
     private readonly AnimeThemesApi _apiClient = new();
     private List<string>? _themeMp3Cache;
     private readonly Lock _cacheLock = new();
@@ -379,7 +380,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
     {
         try
         {
-            if (!string.IsNullOrEmpty(path) && File.Exists(path))
+            if (File.Exists(path))
                 File.Delete(path);
         }
         catch { }

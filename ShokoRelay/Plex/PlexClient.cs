@@ -185,7 +185,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         int start = 0;
         while (true)
         {
-            var q = new List<string> { $"X-Plex-Container-Start={start}", "X-Plex-Container-Size=200" };
+            var q = new List<string> { $"X-Plex-Container-Start={start}", "X-Plex-Container-Size=200", "includeCollections=1" };
             if (type.HasValue)
                 q.Add($"type={type.Value}");
             if (onlyUnwatched.HasValue)
@@ -207,6 +207,12 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         }
         return results;
     }
+
+    /// <summary>List all collections in the given section.</summary>
+    /// <param name="target">Target library.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A list of metadata items representing collections.</returns>
+    public Task<List<PlexMetadataItem>> GetSectionCollectionsAsync(PlexLibraryTarget target, CancellationToken ct = default) => GetSectionItemsAsync(target, null, ct, type: PlexConstants.TypeCollection);
 
     /// <summary>List all shows in the given section.</summary>
     /// <param name="target">Target library.</param>
@@ -245,6 +251,11 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
     /// <returns>The original Shoko path.</returns>
     public string MapPlexPathToShokoPath(string path) => MapPath(path, ShokoRelay.Settings.Advanced.PathMappings, false);
 
+    /// <summary>Internal core for mapping paths between Shoko and Plex.</summary>
+    /// <param name="path">The input path.</param>
+    /// <param name="mappings">Dictionary of path mappings.</param>
+    /// <param name="shokoToPlex">True to map Shoko to Plex, false for Plex to Shoko.</param>
+    /// <returns>The translated path string.</returns>
     private static string MapPath(string path, Dictionary<string, string> mappings, bool shokoToPlex)
     {
         if (string.IsNullOrWhiteSpace(path) || mappings == null || mappings.Count == 0)

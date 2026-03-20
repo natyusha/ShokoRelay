@@ -9,7 +9,10 @@
   let plexPollTimer = null;
 
   // #region Helpers
-  /** Enable or disable all Plex-dependent automation controls on the dashboard. */
+  /**
+   * Enable or disable all Plex-dependent automation controls on the dashboard.
+   * @param {boolean} enabled - Whether Plex automation is currently possible.
+   */
   function setPlexAutomationControls(enabled) {
     document.querySelectorAll(".plex-auth").forEach((e) => {
       e.disabled = !enabled;
@@ -77,7 +80,10 @@
     }, 2000);
   }
 
-  /** Refresh the full Plex authentication and settings state from the server. */
+  /**
+   * Refresh the full Plex authentication and settings state from the server.
+   * @returns {Promise<void>}
+   */
   async function refreshPlexState() {
     const res = await fetchJson(configUrl);
     if (!res.ok) {

@@ -107,8 +107,11 @@ internal static class AnimeThemesHelper
     /// <summary>Regex for matching known AnimeThemes slug formats.</summary>
     internal static readonly Regex SlugRegex = new("^(?:op|ed)(?!0)[0-9]{0,2}(?:-(?:bd|web|tv|original))?$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    /// <summary>Regex for Plex Extra Credits which always start with a <c>C# ❯</c> prefix</summary>
+    /// <summary>Regex for Plex Extra Credits which always start with a <c>C# ❯</c> prefix.</summary>
     internal static readonly Regex CreditsFileRegex = new(@"^C\d+\s❯", RegexOptions.Compiled);
+
+    /// <summary>Regex for themes from secondary series in an override group which start with a <c>P# ❯</c> prefix.</summary>
+    internal static readonly Regex OverrideThemeFileRegex = new(@"^P\d+\s❯", RegexOptions.Compiled);
 
     private static readonly Dictionary<string, string> SlugFormatting = new(StringComparer.OrdinalIgnoreCase)
     {

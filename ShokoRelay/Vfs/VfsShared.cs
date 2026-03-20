@@ -69,15 +69,11 @@ internal static class VfsShared
 
     private static string ResolveFolderName(string configured, string defaultName)
     {
-        if (string.IsNullOrWhiteSpace(configured))
-            configured = defaultName;
-        configured = configured.Trim().TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        if (Path.IsPathRooted(configured))
-            configured = Path.GetFileName(configured);
-        if (string.IsNullOrWhiteSpace(configured))
-            configured = defaultName;
-        configured = VfsHelper.SanitizeName(configured);
-        return string.IsNullOrWhiteSpace(configured) ? defaultName : configured;
+        var name = string.IsNullOrWhiteSpace(configured) ? defaultName : configured.Trim().TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        if (Path.IsPathRooted(name))
+            name = Path.GetFileName(name);
+        var sanitized = VfsHelper.SanitizeName(name);
+        return (string.IsNullOrWhiteSpace(sanitized) || sanitized == "Unknown") ? defaultName : sanitized;
     }
 
     #endregion
@@ -143,8 +139,8 @@ internal static class VfsShared
     {
         if (string.IsNullOrWhiteSpace(path))
             return false;
-        string full = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        string? root = Path.GetPathRoot(full)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var full = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var root = Path.GetPathRoot(full)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         return !string.Equals(full, root, StringComparison.OrdinalIgnoreCase);
     }
 

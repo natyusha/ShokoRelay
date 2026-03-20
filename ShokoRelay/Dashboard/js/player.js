@@ -54,7 +54,11 @@
 
   // #region Utilities
 
-  /** Converts a numeric time in seconds to a human-readable M:SS format. */
+  /**
+   * Converts a numeric time in seconds to a human-readable M:SS format.
+   * @param {number} seconds - The time in seconds.
+   * @returns {string} The formatted duration string.
+   */
   const formatTime = (seconds) => {
     if (isNaN(seconds)) return "0:00";
     const m = Math.floor(seconds / 60);
@@ -91,7 +95,13 @@
   /** Decodes unicode escape sequences in server-provided filenames. */
   const decodeUnicode = (s) => (s || "").replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
 
-  /** Cycles through an array of modes in a specific direction. */
+  /**
+   * Cycles through an array of modes in a specific direction.
+   * @param {string} current - The currently active mode.
+   * @param {string[]} modes - The list of available modes.
+   * @param {number} [dir=1] - Direction to move (1 for next, -1 for previous).
+   * @returns {string} The newly selected mode.
+   */
   const cycleMode = (current, modes, dir = 1) => {
     const idx = modes.indexOf(current);
     return modes[(idx + dir + modes.length) % modes.length];
@@ -106,7 +116,10 @@
     };
   };
 
-  /** Evaluates the full list of themes against active search terms and metadata tags. */
+  /**
+   * Evaluates the full list of themes against active search terms, heart status, and metadata tags.
+   * @returns {WebmEntry[]} The filtered list of theme entries.
+   */
   const getFilteredItems = () => {
     const rawFt = (playerFilter?.value || "").toLowerCase().trim();
     if (!rawFt) return webmTreeData;
@@ -306,7 +319,7 @@
     if (playerAnime) {
       playerAnime.textContent = playerAnime.title = item ? item.series : "Select a theme to begin...";
       if (item?.seriesId) {
-        const shokoBase = base.split("/api/")[0];
+        const shokoBase = location.origin + base.split("/api/")[0]; // Reverse Proxy Support
         playerAnime.href = `${shokoBase}/webui/collection/series/${item.seriesId}/overview`;
         playerAnime.style.pointerEvents = "auto";
       } else {

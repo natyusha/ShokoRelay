@@ -160,6 +160,11 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
 
     #region Internal API Helpers
 
+    /// <summary>Finds a collection ID by title.</summary>
+    /// <param name="title">Collection title.</param>
+    /// <param name="target">Plex library target.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The numeric rating key of the collection, or null if not found.</returns>
     private async Task<int?> FindCollectionIdAsync(string title, PlexLibraryTarget target, CancellationToken ct)
     {
         using var req = _plexClient.CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/collections?title={Uri.EscapeDataString(title)}&X-Plex-Container-Size=10", target.ServerUrl);
@@ -168,6 +173,11 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
         return int.TryParse(meta?.RatingKey, out int id) ? id : null;
     }
 
+    /// <summary>Creates a new collection in the specified target library.</summary>
+    /// <param name="title">Collection title.</param>
+    /// <param name="target">Plex library target.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The rating key of the newly created collection, or null on failure.</returns>
     private async Task<int?> CreateCollectionAsync(string title, PlexLibraryTarget target, CancellationToken ct)
     {
         string path = $"/library/collections?title={Uri.EscapeDataString(title)}&titleSort={Uri.EscapeDataString(title)}&sectionId={target.SectionId}&type={(int)target.LibraryType}";
@@ -193,6 +203,13 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
     private async Task<bool> DeleteCollectionAsync(int collectionId, PlexLibraryTarget target, CancellationToken cancellationToken = default) =>
         await ExecuteActionAsync(HttpMethod.Delete, $"/library/collections/{collectionId}", target, $"Delete collection {collectionId}", cancellationToken);
 
+    /// <summary>Executes a generic Plex API action and handles response logging.</summary>
+    /// <param name="method">HTTP method.</param>
+    /// <param name="path">API path.</param>
+    /// <param name="target">Target server.</param>
+    /// <param name="actionName">Display name for logging.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>True if the request returned a success status code.</returns>
     private async Task<bool> ExecuteActionAsync(HttpMethod method, string path, PlexLibraryTarget target, string actionName, CancellationToken ct)
     {
         try

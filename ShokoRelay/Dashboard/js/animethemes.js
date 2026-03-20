@@ -127,7 +127,7 @@
       const slug = (res.headers.get("X-Theme-Slug") || "").replace(/\bOpening\s?/gi, "OP").replace(/\bEnding\s?/gi, "ED");
       const artist = res.headers.get("X-Theme-Artist"),
         album = res.headers.get("X-Theme-Album");
-      let html = `<span class="np-line">${title}</span>${artist ? `<span class="np-line">${artist}</span>` : ""}`;
+      let html = `<span class="np-line title">${title}</span>${artist ? `<span class="np-line artist">${artist}</span>` : ""}`;
       const meta = [album, slug].filter(Boolean).join(" \u2014 ");
       if (meta) html += `<small class="np-line">${meta}</small>`;
       dismissNowPlaying();
@@ -151,9 +151,7 @@
   }
 
   if (atTrack) {
-    /** @param {MouseEvent} e */
     atTrack.onclick = (e) => atAudio && (atAudio.currentTime = ((e.clientX - atTrack.getBoundingClientRect().left) / atTrack.offsetWidth) * atAudio.duration);
-    /** @param {MouseEvent} e */
     atTrack.onmousedown = (e) => {
       if (e.button === 1 && atAudio?.src) {
         e.preventDefault();
@@ -178,7 +176,8 @@
       atAudio.onended = async () => {
         syncPlaybackUI();
         if (el("at-mode")?.getAttribute("data-mode") === "shuffle") {
-          const d = await (await fetch(base + "/animethemes/mp3/random")).json();
+          const res = await fetchJson(base + "/animethemes/mp3/random");
+          const d = getData(res);
           if (d?.path) playThemeMp3(d.path);
         } else dismissNowPlaying();
       };
@@ -255,7 +254,8 @@
           atAudio.play();
           if (atCurrentFolder) showNowPlaying(atCurrentFolder);
         } else {
-          const d = await (await fetch(base + "/animethemes/mp3/random")).json();
+          const res = await fetchJson(base + "/animethemes/mp3/random");
+          const d = getData(res);
           d?.path ? playThemeMp3(d.path) : showToast("No Theme.mp3 Files Found", "error", window._sr.TOAST_MS);
         }
       };

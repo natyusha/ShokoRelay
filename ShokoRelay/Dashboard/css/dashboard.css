@@ -230,6 +230,7 @@ button.float-link {
   min-width: 220px;
   max-width: 420px;
   color: var(--text-color);
+  font-weight: 500;
   font-size: 0.95em;
 }
 .toast.visible {
@@ -264,5 +265,8 @@ button.float-link {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.np-line.artist {
+  opacity: 0.8;
 }
 /* #endregion */

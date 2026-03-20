@@ -3,10 +3,10 @@ using System.Globalization;
 using System.Text;
 using NLog;
 
-namespace ShokoRelay.AnimeThemes;
+namespace ShokoRelay.Services;
 
 /// <summary>Wrapper around FFmpeg/FFprobe CLI tools used by the AnimeThemes subsystem.</summary>
-internal sealed class FfmpegService
+public sealed class FfmpegService
 {
     #region Fields & Constructor
 
@@ -122,9 +122,7 @@ internal sealed class FfmpegService
                 {
                     string full = Path.GetFullPath(configured);
                     if (Directory.Exists(full))
-                    {
                         candidates.Add(full);
-                    }
                     else if (File.Exists(full))
                     {
                         _ffmpegPath = full;
@@ -135,9 +133,7 @@ internal sealed class FfmpegService
                         locatedDir ??= dir;
                     }
                     else
-                    {
                         Logger.Warn("FFmpeg path does not exist: {Path}", full);
-                    }
                 }
                 catch (Exception ex)
                 {
@@ -235,9 +231,7 @@ internal sealed class FfmpegService
         }
 
         if (stdOut != null)
-        {
             tasks.Add(process.StandardOutput.BaseStream.CopyToAsync(stdOut, ct));
-        }
 
         tasks.Add(process.WaitForExitAsync(ct));
         await Task.WhenAll(tasks);

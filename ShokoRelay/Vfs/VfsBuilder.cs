@@ -97,7 +97,7 @@ public class VfsBuilder
 
     #region Core Build Logic
 
-    /// <summary> Internal core logic for orchestrating a VFS build or clean run.</summary>
+    /// <summary>Internal core logic for orchestrating a VFS build or clean run.</summary>
     /// <param name="seriesIds">Optional collection of series IDs to process.</param>
     /// <param name="cleanRoot">Whether to delete existing VFS folders before building.</param>
     /// <param name="pruneSeries">Whether to remove per-series folders specifically.</param>
@@ -248,6 +248,17 @@ public class VfsBuilder
         return new VfsBuildResult(rootName, seriesProcessed, created, skipped, errors, planned, [.. seriesDetailsBag.OrderBy(x => x.Name)], cleanupDetails, sw.Elapsed);
     }
 
+    /// <summary>Builds the VFS structure for a specific series, handling naming and de-duplication.</summary>
+    /// <param name="series">Shoko series metadata.</param>
+    /// <param name="rootFolderName">Name of the VFS root folder.</param>
+    /// <param name="cleanRoot">Whether to perform cleanup.</param>
+    /// <param name="cleanedRoots">Thread-safe tracker for cleaned roots.</param>
+    /// <param name="cleanedSeries">Thread-safe tracker for cleaned series folders.</param>
+    /// <param name="filtered">Whether this is a filtered build.</param>
+    /// <param name="cleanOnly">If true, skips link creation.</param>
+    /// <param name="rootTasks">Task tracker for root operations.</param>
+    /// <param name="seriesTasks">Task tracker for series operations.</param>
+    /// <returns>A tuple of counts: Created, Skipped, Errors, Planned.</returns>
     private (int Created, int Skipped, List<string> Errors, int Planned) BuildSeries(
         IShokoSeries series,
         string rootFolderName,

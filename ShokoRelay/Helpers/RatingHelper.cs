@@ -88,16 +88,15 @@ public static class RatingHelper
         // Check higher (more restrictive) ratings first and return immediately when matched.
         if (string.IsNullOrEmpty(c_rating))
         {
-            if (tagSet.Contains("josei") || tagSet.Contains("seinen"))
-                return ("TV-14" + descriptor, false);
-            if (tagSet.Contains("shoujo") || tagSet.Contains("shounen"))
-                return ("TV-PG" + descriptor, false);
-            if (tagSet.Contains("mina"))
-                return ("TV-G" + descriptor, false);
-            if (tagSet.Contains("kodomo"))
-                return ("TV-Y" + descriptor, false);
+            return tagSet switch
+            {
+                _ when tagSet.Contains("josei") || tagSet.Contains("seinen") => ("TV-14" + descriptor, false),
+                _ when tagSet.Contains("shoujo") || tagSet.Contains("shounen") => ("TV-PG" + descriptor, false),
+                _ when tagSet.Contains("mina") => ("TV-G" + descriptor, false),
+                _ when tagSet.Contains("kodomo") => ("TV-Y" + descriptor, false),
+                _ => (c_rating, false),
+            };
         }
-
         if (!string.IsNullOrEmpty(c_rating) && c_rating != "X")
             c_rating += descriptor;
         return (c_rating, false);

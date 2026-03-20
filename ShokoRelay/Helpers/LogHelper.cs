@@ -76,9 +76,7 @@ public static class LogHelper
 
     private static void AppendHeader(StringBuilder sb, string title)
     {
-        sb.AppendLine($"{title} - {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-        sb.AppendLine(new string('-', 60));
-        sb.AppendLine();
+        sb.AppendLine($"{title} - {DateTime.Now:yyyy-MM-dd HH:mm:ss}").AppendLine(new string('-', 60)).AppendLine();
     }
 
     #endregion

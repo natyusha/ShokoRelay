@@ -44,16 +44,13 @@ public static class ShokoExtensionHelper
     /// <param name="partIndex">Optional index for multi-part files.</param>
     /// <returns>A Plex-compatible episode GUID string.</returns>
     public static string GetPlexGuid(this IEpisode e, int? partIndex = null) =>
-        partIndex.HasValue
-            ? $"{ShokoRelayConstants.AgentScheme}://episode/{PlexConstants.EpisodePrefix}{e.ID}{PlexConstants.PartPrefix}{partIndex}"
-            : $"{ShokoRelayConstants.AgentScheme}://episode/{PlexConstants.EpisodePrefix}{e.ID}";
+        $"{ShokoRelayConstants.AgentScheme}://episode/{PlexConstants.EpisodePrefix}{e.ID}{(partIndex.HasValue ? $"{PlexConstants.PartPrefix}{partIndex}" : "")}";
 
     /// <summary>Gets the Plex rating key for an episode, with optional part indexing.</summary>
     /// <param name="e">The episode metadata.</param>
     /// <param name="partIndex">Optional index for multi-part files.</param>
     /// <returns>A Plex-compatible episode rating key string.</returns>
-    public static string GetPlexRatingKey(this IEpisode e, int? partIndex = null) =>
-        partIndex.HasValue ? $"{PlexConstants.EpisodePrefix}{e.ID}{PlexConstants.PartPrefix}{partIndex}" : $"{PlexConstants.EpisodePrefix}{e.ID}";
+    public static string GetPlexRatingKey(this IEpisode e, int? partIndex = null) => $"{PlexConstants.EpisodePrefix}{e.ID}{(partIndex.HasValue ? $"{PlexConstants.PartPrefix}{partIndex}" : "")}";
 
     #endregion
 

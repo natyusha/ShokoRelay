@@ -204,7 +204,7 @@ Any subfolder named after the configured `VFS Root Path`, `Collection Posters Ro
 
 ### AnimeThemes Video Player
 
-Shoko Relay includes a stand-alone, browser-based video player designed specifically for your AnimeThemes collection. It can be accessed via the `Open Video Player` icon (clap board) within the "AnimeThemes: VFS" section of the dashboard (or by a dedicated url: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/dashboard/player`). There is a included tree view which allows you to browse your themes by Group and Series as they would appear in Plex. Support for Loop, Shuffle, and Sequential playback is also available via a 4 stage toggle button. A search box is included which will filter the treeview based on series, group, or filename level queries. The filter supports tag-based filtering syntax using `+` (inclusion) and `-` (exclusion) operators.
+Shoko Relay includes a stand-alone, browser-based video player designed specifically for your AnimeThemes collection. It can be accessed via the `Open Video Player` icon (clap board) within the "AnimeThemes: VFS" section of the dashboard (or by a dedicated url: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/dashboard/player`). There is an included tree view which allows you to browse your themes by Group/Series as they would appear in Plex. Support for Loop, Shuffle, and Sequential playback is also available via a 4 stage toggle button. A search box is included which will filter the tree view based on series, group, or filename level queries. The filter supports tag-based filtering syntax using `+` (inclusion) and `-` (exclusion) operators.
 
 > [!TIP]
 > There is a help button in the top right of the video player which will show a full list of keybinds and filters.

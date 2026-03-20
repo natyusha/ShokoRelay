@@ -87,7 +87,16 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
 
             foreach (var target in targets)
             {
+                //Fetch all items AND all collections at the start to minimize per-item API calls
                 var items = await plexClient.GetSectionShowsAsync(target, cancellationToken) ?? [];
+                var collections = await plexClient.GetSectionCollectionsAsync(target, cancellationToken) ?? [];
+
+                // Map collection names to their Plex RatingKeys (IDs)
+                var collectionIdMap = collections
+                    .Where(c => !string.IsNullOrEmpty(c.Title) && !string.IsNullOrEmpty(c.RatingKey))
+                    .GroupBy(c => c.Title!, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(g => g.Key, g => int.Parse(g.First().RatingKey!), StringComparer.OrdinalIgnoreCase);
+
                 var posted = new HashSet<int>();
 
                 foreach (var item in items)
@@ -105,34 +114,53 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                         continue;
 
                     Logger.Trace("CollectionService: Processing series {0} (Plex Key: {1})", sid.Value, item.RatingKey);
-                    if (await plexCollections.AssignCollectionToItemByMetadataAsync(plexKey, collectionName, target, cancellationToken))
-                    {
-                        created++;
-                        Logger.Info("Plex Collections: Assigned '{0}' to '{1}'", collectionName, item.Title);
-                        createdList.Add(
-                            new
-                            {
-                                seriesId = sid.Value,
-                                ratingKey = plexKey,
-                                collectionName,
-                                sectionId = target.SectionId,
-                            }
-                        );
 
-                        if (await plexCollections.GetOrCreateCollectionIdAsync(collectionName, target, cancellationToken) is { } cid && posted.Add(cid))
+                    //  Handle Assignment (Check memory first to avoid redundant API call)
+                    bool alreadyAssigned = item.Collection?.Any(c => string.Equals(c.Tag, collectionName, StringComparison.OrdinalIgnoreCase)) == true;
+                    bool assignmentOk = alreadyAssigned;
+
+                    if (!alreadyAssigned)
+                    {
+                        assignmentOk = await plexCollections.AssignCollectionToItemByMetadataAsync(plexKey, collectionName, target, cancellationToken);
+                        if (assignmentOk)
                         {
-                            Logger.Trace("CollectionService: Triggering poster upload for '{0}'", collectionName);
+                            created++;
+                            Logger.Info("Plex Collections: Assigned '{0}' to '{1}'", collectionName, item.Title);
+                            createdList.Add(
+                                new
+                                {
+                                    seriesId = sid.Value,
+                                    ratingKey = plexKey,
+                                    collectionName,
+                                    sectionId = target.SectionId,
+                                }
+                            );
+                        }
+                        else
+                        {
+                            errs++;
+                            errorsList.Add($"Failed assignment: {sid.Value}");
+                        }
+                    }
+
+                    // Handle Poster (Only once per collection name in this library)
+                    if (assignmentOk)
+                    {
+                        if (!collectionIdMap.TryGetValue(collectionName, out int cid))
+                        {
+                            var newId = await plexCollections.GetOrCreateCollectionIdAsync(collectionName, target, cancellationToken);
+                            if (newId.HasValue)
+                                cid = collectionIdMap[collectionName] = newId.Value;
+                        }
+
+                        if (cid > 0 && posted.Add(cid))
+                        {
                             if (await TryApplyPoster(series!, collectionName, cid, target, cancellationToken))
                             {
                                 uploaded++;
-                                Logger.Debug("CollectionService: Uploaded poster for '{0}'", collectionName);
+                                Logger.Debug("CollectionService: Applied poster for '{0}'", collectionName);
                             }
                         }
-                    }
-                    else
-                    {
-                        errs++;
-                        errorsList.Add($"Failed assignment: {sid.Value}");
                     }
                 }
             }

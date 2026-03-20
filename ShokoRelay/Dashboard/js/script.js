@@ -173,7 +173,7 @@
   async function syncActiveTasks() {
     const res = await fetchJson(window._sr.base + "/tasks/active");
     if (!res.ok) return;
-    const activeTasks = res.data || [];
+    const activeTasks = getData(res) || [];
     MANAGED_TASK_IDS.forEach((id) => {
       const btn = el(id);
       if (!btn) return;
@@ -183,8 +183,9 @@
     });
 
     const completeRes = await fetchJson(window._sr.base + "/tasks/completed");
-    if (completeRes.ok && completeRes.data) {
-      for (const [taskName, result] of Object.entries(completeRes.data)) {
+    const completeData = getData(completeRes);
+    if (completeRes.ok && completeData) {
+      for (const [taskName, result] of Object.entries(completeData)) {
         const btn = el(taskName);
         if (btn?.classList.contains("clicking")) continue;
         const label = taskName.replace(/-/g, " ");

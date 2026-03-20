@@ -59,11 +59,13 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     [HttpGet]
     public IActionResult Match([FromBody] PlexMatchBody? body = null)
     {
-        string? rawPath = body?.Filename;
+        string? rawPath = body?.Filename ?? Request.Query["filename"];
+        string? title = body?.Title ?? Request.Query["title"];
+        int? manual = body?.Manual ?? (int.TryParse(Request.Query["manual"], out var m) ? m : null);
         int? seriesId;
         if (string.IsNullOrWhiteSpace(rawPath))
         {
-            if (body?.Manual == 1 && int.TryParse(body.Title, out var manualId))
+            if (manual == 1 && int.TryParse(title, out var manualId))
                 seriesId = manualId;
             else
                 return EmptyMatch();

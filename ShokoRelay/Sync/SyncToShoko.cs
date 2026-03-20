@@ -1,4 +1,5 @@
 using NLog;
+using Shoko.Abstractions.Metadata.Shoko;
 using Shoko.Abstractions.Services;
 using ShokoRelay.Config;
 using ShokoRelay.Helpers;
@@ -47,6 +48,9 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
         var appliedIds = new HashSet<int>();
         var targets = _plexClient.GetConfiguredTargets();
 
+        // Optimization: Session-level cache to prevent redundant database lookups and GUID parsing when the same episode exists in multiple libraries or is watched by multiple users.
+        var episodeCache = new Dictionary<string, IShokoEpisode?>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var target in targets)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -73,8 +77,20 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                         result = SyncHelper.IncSkipped(result, result.PerUser, uName);
                         continue;
                     }
+
+                    if (string.IsNullOrWhiteSpace(item.Guid))
+                        continue;
+
                     result = SyncHelper.IncProcessed(result, result.PerUser, uName);
-                    var ep = PlexHelper.ExtractShokoEpisodeIdFromGuid(item.Guid) is { } id ? _metadataService.GetShokoEpisodeByID(id) : null;
+
+                    // Optimization: Check the session cache before hitting the database
+                    if (!episodeCache.TryGetValue(item.Guid, out var ep))
+                    {
+                        var epId = PlexHelper.ExtractShokoEpisodeIdFromGuid(item.Guid);
+                        ep = epId.HasValue ? _metadataService.GetShokoEpisodeByID(epId.Value) : null;
+                        episodeCache[item.Guid] = ep;
+                    }
+
                     if (ep == null || appliedIds.Contains(ep.ID))
                     {
                         result = SyncHelper.IncSkipped(result, result.PerUser, uName);

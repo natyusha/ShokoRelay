@@ -27,9 +27,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
         {
             var mf = _videoService.GetAllManagedFolders();
             if (mf != null)
-            {
                 folders = [.. mf.Where(f => f.DropFolderType.HasFlag(DropFolderType.Source)).Select(f => f.Name ?? f.Path ?? string.Empty).Where(s => !string.IsNullOrEmpty(s))];
-            }
         }
         catch (Exception ex)
         {

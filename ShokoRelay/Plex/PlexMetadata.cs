@@ -323,17 +323,8 @@ public class PlexMetadata(IMetadataService metadataService)
     /// <returns>The group's preferred title, or null if no collection applies.</returns>
     public string? GetCollectionName(ISeries series)
     {
-        if (series is not IShokoSeries shokoSeries)
-            return null;
-
-        var groupId = shokoSeries.TopLevelGroupID;
-        if (groupId <= 0)
-            return null;
-
-        var group = _metadataService.GetShokoGroupByID(groupId);
-        return group is not IShokoGroup shokoGroup ? null
-            : (shokoGroup.Series?.Count ?? 0) <= 1 ? null
-            : group is IWithTitles titled && !string.IsNullOrWhiteSpace(titled.PreferredTitle?.Value) ? titled.PreferredTitle?.Value
+        return series is not IShokoSeries { TopLevelGroupID: > 0 } ss ? null
+            : _metadataService.GetShokoGroupByID(ss.TopLevelGroupID) is IShokoGroup { Series.Count: > 1 } g && g is IWithTitles { PreferredTitle.Value: { } title } ? title
             : null;
     }
 

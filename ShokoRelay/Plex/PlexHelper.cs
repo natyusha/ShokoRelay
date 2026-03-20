@@ -193,8 +193,14 @@ public static class PlexHelper
         var posterPath = FindCollectionPosterPath(series, collectionName, collectionId, metadataService);
         if (!string.IsNullOrWhiteSpace(posterPath))
         {
+            long ticks = 0;
+            try
+            {
+                ticks = new FileInfo(posterPath).LastWriteTimeUtc.Ticks;
+            }
+            catch { }
             string b = string.IsNullOrWhiteSpace(baseUrl) ? ShokoRelay.ServerBaseUrl : baseUrl?.TrimEnd('/') ?? string.Empty;
-            return $"{b}{ShokoRelayConstants.BasePath}/collections/user/{series.TopLevelGroupID}";
+            return $"{b}{ShokoRelayConstants.BasePath}/collections/user/{series.TopLevelGroupID}?t={ticks}";
         }
         if (allowPrimarySeriesFallback && metadataService != null)
         {
@@ -218,10 +224,8 @@ public static class PlexHelper
     {
         if (id <= 0)
             return false;
-        string trimmed = value.Trim();
-        if (trimmed.StartsWith("c", StringComparison.OrdinalIgnoreCase))
-            trimmed = trimmed[1..];
-        return int.TryParse(trimmed, out int parsed) && parsed == id;
+        string s = value.Trim();
+        return int.TryParse(s.StartsWith("c", StringComparison.OrdinalIgnoreCase) ? s[1..] : s, out int parsed) && parsed == id;
     }
 
     private static string? NormalizeCollectionKey(string value)

@@ -227,58 +227,55 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
             string themeRoot = VfsShared.ResolveAnimeThemesFolderName();
             string vfsRoot = VfsShared.ResolveRootFolderName();
 
-            // Resolve which series we are processing
-            var seriesList = (seriesFilter?.Any() == true ? seriesFilter.Distinct().Select(id => _metadataService.GetShokoSeriesByID(id)) : _metadataService.GetAllShokoSeries())
+            // Resolve and group by the target Primary ID folder (VFS destination) first. This prevents race conditions where different threads try to clean the same folder.
+            var folderGroups = (seriesFilter?.Any() == true ? seriesFilter.Distinct().Select(_metadataService.GetShokoSeriesByID) : _metadataService.GetAllShokoSeries())
                 .Where(s => s?.AnidbAnimeID > 0)
+                .GroupBy(s => OverrideHelper.GetPrimary(s!.ID, _metadataService))
                 .ToList();
 
-            // Group by AniDB ID (the source of the themes)
-            var groups = seriesList.GroupBy(s => s!.AnidbAnimeID).ToList();
-
             Parallel.ForEach(
-                groups,
+                folderGroups,
                 new ParallelOptions { MaxDegreeOfParallelism = ShokoRelay.GetMaxParallelism(), CancellationToken = ct },
-                group =>
+                folderGroup =>
                 {
                     ct.ThrowIfCancellationRequested();
 
-                    var matchedThemes = entries.Where(e => e.AniDbId == group.Key && IsAllowed(e, ShokoRelay.Settings.Advanced.AnimeThemesOverlapLevel)).ToList();
+                    int primaryId = folderGroup.Key;
+                    var overrideOrder = OverrideHelper.GetGroup(primaryId, _metadataService).ToList();
+                    var allAnidbIdsInFolder = folderGroup.Select(s => s!.AnidbAnimeID).Distinct().ToHashSet();
+
+                    // Get all themes for all AniDB IDs associated with this VFS folder
+                    var matchedThemes = entries.Where(e => allAnidbIdsInFolder.Contains(e.AniDbId) && IsAllowed(e, ShokoRelay.Settings.Advanced.AnimeThemesOverlapLevel)).ToList();
 
                     if (!matchedThemes.Any())
                         return;
 
-                    // Further group by the target Primary ID folder (VFS destination)
-                    var targetFolders = group.GroupBy(s => OverrideHelper.GetPrimary(s!.ID, _metadataService));
+                    var representativeSeries = folderGroup.First();
+                    var roots = representativeSeries!
+                        .Episodes.SelectMany(ep => ep.VideoList)
+                        .SelectMany(v => v.Files)
+                        .Select(VfsShared.ResolveImportRootPath)
+                        .Where(r => !string.IsNullOrEmpty(r))
+                        .Distinct()
+                        .ToList();
 
-                    foreach (var folderGroup in targetFolders)
+                    if (!roots.Any())
                     {
-                        int primaryId = folderGroup.Key;
-                        var overrideOrder = OverrideHelper.GetGroup(primaryId, _metadataService).ToList();
-                        var representativeSeries = folderGroup.First();
+                        Interlocked.Increment(ref state.Skipped);
+                        return;
+                    }
+                    Interlocked.Increment(ref state.Matched);
+                    string shortsDir = Path.Combine(roots[0]!, vfsRoot, primaryId.ToString(), "Shorts");
+                    var plannedFilenames = new HashSet<string>(VfsShared.PathComparer);
 
-                        var roots = representativeSeries!
-                            .Episodes.SelectMany(ep => ep.VideoList)
-                            .SelectMany(v => v.Files)
-                            .Select(VfsShared.ResolveImportRootPath)
-                            .Where(r => !string.IsNullOrEmpty(r))
-                            .Distinct()
-                            .ToList();
-
-                        if (!roots.Any())
+                    // Map potential theme entries to metadata-based names
+                    var potentialLinks = folderGroup
+                        .SelectMany(series =>
                         {
-                            Interlocked.Increment(ref state.Skipped);
-                            continue;
-                        }
-                        Interlocked.Increment(ref state.Matched);
-                        string shortsDir = Path.Combine(roots[0]!, vfsRoot, primaryId.ToString(), "Shorts");
-                        var plannedFilenames = new HashSet<string>(VfsShared.PathComparer);
-
-                        // Map potential theme entries to metadata-based names
-                        var potentialLinks = folderGroup
-                            .SelectMany(series =>
-                            {
-                                int seriesIdx = overrideOrder.IndexOf(series!.ID);
-                                return matchedThemes.Select(entry =>
+                            int seriesIdx = overrideOrder.IndexOf(series!.ID);
+                            return matchedThemes
+                                .Where(e => e.AniDbId == series.AnidbAnimeID)
+                                .Select(entry =>
                                 {
                                     string relPath = entry.FilePath.TrimStart('/', '\\');
                                     string? src = AnimeThemesHelper.ResolveThemeSourcePath(relPath, roots[0]!, themeRoot);
@@ -306,11 +303,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                                     );
 
                                     // Content Signature: Used to group files that represent the same musical entry
-                                    var signatureLookup = lookup with
-                                    {
-                                        NC = false,
-                                    };
-                                    string sigName = Path.GetFileNameWithoutExtension(AnimeThemesHelper.BuildNewFileName(signatureLookup, ""));
+                                    string sigName = Path.GetFileNameWithoutExtension(AnimeThemesHelper.BuildNewFileName(lookup with { NC = false }, ""));
 
                                     return new
                                     {
@@ -323,70 +316,91 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                                         SeriesIndex = seriesIdx,
                                     };
                                 });
-                            })
-                            .Where(x => x != null)
-                            .GroupBy(x => x!.Signature);
+                        })
+                        .Where(x => x != null)
+                        .GroupBy(x => x!.Signature);
 
-                        // Resolve collisions and perform linking
-                        foreach (var sigGroup in potentialLinks)
+                    // Resolve collisions and perform linking
+                    foreach (var sigGroup in potentialLinks)
+                    {
+                        // Logic: If any BD source exists, discard non-BD sources. Otherwise, keep all (TV/WEB/etc).
+                        bool hasBD = sigGroup.Any(x => x!.Entry.Source == "BD");
+                        var sourceSurvivors = hasBD ? [.. sigGroup.Where(x => x!.Entry.Source == "BD")] : sigGroup.ToList();
+
+                        // NC Filtering: If enabled, prefer versions without credits over those with credits
+                        var finalSurvivors = sourceSurvivors;
+                        if (ShokoRelay.Settings.Advanced.AnimeThemesPreferNc && sourceSurvivors.Any(x => x!.Entry.NC))
+                            finalSurvivors = [.. sourceSurvivors.Where(x => x!.Entry.NC)];
+
+                        // De-duplicate survivors via numbering
+                        int counter = 1;
+                        foreach (var item in finalSurvivors)
                         {
-                            // Logic: If any BD source exists, discard non-BD sources. Otherwise, keep all (TV/WEB/etc).
-                            bool hasBD = sigGroup.Any(x => x!.Entry.Source == "BD");
-                            var sourceSurvivors = hasBD ? [.. sigGroup.Where(x => x!.Entry.Source == "BD")] : sigGroup.ToList();
+                            string suffix = counter > 1 ? $" ({counter})" : "";
+                            string finalName = AnimeThemesHelper.BuildNewFileName(item!.Lookup, suffix + item.Extension, item.SeriesIndex);
+                            string destPath = VfsShared.NormalizeSeparators(Path.Combine(shortsDir, finalName));
 
-                            // NC Filtering: If enabled, prefer versions without credits over those with credits
-                            var finalSurvivors = sourceSurvivors;
-                            if (ShokoRelay.Settings.Advanced.AnimeThemesPreferNc && sourceSurvivors.Any(x => x!.Entry.NC))
+                            Directory.CreateDirectory(shortsDir);
+                            lock (plannedFilenames)
+                                plannedFilenames.Add(finalName);
+
+                            string targetOverride = AnimeThemesHelper.BuildThemeRelativeTarget(item.RelativePath, themeRoot);
+
+                            if (VfsShared.TryCreateLink(item.SourcePath, destPath, Logger, targetOverride: targetOverride))
                             {
-                                finalSurvivors = [.. sourceSurvivors.Where(x => x!.Entry.NC)];
+                                Interlocked.Increment(ref state.Created);
+                                lock (state.CacheEntries)
+                                    state.CacheEntries.Add(new WebmCacheEntry(destPath, item.Entry.VideoId, AnimeThemesHelper.CalculateBitmask(item.Entry)));
+                                Logger.Info("AnimeThemes VFS: Created link '{0}' (VideoID: {1})", Path.GetFileName(destPath), item.Entry.VideoId);
                             }
-
-                            // De-duplicate survivors via numbering
-                            int counter = 1;
-                            foreach (var item in finalSurvivors)
+                            else
                             {
-                                string suffix = counter > 1 ? $" ({counter})" : "";
-                                string finalName = Path.GetFileNameWithoutExtension(AnimeThemesHelper.BuildNewFileName(item!.Lookup, "", item.SeriesIndex)) + suffix + item.Extension;
-                                string destPath = VfsShared.NormalizeSeparators(Path.Combine(shortsDir, finalName));
-
-                                Directory.CreateDirectory(shortsDir);
-                                lock (plannedFilenames)
-                                    plannedFilenames.Add(finalName);
-
-                                string targetOverride = AnimeThemesHelper.BuildThemeRelativeTarget(item.RelativePath, themeRoot);
-
-                                if (VfsShared.TryCreateLink(item.SourcePath, destPath, Logger, targetOverride: targetOverride))
-                                {
-                                    Interlocked.Increment(ref state.Created);
-                                    lock (state.CacheEntries)
-                                        state.CacheEntries.Add(new WebmCacheEntry(destPath, item.Entry.VideoId, AnimeThemesHelper.CalculateBitmask(item.Entry)));
-                                    Logger.Info("AnimeThemes VFS: Created link '{0}' (VideoID: {1})", Path.GetFileName(destPath), item.Entry.VideoId);
-                                }
-                                else
-                                {
-                                    lock (state.Errors)
-                                        state.Errors.Add($"Link failed: {destPath}");
-                                }
-
-                                counter++;
+                                lock (state.Errors)
+                                    state.Errors.Add($"Link failed: {destPath}");
                             }
+                            counter++;
                         }
+                    }
 
-                        // Per-Series Cleanup: Remove orphans in the Shorts folder that were not part of this generation run.
-                        if (Directory.Exists(shortsDir))
-                        {
-                            foreach (var file in Directory.EnumerateFiles(shortsDir))
+                    // Per-Series Cleanup: Remove orphans in the Shorts folder that were not part of this generation run.
+                    if (Directory.Exists(shortsDir))
+                    {
+                        var myPrefixes = folderGroup
+                            .Select(s =>
                             {
-                                string fileName = Path.GetFileName(file);
-                                if (AnimeThemesHelper.CreditsFileRegex.IsMatch(fileName) || plannedFilenames.Contains(fileName)) // Protection: Skip regular VFS credits (e.g., C1 ❯ Title.ext) and current planned themes
-                                    continue;
+                                int idx = overrideOrder.IndexOf(s!.ID);
+                                return idx > 0 ? $"P{idx + 1} ❯ " : null;
+                            })
+                            .ToHashSet();
 
-                                try
+                        foreach (var file in Directory.EnumerateFiles(shortsDir))
+                        {
+                            string fileName = Path.GetFileName(file);
+                            if (AnimeThemesHelper.CreditsFileRegex.IsMatch(fileName) || plannedFilenames.Contains(fileName))
+                                continue;
+
+                            // If this is a filtered build, only delete files that belong to the series currently being processed.
+                            if (seriesFilter?.Any() == true)
+                            {
+                                bool isMyFile = false;
+                                if (AnimeThemesHelper.OverrideThemeFileRegex.IsMatch(fileName))
                                 {
-                                    File.Delete(file);
+                                    foreach (var p in myPrefixes)
+                                        if (p != null && fileName.StartsWith(p))
+                                            isMyFile = true;
                                 }
-                                catch { }
+                                else if (myPrefixes.Contains(null))
+                                    isMyFile = true;
+
+                                if (!isMyFile)
+                                    continue;
                             }
+
+                            try
+                            {
+                                File.Delete(file);
+                            }
+                            catch { }
                         }
                     }
                 }

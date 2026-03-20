@@ -83,7 +83,7 @@ Endpoints managed by `MetadataController`
 
 ```
 GET  /                                                         -> GetMediaProvider
-GET  /matches?name={name}&title={id}&manual=1                  -> Match
+GET  /matches?filename={path}&title={id}&manual=1              -> Match
 POST /matches                                                  -> Match
 
 GET  /collections/{groupId}                                    -> GetCollection
@@ -97,12 +97,13 @@ GET  /metadata/{ratingKey}/images                              -> GetImages
 
 - `GetMediaProvider` returns the agent descriptor describing supported types and features.
 - `Match` looks up a series by filename or title. Priority is given to IDs found in the path.
-  - The title lookup uses `ShokoSeriesID` only.
+  - Testing the `GET` endpoint would use the following format: `/matches?title={ShokoSeriesID}&manual=1`
 
 ---
 
 - `GetCollection` retrieves collection metadata for a given group ID.
 - `GetCollectionPoster` returns the poster image from the `!CollectionPosters` directory.
+  - Supports an optional `?t={ticks}` query parameter for cache busting.
 
 ---
 
@@ -297,6 +298,7 @@ POST /animethemes/webm/favourites                              -> UpdateAnimeThe
 
 ```
 GET  /animethemes/mp3                                          -> AnimeThemesMp3
+     [?path={path}&slug={slug}&offset={int}&batch={true|false}&force={true|false}]
 GET  /animethemes/mp3/stream?path={path}                       -> AnimeThemesMp3Stream
 HEAD /animethemes/mp3/stream?path={path}                       -> AnimeThemesMp3Stream
 GET  /animethemes/mp3/random?refresh={true|false}              -> AnimeThemesMp3Random

@@ -104,9 +104,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
 
         OverrideHelper.EnsureLoaded();
         if (ShokoRelay.Settings.TmdbEpNumbering)
-        {
             ids = [.. ids.Select(i => OverrideHelper.GetPrimary(i, _metadataService)).Distinct()];
-        }
         return null;
     }
 

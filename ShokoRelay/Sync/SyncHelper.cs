@@ -256,6 +256,15 @@ public static class SyncHelper
     }
 
     /// <summary>Fetches episodes for a managed user section.</summary>
+    /// <param name="plexAuth">Plex Auth service.</param>
+    /// <param name="plexClient">Plex Client service.</param>
+    /// <param name="configProvider">Config Provider service.</param>
+    /// <param name="target">Target library.</param>
+    /// <param name="userName">Managed username.</param>
+    /// <param name="pin">Optional user PIN.</param>
+    /// <param name="sinceHours">Optional lookback window.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A tuple containing the list of episodes and an optional error message.</returns>
     public static async Task<(List<PlexMetadataItem> Episodes, string? ErrorMessage)> FetchManagedUserSectionEpisodesAsync(
         PlexAuth plexAuth,
         PlexClient plexClient,
