@@ -63,12 +63,12 @@ internal sealed record ThemeSelection(string AudioUrl, string SlugRaw, string Sl
 #endregion
 
 /// <summary>Provides functionality for fetching, converting and previewing anime theme audio from the AnimeThemes API.</summary>
-public class AnimeThemesMp3Generator(IMetadataService metadataService, IVideoService videoService, ConfigProvider configProvider)
+public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService metadataService, IVideoService videoService, ConfigProvider configProvider)
 {
     #region Fields & Constructor
 
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
-    private static readonly HttpClient Http = new();
+    private readonly HttpClient _http = httpClient;
     private readonly FfmpegService _ffmpegService = new(configProvider.PluginDirectory);
     private readonly AnimeThemesApi _apiClient = new();
     private List<string>? _themeMp3Cache;
@@ -203,7 +203,7 @@ public class AnimeThemesMp3Generator(IMetadataService metadataService, IVideoSer
 
         await Parallel.ForEachAsync(
             folders,
-            new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, ShokoRelay.Settings.Advanced.Parallelism), CancellationToken = ct },
+            new ParallelOptions { MaxDegreeOfParallelism = ShokoRelay.GetMaxParallelism(), CancellationToken = ct },
             async (folder, token) =>
             {
                 if (excluded.Contains(Path.GetFileName(folder)))
@@ -353,7 +353,7 @@ public class AnimeThemesMp3Generator(IMetadataService metadataService, IVideoSer
     /// <summary>Downloads an audio file to a temporary location.</summary>
     private async Task<string> DownloadAudioAsync(string url, CancellationToken ct)
     {
-        using var resp = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+        using var resp = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
         resp.EnsureSuccessStatusCode();
         string temp = Path.Combine(Path.GetTempPath(), $"at-{Guid.NewGuid():N}{Path.GetExtension(url)}");
         using (var i = await resp.Content.ReadAsStreamAsync(ct))

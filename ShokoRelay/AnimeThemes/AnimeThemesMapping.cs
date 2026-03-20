@@ -8,14 +8,14 @@ using ShokoRelay.Vfs;
 namespace ShokoRelay.AnimeThemes;
 
 /// <summary>Provides operations for building and applying mappings between anime theme files and AniDB/video identifiers.</summary>
-public class AnimeThemesMapping(IMetadataService metadataService, IVideoService videoService, ConfigProvider configProvider)
+public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadataService, IVideoService videoService, ConfigProvider configProvider)
 {
     #region Fields & Constructor
 
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private readonly IMetadataService _metadataService = metadataService;
     private readonly IVideoService _videoService = videoService;
-    private readonly AnimeThemesApi _apiClient = new();
+    private readonly AnimeThemesApi _apiClient = new(httpClient);
     private readonly string _configDirectory = configProvider.ConfigDirectory;
 
     #endregion
@@ -35,9 +35,8 @@ public class AnimeThemesMapping(IMetadataService metadataService, IVideoService 
     {
         try
         {
-            using var client = new HttpClient();
-            AnimeThemesHelper.EnsureUserAgent(client);
-            var content = await client.GetStringAsync(rawUrl, ct).ConfigureAwait(false);
+            AnimeThemesHelper.EnsureUserAgent(httpClient);
+            var content = await httpClient.GetStringAsync(rawUrl, ct).ConfigureAwait(false);
             if (string.IsNullOrWhiteSpace(content))
                 return (0, "Downloaded content empty");
 
@@ -111,7 +110,7 @@ public class AnimeThemesMapping(IMetadataService metadataService, IVideoService 
             int errors = 0;
             await Parallel.ForEachAsync(
                 toProcess,
-                new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, ShokoRelay.Settings.Advanced.Parallelism), CancellationToken = ct },
+                new ParallelOptions { MaxDegreeOfParallelism = ShokoRelay.GetMaxParallelism(), CancellationToken = ct },
                 async (item, token) =>
                 {
                     try
@@ -238,7 +237,7 @@ public class AnimeThemesMapping(IMetadataService metadataService, IVideoService 
 
             Parallel.ForEach(
                 groups,
-                new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, ShokoRelay.Settings.Advanced.Parallelism), CancellationToken = ct },
+                new ParallelOptions { MaxDegreeOfParallelism = ShokoRelay.GetMaxParallelism(), CancellationToken = ct },
                 group =>
                 {
                     ct.ThrowIfCancellationRequested();

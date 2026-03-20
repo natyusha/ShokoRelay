@@ -26,6 +26,11 @@ public class ServiceRegistration : IPluginServiceRegistration
         serviceCollection.AddControllers().AddApplicationPart(typeof(ServiceRegistration).Assembly);
 
         serviceCollection.AddSingleton(new ConfigProvider(applicationPaths));
+        serviceCollection.AddSingleton(provider =>
+        {
+            var handler = new HttpClientHandler { UseCookies = true, CookieContainer = new System.Net.CookieContainer() };
+            return new HttpClient(handler, disposeHandler: true);
+        });
         serviceCollection.AddSingleton<AnimeThemesMp3Generator>();
         serviceCollection.AddSingleton<AnimeThemesMapping>();
         serviceCollection.AddSingleton<PlexMetadata>();
@@ -37,15 +42,14 @@ public class ServiceRegistration : IPluginServiceRegistration
         serviceCollection.AddSingleton<Sync.SyncToShoko>();
         serviceCollection.AddSingleton<Sync.SyncToPlex>();
 
-        var handlerWithCookies = new HttpClientHandler { UseCookies = true, CookieContainer = new System.Net.CookieContainer() };
         serviceCollection.AddSingleton(provider =>
         {
             var cp = provider.GetRequiredService<ConfigProvider>();
             var plexAuthConfig = new PlexAuthConfig { ClientIdentifier = cp.GetPlexClientIdentifier() };
-            return new PlexAuth(new HttpClient(handlerWithCookies, disposeHandler: false), plexAuthConfig);
+            return new PlexAuth(provider.GetRequiredService<HttpClient>(), plexAuthConfig);
         });
-        serviceCollection.AddSingleton(provider => new PlexClient(new HttpClient(handlerWithCookies, disposeHandler: false), provider.GetRequiredService<ConfigProvider>()));
-        serviceCollection.AddSingleton(provider => new PlexCollections(new HttpClient(handlerWithCookies, disposeHandler: false), provider.GetRequiredService<PlexClient>()));
+        serviceCollection.AddSingleton<PlexClient>();
+        serviceCollection.AddSingleton<PlexCollections>();
 
         serviceCollection.AddHostedService<ShokoRelay>();
     }
@@ -101,6 +105,9 @@ public class ShokoRelay : BackgroundService
     private static DateTime? _lastImportRunUtc;
     private static DateTime? _lastPlexAutomationUtc;
     private static DateTime? _lastSyncWatchedUtc;
+
+    /// <summary>Returns the effective degree of parallelism clamped to at least 1 without appearing in the config file.</summary>
+    public static int GetMaxParallelism() => Math.Max(1, Settings.Advanced.Parallelism);
 
     /// <summary>Initializes the Relay hosted service.</summary>
     public ShokoRelay(

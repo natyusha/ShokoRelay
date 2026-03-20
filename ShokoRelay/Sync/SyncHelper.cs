@@ -104,27 +104,6 @@ public record PlexWatchedSyncResult(
 /// <summary>Shared helpers used by sync services.</summary>
 public static class SyncHelper
 {
-    #region GUID Parsing
-
-    /// <summary>Parse Shoko episode ID from GUID.</summary>
-    public static int? TryParseShokoEpisodeIdFromGuid(string? guid) => ParseGuidId(guid, $"{ShokoRelayConstants.AgentScheme}://episode/{PlexConstants.EpisodePrefix}");
-
-    /// <summary>Parse Shoko series ID from GUID.</summary>
-    public static int? TryParseShokoSeriesIdFromGuid(string? guid) => ParseGuidId(guid, $"{ShokoRelayConstants.AgentScheme}://show/");
-
-    private static int? ParseGuidId(string? guid, string prefix)
-    {
-        if (string.IsNullOrWhiteSpace(guid))
-            return null;
-        int idx = guid.IndexOf(prefix, StringComparison.OrdinalIgnoreCase);
-        if (idx < 0)
-            return null;
-        var idStr = new string([.. guid[(idx + prefix.Length)..].TakeWhile(char.IsDigit)]);
-        return int.TryParse(idStr, out int id) ? id : null;
-    }
-
-    #endregion
-
     #region Collection Helpers
 
     /// <summary>Create result buckets for users.</summary>
@@ -349,10 +328,9 @@ public static class SyncHelper
         }
     }
 
-    private static readonly HttpClient _sharedHttp = new();
-
     /// <summary>Checks if a user has access to a section.</summary>
     public static async Task<bool> UserHasAccessToSectionAsync(
+        HttpClient httpClient,
         PlexClient plexClient,
         PlexLibraryTarget target,
         string plexUserName,
@@ -369,7 +347,7 @@ public static class SyncHelper
         try
         {
             using var accessReq = plexClient.CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?X-Plex-Container-Size=1", target.ServerUrl, plexToken);
-            using var resp = await _sharedHttp.SendAsync(accessReq, cancellationToken).ConfigureAwait(false);
+            using var resp = await httpClient.SendAsync(accessReq, cancellationToken).ConfigureAwait(false);
             hasAccess = resp.IsSuccessStatusCode;
         }
         catch

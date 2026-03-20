@@ -1,4 +1,3 @@
-using System.Globalization;
 using NLog;
 using Shoko.Abstractions.Services;
 using ShokoRelay.Config;
@@ -13,7 +12,6 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
     #region Fields & Constructor
 
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
-    private static readonly HttpClient Http = new();
     private readonly PlexClient _plexClient = plexClient;
     private readonly IMetadataService _metadataService = metadataService;
     private readonly IUserDataService _userDataService = userDataService;
@@ -47,9 +45,20 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
         if (targets.Count == 0)
             return result;
 
-        var shokoWatched = _userDataService.GetEpisodeUserDataForUser(shokoUser).Where(e => e.IsWatched).ToList();
+        var shokoWatchedRaw = _userDataService.GetEpisodeUserDataForUser(shokoUser).Where(e => e.IsWatched).ToList();
         if (sinceHours > 0)
-            shokoWatched = [.. shokoWatched.Where(e => (e.LastPlayedAt ?? DateTime.MinValue) >= DateTime.UtcNow.AddHours(-sinceHours.Value))];
+            shokoWatchedRaw = [.. shokoWatchedRaw.Where(e => (e.LastPlayedAt ?? DateTime.MinValue) >= DateTime.UtcNow.AddHours(-sinceHours.Value))];
+
+        var shokoWatched = shokoWatchedRaw
+            .Select(sw => new { UserData = sw, Episode = _metadataService.GetShokoEpisodeByID(sw.EpisodeID) })
+            .Where(x => x.Episode != null)
+            .Select(x => new
+            {
+                x.UserData,
+                x.Episode,
+                Guid = x.Episode!.GetPlexGuid(),
+            })
+            .ToList();
 
         result = result with { Processed = shokoWatched.Count };
         var extraEntries = _configProvider.GetExtraPlexUserEntries();
@@ -72,7 +81,7 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
             foreach (var (uName, uToken) in plexUsers)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (!await SyncHelper.UserHasAccessToSectionAsync(_plexClient, target, uName, uToken, accessCache, cancellationToken))
+                if (!await SyncHelper.UserHasAccessToSectionAsync(_plexClient.HttpClient, _plexClient, target, uName, uToken, accessCache, cancellationToken))
                     continue;
 
                 result.PerUser[uName] = result.PerUser[uName] with { Processed = shokoWatched.Count };
@@ -81,64 +90,59 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
 
                 foreach (var sw in shokoWatched)
                 {
-                    var ep = _metadataService.GetShokoEpisodeByID(sw.EpisodeID);
-                    if (ep == null)
+                    if (!plexMap.TryGetValue(sw.Guid, out var rKey))
                         continue;
 
-                    var guid = ep.GetPlexGuid();
-                    if (!plexMap.TryGetValue(guid, out var rKey))
-                        continue;
-
-                    matchedGlobal.Add(sw.EpisodeID);
+                    matchedGlobal.Add(sw.UserData.EpisodeID);
                     if (!dryRun)
                     {
                         using var req = _plexClient.CreateRequest(HttpMethod.Get, $"/:/scrobble?identifier=com.plexapp.plugins.library&key={rKey}", target.ServerUrl, uToken);
-                        using var resp = await Http.SendAsync(req, cancellationToken).ConfigureAwait(false);
+                        using var resp = await _plexClient.HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
                         if (!resp.IsSuccessStatusCode)
                             continue;
                     }
 
                     result = SyncHelper.IncMarkedWatched(result, result.PerUser, uName);
-                    Logger.Info("{0}Shoko->Plex: {1} scrobbled ep {2} on {3}", logPrefix, uName, sw.EpisodeID, target.ServerUrl);
+                    Logger.Info("{0}Shoko->Plex: {1} scrobbled ep {2} on {3}", logPrefix, uName, sw.UserData.EpisodeID, target.ServerUrl);
                     SyncHelper.AddPerUserChange(
                         result.PerUserChanges,
                         uName,
                         SyncHelper.MakeChange(
                             uName,
-                            sw.EpisodeID,
-                            ep.Series?.PreferredTitle?.Value,
-                            ep.PreferredTitle?.Value,
-                            ep.SeasonNumber,
-                            ep.EpisodeNumber,
+                            sw.UserData.EpisodeID,
+                            sw.Episode!.Series?.PreferredTitle?.Value,
+                            sw.Episode.PreferredTitle?.Value,
+                            sw.Episode.SeasonNumber,
+                            sw.Episode.EpisodeNumber,
                             rKey,
-                            guid,
+                            sw.Guid,
                             null,
-                            sw.LastPlayedAt,
+                            sw.UserData.LastPlayedAt,
                             true,
                             true,
-                            plexUserRating: sw.UserRating
+                            plexUserRating: sw.UserData.UserRating
                         )
                     );
 
-                    if (actualVotes && sw.HasUserRating)
+                    if (actualVotes && sw.UserData.HasUserRating)
                     {
                         result = SyncHelper.IncVotesFound(result);
                         if (!dryRun)
                         {
                             using var rateReq = _plexClient.CreateRequest(
                                 HttpMethod.Get,
-                                $"/:/rate?identifier=com.plexapp.plugins.library&key={rKey}&rating={sw.UserRating.Value.ToString(CultureInfo.InvariantCulture)}",
+                                $"/:/rate?identifier=com.plexapp.plugins.library&key={rKey}&rating={sw.UserData.UserRating.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)}",
                                 target.ServerUrl,
                                 uToken
                             );
-                            await Http.SendAsync(rateReq, cancellationToken).ConfigureAwait(false);
+                            await _plexClient.HttpClient.SendAsync(rateReq, cancellationToken).ConfigureAwait(false);
                         }
                         result = SyncHelper.IncVotesUpdated(result);
                     }
                 }
             }
         }
-        var notFoundCount = shokoWatched.Count(e => !matchedGlobal.Contains(e.EpisodeID));
+        var notFoundCount = shokoWatched.Count(e => !matchedGlobal.Contains(e.UserData.EpisodeID));
         result = result with { Skipped = result.Skipped + notFoundCount };
         return result;
     }

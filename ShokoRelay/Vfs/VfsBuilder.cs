@@ -197,7 +197,7 @@ public class VfsBuilder
         // Process series in parallel
         Parallel.ForEach(
             seriesList,
-            new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, ShokoRelay.Settings.Advanced.Parallelism) },
+            new ParallelOptions { MaxDegreeOfParallelism = ShokoRelay.GetMaxParallelism() },
             series =>
             {
                 try

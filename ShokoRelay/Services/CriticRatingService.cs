@@ -114,7 +114,7 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
                 {
                     if (string.IsNullOrWhiteSpace(item.Guid))
                         continue;
-                    var epId = Sync.SyncHelper.TryParseShokoEpisodeIdFromGuid(item.Guid);
+                    var epId = PlexHelper.ExtractShokoEpisodeIdFromGuid(item.Guid);
                     if (!epId.HasValue)
                         continue;
 

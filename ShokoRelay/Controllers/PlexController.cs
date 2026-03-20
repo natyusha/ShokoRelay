@@ -3,7 +3,6 @@ using Shoko.Abstractions.Services;
 using ShokoRelay.Config;
 using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
-using ShokoRelay.Sync;
 
 namespace ShokoRelay.Controllers;
 
@@ -299,7 +298,7 @@ public class PlexController(
             return Ok(new { status = "ignored", reason });
         }
 
-        int? shokoEpisodeId = SyncHelper.TryParseShokoEpisodeIdFromGuid(evt.Metadata.Guid);
+        int? shokoEpisodeId = PlexHelper.ExtractShokoEpisodeIdFromGuid(evt.Metadata.Guid);
         if (!shokoEpisodeId.HasValue)
             return Ok(new { status = "ignored", reason = "no_shoko_guid" });
 

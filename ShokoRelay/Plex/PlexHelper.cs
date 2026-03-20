@@ -12,26 +12,30 @@ namespace ShokoRelay.Plex;
 /// <summary>Miscellaneous utility routines used by Plex-facing code.</summary>
 public static class PlexHelper
 {
-    #region Fields
+    #region GUID Parsing
 
     /// <summary>Regex which extracts the ID from a Show GUID.</summary>
     private static readonly Regex _showIdRegex = new(@"/show/(\d+)", RegexOptions.Compiled);
 
-    #endregion
-
-    #region GUID Parsing
+    /// <summary>Regex which extracts the ID from an Episode GUID.</summary>
+    private static readonly Regex _episodeIdRegex = new(@"/episode/e(\d+)", RegexOptions.Compiled);
 
     /// <summary>Parse a Plex GUID string and return the embedded Shoko series ID.</summary>
     /// <param name="guid">Plex GUID.</param>
     /// <returns>Extracted ID or null.</returns>
-    public static int? ExtractShokoSeriesIdFromGuid(string? guid)
+    public static int? ExtractShokoSeriesIdFromGuid(string? guid) => ExtractIdFromGuid(guid, _showIdRegex);
+
+    /// <summary>Parse Shoko episode ID from GUID.</summary>
+    /// <param name="guid">Plex GUID.</param>
+    /// <returns>Extracted ID or null.</returns>
+    public static int? ExtractShokoEpisodeIdFromGuid(string? guid) => ExtractIdFromGuid(guid, _episodeIdRegex);
+
+    private static int? ExtractIdFromGuid(string? guid, Regex regex)
     {
         if (string.IsNullOrWhiteSpace(guid))
             return null;
-        var match = _showIdRegex.Match(guid);
-        return !match.Success ? null
-            : int.TryParse(match.Groups[1].Value, out var id) ? id
-            : null;
+        var match = regex.Match(guid);
+        return match.Success && int.TryParse(match.Groups[1].Value, out var id) ? id : null;
     }
 
     #endregion

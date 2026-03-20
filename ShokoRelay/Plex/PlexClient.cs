@@ -1,5 +1,6 @@
 using NLog;
 using ShokoRelay.Config;
+using ShokoRelay.Helpers;
 
 namespace ShokoRelay.Plex;
 
@@ -9,6 +10,9 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
     #region Fields & Properties
 
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+
+    /// <summary>Internal access to the shared HttpClient instance.</summary>
+    internal HttpClient HttpClient => httpClient;
 
     private string Token => configProvider.GetPlexToken();
     private string ClientIdentifier => configProvider.GetPlexClientIdentifier();
@@ -34,13 +38,13 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
             return false;
 
         string mapped = MapShokoPathToPlexPath(path);
-        string normMapped = mapped.Replace('\\', '/').TrimEnd('/');
+        string normMapped = TextHelper.NormalizePathForPlex(mapped);
 
         // Use only the folder name (ShokoSeriesID) for cleaner logging
         string logFolderName = Path.GetFileName(normMapped);
 
         var allTargets = GetConfiguredTargets();
-        var matchingTargets = allTargets.Where(target => target.Locations.Any(loc => normMapped.StartsWith(loc.Replace('\\', '/').TrimEnd('/'), StringComparison.OrdinalIgnoreCase))).ToList();
+        var matchingTargets = allTargets.Where(target => target.Locations.Any(loc => normMapped.StartsWith(TextHelper.NormalizePathForPlex(loc), StringComparison.OrdinalIgnoreCase))).ToList();
 
         var targetsToProcess = matchingTargets.Any() ? matchingTargets : allTargets;
 
@@ -131,31 +135,6 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
     #endregion
 
     #region Metadata Queries
-
-    /// <summary>Check whether a given ratingKey exists in the provided target section.</summary>
-    /// <param name="ratingKey">Plex rating key.</param>
-    /// <param name="target">Target server/section.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>True if the item is present in the section.</returns>
-    public async Task<bool> ItemExistsInSectionAsync(int ratingKey, PlexLibraryTarget target, CancellationToken cancellationToken = default)
-    {
-        if (!IsEnabled || ratingKey <= 0 || target == null)
-            return false;
-        try
-        {
-            using var req = CreateRequest(HttpMethod.Get, $"/library/metadata/{ratingKey}?X-Plex-Container-Size=1", target.ServerUrl);
-            using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
-            if (!resp.IsSuccessStatusCode)
-                return false;
-            var meta = (await PlexApi.ReadContainerAsync(resp, cancellationToken).ConfigureAwait(false))?.Metadata?.FirstOrDefault();
-            return meta?.LibrarySectionId == target.SectionId
-                || (meta != null && await GetSectionItemsAsync(target, null, cancellationToken, null, $"{ShokoRelayConstants.AgentScheme}://show/{ratingKey}").ContinueWith(t => t.Result.Any()));
-        }
-        catch
-        {
-            return false;
-        }
-    }
 
     /// <summary>Find the Plex ratingKey for a Shoko series within the given Plex section using its metadata GUID.</summary>
     /// <param name="shokoSeriesId">Shoko series ID.</param>
@@ -271,21 +250,18 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         if (string.IsNullOrWhiteSpace(path) || mappings == null || mappings.Count == 0)
             return path;
 
-        string input = path.Replace('\\', '/').TrimEnd('/');
+        string input = TextHelper.NormalizePathForPlex(path);
 
         var match = mappings
-            .Select(m => new { Shoko = m.Key.Replace('\\', '/').TrimEnd('/'), Plex = m.Value.Replace('\\', '/').TrimEnd('/') })
-            .OrderByDescending(m => (shokoToPlex ? m.Shoko : m.Plex).Length)
-            .FirstOrDefault(m => input.StartsWith(shokoToPlex ? m.Shoko : m.Plex, StringComparison.OrdinalIgnoreCase));
+            .Select(m => new { In = TextHelper.NormalizePathForPlex(shokoToPlex ? m.Key : m.Value), Out = TextHelper.NormalizePathForPlex(shokoToPlex ? m.Value : m.Key) })
+            .OrderByDescending(m => m.In.Length)
+            .FirstOrDefault(m => input.StartsWith(m.In, StringComparison.OrdinalIgnoreCase));
 
         if (match == null)
             return path;
 
-        string baseIn = shokoToPlex ? match.Shoko : match.Plex;
-        string baseOut = shokoToPlex ? match.Plex : match.Shoko;
-        string remainder = input.Length > baseIn.Length ? input[baseIn.Length..].TrimStart('/') : "";
-
-        string result = string.IsNullOrEmpty(remainder) ? baseOut : $"{baseOut.TrimEnd('/')}/{remainder}";
+        string remainder = input.Length > match.In.Length ? input[match.In.Length..].TrimStart('/') : "";
+        string result = string.IsNullOrEmpty(remainder) ? match.Out : $"{match.Out.TrimEnd('/')}/{remainder}";
 
         return shokoToPlex ? result : result.Replace('/', Path.DirectorySeparatorChar);
     }

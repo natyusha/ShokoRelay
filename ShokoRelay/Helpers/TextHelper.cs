@@ -203,6 +203,11 @@ public static class TextHelper
 
     #region VFS/Plex Utils
 
+    /// <summary>Normalizes directory separators to forward slashes and trims trailing slashes for Plex-compatible path comparison.</summary>
+    /// <param name="path">The filesystem path to normalize.</param>
+    /// <returns>A normalized path string.</returns>
+    public static string NormalizePathForPlex(string? path) => string.IsNullOrWhiteSpace(path) ? string.Empty : path.Replace('\\', '/').TrimEnd('/');
+
     /// <summary>Maps invalid Windows filename characters to visually similar Unicode replacements.</summary>
     public static readonly FrozenDictionary<char, char> ReplacementCharMap = new Dictionary<char, char>
     {

@@ -74,7 +74,7 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                         continue;
                     }
                     result = SyncHelper.IncProcessed(result, result.PerUser, uName);
-                    var ep = SyncHelper.TryParseShokoEpisodeIdFromGuid(item.Guid) is { } id ? _metadataService.GetShokoEpisodeByID(id) : null;
+                    var ep = PlexHelper.ExtractShokoEpisodeIdFromGuid(item.Guid) is { } id ? _metadataService.GetShokoEpisodeByID(id) : null;
                     if (ep == null || appliedIds.Contains(ep.ID))
                     {
                         result = SyncHelper.IncSkipped(result, result.PerUser, uName);

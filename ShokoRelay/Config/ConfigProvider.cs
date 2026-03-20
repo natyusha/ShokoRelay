@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using NLog;
 using Shoko.Abstractions.Plugin;
+using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
 
 namespace ShokoRelay.Config;
@@ -315,7 +316,10 @@ public class ConfigProvider
     {
         if (settings.Advanced.PathMappings.Count == 0)
             return false;
-        var norm = settings.Advanced.PathMappings.ToDictionary(k => NormalizeShokoKey(k.Key), v => NormalizePlexBasePath(v.Value));
+        var norm = settings.Advanced.PathMappings.ToDictionary(
+            k => NormalizeShokoKey(k.Key),
+            v => (TextHelper.NormalizePathForPlex(v.Value.Trim()) is var p && !p.StartsWith("/") && !p.Contains(":") && !p.StartsWith("//")) ? "/" + p : p
+        );
         if (JsonSerializer.Serialize(settings.Advanced.PathMappings) == JsonSerializer.Serialize(norm))
             return false;
         settings.Advanced.PathMappings = norm;
@@ -344,8 +348,6 @@ public class ConfigProvider
             return n;
         }
     }
-
-    private static string NormalizePlexBasePath(string v) => (v.Trim().Replace('\\', '/').TrimEnd('/') is var p && !p.StartsWith("/") && !p.Contains(":") && !p.StartsWith("//")) ? "/" + p : p;
 
     private static void ApplyDefaultValues(object obj)
     {

@@ -137,22 +137,6 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
         return deleted;
     }
 
-    /// <summary>Deletes the specified collection if it contains no child items.</summary>
-    /// <param name="collectionId">Collection ID.</param>
-    /// <param name="target">Target library.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>True if deleted.</returns>
-    public async Task<bool> DeleteCollectionIfEmptyAsync(int collectionId, PlexLibraryTarget target, CancellationToken cancellationToken = default)
-    {
-        if (!IsEnabled)
-            return false;
-        using var req = _plexClient.CreateRequest(HttpMethod.Get, $"/library/collections/{collectionId}/children?X-Plex-Container-Size=1", target.ServerUrl);
-        using var resp = await _httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
-        return resp.IsSuccessStatusCode
-            && !((await PlexApi.ReadContainerAsync(resp, cancellationToken).ConfigureAwait(false))?.Metadata?.Count > 0)
-            && await DeleteCollectionAsync(collectionId, target, cancellationToken).ConfigureAwait(false);
-    }
-
     #endregion
 
     #region Metadata Updates
