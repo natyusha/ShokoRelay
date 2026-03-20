@@ -500,8 +500,10 @@
       playerFilterClear.onclick = () => {
         playerFilter.value = "";
         playerFilterClear.hidden = true;
-        renderTree(getFilteredItems());
         playerFilter.focus();
+        setTimeout(() => {
+          renderTree(getFilteredItems()); // Defer DOM Operation to reduce perceived lag
+        }, 10);
       };
 
     if (playerNextBtn) {

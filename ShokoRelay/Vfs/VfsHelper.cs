@@ -8,7 +8,10 @@ public static class VfsHelper
 {
     #region Regex and Mappings
 
+    /// <summary>Regex to match standard quotes with the intention of turning them curly.</summary>
     private static readonly Regex _quotedTextRegex = new("\"(.*?)\"", RegexOptions.Compiled);
+
+    /// <summary>Regex to match whitespace except for Hair Space and Zero Width Spaceas they are part of some Plex Extra filename formatting.</summary>
     private static readonly Regex _whitespaceRegex = new(@"((?![\u200A\u200B])\s)+", RegexOptions.Compiled);
     private static readonly (string Find, string Replace)[] _styledReplacements = [("1/2", "½"), ("1/6", "⅙"), ("-->", "→"), ("<--", "←"), ("->", "→"), ("<-", "←")];
     private static readonly IReadOnlyDictionary<string, string> _extraTypePrefixes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)

@@ -184,6 +184,7 @@ This plugin includes full [AnimeThemes](https://animethemes.moe/) integration. I
    - If you have the torrent click the `Import` button to download the [current torrent mapping](https://gist.github.com/natyusha/bb33a3b3bc95bc7a3869633e23d522bb)
    - Mapping the torrent takes ~8 hours (due to rate limits) and generated mappings will be appended to it
 3. Apply the mapping to the VFS by clicking the `Generate` button
+   - The themes will be placed in the "Shorts" folder of their respective series
 
 > [!TIP]
 > By default, the plugin appends metadata attributes to the filename, such as `[SPOIL, SUBS]`. If you prefer a cleaner look, you can disable this by unchecking `Advanced Settings > Append AnimeThemes Tags` in the dashboard's Provider Settings. Note that a fresh "Generate" run is required to rename existing links after changing this setting.

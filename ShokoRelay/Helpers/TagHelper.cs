@@ -11,6 +11,7 @@ public static class TagHelper
 {
     #region Static Configuration
 
+    /// <summary>Regex which matches alphanumeric text including single quotes and hyphens until a space or other special character.</summary>
     private static readonly Regex _wordRegex = new(@"[\'\w\d-]+\b", RegexOptions.Compiled);
 
     // csharpier-ignore-start

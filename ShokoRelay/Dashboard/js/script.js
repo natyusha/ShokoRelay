@@ -20,6 +20,9 @@
     playing: "Next",
   };
 
+  /** List of values that correspond to server task names for spinner synchronization. Fallback to empty if tasks missing. */
+  const MANAGED_TASK_IDS = Object.values(window._sr.tasks || {});
+
   // #region Helpers
   /**
    * Fetch a URL and parse the response as JSON, returning a normalized result object.
@@ -132,14 +135,17 @@
   function toastOperation(res, label, opts = {}) {
     const { summary, hideOnSucceed, type } = opts;
     const { text, errorCount } = summarizeResult(res);
-    const logLink = res.data?.logUrl ? `[<a href="${res.data.logUrl}" target="_blank" class="log-link">view log</a>]` : "";
+    const logUrl = res.data?.logUrl || res.data?.LogUrl;
+    const logLink = logUrl ? `[<a href="${logUrl}" target="_blank" class="log-link">view log</a>]` : "";
+
     const envMsg = res.data?.message || res.data?.Message,
       envStatus = res.data?.status || res.data?.Status;
 
     if (res.ok) {
       const display = summary || envMsg || (envStatus !== "ok" ? envStatus : null) || text || "Complete";
       const toastType = type || (errorCount > 0 ? "error" : "success");
-      showToast(`${label}: ${display} ${logLink}`, toastType, errorCount > 0 ? 0 : (hideOnSucceed ?? TOAST_MS));
+      const persistence = logUrl || errorCount > 0 ? 0 : (hideOnSucceed ?? TOAST_MS); // Log-enabled tasks or tasks with errors are persistent (timeout=0).
+      showToast(`${label}: ${display} ${logLink}`, toastType, persistence);
     } else {
       const display = summary || envMsg || text || (typeof res.data === "string" ? res.data : JSON.stringify(res.data));
       showToast(`${label} Failed: ${display} ${logLink}`, "error", 0);
@@ -165,7 +171,6 @@
 
   /** Polls the server for active tasks and completed results, synchronizing the UI state. */
   async function syncActiveTasks() {
-    const MANAGED_TASK_IDS = Object.values(window._sr.tasks || {});
     const res = await fetchJson(window._sr.base + "/tasks/active");
     if (!res.ok) return;
     const activeTasks = res.data || [];
@@ -183,7 +188,9 @@
         const btn = el(taskName);
         if (btn?.classList.contains("clicking")) continue;
         const label = taskName.replace(/-/g, " ");
-        toastOperation({ ok: result.status === "ok", data: result }, label, { hideOnSucceed: 0 });
+        const isOk = (result.status || result.Status || "").toLowerCase() === "ok"; // Ensure the ok status is correctly identified regardless of property casing
+
+        toastOperation({ ok: isOk, data: result }, label, { hideOnSucceed: 0 }); // Polled task completions with logs are always persistent
         await fetch(window._sr.base + `/tasks/clear/${taskName}`, { method: "POST" });
       }
     }

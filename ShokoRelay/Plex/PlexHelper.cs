@@ -14,6 +14,7 @@ public static class PlexHelper
 {
     #region Fields
 
+    /// <summary>Regex which extracts the ID from a Show GUID.</summary>
     private static readonly Regex _showIdRegex = new(@"/show/(\d+)", RegexOptions.Compiled);
 
     #endregion
