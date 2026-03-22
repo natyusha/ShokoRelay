@@ -39,6 +39,7 @@ public class ServiceRegistration : IPluginServiceRegistration
         serviceCollection.AddSingleton<Services.ICollectionService, Services.CollectionService>();
         serviceCollection.AddSingleton<Services.ICriticRatingService, Services.CriticRatingService>();
         serviceCollection.AddSingleton<Services.ShokoImportService>();
+        serviceCollection.AddSingleton<Services.SourceLinkService>();
         serviceCollection.AddSingleton(provider => new Services.FfmpegService(provider.GetRequiredService<ConfigProvider>().PluginDirectory));
         serviceCollection.AddSingleton<Sync.SyncToShoko>();
         serviceCollection.AddSingleton<Sync.SyncToPlex>();

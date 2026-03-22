@@ -20,7 +20,8 @@ public class ShokoController(
     VfsBuilder vfsBuilder,
     Services.ShokoImportService shokoImportService,
     SyncToShoko watchedSyncService,
-    SyncToPlex syncToPlexService
+    SyncToPlex syncToPlexService,
+    Services.SourceLinkService sourceLinkService
 ) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
 {
     #region Fields
@@ -29,6 +30,7 @@ public class ShokoController(
     private readonly Services.ShokoImportService _shokoImportService = shokoImportService;
     private readonly SyncToShoko _watchedSyncService = watchedSyncService;
     private readonly SyncToPlex _syncToPlexService = syncToPlexService;
+    private readonly Services.SourceLinkService _sourceLinkService = sourceLinkService;
 
     #endregion
 
@@ -233,6 +235,24 @@ public class ShokoController(
         {
             return StatusCode(500, new RelayResponse<object>(Status: "error", Message: ex.Message));
         }
+    }
+
+    #endregion
+
+    #region Source Linking
+
+    /// <summary>Processes pending source symlinks or purges existing links from import roots.</summary>
+    /// <param name="mapFile">The relative path to the mapping file.</param>
+    /// <param name="purgeLinks">If true, all symlinks in the import roots (outside VFS) will be removed.</param>
+    /// <returns>The number of successful link operations.</returns>
+    [HttpPost("map-symlinks")]
+    public async Task<IActionResult> ProcessSourceLinks([FromQuery] string? mapFile = null, [FromQuery] bool purgeLinks = false)
+    {
+        if (!purgeLinks && string.IsNullOrWhiteSpace(mapFile))
+            return BadRequest(new RelayResponse<object>(Status: "error", Message: "mapFile parameter is required when not purging."));
+
+        int count = await _sourceLinkService.ProcessLinksAsync(mapFile ?? string.Empty, purgeLinks);
+        return Ok(new RelayResponse<object>(Data: new { count }));
     }
 
     #endregion

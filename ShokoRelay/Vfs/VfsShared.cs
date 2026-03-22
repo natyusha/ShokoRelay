@@ -7,7 +7,7 @@ namespace ShokoRelay.Vfs;
 /// <summary>Shared logic for VFS operations including symlink creation.</summary>
 internal static class VfsShared
 {
-    #region Constants and Properties
+    #region Constants & Props
 
     /// <summary>OS-aware path comparer.</summary>
     public static StringComparer PathComparer => OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
@@ -56,7 +56,7 @@ internal static class VfsShared
 
     #endregion
 
-    #region Folder Name Resolution
+    #region Folder Resolution
 
     /// <summary>Resolves the VFS root folder name.</summary>
     public static string ResolveRootFolderName() => ResolveFolderName(ShokoRelay.Settings.Advanced.VfsRootPath, ShokoRelayConstants.FolderVfsDefault);
@@ -81,6 +81,12 @@ internal static class VfsShared
     #region Symlink Operations
 
     /// <summary>Attempts to create a symlink.</summary>
+    /// <param name="source">The physical source file.</param>
+    /// <param name="dest">The destination link path.</param>
+    /// <param name="logger">Logger instance.</param>
+    /// <param name="targetOverride">Optional specific target string.</param>
+    /// <param name="useRelativeTarget">Whether to resolve the target path relatively.</param>
+    /// <returns>True if the link exists and is correct, or was successfully created.</returns>
     public static bool TryCreateLink(string source, string dest, Logger logger, string? targetOverride = null, bool useRelativeTarget = true)
     {
         string linkDir = Path.GetDirectoryName(dest) ?? string.Empty;
@@ -129,7 +135,7 @@ internal static class VfsShared
 
     #endregion
 
-    #region Validation and Normalization
+    #region Validate & Normalize
 
     /// <summary>Normalizes directory separators.</summary>
     public static string NormalizeSeparators(string path) => path.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);

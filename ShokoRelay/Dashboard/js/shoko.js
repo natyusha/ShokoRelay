@@ -5,6 +5,12 @@
 (() => {
   const { base, configUrl, el, fetchJson, showToast, toastOperation, summarizeResult, initToggle, openModal, setButtonLoading, getData } = window._sr;
 
+  /** Set the dynamic href for the Shoko Dashboard link based on the current origin. */
+  const dashLink = el("shoko-dashboard-link");
+  if (dashLink) {
+    dashLink.href = location.origin + "/webui/dashboard";
+  }
+
   /** Placeholder text for the VFS Overrides Editor, concatenated to stay under the column limit. */
   const OVERRIDES_PLACEHOLDER =
     "This allows shows which are separated on AniDB but part of the same TMDB listing to be combined into a single entry in Plex.\n" +

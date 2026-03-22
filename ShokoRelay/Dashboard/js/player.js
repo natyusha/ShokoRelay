@@ -577,6 +577,8 @@
     });
 
     (async () => {
+      // Show loading placeholder immediately with the same formatting as the empty state
+      if (playerTree) playerTree.innerHTML = '<div class="placeholder">Working on it...</div>';
       const [treeRes, cfgRes, favRes] = await Promise.all([fetchJson(base + "/animethemes/webm/tree"), fetchJson(configUrl), fetchJson(base + "/animethemes/webm/favourites")]);
       if (favRes.ok) favourites = new Set(getData(favRes) || []);
       if (treeRes.ok) {

@@ -255,6 +255,46 @@ GET  /sync-watched/start                                       -> StartWatchedSy
 
 ---
 
+### Shoko Extras
+
+```
+POST /map-symlinks?mapFile={path}&purgeLinks={true|false}      -> ProcessSourceLinks
+```
+
+- `ProcessSourceLinks` manages relative symlinks from protected source folders to the library based on a text-based mapping file, or purges existing links.
+  - If `purgeLinks` is `true`, the plugin recursively removes all symlinks and `_attach` folders within the import roots.
+    - **Safety:** It explicitly excludes the configured VFS root (default `!ShokoRelayVFS`) and never deletes physical media files.
+  - If `purgeLinks` is `false` (default):
+    - The `mapFile` parameter is the path to the `.txt` file relative to the Import Root (e.g., `!Source/symlinks.txt`).
+    - Source paths are resolved relative to the directory containing the mapping file.
+    - Destination paths are resolved relative to the Import Root.
+    - Sidecar files (`.ass`, `.xml`, `.mka`) and attachment folders (`_attach`) are automatically identified and renamed to match the destination.
+
+---
+
+**Mapping File Format:**
+
+The mapping file uses a pipe-delimited (`|`) and semicolon-delimited (`;`) structure. While designed for multiple scripts, this plugin specifically extracts the source path, destination path, and tags.
+
+`"original_path";comment;tag1,tag2|"symlink_path";comment;ext|title|subgroup|"audio_path";comment;lang;name`
+
+**Plugin Logic:**
+
+- Segment 1 (Source):
+  - `Path`: Extracted from the first double-quoted string.
+  - `Tags`: Extracted from the 3rd semicolon-separated group. Tags are split by commas and appended to the destination filename in brackets (e.g., `[tag1] [tag2]`).
+- Segment 2 (Destination):
+  - `Path`: Extracted from the second double-quoted string. Used as the base for the symlink and sidecar renaming.
+- Segments 3+ (Optional):
+  - Used by external scripts for title, subgroup, or external audio track info; ignored by this plugin.
+
+**Notes:**
+
+- Sidecar Renaming: Sidecars are renamed by replacing the source base name with the tagged destination base name.
+- Attachment Handling: Folders ending in `_attach` are created as physical directories at the destination, but their internal contents (fonts) are linked as individual relative file symlinks for maximum cross-platform compatibility.
+- Relative Pathing: Links are created with relative targets. They remain valid as long as the relative depth between the source and destination remains consistent.
+- Bookkeeping: Lines that are successfully processed are automatically prefixed with `#` to prevent redundant processing in future runs.
+
 ## AnimeThemes
 
 Endpoints managed by `AnimeThemesController`

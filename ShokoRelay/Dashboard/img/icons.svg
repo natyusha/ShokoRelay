@@ -74,6 +74,12 @@
              L7.23,8.83L14.67,16.27L12.58,21.15C10.34,20.81 7.94,19.58 5.93,17.57Z" />
   </symbol>
 
+  <symbol id="view-dashboard-outline" viewBox="0 0 24 24">
+    <title>Shoko Dashboard</title>
+    <path
+      d="M19,5V7H15V5H19M9,5V11H5V5H9M19,13V19H15V13H19M9,17V19H5V17H9M21,3H13V9H21V3M11,3H3V13H11V3M21,11H13V21H21V11M11,15H3V21H11V15Z" />
+  </symbol>
+
   <symbol id="download" viewBox="0 0 24 24">
     <title>Import Curated Mapping File</title>
     <path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z" />
