@@ -12,7 +12,7 @@ public class SourceLinkService(IVideoService videoService)
 
     /// <summary>Scans all import roots for the specified mapping file and processes pending entries, or purges existing links.</summary>
     /// <param name="mapFile">The relative path to the mapping file.</param>
-    /// <param name="purgeLinks">If true, removes all symlinks in the import roots instead of creating them.</param>
+    /// <param name="purgeLinks">If true, removes all symlinks and generated _attach folders in the import roots.</param>
     /// <returns>The number of links created or removed.</returns>
     public async Task<int> ProcessLinksAsync(string mapFile, bool purgeLinks = false)
     {
@@ -138,13 +138,19 @@ public class SourceLinkService(IVideoService videoService)
             foreach (var entry in candidates)
             {
                 string name = Path.GetFileName(entry);
-                if (!name.Equals(Path.GetFileName(fullSrc)) && !name.StartsWith(srcBase + ".") && !name.StartsWith(srcBase + "_"))
+                bool isDir = Directory.Exists(entry);
+
+                // Logic: Filter for the primary video, extension-based sidecar files, or the designated attachments folder
+                if (!name.Equals(Path.GetFileName(fullSrc)) && !(!isDir && name.StartsWith(srcBase + ".")) && !(isDir && name.Equals(srcBase + "_attachments", StringComparison.OrdinalIgnoreCase)))
                     continue;
 
-                string newName = finalDestBase + name[srcBase.Length..];
-                string targetPath = Path.Combine(destDir, newName);
+                string suffix = name[srcBase.Length..];
+                if (isDir)
+                    suffix = "_attach";
 
-                if (Directory.Exists(entry))
+                string targetPath = Path.Combine(destDir, finalDestBase + suffix);
+
+                if (isDir)
                 {
                     if (File.Exists(targetPath))
                         File.Delete(targetPath);
@@ -164,11 +170,14 @@ public class SourceLinkService(IVideoService videoService)
         }
     }
 
+    /// <summary>Isolates paths and tags within segments by splitting on semicolons first, then stripping quotes and normalizing slashes.</summary>
+    /// <param name="rawSegment">The raw string segment from the pipe-delimited file.</param>
+    /// <returns>A tuple containing the cleaned relative path and a list of extracted tags.</returns>
     private static (string Path, List<string> Tags) ExtractPathAndTags(string rawSegment)
     {
         var parts = rawSegment.Split(';');
         string path = parts[0].Trim().Trim('"').Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar).TrimStart(Path.DirectorySeparatorChar);
-        var tags = parts.Length > 2 ? [.. parts[2].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)] : new List<string>();
+        var tags = parts.Length > 2 ? [.. parts[2].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)] : (List<string>)[];
         return (path, tags);
     }
 }

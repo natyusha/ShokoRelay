@@ -291,7 +291,11 @@ The mapping file uses a pipe-delimited (`|`) and semicolon-delimited (`;`) struc
 **Notes:**
 
 - Sidecar Renaming: Sidecars are renamed by replacing the source base name with the tagged destination base name.
-- Attachment Handling: Folders ending in `_attach` are created as physical directories at the destination, but their internal contents (fonts) are linked as individual relative file symlinks for maximum cross-platform compatibility.
+- Attachment Handling:
+  - Source Convention: The original attachment folders must end in `_attachments` (e.g., `Anime_attachments`).
+  - Destination Result: The plugin creates a physical folder at the destination ending in `_attach` (e.g., `Anime_attach`).
+  - Internal contents (fonts) are linked as individual relative file symlinks.
+  - This distinction ensures the `purgeLinks` command can safely remove generated links without touching original source files.
 - Relative Pathing: Links are created with relative targets. They remain valid as long as the relative depth between the source and destination remains consistent.
 - Bookkeeping: Lines that are successfully processed are automatically prefixed with `#` to prevent redundant processing in future runs.
 
