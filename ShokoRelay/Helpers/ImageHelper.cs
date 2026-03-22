@@ -1,7 +1,7 @@
 using Newtonsoft.Json;
-using Shoko.Abstractions.Enums;
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Containers;
+using Shoko.Abstractions.Metadata.Enums;
 
 namespace ShokoRelay.Helpers;
 

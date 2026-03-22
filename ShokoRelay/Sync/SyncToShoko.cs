@@ -1,6 +1,8 @@
 using NLog;
+using Shoko.Abstractions.Metadata.Services;
 using Shoko.Abstractions.Metadata.Shoko;
-using Shoko.Abstractions.Services;
+using Shoko.Abstractions.User.Enums;
+using Shoko.Abstractions.User.Services;
 using ShokoRelay.Config;
 using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
@@ -105,9 +107,7 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                     if (wouldMark)
                     {
                         if (!dryRun)
-                            await _userDataService
-                                .SetEpisodeWatchedStatus(ep, defaultUser, true, watchedAt, videoReason: Shoko.Abstractions.UserData.Enums.VideoUserDataSaveReason.UserInteraction)
-                                .ConfigureAwait(false);
+                            await _userDataService.SetEpisodeWatchedStatus(ep, defaultUser, true, watchedAt, videoReason: VideoUserDataSaveReason.UserInteraction).ConfigureAwait(false);
                         appliedIds.Add(ep.ID);
                         result = SyncHelper.IncMarkedWatched(result, result.PerUser, uName);
                         Logger.Info("{0}Plex->Shoko: {1} marked {2} S{3}E{4}", logPrefix, uName, ep.Series?.PreferredTitle?.Value, ep.SeasonNumber, ep.EpisodeNumber);

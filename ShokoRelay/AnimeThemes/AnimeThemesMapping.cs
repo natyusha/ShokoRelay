@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using NLog;
-using Shoko.Abstractions.Services;
+using Shoko.Abstractions.Metadata.Services;
+using Shoko.Abstractions.Video.Services;
 using ShokoRelay.Config;
 using ShokoRelay.Helpers;
 using ShokoRelay.Vfs;

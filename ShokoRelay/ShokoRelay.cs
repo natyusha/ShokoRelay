@@ -2,9 +2,9 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using NLog;
-using Shoko.Abstractions.Core;
+using Shoko.Abstractions.Core.Services;
+using Shoko.Abstractions.Metadata.Services;
 using Shoko.Abstractions.Plugin;
-using Shoko.Abstractions.Services;
 using ShokoRelay.AnimeThemes;
 using ShokoRelay.Config;
 using ShokoRelay.Plex;
@@ -74,7 +74,7 @@ public class Plugin : IPlugin
     public string? Description => "A Custom Metadata Provider and Automation Tools for Plex and AnimeThemes in the form of a Shoko Server plugin";
 
     /// <summary>Plugin thumbnail resource.</summary>
-    public string? EmbeddedThumbnailResourceName => "ShokoRelay.dashboard.img.shoko-relay-thumbnail.png";
+    public string? EmbeddedThumbnailResourceName => "ShokoRelay.Assets.shoko-relay-thumbnail.png";
 }
 
 #endregion

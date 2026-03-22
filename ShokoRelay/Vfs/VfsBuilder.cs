@@ -1,8 +1,9 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using NLog;
+using Shoko.Abstractions.Metadata.Services;
 using Shoko.Abstractions.Metadata.Shoko;
-using Shoko.Abstractions.Services;
+using Shoko.Abstractions.Video.Enums;
 using ShokoRelay.Config;
 using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
@@ -286,7 +287,7 @@ public class VfsBuilder
         foreach (var mapping in fileData.Mappings.OrderBy(m => m.Coords.Season).ThenBy(m => m.Coords.Episode).ThenBy(m => m.PartIndex ?? 0))
         {
             var loc = mapping.Video?.Files?.FirstOrDefault(l => File.Exists(l.Path)) ?? mapping.Video?.Files?.FirstOrDefault();
-            if (loc?.ManagedFolder == null || loc.ManagedFolder.DropFolderType.HasFlag(Shoko.Abstractions.Enums.DropFolderType.Source))
+            if (loc?.ManagedFolder == null || loc.ManagedFolder.DropFolderType.HasFlag(DropFolderType.Source))
             {
                 skipped++;
                 continue;

@@ -1,6 +1,6 @@
 using NLog;
-using Shoko.Abstractions.Enums;
-using Shoko.Abstractions.Services;
+using Shoko.Abstractions.Video.Enums;
+using Shoko.Abstractions.Video.Services;
 using ShokoRelay.Helpers;
 
 namespace ShokoRelay.Services;

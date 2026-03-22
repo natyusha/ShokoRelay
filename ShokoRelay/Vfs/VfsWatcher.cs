@@ -1,9 +1,10 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using NLog;
-using Shoko.Abstractions.Events;
+using Shoko.Abstractions.Metadata.Services;
 using Shoko.Abstractions.Metadata.Shoko;
-using Shoko.Abstractions.Services;
+using Shoko.Abstractions.Video.Events;
+using Shoko.Abstractions.Video.Services;
 using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
 
@@ -63,7 +64,7 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
 
     #region Event Handlers
 
-    private void OnFileChanged(object? sender, FileEventArgs e)
+    private void OnFileChanged(object? sender, VideoFileEventArgs e)
     {
         if (e?.Series == null || e.Series.Count == 0)
             return;
@@ -76,11 +77,11 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
         KickProcessLoop();
     }
 
-    private void OnVideoFileHashed(object? sender, FileHashedEventArgs e) => OnFileChanged(sender, e);
+    private void OnVideoFileHashed(object? sender, VideoFileHashedEventArgs e) => OnFileChanged(sender, e);
 
-    private void OnVideoFileRelocated(object? sender, FileRelocatedEventArgs e) => OnFileChanged(sender, e);
+    private void OnVideoFileRelocated(object? sender, VideoFileRelocatedEventArgs e) => OnFileChanged(sender, e);
 
-    private void OnVideoFileDeleted(object? sender, FileEventArgs e) => OnFileChanged(sender, e);
+    private void OnVideoFileDeleted(object? sender, VideoFileEventArgs e) => OnFileChanged(sender, e);
 
     #endregion
 

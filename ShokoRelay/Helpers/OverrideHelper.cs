@@ -1,5 +1,5 @@
 using System.Globalization;
-using Shoko.Abstractions.Services;
+using Shoko.Abstractions.Metadata.Services;
 
 namespace ShokoRelay.Helpers;
 

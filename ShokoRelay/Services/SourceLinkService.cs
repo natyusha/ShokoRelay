@@ -1,5 +1,5 @@
 using NLog;
-using Shoko.Abstractions.Services;
+using Shoko.Abstractions.Video.Services;
 using ShokoRelay.Vfs;
 
 namespace ShokoRelay.Services;
@@ -140,8 +140,12 @@ public class SourceLinkService(IVideoService videoService)
                 string name = Path.GetFileName(entry);
                 bool isDir = Directory.Exists(entry);
 
-                // Logic: Filter for the primary video, extension-based sidecar files, or the designated attachments folder
-                if (!name.Equals(Path.GetFileName(fullSrc)) && !(!isDir && name.StartsWith(srcBase + ".")) && !(isDir && name.Equals(srcBase + "_attachments", StringComparison.OrdinalIgnoreCase)))
+                // Logic: Filter for the primary video, extension-based sidecar files (period or underscore), or the designated attachments folder
+                if (
+                    !name.Equals(Path.GetFileName(fullSrc))
+                    && !(!isDir && (name.StartsWith(srcBase + ".") || name.StartsWith(srcBase + "_")))
+                    && !(isDir && name.Equals(srcBase + "_attachments", StringComparison.OrdinalIgnoreCase))
+                )
                     continue;
 
                 string suffix = name[srcBase.Length..];

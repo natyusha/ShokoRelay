@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Shoko.Abstractions.Metadata.Containers;
-using Shoko.Abstractions.Services;
+using Shoko.Abstractions.Metadata.Services;
 using ShokoRelay.AnimeThemes;
 using ShokoRelay.Config;
 using ShokoRelay.Helpers;
