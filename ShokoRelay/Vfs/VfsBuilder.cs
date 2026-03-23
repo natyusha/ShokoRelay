@@ -28,6 +28,7 @@ public record RootCleanupDetails(string Path, long ElapsedMs);
 /// <param name="SeriesProcessed">Processed series count.</param>
 /// <param name="CreatedLinks">Successful links created.</param>
 /// <param name="Skipped">Skipped items count.</param>
+/// <param name="SkippedDetails">List of specific skipped link descriptions.</param>
 /// <param name="Errors">Encountered errors.</param>
 /// <param name="PlannedLinks">Target link count.</param>
 /// <param name="SeriesDetails">List of detailed processing stats for each series.</param>
@@ -38,6 +39,7 @@ public record VfsBuildResult(
     int SeriesProcessed,
     int CreatedLinks,
     int Skipped,
+    List<string> SkippedDetails,
     List<string> Errors,
     int PlannedLinks,
     List<SeriesProcessDetails> SeriesDetails,
@@ -109,6 +111,8 @@ public class VfsBuilder
         var (sw, created, skipped, seriesProcessed, planned) = (Stopwatch.StartNew(), 0, 0, 0, 0);
         var seriesDetailsBag = new ConcurrentBag<SeriesProcessDetails>();
         var cleanupDetails = new List<RootCleanupDetails>();
+        var skippedDetailsBag = new ConcurrentBag<string>();
+        var exclusions = ShokoRelay.Settings.Advanced.PathExclusions.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
 
         // Initialize build-session caches
         (_seriesFileDataCacheForBuild, _subtitleFileCacheForBuild, _metadataFileCacheForBuild, _warningsForBuild, _createdDirsForBuild) = (
@@ -204,8 +208,7 @@ public class VfsBuilder
                 try
                 {
                     var seriesSw = Stopwatch.StartNew();
-                    var (Created, Skipped, Errors, Planned) = BuildSeries(series, rootName, cleanRoot, cleanedRoots, cleanedSeries, isFiltered, cleanOnly, rootTasks, seriesTasks);
-                    seriesSw.Stop();
+                    var (Created, Skipped, SkippedList, Errors, Planned) = BuildSeries(series, rootName, cleanRoot, cleanedRoots, cleanedSeries, isFiltered, cleanOnly, rootTasks, seriesTasks, exclusions);
 
                     // Capture individual series details for the log report
                     seriesDetailsBag.Add(new SeriesProcessDetails(series.PreferredTitle?.Value ?? series.ID.ToString(), seriesSw.ElapsedMilliseconds, Created));
@@ -218,6 +221,8 @@ public class VfsBuilder
                     Interlocked.Add(ref created, Created);
                     Interlocked.Add(ref skipped, Skipped);
                     Interlocked.Add(ref planned, Planned);
+                    foreach (var s in SkippedList)
+                        skippedDetailsBag.Add(s);
                     foreach (var err in Errors)
                         errorsBag.Add(err);
                     Interlocked.Increment(ref seriesProcessed);
@@ -231,7 +236,6 @@ public class VfsBuilder
         );
 
         sw.Stop(); // Capture total elapsed time here
-
         var errors = errorsBag.ToList();
 
         // Cleanup build-session objects
@@ -246,7 +250,7 @@ public class VfsBuilder
             errors.Count
         );
 
-        return new VfsBuildResult(rootName, seriesProcessed, created, skipped, errors, planned, [.. seriesDetailsBag.OrderBy(x => x.Name)], cleanupDetails, sw.Elapsed);
+        return new VfsBuildResult(rootName, seriesProcessed, created, skipped, [.. skippedDetailsBag], errors, planned, [.. seriesDetailsBag.OrderBy(x => x.Name)], cleanupDetails, sw.Elapsed);
     }
 
     /// <summary>Builds the VFS structure for a specific series, handling naming and de-duplication.</summary>
@@ -259,8 +263,9 @@ public class VfsBuilder
     /// <param name="cleanOnly">If true, skips link creation.</param>
     /// <param name="rootTasks">Task tracker for root operations.</param>
     /// <param name="seriesTasks">Task tracker for series operations.</param>
-    /// <returns>A tuple of counts: Created, Skipped, Errors, Planned.</returns>
-    private (int Created, int Skipped, List<string> Errors, int Planned) BuildSeries(
+    /// <param name="exclusions">List of paths to exclude from processing.</param>
+    /// <returns>A tuple of counts: Created, Skipped, SkippedDetails, Errors, Planned.</returns>
+    private (int Created, int Skipped, List<string> SkippedDetails, List<string> Errors, int Planned) BuildSeries(
         IShokoSeries series,
         string rootFolderName,
         bool cleanRoot,
@@ -269,15 +274,16 @@ public class VfsBuilder
         bool filtered,
         bool cleanOnly,
         ConcurrentDictionary<string, Task> rootTasks,
-        ConcurrentDictionary<string, Task> seriesTasks
+        ConcurrentDictionary<string, Task> seriesTasks,
+        List<string> exclusions
     )
     {
-        var (created, skipped, planned, errors, sSw) = (0, 0, 0, new List<string>(), Stopwatch.StartNew());
+        var (created, skipped, planned, errors, skippedDetails, sSw) = (0, 0, 0, new List<string>(), new List<string>(), Stopwatch.StartNew());
         var (DisplayTitle, _, _) = TextHelper.ResolveFullSeriesTitles(series);
         int folderId = ShokoRelay.Settings.TmdbEpNumbering ? OverrideHelper.GetPrimary(series.ID, _metadataService) : series.ID;
         var fileData = GetSeriesFileDataCached(series);
         if (!fileData.Mappings.Any())
-            return (0, 0, errors, 0);
+            return (0, 0, skippedDetails, errors, 0);
 
         var coordCounts = fileData.Mappings.GroupBy(m => (m.Coords.Season, m.Coords.Episode)).ToDictionary(g => g.Key, g => g.Count());
         var versionCounters = fileData.Mappings.GroupBy(m => (m.Coords.Season, m.Coords.Episode)).Where(g => g.Count() > 1).ToDictionary(g => g.Key, _ => 1);
@@ -287,12 +293,18 @@ public class VfsBuilder
         foreach (var mapping in fileData.Mappings.OrderBy(m => m.Coords.Season).ThenBy(m => m.Coords.Episode).ThenBy(m => m.PartIndex ?? 0))
         {
             var loc = mapping.Video?.Files?.FirstOrDefault(l => File.Exists(l.Path)) ?? mapping.Video?.Files?.FirstOrDefault();
+
+            // Logical Skip: File is in a protected Source folder
             if (loc?.ManagedFolder == null || loc.ManagedFolder.DropFolderType.HasFlag(DropFolderType.Source))
             {
                 skipped++;
+                skippedDetails.Add($"[Source Folder] {series.PreferredTitle?.Value} S{mapping.Coords.Season}E{mapping.Coords.Episode} - {mapping.FileName}");
                 continue;
             }
+
             string? importRoot = VfsShared.ResolveImportRootPath(loc);
+
+            // Error: Metadata exists but the Import Root cannot be resolved
             if (importRoot == null)
             {
                 skipped++;
@@ -325,12 +337,23 @@ public class VfsBuilder
                 Directory.CreateDirectory(seriesPath);
 
             string? src = VfsShared.ResolveSourcePath(loc, importRoot);
+
+            // Error: The file record exists in Shoko but is missing from the physical disk
             if (src == null)
             {
                 skipped++;
                 errors.Add($"No accessible file for {series.PreferredTitle?.Value} S{mapping.Coords.Season}E{mapping.Coords.Episode}");
                 continue;
             }
+
+            // Logical Skip: Path matches a user-defined exclusion
+            if (exclusions.Any(ex => src.StartsWith(ex, VfsShared.PathComparer == StringComparer.OrdinalIgnoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)))
+            {
+                skipped++;
+                skippedDetails.Add($"[Excluded Path] {series.PreferredTitle?.Value} S{mapping.Coords.Season}E{mapping.Coords.Episode} - {mapping.FileName}");
+                continue;
+            }
+
             string seasonPath = Path.Combine(seriesPath, VfsHelper.SanitizeName(PlexMapping.GetSeasonFolder(mapping.Coords.Season)));
             if (_createdDirsForBuild?.TryAdd(seasonPath, 0) == true)
                 Directory.CreateDirectory(seasonPath);
@@ -376,11 +399,12 @@ public class VfsBuilder
             }
             else
             {
+                // Error: OS failed to create the symlink
                 skipped++;
                 errors.Add($"Link failed: {src} -> {destPath}");
             }
         }
-        return (created, skipped, errors, planned);
+        return (created, skipped, skippedDetails, errors, planned);
     }
 
     private void HandleCleanup(string path, ConcurrentDictionary<string, byte> cleaned, ConcurrentDictionary<string, Task> tasks, List<string> errors)

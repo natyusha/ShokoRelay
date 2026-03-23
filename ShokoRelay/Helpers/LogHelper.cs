@@ -150,6 +150,12 @@ public static class LogHelper
         }
         items.Add("Processed Series Details:");
         items.AddRange(r.SeriesDetails.OrderByDescending(x => x.ElapsedMs).Select(d => $"[{d.ElapsedMs, 5}ms] {d.Name} ({d.CreatedLinks} links)"));
+        if (r.SkippedDetails.Any())
+        {
+            items.Add("");
+            items.Add("Skipped Items:");
+            items.AddRange(r.SkippedDetails.Select(s => $"SKIPPED: {s}"));
+        }
         items.AddRange(r.Errors.Select(e => $"ERROR: {e}"));
 
         BuildReport(sb, "VFS Generation Report", stats, "Report Details:", items);

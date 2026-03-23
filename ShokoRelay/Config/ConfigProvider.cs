@@ -7,6 +7,7 @@ using NLog;
 using Shoko.Abstractions.Plugin;
 using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
+using ShokoRelay.Vfs;
 
 namespace ShokoRelay.Config;
 
@@ -328,11 +329,26 @@ public class ConfigProvider
 
     private bool NormalizeCsvFields(RelayConfig s)
     {
-        static string Norm(string? r) => string.Join(", ", (r ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase));
-        var (nt, ne) = (Norm(s.TagBlacklist), Norm(s.Automation.ExtraPlexUsers));
+        static string Norm(string? r, char separator) =>
+            string.Join(separator + " ", (r ?? "").Split(separator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase));
+
+        var (nt, ne) = (Norm(s.TagBlacklist, ','), Norm(s.Automation.ExtraPlexUsers, ','));
         bool c = s.TagBlacklist != nt || s.Automation.ExtraPlexUsers != ne;
         s.TagBlacklist = nt;
         s.Automation.ExtraPlexUsers = ne;
+
+        // Normalize Path Exclusions (Newline separated)
+        var nex = string.Join(
+            Environment.NewLine,
+            (s.Advanced.PathExclusions ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(VfsShared.NormalizeSeparators).Distinct(VfsShared.PathComparer)
+        );
+
+        if (s.Advanced.PathExclusions != nex)
+        {
+            s.Advanced.PathExclusions = nex;
+            c = true;
+        }
+
         return c;
     }
 
