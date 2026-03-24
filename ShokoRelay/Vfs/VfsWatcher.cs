@@ -104,11 +104,18 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
         {
             while (true)
             {
-                using var enumerator = _pending.GetEnumerator();
-                if (!enumerator.MoveNext())
-                    break;
-                int seriesId = enumerator.Current.Key;
-                _pending.TryRemove(seriesId, out _);
+                int seriesId;
+                lock (_gate)
+                {
+                    using var enumerator = _pending.GetEnumerator();
+                    if (!enumerator.MoveNext())
+                    {
+                        _processing = false;
+                        break;
+                    }
+                    seriesId = enumerator.Current.Key;
+                    _pending.TryRemove(seriesId, out _);
+                }
 
                 try
                 {
@@ -132,7 +139,7 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
                     Logger.Warn(ex, "VFS refresh failed for series {SeriesId}", seriesId);
                 }
 
-                await Task.Delay(200); // light debounce
+                await Task.Delay(400).ConfigureAwait(false); // light debounce
             }
         }
         finally

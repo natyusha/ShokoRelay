@@ -96,6 +96,7 @@ public sealed class FfmpegService
 
     #region Configuration Logic
 
+    /// <summary>Ensures that the paths to the FFmpeg and FFprobe binaries are resolved and verified. Searches configured paths, the plugin directory, and the system PATH.</summary>
     private static void EnsureFfmpegConfigured()
     {
         if (_ffmpegConfigured)
@@ -171,6 +172,12 @@ public sealed class FfmpegService
         }
     }
 
+    /// <summary>Searches a specific directory for a binary and updates the provided path field if found.</summary>
+    /// <param name="dir">The directory to search.</param>
+    /// <param name="binaryName">The filename of the binary (e.g., ffmpeg.exe).</param>
+    /// <param name="pathField">A reference to the string field storing the resolved path.</param>
+    /// <param name="currentLocatedDir">The directory where a previous binary in the suite was found, used as a hint.</param>
+    /// <returns>A tuple containing a boolean indicating success and the directory where the binary was located.</returns>
     private static (bool Found, string? LocatedDir) TryFindBinary(string dir, string binaryName, ref string pathField, string? currentLocatedDir)
     {
         string candidate = Path.Combine(dir, binaryName);
@@ -181,6 +188,9 @@ public sealed class FfmpegService
         return (true, currentLocatedDir ?? dir);
     }
 
+    /// <summary>Resolves a valid working directory for process execution based on a preferred path hint.</summary>
+    /// <param name="preferred">The preferred directory or file path to evaluate.</param>
+    /// <returns>A confirmed absolute directory path.</returns>
     private static string DetermineWorkingDirectory(string preferred)
     {
         if (File.Exists(preferred))
@@ -197,6 +207,12 @@ public sealed class FfmpegService
 
     #region Process Execution
 
+    /// <summary>Executes an FFmpeg process with optional stream redirection and robust error handling.</summary>
+    /// <param name="fileName">The path to the FFmpeg/FFprobe binary.</param>
+    /// <param name="args">The list of command line arguments.</param>
+    /// <param name="stdIn">Optional input stream to pipe into the process.</param>
+    /// <param name="stdOut">Optional output stream to capture process output.</param>
+    /// <param name="ct">Cancellation token.</param>
     private static async Task RunProcessAsync(string fileName, IReadOnlyList<string> args, Stream? stdIn, Stream? stdOut, CancellationToken ct)
     {
         var psi = CreateProcessStartInfo(fileName, args);
@@ -211,35 +227,59 @@ public sealed class FfmpegService
                 stderr.AppendLine(e.Data);
         };
 
-        process.Start();
-        process.BeginErrorReadLine();
-
-        var tasks = new List<Task>();
-        if (stdIn != null)
+        try
         {
-            tasks.Add(
-                Task.Run(
-                    async () =>
-                    {
-                        await stdIn.CopyToAsync(process.StandardInput.BaseStream, ct);
-                        await process.StandardInput.FlushAsync();
-                        process.StandardInput.Close();
-                    },
-                    ct
-                )
-            );
+            process.Start();
+            process.BeginErrorReadLine();
+
+            var tasks = new List<Task>();
+            if (stdIn != null)
+            {
+                tasks.Add(
+                    Task.Run(
+                        async () =>
+                        {
+                            try
+                            {
+                                await stdIn.CopyToAsync(process.StandardInput.BaseStream, ct).ConfigureAwait(false);
+                                await process.StandardInput.FlushAsync().ConfigureAwait(false);
+                            }
+                            finally
+                            {
+                                process.StandardInput.Close();
+                            }
+                        },
+                        ct
+                    )
+                );
+            }
+
+            if (stdOut != null)
+                tasks.Add(process.StandardOutput.BaseStream.CopyToAsync(stdOut, ct));
+
+            tasks.Add(process.WaitForExitAsync(ct));
+            await Task.WhenAll(tasks).ConfigureAwait(false);
+
+            if (process.ExitCode != 0)
+                throw new InvalidOperationException($"{fileName} exited with code {process.ExitCode}: {stderr.ToString().Trim()}");
         }
-
-        if (stdOut != null)
-            tasks.Add(process.StandardOutput.BaseStream.CopyToAsync(stdOut, ct));
-
-        tasks.Add(process.WaitForExitAsync(ct));
-        await Task.WhenAll(tasks);
-
-        if (process.ExitCode != 0)
-            throw new InvalidOperationException($"{fileName} exited with code {process.ExitCode}: {stderr.ToString().Trim()}");
+        catch (OperationCanceledException)
+        {
+            try
+            {
+                if (!process.HasExited)
+                    process.Kill(true);
+            }
+            catch { }
+            throw;
+        }
     }
 
+    /// <summary>Executes a process and captures its standard output stream as a string.</summary>
+    /// <param name="fileName">The path to the executable.</param>
+    /// <param name="args">The list of command line arguments.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The full string content of the process's standard output.</returns>
     private static async Task<string> RunProcessCaptureAsync(string fileName, IReadOnlyList<string> args, CancellationToken ct)
     {
         var psi = CreateProcessStartInfo(fileName, args);
@@ -256,12 +296,16 @@ public sealed class FfmpegService
         process.Start();
         process.BeginErrorReadLine();
 
-        string output = await process.StandardOutput.ReadToEndAsync();
-        await process.WaitForExitAsync(ct);
+        string output = await process.StandardOutput.ReadToEndAsync().ConfigureAwait(false);
+        await process.WaitForExitAsync(ct).ConfigureAwait(false);
 
         return process.ExitCode != 0 ? throw new InvalidOperationException($"{fileName} exited with code {process.ExitCode}: {stderr.ToString().Trim()}") : output;
     }
 
+    /// <summary>Initializes a <see cref="ProcessStartInfo"/> object with common plugin requirements such as hidden windows, redirected error streams, and specific working directories.</summary>
+    /// <param name="fileName">The path to the executable file.</param>
+    /// <param name="args">The list of command line arguments to provide to the process.</param>
+    /// <returns>A pre-configured <see cref="ProcessStartInfo"/> instance.</returns>
     private static ProcessStartInfo CreateProcessStartInfo(string fileName, IReadOnlyList<string> args)
     {
         var psi = new ProcessStartInfo
@@ -283,6 +327,9 @@ public sealed class FfmpegService
 
     #region Helpers
 
+    /// <summary>Sanitizes metadata values by replacing double quotes with single quotes to ensure command-line argument integrity.</summary>
+    /// <param name="value">The raw metadata string to sanitize.</param>
+    /// <returns>A sanitized string safe for use in FFmpeg metadata arguments.</returns>
     private static string EscapeMetadata(string value) => value?.Replace("\"", "'") ?? string.Empty;
 
     #endregion

@@ -14,6 +14,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
     #region Fields & Constructor
 
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+    private static readonly SemaphoreSlim _mappingSemaphore = new(1, 1);
     private readonly IMetadataService _metadataService = metadataService;
     private readonly IVideoService _videoService = videoService;
     private readonly AnimeThemesApi _apiClient = new(httpClient);
@@ -212,17 +213,18 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
     /// <returns>An <see cref="AnimeThemesMappingApplyResult"/> with counts and results.</returns>
     public async Task<AnimeThemesMappingApplyResult> ApplyMappingAsync(IReadOnlyCollection<int>? seriesFilter = null, CancellationToken ct = default)
     {
-        const string taskName = ShokoRelayConstants.TaskAtVfsBuild;
-        TaskHelper.StartTask(taskName);
-        Logger.Info("AnimeThemes VFS: Starting task...");
-
+        // Acquire the async lock
+        await _mappingSemaphore.WaitAsync(ct).ConfigureAwait(false);
         try
         {
+            const string taskName = ShokoRelayConstants.TaskAtVfsBuild;
+            TaskHelper.StartTask(taskName);
+            Logger.Info("AnimeThemes VFS: Starting task...");
             string mapPath = Path.Combine(_configDirectory, ShokoRelayConstants.FileAtMapping);
             if (!File.Exists(mapPath))
                 throw new FileNotFoundException("Mapping file not found");
 
-            var entries = AnimeThemesHelper.ParseMappingContent(await File.ReadAllTextAsync(mapPath, ct));
+            var entries = AnimeThemesHelper.ParseMappingContent(await File.ReadAllTextAsync(mapPath, ct).ConfigureAwait(false));
             var sw = Stopwatch.StartNew();
             var state = new MappingState();
             string themeRoot = VfsShared.ResolveAnimeThemesFolderName();
@@ -412,7 +414,8 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
         }
         finally
         {
-            TaskHelper.FinishTask(taskName);
+            _mappingSemaphore.Release();
+            TaskHelper.FinishTask(ShokoRelayConstants.TaskAtVfsBuild);
         }
     }
 

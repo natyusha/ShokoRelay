@@ -225,11 +225,10 @@ public static class SyncHelper
             {
                 var homeUsers = await plexAuth.GetHomeUsersAsync(adminToken, cancellationToken).ConfigureAwait(false);
                 var matched = homeUsers.FirstOrDefault(u =>
-                    (!string.IsNullOrWhiteSpace(u.Title) && string.Equals(u.Title.Trim(), userName, StringComparison.OrdinalIgnoreCase))
-                    || (!string.IsNullOrWhiteSpace(u.Title) && u.Title.IndexOf(userName, StringComparison.OrdinalIgnoreCase) >= 0)
-                    || (!string.IsNullOrWhiteSpace(u.Username) && string.Equals(u.Username.Trim(), userName, StringComparison.OrdinalIgnoreCase))
+                    string.Equals(u.Title?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(u.Username?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(u.Uuid, userName, StringComparison.OrdinalIgnoreCase)
                     || (int.TryParse(userName, out var exId) && u.Id == exId)
-                    || (!string.IsNullOrWhiteSpace(u.Uuid) && string.Equals(u.Uuid, userName, StringComparison.OrdinalIgnoreCase))
                 );
                 if (matched != null)
                 {
