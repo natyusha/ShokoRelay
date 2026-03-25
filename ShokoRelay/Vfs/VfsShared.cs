@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using NLog;
 using Shoko.Abstractions.Video;
+using ShokoRelay.Config;
 
 namespace ShokoRelay.Vfs;
 
@@ -58,15 +59,10 @@ internal static class VfsShared
 
     #region Folder Resolution
 
-    /// <summary>Resolves the VFS root folder name.</summary>
-    public static string ResolveRootFolderName() => ResolveFolderName(ShokoRelay.Settings.Advanced.VfsRootPath, ShokoRelayConstants.FolderVfsDefault);
-
-    /// <summary>Resolves the collection posters folder name.</summary>
-    public static string ResolveCollectionPostersFolderName() => ResolveFolderName(ShokoRelay.Settings.Advanced.CollectionPostersRootPath, ShokoRelayConstants.FolderCollectionPostersDefault);
-
-    /// <summary>Resolves the anime themes folder name.</summary>
-    public static string ResolveAnimeThemesFolderName() => ResolveFolderName(ShokoRelay.Settings.Advanced.AnimeThemesRootPath, ShokoRelayConstants.FolderAnimeThemesDefault);
-
+    /// <summary>Resolves a finalized folder name by sanitizing user input and falling back to a default value if necessary.</summary>
+    /// <param name="configured">The raw folder name string obtained from the configuration settings.</param>
+    /// <param name="defaultName">The hardcoded default name to use as a fallback if the configured value is invalid.</param>
+    /// <returns>A sanitized folder name string safe for use in filesystem paths.</returns>
     private static string ResolveFolderName(string configured, string defaultName)
     {
         var name = string.IsNullOrWhiteSpace(configured) ? defaultName : configured.Trim().TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
@@ -74,6 +70,26 @@ internal static class VfsShared
             name = Path.GetFileName(name);
         var sanitized = VfsHelper.SanitizeName(name);
         return (string.IsNullOrWhiteSpace(sanitized) || sanitized == "Unknown") ? defaultName : sanitized;
+    }
+
+    /// <summary>Resolves the VFS root folder name.</summary>
+    public static string ResolveRootFolderName() => ResolveFolderName(ShokoRelay.Settings.Advanced.VfsRootPath, ShokoRelayConstants.FolderVfsDefault);
+
+    /// <summary>Resolves the anime themes folder name.</summary>
+    public static string ResolveAnimeThemesFolderName() => ResolveFolderName(ShokoRelay.Settings.Advanced.AnimeThemesRootPath, ShokoRelayConstants.FolderAnimeThemesDefault);
+
+    /// <summary>Resolves the collection posters folder name.</summary>
+    public static string ResolveCollectionPostersFolderName() => ResolveFolderName(ShokoRelay.Settings.Advanced.CollectionPostersRootPath, ShokoRelayConstants.FolderCollectionPostersDefault);
+
+    /// <summary>Assembles a unique set of folder names that should be ignored by VFS and Link operations based on current settings.</summary>
+    /// <param name="settings">The current relay configuration.</param>
+    /// <returns>A HashSet of folder names.</returns>
+    public static HashSet<string> GetIgnoredFolderNames(RelayConfig settings)
+    {
+        var ignored = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ResolveRootFolderName(), ResolveAnimeThemesFolderName(), ResolveCollectionPostersFolderName() };
+        foreach (var folder in settings.Advanced.FolderExclusions.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            ignored.Add(folder);
+        return ignored;
     }
 
     #endregion

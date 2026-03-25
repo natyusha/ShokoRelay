@@ -333,10 +333,10 @@ public class AdvancedConfig
     [Display(Name = "Path Mappings", Description = "Mappings for Plex base paths to Shoko base paths. Enter one mapping per line")]
     public Dictionary<string, string> PathMappings { get; set; } = [];
 
-    /// <summary>Paths to ignore when generating the VFS.</summary>
-    [Display(Name = "Path Exclusions", Description = "Shoko paths which you do not want VFS generation to consider. Enter one exclusion per line")]
+    /// <summary>Folders to ignore when generating the VFS.</summary>
+    [Display(Name = "Folder Exclusions", Description = "Folders within Shoko destinations which you do not want VFS generation to consider. Enter one exclusion per line")]
     [DefaultValue("")]
-    public string PathExclusions { get; set; } = "";
+    public string FolderExclusions { get; set; } = "";
 
     /// <summary>Whether to append metadata tags to AnimeThemes filenames.</summary>
     [Display(Name = "Append AnimeThemes Tags", Description = "Enable to append attributes like [SPOIL, SUBS] to AnimeThemes VFS filenames (extra names in Plex are the same)")]

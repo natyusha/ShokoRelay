@@ -116,7 +116,7 @@ public class VfsBuilder
             var seriesDetailsBag = new ConcurrentBag<SeriesProcessDetails>();
             var cleanupDetails = new List<RootCleanupDetails>();
             var skippedDetailsBag = new ConcurrentBag<string>();
-            var exclusions = ShokoRelay.Settings.Advanced.PathExclusions.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+            var ignoredFolders = VfsShared.GetIgnoredFolderNames(ShokoRelay.Settings);
 
             // Initialize build-session caches
             (_seriesFileDataCacheForBuild, _subtitleFileCacheForBuild, _metadataFileCacheForBuild, _warningsForBuild, _createdDirsForBuild) = (
@@ -212,7 +212,18 @@ public class VfsBuilder
                     try
                     {
                         var seriesSw = Stopwatch.StartNew();
-                        var (Created, Skipped, SkippedList, Errors, Planned) = BuildSeries(series, rootName, cleanRoot, cleanedRoots, cleanedSeries, isFiltered, cleanOnly, rootTasks, seriesTasks, exclusions);
+                        var (Created, Skipped, SkippedList, Errors, Planned) = BuildSeries(
+                            series,
+                            rootName,
+                            cleanRoot,
+                            cleanedRoots,
+                            cleanedSeries,
+                            isFiltered,
+                            cleanOnly,
+                            rootTasks,
+                            seriesTasks,
+                            ignoredFolders
+                        );
 
                         // Capture individual series details for the log report
                         seriesDetailsBag.Add(new SeriesProcessDetails(series.PreferredTitle?.Value ?? series.ID.ToString(), seriesSw.ElapsedMilliseconds, Created));
@@ -268,7 +279,7 @@ public class VfsBuilder
     /// <param name="cleanOnly">If true, skips link creation.</param>
     /// <param name="rootTasks">Task tracker for root operations.</param>
     /// <param name="seriesTasks">Task tracker for series operations.</param>
-    /// <param name="exclusions">List of paths to exclude from processing.</param>
+    /// <param name="ignoredFolders">List of folders in Shoko destinations to exclude from processing.</param>
     /// <returns>A tuple of counts: Created, Skipped, SkippedDetails, Errors, Planned.</returns>
     private (int Created, int Skipped, List<string> SkippedDetails, List<string> Errors, int Planned) BuildSeries(
         IShokoSeries series,
@@ -280,7 +291,7 @@ public class VfsBuilder
         bool cleanOnly,
         ConcurrentDictionary<string, Task> rootTasks,
         ConcurrentDictionary<string, Task> seriesTasks,
-        List<string> exclusions
+        HashSet<string> ignoredFolders
     )
     {
         var (created, skipped, planned, errors, skippedDetails, sSw) = (0, 0, 0, new List<string>(), new List<string>(), Stopwatch.StartNew());
@@ -351,11 +362,12 @@ public class VfsBuilder
                 continue;
             }
 
-            // Logical Skip: Path matches a user-defined exclusion
-            if (exclusions.Any(ex => src.StartsWith(ex, VfsShared.PathComparer == StringComparer.OrdinalIgnoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)))
+            // Check if any segment of the source path is in the ignored folders set
+            var pathSegments = src.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries);
+            if (pathSegments.Any(ignoredFolders.Contains))
             {
                 skipped++;
-                skippedDetails.Add($"[Excluded Path] {series.PreferredTitle?.Value} S{mapping.Coords.Season}E{mapping.Coords.Episode} - {mapping.FileName}");
+                skippedDetails.Add($"[Excluded Folder] {series.PreferredTitle?.Value} S{mapping.Coords.Season}E{mapping.Coords.Episode} - {mapping.FileName}");
                 continue;
             }
 

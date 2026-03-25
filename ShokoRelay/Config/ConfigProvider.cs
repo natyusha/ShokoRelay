@@ -340,12 +340,12 @@ public class ConfigProvider
         // Normalize Path Exclusions (Newline separated)
         var nex = string.Join(
             Environment.NewLine,
-            (s.Advanced.PathExclusions ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(VfsShared.NormalizeSeparators).Distinct(VfsShared.PathComparer)
+            (s.Advanced.FolderExclusions ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(VfsShared.NormalizeSeparators).Distinct(VfsShared.PathComparer)
         );
 
-        if (s.Advanced.PathExclusions != nex)
+        if (s.Advanced.FolderExclusions != nex)
         {
-            s.Advanced.PathExclusions = nex;
+            s.Advanced.FolderExclusions = nex;
             c = true;
         }
 

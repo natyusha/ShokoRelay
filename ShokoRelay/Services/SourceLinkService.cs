@@ -21,14 +21,8 @@ public class SourceLinkService(IVideoService videoService)
 
         if (purgeLinks)
         {
-            // Resolve all configured folder names that should be protected from the purge
-            var protectedFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            {
-                VfsShared.ResolveRootFolderName(),
-                VfsShared.ResolveAnimeThemesFolderName(),
-                VfsShared.ResolveCollectionPostersFolderName(),
-            };
-
+            // Use the centralized ignored folder set for purge safety
+            var protectedFolders = VfsShared.GetIgnoredFolderNames(ShokoRelay.Settings);
             foreach (var root in roots)
                 count += PurgeDirectoryLinks(root!, protectedFolders);
             return count;

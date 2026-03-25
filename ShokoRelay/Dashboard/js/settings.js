@@ -103,7 +103,7 @@
       } else {
         label.innerHTML = `<span>${p.Display || p.Path.split(".").pop()}</span>${p.Description ? `<small>${p.Description}</small>` : ""}`;
         wrap.appendChild(label);
-        input = document.createElement(p.Type === "enum" ? "select" : p.Type === "json" || p.Path.endsWith("TagBlacklist") || p.Path.endsWith("PathExclusions") ? "textarea" : "input");
+        input = document.createElement(p.Type === "enum" ? "select" : p.Type === "json" || p.Path.endsWith("TagBlacklist") || p.Path.endsWith("FolderExclusions") ? "textarea" : "input");
 
         if (p.Type === "enum") {
           (p.EnumValues || []).forEach((ev) => {
