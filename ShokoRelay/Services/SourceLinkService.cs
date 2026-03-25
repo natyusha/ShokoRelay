@@ -21,9 +21,16 @@ public class SourceLinkService(IVideoService videoService)
 
         if (purgeLinks)
         {
-            string vfsRoot = VfsShared.ResolveRootFolderName();
+            // Resolve all configured folder names that should be protected from the purge
+            var protectedFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                VfsShared.ResolveRootFolderName(),
+                VfsShared.ResolveAnimeThemesFolderName(),
+                VfsShared.ResolveCollectionPostersFolderName(),
+            };
+
             foreach (var root in roots)
-                count += PurgeDirectoryLinks(root!, vfsRoot);
+                count += PurgeDirectoryLinks(root!, protectedFolders);
             return count;
         }
 
@@ -67,8 +74,11 @@ public class SourceLinkService(IVideoService videoService)
         return count;
     }
 
-    /// <summary>Recursively removes symlinks and _attach folders from a directory, skipping the VFS root.</summary>
-    private static int PurgeDirectoryLinks(string path, string vfsRootName)
+    /// <summary>Recursively removes symlinks and _attach folders from a directory, skipping protected system folders.</summary>
+    /// <param name="path">The directory path to scan.</param>
+    /// <param name="protectedFolders">A set of folder names to exclude from the purge.</param>
+    /// <returns>The number of items deleted.</returns>
+    private static int PurgeDirectoryLinks(string path, HashSet<string> protectedFolders)
     {
         int deleted = 0;
         try
@@ -76,7 +86,7 @@ public class SourceLinkService(IVideoService videoService)
             foreach (var entry in Directory.EnumerateFileSystemEntries(path))
             {
                 var name = Path.GetFileName(entry);
-                if (name.Equals(vfsRootName, StringComparison.OrdinalIgnoreCase))
+                if (protectedFolders.Contains(name))
                     continue;
 
                 var attr = File.GetAttributes(entry);
@@ -97,7 +107,7 @@ public class SourceLinkService(IVideoService videoService)
                         deleted++;
                     }
                     else
-                        deleted += PurgeDirectoryLinks(entry, vfsRootName);
+                        deleted += PurgeDirectoryLinks(entry, protectedFolders);
                 }
             }
         }
@@ -140,12 +150,8 @@ public class SourceLinkService(IVideoService videoService)
                 string name = Path.GetFileName(entry);
                 bool isDir = Directory.Exists(entry);
 
-                // Logic: Filter for the primary video, extension-based sidecar files (period or underscore), or the designated attachments folder
-                if (
-                    !name.Equals(Path.GetFileName(fullSrc))
-                    && !(!isDir && (name.StartsWith(srcBase + ".") || name.StartsWith(srcBase + "_")))
-                    && !(isDir && name.Equals(srcBase + "_attachments", StringComparison.OrdinalIgnoreCase))
-                )
+                // Logic: Filter for the primary video, any file starting with the base name, or the designated attachments folder
+                if (!name.Equals(Path.GetFileName(fullSrc)) && !(!isDir && name.StartsWith(srcBase)) && !(isDir && name.Equals(srcBase + "_attachments", StringComparison.OrdinalIgnoreCase)))
                     continue;
 
                 string suffix = name[srcBase.Length..];

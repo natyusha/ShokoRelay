@@ -263,12 +263,13 @@ POST /map-symlinks?mapFile={path}&purgeLinks={true|false}      -> ProcessSourceL
 
 - `ProcessSourceLinks` manages relative symlinks from protected source folders to the library based on a text-based mapping file, or purges existing links.
   - If `purgeLinks` is `true`, the plugin recursively removes all symlinks and `_attach` folders within the import roots.
-    - **Safety:** It explicitly excludes the configured VFS root (default `!ShokoRelayVFS`) and never deletes physical media files.
+    - **Safety:** It explicitly excludes the configured VFS / AnimeThemes / Posters root folders and never deletes physical media files.
   - If `purgeLinks` is `false` (default):
     - The `mapFile` parameter is the path to the `.txt` file relative to the Import Root (e.g., `!Source/symlinks.txt`).
     - Source paths are resolved relative to the directory containing the mapping file.
     - Destination paths are resolved relative to the Import Root.
-    - Sidecar files (`.ass`, `.xml`, `.mka`) and attachment folders (`_attach`) are automatically identified and renamed to match the destination.
+    - Sidecar files (any file starting with `{baseName}`) and attachment folders (directories named `{baseName}_attachments`) are automatically identified and renamed to match the destination.
+      - Note: the `_attachments` folders are renamed to `_attach` at the destination to allow the `purgeLinks` operation to delete them without touching the originals.
 
 ---
 
