@@ -53,8 +53,28 @@ public static class VfsHelper
 
     #region Naming Logic
 
-    /// <summary>Builds a standard episode filename.</summary>
-    public static string BuildStandardFileName(MapHelper.FileMapping mapping, int pad, string ext, int fileId, bool omitFileId = false, int? partIdx = null, int? partCount = null, int? vIdx = null)
+    /// <summary>Builds a standard episode filename based on coordinates, versioning, and variation status.</summary>
+    /// <param name="mapping">The mapping containing coordinates and video data.</param>
+    /// <param name="pad">The number of digits to pad the episode number with.</param>
+    /// <param name="ext">The file extension (including the dot).</param>
+    /// <param name="fileId">The unique Shoko video identifier.</param>
+    /// <param name="omitFileId">Whether to exclude the Shoko video identifier from the filename.</param>
+    /// <param name="partIdx">The 1-based index for multi-part files.</param>
+    /// <param name="partCount">The total number of parts for the file.</param>
+    /// <param name="vIdx">The 1-based version index for duplicate items in the same variation bucket.</param>
+    /// <param name="isVariation">Whether the file is marked as a variation in Shoko.</param>
+    /// <returns>A formatted filename string (e.g., "S01E01-v1 [123][variation].mkv").</returns>
+    public static string BuildStandardFileName(
+        MapHelper.FileMapping mapping,
+        int pad,
+        string ext,
+        int fileId,
+        bool omitFileId = false,
+        int? partIdx = null,
+        int? partCount = null,
+        int? vIdx = null,
+        bool isVariation = false
+    )
     {
         string name = $"S{mapping.Coords.Season:D2}E{mapping.Coords.Episode.ToString($"D{pad}")}";
         if (mapping.Coords.EndEpisode.HasValue && mapping.Coords.EndEpisode != mapping.Coords.Episode)
@@ -64,15 +84,43 @@ public static class VfsHelper
             name += $"-pt{partIdx ?? mapping.PartIndex}";
         else if (vIdx.HasValue)
             name += $"-v{vIdx}";
-        return omitFileId ? $"{name}{ext}" : $"{name} [{fileId}]{ext}";
+
+        string result = omitFileId ? name : $"{name} [{fileId}]";
+        if (isVariation)
+            result += "[variation]";
+        return result + ext;
     }
 
-    /// <summary>Builds a filename for extras.</summary>
-    public static string BuildExtrasFileName(MapHelper.FileMapping m, (string Folder, string Subtype) ex, int pad, string ext, string seriesTitle, int? pIdx = null, int? pCount = null, int? vIdx = null)
+    /// <summary>Builds a filename for extra content (trailers, credits, etc.) using special type prefixes and title metadata.</summary>
+    /// <param name="m">The mapping containing coordinates and metadata.</param>
+    /// <param name="ex">A tuple containing the target folder and the Plex extra subtype.</param>
+    /// <param name="pad">The number of digits to pad the extra number with.</param>
+    /// <param name="ext">The file extension (including the dot).</param>
+    /// <param name="seriesTitle">The display title of the parent series used for name resolution.</param>
+    /// <param name="pIdx">Optional 1-based index for multi-part extras.</param>
+    /// <param name="pCount">Optional total number of parts for multi-part extras.</param>
+    /// <param name="vIdx">Optional version index for duplicate extras.</param>
+    /// <param name="isVariation">Whether the file is marked as a variation in Shoko.</param>
+    /// <returns>A sanitized and formatted filename string for Plex extras (e.g., "C01 ❯ Episode Title [variation].mkv").</returns>
+    public static string BuildExtrasFileName(
+        MapHelper.FileMapping m,
+        (string Folder, string Subtype) ex,
+        int pad,
+        string ext,
+        string seriesTitle,
+        int? pIdx = null,
+        int? pCount = null,
+        int? vIdx = null,
+        bool isVariation = false
+    )
     {
         string ep = _extraTypePrefixes.TryGetValue(ex.Subtype, out var pref) ? pref + m.Coords.Episode.ToString($"D{pad}") : m.Coords.Episode.ToString($"D{pad}");
         string part = (pCount ?? m.PartCount) > 1 ? $"-pt{pIdx ?? m.PartIndex}" : (vIdx.HasValue ? $"-v{vIdx}" : "");
-        return SanitizeName($"{ep}{part} ❯ {CleanEpisodeTitleForFilename(TextHelper.ResolveEpisodeTitle(m.PrimaryEpisode, seriesTitle))}{ext}");
+
+        string name = $"{ep}{part} ❯ {CleanEpisodeTitleForFilename(TextHelper.ResolveEpisodeTitle(m.PrimaryEpisode, seriesTitle))}";
+        if (isVariation)
+            name += "[variation]";
+        return SanitizeName(name + ext);
     }
 
     #endregion

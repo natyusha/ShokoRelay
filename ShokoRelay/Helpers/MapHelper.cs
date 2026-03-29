@@ -21,7 +21,8 @@ public static class MapHelper
     /// <param name="PartIndex">Optional index for split files.</param>
     /// <param name="PartCount">Total parts for split files.</param>
     /// <param name="TmdbEpisode">Optional TMDB metadata override.</param>
-    public record FileMapping(IVideo Video, IReadOnlyList<IEpisode> Episodes, IEpisode PrimaryEpisode, PlexCoords Coords, string FileName, int? PartIndex, int PartCount, object? TmdbEpisode);
+    /// <param name="IsVariation">Indicates if this file is marked as a variation in Shoko.</param>
+    public record FileMapping(IVideo Video, IReadOnlyList<IEpisode> Episodes, IEpisode PrimaryEpisode, PlexCoords Coords, string FileName, int? PartIndex, int PartCount, object? TmdbEpisode, bool IsVariation);
 
     /// <summary>Aggregates file mapping information and available seasons for a series.</summary>
     /// <param name="Mappings">List of individual file mappings.</param>
@@ -110,10 +111,30 @@ public static class MapHelper
         var episodeFileLists = seriesEpisodes.ToDictionary(x => x.Episode.ID, x => x.Videos.OrderBy(v => Path.GetFileName(v.Files.FirstOrDefault()?.Path ?? "")).ToList());
         var allVideos = seriesEpisodes.SelectMany(x => x.Videos).GroupBy(v => v.ID).Select(g => g.First()).OrderBy(v => Path.GetFileName(v.Files.FirstOrDefault()?.Path ?? "")).ToList();
 
+        // Versioning Logic: Group counts and counters by Season, Episode, and IsVariation status
+        var coordCounts = allVideos
+            .Where(v => videoToEps.ContainsKey(v.ID))
+            .Select(v =>
+            {
+                var eps = videoToEps[v.ID];
+                var sortedEps = eps.OrderBy(x => x.Coords.Season).ThenBy(x => x.Coords.Episode);
+                var deduped = DeduplicateByCoords([.. sortedEps], v);
+                if (deduped.Count == 0)
+                    return null;
+                var c = (deduped.Count == 1) ? deduped[0].Coords : GetPlexCoordinatesForFile(deduped.Select(x => x.Episode));
+                return new { Coords = c, v.IsVariation };
+            })
+            .Where(x => x != null)
+            .GroupBy(x => (x!.Coords.Season, x.Coords.Episode, x.IsVariation))
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        var versionCounters = coordCounts.Where(g => g.Value > 1).ToDictionary(g => g.Key, _ => 1);
+
         foreach (var video in allVideos)
         {
             if (!videoToEps.TryGetValue(video.ID, out var epList) || epList.Count == 0)
                 continue;
+
             // Handle multi-type tiebreaks using cross-reference ordering
             var sortedEps = epList.OrderBy(x => x.Coords.Season).ThenBy(x => x.Coords.Episode).ToList();
             if (sortedEps.Count > 1 && sortedEps.Select(x => x.Episode.Type).Distinct().Count() > 1 && video.CrossReferences?.Count > 0)
@@ -140,6 +161,10 @@ public static class MapHelper
             if (coords.Season == PlexConstants.SeasonOther)
                 coords = ApplyFeaturettesFallback(coords, s1, s0);
 
+            // Versioning: Only calculate vIdx if there are multiple files within this specific variation status group
+            var vKey = (coords.Season, coords.Episode, video.IsVariation);
+            int? vIdx = (!partIdx.HasValue && versionCounters.TryGetValue(vKey, out var v)) ? (versionCounters[vKey] = v + 1) - 1 : null;
+
             // TMDB Episode metadata override for multi-part files
             object? tmdbEp = null;
             if (fCount > 1 && ShokoRelay.Settings.TmdbEpNumbering && firstEp is IShokoEpisode se && se.TmdbEpisodes?.Any() == true)
@@ -156,7 +181,7 @@ public static class MapHelper
                     };
                 }
             }
-            result.Add(new FileMapping(video, [.. deduped.Select(x => x.Episode)], firstEp, coords, fileName, partIdx, allowPt ? fCount : 1, tmdbEp));
+            result.Add(new FileMapping(video, [.. deduped.Select(x => x.Episode)], firstEp, coords, fileName, partIdx, allowPt ? fCount : 1, tmdbEp, video.IsVariation));
         }
         return result;
     }

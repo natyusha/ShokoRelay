@@ -166,7 +166,7 @@ public class VfsBuilder
                                 Logger.Info("VFS Build: Cleaned root folder '{0}' in {1}ms", path, cleanSw.ElapsedMilliseconds);
 
                                 Directory.CreateDirectory(path);
-                                File.WriteAllText(Path.Combine(path, ".ignore"), ""); // Re-create the folder and add an .ignore file immediately after cleanup for Emby / Jellyin users
+                                File.WriteAllText(Path.Combine(path, ".ignore"), ""); // Re-create the folder and add an .ignore file immediately after cleanup for Emby / Jellyfin users
                             }
                             catch (Exception ex)
                             {
@@ -345,7 +345,7 @@ public class VfsBuilder
                 Directory.CreateDirectory(rootPath);
                 try
                 {
-                    File.WriteAllText(Path.Combine(rootPath, ".ignore"), ""); // Add an .ignore file immediately after the build starts for Emby / Jellyin users
+                    File.WriteAllText(Path.Combine(rootPath, ".ignore"), ""); // Add an .ignore file immediately after the build starts for Emby / Jellyfin users
                 }
                 catch { }
             }
@@ -388,7 +388,8 @@ public class VfsBuilder
                         DisplayTitle,
                         hasPeer ? mapping.PartIndex : null,
                         hasPeer ? mapping.PartCount : 1,
-                        vIdx
+                        vIdx,
+                        mapping.IsVariation
                     )
                     : VfsHelper.BuildStandardFileName(
                         mapping,
@@ -398,7 +399,8 @@ public class VfsBuilder
                         mapping.PartCount > 1 && mapping.PartIndex.HasValue,
                         hasPeer ? mapping.PartIndex : null,
                         hasPeer ? mapping.PartCount : 1,
-                        vIdx
+                        vIdx,
+                        mapping.IsVariation
                     )
             );
             string destPath = Path.Combine(seasonPath, fileName);
