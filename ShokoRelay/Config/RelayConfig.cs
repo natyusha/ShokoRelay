@@ -374,10 +374,16 @@ public class AdvancedConfig
     public string FFmpegPath { get; set; } = "";
 
     /// <summary>Plex RefreshMetadataAsync delay.</summary>
-    [Display(Name = "Plex Fixup Delay", Description = "The delay (in minutes) after the VFS adds a file to force refresh series metadata. Set to 0 to disable")]
-    [Range(0, 60, ErrorMessage = "Plex Fixup Delay must be between 0 and 60")]
+    [Display(Name = "Plex Fixup Delay", Description = "The delay (in minutes) after the VFS adds a file to force refresh series metadata")]
+    [Range(1, 60, ErrorMessage = "Plex Fixup Delay must be between 1 and 60")]
     [DefaultValue(2)]
     public int PlexFixupDelay { get; set; } = 2;
+
+    /// <summary>Plex partial scan delay.</summary>
+    [Display(Name = "Plex Scan Delay", Description = "The delay (in seconds) after the VFS adds a file to trigger a partial library scan in Plex")]
+    [Range(1, 60, ErrorMessage = "Plex Scan Delay must be between 1 and 60")]
+    [DefaultValue(5)]
+    public int PlexScanDelay { get; set; } = 5;
 
     /// <summary>Task parallelism limit.</summary>
     [Display(Name = "Parallelism", Description = "The maximum number of concurrent operations *used by VFS and AnimeThemes batch operations")]

@@ -25,6 +25,8 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
 
     private readonly ConcurrentDictionary<int, byte> _pending = new();
     private readonly ConcurrentDictionary<int, CancellationTokenSource> _pendingMetadataFixups = new();
+    private readonly ConcurrentDictionary<int, CancellationTokenSource> _pendingLibraryScans = new();
+    private readonly ConcurrentDictionary<int, CancellationTokenSource> _pendingCollectionUpdates = new();
     private bool _processing;
     private readonly Lock _gate = new();
 
@@ -51,8 +53,11 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
             _videoService.VideoFileRelocated -= OnVideoFileRelocated;
             _videoService.VideoFileDeleted -= OnVideoFileDeleted;
 
-            // Clear any pending metadata fixups
             foreach (var kvp in _pendingMetadataFixups)
+                kvp.Value.Cancel();
+            foreach (var kvp in _pendingLibraryScans)
+                kvp.Value.Cancel();
+            foreach (var kvp in _pendingCollectionUpdates)
                 kvp.Value.Cancel();
         }
         catch { }
@@ -70,9 +75,7 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
             return;
 
         foreach (var series in e.Series)
-        {
             _pending[series.ID] = 1;
-        }
 
         KickProcessLoop();
     }
@@ -104,27 +107,27 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
         {
             while (true)
             {
-                int seriesId;
+                List<int> seriesIds;
                 lock (_gate)
                 {
-                    using var enumerator = _pending.GetEnumerator();
-                    if (!enumerator.MoveNext())
+                    if (_pending.IsEmpty)
                     {
                         _processing = false;
                         break;
                     }
-                    seriesId = enumerator.Current.Key;
-                    _pending.TryRemove(seriesId, out _);
+                    seriesIds = [.. _pending.Keys];
+                    foreach (var id in seriesIds)
+                        _pending.TryRemove(id, out _);
                 }
 
                 try
                 {
                     var sw = Stopwatch.StartNew();
-                    var result = _builder.Build(seriesId, cleanRoot: false, pruneSeries: true);
+                    var result = _builder.Build(seriesIds, cleanRoot: false, pruneSeries: true);
                     sw.Stop();
                     Logger.Info(
-                        "VFS refreshed for series {SeriesId} in {Elapsed}ms — created={Created} planned={Planned} skipped={Skipped} seriesProcessed={SeriesProcessed} errors={ErrorsCount}",
-                        seriesId,
+                        "VFS batch refreshed for {0} series in {1}ms — created={2} planned={3} skipped={4} seriesProcessed={5} errors={6}",
+                        seriesIds.Count,
                         sw.ElapsedMilliseconds,
                         result.CreatedLinks,
                         result.PlannedLinks,
@@ -132,14 +135,16 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
                         result.SeriesProcessed,
                         result.Errors?.Count ?? 0
                     );
-                    await TriggerPlexUpdatesAsync(seriesId).ConfigureAwait(false);
+
+                    foreach (var seriesId in seriesIds)
+                        TriggerPlexUpdates(seriesId);
                 }
                 catch (Exception ex)
                 {
-                    Logger.Warn(ex, "VFS refresh failed for series {SeriesId}", seriesId);
+                    Logger.Warn(ex, "VFS batch refresh failed");
                 }
 
-                await Task.Delay(400).ConfigureAwait(false); // light debounce
+                await Task.Delay(400).ConfigureAwait(false);
             }
         }
         finally
@@ -160,7 +165,7 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
 
     /// <summary>Refresh Plex library paths and metadata for a series after VFS links are updated.</summary>
     /// <param name="seriesId">The Shoko Series ID to update in Plex.</param>
-    private async Task TriggerPlexUpdatesAsync(int seriesId)
+    private void TriggerPlexUpdates(int seriesId)
     {
         if (!_plexLibrary.IsEnabled)
             return;
@@ -169,62 +174,62 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
         if (series == null)
             return;
 
-        // Trigger immediate partial library scans if enabled
-        if (_plexLibrary.ScanOnVfsRefresh)
+        ScheduleLibraryScan(series);
+        ScheduleMetadataFixup(series);
+        ScheduleCollectionUpdate(series);
+    }
+
+    /// <summary>Schedules or resets the timer for a partial Plex library scan for the given series.</summary>
+    /// <param name="series">The Shoko series being updated.</param>
+    private void ScheduleLibraryScan(IShokoSeries series)
+    {
+        if (!_plexLibrary.ScanOnVfsRefresh)
+            return;
+
+        int delaySeconds = ShokoRelay.Settings.Advanced.PlexScanDelay;
+
+        if (_pendingLibraryScans.TryRemove(series.ID, out var oldCts))
         {
-            foreach (var path in ResolveSeriesVfsPaths(series))
-                await _plexLibrary.RefreshSectionPathAsync(path).ConfigureAwait(false);
+            oldCts.Cancel();
+            oldCts.Dispose();
         }
 
-        // Handle debounced Metadata Refresh (Mitigation for Plex CMP "empty first pass" bug)
-        ScheduleMetadataFixup(series);
+        var cts = new CancellationTokenSource();
+        _pendingLibraryScans[series.ID] = cts;
 
-        // Update collection assignments and posters (Lightweight metadata-only calls)
-        var collectionName = _plexMetadata.GetCollectionName(series);
-        if (!string.IsNullOrWhiteSpace(collectionName))
+        _ = Task.Run(async () =>
         {
-            var targets = _plexLibrary.GetConfiguredTargets();
-            foreach (var target in targets)
+            try
             {
-                var ratingKey = await _plexLibrary.FindRatingKeyForShokoSeriesInSectionAsync(series.ID, target).ConfigureAwait(false);
-                if (!ratingKey.HasValue)
-                    continue;
+                await Task.Delay(TimeSpan.FromSeconds(delaySeconds), cts.Token).ConfigureAwait(false);
 
-                bool ok = await _plexCollections.AssignCollectionToItemByMetadataAsync(ratingKey.Value, collectionName, target).ConfigureAwait(false);
-                if (!ok)
-                    continue;
-
-                var collectionId = await _plexCollections.GetOrCreateCollectionIdAsync(collectionName, target, CancellationToken.None).ConfigureAwait(false);
-                if (collectionId == null)
-                    continue;
-
-                string? posterUrl = PlexHelper.GetCollectionPosterUrl(series, collectionName, collectionId.Value, _metadataService, ShokoRelay.Settings.CollectionPosters);
-
-                if (!string.IsNullOrWhiteSpace(posterUrl))
+                foreach (var path in ResolveSeriesVfsPaths(series))
                 {
-                    try
-                    {
-                        bool posted = await _plexCollections.UploadCollectionPosterByUrlAsync(collectionId.Value, posterUrl, target).ConfigureAwait(false);
-                        if (!posted)
-                            Logger.Warn("Failed to upload collection poster for {CollectionId} on {Server}:{Section}", collectionId.Value, target.ServerUrl, target.SectionId);
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.Warn(ex, "UploadCollectionPosterByUrlAsync failed for collection {CollectionId} on {Server}:{Section}", collectionId.Value, target.ServerUrl, target.SectionId);
-                    }
+                    if (Directory.Exists(path) && Directory.EnumerateFileSystemEntries(path).Any())
+                        await _plexLibrary.RefreshSectionPathAsync(path, cts.Token).ConfigureAwait(false);
+                    else
+                        Logger.Debug("VFS: Library scan for '{0}' skipped; path '{1}' not ready or empty.", series.PreferredTitle?.Value, path);
                 }
             }
-        }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "VFS: Library scan failed for series {0}", series.ID);
+            }
+            finally
+            {
+                _pendingLibraryScans.TryRemove(new KeyValuePair<int, CancellationTokenSource>(series.ID, cts));
+                cts.Dispose();
+            }
+        });
     }
 
     /// <summary>Schedules or resets the timer for a full Plex metadata refresh for the given series.</summary>
+    /// <param name="series">The Shoko series being updated.</param>
     private void ScheduleMetadataFixup(IShokoSeries series)
     {
         int delayMinutes = ShokoRelay.Settings.Advanced.PlexFixupDelay;
-        if (delayMinutes <= 0)
-            return;
 
-        // Cancel any existing pending fixup for this series to reset the timer (Debounce)
         if (_pendingMetadataFixups.TryRemove(series.ID, out var oldCts))
         {
             oldCts.Cancel();
@@ -241,45 +246,105 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
             try
             {
                 await Task.Delay(TimeSpan.FromMinutes(delayMinutes), cts.Token).ConfigureAwait(false);
-
-                var targets = _plexLibrary.GetConfiguredTargets();
-                if (targets.Count == 0)
-                {
-                    Logger.Warn("VFS: Fixup for '{0}' aborted; no Plex targets configured.", series.PreferredTitle?.Value);
-                    return;
-                }
-
-                bool foundInAnyTarget = false;
-                foreach (var target in targets)
-                {
-                    var ratingKey = await _plexLibrary.FindRatingKeyForShokoSeriesInSectionAsync(series.ID, target).ConfigureAwait(false);
-                    if (ratingKey.HasValue)
-                    {
-                        foundInAnyTarget = true;
-                        Logger.Info("VFS: Triggering debounced metadata fixup for '{0}' (RatingKey: {1}) on {2}", series.PreferredTitle?.Value, ratingKey.Value, target.ServerName);
-                        await _plexLibrary.RefreshMetadataAsync(ratingKey.Value, target, cts.Token).ConfigureAwait(false);
-                    }
-                }
-
-                if (!foundInAnyTarget)
-                {
-                    Logger.Debug("VFS: Debounced fixup for '{0}' skipped; rating key not found in Plex yet (Initial scan may still be in progress).", series.PreferredTitle?.Value);
-                }
+                await RunMetadataFixupAsync(series, cts.Token).ConfigureAwait(false);
             }
-            catch (OperationCanceledException)
-            {
-                // Task was reset by a newer file event for the same series
-            }
-            catch (Exception ex)
-            {
-                Logger.Error(ex, "VFS: Metadata fixup failed for series {0}", series.ID);
-            }
+            catch (OperationCanceledException) { }
             finally
             {
                 _pendingMetadataFixups.TryRemove(new KeyValuePair<int, CancellationTokenSource>(series.ID, cts));
                 cts.Dispose();
             }
         });
+    }
+
+    private async Task RunMetadataFixupAsync(IShokoSeries series, CancellationToken token)
+    {
+        try
+        {
+            var targets = _plexLibrary.GetConfiguredTargets();
+            bool foundInAnyTarget = false;
+            foreach (var target in targets)
+            {
+                var ratingKey = await _plexLibrary.FindRatingKeyForShokoSeriesInSectionAsync(series.ID, target, token).ConfigureAwait(false);
+                if (ratingKey.HasValue)
+                {
+                    foundInAnyTarget = true;
+                    Logger.Info("VFS: Triggering metadata fixup for '{0}' (RatingKey: {1}) on {2}", series.PreferredTitle?.Value, ratingKey.Value, target.ServerName);
+                    await _plexLibrary.RefreshMetadataAsync(ratingKey.Value, target, token).ConfigureAwait(false);
+                }
+            }
+
+            if (!foundInAnyTarget)
+                Logger.Debug("VFS: Fixup for '{0}' skipped; rating key not found in Plex yet.", series.PreferredTitle?.Value);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "VFS: Metadata fixup failed for series {0}", series.ID);
+        }
+    }
+
+    /// <summary>Schedules or resets the timer for updating collections and posters in Plex for the given series.</summary>
+    /// <param name="series">The Shoko series being updated.</param>
+    private void ScheduleCollectionUpdate(IShokoSeries series)
+    {
+        int delayMinutes = ShokoRelay.Settings.Advanced.PlexFixupDelay;
+
+        if (_pendingCollectionUpdates.TryRemove(series.ID, out var oldCts))
+        {
+            oldCts.Cancel();
+            oldCts.Dispose();
+        }
+
+        var cts = new CancellationTokenSource();
+        _pendingCollectionUpdates[series.ID] = cts;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromMinutes(delayMinutes), cts.Token).ConfigureAwait(false);
+                await RunCollectionUpdateAsync(series, cts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) { }
+            finally
+            {
+                _pendingCollectionUpdates.TryRemove(new KeyValuePair<int, CancellationTokenSource>(series.ID, cts));
+                cts.Dispose();
+            }
+        });
+    }
+
+    private async Task RunCollectionUpdateAsync(IShokoSeries series, CancellationToken token)
+    {
+        try
+        {
+            var collectionName = _plexMetadata.GetCollectionName(series);
+            if (string.IsNullOrWhiteSpace(collectionName))
+                return;
+
+            var targets = _plexLibrary.GetConfiguredTargets();
+            foreach (var target in targets)
+            {
+                var ratingKey = await _plexLibrary.FindRatingKeyForShokoSeriesInSectionAsync(series.ID, target, token).ConfigureAwait(false);
+                if (!ratingKey.HasValue)
+                    continue;
+
+                if (await _plexCollections.AssignCollectionToItemByMetadataAsync(ratingKey.Value, collectionName, target, token).ConfigureAwait(false))
+                {
+                    var collectionId = await _plexCollections.GetOrCreateCollectionIdAsync(collectionName, target, token).ConfigureAwait(false);
+                    if (!collectionId.HasValue)
+                        continue;
+
+                    string? posterUrl = PlexHelper.GetCollectionPosterUrl(series, collectionName, collectionId.Value, _metadataService, ShokoRelay.Settings.CollectionPosters);
+                    if (!string.IsNullOrWhiteSpace(posterUrl))
+                        await _plexCollections.UploadCollectionPosterByUrlAsync(collectionId.Value, posterUrl, target, token).ConfigureAwait(false);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "VFS: Collection update failed for series {0}", series.ID);
+        }
     }
 
     private IEnumerable<string> ResolveSeriesVfsPaths(IShokoSeries series)
