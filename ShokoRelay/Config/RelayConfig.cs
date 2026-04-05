@@ -334,7 +334,7 @@ public class AdvancedConfig
     public Dictionary<string, string> PathMappings { get; set; } = [];
 
     /// <summary>Folders to ignore when generating the VFS.</summary>
-    [Display(Name = "Folder Exclusions", Description = "Folders within Shoko destinations which you do not want VFS generation to consider. Enter one exclusion per line")]
+    [Display(Name = "Folder Exclusions", Description = "Folders within Shoko destinations which you do not want VFS generation to consider. One per line")]
     [DefaultValue("")]
     public string FolderExclusions { get; set; } = "";
 

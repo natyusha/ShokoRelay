@@ -5,11 +5,20 @@
 (() => {
   const { base, configUrl, el, fetchJson, showToast, toastOperation, summarizeResult, initToggle, openModal, setButtonLoading, getData } = window._sr;
 
-  /** Set the dynamic href for the Shoko Dashboard link based on the current origin. */
-  const dashLink = el("shoko-dashboard-link");
-  if (dashLink) {
-    dashLink.href = location.origin + "/webui/dashboard";
-  }
+  /** Set the dynamic href for Shoko system links based on the current origin. */
+  const resolveSystemLinks = () => {
+    const origin = location.origin;
+    const links = {
+      "shoko-api-link": "/swagger/index.html",
+      "shoko-dashboard-link": "/webui/dashboard",
+    };
+
+    Object.entries(links).forEach(([id, path]) => {
+      const anchor = el(id);
+      if (anchor) anchor.href = origin + path;
+    });
+  };
+  resolveSystemLinks();
 
   /** Placeholder text for the VFS Overrides Editor, concatenated to stay under the column limit. */
   const OVERRIDES_PLACEHOLDER =
