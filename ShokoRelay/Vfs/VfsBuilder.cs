@@ -26,6 +26,7 @@ public record RootCleanupDetails(string Path, long ElapsedMs);
 /// <summary>Result returned by <see cref="VfsBuilder"/> after a build or clean operation.</summary>
 /// <param name="RootPath">VFS root folder name.</param>
 /// <param name="SeriesProcessed">Processed series count.</param>
+/// <param name="ConsolidatedSeries">Count of secondary series merged into primary series via overrides.</param>
 /// <param name="CreatedLinks">Successful links created.</param>
 /// <param name="Skipped">Skipped items count.</param>
 /// <param name="SkippedDetails">List of specific skipped link descriptions.</param>
@@ -37,6 +38,7 @@ public record RootCleanupDetails(string Path, long ElapsedMs);
 public record VfsBuildResult(
     string RootPath,
     int SeriesProcessed,
+    int ConsolidatedSeries,
     int CreatedLinks,
     int Skipped,
     List<string> SkippedDetails,
@@ -199,9 +201,17 @@ public class VfsBuilder
                 ]
                 : (_metadataService.GetAllShokoSeries() ?? []);
 
+            int totalInScope = seriesList.Count();
+            int consolidatedCount = 0;
+
             OverrideHelper.EnsureLoaded();
             if (ShokoRelay.Settings.TmdbEpNumbering)
-                seriesList = [.. seriesList.GroupBy(s => OverrideHelper.GetPrimary(s.ID, _metadataService)).Select(g => g.FirstOrDefault(s => s.ID == g.Key) ?? g.First())];
+            {
+                // Group by primary ID and count how many secondary series are being merged
+                var grouped = seriesList.GroupBy(s => OverrideHelper.GetPrimary(s.ID, _metadataService)).ToList();
+                seriesList = [.. grouped.Select(g => g.FirstOrDefault(s => s.ID == g.Key) ?? g.First())];
+                consolidatedCount = totalInScope - seriesList.Count();
+            }
 
             // Process series in parallel
             Parallel.ForEach(
@@ -257,15 +267,28 @@ public class VfsBuilder
             (_seriesFileDataCacheForBuild, _subtitleFileCacheForBuild, _metadataFileCacheForBuild, _warningsForBuild, _createdDirsForBuild) = (null, null, null, null, null);
 
             Logger.Info(
-                "VFS BuildInternal completed in {Elapsed}ms: processed={Processed}, created={Created}, skipped={Skipped}, errors={Errors}",
+                "VFS BuildInternal completed in {Elapsed}ms: processed={Processed}, consolidated={Consolidated}, created={Created}, skipped={Skipped}, errors={Errors}",
                 sw.ElapsedMilliseconds,
                 seriesProcessed,
+                consolidatedCount,
                 created,
                 skipped,
                 errors.Count
             );
 
-            return new VfsBuildResult(rootName, seriesProcessed, created, skipped, [.. skippedDetailsBag], errors, planned, [.. seriesDetailsBag.OrderBy(x => x.Name)], cleanupDetails, sw.Elapsed);
+            return new VfsBuildResult(
+                rootName,
+                seriesProcessed,
+                consolidatedCount,
+                created,
+                skipped,
+                [.. skippedDetailsBag],
+                errors,
+                planned,
+                [.. seriesDetailsBag.OrderBy(x => x.Name)],
+                cleanupDetails,
+                sw.Elapsed
+            );
         }
     }
 

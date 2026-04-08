@@ -135,6 +135,7 @@ public static class LogHelper
         {
             ["Elapsed Time"] = $"{r.TotalElapsed.TotalSeconds:F2}s",
             ["Series Processed"] = r.SeriesProcessed,
+            ["Consolidated (Overrides)"] = r.ConsolidatedSeries,
             ["Links Created"] = r.CreatedLinks,
             ["Links Planned"] = r.PlannedLinks,
             ["Links Skipped"] = r.Skipped,
