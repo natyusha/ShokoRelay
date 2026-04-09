@@ -7,3 +7,4 @@ publish-linux/
 *.code-workspace
 .editorconfig
 .config/
+.vscode/

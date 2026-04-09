@@ -152,10 +152,10 @@ POST /plex/auth/refresh                                        -> RefreshPlexLib
 ### Plex: Automation
 
 ```
-GET  /plex/collections/build?seriesId={id}&filter={filter}     -> BuildPlexCollections
-GET  /plex/collections/posters?seriesId={id}&filter={filter}   -> ApplyCollectionPosters
+GET  /plex/collections/build?seriesId={id}&filter={csv}        -> BuildPlexCollections
+GET  /plex/collections/posters?seriesId={id}&filter={csv}      -> ApplyCollectionPosters
 
-GET  /plex/ratings/apply?seriesId={id}&filter={filter}         -> ApplyAudienceRatings
+GET  /plex/ratings/apply?seriesId={id}&filter={csv}            -> ApplyAudienceRatings
 
 GET  /plex/automation/run                                      -> RunPlexAutomationNow
 ```
@@ -177,6 +177,7 @@ GET  /plex/automation/run                                      -> RunPlexAutomat
 **Notes:**
 
 - Each of the above (other than `RunPlexAutomationNow`) accepts either `seriesId` _or_ a comma separated `filter`.
+  - The `seriesId` defaults to Shoko but can be an AniDB ID if prefixed with an 'a'.
 - All operations respect the `Advanced.Parallelism` setting to prevent IO saturation.
 
 ---
@@ -204,7 +205,7 @@ Endpoints are managed by `ShokoController`
 ### Virtual File System (VFS)
 
 ```
-GET  /vfs?run={true|false}&clean={true|false}&filter={filter}  -> BuildVfs
+GET  /vfs?run={true|false}&clean={true|false}&filter={csv}     -> BuildVfs
 
 POST /vfs/overrides                                            -> SaveVfsOverrides
 ```
@@ -212,6 +213,7 @@ POST /vfs/overrides                                            -> SaveVfsOverrid
 - `BuildVfs` (all query parameters are optional)
   - `run` (default false): if true the VFS is constructed.
   - `clean` (default true): clear the existing root before building.
+  - `filter`: comma separated Shoko or AniDB (prefixed with an 'a') series IDs.
 - `SaveVfsOverrides` accepts raw text for `anidb_vfs_overrides.csv`.
 
 ---
@@ -315,6 +317,7 @@ POST /animethemes/vfs/import                                   -> ImportAnimeThe
 ```
 
 - `AnimeThemesVfsBuild` applies the mapping and generates `webm_animethemes.cache`.
+  - `filter`: comma separated Shoko or AniDB (prefixed with an 'a') series IDs.
   - Cache Format: `VfsPath|VideoId|Bitmask`.
   - Bitmask flags: `1:NC, 2:Lyrics, 4:Subs, 8:Uncen, 16:NSFW, 32:Spoil, 64:Trans, 128:Over`.
 - `AnimeThemesVfsMap` generates the mapping CSV or tests a single filename mapping.

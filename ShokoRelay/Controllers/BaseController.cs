@@ -68,11 +68,11 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
 
     #region Validation Helpers
 
-    /// <summary>Parse a comma-separated filter string into a list of valid positive integers.</summary>
+    /// <summary>Parse a comma-separated filter string into a list of valid positive integers. Supports 'a' prefix for AniDB IDs.</summary>
     /// <param name="filter">Raw filter string from query parameter.</param>
     /// <param name="errors">Output list of collected parse error messages.</param>
     /// <returns>A list of unique, valid Shoko Series IDs.</returns>
-    protected static List<int> ParseFilterIds(string? filter, out List<string> errors)
+    protected List<int> ParseFilterIds(string? filter, out List<string> errors)
     {
         errors = [];
         var ids = new HashSet<int>();
@@ -82,6 +82,24 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
 
         foreach (var raw in filter.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
+            // Handle AniDB ID prefix (e.g. "a69" for One Piece)
+            if (raw.StartsWith("a", StringComparison.OrdinalIgnoreCase))
+            {
+                if (int.TryParse(raw[1..], out int aid) && aid > 0)
+                {
+                    if (_metadataService.GetShokoSeriesByAnidbID(aid) is { } series)
+                        ids.Add(series.ID);
+                    else
+                        errors.Add($"No Shoko Series found for AniDB ID: {aid}");
+                }
+                else
+                {
+                    errors.Add($"Invalid AniDB ID format: {raw}");
+                }
+                continue;
+            }
+
+            // Handle standard Shoko Series ID
             if (!int.TryParse(raw, out int id) || id <= 0)
             {
                 errors.Add($"Invalid series id: {raw}");
