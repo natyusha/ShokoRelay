@@ -41,7 +41,7 @@ Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File Sy
     - You can download the latest report via a dashboard toast that will appear when the process completes
   - The VFS will automatically update when it detects files have been renamed or moved
 - **Recommended:**
-  - Link the plugin to your Plex account via the `Start Plex Auth` button in the "Plex: Authentication" section
+  - Link the plugin to your Plex account via the `Start Plex Auth` button in the "Plex Authentication" section
     - Once clicked it will change to a `Login` link which will redirect you to `app.plex.tv/auth`
     - From there you can login to Plex as normal using your credentials and then close the tab
     - This will enable: Auto Scanning, Scrobbling (webhooks) and enhanced collection/ratings support
@@ -115,29 +115,7 @@ com.plexapp.agents.shokorelay
 
 </details>
 
-## Plex: Automation
-
-> [!NOTE]
-> The Plex automation interval or "Int." (listed under the "Plex: Authentication" section) can be configured to control how often [Generate Collections](#collection-generation) and [Apply Critic Ratings](#critic-rating-application) runs. _An interval of 24-hours or above is recommended as Shoko rarely updates this information._
-
-### Collection Generation
-
-- Currently Plex's Provider Framework does not allow collections to be automatically assigned
-  - They have to be injected manually via Plex's HTTP API instead
-- Click the `Generate Collections` button in the "Plex: Automation" section to start this process
-- _Requires Plex authentication_
-
-**Notes:**
-
-As a bonus this supports using the primary series poster as the collection poster (if configured under "Provider Settings"). Custom local posters can also be used by placing them in the configured `Collection Posters Root Path` (default `!CollectionPosters`) folder. These files are simply named after the Shoko group name (or ID) that you wish them to apply to. Empty collections will also be removed automatically during collection generation.
-
-### Critic Rating Application
-
-- The Provider Framework supports TMDB ratings but they are not visible outside of the "New Plex Experience"
-- To mitigate this the `Apply Critic Ratings` button on the dashboard is available
-  - This makes Plex for Web/Desktop show the ratings next to a generic grey star in the UI
-- The rating source for this can be configured (or disabled) under `Critic Rating Mode` in the Provider Settings
-- _Requires Plex authentication_
+## Automation Controls
 
 #### Force Partial Scans
 
@@ -154,19 +132,45 @@ As a bonus this supports using the primary series poster as the collection poste
 - Managed users must be added to `Extra Plex Users` on the dashboard if you wish them to be included
 - _Requires a Plex Pass subscription_
 
-## Shoko: Automation
+### Scheduling
+
+- `UTC Offset` An input which controls the starting time in UTC for scheduled tasks
+- `Plex Int.` An input which will schedule [Generate Collections](#collection-generation) and [Apply Critic Ratings](#critic-rating-application) every `N` hours
+  - An interval of 24-hours or above is recommended as Shoko rarely updates this information
+- `Import Int.` An input which will schedule Shoko imports from "Source" type drop folders every `N` hours
+- `Sync Int.` An input which will schedule watched state syncing from Plex to Shoko every `N` hours
+  - This includes ratings/votes if `Include Ratings` is enabled in the `Sync Watched States` modal
+  - _Requires Plex authentication_
+
+## Quick Actions
+
+### Collection Generation
+
+- Currently Plex's Provider Framework does not allow collections to be automatically assigned
+  - They have to be injected manually via Plex's HTTP API instead
+- Click the `Generate Collections` button in the "Quick Actions" section of the dashboard to start this process
+- _Requires Plex authentication_
+
+**Notes:**
+
+As a bonus this supports using the primary series poster as the collection poster (if configured under "Provider Settings"). Custom local posters can also be used by placing them in the configured `Collection Posters Root Path` (default `!CollectionPosters`) folder. These files are simply named after the Shoko group name (or ID) that you wish them to apply to. Empty collections will also be removed automatically during collection generation.
+
+### Critic Rating Application
+
+- The Provider Framework supports TMDB ratings but they are not visible outside of the "New Plex Experience"
+- To mitigate this the `Apply Critic Ratings` button in the "Quick Actions" section of the dashboard is available
+  - This makes Plex for Web/Desktop show the ratings next to a generic grey star in the UI
+- The rating source for this can be configured (or disabled) under `Critic Rating Mode` in the Provider Settings
+- _Requires Plex authentication_
+
+### Shoko Actions
 
 - `Remove Missing` A button which will remove files that are no longer present from Shoko
   - Unlike the "Remove Missing Files" action in Shoko's WebUI this will remove all traces of the files from the Shoko DB
   - Entries will _always_ be removed from the AniDB MyList as well
 - `Import` A button which will make shoko rescan all "Source" type drop folders
 - `Sync` A button which opens a modal allowing for watched state syncing from Plex to Shoko or Shoko to Plex
-  - This includes any users configured under `Extra Plex Users` in the "Plex: Authentication" section
-  - _Requires Plex authentication_
-- `Schedule Offset` An input which controls the starting time in UTC for scheduled tasks
-- `Import Int.` An input which will schedule imports from "Source" type drop folders every `N` hours
-- `Sync Int.` An input which will schedule watched state syncing from Plex to Shoko every `N` hours
-  - This includes ratings/votes if `Include Ratings` is enabled in the `Sync Watched States` modal
+  - This includes any users configured under `Extra Plex Users` in the "Plex Authentication" section
   - _Requires Plex authentication_
 
 ## AnimeThemes Integration

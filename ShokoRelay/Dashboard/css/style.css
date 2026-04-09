@@ -168,6 +168,9 @@ textarea {
   font-size: 0.9em;
   font-family: "Sora", sans-serif;
 }
+.clear input {
+  margin-bottom: 0;
+}
 button {
   font-family: "Sora", sans-serif;
 }
@@ -219,13 +222,13 @@ a:hover:not(.plex-login-link) {
   max-width: 46px;
 }
 .w100 {
-  max-width: 100px;
+  max-width: 98px;
 }
 .w100 > button {
   width: 100%;
 }
-.plex-divider {
-  margin: 17px 0 5px 0;
+.divider {
+  margin: 13px 0 13px 0;
 }
 .tmdb-ep-num:disabled,
 .plex-auth:disabled {

@@ -28,7 +28,7 @@
       -->
       <div class="two-cols">
         <section>
-          <h2 class="plex">Plex: Authentication</h2>
+          <h2 class="plex">Plex Authentication</h2>
           <div class="full" id="plex-auth-action">
             <!-- State: Unlinked -->
             <button id="plex-start" class="plex-auth-state">Start Plex Auth</button>
@@ -40,24 +40,22 @@
               </button>
             </div>
           </div>
-          <div class="full">
+          <div class="full clear">
             <div>
               <label for="extra-plex-users">Extra Plex Users (<span id="plex-libraries-count">0</span> Libraries)</label>
               <input id="extra-plex-users" class="plex-auth" type="text" placeholder="user1;1234 (comma separated, optional PIN)" />
             </div>
-            <div class="w46">
-              <label for="plex-auto-frequency" title="Plex Automation Interval">Int.</label>
-              <input id="plex-auto-frequency" class="plex-auth" type="number" min="0" step="1" placeholder="hrs" />
-            </div>
           </div>
         </section>
+        <!-- #endregion -->
+
+        <!-- #region MARK: Automation Controls
+        -->
         <section>
-          <h2 class="plex">Plex: Automation</h2>
-          <div class="full">
-            <button id="{{ TaskPlexCollectionsBuild }}" class="plex-auth" data-relay-endpoint="/plex/collections/build" data-relay-label="Collections" data-relay-persist="true">Generate Collections</button>
-            <button id="{{ TaskPlexRatingsApply }}" class="plex-auth" data-relay-endpoint="/plex/ratings/apply" data-relay-label="Critic Ratings" data-relay-persist="true">Apply Critic Ratings</button>
-          </div>
-          <hr class="plex-divider" />
+          <h2>
+            <svg class="icon-svg"><use href="img/icons.svg#clock-star-four-points-outline"></use></svg>
+            Automation Controls
+          </h2>
           <div class="full">
             <label class="shoko-checkbox plex-auth">
               <input id="plex-scan-vfs" class="plex-auth" type="checkbox" />
@@ -82,6 +80,24 @@
               </span>
             </label>
           </div>
+          <div class="full clear">
+            <div>
+              <label for="shoko-utc-offset" title="Schedule Start Time">UTC Offset</label>
+              <input id="shoko-utc-offset" type="number" min="-12" max="14" step="1" placeholder="-12...+14" />
+            </div>
+            <div>
+              <label for="plex-auto-frequency" title="Plex Automation Interval">Plex Int.</label>
+              <input id="plex-auto-frequency" class="plex-auth" type="number" min="0" step="1" placeholder="hours" />
+            </div>
+            <div>
+              <label for="shoko-import-frequency" title="Automatic Source Import Interval">Import Int.</label>
+              <input id="shoko-import-frequency" type="number" min="0" step="1" placeholder="hours" />
+            </div>
+            <div>
+              <label for="shoko-sync-frequency" title="Automatic Watched State Sync Interval">Sync Int.</label>
+              <input id="shoko-sync-frequency" class="plex-auth" type="number" min="0" step="1" placeholder="hours" />
+            </div>
+          </div>
         </section>
       </div>
       <!-- #endregion -->
@@ -95,9 +111,6 @@
               <svg class="icon-svg"><use href="img/icons.svg#database-refresh-outline"></use></svg>
               Shoko: VFS
             </h2>
-            <a id="shoko-api-link" href="#" target="_blank" rel="noopener noreferrer" class="at-btn" title="Open Swagger" aria-label="Open Swagger">
-              <svg class="icon-svg"><use href="img/icons.svg#api"></use></svg>
-            </a>
           </div>
           <div class="full">
             <div>
@@ -115,30 +128,28 @@
             </button>
           </div>
         </section>
+        <!-- #endregion -->
+
+        <!-- #region MARK: Quick Actions
+        -->
         <section>
           <div class="full">
             <h2>
               <svg class="icon-svg"><use href="img/icons.svg#auto-fix"></use></svg>
-              Shoko: Automation
+              Quick Actions
             </h2>
+            <a id="shoko-api-link" href="#" target="_blank" rel="noopener noreferrer" class="at-btn" title="Open Swagger" aria-label="Open Swagger">
+              <svg class="icon-svg"><use href="img/icons.svg#api"></use></svg>
+            </a>
             <a id="shoko-dashboard-link" href="#" target="_blank" rel="noopener noreferrer" class="at-btn" title="Open Shoko Dashboard" aria-label="Open Shoko Dashboard">
               <svg class="icon-svg"><use href="img/icons.svg#view-dashboard-outline"></use></svg>
             </a>
           </div>
           <div class="full">
-            <div>
-              <label for="shoko-utc-offset">Schedule Offset</label>
-              <input id="shoko-utc-offset" type="number" min="-12" max="14" step="1" placeholder="UTC (-12...+14)" />
-            </div>
-            <div class="w100">
-              <label for="shoko-import-frequency" title="Automatic Source Import Interval">Import Int.</label>
-              <input id="shoko-import-frequency" type="number" min="0" step="1" placeholder="hours" />
-            </div>
-            <div class="w100">
-              <label for="shoko-sync-frequency" title="Automatic Watched State Sync Interval">Sync Int.</label>
-              <input id="shoko-sync-frequency" class="plex-auth" type="number" min="0" step="1" placeholder="hours" />
-            </div>
+            <button id="{{ TaskPlexCollectionsBuild }}" class="plex-auth" data-relay-endpoint="/plex/collections/build" data-relay-label="Collections" data-relay-persist="true">Generate Collections</button>
+            <button id="{{ TaskPlexRatingsApply }}" class="plex-auth" data-relay-endpoint="/plex/ratings/apply" data-relay-label="Critic Ratings" data-relay-persist="true">Apply Critic Ratings</button>
           </div>
+          <hr class="divider" />
           <div class="full">
             <button
               id="{{ TaskShokoRemoveMissing }}"

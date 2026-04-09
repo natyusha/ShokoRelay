@@ -69,6 +69,7 @@ label.shoko-checkbox {
   align-items: flex-start;
   gap: 0.6rem;
   cursor: pointer;
+  margin-left: 2px;
   padding: 0.25rem 0;
   user-select: none;
 }
