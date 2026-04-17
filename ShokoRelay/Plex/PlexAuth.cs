@@ -128,6 +128,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
             return (response.StatusCode is not HttpStatusCode.Unauthorized and not HttpStatusCode.Forbidden, [], []);
 
         var devices = await ReadJsonAsync<List<PlexDevice>>(response, ct).ConfigureAwait(false) ?? [];
+        
         var servers = devices
             .Where(d => d.Provides?.Contains("server", StringComparison.OrdinalIgnoreCase) == true)
             .Select(d =>
@@ -138,6 +139,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
                 return new PlexServerInfo(d.ClientIdentifier ?? "", d.Name ?? "", pref, d.HttpsRequired);
             })
             .ToList();
+        
         return (true, servers, devices);
     }
 
