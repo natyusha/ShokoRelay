@@ -328,6 +328,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
                     Id = s.Id,
                     Name = s.Name,
                     PreferredUri = s.PreferredUri ?? string.Empty,
+                    HttpsRequired = s.HttpsRequired,
                 })
                 .ToList();
             _configProvider.UpdatePlexTokenInfo(servers: servers);

@@ -117,6 +117,9 @@ public class PlexAvailableServer
 
     /// <summary>Best connection URI.</summary>
     public string PreferredUri { get; set; } = "";
+
+    /// <summary>Whether the server requires HTTPS.</summary>
+    public bool HttpsRequired { get; set; } = false;
 }
 
 /// <summary>Metadata describing a library section exposed by a Plex server.</summary>
