@@ -95,8 +95,7 @@ public class PlexController(
             try
             {
                 string clientIdentifier = _configProvider.GetPlexClientIdentifier();
-                var priorityMode = _configProvider.GetSettings()?.Advanced.PlexConnectionPriority ?? Config.PlexConnectionPriority.LocalFirst;
-                var discovery = await _plexAuth.DiscoverShokoLibrariesAsync(pin.AuthToken, clientIdentifier, cancellationToken, priorityMode).ConfigureAwait(false);
+                var discovery = await _plexAuth.DiscoverShokoLibrariesAsync(pin.AuthToken, clientIdentifier, cancellationToken).ConfigureAwait(false);
                 PersistDiscoveryResults(discovery);
             }
             catch (Exception ex)
@@ -144,8 +143,7 @@ public class PlexController(
 
         try
         {
-            var priorityMode = _configProvider.GetSettings()?.Advanced.PlexConnectionPriority ?? Config.PlexConnectionPriority.LocalFirst;
-            var discovery = await _plexAuth.DiscoverShokoLibrariesAsync(token, clientIdentifier, cancellationToken, priorityMode).ConfigureAwait(false);
+            var discovery = await _plexAuth.DiscoverShokoLibrariesAsync(token, clientIdentifier, cancellationToken).ConfigureAwait(false);
             PersistDiscoveryResults(discovery);
             return Ok(new RelayResponse<object>(Data: new { libraries = CollectDiscoveredLibraries(discovery.ShokoLibraries) }));
         }

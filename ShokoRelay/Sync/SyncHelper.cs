@@ -285,8 +285,7 @@ public static class SyncHelper
             try
             {
                 var clientIdentifier = configProvider.GetPlexClientIdentifier();
-                var priorityMode = configProvider.GetSettings()?.Advanced.PlexConnectionPriority ?? Config.PlexConnectionPriority.LocalFirst;
-                var (TokenValid, Servers, Devices) = await plexAuth.GetPlexServerListAsync(userToken, clientIdentifier, cancellationToken, priorityMode).ConfigureAwait(false);
+                var (TokenValid, Servers, Devices) = await plexAuth.GetPlexServerListAsync(userToken, clientIdentifier, cancellationToken).ConfigureAwait(false);
                 var devices = Devices ?? [];
                 foreach (var dev in devices)
                 {

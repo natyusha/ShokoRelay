@@ -105,18 +105,6 @@ public enum OverlapLevel
     None = 2,
 }
 
-/// <summary>Plex server connection priority mode.</summary>
-public enum PlexConnectionPriority
-{
-    /// <summary>Prioritize local connections over HTTPS (Local HTTP > Remote HTTPS > Remote HTTP > Relay).</summary>
-    [Display(Name = "Local First")]
-    LocalFirst = 0,
-
-    /// <summary>Prioritize HTTPS over local connections (HTTPS > HTTP > Relay).</summary>
-    [Display(Name = "HTTPS First")]
-    HttpsFirst = 1,
-}
-
 #endregion
 
 #region Provider Config
@@ -402,11 +390,6 @@ public class AdvancedConfig
     [Range(1, 16, ErrorMessage = "Parallelism must be between 1 and 16")]
     [DefaultValue(4)]
     public int Parallelism { get; set; } = 4;
-
-    /// <summary>Plex server connection priority mode.</summary>
-    [Display(Name = "Plex Connection Priority", Description = "Select how to prioritize Plex server connections: Local First (prioritizes local network connections) or HTTPS First (prioritizes secure connections). Note: After changing this setting, you may need to refresh the page and click the Refresh button in the Plex section to see the effect.")]
-    [DefaultValue(PlexConnectionPriority.LocalFirst)]
-    public PlexConnectionPriority PlexConnectionPriority { get; set; } = PlexConnectionPriority.LocalFirst;
 }
 
 #endregion

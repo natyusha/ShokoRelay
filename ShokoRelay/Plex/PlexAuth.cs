@@ -21,7 +21,8 @@ public sealed record PlexDeviceConnection(string? Uri, bool Local, bool Relay);
 /// <param name="Provides">Capability list.</param>
 /// <param name="AccessToken">Device access token.</param>
 /// <param name="Connections">Available network connections.</param>
-public sealed record PlexDevice(string? ClientIdentifier, string? Name, string? Provides, string? AccessToken, List<PlexDeviceConnection>? Connections);
+/// <param name="HttpsRequired">Whether the server requires HTTPS connections.</param>
+public sealed record PlexDevice(string? ClientIdentifier, string? Name, string? Provides, string? AccessToken, List<PlexDeviceConnection>? Connections, bool HttpsRequired = false);
 
 /// <summary>Summary of a Plex server connection.</summary>
 /// <param name="Id">Server identifier.</param>
@@ -117,9 +118,8 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
     /// <param name="token">Plex authentication token.</param>
     /// <param name="cid">Client identifier.</param>
     /// <param name="ct">Cancellation token.</param>
-    /// <param name="priorityMode">Connection priority mode (Local First or HTTPS First).</param>
     /// <returns>Tuple of token validity and lists of servers/devices.</returns>
-    public async Task<(bool TokenValid, List<PlexServerInfo> Servers, List<PlexDevice> Devices)> GetPlexServerListAsync(string token, string cid, CancellationToken ct = default, Config.PlexConnectionPriority priorityMode = Config.PlexConnectionPriority.LocalFirst)
+    public async Task<(bool TokenValid, List<PlexServerInfo> Servers, List<PlexDevice> Devices)> GetPlexServerListAsync(string token, string cid, CancellationToken ct = default)
     {
         using var request = CreateRequest(HttpMethod.Get, new Uri("https://clients.plex.tv/api/v2/resources"), token, cid);
         using var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
@@ -132,27 +132,12 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
             .Where(d => d.Provides?.Contains("server", StringComparison.OrdinalIgnoreCase) == true)
             .Select(d =>
             {
-                // Calculate priority score for each connection
-                // Local First: Local (100) + HTTPS (10) > Remote (0) + HTTPS (10) > Relay (-100)
-                // HTTPS First: HTTPS (100) > HTTP (0) > Relay (-100)
-                var pref = d.Connections?
-                    .OrderByDescending(c =>
-                    {
-                        if (c.Relay) return -100;
-                        
-                        if (priorityMode == Config.PlexConnectionPriority.HttpsFirst)
-                        {
-                            return c.Uri?.StartsWith("https") == true ? 100 : 0;
-                        }
-                        else
-                        {
-                            // Local First: prioritize local connections, then HTTPS
-                            var score = c.Local ? 100 : 0;
-                            if (c.Uri?.StartsWith("https") == true) score += 10;
-                            return score;
-                        }
-                    })
-                    .FirstOrDefault()?.Uri;
+                // Filter connections based on httpsRequired flag
+                var availableConnections = d.Connections?
+                    .Where(c => !d.HttpsRequired || c.Uri?.StartsWith("https") == true)
+                    .ToList();
+                
+                var pref = availableConnections?.OrderByDescending(c => (c.Local && !c.Relay ? 100 : 0) + (c.Uri?.StartsWith("https") == true ? 10 : 0) + (!c.Relay ? 1 : 0)).FirstOrDefault()?.Uri;
                 return new PlexServerInfo(d.ClientIdentifier ?? "", d.Name ?? "", pref);
             })
             .ToList();
@@ -189,16 +174,14 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
     /// <param name="token">Admin token.</param>
     /// <param name="cid">Client ID.</param>
     /// <param name="ct">Cancellation token.</param>
-    /// <param name="priorityMode">Connection priority mode (Local First or HTTPS First).</param>
     /// <returns>Discovery results containing server and library pairs.</returns>
     public async Task<(bool TokenValid, List<PlexServerInfo> Servers, List<(PlexLibraryInfo Library, PlexServerInfo Server)> ShokoLibraries)> DiscoverShokoLibrariesAsync(
         string token,
         string cid,
-        CancellationToken ct = default,
-        Config.PlexConnectionPriority priorityMode = Config.PlexConnectionPriority.LocalFirst
+        CancellationToken ct = default
     )
     {
-        var (TokenValid, Servers, _) = await GetPlexServerListAsync(token, cid, ct, priorityMode).ConfigureAwait(false);
+        var (TokenValid, Servers, _) = await GetPlexServerListAsync(token, cid, ct).ConfigureAwait(false);
         var list = new List<(PlexLibraryInfo, PlexServerInfo)>();
         if (TokenValid)
         {
