@@ -264,7 +264,7 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
     {
         try
         {
-            // Re-generate the VFS for this series in case TMDB numbering or other metadata updated in Shoko after the initial file event was processed.
+            // Regenerate the VFS to account for cases where the episode/season numbering was updated in Shoko after the initial file event was processed (a metadata refresh can't do this on its own)
             var vfsResult = _builder.Build(series.ID, cleanRoot: false, pruneSeries: true);
             if (vfsResult.CreatedLinks > 0)
                 Logger.Info("VFS: Re-generated links for '{0}' during fixup phase", series.PreferredTitle?.Value);

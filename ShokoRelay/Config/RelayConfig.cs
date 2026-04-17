@@ -374,7 +374,7 @@ public class AdvancedConfig
     public string FFmpegPath { get; set; } = "";
 
     /// <summary>Plex RefreshMetadataAsync delay.</summary>
-    [Display(Name = "Plex Fixup Delay", Description = "The delay (in minutes) after the VFS adds a file to force refresh series metadata")]
+    [Display(Name = "Plex Fixup Delay", Description = "The delay (in minutes) after the VFS adds a file to regenerate it and force refresh series metadata")]
     [Range(1, 60, ErrorMessage = "Plex Fixup Delay must be between 1 and 60")]
     [DefaultValue(2)]
     public int PlexFixupDelay { get; set; } = 2;
