@@ -153,15 +153,6 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
                         }
                     })
                     .FirstOrDefault()?.Uri;
-                
-                // Log available connections and selected one for debugging
-                if (d.Connections != null)
-                {
-                    var connectionsList = string.Join(", ", d.Connections.Select(c =>
-                        $"{c.Uri} (Local:{c.Local}, Relay:{c.Relay})"));
-                    Logger.Debug($"Plex server '{d.Name}' available connections: {connectionsList}");
-                }
-                Logger.Debug($"Plex server '{d.Name}' selected connection: {pref} (Mode: {priorityMode})");
                 return new PlexServerInfo(d.ClientIdentifier ?? "", d.Name ?? "", pref);
             })
             .ToList();
