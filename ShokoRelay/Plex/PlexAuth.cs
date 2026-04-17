@@ -20,14 +20,16 @@ public sealed record PlexDeviceConnection(string? Uri, bool Local, bool Relay);
 /// <param name="Name">Device name.</param>
 /// <param name="Provides">Capability list.</param>
 /// <param name="AccessToken">Device access token.</param>
+/// <param name="HttpsRequired">True if the server requires secure connections.</param>
 /// <param name="Connections">Available network connections.</param>
-public sealed record PlexDevice(string? ClientIdentifier, string? Name, string? Provides, string? AccessToken, List<PlexDeviceConnection>? Connections);
+public sealed record PlexDevice(string? ClientIdentifier, string? Name, string? Provides, string? AccessToken, bool HttpsRequired, List<PlexDeviceConnection>? Connections);
 
 /// <summary>Summary of a Plex server connection.</summary>
 /// <param name="Id">Server identifier.</param>
 /// <param name="Name">Display name.</param>
 /// <param name="PreferredUri">Best connection URL.</param>
-public sealed record PlexServerInfo(string Id, string Name, string? PreferredUri);
+/// <param name="HttpsRequired">True if HTTPS is mandatory.</param>
+public sealed record PlexServerInfo(string Id, string Name, string? PreferredUri, bool HttpsRequired);
 
 /// <summary>Summary of a Plex library section including physical locations.</summary>
 /// <param name="Id">Section ID.</param>
@@ -130,8 +132,10 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
             .Where(d => d.Provides?.Contains("server", StringComparison.OrdinalIgnoreCase) == true)
             .Select(d =>
             {
-                var pref = d.Connections?.OrderByDescending(c => (c.Local && !c.Relay ? 100 : 0) + (c.Uri?.StartsWith("https") == true ? 10 : 0) + (!c.Relay ? 1 : 0)).FirstOrDefault()?.Uri;
-                return new PlexServerInfo(d.ClientIdentifier ?? "", d.Name ?? "", pref);
+                // Logic: Sort connections by Locality, Protocol (HTTPS), and Relay status. If HttpsRequired is true filter out non-HTTPS URIs entirely.
+                var validConnections = d.HttpsRequired ? d.Connections?.Where(c => c.Uri?.StartsWith("https") == true) : d.Connections;
+                var pref = validConnections?.OrderByDescending(c => (c.Local && !c.Relay ? 100 : 0) + (c.Uri?.StartsWith("https") == true ? 10 : 0) + (!c.Relay ? 1 : 0)).FirstOrDefault()?.Uri;
+                return new PlexServerInfo(d.ClientIdentifier ?? "", d.Name ?? "", pref, d.HttpsRequired);
             })
             .ToList();
         return (true, servers, devices);

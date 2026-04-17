@@ -257,10 +257,22 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
         });
     }
 
+    /// <summary>Worker task that performs the actual metadata fixup logic after the debounce delay has settled.</summary>
+    /// <param name="series">The Shoko series to fix up.</param>
+    /// <param name="token">Cancellation token.</param>
     private async Task RunMetadataFixupAsync(IShokoSeries series, CancellationToken token)
     {
         try
         {
+            // Re-generate the VFS for this series in case TMDB numbering or other metadata updated in Shoko after the initial file event was processed.
+            var vfsResult = _builder.Build(series.ID, cleanRoot: false, pruneSeries: true);
+            if (vfsResult.CreatedLinks > 0)
+                Logger.Info("VFS: Re-generated links for '{0}' during fixup phase", series.PreferredTitle?.Value);
+
+            int bufferSeconds = ShokoRelay.Settings.Advanced.PlexScanDelay;
+            if (bufferSeconds > 0)
+                await Task.Delay(TimeSpan.FromSeconds(bufferSeconds), token).ConfigureAwait(false);
+
             var targets = _plexLibrary.GetConfiguredTargets();
             bool foundInAnyTarget = false;
             foreach (var target in targets)
@@ -269,14 +281,15 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
                 if (ratingKey.HasValue)
                 {
                     foundInAnyTarget = true;
-                    Logger.Info("VFS: Triggering metadata fixup for '{0}' (RatingKey: {1}) on {2}", series.PreferredTitle?.Value, ratingKey.Value, target.ServerName);
+                    Logger.Info("VFS: Triggering debounced metadata fixup for '{0}' (RatingKey: {1}) on {2}", series.PreferredTitle?.Value, ratingKey.Value, target.ServerName);
                     await _plexLibrary.RefreshMetadataAsync(ratingKey.Value, target, token).ConfigureAwait(false);
                 }
             }
 
             if (!foundInAnyTarget)
-                Logger.Debug("VFS: Fixup for '{0}' skipped; rating key not found in Plex yet.", series.PreferredTitle?.Value);
+                Logger.Debug("VFS: Debounced fixup for '{0}' skipped; rating key not found in Plex yet.", series.PreferredTitle?.Value);
         }
+        catch (OperationCanceledException) { }
         catch (Exception ex)
         {
             Logger.Error(ex, "VFS: Metadata fixup failed for series {0}", series.ID);

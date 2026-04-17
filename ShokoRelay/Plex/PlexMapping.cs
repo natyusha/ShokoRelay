@@ -25,7 +25,7 @@ public static class PlexMapping
 
     #endregion
 
-    #region Season and Folder Logic
+    #region Season & Folder Logic
 
     /// <summary>Look up info for an extra/special season number.</summary>
     /// <param name="seasonNumber">The season ID.</param>
@@ -48,7 +48,7 @@ public static class PlexMapping
 
     #endregion
 
-    #region Coordinate Calculation
+    #region Coordinate Calc
 
     /// <summary>Calculate Plex coordinates for an episode.</summary>
     /// <param name="e">The episode metadata.</param>
@@ -171,7 +171,7 @@ public static class PlexMapping
 
     #endregion
 
-    #region TMDB Ordering and Cache Logic
+    #region TMDB Order & Cache
 
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<(int EpId, string? OrderingId), bool> _tmdbAllOrderingsContainsCache = new();
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<(int EpId, string? OrderingId), (int? Season, int Episode)> _orderingCoordsCache = new();
