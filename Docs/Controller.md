@@ -27,11 +27,11 @@ GET  /config                                                   -> GetConfig
 POST /config                                                   -> SaveConfig
 GET  /config/schema                                            -> GetConfigSchema
 
-GET  /logs/{fileName}                                          -> GetLog
-
 GET  /tasks/active                                             -> GetActiveTasks
 GET  /tasks/completed                                          -> GetCompletedTasks
 POST /tasks/clear/{taskName}                                   -> ClearTaskResult
+
+GET  /logs/{fileName}                                          -> GetLog
 ```
 
 - `GetControllerPage` Serves the plugin's frontend components and static assets from the `dashboard` folder.
@@ -39,9 +39,6 @@ POST /tasks/clear/{taskName}                                   -> ClearTaskResul
   - `/dashboard/player`: Serves the stand-alone AnimeThemes video player (`player.cshtml`).
   - `/dashboard/{assetPath}`: Serves static assets (JS, CSS, fonts, images).
   - The controller uses `FileExtensionContentTypeProvider` for MIME mapping and automatically injects a `<base>` tag.
-
----
-
 - `GetConfig` returns the current configuration payload (JSON) used by the dashboard page.
   - The `ConfigProvider` handles serialization and sanitization. Structure is nested into `Automation`, `Playback`, and `Advanced`.
   - This also includes `anidb_vfs_overrides.csv` in the response as a separate entry from the main payload.
@@ -49,12 +46,15 @@ POST /tasks/clear/{taskName}                                   -> ClearTaskResul
   - `/config` does not expose the Plex token. Instead the response includes `PlexLibrary.HasToken`.
 - `GetConfigSchema` returns a JSON schema representation of `RelayConfig` properties.
   - Properties within the `AdvancedConfig` class are automatically flagged with `Advanced: true`.
-
----
-
+- `GetActiveTasks` returns a list of unique task identifiers currently running on the server.
+- `GetCompletedTasks` returns a dictionary of results for tasks that finished while the dashboard was disconnected or before a refresh.
+- `ClearTaskResult` acknowledges and removes a stored result from the server's memory.
 - `GetLog` serves report files created under the plugin's `logs` directory.
   - This endpoint serves the file as `text/plain` without a download name, allowing it to be viewed directly in a browser tab.
-- All automation endpoints utilize the `LogAndReturn` helper to provide a direct `logUrl` in the response. Reports include:
+
+**Notes:**
+
+All automation endpoints utilize the `LogAndReturn` helper to provide a direct `logUrl` in the response. Reports include:
 
 ```
 /plex/collections/build                                        -> collections-report.log
@@ -69,12 +69,6 @@ POST /tasks/clear/{taskName}                                   -> ClearTaskResul
 
 ---
 
-- `GetActiveTasks` returns a list of unique task identifiers currently running on the server.
-- `GetCompletedTasks` returns a dictionary of results for tasks that finished while the dashboard was disconnected or before a refresh.
-- `ClearTaskResult` acknowledges and removes a stored result from the server's memory.
-
----
-
 ## Metadata Provider
 
 Endpoints managed by `MetadataController`
@@ -83,13 +77,13 @@ Endpoints managed by `MetadataController`
 
 ```
 GET  /                                                         -> GetMediaProvider
-GET  /matches?filename={path}&title={id}&manual=1              -> Match
-POST /matches                                                  -> Match
+GET  /matches?filename={path}&title={id}&manual=1              -> Match                     (for preview/testing)
+POST /matches?filename={path}&title={id}&manual=1              -> Match
 
 GET  /collections/{groupId}                                    -> GetCollection
-GET  /collections/user/{groupId}                               -> GetCollectionPoster (image)
+GET  /collections/user/{groupId}?t={ticks}                     -> GetCollectionPoster       (image)
 
-GET  /metadata/{ratingKey}?includeChildren=0|1                 -> GetMetadata
+GET  /metadata/{ratingKey}?includeChildren={0|1}               -> GetMetadata
 GET  /metadata/{ratingKey}/children                            -> GetChildren
 GET  /metadata/{ratingKey}/grandchildren                       -> GetGrandchildren
 GET  /metadata/{ratingKey}/images                              -> GetImages
@@ -97,22 +91,17 @@ GET  /metadata/{ratingKey}/images                              -> GetImages
 
 - `GetMediaProvider` returns the agent descriptor describing supported types and features.
 - `Match` looks up a series by filename or title. Priority is given to IDs found in the path.
+  - `filename`: The file path provided by Plex.
+  - `title`: The Shoko Series ID (used when `manual=1`).
+  - `manual`: (default 0) set to 1 to force identification via the `title` parameter.
   - Testing the `GET` endpoint would use the following format: `/matches?title={ShokoSeriesID}&manual=1`
-
----
-
 - `GetCollection` retrieves collection metadata for a given group ID.
 - `GetCollectionPoster` returns the poster image from the `!CollectionPosters` directory.
-  - Supports an optional `?t={ticks}` query parameter for cache busting.
-
----
-
+  - `t`: (optional) timestamp ticks used for cache busting.
 - `GetMetadata` returns full metadata for a ratingKey (series/season/episode).
-  - Logic for context resolution and series merging is delegated to the `PlexMetadata` service.
+  - `includeChildren`: (default 0) set to 1 to embed immediate children in the response.
 - `GetChildren` / `GetGrandchildren` return only the immediate or second-level child items respectively.
 - `GetImages` returns a `MediaContainer` with an `Image` array used by Plex when fetching all artwork.
-
----
 
 **Notes:**
 
@@ -162,23 +151,15 @@ GET  /plex/automation/run                                      -> RunPlexAutomat
 
 - `BuildPlexCollections` generate Plex collections for the specified series or filter.
 - `ApplyCollectionPosters` upload or refresh posters for the same series set.
-
----
-
 - `ApplyAudienceRatings` update series/episode ratings based on the configured source (TMDB/AniDB).
-
----
-
 - `RunPlexAutomationNow` triggers collection building and rating application back-to-back for all series.
-  - The scheduler is governed by `Automation.PlexAutomationFrequencyHours`.
-
----
 
 **Notes:**
 
 - Each of the above (other than `RunPlexAutomationNow`) accepts either `seriesId` _or_ a comma separated `filter`.
   - The `seriesId` defaults to Shoko but can be an AniDB ID if prefixed with an 'a'.
 - All operations respect the `Advanced.Parallelism` setting to prevent IO saturation.
+- The scheduler is governed by `Automation.PlexAutomationFrequencyHours`.
 
 ---
 
@@ -189,6 +170,9 @@ POST /plex/webhook                                             -> PluginPlexWebh
 ```
 
 - `PluginPlexWebhook` handles Plex `media.scrobble` and `media.rate` events.
+
+**Notes:**
+
 - Strict Validation:
   - Validates the `Server.uuid` against known servers to prevent leaks from shared libraries.
   - Distinguishes between the actual Admin account and managed users.
@@ -211,18 +195,18 @@ POST /vfs/overrides                                            -> SaveVfsOverrid
 ```
 
 - `BuildVfs` (all query parameters are optional)
-  - `run` (default false): if true the VFS is constructed.
-  - `clean` (default true): clear the existing root before building.
-  - `filter`: comma separated Shoko or AniDB (prefixed with an 'a') series IDs.
+  - `run`: (default false) set to true to execute the VFS construction.
+  - `clean`: (default true) clear the existing root before building.
+  - `filter`: (optional) comma separated Shoko or AniDB (prefixed with an 'a') series IDs.
 - `SaveVfsOverrides` accepts raw text for `anidb_vfs_overrides.csv`.
-
----
 
 **Notes:**
 
 - When `Automation.ScanOnVfsRefresh` is enabled, the controller schedules library scans for affected series automatically.
 - When importing local metadata images, files named `Specials.<ext>` are renamed to `Season-Specials-Poster.<ext>` in the VFS.
+- Any folder name listed in the `Folder Exclusions` setting (plus system folders like !AnimeThemes) is ignored during VFS generation.
 - Overrides allow grouping multiple AniDB IDs under a single primary Shoko Series ID for Plex.
+- `VfsWatcher` automatically triggers batch VFS builds when file events are detected.
 
 ---
 
@@ -243,12 +227,15 @@ GET  /sync-watched/start                                       -> StartWatchedSy
 ```
 
 - `RemoveMissingFiles` removes missing files from Shoko and the AniDB MyList (physical files are never touched).
+  - `dryRun`: (default true) set to false to actually remove records from Shoko and AniDB MyList.
 - `RunShokoImport` triggers a scan of managed folders marked as "Source".
 - `SyncPlexWatched` synchronizes watched state between Plex and Shoko (Bi-directional).
-  - Default direction is `Plex→Shoko`. Set `import=true` for `Plex←Shoko`.
-  - Direction and exclusion settings are read from `Automation` config.
-
----
+  - `dryRun`: (default true) set to false to write watched states/ratings to databases.
+  - `sinceHours`: (optional) limit processing to items viewed within this window.
+  - `ratings`: (default to configuration) set to true/false to override the `Automation.ShokoSyncWatchedIncludeRatings` setting.
+  - `import`: (default false) set to true for `Plex←Shoko`. Default is `Plex→Shoko`.
+  - `excludeAdmin`: (default to configuration) set to true/false to override the `Automation.ShokoSyncWatchedExcludeAdmin` setting.
+  - Direction and exclusion settings are read from `AutomationConfig`.
 
 **Notes:**
 
@@ -264,14 +251,19 @@ POST /map-symlinks?mapFile={path}&purgeLinks={true|false}      -> ProcessSourceL
 ```
 
 - `ProcessSourceLinks` manages relative symlinks from protected source folders to the library based on a text-based mapping file, or purges existing links.
-  - If `purgeLinks` is `true`, the plugin recursively removes all symlinks and `_attach` folders within the import roots.
-    - **Safety:** It explicitly excludes the configured VFS / AnimeThemes / Posters root folders and never deletes physical media files.
-  - If `purgeLinks` is `false` (default):
-    - The `mapFile` parameter is the path to the `.txt` file relative to the Import Root (e.g., `!Source/symlinks.txt`).
-    - Source paths are resolved relative to the directory containing the mapping file.
-    - Destination paths are resolved relative to the Import Root.
-    - Sidecar files (any file starting with `{baseName}`) and attachment folders (directories named `{baseName}_attachments`) are automatically identified and renamed to match the destination.
-      - Note: the `_attachments` folders are renamed to `_attach` at the destination to allow the `purgeLinks` operation to delete them without touching the originals.
+  - `mapFile`: (required if not purging) path to the `.txt` file relative to the Import Root (e.g., `!Source/symlinks.txt`).
+  - `purgeLinks`: (default false) set to true to recursively remove all symlinks and `_attach` folders in the import roots.
+
+**Notes:**
+
+- If `purgeLinks` is `true`:
+  - It explicitly excludes the configured VFS / AnimeThemes / Posters root folders and never deletes physical media files.
+- If `purgeLinks` is `false` (default):
+  - The `mapFile` parameter is the path to the `.txt` file relative to the Import Root (e.g., `!Source/symlinks.txt`).
+  - Source paths are resolved relative to the directory containing the mapping file.
+  - Destination paths are resolved relative to the Import Root.
+  - Sidecar files (any file starting with `{baseName}`) and attachment folders (directories named `{baseName}_attachments`) are automatically identified and renamed to match the destination.
+    - The `_attachments` folders are renamed to `_attach` at the destination to allow the `purgeLinks` operation to delete them without touching the originals.
 
 ---
 
@@ -317,10 +309,11 @@ POST /animethemes/vfs/import                                   -> ImportAnimeThe
 ```
 
 - `AnimeThemesVfsBuild` applies the mapping and generates `webm_animethemes.cache`.
-  - `filter`: comma separated Shoko or AniDB (prefixed with an 'a') series IDs.
+  - `filter`: (optional) comma separated Shoko or AniDB (prefixed with an 'a') series IDs.
   - Cache Format: `VfsPath|VideoId|Bitmask`.
   - Bitmask flags: `1:NC, 2:Lyrics, 4:Subs, 8:Uncen, 16:NSFW, 32:Spoil, 64:Trans, 128:Over`.
 - `AnimeThemesVfsMap` generates the mapping CSV or tests a single filename mapping.
+  - `testPath`: (optional) provide a filename to preview its mapping result and generated name.
   - The filename generation respects the `Advanced.AnimeThemesAppendTags` setting.
 
 ---
@@ -353,11 +346,15 @@ GET  /animethemes/mp3/random?refresh={true|false}              -> AnimeThemesMp3
 ```
 
 - `AnimeThemesMp3` generates or batches Theme.mp3 files using parallelism.
+  - `path`: (required) relative or absolute Shoko/Plex path.
+  - `slug`: (optional) specific theme identifier (e.g., OP1).
+  - `offset`: (default 0) selection index when multiple themes match.
+  - `batch`: (default false) set to true to recursively process subfolders.
+  - `force`: (default false) set to true to overwrite existing `Theme.mp3` files.
 - `AnimeThemesMp3Stream` embeds ID3v2 tags in response headers.
   - Headers: `X-Theme-Title`, `X-Theme-Slug`, `X-Theme-Artist`, `X-Theme-Album`.
 - `AnimeThemesMp3Random` uses a startup cache persisted in `mp3_animethemes.cache`.
-
----
+  - `refresh`: (default false) set to true to force a re-scan of managed roots for existing themes.
 
 **Notes:**
 

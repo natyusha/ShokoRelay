@@ -87,7 +87,12 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
 
                 result.PerUser[uName] = result.PerUser[uName] with { Processed = shokoWatched.Count };
                 var unwatched = await _plexClient.GetSectionEpisodesAsync(target, uToken, cancellationToken, true).ConfigureAwait(false);
-                var plexMap = (unwatched ?? []).ToDictionary(i => i.Guid ?? "", i => i.RatingKey ?? "", StringComparer.OrdinalIgnoreCase);
+                var plexMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var item in unwatched ?? [])
+                {
+                    if (!string.IsNullOrWhiteSpace(item.Guid))
+                        plexMap.TryAdd(item.Guid, item.RatingKey ?? "");
+                }
 
                 foreach (var sw in shokoWatched)
                 {

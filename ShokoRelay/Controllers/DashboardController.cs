@@ -102,23 +102,6 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
 
     #endregion
 
-    #region Logs
-
-    /// <summary>Serves report files from the plugin's logs directory.</summary>
-    /// <param name="fileName">The log filename.</param>
-    /// <returns>The log content as text/plain.</returns>
-    [HttpGet("logs/{fileName}")]
-    public IActionResult GetLog(string fileName)
-    {
-        if (string.IsNullOrWhiteSpace(fileName))
-            return BadRequest(new { status = "error", message = "fileName is required" });
-        string logsDir = Path.Combine(_configProvider.PluginDirectory, "logs");
-        string path = Path.Combine(logsDir, fileName);
-        return !System.IO.File.Exists(path) ? NotFound(new { status = "error", message = "log not found" }) : PhysicalFile(path, "text/plain");
-    }
-
-    #endregion
-
     #region Tasks
 
     /// <summary>Returns a list of currently running tasks for the dashboard UI.</summary>
@@ -136,6 +119,23 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
     {
         TaskHelper.TaskResults.TryRemove(taskName, out _);
         return Ok();
+    }
+
+    #endregion
+
+    #region Logs
+
+    /// <summary>Serves report files from the plugin's logs directory.</summary>
+    /// <param name="fileName">The log filename.</param>
+    /// <returns>The log content as text/plain.</returns>
+    [HttpGet("logs/{fileName}")]
+    public IActionResult GetLog(string fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName))
+            return BadRequest(new { status = "error", message = "fileName is required" });
+        string logsDir = Path.Combine(_configProvider.PluginDirectory, "logs");
+        string path = Path.Combine(logsDir, fileName);
+        return !System.IO.File.Exists(path) ? NotFound(new { status = "error", message = "log not found" }) : PhysicalFile(path, "text/plain");
     }
 
     #endregion

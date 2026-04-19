@@ -120,6 +120,7 @@ com.plexapp.agents.shokorelay
 #### Force Partial Scans
 
 - When `Force Partial Scans` is enabled Plex's HTTP API will be used to scan folders modified by the VFS watcher
+- This is much more reliable than Plex's default "Scan my library automatically" implementation
 - _Requires Plex authentication_
 
 #### Auto Scrobble
@@ -128,7 +129,7 @@ com.plexapp.agents.shokorelay
 - This can be enabled in the Plex Web/Desktop App under `Settings > Webhooks`
   - Click `Add Webhook` and enter: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/plex/webhook`
   - Click `Save Changes` to complete the process
-- The webhook respects the `Include Ratings` and `Exclude Admin` settings in the Sync Watched States Menu
+- The webhook respects the `Include Ratings` and `Exclude Admin` settings in the `Sync Watched States Menu`
 - Managed users must be added to `Extra Plex Users` on the dashboard if you wish them to be included
 - _Requires a Plex Pass subscription_
 
@@ -139,7 +140,7 @@ com.plexapp.agents.shokorelay
   - An interval of 24-hours or above is recommended as Shoko rarely updates this information
 - `Import Int.` An input which will schedule Shoko imports from "Source" type drop folders every `N` hours
 - `Sync Int.` An input which will schedule watched state syncing from Plex to Shoko every `N` hours
-  - This includes ratings/votes if `Include Ratings` is enabled in the `Sync Watched States` modal
+  - This includes ratings/votes if `Include Ratings` is enabled in the `Sync Watched States Menu` (under quick actions)
   - _Requires Plex authentication_
 
 ## Quick Actions
@@ -150,8 +151,6 @@ com.plexapp.agents.shokorelay
   - They have to be injected manually via Plex's HTTP API instead
 - Click the `Generate Collections` button in the "Quick Actions" section of the dashboard to start this process
 - _Requires Plex authentication_
-
-**Notes:**
 
 As a bonus this supports using the primary series poster as the collection poster (if configured under "Provider Settings"). Custom local posters can also be used by placing them in the configured `Collection Posters Root Path` (default `!CollectionPosters`) folder. These files are simply named after the Shoko group name (or ID) that you wish them to apply to. Empty collections will also be removed automatically during collection generation.
 
