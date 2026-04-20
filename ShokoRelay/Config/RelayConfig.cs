@@ -214,7 +214,7 @@ public class RelayConfig
     public TagSources TagSources { get; set; } = TagSources.Combined;
 
     /// <summary>The threshold weight for AniDB tags.</summary>
-    [Display(Name = "Minimum Tag Weight", Description = "Select the minimum AniDB tag weight to apply to a series in Plex")]
+    [Display(Name = "Minimum Tag Weight", Description = "Select the minimum AniDB tag weight to apply to series in Plex")]
     [DefaultValue(MinimumTagWeight.Zero)]
     public MinimumTagWeight MinimumTagWeight { get; set; } = MinimumTagWeight.Zero;
 
@@ -278,13 +278,13 @@ public class AutomationConfig
     public int ShokoSyncWatchedFrequencyHours { get; set; } = 0;
 
     /// <summary>Whether to include ratings in sync tasks.</summary>
-    [Display(Name = "Include Ratings for Scheduled Sync", Description = "When enabled, Plex->Shoko sync/scrobbles will also include user ratings/votes")]
+    [Display(Name = "Include Ratings for Scheduled Sync", Description = "When enabled, all sync/scrobble actions will also include user ratings/votes")]
     [Browsable(false)]
     [DefaultValue(false)]
     public bool ShokoSyncWatchedIncludeRatings { get; set; } = false;
 
     /// <summary>Whether to ignore the Plex admin user during sync.</summary>
-    [Display(Name = "Exclude Admin for Scheduled Sync", Description = "When enabled, Plex->Shoko sync/scrobbles will ignore items scrobbled by the Plex token owner/admin")]
+    [Display(Name = "Exclude Admin for Scheduled Sync", Description = "When enabled, all sync/scrobble actions will ignore items scrobbled by the Plex token owner/admin")]
     [Browsable(false)]
     [DefaultValue(false)]
     public bool ShokoSyncWatchedExcludeAdmin { get; set; } = false;

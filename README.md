@@ -120,7 +120,7 @@ com.plexapp.agents.shokorelay
 #### Force Partial Scans
 
 - When `Force Partial Scans` is enabled Plex's HTTP API will be used to scan folders modified by the VFS watcher
-- This is much more reliable than Plex's default "Scan my library automatically" implementation
+- On certain setups this is much more reliable than Plex's default "Scan my library automatically" implementation
 - _Requires Plex authentication_
 
 #### Auto Scrobble
@@ -140,7 +140,9 @@ com.plexapp.agents.shokorelay
   - An interval of 24-hours or above is recommended as Shoko rarely updates this information
 - `Import Int.` An input which will schedule Shoko imports from "Source" type drop folders every `N` hours
 - `Sync Int.` An input which will schedule watched state syncing from Plex to Shoko every `N` hours
-  - This includes ratings/votes if `Include Ratings` is enabled in the `Sync Watched States Menu` (under quick actions)
+  - This includes ratings/votes if `Include Ratings` is enabled in the `Sync Watched States Menu`
+  - To speed up the process the scheduled watched sync only considers things watched during the scheduled interval +1 hour
+    - A full sync may need to be run if Shoko or Plex downtime exceeds the considered time period
   - _Requires Plex authentication_
 
 ## Quick Actions
@@ -348,7 +350,6 @@ Due to this plugin relying on Plex's metadata provider feature (which is still u
 #### Missing from Shoko's Abstractions
 
 - **TMDB**: taglines
-- **AniDB**: Similar Anime `api/v3/Series/{seriesID}/AniDB/Similar`
 
 #### Missing Plex Provider Features
 
@@ -357,7 +358,6 @@ Due to this plugin relying on Plex's metadata provider feature (which is still u
 
 ## TODO
 
-- Populate the provider's similar Array with similar AniDB series
 - Once available in Plex metadata providers:
   - Switch collection support from the Plex HTTP API "Generate Collections" button to the provider
   - Add custom or generic series/episode ratings directly through the provider

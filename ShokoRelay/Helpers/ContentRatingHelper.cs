@@ -5,7 +5,7 @@ using Shoko.Abstractions.Metadata.Shoko;
 namespace ShokoRelay.Helpers;
 
 /// <summary>Utility functions for deriving content rating and adult flag from series metadata.</summary>
-public static class RatingHelper
+public static class ContentRatingHelper
 {
     #region Constants
 

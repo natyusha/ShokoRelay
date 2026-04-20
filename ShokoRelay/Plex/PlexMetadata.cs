@@ -55,7 +55,7 @@ public class PlexMetadata(IMetadataService metadataService)
         var extras = group.Skip(1).Select(id => _metadataService.GetShokoSeriesByID(id)).OfType<IShokoSeries>().Cast<ISeries>().ToList();
         var fileData = extras.Count > 0 ? MapHelper.GetSeriesFileDataMerged(primarySeries, extras) : MapHelper.GetSeriesFileData(primarySeries);
 
-        return new SeriesContext(primarySeries, TextHelper.ResolveFullSeriesTitles(primarySeries), RatingHelper.GetContentRatingAndAdult(primarySeries).Rating ?? "", fileData);
+        return new SeriesContext(primarySeries, TextHelper.ResolveFullSeriesTitles(primarySeries), ContentRatingHelper.GetContentRatingAndAdult(primarySeries).Rating ?? "", fileData);
     }
 
     #endregion
@@ -73,7 +73,7 @@ public class PlexMetadata(IMetadataService metadataService)
         var description = TextHelper.GetDescriptionByLanguage(series, ShokoRelay.Settings.SeriesDescriptionLanguage);
         var tmdbDescription = (series as IShokoSeries)?.TmdbShows?.FirstOrDefault()?.PreferredDescription?.Value;
         var studios = CastHelper.GetStudioTags(series);
-        var (Rating, IsAdult) = RatingHelper.GetContentRatingAndAdult(series);
+        var (Rating, IsAdult) = ContentRatingHelper.GetContentRatingAndAdult(series);
         var plexTheme = ShokoRelay.Settings.PlexThemeMusic && series is IShokoSeries ss && ss.TmdbShows?.FirstOrDefault()?.TvdbShowID is int tvdb && tvdb > 0 ? $"https://tvthemes.plexapp.com/{tvdb}.mp3" : null;
         // csharpier-ignore-start
         return new Dictionary<string, object?>
@@ -106,11 +106,11 @@ public class PlexMetadata(IMetadataService metadataService)
             ["Director"]              = CastHelper.GetDirectors(series),
             ["Producer"]              = CastHelper.GetProducers(series),
             ["Writer"]                = CastHelper.GetWriters(series),
-            //["Similar]              = AniDB has this but it is not exposed
+            ["Similar"]               = BuildSimilarArray(series),
             ["Studio"]                = studios,
             ["Collection"]            = GetCollectionName(series) is string c ? new[] { new { tag = c } } : null,
-            ["Rating"]                = BuildRatingArray(series),
             ["Network"]               = BuildNetworkArray(series),
+            ["Rating"]                = BuildRatingArray(series),
             //[SeasonType]            = Not relevant
         };
         // csharpier-ignore-end
@@ -206,7 +206,7 @@ public class PlexMetadata(IMetadataService metadataService)
             ["titleSort"]             = seasonTitle,
             ["year"]                  = seasonDate?.Year,
             ["summary"]               = seasonSummary ?? string.Empty,
-            ["isAdult"]               = RatingHelper.GetContentRatingAndAdult(series).IsAdult,
+            ["isAdult"]               = ContentRatingHelper.GetContentRatingAndAdult(series).IsAdult,
 
             ["parentRatingKey"]       = series.GetPlexRatingKey(),
             ["parentKey"]             = $"/metadata/{series.ID}",
@@ -277,12 +277,12 @@ public class PlexMetadata(IMetadataService metadataService)
             ["originallyAvailableAt"] = ep.AirDate?.ToString("yyyy-MM-dd"),
             ["thumb"]                 = ShokoRelay.Settings.TmdbThumbnails && images.GetImages(ImageEntityType.Thumbnail).FirstOrDefault() is { } t ? ImageHelper.GetImageUrl(t, cacheBuster: cb) : null,
             //["art"]                 = No source for episode level background images
-            ["contentRating"]         = RatingHelper.GetContentRatingAndAdult(series).Rating,
+            ["contentRating"]         = ContentRatingHelper.GetContentRatingAndAdult(series).Rating,
             //["originalTitle"]       = No source for original episode titles
             ["titleSort"]             = epTitle,
             ["year"]                  = ep.AirDate?.Year,
             ["summary"]               = TextHelper.SanitizeSummaryWithFallback(epDescription, (ep as IShokoEpisode)?.TmdbEpisodes?.FirstOrDefault()?.PreferredDescription?.Value, ShokoRelay.Settings.SummaryMode),
-            ["isAdult"]               = RatingHelper.GetContentRatingAndAdult(series).IsAdult,
+            ["isAdult"]               = ContentRatingHelper.GetContentRatingAndAdult(series).IsAdult,
             ["duration"]              = (int)ep.Runtime.TotalMilliseconds,
 
             ["parentRatingKey"]       = series.GetPlexRatingKey(mapped.Season),
@@ -361,8 +361,14 @@ public class PlexMetadata(IMetadataService metadataService)
 
     #region Key / Array Builders
 
+    /// <summary>Generates a cache-busting string based on the last update timestamp of the provided entity.</summary>
+    /// <param name="entity">The metadata object to evaluate.</param>
+    /// <returns>A Unix timestamp string if the entity implements <see cref="IWithUpdateDate"/>, otherwise null.</returns>
     private static string? GetCacheBuster(object? entity) => entity is IWithUpdateDate upd ? new DateTimeOffset(upd.LastUpdatedAt).ToUnixTimeSeconds().ToString() : null;
 
+    /// <summary>Builds an array of external cross-reference GUIDs (TMDB/TVDB) for a series.</summary>
+    /// <param name="series">The source series metadata.</param>
+    /// <returns>An array of objects containing external IDs.</returns>
     private object[] BuildXrefGuidArray(ISeries series)
     {
         var guids = new List<object>();
@@ -389,22 +395,9 @@ public class PlexMetadata(IMetadataService metadataService)
         return [.. guids];
     }
 
-    private object[]? BuildNetworkArray(ISeries series)
-    {
-        var src = (series as IShokoSeries)?.TmdbShows?.FirstOrDefault() ?? (series as ITmdbShow);
-        if (src?.GetType().GetProperty("TmdbNetworks")?.GetValue(src) is not System.Collections.IEnumerable list)
-            return null;
-
-        var result = new List<object>();
-        foreach (var n in list)
-        {
-            var name = (n as ITmdbNetwork)?.Name ?? n?.GetType().GetProperty("Name")?.GetValue(n) as string;
-            if (!string.IsNullOrWhiteSpace(name))
-                result.Add(new { tag = name });
-        }
-        return result.Count > 0 ? [.. result] : null;
-    }
-
+    /// <summary>Resolves production country codes to English names for a series.</summary>
+    /// <param name="series">The source series metadata.</param>
+    /// <returns>An array of objects containing country tags, or null if none found.</returns>
     private object[]? BuildCountryArray(ISeries series)
     {
         var codes =
@@ -434,6 +427,50 @@ public class PlexMetadata(IMetadataService metadataService)
         return result.Count > 0 ? [.. result] : null;
     }
 
+    /// <summary>Builds an array of similar anime titles and GUIDs for items that exist in the user's local Shoko collection.</summary>
+    /// <param name="series">The source series metadata.</param>
+    /// <returns>An array of objects containing guid and tag (title), or null if no local matches found.</returns>
+    private object[]? BuildSimilarArray(ISeries series)
+    {
+        if (series is not IShokoSeries { AnidbAnime.Similar: { Count: > 0 } similarList })
+            return null;
+
+        var results = new List<object>();
+        foreach (var s in similarList)
+        {
+            // Only include similar anime if they actually exist in the local Shoko collection. This ensures Plex can successfully retrieve metadata and artwork for the linked items.
+            var localSeries = _metadataService.GetShokoSeriesByAnidbID(s.SimilarID);
+            if (localSeries == null)
+                continue;
+
+            results.Add(new { guid = localSeries.GetPlexGuid(), tag = localSeries.PreferredTitle?.Value ?? localSeries.DefaultTitle?.Value });
+        }
+
+        return results.Count > 0 ? [.. results] : null;
+    }
+
+    /// <summary>Extracts the broadcasting network information for a series.</summary>
+    /// <param name="series">The source series metadata.</param>
+    /// <returns>An array of objects containing network tags, or null if none found.</returns>
+    private object[]? BuildNetworkArray(ISeries series)
+    {
+        var src = (series as IShokoSeries)?.TmdbShows?.FirstOrDefault() ?? (series as ITmdbShow);
+        if (src?.GetType().GetProperty("TmdbNetworks")?.GetValue(src) is not System.Collections.IEnumerable list)
+            return null;
+
+        var result = new List<object>();
+        foreach (var n in list)
+        {
+            var name = (n as ITmdbNetwork)?.Name ?? n?.GetType().GetProperty("Name")?.GetValue(n) as string;
+            if (!string.IsNullOrWhiteSpace(name))
+                result.Add(new { tag = name });
+        }
+        return result.Count > 0 ? [.. result] : null;
+    }
+
+    /// <summary>Formats a numeric rating into a Plex-compatible audience rating object.</summary>
+    /// <param name="r">The raw rating value (0-10).</param>
+    /// <returns>An array containing the Plex rating object, or null if invalid.</returns>
     private object? BuildRatingArray(double? r) =>
         r > 0
             ? new[]
@@ -447,8 +484,14 @@ public class PlexMetadata(IMetadataService metadataService)
             }
             : null;
 
+    /// <summary>Resolves and formats the audience rating for a series.</summary>
+    /// <param name="s">The series metadata.</param>
+    /// <returns>A formatted rating array, or null.</returns>
     private object? BuildRatingArray(ISeries s) => BuildRatingArray((s as IShokoSeries)?.TmdbShows?.FirstOrDefault()?.Rating ?? (s as ITmdbShow)?.Rating);
 
+    /// <summary>Resolves and formats the audience rating for an episode.</summary>
+    /// <param name="e">The episode metadata.</param>
+    /// <returns>A formatted rating array, or null.</returns>
     private object? BuildRatingArray(IEpisode e) => BuildRatingArray((e as IShokoEpisode)?.TmdbEpisodes?.FirstOrDefault()?.Rating ?? (e as ITmdbEpisode)?.Rating);
 
     #endregion
