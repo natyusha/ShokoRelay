@@ -203,12 +203,17 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
             {
                 await Task.Delay(TimeSpan.FromSeconds(delaySeconds), cts.Token).ConfigureAwait(false);
 
-                foreach (var path in ResolveSeriesVfsPaths(series))
+                lock (VfsBuilder.GlobalBuildLock)
                 {
-                    if (Directory.Exists(path) && Directory.EnumerateFileSystemEntries(path).Any())
-                        await _plexLibrary.RefreshSectionPathAsync(path, cts.Token).ConfigureAwait(false);
-                    else
-                        Logger.Debug("VFS: Library scan for '{0}' skipped; path '{1}' not ready or empty.", series.PreferredTitle?.Value, path);
+                    if (_pending.ContainsKey(series.ID))
+                        return;
+                    foreach (var path in ResolveSeriesVfsPaths(series))
+                    {
+                        if (Directory.Exists(path) && Directory.EnumerateFileSystemEntries(path).Any())
+                            _ = _plexLibrary.RefreshSectionPathAsync(path, cts.Token);
+                        else
+                            Logger.Debug("VFS: Library scan for '{0}' skipped; path '{1}' not ready or empty.", series.PreferredTitle?.Value, path);
+                    }
                 }
             }
             catch (OperationCanceledException) { }
@@ -246,7 +251,13 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
             try
             {
                 await Task.Delay(TimeSpan.FromMinutes(delayMinutes), cts.Token).ConfigureAwait(false);
-                await RunMetadataFixupAsync(series, cts.Token).ConfigureAwait(false);
+                lock (VfsBuilder.GlobalBuildLock)
+                {
+                    if (_pending.ContainsKey(series.ID))
+                        return;
+
+                    _ = RunMetadataFixupAsync(series, cts.Token);
+                }
             }
             catch (OperationCanceledException) { }
             finally
@@ -316,7 +327,13 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
             try
             {
                 await Task.Delay(TimeSpan.FromMinutes(delayMinutes), cts.Token).ConfigureAwait(false);
-                await RunCollectionUpdateAsync(series, cts.Token).ConfigureAwait(false);
+                lock (VfsBuilder.GlobalBuildLock)
+                {
+                    if (_pending.ContainsKey(series.ID))
+                        return;
+
+                    _ = RunCollectionUpdateAsync(series, cts.Token);
+                }
             }
             catch (OperationCanceledException) { }
             finally

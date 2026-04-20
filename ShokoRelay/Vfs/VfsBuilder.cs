@@ -57,7 +57,7 @@ public class VfsBuilder
     #region Fields & Constructor
 
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
-    private static readonly Lock _globalBuildLock = new();
+    internal static readonly Lock GlobalBuildLock = new();
     private readonly IMetadataService _metadataService;
     private readonly string _pluginDataPath;
 
@@ -112,7 +112,7 @@ public class VfsBuilder
     private VfsBuildResult BuildInternal(IReadOnlyCollection<int>? seriesIds, bool cleanRoot, bool pruneSeries, bool cleanOnly)
     {
         // Prevent multiple concurrent build/clean operations
-        lock (_globalBuildLock)
+        lock (GlobalBuildLock)
         {
             var (sw, created, skipped, seriesProcessed, planned) = (Stopwatch.StartNew(), 0, 0, 0, 0);
             var seriesDetailsBag = new ConcurrentBag<SeriesProcessDetails>();
