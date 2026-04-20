@@ -133,9 +133,29 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
             .Where(d => d.Provides?.Contains("server", StringComparison.OrdinalIgnoreCase) == true)
             .Select(d =>
             {
-                // Logic: Sort connections by Locality, Protocol (HTTPS), and Relay status. If HttpsRequired is true filter out non-HTTPS URIs entirely.
                 var validConnections = d.HttpsRequired ? d.Connections?.Where(c => c.Uri?.StartsWith("https") == true) : d.Connections;
-                var pref = validConnections?.OrderByDescending(c => (c.Local && !c.Relay ? 100 : 0) + (c.Uri?.StartsWith("https") == true ? 10 : 0) + (!c.Relay ? 1 : 0)).FirstOrDefault()?.Uri;
+
+                var pref = validConnections
+                    ?.OrderByDescending(c =>
+                    {
+                        int score = 0;
+                        if (c.Local && !c.Relay)
+                            score += 100;
+                        if (!c.Relay)
+                            score += 1;
+
+                        // Only prefer HTTPS if it's a valid .plex.direct URI OR if the server requires HTTPS.
+                        if (c.Uri?.StartsWith("https") == true)
+                        {
+                            if (c.Uri.Contains(".plex.direct") || d.HttpsRequired)
+                                score += 10;
+                        }
+
+                        return score;
+                    })
+                    .FirstOrDefault()
+                    ?.Uri;
+
                 return new PlexServerInfo(d.ClientIdentifier ?? "", d.Name ?? "", pref, d.HttpsRequired);
             })
             .ToList();
