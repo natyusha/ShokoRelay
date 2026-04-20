@@ -232,6 +232,11 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
         );
     }
 
+    /// <summary>Returns an empty extras container to satisfy Plex's automated metadata queries.</summary>
+    /// <returns>An empty MediaContainer.</returns>
+    [HttpGet("metadata/{ratingKey}/extras")]
+    public IActionResult GetExtras() => EmptyMatch();
+
     #endregion
 
     #region Collections

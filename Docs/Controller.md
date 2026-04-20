@@ -87,6 +87,7 @@ GET  /metadata/{ratingKey}?includeChildren={0|1}               -> GetMetadata
 GET  /metadata/{ratingKey}/children                            -> GetChildren
 GET  /metadata/{ratingKey}/grandchildren                       -> GetGrandchildren
 GET  /metadata/{ratingKey}/images                              -> GetImages
+GET  /metadata/{ratingKey}/extras                              -> GetExtras
 ```
 
 - `GetMediaProvider` returns the agent descriptor describing supported types and features.
@@ -102,6 +103,7 @@ GET  /metadata/{ratingKey}/images                              -> GetImages
   - `includeChildren`: (default 0) set to 1 to embed immediate children in the response.
 - `GetChildren` / `GetGrandchildren` return only the immediate or second-level child items respectively.
 - `GetImages` returns a `MediaContainer` with an `Image` array used by Plex when fetching all artwork.
+- `GetExtras` returns an empty `MediaContainer` to satisfy Plex requirements and prevent 404 errors during metadata refreshes.
 
 **Notes:**
 
