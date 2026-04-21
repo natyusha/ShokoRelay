@@ -83,6 +83,7 @@ public class ShokoController(
     {
         try
         {
+            Logger.Info("Shoko: Updating VFS overrides file...");
             string path = Path.Combine(ShokoRelay.ConfigDirectory, ShokoRelayConstants.FileVfsOverrides);
             System.IO.File.WriteAllText(path, content ?? string.Empty);
             OverrideHelper.EnsureLoaded();
@@ -138,6 +139,7 @@ public class ShokoController(
     [HttpPost("shoko/import")]
     public async Task<IActionResult> RunShokoImport()
     {
+        Logger.Info("Shoko: Import scan triggered manually.");
         var scanned = await _shokoImportService.TriggerImportAsync().ConfigureAwait(false);
         return Ok(new RelayResponse<object>(Data: new { scanned, scannedCount = scanned?.Count ?? 0 }));
     }
@@ -251,7 +253,18 @@ public class ShokoController(
         if (!purgeLinks && string.IsNullOrWhiteSpace(mapFile))
             return BadRequest(new RelayResponse<object>(Status: "error", Message: "mapFile parameter is required when not purging."));
 
+        if (purgeLinks)
+            Logger.Info("Shoko: Starting manual purge of library symlinks...");
+        else
+            Logger.Info("Shoko: Starting source link processing using map: {0}", mapFile);
+
         int count = await _sourceLinkService.ProcessLinksAsync(mapFile ?? string.Empty, purgeLinks);
+
+        if (purgeLinks)
+            Logger.Info("Shoko: Purge complete. {0} items removed.", count);
+        else
+            Logger.Info("Shoko: Source link processing complete. {0} links created/updated.", count);
+
         return Ok(new RelayResponse<object>(Data: new { count }));
     }
 

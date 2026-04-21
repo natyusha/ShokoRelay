@@ -198,7 +198,12 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
     {
         string root = query.Path ?? "";
         if (!Directory.Exists(root))
+        {
+            Logger.Warn("AnimeThemes MP3: Batch root not found: {0}", root);
             return new ThemeMp3BatchResult(root, [new(root, "error", "Batch root not found.")], 0, 0, 1);
+        }
+
+        Logger.Info("AnimeThemes MP3: Starting batch generation for root: {0}", root);
         var (results, p, s, e) = (new List<ThemeMp3OperationResult>(), 0, 0, 0);
         var folders = Directory.EnumerateDirectories(root).Prepend(root).Where(f => query.Force || !File.Exists(Path.Combine(f, "Theme.mp3"))).ToList();
         var excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { VfsShared.ResolveRootFolderName(), VfsShared.ResolveCollectionPostersFolderName(), VfsShared.ResolveAnimeThemesFolderName() };
@@ -230,6 +235,8 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
                 }
             }
         );
+
+        Logger.Info("AnimeThemes MP3: Batch generation finished. {0} processed, {1} skipped, {2} errors.", p, s, e);
         return new ThemeMp3BatchResult(root, results, p, s, e);
     }
 
@@ -246,19 +253,31 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         string? temp = null;
         try
         {
+            Logger.Info("AnimeThemes MP3: Generating Theme.mp3 for series '{0}' in {1}", series.PreferredTitle?.Value ?? series.ID.ToString(), folder);
             var sel = await FetchThemeAsync(series.AnidbAnimeID, query.Slug, query.Offset, ct);
             if (sel == null)
-                return new(folder, "skipped", string.IsNullOrWhiteSpace(query.Slug) ? "Entry not found." : $"No entry for slug '{query.Slug}'.");
+            {
+                string skipMsg = string.IsNullOrWhiteSpace(query.Slug) ? "Entry not found." : $"No entry for slug '{query.Slug}'.";
+                Logger.Info("AnimeThemes MP3: Skipped series '{0}' ({1})", series.PreferredTitle?.Value, skipMsg);
+                return new(folder, "skipped", skipMsg);
+            }
+
             temp = await DownloadAudioAsync(sel.AudioUrl, ct);
             var dur = await _ffmpegService.ProbeDurationAsync(temp, ct);
             string title = dur.TotalSeconds < 100 && !string.IsNullOrEmpty(sel.SongTitle) ? sel.SongTitle + " (TV Size)" : sel.SongTitle;
+
+            Logger.Debug("AnimeThemes MP3: Converting audio for '{0}' ({1})", series.PreferredTitle?.Value, sel.SlugDisplay);
             await _ffmpegService.ConvertToMp3FileAsync(temp, themePath, title, sel.SlugDisplay, sel.Artist, sel.AnimeTitle, ct);
+
             int primaryId = OverrideHelper.GetPrimary(series.ID, metadataService);
-            return new(folder, "ok", null, themePath, TryLinkIntoVfs(videoFile, primaryId, themePath), sel.AnimeTitle, sel.AnimeSlug, series.ID, sel.SlugDisplay, dur.TotalSeconds);
+            string? vfsLink = TryLinkIntoVfs(videoFile, primaryId, themePath);
+
+            Logger.Info("AnimeThemes MP3: Successfully generated '{0}' ({1})", series.PreferredTitle?.Value, sel.SlugDisplay);
+            return new(folder, "ok", null, themePath, vfsLink, sel.AnimeTitle, sel.AnimeSlug, series.ID, sel.SlugDisplay, dur.TotalSeconds);
         }
         catch (Exception ex)
         {
-            Logger.Error(ex, "Failed to process for {0}", folder);
+            Logger.Error(ex, "AnimeThemes MP3: Failed to process for {0}", folder);
             return new(folder, "error", ex.Message);
         }
         finally
@@ -280,6 +299,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         string? temp = null;
         try
         {
+            Logger.Info("AnimeThemes MP3: Previewing theme for series '{0}'", series.PreferredTitle?.Value);
             var sel = await FetchThemeAsync(series.AnidbAnimeID, query.Slug, query.Offset, ct);
             if (sel == null)
                 return (null, new(folder, "error", "Entry not found."));
@@ -288,7 +308,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         }
         catch (Exception ex)
         {
-            Logger.Error(ex, "Failed to preview for {0}", folder);
+            Logger.Error(ex, "AnimeThemes MP3: Failed to preview for {0}", folder);
             return (null, new(folder, "error", ex.Message));
         }
         finally
@@ -307,17 +327,33 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         if (string.IsNullOrWhiteSpace(q.Path))
             return (new("", "error", "Path is required."), null);
         string folder = q.Path;
+
+        Logger.Debug("AnimeThemes MP3: Preparing context for folder: {0}", folder);
         if (!Directory.Exists(folder))
             return (new(folder, "error", "Folder not found."), null);
+
         string themePath = Path.Combine(folder, "Theme.mp3");
         if (!preview && !q.Force && File.Exists(themePath))
             return (new(folder, "skipped", "Theme.mp3 already exists."), null);
+
         string? vid = Directory.EnumerateFiles(folder).FirstOrDefault(f => AnimeThemesHelper.VideoFileExtensions.Contains(Path.GetExtension(f)));
         if (vid == null)
+        {
+            Logger.Debug("AnimeThemes MP3: No recognized video files in {0}", folder);
             return (new(folder, "error", "No video files found."), null);
+        }
+
         var vf = videoService.GetVideoFileByAbsolutePath(vid);
         var s = vf?.Video?.Episodes?.FirstOrDefault()?.Series;
-        return (s == null) ? (new(folder, "error", vf == null ? "Video not recognized." : "Series lookup failed."), null) : (null, (folder, themePath, vf!, s));
+
+        if (s == null)
+        {
+            Logger.Warn("AnimeThemes MP3: Series lookup failed for video {0} in {1}", vid, folder);
+            return (new(folder, "error", vf == null ? "Video not recognized." : "Series lookup failed."), null);
+        }
+
+        Logger.Debug("AnimeThemes MP3: Folder {0} maps to series '{1}' (AniDB: {2})", folder, s.PreferredTitle?.Value, s.AnidbAnimeID);
+        return (null, (folder, themePath, vf!, s));
     }
 
     /// <summary>Queries the AnimeThemes API for a specific series theme.</summary>
@@ -325,22 +361,30 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
     {
         if (!string.IsNullOrWhiteSpace(slugArg) && !AnimeThemesHelper.SlugRegex.IsMatch(slugArg))
             throw new ArgumentException("Invalid slug format.");
+
+        Logger.Debug("AnimeThemes MP3: Fetching metadata for AniDB ID {0} (Slug: {1}, Offset: {2})", aid, slugArg ?? "Auto", offset);
         var (parsedBase, _) = AnimeThemesHelper.ParseSlug(slugArg ?? "");
         string filter = string.IsNullOrEmpty(slugArg)
             ? "&filter[animetheme][type]=OP,ED"
             : $"&filter[animetheme][slug]={Uri.EscapeDataString(parsedBase is "OP" or "ED" ? $"{parsedBase},{parsedBase}1" : parsedBase)}";
+
         var anime = await _apiClient.FetchAnimeThemesAsync(aid, filter, ct);
         var entry = anime?.Anime?.ElementAtOrDefault(offset);
         if (entry?.Animethemes == null || entry.Animethemes.Count == 0)
             return null;
+
         int idx = (string.IsNullOrEmpty(slugArg) && entry.Animethemes.Count > 1 && string.Equals(entry.Animethemes[1].Slug, "OP1", StringComparison.OrdinalIgnoreCase)) ? 1 : 0;
         var themeDetail = await _apiClient.FetchAnimeThemeWithArtistsAsync(entry.Animethemes[idx].Id, ct);
         var audio = themeDetail?.Animetheme?.Animethemeentries?.FirstOrDefault()?.Videos?.FirstOrDefault()?.Audio?.Link;
+
         if (string.IsNullOrEmpty(audio))
             return null;
+
         var (bp, sp) = AnimeThemesHelper.ParseSlug(themeDetail!.Animetheme!.Slug ?? "");
         string display = $"{(bp.StartsWith("OP", StringComparison.OrdinalIgnoreCase) ? "Opening" : "Ending")} {bp[2..]}".Trim() + AnimeThemesHelper.FormatSlugTag(sp);
         var artists = themeDetail.Animetheme.Song?.Artists;
+
+        Logger.Debug("AnimeThemes MP3: Selected theme: {0} - {1}", display, themeDetail.Animetheme.Song?.Title);
         return new ThemeSelection(
             audio,
             themeDetail.Animetheme.Slug ?? "",
@@ -355,12 +399,13 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
     /// <summary>Downloads an audio file to a temporary location.</summary>
     private async Task<string> DownloadAudioAsync(string url, CancellationToken ct)
     {
-        using var resp = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+        Logger.Debug("AnimeThemes MP3: Downloading audio from {0}", url);
+        using var resp = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
         resp.EnsureSuccessStatusCode();
         string temp = Path.Combine(Path.GetTempPath(), $"at-{Guid.NewGuid():N}{Path.GetExtension(url)}");
-        using (var i = await resp.Content.ReadAsStreamAsync(ct))
+        using (var i = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false))
         using (var o = File.Create(temp))
-            await i.CopyToAsync(o, ct);
+            await i.CopyToAsync(o, ct).ConfigureAwait(false);
         return temp;
     }
 
@@ -370,9 +415,12 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         string? root = VfsShared.ResolveImportRootPath(loc);
         if (root == null)
             return null;
+
         string destDir = Path.Combine(root, VfsShared.ResolveRootFolderName(), sid.ToString());
         Directory.CreateDirectory(destDir);
         string dest = Path.Combine(destDir, "Theme.mp3");
+
+        Logger.Debug("AnimeThemes MP3: Linking Theme.mp3 to VFS: {0}", dest);
         return VfsShared.TryCreateLink(src, dest, Logger) ? dest : null;
     }
 
@@ -382,7 +430,10 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         try
         {
             if (File.Exists(path))
+            {
+                Logger.Trace("AnimeThemes MP3: Cleaning up temporary file: {0}", path);
                 File.Delete(path);
+            }
         }
         catch { }
     }

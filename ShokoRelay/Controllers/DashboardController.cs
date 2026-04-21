@@ -87,6 +87,8 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
     {
         if (config == null)
             return BadRequest(new { status = "error", message = "Config payload is required." });
+
+        Logger.Info("Dashboard: Saving updated provider settings...");
         _configProvider.SaveSettings(config);
         return Ok(new { status = "ok" });
     }

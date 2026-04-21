@@ -139,6 +139,7 @@ com.plexapp.agents.shokorelay
 - `Plex Int.` An input which will schedule [Generate Collections](#collection-generation) and [Apply Critic Ratings](#critic-rating-application) every `N` hours
   - An interval of 24-hours or above is recommended as Shoko rarely updates this information
 - `Import Int.` An input which will schedule Shoko imports from "Source" type drop folders every `N` hours
+  - This is intended to replace Shoko's default Update Options for "Files With Missing Info"
 - `Sync Int.` An input which will schedule watched state syncing from Plex to Shoko every `N` hours
   - This includes ratings/votes if `Include Ratings` is enabled in the `Sync Watched States Menu`
   - To speed up the process the scheduled watched sync only considers things watched during the scheduled interval +1 hour

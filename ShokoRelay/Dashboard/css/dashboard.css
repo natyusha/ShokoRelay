@@ -70,7 +70,7 @@ label.shoko-checkbox {
   gap: 0.6rem;
   cursor: pointer;
   margin-left: 2px;
-  padding: 0.25rem 0;
+  padding: 0.219rem 0;
   user-select: none;
 }
 label.shoko-checkbox input[type="checkbox"] {

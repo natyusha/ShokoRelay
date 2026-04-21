@@ -118,8 +118,10 @@ public class AnimeThemesController(
     [HttpPost("animethemes/vfs/import")]
     public async Task<IActionResult> ImportAnimeThemesMapping(CancellationToken cancellationToken = default)
     {
+        Logger.Info("AnimeThemes: Fetching curated mapping file from GitHub...");
         const string rawUrl = AnimeThemesHelper.AtRawMapUrl + ShokoRelayConstants.FileAtMapping;
         var (count, _) = await _animeThemesMapping.ImportMappingFromUrlAsync(rawUrl, cancellationToken).ConfigureAwait(false);
+        Logger.Info("AnimeThemes: Import successful. {0} entries updated.", count);
         return Ok(new RelayResponse<object>(Data: new { count }));
     }
 

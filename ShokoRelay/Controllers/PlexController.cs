@@ -81,11 +81,12 @@ public class PlexController(
             if (string.IsNullOrWhiteSpace(pin.AuthToken))
                 return Ok(new RelayResponse<object>(Status: "pending"));
 
+            Logger.Info("Plex: Authentication successful. Saving token and discovering libraries...");
             _configProvider.UpdatePlexTokenInfo(token: pin.AuthToken);
 
             try
             {
-                await _configProvider.RefreshAdminUsername(_plexAuth, cancellationToken);
+                await _configProvider.RefreshAdminUsername(_plexAuth, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -121,6 +122,7 @@ public class PlexController(
         if (string.IsNullOrWhiteSpace(token))
             return Ok(new RelayResponse<object>());
 
+        Logger.Info("Plex: Unlinking account and revoking token...");
         string clientIdentifier = _configProvider.GetPlexClientIdentifier();
         await _plexAuth.RevokePlexTokenAsync(token, clientIdentifier, cancellationToken).ConfigureAwait(false);
 
@@ -138,7 +140,8 @@ public class PlexController(
         if (string.IsNullOrWhiteSpace(token))
             return Unauthorized(new RelayResponse<object>(Status: "error", Message: "Plex token is missing."));
 
-        await _configProvider.RefreshAdminUsername(_plexAuth, cancellationToken);
+        Logger.Info("Plex: Refreshing servers and libraries...");
+        await _configProvider.RefreshAdminUsername(_plexAuth, cancellationToken).ConfigureAwait(false);
         string clientIdentifier = _configProvider.GetPlexClientIdentifier();
 
         try
