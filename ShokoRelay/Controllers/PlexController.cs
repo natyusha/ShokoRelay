@@ -112,24 +112,6 @@ public class PlexController(
         }
     }
 
-    /// <summary>Revokes the current Plex token.</summary>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>Success status.</returns>
-    [HttpPost("plex/auth/unlink")]
-    public async Task<IActionResult> UnlinkPlex(CancellationToken cancellationToken = default)
-    {
-        var token = _configProvider.GetPlexToken();
-        if (string.IsNullOrWhiteSpace(token))
-            return Ok(new RelayResponse<object>());
-
-        Logger.Info("Plex: Unlinking account and revoking token...");
-        string clientIdentifier = _configProvider.GetPlexClientIdentifier();
-        await _plexAuth.RevokePlexTokenAsync(token, clientIdentifier, cancellationToken).ConfigureAwait(false);
-
-        _configProvider.DeleteTokenFile();
-        return Ok(new RelayResponse<object>());
-    }
-
     /// <summary>Forces a rediscovery of servers and libraries.</summary>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>New list of libraries.</returns>
@@ -155,6 +137,24 @@ public class PlexController(
             Logger.Warn($"Failed to refresh libraries: {ex.Message}");
             return StatusCode(502, new RelayResponse<object>(Status: "error", Message: "Failed to refresh Plex libraries."));
         }
+    }
+
+    /// <summary>Revokes the current Plex token.</summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Success status.</returns>
+    [HttpPost("plex/auth/unlink")]
+    public async Task<IActionResult> UnlinkPlex(CancellationToken cancellationToken = default)
+    {
+        var token = _configProvider.GetPlexToken();
+        if (string.IsNullOrWhiteSpace(token))
+            return Ok(new RelayResponse<object>());
+
+        Logger.Info("Plex: Unlinking account and revoking token...");
+        string clientIdentifier = _configProvider.GetPlexClientIdentifier();
+        await _plexAuth.RevokePlexTokenAsync(token, clientIdentifier, cancellationToken).ConfigureAwait(false);
+
+        _configProvider.DeleteTokenFile();
+        return Ok(new RelayResponse<object>());
     }
 
     #endregion

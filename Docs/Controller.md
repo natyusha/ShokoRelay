@@ -128,15 +128,16 @@ Endpoints are managed by `PlexController`
 ### Plex: Authentication
 
 ```
-GET  /plex/auth                                                -> StartPlexAuth             (returns pin + authUrl)
-GET  /plex/auth/status?pinId={id}                              -> GetPlexAuthStatus         (poll for pin completion)
-POST /plex/auth/unlink                                         -> UnlinkPlex                (revoke & clear saved token)
-POST /plex/auth/refresh                                        -> RefreshPlexLibraries      (re-discover Shoko libraries)
+GET  /plex/auth                                                -> StartPlexAuth
+GET  /plex/auth/status?pinId={id}                              -> GetPlexAuthStatus
+POST /plex/auth/refresh                                        -> RefreshPlexLibraries
+POST /plex/auth/unlink                                         -> UnlinkPlex
 ```
 
-- `StartPlexAuth` begins the PIN-based pairing flow via Plex.tv.
-- `GetPlexAuthStatus` and `RefreshPlexLibraries` automatically call `RefreshAdminUsername` to identify and persist the server owner's name.
-- `UnlinkPlex` revokes the token and removes all persisted server/library metadata from `plex.token`.
+- `StartPlexAuth` initiates the PIN-based OAuth flow by requesting a unique pairing code and authorization URL from Plex.tv.
+- `GetPlexAuthStatus` polls for PIN completion; upon success, it saves the authentication token and triggers the initial discovery of servers and Shoko Relay libraries.
+- `RefreshPlexLibraries` uses the saved token to force re-discovery of all accessible Plex servers then updates server URIs and the list of Shoko Relay libraries.
+- `UnlinkPlex` revokes the token at Plex.tv and deletes the `plex.token` file.
 
 ---
 
@@ -341,7 +342,7 @@ POST /animethemes/webm/favourites                              -> UpdateAnimeThe
 
 ```
 GET  /animethemes/mp3                                          -> AnimeThemesMp3
-     [?path={path}&slug={slug}&offset={int}&batch={true|false}&force={true|false}]
+     [?path={path}&slug={slug}&offset={int}&batch={true|false}&force={true|false}&season={season}]
 GET  /animethemes/mp3/stream?path={path}                       -> AnimeThemesMp3Stream
 HEAD /animethemes/mp3/stream?path={path}                       -> AnimeThemesMp3Stream
 GET  /animethemes/mp3/random?refresh={true|false}              -> AnimeThemesMp3Random
@@ -353,6 +354,9 @@ GET  /animethemes/mp3/random?refresh={true|false}              -> AnimeThemesMp3
   - `offset`: (default 0) selection index when multiple themes match.
   - `batch`: (default false) set to true to recursively process subfolders.
   - `force`: (default false) set to true to overwrite existing `Theme.mp3` files.
+  - `season`: (optional) filter by anime season using the format "Season Year" (e.g., `Spring 2025`). This only works if `batch=true`.
+    - Seasons: `Winter`, `Spring`, `Summer`, `Fall`.
+    - Validates against the series air date with a one-month early buffer.
 - `AnimeThemesMp3Stream` embeds ID3v2 tags in response headers.
   - Headers: `X-Theme-Title`, `X-Theme-Slug`, `X-Theme-Artist`, `X-Theme-Album`.
 - `AnimeThemesMp3Random` uses a startup cache persisted in `mp3_animethemes.cache`.

@@ -18,7 +18,8 @@ namespace ShokoRelay.AnimeThemes;
 /// <param name="Offset">The index offset to use when multiple themes match.</param>
 /// <param name="Batch">Whether to process all subfolders recursively.</param>
 /// <param name="Force">Whether to force generation even if Theme.mp3 exists.</param>
-public record AnimeThemesMp3Query(string? Path, string? Slug, int Offset = 0, bool Batch = false, bool Force = false);
+/// <param name="Season">Optional season filter (e.g. "Spring 2025") based on the first episode air date.</param>
+public record AnimeThemesMp3Query(string? Path, string? Slug, int Offset = 0, bool Batch = false, bool Force = false, string? Season = null);
 
 /// <summary>Result of a single Theme.mp3 generation attempt.</summary>
 /// <param name="Folder">The directory processed.</param>
@@ -203,6 +204,14 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
             return new ThemeMp3BatchResult(root, [new(root, "error", "Batch root not found.")], 0, 0, 1);
         }
 
+        // Season Filter Validation: If provided, the format must be valid or the entire batch operation aborts.
+        if (!string.IsNullOrWhiteSpace(query.Season) && GetSeasonRange(query.Season) == null)
+        {
+            string msg = $"Malformed season filter '{query.Season}'. Expected format 'Season Year' (e.g. 'Spring 2025').";
+            Logger.Warn("AnimeThemes MP3: {0}", msg);
+            return new ThemeMp3BatchResult(root, [new(root, "error", msg)], 0, 0, 1);
+        }
+
         Logger.Info("AnimeThemes MP3: Starting batch generation for root: {0}", root);
         var (results, p, s, e) = (new List<ThemeMp3OperationResult>(), 0, 0, 0);
         var folders = Directory.EnumerateDirectories(root).Prepend(root).Where(f => query.Force || !File.Exists(Path.Combine(f, "Theme.mp3"))).ToList();
@@ -222,7 +231,8 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
                     }
                     return;
                 }
-                var res = await ProcessSingleAsync(query with { Path = folder, Batch = false }, token).ConfigureAwait(false);
+
+                var res = await ProcessSingleAsync(query with { Path = folder, Batch = true }, token).ConfigureAwait(false);
                 lock (results)
                 {
                     results.Add(res);
@@ -250,15 +260,32 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         if (Error != null)
             return Error;
         var (folder, themePath, videoFile, series) = Data!.Value;
+
+        // Season Filter: Only applied when Batch is true. Ignored for individual folder requests.
+        if (query.Batch && !string.IsNullOrWhiteSpace(query.Season))
+        {
+            var range = GetSeasonRange(query.Season);
+            if (range != null && (!series.AirDate.HasValue || series.AirDate.Value < range.Value.Start || series.AirDate.Value > range.Value.End))
+            {
+                string skipMsg = $"Series does not match season filter '{query.Season}'.";
+                Logger.Debug("AnimeThemes MP3: Skipped series '{0}' ({1})", series.PreferredTitle?.Value, skipMsg);
+                return new(folder, "skipped", skipMsg);
+            }
+        }
+
         string? temp = null;
         try
         {
-            Logger.Info("AnimeThemes MP3: Generating Theme.mp3 for series '{0}' in {1}", series.PreferredTitle?.Value ?? series.ID.ToString(), folder);
+            if (!query.Batch)
+                Logger.Info("AnimeThemes MP3: Generating Theme.mp3 for series '{0}' in {1}", series.PreferredTitle?.Value ?? series.ID.ToString(), folder);
+
             var sel = await FetchThemeAsync(series.AnidbAnimeID, query.Slug, query.Offset, ct);
             if (sel == null)
             {
                 string skipMsg = string.IsNullOrWhiteSpace(query.Slug) ? "Entry not found." : $"No entry for slug '{query.Slug}'.";
-                Logger.Info("AnimeThemes MP3: Skipped series '{0}' ({1})", series.PreferredTitle?.Value, skipMsg);
+                if (!query.Batch)
+                    Logger.Info("AnimeThemes MP3: Skipped series '{0}' ({1})", series.PreferredTitle?.Value, skipMsg);
+
                 return new(folder, "skipped", skipMsg);
             }
 
@@ -354,6 +381,24 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
 
         Logger.Debug("AnimeThemes MP3: Folder {0} maps to series '{1}' (AniDB: {2})", folder, s.PreferredTitle?.Value, s.AnidbAnimeID);
         return (null, (folder, themePath, vf!, s));
+    }
+
+    /// <summary>Parses a season string into a date range with a one-month early buffer.</summary>
+    /// <param name="seasonString">The raw season string (e.g. "Spring 2025").</param>
+    /// <returns>A tuple containing the start and end dates, or null if the string is malformed or the season is unknown.</returns>
+    private static (DateTime Start, DateTime End)? GetSeasonRange(string seasonString)
+    {
+        var parts = seasonString.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return parts.Length != 2 || !int.TryParse(parts[1], out int year)
+            ? null
+            : parts[0].ToLowerInvariant() switch
+            {
+                "winter" => (new DateTime(year - 1, 12, 1), new DateTime(year, 3, 31)),
+                "spring" => (new DateTime(year, 3, 1), new DateTime(year, 6, 30)),
+                "summer" => (new DateTime(year, 6, 1), new DateTime(year, 9, 30)),
+                "fall" => (new DateTime(year, 9, 1), new DateTime(year, 12, 31)),
+                _ => null,
+            };
     }
 
     /// <summary>Queries the AnimeThemes API for a specific series theme.</summary>
