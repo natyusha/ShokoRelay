@@ -5,6 +5,7 @@ using Shoko.Abstractions.Video;
 using Shoko.Abstractions.Video.Services;
 using ShokoRelay.Config;
 using ShokoRelay.Helpers;
+using ShokoRelay.Plex;
 using ShokoRelay.Services;
 using ShokoRelay.Vfs;
 
@@ -66,13 +67,14 @@ internal sealed record ThemeSelection(string AudioUrl, string SlugRaw, string Sl
 #endregion
 
 /// <summary>Provides functionality for fetching, converting and previewing anime theme audio from the AnimeThemes API.</summary>
-public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService metadataService, IVideoService videoService, ConfigProvider configProvider, FfmpegService ffmpegService)
+public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService metadataService, IVideoService videoService, ConfigProvider configProvider, FfmpegService ffmpegService, PlexClient plexClient)
 {
     #region Fields & Constructor
 
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private readonly HttpClient _http = httpClient;
     private readonly FfmpegService _ffmpegService = ffmpegService;
+    private readonly PlexClient _plexClient = plexClient;
     private readonly AnimeThemesApi _apiClient = new();
     private List<string>? _themeMp3Cache;
     private readonly Lock _cacheLock = new();
@@ -299,6 +301,10 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
             int primaryId = OverrideHelper.GetPrimary(series.ID, metadataService);
             string? vfsLink = TryLinkIntoVfs(videoFile, primaryId, themePath);
 
+            // After a successful VFS link is created, trigger a Plex metadata refresh to ensure the new Theme.mp3 is picked up by the server.
+            if (!string.IsNullOrEmpty(vfsLink) && _plexClient.IsEnabled)
+                TriggerPlexRefresh(series.ID);
+
             Logger.Info("AnimeThemes MP3: Successfully generated '{0}' ({1})", series.PreferredTitle?.Value, sel.SlugDisplay);
             return new(folder, "ok", null, themePath, vfsLink, sel.AnimeTitle, sel.AnimeSlug, series.ID, sel.SlugDisplay, dur.TotalSeconds);
         }
@@ -481,6 +487,36 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
             }
         }
         catch { }
+    }
+
+    /// <summary>Fires a background task to refresh Plex metadata for a specific series after a new theme is added.</summary>
+    /// <param name="seriesId">The Shoko series ID to refresh.</param>
+    private void TriggerPlexRefresh(int seriesId)
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                int bufferSeconds = ShokoRelay.Settings.Advanced.PlexScanDelay;
+                if (bufferSeconds > 0)
+                    await Task.Delay(TimeSpan.FromSeconds(bufferSeconds)).ConfigureAwait(false);
+
+                var targets = _plexClient.GetConfiguredTargets();
+                foreach (var target in targets)
+                {
+                    var ratingKey = await _plexClient.FindRatingKeyForShokoSeriesInSectionAsync(seriesId, target).ConfigureAwait(false);
+                    if (ratingKey.HasValue)
+                    {
+                        Logger.Debug("AnimeThemes MP3: Refreshing Plex metadata for ratingKey {0} on {1}", ratingKey.Value, target.ServerName);
+                        await _plexClient.RefreshMetadataAsync(ratingKey.Value, target).ConfigureAwait(false);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "AnimeThemes MP3: Failed to trigger Plex refresh for series {0}", seriesId);
+            }
+        });
     }
 
     #endregion
