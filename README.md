@@ -203,6 +203,10 @@ There is also support for generating `Theme.mp3` files as local metadata. This w
 - Input the path (relative to Plex or Shoko) to a folder containing an anime series and then click `Generate`
 - The `Force Overwrite Toggle` will overwrite any `Theme.mp3` files found in the configured path (or during a batch)
 - The `Recursive Batch Toggle` will enable batch operations on every subfolder of the configured path
+- By default this will grab the first available OP with a fallback to the first ED
+- If you want a specific OP/ED you can enter it under `Slug` i.e. `OP2`
+- Rarely a single AniDB entry will be mapped to multiple AnimeThemes entries. In cases like this the `Off.` or "Index Override" can be set to pick the next match
+  - Generally this means entering a `1`
 
 **Notes:**
 
