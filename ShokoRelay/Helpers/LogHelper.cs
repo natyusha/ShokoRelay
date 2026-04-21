@@ -241,7 +241,22 @@ public static class LogHelper
             ["Skipped"] = result.Skipped,
             ["Errors"] = result.Errors,
         };
-        var items = result.Items.Select(i => $"[{i.Status}] {i.AnimeTitle ?? i.Folder} - {i.Slug}").ToList();
+
+        // Sort priority: [ok] (0), [skipped] (1), [error] (2). Secondary sort by Folder path since that is the primary text displayed in the report.
+        var items = result
+            .Items.OrderBy(i =>
+                i.Status == "ok" ? 0
+                : i.Status == "skipped" ? 1
+                : 2
+            )
+            .ThenBy(i => i.Folder)
+            .Select(i =>
+            {
+                string line = $"[{i.Status}] {i.Folder}";
+                return (i.Status == "ok" && !string.IsNullOrWhiteSpace(i.Slug)) ? $"{line} | {i.Slug}" : line;
+            })
+            .ToList();
+
         BuildReport(sb, "AnimeThemes: MP3 Batch Report", stats, "Item Details:", items);
     }
 
