@@ -237,16 +237,9 @@ public class AutomationConfig
     [DefaultValue("")]
     public string ExtraPlexUsers { get; set; } = "";
 
-    /// <summary>Frequency for Plex metadata automation.</summary>
-    [Display(Name = "Plex Automation Frequency (hours)", Description = "Run Plex automation tasks every N hours. Set to 0 to disable")]
-    [Range(1, 168, ErrorMessage = "Plex Automation Frequency must be between 0 and 168")]
-    [Browsable(false)]
-    [DefaultValue(0)]
-    public int PlexAutomationFrequencyHours { get; set; } = 0;
-
     /// <summary>Whether to trigger Plex scans on VFS changes.</summary>
     [Browsable(false)]
-    [Display(Name = "Scan On VFS Refresh", Description = "Trigger Plex library scans when the VFS is refreshed.")]
+    [Display(Name = "Scan On VFS Refresh [Force Partial Scans]", Description = "Trigger partial library scans in Plex when the VFS is refreshed.")]
     [DefaultValue(false)]
     public bool ScanOnVfsRefresh { get; set; } = false;
 
@@ -257,34 +250,41 @@ public class AutomationConfig
     public bool AutoScrobble { get; set; } = false;
 
     /// <summary>Anchor hour for scheduling.</summary>
-    [Display(Name = "UTC Offset Hours", Description = "Offset from UTC midnight used as the anchor for scheduling (-12 to +14)")]
+    [Display(Name = "UTC Offset (hours)", Description = "Offset from UTC midnight used as the anchor for scheduling (-12 to +14)")]
     [Range(-12, 14, ErrorMessage = "UTC Offset must be between -12 and +14")]
     [Browsable(false)]
     [DefaultValue(0)]
     public int UtcOffsetHours { get; set; } = 0;
 
+    /// <summary>Frequency for Plex metadata automation.</summary>
+    [Display(Name = "Plex Automation Frequency (hours) [Plex Int.]", Description = "Run Plex automation tasks every N hours. Set to 0 to disable")]
+    [Range(0, 168, ErrorMessage = "Plex Automation Frequency must be between 0 and 168")]
+    [Browsable(false)]
+    [DefaultValue(0)]
+    public int PlexAutomationFrequencyHours { get; set; } = 0;
+
     /// <summary>Frequency for Shoko import detection.</summary>
-    [Display(Name = "Auto Import Frequency (hours)", Description = "Run Shoko import detection every N hours. Set to 0 to disable")]
+    [Display(Name = "Auto Import Frequency (hours) [Import Int.]", Description = "Run Shoko import detection every N hours. Set to 0 to disable")]
     [Range(0, 24, ErrorMessage = "Auto Import Frequency must be between 0 and 24")]
     [Browsable(false)]
     [DefaultValue(0)]
     public int ShokoImportFrequencyHours { get; set; } = 0;
 
     /// <summary>Frequency for watched-state synchronization.</summary>
-    [Display(Name = "Auto Sync Watched Frequency (hours)", Description = "Run watched-state sync every N hours. Set to 0 to disable")]
+    [Display(Name = "Auto Sync Watched Frequency (hours) [Sync Int.]", Description = "Run watched-state sync every N hours. Set to 0 to disable")]
     [Range(0, 168, ErrorMessage = "Auto Sync Watched Frequency must be between 0 and 168")]
     [Browsable(false)]
     [DefaultValue(0)]
     public int ShokoSyncWatchedFrequencyHours { get; set; } = 0;
 
     /// <summary>Whether to include ratings in sync tasks.</summary>
-    [Display(Name = "Include Ratings for Scheduled Sync", Description = "When enabled, all sync/scrobble actions will also include user ratings/votes")]
+    [Display(Name = "Include Ratings (for Scheduled Sync)", Description = "When enabled, all sync/scrobble actions will also include user ratings/votes")]
     [Browsable(false)]
     [DefaultValue(false)]
     public bool ShokoSyncWatchedIncludeRatings { get; set; } = false;
 
     /// <summary>Whether to ignore the Plex admin user during sync.</summary>
-    [Display(Name = "Exclude Admin for Scheduled Sync", Description = "When enabled, all sync/scrobble actions will ignore items scrobbled by the Plex token owner/admin")]
+    [Display(Name = "Exclude Admin (for Scheduled Sync)", Description = "When enabled, all sync/scrobble actions will ignore items scrobbled by the Plex token owner/admin")]
     [Browsable(false)]
     [DefaultValue(false)]
     public bool ShokoSyncWatchedExcludeAdmin { get; set; } = false;
