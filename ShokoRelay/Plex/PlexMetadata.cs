@@ -174,8 +174,13 @@ public class PlexMetadata(IMetadataService metadataService)
         var seasonTitle = GetSeasonFolder(seasonNum);
         string? seasonSummary = null;
 
+        // When using VFS overrides find a Shoko series in the group which contains the TMDB metadata for the requisite season number.
+        OverrideHelper.EnsureLoaded();
+        var groupIds = OverrideHelper.GetGroup(ps.ID, _metadataService);
+        var sourceSeries = groupIds.Select(id => _metadataService.GetShokoSeriesByID(id)).OfType<IShokoSeries>().FirstOrDefault(s => s.TmdbSeasons?.Any(ts => ts.SeasonNumber == seasonNum) == true) ?? ps;
+
         bool ignoreTmdb = !string.IsNullOrEmpty(MapHelper.GetPreferredTmdbOrderingId(ps));
-        var tmdbSeason = ignoreTmdb ? null : ps.TmdbSeasons?.FirstOrDefault(ts => ts.SeasonNumber == seasonNum);
+        var tmdbSeason = ignoreTmdb ? null : sourceSeries.TmdbSeasons?.FirstOrDefault(ts => ts.SeasonNumber == seasonNum);
 
         if (tmdbSeason != null)
         {
@@ -183,9 +188,10 @@ public class PlexMetadata(IMetadataService metadataService)
             seasonSummary = TextHelper.SummarySanitizer(tmdbSeason.PreferredDescription?.Value, ShokoRelay.Settings.SummaryMode);
         }
 
-        int nonExtraCount = ctx.FileData.Seasons.Count(s => s >= 0);
+        // Only apply TMDB season posters if there is more than one season present in the consolidated VFS. This accounts for extra seasons brought in via overrides.
+        int totalSeasons = ctx.FileData.Seasons.Count(s => s >= 0);
         List<string>? posters =
-            (ShokoRelay.Settings.TmdbSeasonPosters && nonExtraCount > 1 && tmdbSeason != null)
+            (ShokoRelay.Settings.TmdbSeasonPosters && totalSeasons > 1 && tmdbSeason != null)
                 ? [.. tmdbSeason.GetImages(ImageEntityType.Poster).OrderByDescending(i => i.IsPreferred).Select(i => ImageHelper.GetImageUrl(i, cacheBuster: cb))]
                 : null;
 
