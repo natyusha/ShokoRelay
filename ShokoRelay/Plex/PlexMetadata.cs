@@ -223,7 +223,8 @@ public class PlexMetadata(IMetadataService metadataService)
             ["parentArt"]             = images.GetImages(ImageEntityType.Backdrop).FirstOrDefault() is { } sa ? ImageHelper.GetImageUrl(sa, cacheBuster: cb) : null,
             ["index"]                 = seasonNum,
 
-            ["Image"]                 = ImageHelper.BuildCoverPosterArray(images, seasonTitle, ShokoRelay.Settings.AddEveryImage, posters, cb).ToArray(),
+            // Force addEveryImage to true if TMDB season posters are present, otherwise fallback to the configuration. (Remove this once Shoko's WebUI supports selecting the preferred poster)
+            ["Image"]                 = ImageHelper.BuildCoverPosterArray(images, seasonTitle, posters != null || ShokoRelay.Settings.AddEveryImage, posters, cb).ToArray(),
             //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
         };
         // csharpier-ignore-end
