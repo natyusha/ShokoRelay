@@ -57,7 +57,7 @@ public static class ImageHelper
         {
             var all = images.GetImages(type);
             if (addEveryImage)
-                return all;
+                return all.OrderByDescending(i => i.IsPreferred);
             var pref = all.FirstOrDefault(i => i.IsPreferred);
             return pref is not null ? [pref] : all.Take(1);
         }
