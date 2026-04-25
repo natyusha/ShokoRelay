@@ -105,6 +105,21 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
             );
     }
 
+    /// <summary>Removes a collection tag from an item by updating metadata.</summary>
+    /// <param name="ratingKey">Plex rating key.</param>
+    /// <param name="collectionName">Collection name to remove.</param>
+    /// <param name="target">Target library.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>True on success.</returns>
+    public async Task<bool> RemoveCollectionFromItemAsync(int ratingKey, string collectionName, PlexLibraryTarget target, CancellationToken cancellationToken = default) =>
+        await ExecuteActionAsync(
+            HttpMethod.Put,
+            $"/library/metadata/{ratingKey}?collection%5B%5D.tag.tag-={Uri.EscapeDataString(collectionName)}",
+            target,
+            $"Remove '{collectionName}' from {ratingKey}",
+            cancellationToken
+        );
+
     #endregion
 
     #region Cleanup Operations

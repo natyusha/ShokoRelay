@@ -185,7 +185,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         int start = 0;
         while (true)
         {
-            var q = new List<string> { $"X-Plex-Container-Start={start}", "X-Plex-Container-Size=200", "includeCollections=1" };
+            var q = new List<string> { $"X-Plex-Container-Start={start}", "X-Plex-Container-Size=200" };
             if (type.HasValue)
                 q.Add($"type={type.Value}");
             if (onlyUnwatched.HasValue)

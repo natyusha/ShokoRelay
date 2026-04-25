@@ -87,9 +87,9 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
 
             foreach (var target in targets)
             {
-                //Fetch all items AND all collections at the start to minimize per-item API calls
-                var items = await plexClient.GetSectionShowsAsync(target, cancellationToken) ?? [];
-                var collections = await plexClient.GetSectionCollectionsAsync(target, cancellationToken) ?? [];
+                // Fetch all items at the start to minimize per-item API calls
+                var items = await plexClient.GetSectionShowsAsync(target, cancellationToken).ConfigureAwait(false) ?? [];
+                var collections = await plexClient.GetSectionCollectionsAsync(target, cancellationToken).ConfigureAwait(false) ?? [];
 
                 // Map collection names to their Plex RatingKeys (IDs)
                 var collectionIdMap = collections
@@ -101,7 +101,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
 
                 foreach (var item in items)
                 {
-                    if (string.IsNullOrWhiteSpace(item.Guid))
+                    if (string.IsNullOrWhiteSpace(item.Guid) || !int.TryParse(item.RatingKey, out int plexKey))
                         continue;
                     var sid = PlexHelper.ExtractShokoSeriesIdFromGuid(item.Guid);
                     if (!sid.HasValue || (allowedIds.Count > 0 && !allowedIds.Contains(sid.Value)))
@@ -110,18 +110,26 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                     uniqueSeries.Add(sid.Value);
                     var series = metadataService.GetShokoSeriesByID(sid.Value);
                     var collectionName = series != null ? mapper.GetCollectionName(series) : null;
-                    if (string.IsNullOrEmpty(collectionName) || !int.TryParse(item.RatingKey, out int plexKey))
-                        continue;
 
                     Logger.Trace("CollectionService: Processing series {0} (Plex Key: {1})", sid.Value, item.RatingKey);
 
-                    //  Handle Assignment (Check memory first to avoid redundant API call)
-                    bool alreadyAssigned = item.Collection?.Any(c => string.Equals(c.Tag, collectionName, StringComparison.OrdinalIgnoreCase)) == true;
-                    bool assignmentOk = alreadyAssigned;
+                    var currentPlexCollections = item.Collection?.Select(c => c.Tag).Where(t => !string.IsNullOrEmpty(t)).ToList() ?? [];
+                    bool alreadyHasCorrect = !string.IsNullOrEmpty(collectionName) && currentPlexCollections.Any(c => string.Equals(c, collectionName, StringComparison.OrdinalIgnoreCase));
 
-                    if (!alreadyAssigned)
+                    foreach (var staleName in currentPlexCollections)
                     {
-                        assignmentOk = await plexCollections.AssignCollectionToItemByMetadataAsync(plexKey, collectionName, target, cancellationToken);
+                        // Remove if the series belongs to a different group (rename) or is now a solo group (null)
+                        if (collectionName == null || !string.Equals(staleName, collectionName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (await plexCollections.RemoveCollectionFromItemAsync(plexKey, staleName!, target, cancellationToken).ConfigureAwait(false))
+                                Logger.Info("Plex Collections: Removed incorrect collection '{0}' from '{1}'", staleName, item.Title);
+                        }
+                    }
+
+                    bool assignmentOk = alreadyHasCorrect;
+                    if (!string.IsNullOrEmpty(collectionName) && !alreadyHasCorrect)
+                    {
+                        assignmentOk = await plexCollections.AssignCollectionToItemByMetadataAsync(plexKey, collectionName, target, cancellationToken).ConfigureAwait(false);
                         if (assignmentOk)
                         {
                             created++;
@@ -143,19 +151,19 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                         }
                     }
 
-                    // Handle Poster (Only once per collection name in this library)
-                    if (assignmentOk)
+                    // Handle Poster (Only once per collection per target)
+                    if (assignmentOk && !string.IsNullOrEmpty(collectionName))
                     {
                         if (!collectionIdMap.TryGetValue(collectionName, out int cid))
                         {
-                            var newId = await plexCollections.GetOrCreateCollectionIdAsync(collectionName, target, cancellationToken);
+                            var newId = await plexCollections.GetOrCreateCollectionIdAsync(collectionName, target, cancellationToken).ConfigureAwait(false);
                             if (newId.HasValue)
                                 cid = collectionIdMap[collectionName] = newId.Value;
                         }
 
                         if (cid > 0 && posted.Add(cid))
                         {
-                            if (await TryApplyPoster(series!, collectionName, cid, target, cancellationToken))
+                            if (await TryApplyPoster(series!, collectionName, cid, target, cancellationToken).ConfigureAwait(false))
                             {
                                 uploaded++;
                                 Logger.Debug("CollectionService: Applied poster for '{0}'", collectionName);
@@ -164,7 +172,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                     }
                 }
             }
-            int deleted = await plexCollections.DeleteEmptyCollectionsAsync(cancellationToken);
+            int deleted = await plexCollections.DeleteEmptyCollectionsAsync(cancellationToken).ConfigureAwait(false);
             Logger.Info("Plex Collections: Task finished. {0} collections assigned.", created);
             return new BuildCollectionsResult(uniqueSeries.Count, created, uploaded, 0, uniqueSeries.Count - created, errs, deleted, createdList, errorsList);
         }
