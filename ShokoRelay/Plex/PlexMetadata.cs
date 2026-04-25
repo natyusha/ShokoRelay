@@ -34,14 +34,20 @@ public class PlexMetadata(IMetadataService metadataService)
     {
         int seriesId = 0;
 
-        if (ratingKey.Length > 1 && ratingKey[0] == 'a' && int.TryParse(ratingKey[1..], out var anidb))
-            seriesId = _metadataService.GetShokoSeriesByAnidbID(anidb)?.ID ?? 0;
-        else if (ratingKey.StartsWith(PlexConstants.EpisodePrefix))
-            seriesId = _metadataService.GetShokoEpisodeByID(int.Parse(ratingKey[1..].Split(PlexConstants.PartPrefix)[0]))?.Series?.ID ?? 0;
-        else if (ratingKey.Contains(PlexConstants.SeasonPrefix))
-            int.TryParse(ratingKey.Split(PlexConstants.SeasonPrefix)[0], out seriesId);
+        if (ratingKey.StartsWith(PlexConstants.EpisodePrefix))
+        {
+            var epIdPart = ratingKey[1..].Split(PlexConstants.PartPrefix)[0];
+            if (int.TryParse(epIdPart, out var epId))
+                seriesId = _metadataService.GetShokoEpisodeByID(epId)?.Series?.ID ?? 0;
+        }
         else
-            int.TryParse(ratingKey, out seriesId);
+        {
+            var seriesPart = ratingKey.Split(PlexConstants.SeasonPrefix)[0];
+            if (seriesPart.StartsWith('a') && int.TryParse(seriesPart[1..], out var anidb))
+                seriesId = _metadataService.GetShokoSeriesByAnidbID(anidb)?.ID ?? 0;
+            else
+                int.TryParse(seriesPart, out seriesId);
+        }
 
         var series = _metadataService.GetShokoSeriesByID(seriesId);
         if (series == null)
