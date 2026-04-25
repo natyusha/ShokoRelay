@@ -186,8 +186,8 @@ This plugin includes full [AnimeThemes](https://animethemes.moe/) integration. I
 
 1. Download anime theme videos and place them in the `!AnimeThemes` folder
    - There is a torrent available with over 19000+ themes
-2. Generate a mapping for the the videos by clicking the `Build` button:
-   - If you have the torrent click the `Import` button to download the [current torrent mapping](https://gist.github.com/natyusha/bb33a3b3bc95bc7a3869633e23d522bb)
+2. Generate a mapping for the the videos by clicking the `Build Mapping File` button:
+   - If you have the torrent click the `Import Curated Mapping File` button to download the [current torrent mapping](https://gist.github.com/natyusha/bb33a3b3bc95bc7a3869633e23d522bb)
    - Mapping the torrent takes ~8 hours (due to rate limits) and generated mappings will be appended to it
 3. Apply the mapping to the VFS by clicking the `Generate` button
    - The themes will be placed in the "Shorts" folder of their respective series
@@ -295,7 +295,7 @@ If you aren't happy with TMDB's default episode/season structure for a series, y
 
 **Combining Series**
 
-This allows shows which are separated on AniDB but part of the same TMDB listing to be combined into a single entry in Plex. To achieve this click the `VFS Overrides Editor` button on the dashboard in the "Shoko: VFS" section. It will open a modal which will create (or edit an existing) `anidb_vfs_overrides.csv` file in the plugin's config directory. Each line should contain a comma separated list of AniDB IDs you wish to merge. The first ID is the _primary series_ and the others will be merged into it (for both VFS builds and metadata lookups). Lines that are blank or start with a "#" are ignored.
+This allows shows which are separated on AniDB but part of the same TMDB listing to be combined into a single entry in Plex. To achieve this click the `VFS Overrides Editor` button in the "Shoko: VFS" section of the dashboard. It will open a modal which will create (or edit an existing) `anidb_vfs_overrides.csv` file in the plugin's config directory. Each line should contain a comma separated list of AniDB IDs you wish to merge. The first ID is the _primary series_ and the others will be merged into it (for both VFS builds and metadata lookups). Lines that are blank or start with a "#" are ignored.
 
 An example `anidb_vfs_overrides.csv` is available [here](https://gist.github.com/natyusha/a9ad00a5c16276cfbe2553346c745f1c).
 
