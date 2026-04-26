@@ -37,7 +37,6 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
     /// <summary>Subscribe to Shoko video-file events and begin watching for changes.</summary>
     public void Start()
     {
-        _videoService.VideoFileHashed += OnVideoFileHashed;
         _videoService.VideoFileRelocated += OnVideoFileRelocated;
         _videoService.VideoFileDeleted += OnVideoFileDeleted;
 
@@ -49,7 +48,6 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
     {
         try
         {
-            _videoService.VideoFileHashed -= OnVideoFileHashed;
             _videoService.VideoFileRelocated -= OnVideoFileRelocated;
             _videoService.VideoFileDeleted -= OnVideoFileDeleted;
 
@@ -79,8 +77,6 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
 
         KickProcessLoop();
     }
-
-    private void OnVideoFileHashed(object? sender, VideoFileHashedEventArgs e) => OnFileChanged(sender, e);
 
     private void OnVideoFileRelocated(object? sender, VideoFileRelocatedEventArgs e) => OnFileChanged(sender, e);
 
