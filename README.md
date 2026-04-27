@@ -91,7 +91,8 @@ Enable the following options in Shoko to ensure that Plex has at least one sourc
 #### Library
 
 > [!TIP]
-> If you previously used the legacy `ShokoRelay.bundle` you can simply convert your existing libraries to the new agent. This allows you to maintain credit detection data, watched states and video preview thumbnails. _A full metadata refresh is required after the first scan._
+> If you previously used the legacy `ShokoRelay.bundle` you can simply convert your existing libraries to the new agent. This allows you to maintain watched states and video preview thumbnails. Files that end up with different episode assignments will _not_ migrate correctly and will have to be handled manually (this is guaranteed for "Other" type episodes that were in Season -4).\
+> _A full metadata refresh is required after the first scan._
 
 - The Shoko Relay agent requires a `TV Shows` type library to be created (or an existing one to be used)
 - Under `Add Folders` be sure to only enter the path to `!ShokoRelayVFS` (or the configured `VFS Root Path`) as the directory
@@ -227,7 +228,7 @@ You can mark any theme as a favourite by clicking the heart icon `❤` next to i
 
 ### VFS Mapping
 
-When building the VFS files are placed into folders which are named according to their Shoko SeriesID. Within those folders they will be split into subfolders depending on the type of episode. For regular episodes or specials this means placement into a `Season #` or `Specials` folder. Files placed into those folders are named with the following pattern: `S##E##(-pt#)(-v#) [{ShokoFileID}]([{isVariation}]).ext` (the parts in parenthesis are conditional). Files with `-pt#` in their name will also have `[{ShokoFileID}]` stripped to fully follow the format described in [Combining Episodes](#combining-episodes). To avoid conflicts any file which is a cross over episode will not trigger local metadata/subtitle linking.\
+When building the VFS files are placed into folders which are named according to their Shoko SeriesID. Within those folders they will be split into subfolders depending on the type of episode. For regular episodes or specials this means placement into a `Season #` or `Specials` folder. Files placed into those folders are named with the following pattern: `S##E##(-pt#)(-v#) [{ShokoFileID}]([{isVariation}]).ext` (the parts in parenthesis are conditional). Files with `-pt#` in their name will also have `[{ShokoFileID}]` stripped to fully follow the format described in [Combining Episodes](#combining-episodes). To avoid conflicts any file which is a crossover episode will not trigger local metadata/subtitle linking.\
 _The ShokoFileID is unused by Plex and is there purely to help users visualise the file mappings._
 
 Non standard episodes on the other hand, are placed into a local series level Extra folder. Due to Plex not having individual episode pages or metadata for files placed in said folders they will be named according to the episode name (with a prefix) `X# ❯ Title.ext`. More info on local extras is available [here](https://support.plex.tv/articles/local-files-for-tv-show-trailers-and-extras/) and the following table showcases the assignments.
@@ -242,8 +243,13 @@ Non standard episodes on the other hand, are placed into a local series level Ex
 | O# ❯   | Other   | Featurettes |
 | U# ❯   | Unknown | Other       |
 
-> [!NOTE]
-> `Other` type episodes have a special rule where they will attempt to place themselves in `Season 1` or `Specials` if either is empty. Otherwise, they will be placed in `Featurettes` and display as extras in Plex. This was implemented because these episodes are generally parts of a Movie and have a full set of metadata which would not appear if they were in Plex's local extras.
+**"Other" Rule**
+
+`Other` type episodes have a special rule where they will attempt to place themselves in `Season 1` or `Specials` if either is empty. Otherwise, they will be placed in `Featurettes` and display as extras in Plex. This was implemented because these episodes are generally parts of a Movie and have a full set of metadata which would not appear if they were in Plex's local extras.
+
+**Crossover Episode Limitations**
+
+Crossover episodes are files which are linked to multiple episodes spanning separate AniDB series. Due to Plex's architecture they will only function in one series at a time. Since the plugin doesn't know which episode the user prefers, unwanted crossover entries must be hidden via Shoko's series page. To work around this limitation crossover episodes can also be modified (so the file's hash changes) then manually linked in Shoko to the desired episode.
 
 ### Automatic Title Modification
 
