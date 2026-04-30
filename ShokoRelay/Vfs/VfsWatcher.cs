@@ -78,9 +78,17 @@ public class VfsWatcher(
 
     #region Event Handlers
 
-    private void OnVideoFileRelocated(object? sender, VideoFileRelocatedEventArgs e) => HandleFileEvent(e);
+    private void OnVideoFileRelocated(object? sender, VideoFileRelocatedEventArgs e)
+    {
+        Logger.Info("VFS: File relocated/renamed: {0}", Path.GetFileName(e.RelativePath));
+        HandleFileEvent(e);
+    }
 
-    private void OnVideoFileDeleted(object? sender, VideoFileEventArgs e) => HandleFileEvent(e);
+    private void OnVideoFileDeleted(object? sender, VideoFileEventArgs e)
+    {
+        Logger.Info("VFS: File deleted: {0}", Path.GetFileName(e.RelativePath));
+        HandleFileEvent(e);
+    }
 
     private void OnVideoReleaseSaved(object? sender, VideoReleaseSavedEventArgs e)
     {
@@ -88,8 +96,14 @@ public class VfsWatcher(
         if (e.Video?.Series == null || e.Video.Series.Count == 0)
             return;
 
+        string fileName = e.Video.EarliestKnownName ?? "Unknown File";
+        Logger.Info("VFS: Release saved for video '{0}'", Path.GetFileName(fileName));
+
         foreach (var series in e.Video.Series)
+        {
+            Logger.Debug("VFS: Adding series '{0}' (ID: {1}) to pending queue due to release save.", series.PreferredTitle?.Value, series.ID);
             _pending[series.ID] = 1;
+        }
 
         KickProcessLoop();
     }
