@@ -11,12 +11,21 @@ using ShokoRelay.Plex;
 namespace ShokoRelay.Vfs;
 
 /// <summary>Watches for Shoko video-file events and triggers incremental VFS rebuilds plus debounced Plex refreshes.</summary>
-public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadataService metadataService, PlexMetadata plexMetadata, PlexClient plexLibrary, PlexCollections plexCollections)
+public class VfsWatcher(
+    IVideoService videoService,
+    IVideoReleaseService releaseService,
+    VfsBuilder builder,
+    IMetadataService metadataService,
+    PlexMetadata plexMetadata,
+    PlexClient plexLibrary,
+    PlexCollections plexCollections
+)
 {
     #region Fields & Constructor
 
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private readonly IVideoService _videoService = videoService;
+    private readonly IVideoReleaseService _releaseService = releaseService;
     private readonly VfsBuilder _builder = builder;
     private readonly IMetadataService _metadataService = metadataService;
     private readonly PlexMetadata _plexMetadata = plexMetadata;
@@ -39,8 +48,9 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
     {
         _videoService.VideoFileRelocated += OnVideoFileRelocated;
         _videoService.VideoFileDeleted += OnVideoFileDeleted;
+        _releaseService.SearchCompleted += OnVideoReleaseSearchCompleted;
 
-        Logger.Info("VFS watcher started (auto-refresh on file changes).");
+        Logger.Info("VFS watcher started (listening for relocation, matching and deletion events).");
     }
 
     /// <summary>Unsubscribe from Shoko video-file events and stop watching.</summary>
@@ -50,6 +60,7 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
         {
             _videoService.VideoFileRelocated -= OnVideoFileRelocated;
             _videoService.VideoFileDeleted -= OnVideoFileDeleted;
+            _releaseService.SearchCompleted -= OnVideoReleaseSearchCompleted;
 
             foreach (var kvp in _pendingMetadataFixups)
                 kvp.Value.Cancel();
@@ -67,20 +78,35 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
 
     #region Event Handlers
 
-    private void OnFileChanged(object? sender, VideoFileEventArgs e)
+    private void OnVideoFileRelocated(object? sender, VideoFileRelocatedEventArgs e) => HandleFileEvent(e);
+
+    private void OnVideoFileDeleted(object? sender, VideoFileEventArgs e) => HandleFileEvent(e);
+
+    private void OnVideoReleaseSearchCompleted(object? sender, VideoReleaseSearchCompletedEventArgs e)
     {
-        if (e?.Series == null || e.Series.Count == 0)
+        // Only process successful matches that have been saved to the database. This ensures the VFS only builds for files with confirmed series associations.
+        if (!e.IsSuccessful || !e.IsSaved || e.Video?.Series == null)
             return;
 
-        foreach (var series in e.Series)
+        foreach (var series in e.Video.Series)
             _pending[series.ID] = 1;
 
         KickProcessLoop();
     }
 
-    private void OnVideoFileRelocated(object? sender, VideoFileRelocatedEventArgs e) => OnFileChanged(sender, e);
+    /// <summary>Unified handler for standard video file events.</summary>
+    /// <param name="e">Video file event arguments.</param>
+    private void HandleFileEvent(VideoFileEventArgs? e)
+    {
+        var seriesList = e?.Series?.ToList() ?? e?.Video?.Series?.ToList() ?? [];
+        if (seriesList.Count == 0)
+            return;
 
-    private void OnVideoFileDeleted(object? sender, VideoFileEventArgs e) => OnFileChanged(sender, e);
+        foreach (var series in seriesList)
+            _pending[series.ID] = 1;
+
+        KickProcessLoop();
+    }
 
     #endregion
 
@@ -267,6 +293,7 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
     /// <summary>Worker task that performs the actual metadata fixup logic after the debounce delay has settled.</summary>
     /// <param name="series">The Shoko series to fix up.</param>
     /// <param name="token">Cancellation token.</param>
+    /// <returns>A task representing the fixup operation.</returns>
     private async Task RunMetadataFixupAsync(IShokoSeries series, CancellationToken token)
     {
         try
@@ -340,6 +367,10 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
         });
     }
 
+    /// <summary>Worker task that performs the collection assignment and poster upload logic.</summary>
+    /// <param name="series">The Shoko series to update.</param>
+    /// <param name="token">Cancellation token.</param>
+    /// <returns>A task representing the update operation.</returns>
     private async Task RunCollectionUpdateAsync(IShokoSeries series, CancellationToken token)
     {
         try
@@ -373,6 +404,9 @@ public class VfsWatcher(IVideoService videoService, VfsBuilder builder, IMetadat
         }
     }
 
+    /// <summary>Resolves the list of physical VFS series directories associated with a series across all import roots.</summary>
+    /// <param name="series">The Shoko series.</param>
+    /// <returns>An enumerable of absolute directory paths.</returns>
     private IEnumerable<string> ResolveSeriesVfsPaths(IShokoSeries series)
     {
         var roots = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
