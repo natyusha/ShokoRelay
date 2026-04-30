@@ -48,7 +48,7 @@ public class VfsWatcher(
     {
         _videoService.VideoFileRelocated += OnVideoFileRelocated;
         _videoService.VideoFileDeleted += OnVideoFileDeleted;
-        _releaseService.SearchCompleted += OnVideoReleaseSearchCompleted;
+        _releaseService.ReleaseSaved += OnVideoReleaseSaved;
 
         Logger.Info("VFS watcher started (listening for relocation, matching and deletion events).");
     }
@@ -60,7 +60,7 @@ public class VfsWatcher(
         {
             _videoService.VideoFileRelocated -= OnVideoFileRelocated;
             _videoService.VideoFileDeleted -= OnVideoFileDeleted;
-            _releaseService.SearchCompleted -= OnVideoReleaseSearchCompleted;
+            _releaseService.ReleaseSaved -= OnVideoReleaseSaved;
 
             foreach (var kvp in _pendingMetadataFixups)
                 kvp.Value.Cancel();
@@ -82,10 +82,10 @@ public class VfsWatcher(
 
     private void OnVideoFileDeleted(object? sender, VideoFileEventArgs e) => HandleFileEvent(e);
 
-    private void OnVideoReleaseSearchCompleted(object? sender, VideoReleaseSearchCompletedEventArgs e)
+    private void OnVideoReleaseSaved(object? sender, VideoReleaseSavedEventArgs e)
     {
-        // Only process successful matches that have been saved to the database. This ensures the VFS only builds for files with confirmed series associations.
-        if (!e.IsSuccessful || !e.IsSaved || e.Video?.Series == null)
+        // Trigger build when a video is successfully linked to a series (manual or automatic)
+        if (e.Video?.Series == null || e.Video.Series.Count == 0)
             return;
 
         foreach (var series in e.Video.Series)
