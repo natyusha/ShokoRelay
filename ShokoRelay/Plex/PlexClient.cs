@@ -56,11 +56,11 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
             if (resp.IsSuccessStatusCode)
             {
                 anyOk = true;
-                Logger.Debug("PlexClient: refresh triggered for folder '{0}' on {1}:{2} (Match: {3})", logFolderName, target.ServerUrl, target.SectionId, matchingTargets.Any());
+                Logger.Debug("PlexClient: refresh triggered for folder -> '{0}' on {1}:{2} (Match: {3})", logFolderName, target.ServerUrl, target.SectionId, matchingTargets.Any());
             }
             else
             {
-                Logger.Warn("PlexClient: refresh failed ({0}) for folder '{1}' in section {2}", resp.StatusCode, logFolderName, target.SectionId);
+                Logger.Warn("PlexClient: refresh failed ({0}) for folder -> '{1}' in section {2}", resp.StatusCode, logFolderName, target.SectionId);
             }
         }
         return anyOk;

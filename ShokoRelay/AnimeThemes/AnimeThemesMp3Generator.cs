@@ -361,7 +361,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
             return (new("", "error", "Path is required."), null);
         string folder = q.Path;
 
-        Logger.Debug("AnimeThemes MP3: Preparing context for folder {0}", folder);
+        Logger.Debug("AnimeThemes MP3: Preparing context for folder -> {0}", folder);
         if (!Directory.Exists(folder))
             return (new(folder, "error", "Folder not found."), null);
 
@@ -372,7 +372,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         string? vid = Directory.EnumerateFiles(folder).FirstOrDefault(f => AnimeThemesHelper.VideoFileExtensions.Contains(Path.GetExtension(f)));
         if (vid == null)
         {
-            Logger.Debug("AnimeThemes MP3: No recognized video files in {0}", folder);
+            Logger.Debug("AnimeThemes MP3: No recognized video files in folder -> {0}", folder);
             return (new(folder, "error", "No video files found."), null);
         }
 
@@ -471,7 +471,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         Directory.CreateDirectory(destDir);
         string dest = Path.Combine(destDir, "Theme.mp3");
 
-        Logger.Debug("AnimeThemes MP3: Linking Theme.mp3 to VFS {0}", dest);
+        Logger.Debug("AnimeThemes MP3: Linking Theme.mp3 to VFS -> {0}", dest);
         return VfsShared.TryCreateLink(src, dest, Logger) ? dest : null;
     }
 
@@ -482,7 +482,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         {
             if (File.Exists(path))
             {
-                Logger.Trace("AnimeThemes MP3: Cleaning up temporary file {0}", path);
+                Logger.Trace("AnimeThemes MP3: Cleaning up temporary file -> {0}", path);
                 File.Delete(path);
             }
         }

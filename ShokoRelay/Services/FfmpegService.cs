@@ -134,7 +134,7 @@ public sealed class FfmpegService
                         locatedDir ??= dir;
                     }
                     else
-                        Logger.Warn("FfmpegService: FFmpeg path does not exist {Path}", full);
+                        Logger.Warn("FfmpegService: FFmpeg path does not exist ->{Path}", full);
                 }
                 catch (Exception ex)
                 {

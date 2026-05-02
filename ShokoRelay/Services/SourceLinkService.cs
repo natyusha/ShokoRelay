@@ -107,7 +107,7 @@ public class SourceLinkService(IVideoService videoService)
         }
         catch (Exception ex)
         {
-            Logger.Trace(ex, "SourceLinkService: Purge failed for {0}", path);
+            Logger.Trace(ex, "SourceLinkService: Purge failed for ->{0}", path);
         }
         return deleted;
     }
@@ -121,7 +121,7 @@ public class SourceLinkService(IVideoService videoService)
             string fullDest = Path.Combine(root, relDest);
             if (!File.Exists(fullSrc))
             {
-                Logger.Warn("SourceLinkService: Source file not found: {0}", fullSrc);
+                Logger.Warn("SourceLinkService: Source file not found -> {0}", fullSrc);
                 return false;
             }
 

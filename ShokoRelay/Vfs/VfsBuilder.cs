@@ -143,7 +143,7 @@ public class VfsBuilder
             // Global Pre-Cleanup - prevent parallel threads from waiting on a slow deletion while their stopwatches are running.
             if (cleanRoot && !isFiltered)
             {
-                Logger.Info("VFS: BuildInternal -> Performing global root cleanup...");
+                Logger.Info("VFS: Performing global root cleanup...");
                 var allRoots = _metadataService
                     .GetAllShokoSeries()
                     .SelectMany(s => s.Episodes.SelectMany(ep => ep.VideoList).SelectMany(v => v.Files))
@@ -165,19 +165,19 @@ public class VfsBuilder
                                 Directory.Delete(path, true);
                                 cleanSw.Stop();
                                 cleanupDetails.Add(new RootCleanupDetails(path, cleanSw.ElapsedMilliseconds));
-                                Logger.Info("VFS: BuildInternal -> Cleaned root folder '{0}' in {1}ms", path, cleanSw.ElapsedMilliseconds);
+                                Logger.Info("VFS: Cleaned root folder -> '{0}' in {1}ms", path, cleanSw.ElapsedMilliseconds);
 
                                 Directory.CreateDirectory(path);
                                 File.WriteAllText(Path.Combine(path, ".ignore"), ""); // Re-create the folder and add an .ignore file immediately after cleanup for Emby / Jellyfin users
                             }
                             catch (Exception ex)
                             {
-                                Logger.Warn(ex, "VFS: BuildInternal -> Failed to clean root {0}", path);
+                                Logger.Warn(ex, "VFS: Failed to clean root -> {0}", path);
                             }
                         }
                         else
                         {
-                            Logger.Warn("VFS: BuildInternal -> Refusing to delete unsafe path: {0}", path);
+                            Logger.Warn("VFS: Refusing to delete unsafe path -> {0}", path);
                         }
                     }
                 }
@@ -240,7 +240,7 @@ public class VfsBuilder
 
                         if (Created > 0 || Errors.Count > 0)
                         {
-                            Logger.Info("VFS: BuildInternal -> Processed series '{0}' ({1} links created) in {2}ms", series.PreferredTitle?.Value ?? series.ID.ToString(), Created, seriesSw.ElapsedMilliseconds);
+                            Logger.Info("VFS: Processed series -> '{0}' ({1} links created) in {2}ms", series.PreferredTitle?.Value ?? series.ID.ToString(), Created, seriesSw.ElapsedMilliseconds);
                         }
 
                         Interlocked.Add(ref created, Created);
@@ -255,7 +255,7 @@ public class VfsBuilder
                     catch (Exception ex)
                     {
                         errorsBag.Add($"Failed series {series.PreferredTitle?.Value}: {ex.Message}");
-                        Logger.Error(ex, "VFS: BuildInternal -> Build failed for series {SeriesId}", series.ID);
+                        Logger.Error(ex, "VFS: Build failed for series {SeriesId}", series.ID);
                     }
                 }
             );
@@ -267,7 +267,7 @@ public class VfsBuilder
             (_seriesFileDataCacheForBuild, _subtitleFileCacheForBuild, _metadataFileCacheForBuild, _warningsForBuild, _createdDirsForBuild) = (null, null, null, null, null);
 
             Logger.Info(
-                "VFS: BuildInternal -> completed in {Elapsed}ms: processed={Processed}, consolidated={Consolidated}, created={Created}, skipped={Skipped}, errors={Errors}",
+                "VFS: Build completed in {Elapsed}ms -> processed={Processed}, consolidated={Consolidated}, created={Created}, skipped={Skipped}, errors={Errors}",
                 sw.ElapsedMilliseconds,
                 seriesProcessed,
                 consolidatedCount,
@@ -437,7 +437,7 @@ public class VfsBuilder
                     LinkSubtitles(src, Path.GetDirectoryName(src)!, Path.GetFileNameWithoutExtension(destPath), seasonPath, ref planned, ref skipped, errors, ref created);
                 }
                 else
-                    Logger.Debug("VFS: Skipping local assets for crossover video {File} (series {SeriesId})", src, series.ID);
+                    Logger.Debug("VFS: Skipping local assets for crossover video -> {File} (series {SeriesId})", src, series.ID);
             }
             else
             {
@@ -464,7 +464,7 @@ public class VfsBuilder
             if (!VfsShared.IsSafeToDelete(path))
             {
                 errors.Add($"Refusing to clean: {path}");
-                Logger.Warn("VFS: Unsafe cleanup path blocked: {Path}", path);
+                Logger.Warn("VFS: Unsafe cleanup path blocked -> {Path}", path);
             }
             else
                 try
@@ -475,12 +475,12 @@ public class VfsBuilder
                 catch (IOException ex)
                 {
                     errors.Add($"Clean failed: Folder in use or locked by another process {path}");
-                    Logger.Warn(ex, "VFS: Cleanup blocked: Path in use {Path}", path);
+                    Logger.Warn(ex, "VFS: Cleanup blocked due to in use path -> {Path}", path);
                 }
                 catch (Exception ex)
                 {
                     errors.Add($"Clean failed {path}: {ex.Message}");
-                    Logger.Error(ex, "VFS: Clean failed for {Path}", path);
+                    Logger.Error(ex, "VFS: Clean failed for path -> {Path}", path);
                 }
         }
         tcs.SetResult();
