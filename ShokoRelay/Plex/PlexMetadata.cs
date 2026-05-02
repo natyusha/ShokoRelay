@@ -28,22 +28,31 @@ public class PlexMetadata(IMetadataService metadataService)
     public record SeriesContext(IShokoSeries Series, (string DisplayTitle, string SortTitle, string? OriginalTitle) Titles, string ContentRating, MapHelper.SeriesFileData FileData);
 
     /// <summary>Resolves a Plex-style ratingKey into a <see cref="SeriesContext"/>.</summary>
-    /// <param name="ratingKey">Plex rating key representing show, season or episode.</param>
+    /// <param name="ratingKey">Plex rating key representing a show, season or episode.</param>
     /// <returns>A SeriesContext containing resolved series data and mappings, or null if not found.</returns>
     public SeriesContext? GetSeriesContext(string ratingKey)
     {
         int seriesId = 0;
 
-        if (ratingKey.StartsWith(PlexConstants.EpisodePrefix))
+        if (ratingKey.StartsWith(PlexConstants.AniDbPrefix + PlexConstants.EpisodePrefix, StringComparison.OrdinalIgnoreCase))
         {
-            var epIdPart = ratingKey[1..].Split(PlexConstants.PartPrefix)[0];
+            // AniDB Episode Alias (ae{ID} or ae{ID}p{Part})
+            var epIdPart = ratingKey[(PlexConstants.AniDbPrefix.Length + PlexConstants.EpisodePrefix.Length)..].Split(PlexConstants.PartPrefix)[0];
+            if (int.TryParse(epIdPart, out var aid))
+                seriesId = _metadataService.GetShokoEpisodeByAnidbID(aid)?.Series?.ID ?? 0;
+        }
+        else if (ratingKey.StartsWith(PlexConstants.EpisodePrefix))
+        {
+            // Shoko Episode ID (e{ID} or e{ID}p{Part})
+            var epIdPart = ratingKey[PlexConstants.EpisodePrefix.Length..].Split(PlexConstants.PartPrefix)[0];
             if (int.TryParse(epIdPart, out var epId))
                 seriesId = _metadataService.GetShokoEpisodeByID(epId)?.Series?.ID ?? 0;
         }
         else
         {
+            // Isolate the show component (supports {ID}, a{AniDB}, {ID}s{Season}, or a{AniDB}s{Season})
             var seriesPart = ratingKey.Split(PlexConstants.SeasonPrefix)[0];
-            if (seriesPart.StartsWith('a') && int.TryParse(seriesPart[1..], out var anidb))
+            if (seriesPart.StartsWith(PlexConstants.AniDbPrefix) && int.TryParse(seriesPart[PlexConstants.AniDbPrefix.Length..], out var anidb))
                 seriesId = _metadataService.GetShokoSeriesByAnidbID(anidb)?.ID ?? 0;
             else
                 int.TryParse(seriesPart, out seriesId);

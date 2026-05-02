@@ -8,6 +8,8 @@ namespace ShokoRelay.Plex
         #region Rating Key Prefixes
 
         // csharpier-ignore-start
+        /// <summary>Prefix for AniDB rating keys.</summary>
+        public const string AniDbPrefix         = "a";
         /// <summary>Prefix for collection rating keys.</summary>
         public const string CollectionPrefix    = "c";
         /// <summary>Prefix for season rating keys.</summary>

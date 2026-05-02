@@ -2,7 +2,7 @@
 
 All of the endpoints below are available under the plugin base path: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay`
 
-They can be interacted with easily using **/swagger/** at: `http(s)://{ShokoHost}:{ShokoPort}/swagger`
+They can be interacted with easily using **/swagger/** at: `http(s)://{ShokoHost}:{ShokoPort}/swagger` and changing the dropdown in the top right to "Shoko Relay V1"
 
 ## Table of Contents
 
@@ -109,12 +109,11 @@ GET  /metadata/{ratingKey}/extras                              -> GetExtras
 
 - TMDB episode-numbering is honoured when enabled (uses `IShokoEpisode.TmdbEpisodes`).
 - Hidden episodes are excluded from all metadata results.
-- RatingKey formats supported:
-  - `123` (Series)
-  - `123s4` (Season 4 of series 123)
-  - `e56789` (Episode)
-  - `e56789p2` (Episode 56789, Part 2)
-  - `a123` (AniDB ID 123 alias, resolves to Shoko Series)
+- Supported `RatingKey` formats:
+  - `123` (Shoko Series ID) / `a890` (AniDB Series ID)
+  - `123s4` (Shoko Series Season 4) / `a123s4` (AniDB Series Season 4)
+  - `e567` (Shoko Episode ID) / `ae567` (AniDB Episode ID)
+  - _AniDB IDs resolve to Shoko IDs and must be known to Shoko_
 - Crossover episodes (files belonging to multiple series) are skipped for local metadata/subtitle linking to avoid conflicts.
 
 ---

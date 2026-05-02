@@ -23,7 +23,6 @@ public class ServiceRegistration : IPluginServiceRegistration
     public static void RegisterServices(IServiceCollection serviceCollection, IApplicationPaths applicationPaths)
     {
         serviceCollection.AddHttpContextAccessor();
-        serviceCollection.AddControllers().AddApplicationPart(typeof(ServiceRegistration).Assembly);
 
         serviceCollection.AddSingleton(new ConfigProvider(applicationPaths));
         serviceCollection.AddSingleton(provider =>

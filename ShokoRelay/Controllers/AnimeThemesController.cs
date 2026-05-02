@@ -9,7 +9,7 @@ using ShokoRelay.Plex;
 namespace ShokoRelay.Controllers;
 
 /// <summary>Provides operations for building AnimeThemes VFS mappings, generating MP3 series themes, and handling the standalone video player endpoints.</summary>
-[ApiVersionNeutral]
+[ApiVersion(ShokoRelayConstants.ApiVersion)]
 [ApiController]
 [Route(ShokoRelayConstants.BasePath)]
 public class AnimeThemesController(
@@ -130,6 +130,10 @@ public class AnimeThemesController(
     #region MP3 Generation
 
     /// <summary>Generates Theme.mp3 files for anime series.</summary>
+    /// <remarks>
+    /// Can be run for a single folder or as a recursive batch.
+    /// Supports automatic path translation from Plex paths to Shoko paths.
+    /// </remarks>
     /// <param name="query">Parameters for the MP3 generation request.</param>
     /// <returns>An operation result or batch report.</returns>
     [HttpGet("animethemes/mp3")]

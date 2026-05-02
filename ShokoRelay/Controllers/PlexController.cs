@@ -9,7 +9,7 @@ using ShokoRelay.Plex;
 namespace ShokoRelay.Controllers;
 
 /// <summary>Manages Plex-specific integrations including authentication and automation.</summary>
-[ApiVersionNeutral]
+[ApiVersion(ShokoRelayConstants.ApiVersion)]
 [ApiController]
 [Route(ShokoRelayConstants.BasePath)]
 public class PlexController(

@@ -13,7 +13,7 @@ namespace ShokoRelay.Controllers;
 /// Provides the foundational infrastructure for all Shoko Relay controllers.
 /// Contains shared logic for logging, validation, response formatting, and Plex discovery.
 /// </summary>
-[ApiVersionNeutral]
+[ApiVersion(ShokoRelayConstants.ApiVersion)]
 [ApiController]
 [Route(ShokoRelayConstants.BasePath)]
 public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IMetadataService metadataService, PlexClient plexLibrary) : ControllerBase
@@ -83,9 +83,9 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
         foreach (var raw in filter.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             // Handle AniDB ID prefix (e.g. "a69" for One Piece)
-            if (raw.StartsWith("a", StringComparison.OrdinalIgnoreCase))
+            if (raw.StartsWith(PlexConstants.AniDbPrefix, StringComparison.OrdinalIgnoreCase))
             {
-                if (int.TryParse(raw[1..], out int aid) && aid > 0)
+                if (int.TryParse(raw[PlexConstants.AniDbPrefix.Length..], out int aid) && aid > 0)
                 {
                     if (_metadataService.GetShokoSeriesByAnidbID(aid) is { } series)
                         ids.Add(series.ID);

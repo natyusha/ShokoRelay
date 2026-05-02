@@ -10,7 +10,7 @@ using ShokoRelay.Vfs;
 namespace ShokoRelay.Controllers;
 
 /// <summary>Handles Shoko-specific automation tasks including VFS construction and housekeeping.</summary>
-[ApiVersionNeutral]
+[ApiVersion(ShokoRelayConstants.ApiVersion)]
 [ApiController]
 [Route(ShokoRelayConstants.BasePath)]
 public class ShokoController(
