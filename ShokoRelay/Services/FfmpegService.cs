@@ -134,11 +134,11 @@ public sealed class FfmpegService
                         locatedDir ??= dir;
                     }
                     else
-                        Logger.Warn("FFmpeg path does not exist: {Path}", full);
+                        Logger.Warn("FfmpegService: FFmpeg path does not exist {Path}", full);
                 }
                 catch (Exception ex)
                 {
-                    Logger.Warn(ex, "Failed to configure FFmpeg path");
+                    Logger.Warn(ex, "FfmpegService: Failed to configure FFmpeg path");
                 }
             }
 
@@ -158,14 +158,14 @@ public sealed class FfmpegService
             if (ffmpegFound || ffprobeFound)
             {
                 _workingDirectory = DetermineWorkingDirectory(locatedDir ?? pluginDir);
-                Logger.Info("FFmpeg binaries configured at {Path}", locatedDir ?? "system PATH");
+                Logger.Info("FfmpegService: FFmpeg binaries configured at {Path}", locatedDir ?? "system PATH");
             }
             else
             {
                 _ffmpegPath = ffmpegName;
                 _ffprobePath = ffprobeName;
                 _workingDirectory = DetermineWorkingDirectory(pluginDir);
-                Logger.Warn("FFmpeg binaries not found in configured paths; falling back to system PATH.");
+                Logger.Warn("FfmpegService: FFmpeg binaries not found in configured paths -> falling back to system PATH");
             }
 
             _ffmpegConfigured = true;

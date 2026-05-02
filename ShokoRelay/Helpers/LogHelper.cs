@@ -44,7 +44,7 @@ public static class LogHelper
         }
         catch (Exception ex)
         {
-            Logger.Warn(ex, "Failed to write {FileName}", fileName);
+            Logger.Warn(ex, "LogHelper: Failed to write {FileName}", fileName);
         }
     }
 

@@ -9,8 +9,8 @@ using ShokoRelay.Plex;
 namespace ShokoRelay.Controllers;
 
 /// <summary>Manages Plex-specific integrations including authentication and automation.</summary>
-[ApiVersion(ShokoRelayConstants.ApiVersion)]
 [ApiController]
+[ApiVersion(ShokoRelayConstants.ApiVersion)]
 [Route(ShokoRelayConstants.BasePath)]
 public class PlexController(
     ConfigProvider configProvider,
@@ -81,7 +81,7 @@ public class PlexController(
             if (string.IsNullOrWhiteSpace(pin.AuthToken))
                 return Ok(new RelayResponse<object>(Status: "pending"));
 
-            Logger.Info("Plex: Authentication successful. Saving token and discovering libraries...");
+            Logger.Info("Plex: Authentication successful -> Saving token and discovering libraries...");
             _configProvider.UpdatePlexTokenInfo(token: pin.AuthToken);
 
             try
@@ -90,7 +90,7 @@ public class PlexController(
             }
             catch (Exception ex)
             {
-                Logger.Warn($"Failed to fetch admin name: {ex.Message}");
+                Logger.Warn($"Plex: Failed to fetch admin name {ex.Message}");
             }
 
             try
@@ -101,7 +101,7 @@ public class PlexController(
             }
             catch (Exception ex)
             {
-                Logger.Warn($"Plex discovery failed: {ex.Message}");
+                Logger.Warn($"Plex: Discovery failed {ex.Message}");
             }
 
             return Ok(new RelayResponse<object>(Data: new { tokenSaved = true }));
@@ -134,7 +134,7 @@ public class PlexController(
         }
         catch (Exception ex)
         {
-            Logger.Warn($"Failed to refresh libraries: {ex.Message}");
+            Logger.Warn($"Plex: Failed to refresh libraries {ex.Message}");
             return StatusCode(502, new RelayResponse<object>(Status: "error", Message: "Failed to refresh Plex libraries."));
         }
     }
@@ -299,7 +299,7 @@ public class PlexController(
         var (allowed, reason) = await ValidateWebhookSource(evt, ShokoRelay.Settings, HttpContext.RequestAborted);
         if (!allowed)
         {
-            Logger.Info("Plex Webhook Ignored: {Reason} | User: {User} | Event: {Event}", reason, evt.Account?.Title, evt.Event);
+            Logger.Info("Plex: Webhook ignored -> {Reason} | User: {User} | Event: {Event}", reason, evt.Account?.Title, evt.Event);
             return Ok(new { status = "ignored", reason });
         }
 
@@ -324,7 +324,7 @@ public class PlexController(
             if (ratingValue.HasValue)
             {
                 await _userDataService.RateEpisode(shokoEpisode, user, ratingValue.Value).ConfigureAwait(false);
-                Logger.Info("Plex rating applied: user='{User}', series='{Series}', episode='{SeasonEp}', rating={Rating}", evt.Account?.Title, seriesName, seasonEp, ratingValue);
+                Logger.Info("Plex: Rating applied -> user='{User}', series='{Series}', episode='{SeasonEp}', rating={Rating}", evt.Account?.Title, seriesName, seasonEp, ratingValue);
             }
             return Ok(new { status = "ok", rated = true });
         }
@@ -333,7 +333,7 @@ public class PlexController(
         var saved = await _userDataService.SetEpisodeWatchedStatus(shokoEpisode, user, true, watchedAt, videoReason: VideoUserDataSaveReason.PlaybackEnd).ConfigureAwait(false);
 
         if (saved != null)
-            Logger.Info("Plex scrobble applied: user='{User}', series='{Series}', episode='{SeasonEp}'", evt.Account?.Title, seriesName, seasonEp);
+            Logger.Info("Plex: Scrobble applied -> user='{User}', series='{Series}', episode='{SeasonEp}'", evt.Account?.Title, seriesName, seasonEp);
         return Ok(new { status = "ok", marked = saved != null });
     }
 

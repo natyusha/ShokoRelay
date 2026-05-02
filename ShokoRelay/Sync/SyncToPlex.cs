@@ -109,7 +109,7 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
                     }
 
                     result = SyncHelper.IncMarkedWatched(result, result.PerUser, uName);
-                    Logger.Info("{0}Shoko->Plex: {1} scrobbled ep {2} on {3}", logPrefix, uName, sw.UserData.EpisodeID, target.ServerUrl);
+                    Logger.Info("WatchedSyncService: {0}Shoko->Plex: {1} scrobbled ep {2} on {3}", logPrefix, uName, sw.UserData.EpisodeID, target.ServerUrl);
                     SyncHelper.AddPerUserChange(
                         result.PerUserChanges,
                         uName,

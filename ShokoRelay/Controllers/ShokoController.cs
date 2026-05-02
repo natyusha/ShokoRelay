@@ -10,8 +10,8 @@ using ShokoRelay.Vfs;
 namespace ShokoRelay.Controllers;
 
 /// <summary>Handles Shoko-specific automation tasks including VFS construction and housekeeping.</summary>
-[ApiVersion(ShokoRelayConstants.ApiVersion)]
 [ApiController]
+[ApiVersion(ShokoRelayConstants.ApiVersion)]
 [Route(ShokoRelayConstants.BasePath)]
 public class ShokoController(
     ConfigProvider configProvider,
@@ -100,8 +100,9 @@ public class ShokoController(
     #region Automation
 
     /// <summary>Removes records for video files that no longer exist on disk from the Shoko database and Anidb MyList.</summary>
-    [HttpGet("shoko/remove-missing")]
-    [HttpPost("shoko/remove-missing")]
+    [Route("shoko/remove-missing")]
+    [HttpGet]
+    [HttpPost]
     public async Task<IActionResult> RemoveMissingFiles([FromQuery] bool? dryRun = null)
     {
         bool doDry = dryRun ?? true;
@@ -139,7 +140,7 @@ public class ShokoController(
     [HttpPost("shoko/import")]
     public async Task<IActionResult> RunShokoImport()
     {
-        Logger.Info("Shoko: Import scan triggered manually.");
+        Logger.Info("Shoko: Import scan triggered manually");
         var scanned = await _shokoImportService.TriggerImportAsync().ConfigureAwait(false);
         return Ok(new RelayResponse<object>(Data: new { scanned, scannedCount = scanned?.Count ?? 0 }));
     }
@@ -176,8 +177,9 @@ public class ShokoController(
     /// <param name="import">Direction: true for Plex-to-Shoko.</param>
     /// <param name="excludeAdmin">Ignore admin user.</param>
     /// <returns>Sync report result.</returns>
-    [HttpGet("sync-watched")]
-    [HttpPost("sync-watched")]
+    [Route("sync-watched")]
+    [HttpGet]
+    [HttpPost]
     public async Task<IActionResult> SyncPlexWatched(
         [FromQuery] string? dryRun = null,
         [FromQuery] int? sinceHours = null,
@@ -256,14 +258,14 @@ public class ShokoController(
         if (purgeLinks)
             Logger.Info("Shoko: Starting manual purge of library symlinks...");
         else
-            Logger.Info("Shoko: Starting source link processing using map: {0}", mapFile);
+            Logger.Info("Shoko: Starting source link processing using map {0}", mapFile);
 
         int count = await _sourceLinkService.ProcessLinksAsync(mapFile ?? string.Empty, purgeLinks);
 
         if (purgeLinks)
-            Logger.Info("Shoko: Purge complete. {0} items removed.", count);
+            Logger.Info("Shoko: Purge complete -> {0} items removed.", count);
         else
-            Logger.Info("Shoko: Source link processing complete. {0} links created/updated.", count);
+            Logger.Info("Shoko: Source link processing complete -> {0} links created/updated.", count);
 
         return Ok(new RelayResponse<object>(Data: new { count }));
     }

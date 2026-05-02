@@ -259,7 +259,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
         }
         catch (Exception ex)
         {
-            Logger.Warn(ex, "PlexAuth: Failed to parse Switch User XML response.");
+            Logger.Warn(ex, "PlexAuth: Failed to parse Switch User XML response");
             return null;
         }
     }
@@ -296,7 +296,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
         }
         catch
         {
-            Logger.Warn("Failed to revoke Plex token.");
+            Logger.Warn("PlexAuth: Failed to revoke Plex token");
         }
     }
 
@@ -331,7 +331,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
         catch (JsonException ex)
         {
             string snippet = content.Length > 512 ? content[..512] : content;
-            Logger.Warn(ex, "PlexAuth: Failed to parse JSON. Body starts with: {0}", snippet);
+            Logger.Warn(ex, "PlexAuth: Failed to parse JSON -> Body starts with {0}", snippet);
             return default;
         }
     }

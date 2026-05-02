@@ -84,7 +84,7 @@ public class ConfigProvider
             _cachedServers = null;
             _cachedAdminUsername = null;
         }
-        Logger.Info("Settings invalidated due to external file change.");
+        Logger.Info("Config: Settings invalidated due to external file change");
     }
 
     #endregion
@@ -165,7 +165,7 @@ public class ConfigProvider
         }
         catch (Exception ex)
         {
-            Logger.Warn(ex, "Invalid config, using defaults.");
+            Logger.Warn(ex, "Config: Invalid settings -> Using defaults");
             s = new();
         }
         ApplyDefaultValues(s);
@@ -198,7 +198,7 @@ public class ConfigProvider
         }
         catch (Exception ex)
         {
-            Logger.Warn(ex, "Failed to delete token file.");
+            Logger.Warn(ex, "Config: Failed to delete token file");
         }
     }
 

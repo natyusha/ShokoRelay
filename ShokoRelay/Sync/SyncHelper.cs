@@ -236,7 +236,7 @@ public static class SyncHelper
                     if (!string.IsNullOrWhiteSpace(fetched))
                     {
                         userToken = fetched;
-                        logger.Info("WatchedSyncService: fetched transient token for managed Plex user '{User}' (id={Id}); not persisted", userName, matched.Id);
+                        logger.Info("WatchedSyncService: fetched transient token for managed Plex user '{User}' (id={Id}) not persisted", userName, matched.Id);
                     }
                     else
                         logger.Info("WatchedSyncService: SwitchHomeUser returned no token for managed user '{User}' (id={Id})", userName, matched.Id);

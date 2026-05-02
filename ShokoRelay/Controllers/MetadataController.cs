@@ -10,8 +10,8 @@ using ShokoRelay.Plex;
 namespace ShokoRelay.Controllers;
 
 /// <summary>Provides the core Metadata Provider endpoints for the Plex Agent.</summary>
-[ApiVersion(ShokoRelayConstants.ApiVersion)]
 [ApiController]
+[ApiVersion(ShokoRelayConstants.ApiVersion)]
 [Route(ShokoRelayConstants.BasePath)]
 public class MetadataController(IMetadataService metadataService, PlexMetadata mapper, ConfigProvider configProvider, PlexClient plexLibrary)
     : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
@@ -55,8 +55,8 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     /// <param name="body">Match parameters including filename and title.</param>
     /// <returns>A match result MediaContainer.</returns>
     [Route("matches")]
-    [HttpPost]
     [HttpGet]
+    [HttpPost]
     public IActionResult Match([FromBody] PlexMatchBody? body = null)
     {
         string? rawPath = body?.Filename ?? Request.Query["filename"];
@@ -78,7 +78,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
         var series = _metadataService.GetShokoSeriesByID(seriesId.Value);
         if (series == null)
         {
-            Logger.Info("Match: no Shoko series found for id {SeriesId}", seriesId.Value);
+            Logger.Info("Metadata: No Shoko series found for id {SeriesId}", seriesId.Value);
             return EmptyMatch();
         }
         var poster = (series as IWithImages)?.GetImages(ImageEntityType.Poster).FirstOrDefault();

@@ -10,8 +10,8 @@ using ShokoRelay.Plex;
 namespace ShokoRelay.Controllers;
 
 /// <summary>Handles the plugin's frontend components, serving static assets and dynamic configuration data.</summary>
-[ApiVersion(ShokoRelayConstants.ApiVersion)]
 [ApiController]
+[ApiVersion(ShokoRelayConstants.ApiVersion)]
 [Route(ShokoRelayConstants.BasePath)]
 public class DashboardController(ConfigProvider configProvider, IMetadataService metadataService, PlexClient plexLibrary) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
 {

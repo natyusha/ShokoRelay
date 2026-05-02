@@ -9,8 +9,8 @@ using ShokoRelay.Plex;
 namespace ShokoRelay.Controllers;
 
 /// <summary>Provides operations for building AnimeThemes VFS mappings, generating MP3 series themes, and handling the standalone video player endpoints.</summary>
-[ApiVersion(ShokoRelayConstants.ApiVersion)]
 [ApiController]
+[ApiVersion(ShokoRelayConstants.ApiVersion)]
 [Route(ShokoRelayConstants.BasePath)]
 public class AnimeThemesController(
     ConfigProvider configProvider,
@@ -54,7 +54,7 @@ public class AnimeThemesController(
                 }
                 catch (Exception ex)
                 {
-                    Logger.Warn(ex, "Failed to save webm cache");
+                    Logger.Warn(ex, "AnimeThemes: Failed to save webm cache");
                 }
             }
 
@@ -131,8 +131,7 @@ public class AnimeThemesController(
 
     /// <summary>Generates Theme.mp3 files for anime series.</summary>
     /// <remarks>
-    /// Can be run for a single folder or as a recursive batch.
-    /// Supports automatic path translation from Plex paths to Shoko paths.
+    /// Can be run for a single folder or as a recursive batch. Supports automatic path translation from Plex paths to Shoko paths.
     /// </remarks>
     /// <param name="query">Parameters for the MP3 generation request.</param>
     /// <returns>An operation result or batch report.</returns>
@@ -187,8 +186,9 @@ public class AnimeThemesController(
     /// <summary>Streams an existing Theme.mp3 with ID3 tags embedded in response headers.</summary>
     /// <param name="path">The folder path containing the Theme.mp3.</param>
     /// <returns>A file stream result.</returns>
-    [HttpGet("animethemes/mp3/stream")]
-    [HttpHead("animethemes/mp3/stream")]
+    [Route("animethemes/mp3/stream")]
+    [HttpGet]
+    [HttpHead]
     public IActionResult AnimeThemesMp3Stream([FromQuery] string? path)
     {
         if (string.IsNullOrWhiteSpace(path))
@@ -296,8 +296,9 @@ public class AnimeThemesController(
     /// <summary>Streams a WebM theme file from the VFS.</summary>
     /// <param name="path">The relative VFS path to the WebM file.</param>
     /// <returns>A file stream result.</returns>
-    [HttpGet("animethemes/webm/stream")]
-    [HttpHead("animethemes/webm/stream")]
+    [Route("animethemes/webm/stream")]
+    [HttpGet]
+    [HttpHead]
     public IActionResult AnimeThemesWebmStream([FromQuery] string? path)
     {
         if (string.IsNullOrWhiteSpace(path))

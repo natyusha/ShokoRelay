@@ -88,10 +88,7 @@ public class AnimeThemesApi
         using var response = await _http.GetAsync(url, ct);
         if (!response.IsSuccessStatusCode)
         {
-            if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
-                Logger.Warn("AnimeThemes API returned Forbidden for {Url} (check user-agent/config)", url);
-            else
-                Logger.Warn("AnimeThemes API returned {Status} for {Url}", response.StatusCode, url);
+            Logger.Warn("AnimeThemes: API returned {Status} for {Url}", response.StatusCode, url);
             return default;
         }
 

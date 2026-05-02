@@ -56,7 +56,7 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
     {
         const string taskName = ShokoRelayConstants.TaskPlexRatingsApply;
         TaskHelper.StartTask(taskName);
-        Logger.Info("Plex Ratings: Starting task...");
+        Logger.Info("CriticRatingService: Starting task...");
 
         try
         {
@@ -99,12 +99,12 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
                     {
                         uS++;
                         appliedChanges.Add(new RatingChange(series.PreferredTitle?.Value ?? "Unknown", "Show", item.RatingKey!, item.Rating, rating));
-                        Logger.Info("Plex Ratings: Updated Show '{0}' to {1}", series.PreferredTitle?.Value, rating);
+                        Logger.Info("CriticRatingService: Updated Show '{0}' to {1}", series.PreferredTitle?.Value, rating);
                     }
                     else
                     {
                         errs++;
-                        errorsList.Add($"Failed update for show {shokoId.Value}");
+                        errorsList.Add($"CriticRatingService: Failed update for show {shokoId.Value}");
                     }
                 }
 
@@ -134,16 +134,16 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
                     {
                         uE++;
                         appliedChanges.Add(new RatingChange($"{episode.Series?.PreferredTitle?.Value} - S{episode.SeasonNumber}E{episode.EpisodeNumber}", "Episode", item.RatingKey!, item.Rating, rating));
-                        Logger.Trace("Plex Ratings: Updated Episode {0} to {1}", item.RatingKey, rating);
+                        Logger.Trace("CriticRatingService: Updated Episode {0} to {1}", item.RatingKey, rating);
                     }
                     else
                     {
                         errs++;
-                        errorsList.Add($"Failed update for episode {epId}");
+                        errorsList.Add($"CriticRatingService: Failed update for episode {epId}");
                     }
                 }
             }
-            Logger.Info("Plex Ratings: Task finished. Updated {0} shows and {1} episodes.", uS, uE);
+            Logger.Info("CriticRatingService: Task finished -> Updated {0} shows and {1} episodes", uS, uE);
             return new ApplyRatingsResult(pS, uS, pE, uE, errs, errorsList, appliedChanges);
         }
         finally

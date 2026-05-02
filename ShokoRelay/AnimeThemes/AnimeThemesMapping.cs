@@ -48,7 +48,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
         }
         catch (Exception ex)
         {
-            Logger.Warn(ex, "Failed to import mapping from URL");
+            Logger.Warn(ex, "AnimeThemes: Failed to import mapping from URL");
             return (0, "Import failed: " + ex.Message);
         }
     }
@@ -60,7 +60,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
     {
         const string taskName = ShokoRelayConstants.TaskAtMapBuild;
         TaskHelper.StartTask(taskName);
-        Logger.Info("AnimeThemes Mapping: Starting scan...");
+        Logger.Info("AnimeThemes: Starting mapping task...");
 
         try
         {
@@ -163,7 +163,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
 
             var finalEntries = entries.GroupBy(e => e.FilePath).Select(g => g.First()).ToList();
             await File.WriteAllTextAsync(mapPath, AnimeThemesHelper.SerializeMapping(finalEntries), ct);
-            Logger.Info("AnimeThemes Mapping: Task finished. {0} entries written.", finalEntries.Count);
+            Logger.Info("AnimeThemes: Finished mapping task -> {0} entries written.", finalEntries.Count);
             return new AnimeThemesMappingBuildResult(mapPath, finalEntries.Count, entries.Count - toProcess.Count, errors, messages);
         }
         finally
@@ -409,7 +409,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                 }
             );
 
-            Logger.Info("AnimeThemes VFS: Task finished. {0} links created in {1}ms.", state.Created, sw.ElapsedMilliseconds);
+            Logger.Info("AnimeThemes VFS: Task finished -> {0} links created in {1}ms.", state.Created, sw.ElapsedMilliseconds);
             return new AnimeThemesMappingApplyResult(state.Created, state.Skipped, state.Matched, state.Errors, state.CacheEntries, sw.Elapsed);
         }
         finally

@@ -144,7 +144,7 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
             {
                 if (int.TryParse(m.RatingKey, out int id) && m.ChildCount == 0 && await DeleteCollectionAsync(id, target, cancellationToken).ConfigureAwait(false))
                 {
-                    Logger.Info("Deleted empty collection {CollectionId} in section {SectionId}", id, target.SectionId);
+                    Logger.Info("PlexCollections: Deleted empty collection {CollectionId} in section {SectionId}", id, target.SectionId);
                     deleted++;
                 }
             }
@@ -202,7 +202,7 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
         {
             var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             Logger.Warn(
-                "Plex create collection failed with status {0} for title {1} on {2}/{3}. Response: {4}",
+                "PlexCollections: Create collection failed with status {0} for title {1} on {2}/{3}. Response: {4}",
                 resp.StatusCode,
                 title,
                 target.ServerUrl,
@@ -235,11 +235,18 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
                 return true;
 
             var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            Logger.Warn("Plex {0} failed with status {1} on {2}/{3}. Response: {4}", actionName, response.StatusCode, target.ServerUrl, target.SectionId, body?.Length > 1024 ? body[..1024] + "..." : body);
+            Logger.Warn(
+                "PlexCollections: {0} failed with status {1} on {2}/{3} -> Response {4}",
+                actionName,
+                response.StatusCode,
+                target.ServerUrl,
+                target.SectionId,
+                body?.Length > 1024 ? body[..1024] + "..." : body
+            );
         }
         catch (Exception ex)
         {
-            Logger.Warn(ex, "{0} failed for {1}:{2}", actionName, target.ServerUrl, target.SectionId);
+            Logger.Warn(ex, "PlexCollections: {0} failed for {1}:{2}", actionName, target.ServerUrl, target.SectionId);
         }
         return false;
     }

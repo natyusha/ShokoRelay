@@ -50,7 +50,7 @@ public class VfsWatcher(
         _videoService.VideoFileDeleted += OnVideoFileDeleted;
         _releaseService.ReleaseSaved += OnVideoReleaseSaved;
 
-        Logger.Info("VFS watcher started (listening for relocation, matching and deletion events).");
+        Logger.Info("VFS: VfsWatcher -> Started (listening for relocation, matching and deletion events)");
     }
 
     /// <summary>Unsubscribe from Shoko video-file events and stop watching.</summary>
@@ -71,7 +71,7 @@ public class VfsWatcher(
         }
         catch { }
 
-        Logger.Info("VFS watcher stopped.");
+        Logger.Info("VFS: VfsWatcher -> Stopped");
     }
 
     #endregion
@@ -101,7 +101,7 @@ public class VfsWatcher(
 
         foreach (var series in e.Video.Series)
         {
-            Logger.Debug("VFS: Adding series '{0}' (ID: {1}) to pending queue due to release save.", series.PreferredTitle?.Value, series.ID);
+            Logger.Debug("VFS: Adding series '{0}' (ID: {1}) to pending queue due to release save", series.PreferredTitle?.Value, series.ID);
             _pending[series.ID] = 1;
         }
 
@@ -162,7 +162,7 @@ public class VfsWatcher(
                     var result = _builder.Build(seriesIds, cleanRoot: false, pruneSeries: true);
                     sw.Stop();
                     Logger.Info(
-                        "VFS batch refreshed for {0} series in {1}ms — created={2} planned={3} skipped={4} seriesProcessed={5} errors={6}",
+                        "VFS: batch refreshed for {0} series in {1}ms -> created={2} planned={3} skipped={4} seriesProcessed={5} errors={6}",
                         seriesIds.Count,
                         sw.ElapsedMilliseconds,
                         result.CreatedLinks,
@@ -177,7 +177,7 @@ public class VfsWatcher(
                 }
                 catch (Exception ex)
                 {
-                    Logger.Warn(ex, "VFS batch refresh failed");
+                    Logger.Warn(ex, "VFS: Batch refresh failed");
                 }
 
                 await Task.Delay(400).ConfigureAwait(false);
@@ -248,7 +248,7 @@ public class VfsWatcher(
                         if (Directory.Exists(path) && Directory.EnumerateFileSystemEntries(path).Any())
                             _ = _plexLibrary.RefreshSectionPathAsync(path, cts.Token);
                         else
-                            Logger.Debug("VFS: Library scan for '{0}' skipped; path '{1}' not ready or empty.", series.PreferredTitle?.Value, path);
+                            Logger.Debug("VFS: Library scan for '{0}' skipped -> path '{1}' not ready or empty", series.PreferredTitle?.Value, path);
                     }
                 }
             }
@@ -335,7 +335,7 @@ public class VfsWatcher(
             }
 
             if (!foundInAnyTarget)
-                Logger.Debug("VFS: Debounced fixup for '{0}' skipped; rating key not found in Plex yet.", series.PreferredTitle?.Value);
+                Logger.Debug("VFS: Debounced fixup for '{0}' skipped; rating key not found in Plex yet", series.PreferredTitle?.Value);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)

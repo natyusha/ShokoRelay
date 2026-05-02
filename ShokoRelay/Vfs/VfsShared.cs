@@ -125,7 +125,7 @@ internal static class VfsShared
         }
         catch (Exception ex)
         {
-            logger.Warn(ex, "Unable to remove existing link at {Dest}", dest);
+            logger.Warn(ex, "VFS: Unable to remove existing link at {Dest}", dest);
             return false;
         }
         return TryCreateSymlink(dest, relativeTarget, logger);
@@ -139,12 +139,12 @@ internal static class VfsShared
             var info = File.CreateSymbolicLink(linkPath, target);
             sw.Stop();
             if (sw.ElapsedMilliseconds > 20)
-                logger.Debug("Symlink creation for {Link} took {Elapsed}ms", linkPath, sw.ElapsedMilliseconds);
+                logger.Debug("VFS: Symlink creation for {Link} took {Elapsed}ms", linkPath, sw.ElapsedMilliseconds);
             return info.Exists;
         }
         catch (Exception ex)
         {
-            logger.Debug(ex, "Symlink creation failed for {Link}", linkPath);
+            logger.Debug(ex, "VFS: Symlink creation failed for {Link}", linkPath);
             return false;
         }
     }

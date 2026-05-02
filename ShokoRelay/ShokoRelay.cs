@@ -132,7 +132,7 @@ public class ShokoRelay : BackgroundService
         _shokoImportService = shokoImportService;
         _collectionService = collectionService;
         _criticRatingService = criticRatingService;
-        Logger.Info($"ShokoRelay v{ShokoRelayConstants.Version} initialized.");
+        Logger.Info($"ShokoRelay v{ShokoRelayConstants.Version} initialized");
     }
 
     #endregion
@@ -150,7 +150,7 @@ public class ShokoRelay : BackgroundService
             if (stoppingToken.IsCancellationRequested)
                 return;
 
-            Logger.Info("Shoko Server started. Initializing Relay scheduling anchors...");
+            Logger.Info("Shoko Server started -> Initializing Relay scheduling anchors...");
             var now = DateTime.UtcNow;
             int offset = Math.Clamp(Settings.Automation.UtcOffsetHours, -12, 14);
             if (Settings.Automation.ShokoImportFrequencyHours > 0)
@@ -161,7 +161,7 @@ public class ShokoRelay : BackgroundService
                 _lastPlexAutomationUtc = ComputeSchedule(now, offset, Settings.Automation.PlexAutomationFrequencyHours).LastScheduled;
 
             _watcher.Start();
-            Logger.Info("Relay started with VFS auto-refresh. Automation anchors synchronized to current UTC slots.");
+            Logger.Info("Relay started -> Entering automation loop");
             await AutomationLoop(stoppingToken).ConfigureAwait(false);
         }
         finally
@@ -177,7 +177,7 @@ public class ShokoRelay : BackgroundService
     /// <inheritdoc/>
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        Logger.Info("ShokoRelay stopping...");
+        Logger.Info("Relay stopping...");
         _watcher.Stop();
         await base.StopAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -254,7 +254,7 @@ public class ShokoRelay : BackgroundService
                     nextRuns.Add(next);
                     if (_lastPlexAutomationUtc == null || _lastPlexAutomationUtc < lastSched)
                     {
-                        Logger.Info("Automation: triggering scheduled Plex automation ({0}h)", plexFreq);
+                        Logger.Info("Automation: triggering scheduled Plex Collection/Rating update ({0}h)", plexFreq);
                         var allSeries = _metadataService.GetAllShokoSeries()?.Cast<Shoko.Abstractions.Metadata.Shoko.IShokoSeries?>().ToList();
                         if (allSeries?.Count > 0)
                         {
@@ -275,7 +275,7 @@ public class ShokoRelay : BackgroundService
             }
             catch (Exception ex)
             {
-                Logger.Warn(ex, "Automation loop error");
+                Logger.Warn(ex, "Automation: loop error");
                 await Task.Delay(TimeSpan.FromMinutes(1), ct).ConfigureAwait(false);
             }
         }

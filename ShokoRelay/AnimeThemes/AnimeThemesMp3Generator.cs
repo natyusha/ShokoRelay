@@ -128,7 +128,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
 
     private void RefreshThemeMp3CacheInternal()
     {
-        Logger.Info("Building Theme.mp3 cache — scanning all managed import folders...");
+        Logger.Info("AnimeThemes: Building Theme.mp3 cache -> scanning all managed import folders...");
         var excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { VfsShared.ResolveRootFolderName(), VfsShared.ResolveCollectionPostersFolderName(), VfsShared.ResolveAnimeThemesFolderName() };
         try
         {
@@ -149,11 +149,11 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
                     .OfType<string>(),
             ];
             SaveCacheToFile();
-            Logger.Info("Theme.mp3 cache refreshed: {0} folders found across {1} roots.", _themeMp3Cache.Count, roots.Count);
+            Logger.Info("AnimeThemes: Theme.mp3 cache refreshed -> {0} folders found across {1} roots", _themeMp3Cache.Count, roots.Count);
         }
         catch (Exception ex)
         {
-            Logger.Warn(ex, "RefreshThemeMp3Cache: repositories not ready.");
+            Logger.Warn(ex, "AnimeThemes: RefreshThemeMp3Cache -> Repositories not ready");
             _themeMp3Cache ??= [];
         }
     }
@@ -173,7 +173,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
             }
             catch
             {
-                Logger.Warn("Failed to read {0}, attempting full scan.", ShokoRelayConstants.FileAtMp3Cache);
+                Logger.Warn("AnimeThemes: Failed to read {0} -> Attempting full scan", ShokoRelayConstants.FileAtMp3Cache);
             }
         }
         RefreshThemeMp3CacheInternal();
@@ -202,19 +202,19 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         string root = query.Path ?? "";
         if (!Directory.Exists(root))
         {
-            Logger.Warn("AnimeThemes MP3: Batch root not found: {0}", root);
+            Logger.Warn("AnimeThemes MP3: Batch root not found -> {0}", root);
             return new ThemeMp3BatchResult(root, [new(root, "error", "Batch root not found.")], 0, 0, 1);
         }
 
         // Season Filter Validation: If provided, the format must be valid or the entire batch operation aborts.
         if (!string.IsNullOrWhiteSpace(query.Season) && GetSeasonRange(query.Season) == null)
         {
-            string msg = $"Malformed season filter '{query.Season}'. Expected format 'Season Year' (e.g. 'Spring 2025').";
+            string msg = $"Malformed season filter '{query.Season}' -> Expected format 'Season Year' (e.g. 'Spring 2025').";
             Logger.Warn("AnimeThemes MP3: {0}", msg);
             return new ThemeMp3BatchResult(root, [new(root, "error", msg)], 0, 0, 1);
         }
 
-        Logger.Info("AnimeThemes MP3: Starting batch generation for root: {0}", root);
+        Logger.Info("AnimeThemes MP3: Starting batch generation for root -> {0}", root);
         var (results, p, s, e) = (new List<ThemeMp3OperationResult>(), 0, 0, 0);
         var folders = Directory.EnumerateDirectories(root).Prepend(root).Where(f => query.Force || !File.Exists(Path.Combine(f, "Theme.mp3"))).ToList();
         var excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { VfsShared.ResolveRootFolderName(), VfsShared.ResolveCollectionPostersFolderName(), VfsShared.ResolveAnimeThemesFolderName() };
@@ -248,7 +248,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
             }
         );
 
-        Logger.Info("AnimeThemes MP3: Batch generation finished. {0} processed, {1} skipped, {2} errors.", p, s, e);
+        Logger.Info("AnimeThemes MP3: Batch generation finished -> {0} processed, {1} skipped, {2} errors", p, s, e);
         return new ThemeMp3BatchResult(root, results, p, s, e);
     }
 
@@ -361,7 +361,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
             return (new("", "error", "Path is required."), null);
         string folder = q.Path;
 
-        Logger.Debug("AnimeThemes MP3: Preparing context for folder: {0}", folder);
+        Logger.Debug("AnimeThemes MP3: Preparing context for folder {0}", folder);
         if (!Directory.Exists(folder))
             return (new(folder, "error", "Folder not found."), null);
 
@@ -471,7 +471,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         Directory.CreateDirectory(destDir);
         string dest = Path.Combine(destDir, "Theme.mp3");
 
-        Logger.Debug("AnimeThemes MP3: Linking Theme.mp3 to VFS: {0}", dest);
+        Logger.Debug("AnimeThemes MP3: Linking Theme.mp3 to VFS {0}", dest);
         return VfsShared.TryCreateLink(src, dest, Logger) ? dest : null;
     }
 
@@ -482,7 +482,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         {
             if (File.Exists(path))
             {
-                Logger.Trace("AnimeThemes MP3: Cleaning up temporary file: {0}", path);
+                Logger.Trace("AnimeThemes MP3: Cleaning up temporary file {0}", path);
                 File.Delete(path);
             }
         }

@@ -31,7 +31,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
         }
         catch (Exception ex)
         {
-            Logger.Warn(ex, "TriggerImportAsync: failed to query managed folders");
+            Logger.Warn(ex, "ShokoImportService: failed to query managed folders");
         }
 
         try
@@ -40,7 +40,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
         }
         catch (Exception ex)
         {
-            Logger.Warn(ex, "TriggerImportAsync: failed to schedule folder scan");
+            Logger.Warn(ex, "ShokoImportService: failed to schedule folder scan");
         }
 
         return folders;
@@ -66,7 +66,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
 
             if (!dryRun && missing.Count > 0)
             {
-                Logger.Info("Shoko Housekeeping: Removing {0} missing files from database...", missing.Count);
+                Logger.Info("ShokoImportService: Removing {0} missing files from database...", missing.Count);
                 var toDelete = all.Where(f => missing.Contains(f.Path)).ToList();
 
                 // Remove the file records from Shoko
@@ -75,7 +75,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
                 // Purge unused releases from DB and remove from AniDB MyList
                 await _releaseService.PurgeUnusedReleases(providerNames: null, removeFromMylist: true).ConfigureAwait(false);
 
-                Logger.Info("Shoko Housekeeping: Database and MyList cleanup complete.");
+                Logger.Info("ShokoImportService: Database and MyList cleanup complete");
             }
             return [.. missing];
         }

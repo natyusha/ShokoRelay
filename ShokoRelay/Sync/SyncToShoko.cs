@@ -110,7 +110,7 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                             await _userDataService.SetEpisodeWatchedStatus(ep, defaultUser, true, watchedAt, videoReason: VideoUserDataSaveReason.UserInteraction).ConfigureAwait(false);
                         appliedIds.Add(ep.ID);
                         result = SyncHelper.IncMarkedWatched(result, result.PerUser, uName);
-                        Logger.Info("{0}Plex->Shoko: {1} marked {2} S{3}E{4}", logPrefix, uName, ep.Series?.PreferredTitle?.Value, ep.SeasonNumber, ep.EpisodeNumber);
+                        Logger.Info("WatchedSyncService: {0}Plex->Shoko: {1} marked {2} S{3}E{4}", logPrefix, uName, ep.Series?.PreferredTitle?.Value, ep.SeasonNumber, ep.EpisodeNumber);
                     }
                     else
                         result = SyncHelper.IncSkipped(result, result.PerUser, uName);

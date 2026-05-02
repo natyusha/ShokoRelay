@@ -73,7 +73,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
     {
         const string taskName = ShokoRelayConstants.TaskPlexCollectionsBuild;
         TaskHelper.StartTask(taskName);
-        Logger.Info("Plex Collections: Starting task...");
+        Logger.Info("CollectionService: Starting task...");
 
         try
         {
@@ -122,7 +122,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                         if (collectionName == null || !string.Equals(staleName, collectionName, StringComparison.OrdinalIgnoreCase))
                         {
                             if (await plexCollections.RemoveCollectionFromItemAsync(plexKey, staleName!, target, cancellationToken).ConfigureAwait(false))
-                                Logger.Info("Plex Collections: Removed incorrect collection '{0}' from '{1}'", staleName, item.Title);
+                                Logger.Info("CollectionService: Removed incorrect collection '{0}' from '{1}'", staleName, item.Title);
                         }
                     }
 
@@ -133,7 +133,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                         if (assignmentOk)
                         {
                             created++;
-                            Logger.Info("Plex Collections: Assigned '{0}' to '{1}'", collectionName, item.Title);
+                            Logger.Info("CollectionService: Assigned '{0}' to '{1}'", collectionName, item.Title);
                             createdList.Add(
                                 new
                                 {
@@ -173,7 +173,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                 }
             }
             int deleted = await plexCollections.DeleteEmptyCollectionsAsync(cancellationToken).ConfigureAwait(false);
-            Logger.Info("Plex Collections: Task finished. {0} collections assigned.", created);
+            Logger.Info("CollectionService: Task finished -> {0} collections assigned", created);
             return new BuildCollectionsResult(uniqueSeries.Count, created, uploaded, 0, uniqueSeries.Count - created, errs, deleted, createdList, errorsList);
         }
         finally
