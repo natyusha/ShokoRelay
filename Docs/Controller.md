@@ -143,14 +143,17 @@ POST /plex/auth/unlink                                         -> UnlinkPlex
 ### Plex: Automation
 
 ```
-GET  /plex/collections/build?seriesId={id}&filter={csv}        -> BuildPlexCollections
-GET  /plex/collections/posters?seriesId={id}&filter={csv}      -> ApplyCollectionPosters
+GET  /plex/library/refresh?filter={csv}                        -> RefreshPlexSeries
 
-GET  /plex/ratings/apply?seriesId={id}&filter={csv}            -> ApplyAudienceRatings
+GET  /plex/collections/build?filter={csv}                      -> BuildPlexCollections
+GET  /plex/collections/posters?filter={csv}                    -> ApplyCollectionPosters
+
+GET  /plex/ratings/apply?filter={csv}                          -> ApplyAudienceRatings
 
 GET  /plex/automation/run                                      -> RunPlexAutomationNow
 ```
 
+- `RefreshPlexSeries` manually triggers a partial library scan in Plex for the specified series.
 - `BuildPlexCollections` generate Plex collections for the specified series or filter.
 - `ApplyCollectionPosters` upload or refresh posters for the same series set.
 - `ApplyAudienceRatings` update series/episode ratings based on the configured source (TMDB/AniDB).
@@ -158,8 +161,8 @@ GET  /plex/automation/run                                      -> RunPlexAutomat
 
 **Notes:**
 
-- Each of the above (other than `RunPlexAutomationNow`) accepts either `seriesId` _or_ a comma separated `filter`.
-  - The `seriesId` defaults to Shoko but can be an AniDB ID if prefixed with an 'a'.
+- Each of the above (other than `RunPlexAutomationNow`) accepts a comma separated `filter`.
+  - The filter is comprised of Shoko or AniDB (prefixed with an 'a') series IDs.
 - All operations respect the `Advanced.Parallelism` setting to prevent IO saturation.
 - The scheduler is governed by `Automation.PlexAutomationFrequencyHours`.
 

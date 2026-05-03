@@ -126,13 +126,12 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
         return null;
     }
 
-    /// <summary>Combined guard for Plex automation requests: checks Plex configuration, validates filter/seriesId, and resolves the target series list.</summary>
-    /// <param name="seriesId">Optional single series ID.</param>
+    /// <summary>Combined guard for Plex automation requests: checks Plex configuration, validates filter, and resolves the target series list.</summary>
     /// <param name="filter">Optional filter string.</param>
     /// <param name="seriesList">Resolved Shoko series objects (output).</param>
     /// <param name="filterIds">Resolved numeric IDs (output).</param>
     /// <returns>BadRequest if validation fails; otherwise null.</returns>
-    protected IActionResult? ValidatePlexFilterRequest(int? seriesId, string? filter, out List<IShokoSeries?> seriesList, out List<int> filterIds)
+    protected IActionResult? ValidatePlexFilterRequest(string? filter, out List<IShokoSeries?> seriesList, out List<int> filterIds)
     {
         seriesList = [];
         filterIds = [];
@@ -144,10 +143,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
         if (validation != null)
             return validation;
 
-        if (seriesId.HasValue && filterIds.Count > 0)
-            return BadRequest(new RelayResponse<object>(Status: "error", Message: "Use either seriesId or filter, not both."));
-
-        seriesList = ResolveSeriesList(seriesId, filterIds);
+        seriesList = ResolveSeriesList(null, filterIds);
         return null;
     }
 

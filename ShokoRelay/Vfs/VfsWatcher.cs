@@ -5,7 +5,6 @@ using Shoko.Abstractions.Metadata.Services;
 using Shoko.Abstractions.Metadata.Shoko;
 using Shoko.Abstractions.Video.Events;
 using Shoko.Abstractions.Video.Services;
-using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
 
 namespace ShokoRelay.Vfs;
@@ -243,7 +242,7 @@ public class VfsWatcher(
                 {
                     if (_pending.ContainsKey(series.ID))
                         return;
-                    foreach (var path in ResolveSeriesVfsPaths(series))
+                    foreach (var path in VfsShared.ResolveSeriesVfsPaths(series))
                     {
                         if (Directory.Exists(path) && Directory.EnumerateFileSystemEntries(path).Any())
                             _ = _plexLibrary.RefreshSectionPathAsync(path, cts.Token);
@@ -320,6 +319,13 @@ public class VfsWatcher(
             int bufferSeconds = ShokoRelay.Settings.Advanced.PlexScanDelay;
             if (bufferSeconds > 0)
                 await Task.Delay(TimeSpan.FromSeconds(bufferSeconds), token).ConfigureAwait(false);
+
+            // Fallback in case the files were not scanned into Plex by the initial scan
+            if (_plexLibrary.ScanOnVfsRefresh)
+            {
+                foreach (var path in VfsShared.ResolveSeriesVfsPaths(series))
+                    await _plexLibrary.RefreshSectionPathAsync(path, token).ConfigureAwait(false);
+            }
 
             var targets = _plexLibrary.GetConfiguredTargets();
             bool foundInAnyTarget = false;
@@ -416,32 +422,6 @@ public class VfsWatcher(
         {
             Logger.Error(ex, "VFS: Collection update failed for series {0}", series.ID);
         }
-    }
-
-    /// <summary>Resolves the list of physical VFS series directories associated with a series across all import roots.</summary>
-    /// <param name="series">The Shoko series.</param>
-    /// <returns>An enumerable of absolute directory paths.</returns>
-    private IEnumerable<string> ResolveSeriesVfsPaths(IShokoSeries series)
-    {
-        var roots = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
-        string rootName = VfsShared.ResolveRootFolderName();
-
-        var fileData = MapHelper.GetSeriesFileData(series);
-        foreach (var mapping in fileData.Mappings)
-        {
-            var location = mapping.Video.Files.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l.Path)) ?? mapping.Video.Files.FirstOrDefault();
-            if (location == null)
-                continue;
-
-            string? importRoot = VfsShared.ResolveImportRootPath(location);
-            if (string.IsNullOrWhiteSpace(importRoot))
-                continue;
-
-            string seriesPath = Path.Combine(importRoot, rootName, series.ID.ToString());
-            roots.Add(seriesPath);
-        }
-
-        return roots;
     }
 
     #endregion

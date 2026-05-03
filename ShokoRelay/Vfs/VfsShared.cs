@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using NLog;
+using Shoko.Abstractions.Metadata.Shoko;
 using Shoko.Abstractions.Video;
 using ShokoRelay.Config;
+using ShokoRelay.Helpers;
 
 namespace ShokoRelay.Vfs;
 
@@ -53,6 +55,32 @@ internal static class VfsShared
                 return candidate;
         }
         return null;
+    }
+
+    /// <summary>Resolves the list of physical VFS series directories associated with a series across all import roots.</summary>
+    /// <param name="series">The Shoko series.</param>
+    /// <returns>An enumerable of absolute directory paths.</returns>
+    public static IEnumerable<string> ResolveSeriesVfsPaths(IShokoSeries series)
+    {
+        var roots = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+        string rootName = ResolveRootFolderName();
+
+        var fileData = MapHelper.GetSeriesFileData(series);
+        foreach (var mapping in fileData.Mappings)
+        {
+            var location = mapping.Video.Files.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l.Path)) ?? mapping.Video.Files.FirstOrDefault();
+            if (location == null)
+                continue;
+
+            string? importRoot = ResolveImportRootPath(location);
+            if (string.IsNullOrWhiteSpace(importRoot))
+                continue;
+
+            string seriesPath = Path.Combine(importRoot, rootName, series.ID.ToString());
+            roots.Add(seriesPath);
+        }
+
+        return roots;
     }
 
     #endregion

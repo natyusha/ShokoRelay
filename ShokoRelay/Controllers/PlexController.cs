@@ -5,6 +5,7 @@ using Shoko.Abstractions.User.Services;
 using ShokoRelay.Config;
 using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
+using ShokoRelay.Vfs;
 
 namespace ShokoRelay.Controllers;
 
@@ -161,14 +162,44 @@ public class PlexController(
 
     #region Automation
 
+
+    /// <summary>Triggers a partial library scan in Plex for specific series.</summary>
+    /// <param name="filter">Comma-separated list of series IDs to refresh.</param>
+    /// <returns>A response containing the count of successful refresh requests sent.</returns>
+    [HttpGet("plex/library/refresh")]
+    public async Task<IActionResult> RefreshPlexSeries([FromQuery] string filter)
+    {
+        var validation = ValidateFilterOrBadRequest(filter, out var ids);
+        if (validation != null)
+            return validation;
+
+        if (!_plexLibrary.IsEnabled)
+            return BadRequest(new RelayResponse<object>(Status: "error", Message: "Plex is not configured."));
+
+        int triggeredCount = 0;
+        foreach (var id in ids)
+        {
+            var series = _metadataService.GetShokoSeriesByID(id);
+            if (series == null)
+                continue;
+
+            foreach (var path in VfsShared.ResolveSeriesVfsPaths(series))
+            {
+                if (await _plexLibrary.RefreshSectionPathAsync(path).ConfigureAwait(false))
+                    triggeredCount++;
+            }
+        }
+
+        return Ok(new RelayResponse<object>(Data: new { triggered = triggeredCount }));
+    }
+
     /// <summary>Triggers the generation of Plex collections.</summary>
-    /// <param name="seriesId">Optional single series ID.</param>
-    /// <param name="filter">Optional comma-separated list of IDs.</param>
+    /// <param name="filter">Optional comma-separated list of Shoko or AniDB IDs.</param>
     /// <returns>A collection build report.</returns>
     [HttpGet("plex/collections/build")]
-    public async Task<IActionResult> BuildPlexCollections([FromQuery] int? seriesId = null, [FromQuery] string? filter = null)
+    public async Task<IActionResult> BuildPlexCollections([FromQuery] string? filter = null)
     {
-        var guard = ValidatePlexFilterRequest(seriesId, filter, out var seriesList, out _);
+        var guard = ValidatePlexFilterRequest(filter, out var seriesList, out _);
         if (guard != null)
             return guard;
 
@@ -190,14 +221,13 @@ public class PlexController(
     }
 
     /// <summary>Refreshes posters for Plex collections.</summary>
-    /// <param name="seriesId">Optional single series ID.</param>
-    /// <param name="filter">Optional comma-separated list of IDs.</param>
+    /// <param name="filter">Optional comma-separated list of Shoko or AniDB IDs.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Apply status result.</returns>
     [HttpGet("plex/collections/posters")]
-    public async Task<IActionResult> ApplyCollectionPosters([FromQuery] int? seriesId = null, [FromQuery] string? filter = null, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> ApplyCollectionPosters([FromQuery] string? filter = null, CancellationToken cancellationToken = default)
     {
-        var guard = ValidatePlexFilterRequest(seriesId, filter, out var seriesList, out _);
+        var guard = ValidatePlexFilterRequest(filter, out var seriesList, out _);
         if (guard != null)
             return guard;
 
@@ -220,13 +250,12 @@ public class PlexController(
     }
 
     /// <summary>Updates ratings in Plex based on Shoko metadata.</summary>
-    /// <param name="seriesId">Optional single series ID.</param>
-    /// <param name="filter">Optional comma-separated list of IDs.</param>
+    /// <param name="filter">Optional comma-separated list of Shoko or AniDB IDs.</param>
     /// <returns>A ratings update report.</returns>
     [HttpGet("plex/ratings/apply")]
-    public async Task<IActionResult> ApplyAudienceRatings([FromQuery] int? seriesId = null, [FromQuery] string? filter = null)
+    public async Task<IActionResult> ApplyAudienceRatings([FromQuery] string? filter = null)
     {
-        var guard = ValidatePlexFilterRequest(seriesId, filter, out var seriesList, out _);
+        var guard = ValidatePlexFilterRequest(filter, out var seriesList, out _);
         if (guard != null)
             return guard;
 
