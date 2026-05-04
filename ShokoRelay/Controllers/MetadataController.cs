@@ -3,9 +3,11 @@ using Newtonsoft.Json;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Enums;
 using Shoko.Abstractions.Metadata.Services;
+using Shoko.Abstractions.Metadata.Shoko;
 using ShokoRelay.Config;
 using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
+using static ShokoRelay.Plex.PlexMapping;
 
 namespace ShokoRelay.Controllers;
 
@@ -136,19 +138,42 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
         if (isAniDbEp || ratingKey.StartsWith(PlexConstants.EpisodePrefix))
         {
             var idPart = isAniDbEp ? ratingKey[(PlexConstants.AniDbPrefix.Length + PlexConstants.EpisodePrefix.Length)..] : ratingKey[PlexConstants.EpisodePrefix.Length..];
-            var epIdPart = idPart.Split(PlexConstants.PartPrefix)[0];
-            int? partIdx = ratingKey.Contains(PlexConstants.PartPrefix) ? int.Parse(ratingKey.Split(PlexConstants.PartPrefix)[1]) : null;
-            if (!int.TryParse(epIdPart, out int id))
-                return BadRequest();
+            var parts = idPart.Split(PlexConstants.PartPrefix);
+            if (!int.TryParse(parts[0], out int id))
+                return NotFound();
+            int? partIdx = parts.Length > 1 && int.TryParse(parts[1], out int p) ? p : null;
             var episode = isAniDbEp ? _metadataService.GetShokoEpisodeByAnidbID(id) : _metadataService.GetShokoEpisodeByID(id);
             if (episode == null)
                 return NotFound();
             var m = ctx.FileData.Mappings.FirstOrDefault(x => x.Episodes.Any(e => e.ID == episode.ID));
-            return m == null ? NotFound() : WrapInContainer(_mapper.MapEpisode(episode, m.Coords, ctx.Series, ctx.Titles, partIdx, m.TmdbEpisode));
+            if (m == null)
+                return NotFound();
+
+            // Handle Episode Groups (One Shoko ID mapped to multiple TMDb IDs)
+            object? tmdbOverride = m.TmdbEpisode;
+            var coords = m.Coords;
+            if (ShokoRelay.Settings.TmdbEpNumbering && episode is IShokoEpisode { TmdbEpisodes.Count: > 1 } se)
+            {
+                // If Plex specifies an index (e.g. index=2), find the specific TMDB metadata for that position
+                if (int.TryParse(Request.Query["index"], out int reqIndex))
+                {
+                    string? prefId = MapHelper.GetPreferredTmdbOrderingId(ctx.Series);
+                    var matchedTe = SelectPreferredTmdbOrdering(se.TmdbEpisodes, prefId).FirstOrDefault(te => GetOrderingCoords(te, prefId).Episode == reqIndex);
+
+                    if (matchedTe != null)
+                    {
+                        var (Season, Episode) = GetOrderingCoords(matchedTe, prefId);
+                        coords = new PlexCoords { Season = Season ?? coords.Season, Episode = Episode };
+                        tmdbOverride = matchedTe;
+                    }
+                }
+            }
+            return WrapInContainer(_mapper.MapEpisode(episode, coords, ctx.Series, ctx.Titles, partIdx, tmdbOverride));
         }
         if (ratingKey.Contains(PlexConstants.SeasonPrefix))
         {
-            int sNum = int.Parse(ratingKey.Split(PlexConstants.SeasonPrefix)[1]);
+            if (!int.TryParse(ratingKey.Split(PlexConstants.SeasonPrefix)[1], out int sNum))
+                return NotFound();
             var seasonMeta = _mapper.MapSeason(ctx.Series, sNum, ctx.Titles.DisplayTitle);
             if (includeChildren == 1)
             {
@@ -176,10 +201,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
         if (ctx == null)
             return NotFound();
         if (ratingKey.Contains(PlexConstants.SeasonPrefix))
-        {
-            int sNum = int.Parse(ratingKey.Split(PlexConstants.SeasonPrefix)[1]);
-            return WrapInPagedContainer(_mapper.BuildEpisodeList(ctx, sNum));
-        }
+            return !int.TryParse(ratingKey.Split(PlexConstants.SeasonPrefix)[1], out int sNum) ? NotFound() : WrapInPagedContainer(_mapper.BuildEpisodeList(ctx, sNum));
         var seasons = ctx.FileData.Seasons.Select(s => _mapper.MapSeason(ctx.Series, s, ctx.Titles.DisplayTitle)).ToList();
         return WrapInPagedContainer(seasons);
     }
@@ -196,6 +218,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
         var allEpisodes = ctx
             .FileData.Mappings.OrderBy(m => m.Coords.Season)
             .ThenBy(m => m.Coords.Episode)
+            .ThenBy(m => m.PartIndex ?? 0)
             .Select(m => _mapper.MapEpisode(m.PrimaryEpisode, m.Coords, ctx.Series, ctx.Titles, m.PartIndex, m.TmdbEpisode))
             .ToList();
         return WrapInPagedContainer(allEpisodes);
@@ -217,7 +240,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             var idPart = isAniDbEp ? ratingKey[(PlexConstants.AniDbPrefix.Length + PlexConstants.EpisodePrefix.Length)..] : ratingKey[PlexConstants.EpisodePrefix.Length..];
             var parts = idPart.Split(PlexConstants.PartPrefix);
             if (!int.TryParse(parts[0], out int id))
-                return BadRequest();
+                return NotFound();
             int? partIdx = parts.Length > 1 && int.TryParse(parts[1], out int p) ? p : null;
             var episode = isAniDbEp ? _metadataService.GetShokoEpisodeByAnidbID(id) : _metadataService.GetShokoEpisodeByID(id);
             var m = episode != null ? ctx.FileData.Mappings.FirstOrDefault(x => x.Episodes.Any(e => e.ID == episode.ID)) : null;
@@ -226,7 +249,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
         else if (ratingKey.Contains(PlexConstants.SeasonPrefix))
         {
             if (!int.TryParse(ratingKey.Split(PlexConstants.SeasonPrefix)[1], out int sNum))
-                return BadRequest();
+                return NotFound();
             images = ExtractImages(_mapper.MapSeason(ctx.Series, sNum, ctx.Titles.DisplayTitle));
         }
         else

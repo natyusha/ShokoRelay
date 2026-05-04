@@ -142,31 +142,49 @@ public class PlexMetadata(IMetadataService metadataService)
     public List<object> BuildEpisodeList(SeriesContext ctx, int seasonNum)
     {
         var items = new List<(PlexCoords Coords, object Meta)>();
+        var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        string? prefId = MapHelper.GetPreferredTmdbOrderingId(ctx.Series);
 
         foreach (var m in ctx.FileData.GetForSeason(seasonNum))
         {
-            if (m.Episodes.Count == 1)
+            // TMDb Episode Groups: One Shoko episode maps to multiple TMDB entries.
+            if (ShokoRelay.Settings.TmdbEpNumbering && m.Episodes.Count == 1 && m.PrimaryEpisode is IShokoEpisode { TmdbEpisodes.Count: > 1 } se)
             {
-                items.Add((m.Coords, MapEpisode(m.PrimaryEpisode, m.Coords, ctx.Series, ctx.Titles, m.PartIndex, m.TmdbEpisode)));
+                var tmdbEpisodes = SelectPreferredTmdbOrdering(se.TmdbEpisodes, prefId);
+                foreach (var te in tmdbEpisodes)
+                {
+                    var (Season, Episode) = GetOrderingCoords(te, prefId);
+                    if (Season != seasonNum)
+                        continue;
+                    var teCoords = new PlexCoords { Season = Season ?? 0, Episode = Episode };
+                    items.Add((teCoords, MapEpisode(se, teCoords, ctx.Series, ctx.Titles, m.PartIndex, te)));
+                }
                 continue;
             }
 
-            foreach (var ep in m.Episodes)
+            // Joined Episodes: Multiple Shoko episodes of the same type sharing a file.
+            if (m.Episodes.Count > 1 && m.Episodes.Select(x => x.Type).Distinct().Count() == 1)
             {
-                var coordsEp = GetPlexCoordinates(ep);
-                if (coordsEp.Season != seasonNum)
+                foreach (var ep in m.Episodes)
                 {
-                    if (coordsEp.Season == PlexConstants.SeasonOther && m.Coords.Season == seasonNum)
-                        coordsEp = new PlexCoords
-                        {
-                            Season = m.Coords.Season,
-                            Episode = coordsEp.Episode,
-                            EndEpisode = coordsEp.EndEpisode,
-                        };
-                    else
+                    var coordsEp = GetPlexCoordinates(ep, prefId);
+                    if (coordsEp.Season != seasonNum)
                         continue;
+                    var meta = MapEpisode(ep, coordsEp, ctx.Series, ctx.Titles);
+                    if (meta is Dictionary<string, object?> dict && dict.TryGetValue("ratingKey", out var rk) && rk is string key)
+                    {
+                        if (seenKeys.Add(key))
+                            items.Add((coordsEp, meta));
+                    }
                 }
-                items.Add((coordsEp, MapEpisode(ep, coordsEp, ctx.Series, ctx.Titles)));
+                continue;
+            }
+            // Standard or Relation-linked files: Use the PrimaryEpisode resolved by MapHelper, which filters out unwanted relations.
+            var primaryMeta = MapEpisode(m.PrimaryEpisode, m.Coords, ctx.Series, ctx.Titles, m.PartIndex, m.TmdbEpisode);
+            if (primaryMeta is Dictionary<string, object?> pDict && pDict.TryGetValue("ratingKey", out var pRk) && pRk is string pKey)
+            {
+                if (seenKeys.Add(pKey))
+                    items.Add((m.Coords, primaryMeta));
             }
         }
         return [.. items.OrderBy(x => x.Coords.Episode).Select(x => x.Meta)];
@@ -272,7 +290,7 @@ public class PlexMetadata(IMetadataService metadataService)
         string epTitle = TextHelper.ResolveEpisodeTitle(ep, titles.DisplayTitle);
         string epDescription = TextHelper.GetDescriptionByLanguage(ep, ShokoRelay.Settings.EpisodeDescriptionLanguage);
 
-        if (partIndex > 1 && tmdbEpisode is not null)
+        if (tmdbEpisode is not null)
         {
             if (tmdbEpisode is IWithTitles wt && !string.IsNullOrEmpty(wt.PreferredTitle?.Value))
                 epTitle = wt.PreferredTitle.Value;
