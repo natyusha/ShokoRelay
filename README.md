@@ -86,6 +86,7 @@ Enable the following options in Shoko to ensure that Plex has at least one sourc
 - Click `Add Provider` in the Metadata Providers header and supply the following URL:
   - `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay`
 - Click `Add Agent` in the Metadata Agents header, name it `Shoko Relay` and select it as the primary provider
+- Optional: Under `additional providers` select `Plex NFO Series` then click the `+`
 - Under `additional providers` select `Plex Local Media` then click the `+` and `Save`
 
 #### Library
@@ -228,7 +229,7 @@ You can mark any theme as a favourite by clicking the heart icon `❤` next to i
 
 ### VFS Mapping
 
-When building the VFS files are placed into folders which are named according to their Shoko SeriesID. Within those folders they will be split into subfolders depending on the type of episode. For regular episodes or specials this means placement into a `Season #` or `Specials` folder. Files placed into those folders are named with the following pattern: `S##E##(-pt#)(-v#) [{ShokoFileID}]([{isVariation}]).ext` (the parts in parenthesis are conditional). Files with `-pt#` in their name will also have `[{ShokoFileID}]` stripped to fully follow the format described in [Combining Episodes](#combining-episodes). To avoid conflicts any file which is a crossover episode will not trigger local metadata/subtitle linking.\
+When building the VFS files are placed into folders which are named according to their Shoko SeriesID. Within those folders they will be split into subfolders depending on the type of episode. For regular episodes or specials this means placement into a `Season #` or `Specials` folder. Files placed into those folders are named with the following pattern: `S##E##(-pt#)(-v#) [{ShokoFileID}]([{isVariation}]).ext` (the parts in parenthesis are conditional). Files with `-pt#` in their name will also have `[{ShokoFileID}]([{isVariation}])` stripped to fully follow the format described in [Combining Episodes](#combining-episodes). To avoid conflicts any file which is a crossover episode will not trigger local metadata/subtitle linking.\
 _The ShokoFileID is unused by Plex and is there purely to help users visualise the file mappings._
 
 Non standard episodes on the other hand, are placed into a local series level Extra folder. Due to Plex not having individual episode pages or metadata for files placed in said folders they will be named according to the episode name (with a prefix) `X# ❯ Title.ext`. More info on local extras is available [here](https://support.plex.tv/articles/local-files-for-tv-show-trailers-and-extras/) and the following table showcases the assignments.
@@ -301,7 +302,7 @@ If you aren't happy with TMDB's default episode/season structure for a series, y
 
 **Combining Series**
 
-This allows shows which are separated on AniDB but part of the same TMDB listing to be combined into a single entry in Plex. To achieve this click the `VFS Overrides Editor` button in the "Shoko: VFS" section of the dashboard. It will open a modal which will create (or edit an existing) `anidb_vfs_overrides.csv` file in the plugin's config directory. Each line should contain a comma separated list of AniDB IDs you wish to merge. The first ID is the _primary series_ and the others will be merged into it (for both VFS builds and metadata lookups). Lines that are blank or start with a "#" are ignored.
+This allows shows which are separated on AniDB but part of the same TMDB listing to be combined into a single entry in Plex. To achieve this click the `VFS Overrides Editor` button in the "Shoko: VFS" section of the dashboard. It will open a modal which will create (or edit an existing) `anidb_vfs_overrides.csv` file in the plugin's config directory. Each line should contain a comma separated list of AniDB IDs you wish to merge. The first ID is the _primary series_ and the others will be merged into it (for both VFS builds and metadata lookups). Lines that are blank or start with a "#" are ignored. It is highly recommended to use this feature for series like "Akahori Gedou Hour Rabuge" where every episode is a crossover.
 
 An example `anidb_vfs_overrides.csv` is available [here](https://gist.github.com/natyusha/a9ad00a5c16276cfbe2553346c745f1c).
 

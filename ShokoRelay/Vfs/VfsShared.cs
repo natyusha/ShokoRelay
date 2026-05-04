@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using NLog;
+using Shoko.Abstractions.Metadata.Services;
 using Shoko.Abstractions.Metadata.Shoko;
 using Shoko.Abstractions.Video;
 using ShokoRelay.Config;
@@ -58,14 +59,15 @@ internal static class VfsShared
     }
 
     /// <summary>Resolves the list of physical VFS series directories associated with a series across all import roots.</summary>
-    /// <param name="series">The Shoko series.</param>
+    /// <param name="series">The Shoko series metadata.</param>
+    /// <param name="metadataService">Metadata service used for override resolution.</param>
     /// <returns>An enumerable of absolute directory paths.</returns>
-    public static IEnumerable<string> ResolveSeriesVfsPaths(IShokoSeries series)
+    public static IEnumerable<string> ResolveSeriesVfsPaths(IShokoSeries series, IMetadataService metadataService)
     {
-        var roots = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+        var roots = new HashSet<string>(PathComparer);
         string rootName = ResolveRootFolderName();
 
-        var fileData = MapHelper.GetSeriesFileData(series);
+        var fileData = MapHelper.GetSeriesFileData(series, metadataService);
         foreach (var mapping in fileData.Mappings)
         {
             var location = mapping.Video.Files.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l.Path)) ?? mapping.Video.Files.FirstOrDefault();

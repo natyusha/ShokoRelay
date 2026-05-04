@@ -183,7 +183,7 @@ public class PlexController(
             if (series == null)
                 continue;
 
-            foreach (var path in VfsShared.ResolveSeriesVfsPaths(series))
+            foreach (var path in VfsShared.ResolveSeriesVfsPaths(series, _metadataService))
             {
                 if (await _plexLibrary.RefreshSectionPathAsync(path).ConfigureAwait(false))
                     triggeredCount++;

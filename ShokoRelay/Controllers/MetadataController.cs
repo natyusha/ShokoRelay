@@ -280,7 +280,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
         var primarySeries = group.MainSeries ?? group.Series?.FirstOrDefault();
         if (primarySeries == null)
             return NotFound();
-        var posterPath = PlexHelper.FindCollectionPosterPathByGroup(primarySeries, groupId);
+        var posterPath = PlexHelper.FindCollectionPosterPathByGroup(primarySeries, groupId, _metadataService);
         return string.IsNullOrWhiteSpace(posterPath) || !System.IO.File.Exists(posterPath)
             ? NotFound()
             : PhysicalFile(posterPath, GetCollectionContentTypeForExtension(Path.GetExtension(posterPath)) ?? "application/octet-stream");

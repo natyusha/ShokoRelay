@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Shoko.Abstractions.Metadata;
+using Shoko.Abstractions.Metadata.Services;
 using Shoko.Abstractions.Metadata.Shoko;
 using Shoko.Abstractions.Video;
 using ShokoRelay.Plex;
@@ -41,10 +42,11 @@ public static class MapHelper
 
     /// <summary>Generate SeriesFileData for the given series by building file mappings and seasons.</summary>
     /// <param name="series">The series to process.</param>
+    /// <param name="metadataService">Metadata service used for override resolution.</param>
     /// <returns>A SeriesFileData object.</returns>
-    public static SeriesFileData GetSeriesFileData(ISeries series)
+    public static SeriesFileData GetSeriesFileData(ISeries series, IMetadataService metadataService)
     {
-        var mappings = BuildFileMappings(series);
+        var mappings = BuildFileMappings(series, metadataService);
         return new SeriesFileData(mappings, [.. mappings.Select(m => m.Coords.Season).Distinct().OrderBy(s => s)]);
     }
 
@@ -63,14 +65,18 @@ public static class MapHelper
     /// <summary>Return merged file data for a primary series and any additional series in the group.</summary>
     /// <param name="primary">The primary series.</param>
     /// <param name="extras">Secondary series to merge.</param>
+    /// <param name="metadataService">Metadata service used for override resolution.</param>
     /// <returns>A combined SeriesFileData object.</returns>
-    public static SeriesFileData GetSeriesFileDataMerged(ISeries primary, IEnumerable<ISeries> extras)
+    public static SeriesFileData GetSeriesFileDataMerged(ISeries primary, IEnumerable<ISeries> extras, IMetadataService metadataService)
     {
-        var all = BuildFileMappings(primary);
+        var all = BuildFileMappings(primary, metadataService);
         foreach (var s in extras ?? [])
             if (s != null)
-                all.AddRange(BuildFileMappings(s));
-        return new SeriesFileData(all, [.. all.Select(m => m.Coords.Season).Distinct().OrderBy(s => s)]);
+                all.AddRange(BuildFileMappings(s, metadataService));
+
+        // A single physical crossover file linked to multiple Shoko series in an override group will produce duplicate mappings. This ensures the VFS only builds the file once.
+        var deduped = all.GroupBy(m => (m.Video.ID, m.Coords, m.PartIndex, m.IsVariation)).Select(g => g.First()).ToList();
+        return new SeriesFileData(deduped, [.. deduped.Select(m => m.Coords.Season).Distinct().OrderBy(s => s)]);
     }
 
     /// <summary>Indicates whether an episode should be treated as hidden.</summary>
@@ -82,7 +88,7 @@ public static class MapHelper
 
     #region Mapping Logic
 
-    private static List<FileMapping> BuildFileMappings(ISeries series)
+    private static List<FileMapping> BuildFileMappings(ISeries series, IMetadataService metadataService)
     {
         var result = new List<FileMapping>();
         var seriesEpisodes = series.Episodes.Select(e => (Episode: e, Videos: e.VideoList.ToList())).Where(x => x.Videos.Count > 0 && !IsHidden(x.Episode)).ToList();
@@ -106,8 +112,8 @@ public static class MapHelper
             }
         );
 
-        bool s1 = seasonsSet.ContainsKey(PlexConstants.SeasonStandard),
-            s0 = seasonsSet.ContainsKey(PlexConstants.SeasonSpecials);
+        bool s1 = seasonsSet.ContainsKey(PlexConstants.SeasonStandard);
+        bool s0 = seasonsSet.ContainsKey(PlexConstants.SeasonSpecials);
         var episodeFileLists = seriesEpisodes.ToDictionary(x => x.Episode.ID, x => x.Videos.OrderBy(v => Path.GetFileName(v.Files.FirstOrDefault()?.Path ?? "")).ToList());
         var allVideos = seriesEpisodes.SelectMany(x => x.Videos).GroupBy(v => v.ID).Select(g => g.First()).OrderBy(v => Path.GetFileName(v.Files.FirstOrDefault()?.Path ?? "")).ToList();
 
@@ -117,8 +123,8 @@ public static class MapHelper
             .Select(v =>
             {
                 var eps = videoToEps[v.ID];
-                var sortedEps = eps.OrderBy(x => x.Coords.Season).ThenBy(x => x.Coords.Episode);
-                var deduped = DeduplicateByCoords([.. sortedEps], v);
+                var sortedEps = eps.OrderBy(x => x.Coords.Season).ThenBy(x => x.Coords.Episode).ToList();
+                var deduped = DeduplicateByCoords(sortedEps, v);
                 if (deduped.Count == 0)
                     return null;
                 var c = (deduped.Count == 1) ? deduped[0].Coords : GetPlexCoordinatesForFile(deduped.Select(x => x.Episode));
@@ -137,9 +143,17 @@ public static class MapHelper
 
             // Handle multi-type tiebreaks using cross-reference ordering
             var sortedEps = epList.OrderBy(x => x.Coords.Season).ThenBy(x => x.Coords.Episode).ToList();
-            if (sortedEps.Count > 1 && sortedEps.Select(x => x.Episode.Type).Distinct().Count() > 1 && video.CrossReferences?.Count > 0)
+
+            // Resolve Primary IDs to handle consolidated crossover series (e.g. Akahori Gedou).
+            var distinctPrimarySeriesCount = (video.CrossReferences ?? [])
+                .Where(cr => cr.ShokoEpisode != null)
+                .Select(cr => OverrideHelper.GetPrimary(cr.ShokoEpisode!.SeriesID, metadataService))
+                .Distinct()
+                .Count();
+
+            if (sortedEps.Count > 1 && sortedEps.Select(x => x.Episode.Type).Distinct().Count() > 1 && distinctPrimarySeriesCount > 1)
             {
-                var firstXrefId = video.CrossReferences.FirstOrDefault(cr => cr.ShokoEpisode != null && sortedEps.Any(e => e.Episode.ID == cr.ShokoEpisode.ID))?.ShokoEpisode?.ID;
+                var firstXrefId = (video.CrossReferences ?? []).FirstOrDefault(cr => cr.ShokoEpisode != null && sortedEps.Any(e => e.Episode.ID == cr.ShokoEpisode.ID))?.ShokoEpisode?.ID;
                 if (firstXrefId.HasValue)
                 {
                     var primaryType = sortedEps.First(x => x.Episode.ID == firstXrefId.Value).Episode.Type;
@@ -152,12 +166,16 @@ public static class MapHelper
                 continue;
             var firstEp = deduped[0].Episode;
             var fileList = episodeFileLists.GetValueOrDefault(firstEp.ID);
-            int fIdx = fileList?.FindIndex(x => x.ID == video.ID) ?? 0,
-                fCount = fileList?.Count ?? 1;
+            int fIdx = fileList?.FindIndex(x => x.ID == video.ID) ?? 0;
+            int fCount = fileList?.Count ?? 1;
             string fileName = Path.GetFileName(video.Files?.FirstOrDefault()?.Path ?? "");
             bool allowPt = fCount > 1 && TextHelper.HasPlexSplitTag(fileName) && deduped.Select(d => d.Episode.Type).Distinct().Count() <= 1;
             int? partIdx = allowPt ? fIdx + 1 : null;
-            PlexCoords coords = (deduped.Count == 1) ? deduped[0].Coords : GetPlexCoordinatesForFile(deduped.Select(x => x.Episode), allowPt ? fIdx : null);
+            // Only calculate a coordinate range if there are multiple physical files (split parts) or if the linked episodes share the same type (indicating a true multi-episode file).
+            PlexCoords coords =
+                (deduped.Count > 1 && (fCount > 1 || deduped.Select(x => x.Episode.Type).Distinct().Count() == 1))
+                    ? GetPlexCoordinatesForFile(deduped.Select(x => x.Episode), allowPt ? fIdx : null)
+                    : deduped[0].Coords;
             if (coords.Season == PlexConstants.SeasonOther)
                 coords = ApplyFeaturettesFallback(coords, s1, s0);
 
@@ -183,7 +201,8 @@ public static class MapHelper
             }
             result.Add(new FileMapping(video, [.. deduped.Select(x => x.Episode)], firstEp, coords, fileName, partIdx, allowPt ? fCount : 1, tmdbEp, video.IsVariation));
         }
-        return result;
+        // Deduplicate mappings by Video ID and Coordinates. This prevents duplicate VFS entries (v1/v2) for crossover series that have been consolidated into a single folder via VFS Overrides.
+        return [.. result.GroupBy(m => (m.Video.ID, m.Coords, m.PartIndex, m.IsVariation)).Select(g => g.First())];
     }
 
     private static List<(IEpisode Episode, PlexCoords Coords)> DeduplicateByCoords(List<(IEpisode Episode, PlexCoords Coords)> eps, IVideo video)

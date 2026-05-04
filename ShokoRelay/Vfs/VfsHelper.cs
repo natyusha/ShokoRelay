@@ -79,46 +79,47 @@ public static class VfsHelper
         string name = $"S{mapping.Coords.Season:D2}E{mapping.Coords.Episode.ToString($"D{pad}")}";
         if (mapping.Coords.EndEpisode.HasValue && mapping.Coords.EndEpisode != mapping.Coords.Episode)
             name += $"-E{mapping.Coords.EndEpisode.Value.ToString($"D{pad}")}";
-        int pCount = partCount ?? mapping.PartCount;
-        if (pCount > 1)
+        int totalParts = partCount ?? mapping.PartCount;
+        if (totalParts > 1)
             name += $"-pt{partIdx ?? mapping.PartIndex}";
         else if (vIdx.HasValue)
             name += $"-v{vIdx}";
 
         string result = omitFileId ? name : $"{name} [{fileId}]";
-        if (isVariation)
+        if (isVariation && totalParts <= 1)
             result += "[variation]";
         return result + ext;
     }
 
     /// <summary>Builds a filename for extra content (trailers, credits, etc.) using special type prefixes and title metadata.</summary>
-    /// <param name="m">The mapping containing coordinates and metadata.</param>
+    /// <param name="mapping">The mapping containing coordinates and metadata.</param>
     /// <param name="ex">A tuple containing the target folder and the Plex extra subtype.</param>
     /// <param name="pad">The number of digits to pad the extra number with.</param>
     /// <param name="ext">The file extension (including the dot).</param>
     /// <param name="seriesTitle">The display title of the parent series used for name resolution.</param>
-    /// <param name="pIdx">Optional 1-based index for multi-part extras.</param>
-    /// <param name="pCount">Optional total number of parts for multi-part extras.</param>
+    /// <param name="partIdx">Optional 1-based index for multi-part extras.</param>
+    /// <param name="partCount">Optional total number of parts for multi-part extras.</param>
     /// <param name="vIdx">Optional version index for duplicate extras.</param>
     /// <param name="isVariation">Whether the file is marked as a variation in Shoko.</param>
     /// <returns>A sanitized and formatted filename string for Plex extras (e.g., "C01 ❯ Episode Title [variation].mkv").</returns>
     public static string BuildExtrasFileName(
-        MapHelper.FileMapping m,
+        MapHelper.FileMapping mapping,
         (string Folder, string Subtype) ex,
         int pad,
         string ext,
         string seriesTitle,
-        int? pIdx = null,
-        int? pCount = null,
+        int? partIdx = null,
+        int? partCount = null,
         int? vIdx = null,
         bool isVariation = false
     )
     {
-        string ep = _extraTypePrefixes.TryGetValue(ex.Subtype, out var pref) ? pref + m.Coords.Episode.ToString($"D{pad}") : m.Coords.Episode.ToString($"D{pad}");
-        string part = (pCount ?? m.PartCount) > 1 ? $"-pt{pIdx ?? m.PartIndex}" : (vIdx.HasValue ? $"-v{vIdx}" : "");
+        string ep = _extraTypePrefixes.TryGetValue(ex.Subtype, out var pref) ? pref + mapping.Coords.Episode.ToString($"D{pad}") : mapping.Coords.Episode.ToString($"D{pad}");
+        int totalParts = partCount ?? mapping.PartCount;
+        string part = totalParts > 1 ? $"-pt{partIdx ?? mapping.PartIndex}" : (vIdx.HasValue ? $"-v{vIdx}" : "");
 
-        string name = $"{ep}{part} ❯ {CleanEpisodeTitleForFilename(TextHelper.ResolveEpisodeTitle(m.PrimaryEpisode, seriesTitle))}";
-        if (isVariation)
+        string name = $"{ep}{part} ❯ {CleanEpisodeTitleForFilename(TextHelper.ResolveEpisodeTitle(mapping.PrimaryEpisode, seriesTitle))}";
+        if (isVariation && totalParts <= 1)
             name += "[variation]";
         return SanitizeName(name + ext);
     }

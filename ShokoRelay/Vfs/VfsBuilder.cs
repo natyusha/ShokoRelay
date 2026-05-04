@@ -67,8 +67,11 @@ public class VfsBuilder
     private ConcurrentBag<string>? _warningsForBuild;
     private ConcurrentDictionary<string, byte>? _createdDirsForBuild;
 
-    private static readonly HashSet<string> MetadataExtensions = PlexConstants.LocalMediaAssets.Artwork.Union(PlexConstants.LocalMediaAssets.ThemeSongs).ToHashSet(StringComparer.OrdinalIgnoreCase);
-    private static readonly IReadOnlySet<string> SubtitleExtensions = PlexConstants.LocalMediaAssets.Subtitles;
+    // <summary>Used for show/season level assets (Art, Theme Songs, NFO)</summary>
+    private static readonly HashSet<string> SeriesMetadataExtensions = [.. PlexConstants.LocalMediaAssets.Artwork, .. PlexConstants.LocalMediaAssets.SeriesMetadata];
+
+    // <summary>Used for episode level sidecars (Subs, NFO, and episode-specific Art)</summary>
+    private static readonly HashSet<string> EpisodeMetadataExtensions = [.. PlexConstants.LocalMediaAssets.Artwork, .. PlexConstants.LocalMediaAssets.EpisodeMetadata];
 
     /// <summary>Initializes a VfsBuilder.</summary>
     public VfsBuilder(IMetadataService metadataService, ConfigProvider configProvider)
@@ -324,8 +327,10 @@ public class VfsBuilder
         if (!fileData.Mappings.Any())
             return (0, 0, skippedDetails, errors, 0);
 
-        var coordCounts = fileData.Mappings.GroupBy(m => (m.Coords.Season, m.Coords.Episode)).ToDictionary(g => g.Key, g => g.Count());
-        var versionCounters = fileData.Mappings.GroupBy(m => (m.Coords.Season, m.Coords.Episode)).Where(g => g.Count() > 1).ToDictionary(g => g.Key, _ => 1);
+        // Collect the base names of all source video files to prevent them from being linked as series-level metadata
+        var videoBaseNames = fileData.Mappings.Select(m => Path.GetFileNameWithoutExtension(m.FileName)).Distinct().ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var coordCounts = fileData.Mappings.GroupBy(m => (m.Coords.Season, m.Coords.Episode, m.IsVariation)).ToDictionary(g => g.Key, g => g.Count());
+        var versionCounters = fileData.Mappings.GroupBy(m => (m.Coords.Season, m.Coords.Episode, m.IsVariation)).Where(g => g.Count() > 1).ToDictionary(g => g.Key, _ => 1);
         int epPad = Math.Max(2, fileData.Mappings.Where(m => m.Coords.Season >= 0).DefaultIfEmpty().Max(m => m?.Coords.EndEpisode ?? m?.Coords.Episode ?? 1).ToString().Length);
         var extraPad = fileData.Mappings.Where(m => m.Coords.Season < 0).GroupBy(m => m.Coords.Season).ToDictionary(g => g.Key, g => g.Count() > 9 ? 2 : 1);
 
@@ -398,7 +403,7 @@ public class VfsBuilder
             if (_createdDirsForBuild?.TryAdd(seasonPath, 0) == true)
                 Directory.CreateDirectory(seasonPath);
 
-            var key = (mapping.Coords.Season, mapping.Coords.Episode);
+            var key = (mapping.Coords.Season, mapping.Coords.Episode, mapping.IsVariation);
             bool hasPeer = coordCounts.TryGetValue(key, out var count) && count > 1;
             int? vIdx = (hasPeer && !mapping.PartIndex.HasValue && versionCounters.TryGetValue(key, out var v)) ? (versionCounters[key] = v + 1) - 1 : null;
             string fileName = VfsHelper.SanitizeName(
@@ -431,13 +436,17 @@ public class VfsBuilder
             {
                 created++;
                 planned++;
-                if ((mapping.Video?.CrossReferences?.Where(cr => cr.ShokoEpisode != null).Select(cr => cr.ShokoEpisode!.SeriesID).Distinct().Count() ?? 0) <= 1)
+
+                // Resolve Primary IDs to allow local asset linking for crossover files that have been consolidated via VFS Overrides.
+                var distinctPrimarySeriesCount =
+                    mapping.Video?.CrossReferences?.Where(cr => cr.ShokoEpisode != null).Select(cr => OverrideHelper.GetPrimary(cr.ShokoEpisode!.SeriesID, _metadataService)).Distinct().Count() ?? 0;
+                if (distinctPrimarySeriesCount <= 1)
                 {
-                    LinkMetadata(Path.GetDirectoryName(src)!, seriesPath);
-                    LinkSubtitles(src, Path.GetDirectoryName(src)!, Path.GetFileNameWithoutExtension(destPath), seasonPath, ref planned, ref skipped, errors, ref created);
+                    LinkSeriesMetadata(Path.GetDirectoryName(src)!, seriesPath, videoBaseNames);
+                    LinkEpisodeMetadata(src, Path.GetDirectoryName(src)!, Path.GetFileNameWithoutExtension(destPath), seasonPath, ref planned, ref skipped, errors, ref created);
                 }
                 else
-                    Logger.Debug("VFS: Skipping local assets for crossover video -> {File} (series {SeriesId})", src, series.ID);
+                    Logger.Debug("VFS: Skipping local assets for crossover video -> {0} (series {1})", src, series.ID);
             }
             else
             {
@@ -490,26 +499,47 @@ public class VfsBuilder
 
     #region Asset Linking
 
-    private void LinkMetadata(string sourceDir, string destDir)
+    /// <summary>Links show-level metadata into the series VFS directory, excluding files that are identified as episode-level sidecars.</summary>
+    /// <param name="sourceDir">The physical directory containing the assets.</param>
+    /// <param name="destDir">The target VFS series directory.</param>
+    /// <param name="videoBaseNames">A set of base names for video files to exclude from series-level linking.</param>
+    private void LinkSeriesMetadata(string sourceDir, string destDir, HashSet<string> videoBaseNames)
     {
         if (string.IsNullOrWhiteSpace(sourceDir) || !Directory.Exists(sourceDir))
             return;
-        var lazyLoader = _metadataFileCacheForBuild?.GetOrAdd(sourceDir, dir => new Lazy<string[]>(() => [.. Directory.EnumerateFiles(dir).Where(f => MetadataExtensions.Contains(Path.GetExtension(f)))]));
+        var lazyLoader = _metadataFileCacheForBuild?.GetOrAdd(sourceDir, dir => new Lazy<string[]>(() => [.. Directory.EnumerateFiles(dir).Where(f => SeriesMetadataExtensions.Contains(Path.GetExtension(f)))]));
         var candidates = lazyLoader?.Value ?? [];
         foreach (var file in candidates)
         {
             string name = Path.GetFileName(file);
-            string destName = string.Equals(Path.GetFileNameWithoutExtension(name), "Specials", StringComparison.OrdinalIgnoreCase) ? "Season-Specials-Poster" + Path.GetExtension(name) : name;
+            string baseName = Path.GetFileNameWithoutExtension(name);
+
+            // If the file name (without extension) matches a video file base name it is an episode sidecar and should be excluded from show-level linking.
+            if (videoBaseNames.Contains(baseName))
+                continue;
+            string destName = string.Equals(baseName, "Specials", StringComparison.OrdinalIgnoreCase) ? "Season-Specials-Poster" + Path.GetExtension(name) : name; // Allow "Specials" custom naming
             VfsShared.TryCreateLink(file, Path.Combine(destDir, destName), Logger);
         }
     }
 
-    private void LinkSubtitles(string sourceFile, string sourceDir, string destBase, string destDir, ref int planned, ref int skipped, List<string> errors, ref int created)
+    /// <summary>Links and renames episode-level metadata into the season VFS directory.</summary>
+    /// <param name="sourceFile">Path to the original video file used for base name matching.</param>
+    /// <param name="sourceDir">The physical directory containing the sidecars.</param>
+    /// <param name="destBase">The new base filename in the VFS.</param>
+    /// <param name="destDir">The target VFS season directory.</param>
+    /// <param name="planned">Reference to the planned links counter.</param>
+    /// <param name="skipped">Reference to the skipped links counter.</param>
+    /// <param name="errors">List of encountered error messages.</param>
+    /// <param name="created">Reference to the successful links created counter.</param>
+    private void LinkEpisodeMetadata(string sourceFile, string sourceDir, string destBase, string destDir, ref int planned, ref int skipped, List<string> errors, ref int created)
     {
         if (string.IsNullOrWhiteSpace(sourceDir) || !Directory.Exists(sourceDir))
             return;
         string originalBase = Path.GetFileNameWithoutExtension(sourceFile);
-        var lazyLoader = _subtitleFileCacheForBuild?.GetOrAdd(sourceDir, dir => new Lazy<string[]>(() => [.. Directory.GetFiles(sourceDir).Where(f => SubtitleExtensions.Contains(Path.GetExtension(f)))]));
+        var lazyLoader = _subtitleFileCacheForBuild?.GetOrAdd(
+            sourceDir,
+            dir => new Lazy<string[]>(() => [.. Directory.GetFiles(sourceDir).Where(f => EpisodeMetadataExtensions.Contains(Path.GetExtension(f)))])
+        );
         var candidates = lazyLoader?.Value ?? [];
         foreach (var sub in candidates)
         {
@@ -524,7 +554,7 @@ public class VfsBuilder
             else
             {
                 skipped++;
-                errors.Add($"Subtitle link failed: {sub}");
+                errors.Add($"Metadata sidecar link failed: {sub}");
             }
         }
     }
@@ -558,7 +588,8 @@ public class VfsBuilder
     private MapHelper.SeriesFileData GetSeriesFileDataCached(IShokoSeries series)
     {
         if (!ShokoRelay.Settings.TmdbEpNumbering)
-            return _seriesFileDataCacheForBuild?.GetOrAdd(series.ID, _ => MapHelper.GetSeriesFileData(series)) ?? MapHelper.GetSeriesFileData(series);
+            return _seriesFileDataCacheForBuild?.GetOrAdd(series.ID, _ => MapHelper.GetSeriesFileData(series, _metadataService)) ?? MapHelper.GetSeriesFileData(series, _metadataService);
+
         int pId = OverrideHelper.GetPrimary(series.ID, _metadataService);
         return _seriesFileDataCacheForBuild?.GetOrAdd(
                 pId,
@@ -566,11 +597,11 @@ public class VfsBuilder
                 {
                     var group = OverrideHelper.GetGroup(pId, _metadataService).Select(_metadataService.GetShokoSeriesByID).OfType<IShokoSeries>().ToList();
                     return group.Count <= 1
-                        ? MapHelper.GetSeriesFileData(group.FirstOrDefault() ?? series)
-                        : MapHelper.GetSeriesFileDataMerged(group[0], group.Skip(1).Cast<Shoko.Abstractions.Metadata.ISeries>());
+                        ? MapHelper.GetSeriesFileData(group.FirstOrDefault() ?? series, _metadataService)
+                        : MapHelper.GetSeriesFileDataMerged(group[0], group.Skip(1).Cast<Shoko.Abstractions.Metadata.ISeries>(), _metadataService);
                 }
             )
-            ?? MapHelper.GetSeriesFileData(series);
+            ?? MapHelper.GetSeriesFileData(series, _metadataService);
     }
 
     #endregion

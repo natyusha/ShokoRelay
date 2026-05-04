@@ -284,7 +284,7 @@ public class ShokoController(
                 {
                     var roots = new HashSet<string>(VfsShared.PathComparer);
                     string rootName = VfsShared.ResolveRootFolderName();
-                    var fileData = MapHelper.GetSeriesFileData(s);
+                    var fileData = MapHelper.GetSeriesFileData(s, _metadataService);
                     foreach (var mapping in fileData.Mappings)
                     {
                         var location = mapping.Video.Files.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l.Path)) ?? mapping.Video.Files.FirstOrDefault();

@@ -46,11 +46,11 @@ public static class PlexHelper
     /// <param name="series">Target series.</param>
     /// <param name="collectionName">Collection name.</param>
     /// <param name="collectionId">Collection ID.</param>
-    /// <param name="metadataService">Optional metadata service.</param>
+    /// <param name="metadataService">Metadata service used for root and override resolution.</param>
     /// <returns>Path to poster file or null.</returns>
-    public static string? FindCollectionPosterPath(IShokoSeries series, string collectionName, int collectionId, IMetadataService? metadataService = null)
+    public static string? FindCollectionPosterPath(IShokoSeries series, string collectionName, int collectionId, IMetadataService metadataService)
     {
-        if (series == null)
+        if (series == null || metadataService == null)
             return null;
         int groupId = series.TopLevelGroupID;
         if (groupId <= 0)
@@ -86,14 +86,15 @@ public static class PlexHelper
     /// <summary>Locate a local collection poster by matching against a group ID.</summary>
     /// <param name="series">Target series.</param>
     /// <param name="groupId">Shoko group ID.</param>
+    /// <param name="metadataService">Metadata service used for root and override resolution.</param>
     /// <returns>Path to poster or null.</returns>
-    public static string? FindCollectionPosterPathByGroup(IShokoSeries series, int groupId)
+    public static string? FindCollectionPosterPathByGroup(IShokoSeries series, int groupId, IMetadataService metadataService)
     {
         if (series == null || groupId <= 0)
             return null;
         var group = series.TopLevelGroup;
         string? groupTitle = group?.PreferredTitle?.Value ?? group?.DefaultTitle?.Value;
-        var roots = ResolveImportRoots(series);
+        var roots = ResolveImportRoots(series, metadataService);
         if (roots.Count == 0)
             return null;
 
@@ -133,14 +134,14 @@ public static class PlexHelper
 
     /// <summary>Determine the filesystem import roots for a series.</summary>
     /// <param name="series">Shoko series.</param>
-    /// <param name="metadataService">Optional metadata service.</param>
+    /// <param name="metadataService">Metadata service used for root and override resolution.</param>
     /// <returns>Unique set of root paths.</returns>
-    public static HashSet<string> ResolveImportRoots(IShokoSeries series, IMetadataService? metadataService = null)
+    public static HashSet<string> ResolveImportRoots(IShokoSeries series, IMetadataService metadataService)
     {
         var roots = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
         OverrideHelper.EnsureLoaded();
         var seriesList = new List<IShokoSeries> { series };
-        if (metadataService != null && ShokoRelay.Settings.TmdbEpNumbering)
+        if (ShokoRelay.Settings.TmdbEpNumbering)
         {
             int primaryId = OverrideHelper.GetPrimary(series.ID, metadataService);
             var group = OverrideHelper.GetGroup(primaryId, metadataService);
@@ -153,7 +154,7 @@ public static class PlexHelper
         }
         foreach (var s in seriesList)
         {
-            var fileData = MapHelper.GetSeriesFileData(s);
+            var fileData = MapHelper.GetSeriesFileData(s, metadataService);
             foreach (var mapping in fileData.Mappings)
             {
                 var location = mapping.Video.Files.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l.Path)) ?? mapping.Video.Files.FirstOrDefault();
@@ -175,20 +176,13 @@ public static class PlexHelper
     /// <param name="series">Series.</param>
     /// <param name="collectionName">Collection name.</param>
     /// <param name="collectionId">Collection ID.</param>
-    /// <param name="metadataService">Optional metadata service.</param>
+    /// <param name="metadataService">Metadata service used for root and override resolution.</param>
     /// <param name="allowPrimarySeriesFallback">Whether to use primary series poster as fallback.</param>
     /// <param name="baseUrl">Base URL override.</param>
     /// <returns>URL string or null.</returns>
-    public static string? GetCollectionPosterUrl(
-        IShokoSeries series,
-        string collectionName,
-        int collectionId,
-        IMetadataService? metadataService = null,
-        bool allowPrimarySeriesFallback = true,
-        string? baseUrl = null
-    )
+    public static string? GetCollectionPosterUrl(IShokoSeries series, string collectionName, int collectionId, IMetadataService metadataService, bool allowPrimarySeriesFallback = true, string? baseUrl = null)
     {
-        if (series == null)
+        if (series == null || metadataService == null)
             return null;
         var posterPath = FindCollectionPosterPath(series, collectionName, collectionId, metadataService);
         if (!string.IsNullOrWhiteSpace(posterPath))

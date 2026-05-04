@@ -130,11 +130,13 @@ namespace ShokoRelay.Plex
                 ".webp",
             }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
-            /// <summary>Audio extensions that Plex treats as theme songs.</summary>
-            public static readonly FrozenSet<string> ThemeSongs = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".mp3" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+            /// <summary>Series level metadata including: Audio extensions that Plex treats as theme songs and NFO Metadata files.</summary>
+            public static readonly FrozenSet<string> SeriesMetadata = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".mp3", ".nfo" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
-            /// <summary>Text-based subtitle extensions supported by Plex.</summary>
-            public static readonly FrozenSet<string> Subtitles = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".srt", ".smi", ".ssa", ".ass", ".vtt" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+            /// <summary>Episode level sidecar files including: Text-based subtitle extensions supported by Plex and NFO Metadata files.</summary>
+            public static readonly FrozenSet<string> EpisodeMetadata = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".srt", ".smi", ".ssa", ".ass", ".vtt", ".nfo" }.ToFrozenSet(
+                StringComparer.OrdinalIgnoreCase
+            );
         }
 
         #endregion

@@ -242,7 +242,7 @@ public class VfsWatcher(
                 {
                     if (_pending.ContainsKey(series.ID))
                         return;
-                    foreach (var path in VfsShared.ResolveSeriesVfsPaths(series))
+                    foreach (var path in VfsShared.ResolveSeriesVfsPaths(series, _metadataService))
                     {
                         if (Directory.Exists(path) && Directory.EnumerateFileSystemEntries(path).Any())
                             _ = _plexLibrary.RefreshSectionPathAsync(path, cts.Token);
@@ -323,7 +323,7 @@ public class VfsWatcher(
             // Fallback in case the files were not scanned into Plex by the initial scan
             if (_plexLibrary.ScanOnVfsRefresh)
             {
-                foreach (var path in VfsShared.ResolveSeriesVfsPaths(series))
+                foreach (var path in VfsShared.ResolveSeriesVfsPaths(series, _metadataService))
                     await _plexLibrary.RefreshSectionPathAsync(path, token).ConfigureAwait(false);
             }
 

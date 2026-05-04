@@ -68,7 +68,7 @@ public class PlexMetadata(IMetadataService metadataService)
 
         var group = OverrideHelper.GetGroup(primaryId, _metadataService);
         var extras = group.Skip(1).Select(id => _metadataService.GetShokoSeriesByID(id)).OfType<IShokoSeries>().Cast<ISeries>().ToList();
-        var fileData = extras.Count > 0 ? MapHelper.GetSeriesFileDataMerged(primarySeries, extras) : MapHelper.GetSeriesFileData(primarySeries);
+        var fileData = extras.Count > 0 ? MapHelper.GetSeriesFileDataMerged(primarySeries, extras, _metadataService) : MapHelper.GetSeriesFileData(primarySeries, _metadataService);
 
         return new SeriesContext(primarySeries, TextHelper.ResolveFullSeriesTitles(primarySeries), ContentRatingHelper.GetContentRatingAndAdult(primarySeries).Rating ?? "", fileData);
     }
