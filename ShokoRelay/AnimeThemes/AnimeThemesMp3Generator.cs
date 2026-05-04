@@ -296,7 +296,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
             string title = dur.TotalSeconds < 100 && !string.IsNullOrEmpty(sel.SongTitle) ? sel.SongTitle + " (TV Size)" : sel.SongTitle;
 
             Logger.Debug("AnimeThemes MP3: Converting audio for '{0}' ({1})", series.PreferredTitle?.Value, sel.SlugDisplay);
-            await _ffmpegService.ConvertToMp3FileAsync(temp, themePath, title, sel.SlugDisplay, sel.Artist, sel.AnimeTitle, ct);
+            await _ffmpegService.ConvertToMp3FileAsync(temp, "Theme.mp3", title, sel.SlugDisplay, sel.Artist, sel.AnimeTitle, ct, folder).ConfigureAwait(false);
 
             int primaryId = OverrideHelper.GetPrimary(series.ID, metadataService);
             string? vfsLink = TryLinkIntoVfs(videoFile, primaryId, themePath);

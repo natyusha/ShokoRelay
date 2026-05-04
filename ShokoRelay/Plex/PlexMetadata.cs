@@ -179,6 +179,7 @@ public class PlexMetadata(IMetadataService metadataService)
                 }
                 continue;
             }
+
             // Standard or Relation-linked files: Use the PrimaryEpisode resolved by MapHelper, which filters out unwanted relations.
             var primaryMeta = MapEpisode(m.PrimaryEpisode, m.Coords, ctx.Series, ctx.Titles, m.PartIndex, m.TmdbEpisode);
             if (primaryMeta is Dictionary<string, object?> pDict && pDict.TryGetValue("ratingKey", out var pRk) && pRk is string pKey)

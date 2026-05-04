@@ -48,16 +48,16 @@ public sealed class FfmpegService
 
     /// <summary>Convert a media file to an MP3 with embedded metadata.</summary>
     /// <param name="inputPath">Source file path.</param>
-    /// <param name="outputPath">Destination path for MP3.</param>
+    /// <param name="outputPath">Destination path for MP3 (filename or relative path).</param>
     /// <param name="title">Song title metadata tag.</param>
     /// <param name="slugDisplay">Display slug metadata tag (TIT3).</param>
     /// <param name="artist">Artist metadata tag.</param>
     /// <param name="album">Album metadata tag.</param>
     /// <param name="ct">Cancellation token.</param>
-    public async Task ConvertToMp3FileAsync(string inputPath, string outputPath, string title, string slugDisplay, string artist, string album, CancellationToken ct)
+    /// <param name="workingDir">Optional working directory for the process.</param>
+    public async Task ConvertToMp3FileAsync(string inputPath, string outputPath, string title, string slugDisplay, string artist, string album, CancellationToken ct, string? workingDir = null)
     {
         EnsureFfmpegConfigured();
-        Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
         // csharpier-ignore-start
         var args = new List<string>
         {
@@ -74,7 +74,7 @@ public sealed class FfmpegService
         };
         // csharpier-ignore-end
 
-        await RunProcessAsync(_ffmpegPath, args, null, null, ct);
+        await RunProcessAsync(_ffmpegPath, args, null, null, ct, workingDir).ConfigureAwait(false);
     }
 
     /// <summary>Convert a media file to MP3 audio and return it in a MemoryStream.</summary>
@@ -213,9 +213,10 @@ public sealed class FfmpegService
     /// <param name="stdIn">Optional input stream to pipe into the process.</param>
     /// <param name="stdOut">Optional output stream to capture process output.</param>
     /// <param name="ct">Cancellation token.</param>
-    private static async Task RunProcessAsync(string fileName, IReadOnlyList<string> args, Stream? stdIn, Stream? stdOut, CancellationToken ct)
+    /// <param name="workingDir">Optional working directory for the process.</param>
+    private static async Task RunProcessAsync(string fileName, IReadOnlyList<string> args, Stream? stdIn, Stream? stdOut, CancellationToken ct, string? workingDir = null)
     {
-        var psi = CreateProcessStartInfo(fileName, args);
+        var psi = CreateProcessStartInfo(fileName, args, workingDir);
         psi.RedirectStandardInput = stdIn != null;
         psi.RedirectStandardOutput = stdOut != null;
 
@@ -302,11 +303,12 @@ public sealed class FfmpegService
         return process.ExitCode != 0 ? throw new InvalidOperationException($"{fileName} exited with code {process.ExitCode}: {stderr.ToString().Trim()}") : output;
     }
 
-    /// <summary>Initializes a <see cref="ProcessStartInfo"/> object with common plugin requirements such as hidden windows, redirected error streams, and specific working directories.</summary>
+    /// <summary>Initializes a <see cref="ProcessStartInfo"/> object with common plugin requirements.</summary>
     /// <param name="fileName">The path to the executable file.</param>
     /// <param name="args">The list of command line arguments to provide to the process.</param>
+    /// <param name="workingDir">Optional directory override for the process execution.</param>
     /// <returns>A pre-configured <see cref="ProcessStartInfo"/> instance.</returns>
-    private static ProcessStartInfo CreateProcessStartInfo(string fileName, IReadOnlyList<string> args)
+    private static ProcessStartInfo CreateProcessStartInfo(string fileName, IReadOnlyList<string> args, string? workingDir = null)
     {
         var psi = new ProcessStartInfo
         {
@@ -314,7 +316,7 @@ public sealed class FfmpegService
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
-            WorkingDirectory = _workingDirectory,
+            WorkingDirectory = workingDir ?? _workingDirectory,
         };
 
         foreach (var arg in args)
