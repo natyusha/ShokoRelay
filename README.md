@@ -310,6 +310,10 @@ An example `anidb_vfs_overrides.csv` is available [here](https://gist.github.com
 
 Sometimes you may encounter a single episode which is split across multiple files. In order to ensure that all of the files are treated as a single entity you can follow Plex's [Naming Conventions](https://support.plex.tv/articles/naming-and-organizing-your-tv-show-files/#toc-6). The VFS will automatically respect this type of file naming in the background. For an ideal playback experience however, it is recommended to merge these types of files together.
 
+### Advanced Metadata Overrides
+
+Now that Plex has support for [NFO Metadata Files](https://support.plex.tv/articles/using-nfo-metadata-files-with-plex/) you can override most metadata fields for series and episodes to whatever you want. Relay treats `.nfo` files just like any other local metadata and will place them in the VFS accordingly. All you need to do is ensure that the `Plex NFO Series` provider is added to the Shoko Relay Agent in Plex.
+
 ### Assumed Content Ratings
 
 If `Assumed Content Ratings` are enabled in the Provider Settings the [target audience](https://anidb.net/tag/2606/animetb) and [content indicator](https://anidb.net/tag/2604/animetb) tags from AniDB will be used to roughly match the [TV Parental Guidelines](https://www.tvguidelines.org/resources/TheRatings.pdf) system. The target audience tags will be checked for ratings from most restrictive to least, then the content indicators will be appended. If the tag weights for the content indicators are high enough (≥ 400 or ★★☆) the rating will be raised to compensate. A general overview is listed in the table below:

@@ -147,7 +147,7 @@ public class PlexMetadata(IMetadataService metadataService)
 
         foreach (var m in ctx.FileData.GetForSeason(seasonNum))
         {
-            // TMDb Episode Groups: One Shoko episode maps to multiple TMDB entries.
+            // TMDB Episode Groups: One Shoko episode maps to multiple TMDB entries.
             if (ShokoRelay.Settings.TmdbEpNumbering && m.Episodes.Count == 1 && m.PrimaryEpisode is IShokoEpisode { TmdbEpisodes.Count: > 1 } se)
             {
                 var tmdbEpisodes = SelectPreferredTmdbOrdering(se.TmdbEpisodes, prefId);

@@ -149,7 +149,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             if (m == null)
                 return NotFound();
 
-            // Handle Episode Groups (One Shoko ID mapped to multiple TMDb IDs)
+            // Handle Episode Groups (One Shoko ID mapped to multiple TMDB IDs)
             object? tmdbOverride = m.TmdbEpisode;
             var coords = m.Coords;
             if (ShokoRelay.Settings.TmdbEpNumbering && episode is IShokoEpisode { TmdbEpisodes.Count: > 1 } se)
