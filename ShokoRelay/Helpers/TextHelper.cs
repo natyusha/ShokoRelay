@@ -12,25 +12,25 @@ public static class TextHelper
 {
     #region Compiled Regex
 
-    private static readonly Regex _seriesPrefixRegex = new(@"^(Gekijou ?(?:ban(?: 3D)?|Tanpen|Remix Ban|Henshuuban|Soushuuhen)|Eiga|OVA) (.*$)", RegexOptions.Compiled);
-    private static readonly Regex _movieDescriptorRegex = new(@"(?i)(:? The)?( Movie| Motion Picture)", RegexOptions.Compiled);
-    private static readonly Regex _defaultTitleRegex = new(@"^(Episode|Volume|Special|Short|(Short )?Movie) [S0]?[1-9][0-9]*$", RegexOptions.Compiled);
-    private static readonly Regex _sourceNoteSummaryRegex = new(
+    private static readonly Regex s_seriesPrefixRegex = new(@"^(Gekijou ?(?:ban(?: 3D)?|Tanpen|Remix Ban|Henshuuban|Soushuuhen)|Eiga|OVA) (.*$)", RegexOptions.Compiled);
+    private static readonly Regex s_movieDescriptorRegex = new(@"(?i)(:? The)?( Movie| Motion Picture)", RegexOptions.Compiled);
+    private static readonly Regex s_defaultTitleRegex = new(@"^(Episode|Volume|Special|Short|(Short )?Movie) [S0]?[1-9][0-9]*$", RegexOptions.Compiled);
+    private static readonly Regex s_sourceNoteSummaryRegex = new(
         @"(?m)^\(?\b((Modified )?Sour?ces?|Note( [1-9])?|Summ?ary|From|See Also):(?!$| a daikon)([^\r\n]+|$)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase
     );
-    private static readonly Regex _listIndicatorRegex = new(@"(?m)^(\*|[\u2014~-] (adapted|source|description|summary|translated|written):?) ([^\r\n]+|$)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-    private static readonly Regex _aniDBLinkRegex = new(@"(?:http:\/\/anidb\.net\/(?:ch|co|cr|[feast]|(?:character|creator|file|episode|anime|tag)\/)(?:\d+)) \[([^\]]+)]", RegexOptions.Compiled);
-    private static readonly Regex _bbCodeItalicBugRegex = new(
+    private static readonly Regex s_listIndicatorRegex = new(@"(?m)^(\*|[\u2014~-] (adapted|source|description|summary|translated|written):?) ([^\r\n]+|$)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex s_aniDBLinkRegex = new(@"(?:http:\/\/anidb\.net\/(?:ch|co|cr|[feast]|(?:character|creator|file|episode|anime|tag)\/)(?:\d+)) \[([^\]]+)]", RegexOptions.Compiled);
+    private static readonly Regex s_bbCodeItalicBugRegex = new(
         @"(?is)\[i\](?!" + Regex.Escape("\"The Sasami") + @"|" + Regex.Escape("\"Stellar") + @"|In the distant| occurred in)(.*?)\[\/i\]",
         RegexOptions.Compiled
     );
-    private static readonly Regex _bbCodeSolitaryRegex = new(@"\[\/?i\]", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-    private static readonly Regex _condenseLinesRegex = new(@"(\r?\n\s*){2,}", RegexOptions.Compiled);
-    private static readonly Regex _condenseSpacesRegex = new(@"\s{2,}", RegexOptions.Compiled);
-    private static readonly Regex _plexSplitTagRegex = new(@"(?ix)(?:^|[\s._-])(cd|disc|disk|dvd|part|pt)[\s._-]*([1-8])(?!\d)", RegexOptions.Compiled);
-    private static readonly Regex _numbersRegex = new(@"\d+", RegexOptions.Compiled);
-    private static readonly Regex _unicodeEscapeRegex = new(@"\\u([0-9a-fA-F]{4})", RegexOptions.Compiled);
+    private static readonly Regex s_bbCodeSolitaryRegex = new(@"\[\/?i\]", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex s_condenseLinesRegex = new(@"(\r?\n\s*){2,}", RegexOptions.Compiled);
+    private static readonly Regex s_condenseSpacesRegex = new(@"\s{2,}", RegexOptions.Compiled);
+    private static readonly Regex s_plexSplitTagRegex = new(@"(?ix)(?:^|[\s._-])(cd|disc|disk|dvd|part|pt)[\s._-]*([1-8])(?!\d)", RegexOptions.Compiled);
+    private static readonly Regex s_numbersRegex = new(@"\d+", RegexOptions.Compiled);
+    private static readonly Regex s_unicodeEscapeRegex = new(@"\\u([0-9a-fA-F]{4})", RegexOptions.Compiled);
 
     #endregion
 
@@ -39,7 +39,7 @@ public static class TextHelper
     /// <summary>Replace runs of two or more whitespace characters with a single space.</summary>
     /// <param name="input">The string to process.</param>
     /// <returns>The condensed string.</returns>
-    public static string CondenseSpaces(string input) => _condenseSpacesRegex.Replace(input, " ");
+    public static string CondenseSpaces(string input) => s_condenseSpacesRegex.Replace(input, " ");
 
     /// <summary>Replace literal commas with the unicode escape \u002C.</summary>
     /// <param name="value">The string to escape.</param>
@@ -49,7 +49,7 @@ public static class TextHelper
     /// <summary>Decode \uXXXX escape sequences back into their actual Unicode characters.</summary>
     /// <param name="value">The string containing escape sequences.</param>
     /// <returns>A decoded string.</returns>
-    public static string UnescapeUnicode(string value) => string.IsNullOrEmpty(value) ? value : _unicodeEscapeRegex.Replace(value, m => ((char)Convert.ToInt32(m.Groups[1].Value, 16)).ToString());
+    public static string UnescapeUnicode(string value) => string.IsNullOrEmpty(value) ? value : s_unicodeEscapeRegex.Replace(value, m => ((char)Convert.ToInt32(m.Groups[1].Value, 16)).ToString());
 
     /// <summary>Splits a CSV line on commas.</summary>
     /// <param name="line">The raw CSV line.</param>
@@ -60,7 +60,7 @@ public static class TextHelper
 
     #region Metadata Resolution
 
-    private static readonly IReadOnlySet<string> _ambiguousTitles = new HashSet<string>(
+    private static readonly IReadOnlySet<string> s_ambiguousTitles = new HashSet<string>(
         ["Complete Movie", "Music Video", "OAD", "OVA", "Short Movie", "Special", "TV Special", "Web"],
         StringComparer.OrdinalIgnoreCase
     );
@@ -113,7 +113,7 @@ public static class TextHelper
         string raw = GetTitleByLanguage(series, ShokoRelay.Settings.SeriesTitleLanguage);
 
         // Move common title prefixes to the end of the title (e.g. OVA, Eiga)
-        string display = (ShokoRelay.Settings.MoveCommonSeriesTitlePrefixes && !string.IsNullOrWhiteSpace(raw)) ? _seriesPrefixRegex.Replace(raw, "$2 — $1") : raw;
+        string display = (ShokoRelay.Settings.MoveCommonSeriesTitlePrefixes && !string.IsNullOrWhiteSpace(raw)) ? s_seriesPrefixRegex.Replace(raw, "$2 — $1") : raw;
 
         // Get Alternate Title according to the language preference
         string? alt = GetTitleByLanguage(series, ShokoRelay.Settings.SeriesAltTitleLanguage);
@@ -138,7 +138,7 @@ public static class TextHelper
         string? tmdbTitle = (ep as IShokoEpisode)?.TmdbEpisodes.FirstOrDefault()?.PreferredTitle?.Value;
 
         // Replace ambiguous single entry titles (like "OVA") with the series title
-        if (ep.EpisodeNumber == 1 && _ambiguousTitles.Contains(raw))
+        if (ep.EpisodeNumber == 1 && s_ambiguousTitles.Contains(raw))
         {
             string title = displaySeriesTitle;
 
@@ -150,7 +150,7 @@ public static class TextHelper
             if (title != raw && !title.Contains(raw))
             {
                 // Reduce redundant movie descriptors for cleaner Plex display
-                string result = (raw == "Complete Movie") ? _movieDescriptorRegex.Replace(title, "").Trim() : title;
+                string result = (raw == "Complete Movie") ? s_movieDescriptorRegex.Replace(title, "").Trim() : title;
                 return $"{result} — {raw}";
             }
             return title;
@@ -161,7 +161,7 @@ public static class TextHelper
             return tmdbTitle;
 
         // Standard enumeration override (e.g. "Episode 1" -> "Actual Title")
-        return (!string.IsNullOrEmpty(tmdbTitle) && _defaultTitleRegex.IsMatch(raw) && !_defaultTitleRegex.IsMatch(tmdbTitle)) ? tmdbTitle : raw;
+        return (!string.IsNullOrEmpty(tmdbTitle) && s_defaultTitleRegex.IsMatch(raw) && !s_defaultTitleRegex.IsMatch(tmdbTitle)) ? tmdbTitle : raw;
     }
 
     /// <summary>Sanitize AniDB summary and, if the result is empty, fall back to TMDB.</summary>
@@ -185,18 +185,18 @@ public static class TextHelper
             return "";
         s = mode switch
         {
-            SummaryMode.FullySanitize => _listIndicatorRegex.Replace(_sourceNoteSummaryRegex.Replace(s, ""), ""),
-            SummaryMode.AllowInfoLines => _listIndicatorRegex.Replace(s, ""),
-            SummaryMode.AllowMiscLines => _sourceNoteSummaryRegex.Replace(s, ""),
+            SummaryMode.FullySanitize => s_listIndicatorRegex.Replace(s_sourceNoteSummaryRegex.Replace(s, ""), ""),
+            SummaryMode.AllowInfoLines => s_listIndicatorRegex.Replace(s, ""),
+            SummaryMode.AllowMiscLines => s_sourceNoteSummaryRegex.Replace(s, ""),
             _ => s,
         };
 
         // Remove AniDB-specific artifacts and bugs
-        s = _aniDBLinkRegex.Replace(s, "$1"); // Resolve [Link] tags
-        s = _bbCodeItalicBugRegex.Replace(s, ""); // Cleanup known AniDB API italic bug content
-        s = _bbCodeSolitaryRegex.Replace(s, ""); // Strip leftover BBCode tags
+        s = s_aniDBLinkRegex.Replace(s, "$1"); // Resolve [Link] tags
+        s = s_bbCodeItalicBugRegex.Replace(s, ""); // Cleanup known AniDB API italic bug content
+        s = s_bbCodeSolitaryRegex.Replace(s, ""); // Strip leftover BBCode tags
 
-        return _condenseSpacesRegex.Replace(_condenseLinesRegex.Replace(s, Environment.NewLine), " ").Trim(' ', '\r', '\n');
+        return s_condenseSpacesRegex.Replace(s_condenseLinesRegex.Replace(s, Environment.NewLine), " ").Trim(' ', '\r', '\n');
     }
 
     #endregion
@@ -225,17 +225,17 @@ public static class TextHelper
     /// <param name="value">The string to clean.</param>
     /// <returns>A filename-safe string.</returns>
     public static string StripInvalidWindowsChars(string value) =>
-        string.IsNullOrWhiteSpace(value) ? "" : _condenseSpacesRegex.Replace(new string([.. value.Where(c => !ReplacementCharMap.ContainsKey(c))]).Trim(), " ");
+        string.IsNullOrWhiteSpace(value) ? "" : s_condenseSpacesRegex.Replace(new string([.. value.Where(c => !ReplacementCharMap.ContainsKey(c))]).Trim(), " ");
 
     /// <summary>Determine if a filename contains a Plex-style split tag (e.g. "pt1").</summary>
     /// <param name="fileName">The filename to check.</param>
     /// <returns>True if a split tag is found.</returns>
-    public static bool HasPlexSplitTag(string fileName) => !string.IsNullOrWhiteSpace(fileName) && _plexSplitTagRegex.IsMatch(Path.GetFileNameWithoutExtension(fileName).Replace('[', ' ').Replace(']', ' '));
+    public static bool HasPlexSplitTag(string fileName) => !string.IsNullOrWhiteSpace(fileName) && s_plexSplitTagRegex.IsMatch(Path.GetFileNameWithoutExtension(fileName).Replace('[', ' ').Replace(']', ' '));
 
     /// <summary>Extracts the first sequence of digits from a string (Series ID lookup).</summary>
     /// <param name="text">The string to parse.</param>
     /// <returns>The extracted integer, or null.</returns>
-    public static int? ExtractSeriesId(string? text) => (text != null && _numbersRegex.Match(text) is { Success: true } m && int.TryParse(m.Value, out var id)) ? id : null;
+    public static int? ExtractSeriesId(string? text) => (text != null && s_numbersRegex.Match(text) is { Success: true } m && int.TryParse(m.Value, out var id)) ? id : null;
 
     #endregion
 }

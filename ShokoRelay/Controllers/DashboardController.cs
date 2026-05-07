@@ -17,7 +17,7 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
 {
     #region Fields & Constructor
 
-    private static readonly Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider ContentTypeProvider = new();
+    private static readonly Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider s_contentTypeProvider = new();
 
     #endregion
 
@@ -29,7 +29,7 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
     [HttpGet("dashboard/{*path}")]
     public IActionResult GetControllerPage([FromRoute] string? path = null)
     {
-        string dashboardDir = Path.Combine(_configProvider.PluginDirectory, "dashboard");
+        string dashboardDir = Path.Combine(ConfigProvider.PluginDirectory, "dashboard");
         bool isPlayer = "player".Equals(path, StringComparison.OrdinalIgnoreCase);
         string fileName = (string.IsNullOrWhiteSpace(path) || isPlayer) ? (isPlayer ? "player.cshtml" : "dashboard.cshtml") : path;
         string safePath = fileName.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
@@ -66,7 +66,7 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
     [HttpGet("config")]
     public IActionResult GetConfig()
     {
-        var payload = _configProvider.GetDashboardConfig();
+        var payload = ConfigProvider.GetDashboardConfig();
         try
         {
             var path = Path.Combine(ShokoRelay.ConfigDirectory, ShokoRelayConstants.FileVfsOverrides);
@@ -89,7 +89,7 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
             return BadRequest(new { status = "error", message = "Config payload is required." });
 
         Logger.Info("Dashboard: Saving updated provider settings...");
-        _configProvider.SaveSettings(config);
+        ConfigProvider.SaveSettings(config);
         return Ok(new { status = "ok" });
     }
 
@@ -135,7 +135,7 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
     {
         if (string.IsNullOrWhiteSpace(fileName))
             return BadRequest(new { status = "error", message = "fileName is required" });
-        string logsDir = Path.Combine(_configProvider.PluginDirectory, "logs");
+        string logsDir = Path.Combine(ConfigProvider.PluginDirectory, "logs");
         string path = Path.Combine(logsDir, fileName);
         return !System.IO.File.Exists(path) ? NotFound(new { status = "error", message = "log not found" }) : PhysicalFile(path, "text/plain");
     }
@@ -146,7 +146,7 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
 
     private string GetContentType(string filePath) =>
         filePath.EndsWith(".cshtml") ? "text/html"
-        : ContentTypeProvider.TryGetContentType(filePath, out var contentType) ? contentType
+        : s_contentTypeProvider.TryGetContentType(filePath, out var contentType) ? contentType
         : "application/octet-stream";
 
     /// <summary>Replaces {{ConstantName}} placeholders with values from ShokoRelayConstants.</summary>

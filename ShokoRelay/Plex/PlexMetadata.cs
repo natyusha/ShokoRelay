@@ -88,7 +88,7 @@ public class PlexMetadata(IMetadataService metadataService)
         var description = TextHelper.GetDescriptionByLanguage(series, ShokoRelay.Settings.SeriesDescriptionLanguage);
         var tmdbDescription = (series as IShokoSeries)?.TmdbShows?.FirstOrDefault()?.PreferredDescription?.Value;
         var studios = CastHelper.GetStudioTags(series);
-        var (Rating, IsAdult) = ContentRatingHelper.GetContentRatingAndAdult(series);
+        var (rating, isAdult) = ContentRatingHelper.GetContentRatingAndAdult(series);
         var plexTheme = ShokoRelay.Settings.PlexThemeMusic && series is IShokoSeries ss && ss.TmdbShows?.FirstOrDefault()?.TvdbShowID is int tvdb && tvdb > 0 ? $"https://tvthemes.plexapp.com/{tvdb}.mp3" : null;
         // csharpier-ignore-start
         return new Dictionary<string, object?>
@@ -101,12 +101,12 @@ public class PlexMetadata(IMetadataService metadataService)
             ["originallyAvailableAt"] = series.AirDate?.ToString("yyyy-MM-dd"),
             ["thumb"]                 = images.GetImages(ImageEntityType.Poster).FirstOrDefault() is { } p ? ImageHelper.GetImageUrl(p, cacheBuster: cb) : null,
             ["art"]                   = images.GetImages(ImageEntityType.Backdrop).FirstOrDefault() is { } a ? ImageHelper.GetImageUrl(a, cacheBuster: cb) : null,
-            ["contentRating"]         = Rating,
+            ["contentRating"]         = rating,
             ["originalTitle"]         = titles.OriginalTitle,
             ["titleSort"]             = titles.SortTitle,
             ["year"]                  = series.AirDate?.Year,
             ["summary"]               = TextHelper.SanitizeSummaryWithFallback(description, tmdbDescription, ShokoRelay.Settings.SummaryMode),
-            ["isAdult"]               = IsAdult,
+            ["isAdult"]               = isAdult,
             ["duration"]              = series.Episodes.Any() ? (int)series.Episodes.Sum(e => e.Runtime.TotalMilliseconds) : (int?)null,
             //["tagline"]             = TMDB has this but it is not exposed
             ["studio"]                = studios.FirstOrDefault()?.Tag,
@@ -151,13 +151,13 @@ public class PlexMetadata(IMetadataService metadataService)
             if (ShokoRelay.Settings.TmdbEpNumbering && m.Episodes.Count == 1 && m.PrimaryEpisode is IShokoEpisode { TmdbEpisodes.Count: > 1 } se)
             {
                 var tmdbEpisodes = SelectPreferredTmdbOrdering(se.TmdbEpisodes, prefId);
-                foreach (var te in tmdbEpisodes)
+                foreach (var tmdbEpisode in tmdbEpisodes)
                 {
-                    var (Season, Episode) = GetOrderingCoords(te, prefId);
-                    if (Season != seasonNum)
+                    var (season, episode) = GetOrderingCoords(tmdbEpisode, prefId);
+                    if (season != seasonNum)
                         continue;
-                    var teCoords = new PlexCoords { Season = Season ?? 0, Episode = Episode };
-                    items.Add((teCoords, MapEpisode(se, teCoords, ctx.Series, ctx.Titles, m.PartIndex, te)));
+                    var tmdbCoords = new PlexCoords { Season = season ?? 0, Episode = episode };
+                    items.Add((tmdbCoords, MapEpisode(se, tmdbCoords, ctx.Series, ctx.Titles, m.PartIndex, tmdbEpisode)));
                 }
                 continue;
             }
@@ -414,7 +414,7 @@ public class PlexMetadata(IMetadataService metadataService)
     {
         var guids = new List<object>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        void add(string id)
+        void Add(string id)
         {
             if (!string.IsNullOrWhiteSpace(id) && seen.Add(id))
                 guids.Add(new { id });
@@ -422,16 +422,16 @@ public class PlexMetadata(IMetadataService metadataService)
 
         if (series is IShokoSeries ss && ss.TmdbShows?.FirstOrDefault() is { } ts)
         {
-            add($"tmdb://{ts.ID}");
+            Add($"tmdb://{ts.ID}");
             if (ts.TvdbShowID > 0)
-                add($"tvdb://{ts.TvdbShowID}");
+                Add($"tvdb://{ts.TvdbShowID}");
         }
         if (series is ITmdbShow s)
         {
             if (s.TvdbShowID > 0)
-                add($"tvdb://{s.TvdbShowID}");
+                Add($"tvdb://{s.TvdbShowID}");
             if (s.ID > 0)
-                add($"tmdb://{s.ID}");
+                Add($"tmdb://{s.ID}");
         }
         return [.. guids];
     }

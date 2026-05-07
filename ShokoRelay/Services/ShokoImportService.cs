@@ -10,7 +10,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
 {
     #region Fields & Constructor
 
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
     private readonly IVideoService _videoService = videoService ?? throw new ArgumentNullException(nameof(videoService));
     private readonly IVideoReleaseService _releaseService = releaseService ?? throw new ArgumentNullException(nameof(releaseService));
 
@@ -31,7 +31,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
         }
         catch (Exception ex)
         {
-            Logger.Warn(ex, "ShokoImportService: failed to query managed folders");
+            s_logger.Warn(ex, "ShokoImportService: failed to query managed folders");
         }
 
         try
@@ -40,7 +40,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
         }
         catch (Exception ex)
         {
-            Logger.Warn(ex, "ShokoImportService: failed to schedule folder scan");
+            s_logger.Warn(ex, "ShokoImportService: failed to schedule folder scan");
         }
 
         return folders;
@@ -55,9 +55,9 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
     /// <returns>A read-only list of paths for files that were identified as missing.</returns>
     public async Task<IReadOnlyList<string>> RemoveMissingFilesAsync(bool dryRun = false)
     {
-        const string taskName = ShokoRelayConstants.TaskShokoRemoveMissing;
+        const string TaskName = ShokoRelayConstants.TaskShokoRemoveMissing;
         if (!dryRun)
-            TaskHelper.StartTask(taskName);
+            TaskHelper.StartTask(TaskName);
 
         try
         {
@@ -66,7 +66,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
 
             if (!dryRun && missing.Count > 0)
             {
-                Logger.Info("ShokoImportService: Removing {0} missing files from database...", missing.Count);
+                s_logger.Info("ShokoImportService: Removing {0} missing files from database...", missing.Count);
                 var toDelete = all.Where(f => missing.Contains(f.Path)).ToList();
 
                 // Remove the file records from Shoko
@@ -75,14 +75,14 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
                 // Purge unused releases from DB and remove from AniDB MyList
                 await _releaseService.PurgeUnusedReleases(providerNames: null, removeFromMylist: true).ConfigureAwait(false);
 
-                Logger.Info("ShokoImportService: Database and MyList cleanup complete");
+                s_logger.Info("ShokoImportService: Database and MyList cleanup complete");
             }
             return [.. missing];
         }
         finally
         {
             if (!dryRun)
-                TaskHelper.FinishTask(taskName);
+                TaskHelper.FinishTask(TaskName);
         }
     }
 

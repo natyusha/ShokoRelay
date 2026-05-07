@@ -56,7 +56,7 @@ public class VfsBuilder
 {
     #region Fields & Constructor
 
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
     internal static readonly Lock GlobalBuildLock = new();
     private readonly IMetadataService _metadataService;
     private readonly string _pluginDataPath;
@@ -68,10 +68,10 @@ public class VfsBuilder
     private ConcurrentDictionary<string, byte>? _createdDirsForBuild;
 
     // <summary>Used for show/season level assets (Art, Theme Songs, NFO)</summary>
-    private static readonly HashSet<string> SeriesMetadataExtensions = [.. PlexConstants.LocalMediaAssets.Artwork, .. PlexConstants.LocalMediaAssets.SeriesMetadata];
+    private static readonly HashSet<string> s_seriesMetadataExtensions = [.. PlexConstants.LocalMediaAssets.Artwork, .. PlexConstants.LocalMediaAssets.SeriesMetadata];
 
     // <summary>Used for episode level sidecars (Subs, NFO, and episode-specific Art)</summary>
-    private static readonly HashSet<string> EpisodeMetadataExtensions = [.. PlexConstants.LocalMediaAssets.Artwork, .. PlexConstants.LocalMediaAssets.EpisodeMetadata];
+    private static readonly HashSet<string> s_episodeMetadataExtensions = [.. PlexConstants.LocalMediaAssets.Artwork, .. PlexConstants.LocalMediaAssets.EpisodeMetadata];
 
     /// <summary>Initializes a VfsBuilder.</summary>
     public VfsBuilder(IMetadataService metadataService, ConfigProvider configProvider)
@@ -146,7 +146,7 @@ public class VfsBuilder
             // Global Pre-Cleanup - prevent parallel threads from waiting on a slow deletion while their stopwatches are running.
             if (cleanRoot && !isFiltered)
             {
-                Logger.Info("VFS: Performing global root cleanup...");
+                s_logger.Info("VFS: Performing global root cleanup...");
                 var allRoots = _metadataService
                     .GetAllShokoSeries()
                     .SelectMany(s => s.Episodes.SelectMany(ep => ep.VideoList).SelectMany(v => v.Files))
@@ -168,19 +168,19 @@ public class VfsBuilder
                                 Directory.Delete(path, true);
                                 cleanSw.Stop();
                                 cleanupDetails.Add(new RootCleanupDetails(path, cleanSw.ElapsedMilliseconds));
-                                Logger.Info("VFS: Cleaned root folder -> '{0}' in {1}ms", path, cleanSw.ElapsedMilliseconds);
+                                s_logger.Info("VFS: Cleaned root folder -> '{0}' in {1}ms", path, cleanSw.ElapsedMilliseconds);
 
                                 Directory.CreateDirectory(path);
                                 File.WriteAllText(Path.Combine(path, ".ignore"), ""); // Re-create the folder and add an .ignore file immediately after cleanup for Emby / Jellyfin users
                             }
                             catch (Exception ex)
                             {
-                                Logger.Warn(ex, "VFS: Failed to clean root -> {0}", path);
+                                s_logger.Warn(ex, "VFS: Failed to clean root -> {0}", path);
                             }
                         }
                         else
                         {
-                            Logger.Warn("VFS: Refusing to delete unsafe path -> {0}", path);
+                            s_logger.Warn("VFS: Refusing to delete unsafe path -> {0}", path);
                         }
                     }
                 }
@@ -225,7 +225,7 @@ public class VfsBuilder
                     try
                     {
                         var seriesSw = Stopwatch.StartNew();
-                        var (Created, Skipped, SkippedList, Errors, Planned) = BuildSeries(
+                        var (created, skipped, skippedList, errors, planned) = BuildSeries(
                             series,
                             rootName,
                             cleanRoot,
@@ -239,26 +239,26 @@ public class VfsBuilder
                         );
 
                         // Capture individual series details for the log report
-                        seriesDetailsBag.Add(new SeriesProcessDetails(series.PreferredTitle?.Value ?? series.ID.ToString(), seriesSw.ElapsedMilliseconds, Created));
+                        seriesDetailsBag.Add(new SeriesProcessDetails(series.PreferredTitle?.Value ?? series.ID.ToString(), seriesSw.ElapsedMilliseconds, created));
 
-                        if (Created > 0 || Errors.Count > 0)
+                        if (created > 0 || errors.Count > 0)
                         {
-                            Logger.Info("VFS: Processed series -> '{0}' ({1} links created) in {2}ms", series.PreferredTitle?.Value ?? series.ID.ToString(), Created, seriesSw.ElapsedMilliseconds);
+                            s_logger.Info("VFS: Processed series -> '{0}' ({1} links created) in {2}ms", series.PreferredTitle?.Value ?? series.ID.ToString(), created, seriesSw.ElapsedMilliseconds);
                         }
 
-                        Interlocked.Add(ref created, Created);
-                        Interlocked.Add(ref skipped, Skipped);
-                        Interlocked.Add(ref planned, Planned);
-                        foreach (var s in SkippedList)
+                        Interlocked.Add(ref created, created);
+                        Interlocked.Add(ref skipped, skipped);
+                        Interlocked.Add(ref planned, planned);
+                        foreach (var s in skippedList)
                             skippedDetailsBag.Add(s);
-                        foreach (var err in Errors)
+                        foreach (var err in errors)
                             errorsBag.Add(err);
                         Interlocked.Increment(ref seriesProcessed);
                     }
                     catch (Exception ex)
                     {
                         errorsBag.Add($"Failed series {series.PreferredTitle?.Value}: {ex.Message}");
-                        Logger.Error(ex, "VFS: Build failed for series {SeriesId}", series.ID);
+                        s_logger.Error(ex, "VFS: Build failed for series {SeriesId}", series.ID);
                     }
                 }
             );
@@ -269,7 +269,7 @@ public class VfsBuilder
             // Cleanup build-session objects
             (_seriesFileDataCacheForBuild, _subtitleFileCacheForBuild, _metadataFileCacheForBuild, _warningsForBuild, _createdDirsForBuild) = (null, null, null, null, null);
 
-            Logger.Info(
+            s_logger.Info(
                 "VFS: Build completed in {Elapsed}ms -> processed={Processed}, consolidated={Consolidated}, created={Created}, skipped={Skipped}, errors={Errors}",
                 sw.ElapsedMilliseconds,
                 seriesProcessed,
@@ -321,7 +321,7 @@ public class VfsBuilder
     )
     {
         var (created, skipped, planned, errors, skippedDetails, sSw) = (0, 0, 0, new List<string>(), new List<string>(), Stopwatch.StartNew());
-        var (DisplayTitle, _, _) = TextHelper.ResolveFullSeriesTitles(series);
+        var (displayTitle, _, _) = TextHelper.ResolveFullSeriesTitles(series);
         int folderId = ShokoRelay.Settings.TmdbEpNumbering ? OverrideHelper.GetPrimary(series.ID, _metadataService) : series.ID;
         var fileData = GetSeriesFileDataCached(series);
         if (!fileData.Mappings.Any())
@@ -413,7 +413,7 @@ public class VfsBuilder
                         ex,
                         extraPad.GetValueOrDefault(mapping.Coords.Season, 1),
                         Path.GetExtension(src),
-                        DisplayTitle,
+                        displayTitle,
                         hasPeer ? mapping.PartIndex : null,
                         hasPeer ? mapping.PartCount : 1,
                         vIdx,
@@ -432,7 +432,7 @@ public class VfsBuilder
                     )
             );
             string destPath = Path.Combine(seasonPath, fileName);
-            if (VfsShared.TryCreateLink(src, destPath, Logger))
+            if (VfsShared.TryCreateLink(src, destPath, s_logger))
             {
                 created++;
                 planned++;
@@ -446,7 +446,7 @@ public class VfsBuilder
                     LinkEpisodeMetadata(src, Path.GetDirectoryName(src)!, Path.GetFileNameWithoutExtension(destPath), seasonPath, ref planned, ref skipped, errors, ref created);
                 }
                 else
-                    Logger.Debug("VFS: Skipping local assets for crossover video -> {0} (series {1})", src, series.ID);
+                    s_logger.Debug("VFS: Skipping local assets for crossover video -> {0} (series {1})", src, series.ID);
             }
             else
             {
@@ -473,7 +473,7 @@ public class VfsBuilder
             if (!VfsShared.IsSafeToDelete(path))
             {
                 errors.Add($"Refusing to clean: {path}");
-                Logger.Warn("VFS: Unsafe cleanup path blocked -> {Path}", path);
+                s_logger.Warn("VFS: Unsafe cleanup path blocked -> {Path}", path);
             }
             else
                 try
@@ -484,12 +484,12 @@ public class VfsBuilder
                 catch (IOException ex)
                 {
                     errors.Add($"Clean failed: Folder in use or locked by another process {path}");
-                    Logger.Warn(ex, "VFS: Cleanup blocked due to in use path -> {Path}", path);
+                    s_logger.Warn(ex, "VFS: Cleanup blocked due to in use path -> {Path}", path);
                 }
                 catch (Exception ex)
                 {
                     errors.Add($"Clean failed {path}: {ex.Message}");
-                    Logger.Error(ex, "VFS: Clean failed for path -> {Path}", path);
+                    s_logger.Error(ex, "VFS: Clean failed for path -> {Path}", path);
                 }
         }
         tcs.SetResult();
@@ -507,7 +507,10 @@ public class VfsBuilder
     {
         if (string.IsNullOrWhiteSpace(sourceDir) || !Directory.Exists(sourceDir))
             return;
-        var lazyLoader = _metadataFileCacheForBuild?.GetOrAdd(sourceDir, dir => new Lazy<string[]>(() => [.. Directory.EnumerateFiles(dir).Where(f => SeriesMetadataExtensions.Contains(Path.GetExtension(f)))]));
+        var lazyLoader = _metadataFileCacheForBuild?.GetOrAdd(
+            sourceDir,
+            dir => new Lazy<string[]>(() => [.. Directory.EnumerateFiles(dir).Where(f => s_seriesMetadataExtensions.Contains(Path.GetExtension(f)))])
+        );
         var candidates = lazyLoader?.Value ?? [];
         foreach (var file in candidates)
         {
@@ -518,7 +521,7 @@ public class VfsBuilder
             if (videoBaseNames.Contains(baseName))
                 continue;
             string destName = string.Equals(baseName, "Specials", StringComparison.OrdinalIgnoreCase) ? "Season-Specials-Poster" + Path.GetExtension(name) : name; // Allow "Specials" custom naming
-            VfsShared.TryCreateLink(file, Path.Combine(destDir, destName), Logger);
+            VfsShared.TryCreateLink(file, Path.Combine(destDir, destName), s_logger);
         }
     }
 
@@ -538,7 +541,7 @@ public class VfsBuilder
         string originalBase = Path.GetFileNameWithoutExtension(sourceFile);
         var lazyLoader = _subtitleFileCacheForBuild?.GetOrAdd(
             sourceDir,
-            dir => new Lazy<string[]>(() => [.. Directory.GetFiles(sourceDir).Where(f => EpisodeMetadataExtensions.Contains(Path.GetExtension(f)))])
+            dir => new Lazy<string[]>(() => [.. Directory.GetFiles(sourceDir).Where(f => s_episodeMetadataExtensions.Contains(Path.GetExtension(f)))])
         );
         var candidates = lazyLoader?.Value ?? [];
         foreach (var sub in candidates)
@@ -546,7 +549,7 @@ public class VfsBuilder
             string name = Path.GetFileName(sub);
             if (!name.StartsWith(originalBase, StringComparison.OrdinalIgnoreCase))
                 continue;
-            if (VfsShared.TryCreateLink(sub, Path.Combine(destDir, destBase + name[originalBase.Length..]), Logger))
+            if (VfsShared.TryCreateLink(sub, Path.Combine(destDir, destBase + name[originalBase.Length..]), s_logger))
             {
                 planned++;
                 created++;
@@ -579,7 +582,7 @@ public class VfsBuilder
                 catch (Exception ex)
                 {
                     _warningsForBuild?.Add($"Prune failed {paths.Last()}: {ex.Message}");
-                    Logger.Warn(ex, "VFS: Failed to prune series path {Path}", paths.Last());
+                    s_logger.Warn(ex, "VFS: Failed to prune series path {Path}", paths.Last());
                 }
             }
         }

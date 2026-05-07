@@ -39,8 +39,8 @@ public class AnimeThemesController(
         if (validation != null)
             return validation;
 
-        const string taskName = ShokoRelayConstants.TaskAtVfsBuild;
-        TaskHelper.StartTask(taskName);
+        const string TaskName = ShokoRelayConstants.TaskAtVfsBuild;
+        TaskHelper.StartTask(TaskName);
         try
         {
             var result = await _animeThemesMapping.ApplyMappingAsync(filterIds, CancellationToken.None).ConfigureAwait(false);
@@ -50,7 +50,7 @@ public class AnimeThemesController(
                 try
                 {
                     var cacheLines = result.CacheEntries.Select(ce => $"{ce.VfsPath.Replace('\\', '/')}|{ce.VideoId}|{ce.Bitmask}");
-                    System.IO.File.WriteAllLines(Path.Combine(_configProvider.ConfigDirectory, ShokoRelayConstants.FileAtWebmCache), cacheLines);
+                    System.IO.File.WriteAllLines(Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileAtWebmCache), cacheLines);
                 }
                 catch (Exception ex)
                 {
@@ -59,13 +59,13 @@ public class AnimeThemesController(
             }
 
             var actionResult = LogAndReturn(ShokoRelayConstants.LogAtVfs, result, (sb, r) => LogHelper.BuildAtVfsBuildReport(sb, r, filterIds ?? []));
-            TaskHelper.CompleteTask(taskName, (actionResult as OkObjectResult)?.Value!);
+            TaskHelper.CompleteTask(TaskName, (actionResult as OkObjectResult)?.Value!);
             return actionResult;
         }
         catch (Exception ex)
         {
             var err = new { status = "error", message = ex.Message };
-            TaskHelper.CompleteTask(taskName, err);
+            TaskHelper.CompleteTask(TaskName, err);
             return BadRequest(new RelayResponse<object>(Status: "error", Message: ex.Message));
         }
     }
@@ -95,19 +95,19 @@ public class AnimeThemesController(
             );
         }
 
-        const string taskName = ShokoRelayConstants.TaskAtMapBuild;
-        TaskHelper.StartTask(taskName);
+        const string TaskName = ShokoRelayConstants.TaskAtMapBuild;
+        TaskHelper.StartTask(TaskName);
         try
         {
             var result = await _animeThemesMapping.BuildMappingFileAsync(CancellationToken.None).ConfigureAwait(false);
             var actionResult = LogAndReturn(ShokoRelayConstants.LogAtMap, result, LogHelper.BuildAtVfsMapReport);
-            TaskHelper.CompleteTask(taskName, (actionResult as OkObjectResult)?.Value!);
+            TaskHelper.CompleteTask(TaskName, (actionResult as OkObjectResult)?.Value!);
             return actionResult;
         }
         catch (Exception ex)
         {
             var err = new { status = "error", message = ex.Message };
-            TaskHelper.CompleteTask(taskName, err);
+            TaskHelper.CompleteTask(TaskName, err);
             return BadRequest(new RelayResponse<object>(Status: "error", Message: ex.Message));
         }
     }
@@ -119,8 +119,8 @@ public class AnimeThemesController(
     public async Task<IActionResult> ImportAnimeThemesMapping(CancellationToken cancellationToken = default)
     {
         Logger.Info("AnimeThemes: Fetching curated mapping file from GitHub...");
-        const string rawUrl = AnimeThemesHelper.AtRawMapUrl + ShokoRelayConstants.FileAtMapping;
-        var (count, _) = await _animeThemesMapping.ImportMappingFromUrlAsync(rawUrl, cancellationToken).ConfigureAwait(false);
+        const string RawUrl = AnimeThemesHelper.AtRawMapUrl + ShokoRelayConstants.FileAtMapping;
+        var (count, _) = await _animeThemesMapping.ImportMappingFromUrlAsync(RawUrl, cancellationToken).ConfigureAwait(false);
         Logger.Info("AnimeThemes: Import successful. {0} entries updated.", count);
         return Ok(new RelayResponse<object>(Data: new { count }));
     }
@@ -141,14 +141,14 @@ public class AnimeThemesController(
         if (string.IsNullOrWhiteSpace(query.Path))
             return BadRequest(new RelayResponse<object>(Status: "error", Message: "path is required"));
 
-        string reverse = _plexLibrary.MapPlexPathToShokoPath(query.Path);
+        string reverse = PlexLibrary.MapPlexPathToShokoPath(query.Path);
         if (!string.Equals(reverse, query.Path, StringComparison.Ordinal))
             query = query with { Path = reverse };
 
         if (query.Batch)
         {
-            const string taskName = ShokoRelayConstants.TaskAtMp3Build;
-            TaskHelper.StartTask(taskName);
+            const string TaskName = ShokoRelayConstants.TaskAtMp3Build;
+            TaskHelper.StartTask(TaskName);
             try
             {
                 var batch = await _animeThemesMp3Generator.ProcessBatchAsync(query, CancellationToken.None);
@@ -156,7 +156,7 @@ public class AnimeThemesController(
                     _animeThemesMp3Generator.AddToThemeMp3Cache(item.Folder);
 
                 var actionResult = LogAndReturn(ShokoRelayConstants.LogAtMp3, batch, LogHelper.BuildAtMp3Report);
-                TaskHelper.CompleteTask(taskName, (actionResult as OkObjectResult)?.Value!);
+                TaskHelper.CompleteTask(TaskName, (actionResult as OkObjectResult)?.Value!);
                 return actionResult;
             }
             catch (Exception ex)
@@ -193,7 +193,7 @@ public class AnimeThemesController(
     {
         if (string.IsNullOrWhiteSpace(path))
             return BadRequest();
-        string resolved = _plexLibrary.MapPlexPathToShokoPath(path);
+        string resolved = PlexLibrary.MapPlexPathToShokoPath(path);
         string themePath = Path.Combine(Path.GetFullPath(resolved), "Theme.mp3");
 
         if (!System.IO.File.Exists(themePath))
@@ -220,7 +220,7 @@ public class AnimeThemesController(
     [HttpGet("animethemes/webm/tree")]
     public IActionResult AnimeThemesWebmTree()
     {
-        string cachePath = Path.Combine(_configProvider.ConfigDirectory, ShokoRelayConstants.FileAtWebmCache);
+        string cachePath = Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileAtWebmCache);
         if (!System.IO.File.Exists(cachePath))
             return Ok(new RelayResponse<object>(Status: "empty"));
 
@@ -258,12 +258,12 @@ public class AnimeThemesController(
 
             if (!seriesTitleCache.TryGetValue(seriesId.Value, out var titles))
             {
-                var series = _metadataService.GetShokoSeriesByID(seriesId.Value);
+                var series = MetadataService.GetShokoSeriesByID(seriesId.Value);
                 if (series != null)
                 {
-                    var (DisplayTitle, _, _) = TextHelper.ResolveFullSeriesTitles(series);
-                    var group = _metadataService.GetShokoGroupByID(series.TopLevelGroupID);
-                    titles = (group is IWithTitles titled && !string.IsNullOrWhiteSpace(titled.PreferredTitle?.Value) ? titled.PreferredTitle.Value : DisplayTitle, DisplayTitle);
+                    var (displayTitle, _, _) = TextHelper.ResolveFullSeriesTitles(series);
+                    var group = MetadataService.GetShokoGroupByID(series.TopLevelGroupID);
+                    titles = (group is IWithTitles titled && !string.IsNullOrWhiteSpace(titled.PreferredTitle?.Value) ? titled.PreferredTitle.Value : displayTitle, displayTitle);
                 }
                 else
                     titles = ($"Series {seriesId.Value}", $"Series {seriesId.Value}");
@@ -303,7 +303,7 @@ public class AnimeThemesController(
     {
         if (string.IsNullOrWhiteSpace(path))
             return BadRequest();
-        string fullPath = Path.GetFullPath(_plexLibrary.MapPlexPathToShokoPath(path));
+        string fullPath = Path.GetFullPath(PlexLibrary.MapPlexPathToShokoPath(path));
         return !System.IO.File.Exists(fullPath) ? NotFound() : File(new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read), "video/webm", enableRangeProcessing: true);
     }
 
@@ -312,7 +312,7 @@ public class AnimeThemesController(
     [HttpGet("animethemes/webm/favourites")]
     public IActionResult GetAnimeThemesFavourites()
     {
-        string path = Path.Combine(_configProvider.ConfigDirectory, ShokoRelayConstants.FileAtFavsCache);
+        string path = Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileAtFavsCache);
         if (!System.IO.File.Exists(path))
             return Ok(new RelayResponse<List<int>>(Data: []));
         try
@@ -335,7 +335,7 @@ public class AnimeThemesController(
         if (videoId <= 0)
             return BadRequest(new RelayResponse<object>(Status: "error", Message: "Invalid videoId"));
 
-        string path = Path.Combine(_configProvider.ConfigDirectory, ShokoRelayConstants.FileAtFavsCache);
+        string path = Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileAtFavsCache);
         var ids = new HashSet<int>();
         if (System.IO.File.Exists(path))
             foreach (var l in System.IO.File.ReadAllLines(path))

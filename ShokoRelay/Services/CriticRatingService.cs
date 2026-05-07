@@ -45,7 +45,7 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
 {
     #region Fields & Constructor
 
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
 
     #endregion
 
@@ -54,9 +54,9 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
     /// <inheritdoc/>
     public async Task<ApplyRatingsResult> ApplyRatingsAsync(IEnumerable<int>? allowedSeriesIds = null, CancellationToken cancellationToken = default)
     {
-        const string taskName = ShokoRelayConstants.TaskPlexRatingsApply;
-        TaskHelper.StartTask(taskName);
-        Logger.Info("CriticRatingService: Starting task...");
+        const string TaskName = ShokoRelayConstants.TaskPlexRatingsApply;
+        TaskHelper.StartTask(TaskName);
+        s_logger.Info("CriticRatingService: Starting task...");
 
         try
         {
@@ -91,7 +91,7 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
                     var rating = ComputeSeriesRating(series);
                     if (!NeedsRatingUpdate(item.Rating, rating))
                     {
-                        Logger.Trace("CriticRatingService: skipping show {0} ({1}) because rating {2} matches Plex", item.RatingKey, series.PreferredTitle?.Value, item.Rating);
+                        s_logger.Trace("CriticRatingService: skipping show {0} ({1}) because rating {2} matches Plex", item.RatingKey, series.PreferredTitle?.Value, item.Rating);
                         continue;
                     }
 
@@ -99,7 +99,7 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
                     {
                         uS++;
                         appliedChanges.Add(new RatingChange(series.PreferredTitle?.Value ?? "Unknown", "Show", item.RatingKey!, item.Rating, rating));
-                        Logger.Info("CriticRatingService: Updated Show '{0}' to {1}", series.PreferredTitle?.Value, rating);
+                        s_logger.Info("CriticRatingService: Updated Show '{0}' to {1}", series.PreferredTitle?.Value, rating);
                     }
                     else
                     {
@@ -126,7 +126,7 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
                     var rating = ComputeEpisodeRating(episode);
                     if (!NeedsRatingUpdate(item.Rating, rating))
                     {
-                        Logger.Trace("CriticRatingService: skipping episode {0} because rating {1} matches Plex", item.RatingKey, item.Rating);
+                        s_logger.Trace("CriticRatingService: skipping episode {0} because rating {1} matches Plex", item.RatingKey, item.Rating);
                         continue;
                     }
 
@@ -134,7 +134,7 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
                     {
                         uE++;
                         appliedChanges.Add(new RatingChange($"{episode.Series?.PreferredTitle?.Value} - S{episode.SeasonNumber}E{episode.EpisodeNumber}", "Episode", item.RatingKey!, item.Rating, rating));
-                        Logger.Trace("CriticRatingService: Updated Episode {0} to {1}", item.RatingKey, rating);
+                        s_logger.Trace("CriticRatingService: Updated Episode {0} to {1}", item.RatingKey, rating);
                     }
                     else
                     {
@@ -143,12 +143,12 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
                     }
                 }
             }
-            Logger.Info("CriticRatingService: Task finished -> Updated {0} shows and {1} episodes", uS, uE);
+            s_logger.Info("CriticRatingService: Task finished -> Updated {0} shows and {1} episodes", uS, uE);
             return new ApplyRatingsResult(pS, uS, pE, uE, errs, errorsList, appliedChanges);
         }
         finally
         {
-            TaskHelper.FinishTask(taskName);
+            TaskHelper.FinishTask(TaskName);
         }
     }
 

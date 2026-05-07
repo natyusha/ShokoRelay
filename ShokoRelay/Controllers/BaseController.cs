@@ -24,13 +24,13 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
     protected static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
     /// <summary>Service used for reading and persisting plugin settings and secrets.</summary>
-    protected readonly ConfigProvider _configProvider = configProvider;
+    protected readonly ConfigProvider ConfigProvider = configProvider;
 
     /// <summary>Service for querying the Shoko metadata database.</summary>
-    protected readonly IMetadataService _metadataService = metadataService;
+    protected readonly IMetadataService MetadataService = metadataService;
 
     /// <summary>Client used for interacting with configured Plex server instances.</summary>
-    protected readonly PlexClient _plexLibrary = plexLibrary;
+    protected readonly PlexClient PlexLibrary = plexLibrary;
 
     /// <summary>Returns the absolute base URL of the plugin's API on the current host.</summary>
     protected string ApiBase => $"{Request.Scheme}://{Request.Host}{ShokoRelayConstants.BasePath}";
@@ -59,7 +59,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
     /// <returns>An IActionResult containing a RelayResponse with status, data, and logUrl.</returns>
     protected IActionResult LogAndReturn<T>(string logName, T resultData, Action<StringBuilder, T> reportBuilder)
     {
-        LogHelper.WriteReport(_configProvider.PluginDirectory, logName, resultData, reportBuilder);
+        LogHelper.WriteReport(ConfigProvider.PluginDirectory, logName, resultData, reportBuilder);
 
         return Ok(new RelayResponse<T>(Data: resultData, LogUrl: $"{ApiBase}/logs/{logName}"));
     }
@@ -87,7 +87,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
             {
                 if (int.TryParse(raw[PlexConstants.AniDbPrefix.Length..], out int aid) && aid > 0)
                 {
-                    if (_metadataService.GetShokoSeriesByAnidbID(aid) is { } series)
+                    if (MetadataService.GetShokoSeriesByAnidbID(aid) is { } series)
                         ids.Add(series.ID);
                     else
                         errors.Add($"No Shoko Series found for AniDB ID: {aid}");
@@ -122,7 +122,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
 
         OverrideHelper.EnsureLoaded();
         if (ShokoRelay.Settings.TmdbEpNumbering)
-            ids = [.. ids.Select(i => OverrideHelper.GetPrimary(i, _metadataService)).Distinct()];
+            ids = [.. ids.Select(i => OverrideHelper.GetPrimary(i, MetadataService)).Distinct()];
         return null;
     }
 
@@ -136,7 +136,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
         seriesList = [];
         filterIds = [];
 
-        if (!_plexLibrary.IsEnabled)
+        if (!PlexLibrary.IsEnabled)
             return BadRequest(new RelayResponse<object>(Status: "error", Message: "Plex server configuration is missing or no library selected."));
 
         var validation = ValidateFilterOrBadRequest(filter, out filterIds);
@@ -235,9 +235,9 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
     /// <returns>A list of Shoko series objects.</returns>
     protected List<IShokoSeries?> ResolveSeriesList(int? seriesId, IReadOnlyCollection<int> filterIds)
     {
-        return seriesId.HasValue ? [_metadataService.GetShokoSeriesByID(seriesId.Value)]
-            : filterIds.Count > 0 ? [.. filterIds.Distinct().Select(id => _metadataService.GetShokoSeriesByID(id))]
-            : [.. _metadataService.GetAllShokoSeries().Cast<IShokoSeries?>()];
+        return seriesId.HasValue ? [MetadataService.GetShokoSeriesByID(seriesId.Value)]
+            : filterIds.Count > 0 ? [.. filterIds.Distinct().Select(id => MetadataService.GetShokoSeriesByID(id))]
+            : [.. MetadataService.GetAllShokoSeries().Cast<IShokoSeries?>()];
     }
 
     /// <summary>Maps a file extension to its corresponding MIME content type for collection poster images.</summary>
@@ -327,11 +327,11 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
                     HttpsRequired = s.HttpsRequired,
                 })
                 .ToList();
-            _configProvider.UpdatePlexTokenInfo(servers: servers);
+            ConfigProvider.UpdatePlexTokenInfo(servers: servers);
         }
 
         var libs = CollectDiscoveredLibraries(discovery.ShokoLibraries);
-        _configProvider.UpdatePlexTokenInfo(libraries: libs);
+        ConfigProvider.UpdatePlexTokenInfo(libraries: libs);
     }
 
     #endregion

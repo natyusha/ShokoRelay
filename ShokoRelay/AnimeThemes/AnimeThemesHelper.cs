@@ -113,7 +113,7 @@ internal static class AnimeThemesHelper
     /// <summary>Regex for themes from secondary series in an override group which start with a <c>P# ❯</c> prefix.</summary>
     internal static readonly Regex OverrideThemeFileRegex = new(@"^P\d+\s❯", RegexOptions.Compiled);
 
-    private static readonly Dictionary<string, string> SlugFormatting = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly Dictionary<string, string> s_slugFormatting = new(StringComparer.OrdinalIgnoreCase)
     {
         { "Animax", "Animax" },
         { "ATX", "AT-X" },
@@ -266,13 +266,13 @@ internal static class AnimeThemesHelper
         string overridePrefix = overrideIndex > 0 ? $"P{overrideIndex + 1} ❯ " : "";
         string nc = lookup.NC ? "NC" : "";
         string slug = string.IsNullOrWhiteSpace(baseSlug) ? "Theme" : baseSlug;
-        const string zwsp = "\u200B",
-            hsp = "\u200A";
+        const string Zwsp = "\u200B",
+            Hsp = "\u200A";
 
         if (slug.StartsWith("OP", StringComparison.OrdinalIgnoreCase))
-            slug = $"{hsp}O{zwsp}P{slug[2..]}";
+            slug = $"{Hsp}O{Zwsp}P{slug[2..]}";
         else if (slug.StartsWith("ED", StringComparison.OrdinalIgnoreCase))
-            slug = $"E{zwsp}D{slug[2..]}";
+            slug = $"E{Zwsp}D{slug[2..]}";
 
         string ver = lookup.Version > 1 ? $"v{lookup.Version}" : "";
         string title = string.IsNullOrWhiteSpace(lookup.SongTitle) ? "" : " ❯ " + lookup.SongTitle;
@@ -326,7 +326,7 @@ internal static class AnimeThemesHelper
     /// <summary>Formats a slug variant suffix into a human-readable tag.</summary>
     /// <param name="suffix">The slug suffix (e.g. BD, TV).</param>
     /// <returns>A formatted string tag.</returns>
-    internal static string FormatSlugTag(string? suffix) => string.IsNullOrWhiteSpace(suffix) ? "" : $" ({(SlugFormatting.TryGetValue(suffix.Trim(), out var f) ? f : suffix)})";
+    internal static string FormatSlugTag(string? suffix) => string.IsNullOrWhiteSpace(suffix) ? "" : $" ({(s_slugFormatting.TryGetValue(suffix.Trim(), out var f) ? f : suffix)})";
 
     /// <summary>Ensures a filename has the specified extension.</summary>
     /// <param name="fileName">The filename.</param>

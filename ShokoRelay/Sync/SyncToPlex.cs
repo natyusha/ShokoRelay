@@ -12,7 +12,7 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
 {
     #region Fields & Constructor
 
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
     private readonly PlexClient _plexClient = plexClient;
     private readonly IMetadataService _metadataService = metadataService;
     private readonly IUserDataService _userDataService = userDataService;
@@ -68,11 +68,11 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
         var plexUsers = new List<(string Name, string? Token)>();
         if (!actualExclude)
             plexUsers.Add(("admin", null));
-        foreach (var (Name, Pin) in extraEntries)
+        foreach (var (name, pin) in extraEntries)
         {
-            var token = await SyncHelper.FetchManagedUserTokenAsync(_plexAuth, _configProvider, Name, Pin, cancellationToken).ConfigureAwait(false);
+            var token = await SyncHelper.FetchManagedUserTokenAsync(_plexAuth, _configProvider, name, pin, cancellationToken).ConfigureAwait(false);
             if (token != null)
-                plexUsers.Add((Name, token));
+                plexUsers.Add((name, token));
         }
 
         var matchedGlobal = new HashSet<int>();
@@ -109,7 +109,7 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
                     }
 
                     result = SyncHelper.IncMarkedWatched(result, result.PerUser, uName);
-                    Logger.Info("WatchedSyncService: {0}Shoko->Plex: {1} scrobbled ep {2} on {3}", logPrefix, uName, sw.UserData.EpisodeID, target.ServerUrl);
+                    s_logger.Info("WatchedSyncService: {0}Shoko->Plex: {1} scrobbled ep {2} on {3}", logPrefix, uName, sw.UserData.EpisodeID, target.ServerUrl);
                     SyncHelper.AddPerUserChange(
                         result.PerUserChanges,
                         uName,

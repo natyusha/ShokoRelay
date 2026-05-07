@@ -12,11 +12,11 @@ public static class TagHelper
     #region Static Configuration
 
     /// <summary>Regex which matches alphanumeric text including single quotes and hyphens until a space or other special character.</summary>
-    private static readonly Regex _wordRegex = new(@"[\'\w\d-]+\b", RegexOptions.Compiled);
+    private static readonly Regex s_wordRegex = new(@"[\'\w\d-]+\b", RegexOptions.Compiled);
 
     // csharpier-ignore-start
     /// <summary><c>TagBlacklistAniDBHelpers</c>: https://github.com/ShokoAnime/ShokoServer/blob/d7c7f6ecdd883c714b15dbef385e19428c8d29cf/Shoko.Server/Utilities/TagFilter.cs#L37C44-L37C68</summary>
-    private static readonly FrozenSet<string> TagBlacklistAniDBHelpers = new[] {
+    private static readonly FrozenSet<string> s_tagBlacklistAniDBHelpers = new[] {
         "asia", "awards", "body and host", "breasts", "cast missing", "cast", "complete manga adaptation", "content indicators", "delayed 16-9 broadcast", "description missing",
         "description needs improvement", "development hell", "dialogue driven", "dynamic", "earth", "elements", "ending", "ensemble cast", "family life", "fast-paced", "fetishes", "maintenance tags",
         "meta tags", "motifs", "no english subs available", "origin", "pic needs improvement", "place", "pornography", "season", "setting", "source material", "staff missing", "storytelling",
@@ -24,18 +24,18 @@ public static class TagHelper
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Words to force lowercase in tags to follow AniDB capitalisation rules: https://wiki.anidb.net/Capitalisation</summary>
-    private static readonly FrozenSet<string> _forceLower = new[] {
+    private static readonly FrozenSet<string> s_forceLower = new[] {
         "a", "an", "the", "and", "but", "or", "nor", "at", "by", "for", "from", "in", "into", "of", "off", "on", "onto", "out", "over", "per", "to", "up", "with", "as", "4-koma",
         "-hime", "-kei", "-kousai", "-sama", "-warashi", "no", "vs", "x"
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Abbreviations or acronyms that should be fully capitalised</summary>
-    private static readonly FrozenSet<string> _forceUpper = new[] {
+    private static readonly FrozenSet<string> s_forceUpper = new[] {
         "3d", "bdsm", "cg", "cgi", "ed", "fff", "ffm", "ii", "milf", "mmf", "mmm", "npc", "op", "rpg", "tbs", "tv"
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Special cases where a specific capitalisation style is preferred</summary>
-    private static readonly FrozenDictionary<string, string> _forceSpecial = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
+    private static readonly FrozenDictionary<string, string> s_forceSpecial = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
         { "comicfesta", "ComicFesta" }, { "d'etat", "d'Etat" }, { "noitamina", "noitaminA" }
     }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
     // csharpier-ignore-end
@@ -61,7 +61,7 @@ public static class TagHelper
             return
             [
                 .. shokoNames
-                    .Where(tagName => !TagBlacklistAniDBHelpers.Contains(tagName) && !userBlacklist.Contains(tagName, StringComparer.OrdinalIgnoreCase))
+                    .Where(tagName => !s_tagBlacklistAniDBHelpers.Contains(tagName) && !userBlacklist.Contains(tagName, StringComparer.OrdinalIgnoreCase))
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .Select(tagName => new { tag = TitleCase(tagName) }),
             ];
@@ -98,7 +98,7 @@ public static class TagHelper
         return
         [
             .. combined
-                .Where(tagName => !string.IsNullOrWhiteSpace(tagName) && !TagBlacklistAniDBHelpers.Contains(tagName) && !userBlacklist.Contains(tagName, StringComparer.OrdinalIgnoreCase))
+                .Where(tagName => !string.IsNullOrWhiteSpace(tagName) && !s_tagBlacklistAniDBHelpers.Contains(tagName) && !userBlacklist.Contains(tagName, StringComparer.OrdinalIgnoreCase))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Select(tagName => new { tag = TitleCase(tagName) }),
         ];
@@ -117,14 +117,14 @@ public static class TagHelper
             return text;
 
         // Primary Pass: Capitalize words and apply Upper/Lower lists
-        string result = _wordRegex.Replace(
+        string result = s_wordRegex.Replace(
             text.ToLower(),
             m =>
             {
                 string word = m.Value;
-                if (_forceLower.Contains(word))
+                if (s_forceLower.Contains(word))
                     return word.ToLower();
-                if (_forceUpper.Contains(word))
+                if (s_forceUpper.Contains(word))
                     return word.ToUpper();
 
                 // Capitalise all words accounting for apostrophes first
@@ -139,7 +139,7 @@ public static class TagHelper
         int lastSpaceIndex = result.LastIndexOf(' ');
         if (lastSpaceIndex >= 0 && lastSpaceIndex < result.Length - 1)
             result = result[..(lastSpaceIndex + 1)] + char.ToUpper(result[lastSpaceIndex + 1]) + result[(lastSpaceIndex + 2)..];
-        result = _wordRegex.Replace(result, m => _forceSpecial.TryGetValue(m.Value, out var special) ? special : m.Value);
+        result = s_wordRegex.Replace(result, m => s_forceSpecial.TryGetValue(m.Value, out var special) ? special : m.Value);
         return result;
     }
 

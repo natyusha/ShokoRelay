@@ -69,20 +69,20 @@ public static class PlexMapping
             if (tmdbEpisodes.Count > 0)
             {
                 var first = tmdbEpisodes.First();
-                var (Season, Episode) = GetOrderingCoords(first, showPrefId);
-                if (Season.HasValue)
+                var (season, episode) = GetOrderingCoords(first, showPrefId);
+                if (season.HasValue)
                 {
                     int? endEp = null;
                     if (tmdbEpisodes.Count > 1)
                     {
-                        var lastCoords = GetOrderingCoords(tmdbEpisodes.Last(), showPrefId);
-                        if (lastCoords.Season == Season)
-                            endEp = lastCoords.Episode;
+                        var (lastSeason, lastEpisode) = GetOrderingCoords(tmdbEpisodes.Last(), showPrefId);
+                        if (lastSeason == season)
+                            endEp = lastEpisode;
                     }
                     result = new PlexCoords
                     {
-                        Season = Season.Value,
-                        Episode = Episode,
+                        Season = season.Value,
+                        Episode = episode,
                         EndEpisode = endEp,
                     };
                     return result;
@@ -127,29 +127,29 @@ public static class PlexMapping
             if (tmdbEntries.Any())
             {
                 var first = tmdbEntries.First();
-                var (Season, Episode) = GetOrderingCoords(first, showPrefId);
-                if (Season.HasValue)
+                var (season, episode) = GetOrderingCoords(first, showPrefId);
+                if (season.HasValue)
                 {
                     if (fileIndexWithinEpisode.HasValue && fileIndexWithinEpisode.Value < tmdbEntries.Count)
                     {
                         var tmdbEp = tmdbEntries[fileIndexWithinEpisode.Value];
-                        var epCoords = GetOrderingCoords(tmdbEp, showPrefId);
+                        var (epSeason, epEpisode) = GetOrderingCoords(tmdbEp, showPrefId);
                         return new PlexCoords
                         {
-                            Season = epCoords.Season ?? Season.Value,
-                            Episode = epCoords.Episode,
+                            Season = epSeason ?? season.Value,
+                            Episode = epEpisode,
                             EndEpisode = null,
                         };
                     }
                     else if (!fileIndexWithinEpisode.HasValue || tmdbEntries.Count == 1)
                     {
                         var last = tmdbEntries.Last();
-                        var lastCoords = GetOrderingCoords(last, showPrefId);
-                        int? endEpisode = (tmdbEntries.Count > 1 && lastCoords.Season == Season) ? lastCoords.Episode : null;
+                        var (lastSeason, lastEpisode) = GetOrderingCoords(last, showPrefId);
+                        int? endEpisode = (tmdbEntries.Count > 1 && lastSeason == season) ? lastEpisode : null;
                         return new PlexCoords
                         {
-                            Season = Season.Value,
-                            Episode = Episode,
+                            Season = season.Value,
+                            Episode = episode,
                             EndEpisode = endEpisode,
                         };
                     }
@@ -173,8 +173,8 @@ public static class PlexMapping
 
     #region TMDB Order & Cache
 
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<(int EpId, string? OrderingId), bool> _tmdbAllOrderingsContainsCache = new();
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<(int EpId, string? OrderingId), (int? Season, int Episode)> _orderingCoordsCache = new();
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<(int EpId, string? OrderingId), bool> s_tmdbAllOrderingsContainsCache = new();
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<(int EpId, string? OrderingId), (int? Season, int Episode)> s_orderingCoordsCache = new();
 
     /// <summary>Filter a list of TMDB episode entries to the preferred ordering.</summary>
     /// <param name="entries">TMDB episodes.</param>
@@ -200,10 +200,10 @@ public static class PlexMapping
                     try
                     {
                         var key = (EpId: te.ID, OrderingId: showPreferredOrderingId);
-                        if (_tmdbAllOrderingsContainsCache.TryGetValue(key, out var cached))
+                        if (s_tmdbAllOrderingsContainsCache.TryGetValue(key, out var cached))
                             return cached;
                         bool found = te.AllOrderings != null && te.AllOrderings.Any(o => string.Equals(o.OrderingID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase));
-                        _tmdbAllOrderingsContainsCache[key] = found;
+                        s_tmdbAllOrderingsContainsCache[key] = found;
                         return found;
                     }
                     catch
@@ -232,7 +232,7 @@ public static class PlexMapping
         if (!string.IsNullOrWhiteSpace(showPreferredOrderingId))
         {
             var key = (EpId: ep.ID, OrderingId: showPreferredOrderingId);
-            if (_orderingCoordsCache.TryGetValue(key, out var cachedCoords))
+            if (s_orderingCoordsCache.TryGetValue(key, out var cachedCoords))
                 return cachedCoords;
             if (ep.AllOrderings != null)
             {
@@ -240,14 +240,14 @@ public static class PlexMapping
                 if (byAll != null)
                 {
                     var result = (byAll.SeasonNumber, byAll.EpisodeNumber);
-                    _orderingCoordsCache[key] = result;
+                    s_orderingCoordsCache[key] = result;
                     return result;
                 }
             }
 
             // Cache the fallback to declared season/episode as well so subsequent calls are cheap
             var fallback = (ep.SeasonNumber, ep.EpisodeNumber);
-            _orderingCoordsCache[key] = fallback;
+            s_orderingCoordsCache[key] = fallback;
             return fallback;
         }
 

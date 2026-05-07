@@ -1,0 +1,97 @@
+root = true
+
+[*]
+insert_final_newline = true
+max_line_length = 210
+indent_style = space
+charset = utf-8
+
+[*.csproj]
+indent_size = 2
+
+[*.cs]
+# CSharpier for all .cs files
+
+## NAMING RULES ##
+# https://learn.microsoft.com/en-us/dotnet/csharp/fundamentals/coding-style/identifier-names
+
+# Constants (PascalCase)
+dotnet_naming_rule.constants_should_be_pascal_case.severity = warning
+dotnet_naming_rule.constants_should_be_pascal_case.symbols = constants
+dotnet_naming_rule.constants_should_be_pascal_case.style = pascal_case_style
+dotnet_naming_symbols.constants.applicable_kinds = field, local
+dotnet_naming_symbols.constants.required_modifiers = const
+
+# Private static fields (s_camelCase)
+dotnet_naming_rule.private_static_fields_rule.severity = warning
+dotnet_naming_rule.private_static_fields_rule.symbols = private_static_fields_symbols
+dotnet_naming_rule.private_static_fields_rule.style = s_camel_case_style
+dotnet_naming_symbols.private_static_fields_symbols.applicable_kinds = field
+dotnet_naming_symbols.private_static_fields_symbols.applicable_accessibilities = private
+dotnet_naming_symbols.private_static_fields_symbols.required_modifiers = static
+
+# Private instance fields (_camelCase)
+dotnet_naming_rule.private_instance_fields_rule.severity = warning
+dotnet_naming_rule.private_instance_fields_rule.symbols = private_instance_fields_symbols
+dotnet_naming_rule.private_instance_fields_rule.style = _camel_case_style
+dotnet_naming_symbols.private_instance_fields_symbols.applicable_kinds = field
+dotnet_naming_symbols.private_instance_fields_symbols.applicable_accessibilities = private
+
+# Parameters and Local Variables (camelCase)
+dotnet_naming_rule.camel_case_rule.severity = warning
+dotnet_naming_rule.camel_case_rule.symbols = camel_case_symbols
+dotnet_naming_rule.camel_case_rule.style = camel_case_style
+dotnet_naming_symbols.camel_case_symbols.applicable_kinds = parameter, local
+
+# Interfaces (IPrefix)
+dotnet_naming_rule.interface_prefix_rule.severity = warning
+dotnet_naming_rule.interface_prefix_rule.symbols = interface_symbols
+dotnet_naming_rule.interface_prefix_rule.style = i_prefix_style
+dotnet_naming_symbols.interface_symbols.applicable_kinds = interface
+
+# Default for all other members (PascalCase)
+dotnet_naming_rule.members_should_be_pascal_case.severity = warning
+dotnet_naming_rule.members_should_be_pascal_case.symbols = all_members
+dotnet_naming_rule.members_should_be_pascal_case.style = pascal_case_style
+dotnet_naming_symbols.all_members.applicable_kinds = *
+
+## STYLE RULES ##
+dotnet_analyzer_diagnostic.category-Style.severity = warning
+
+dotnet_naming_style.pascal_case_style.capitalization = pascal_case
+dotnet_naming_style.camel_case_style.capitalization = camel_case
+dotnet_naming_style._camel_case_style.capitalization = camel_case
+dotnet_naming_style._camel_case_style.required_prefix = _
+dotnet_naming_style.s_camel_case_style.capitalization = camel_case
+dotnet_naming_style.s_camel_case_style.required_prefix = s_
+dotnet_naming_style.i_prefix_style.capitalization = pascal_case
+dotnet_naming_style.i_prefix_style.required_prefix = I
+
+## EXCLUSIONS ##
+
+# Add braces
+dotnet_diagnostic.IDE0011.severity = none
+
+# Use 'var' instead of explicit type
+dotnet_diagnostic.IDE0008.severity = none
+
+# Use expression body for methods
+dotnet_diagnostic.IDE0022.severity = none
+
+# Formatting rule
+dotnet_diagnostic.IDE0055.severity = none
+
+# Remove unnecessary expression value
+dotnet_diagnostic.IDE0058.severity = none
+
+# Use expression body for local functions
+dotnet_diagnostic.IDE0061.severity = none
+
+# Add missing cases to switch expression
+dotnet_diagnostic.IDE0072.severity = none
+
+# Use block-scoped namespace
+dotnet_diagnostic.IDE0160.severity = none
+
+## DASHBOARD RULES ##
+# Prettier for all dashboard files with additional Concentric sorting for CSS files

@@ -8,9 +8,9 @@ public static class OverrideHelper
 {
     #region Fields & Constants
 
-    private static readonly Dictionary<int, List<int>> _groups = [];
-    private static DateTime _lastWriteUtc = DateTime.MinValue;
-    private static string? _loadedPath;
+    private static readonly Dictionary<int, List<int>> s_groups = [];
+    private static DateTime s_lastWriteUtc = DateTime.MinValue;
+    private static string? s_loadedPath;
     private static string OverridesPath => Path.Combine(ShokoRelay.ConfigDirectory, ShokoRelayConstants.FileVfsOverrides);
 
     #endregion
@@ -25,25 +25,25 @@ public static class OverrideHelper
             return;
 
         string path = OverridesPath;
-        if (_loadedPath == path)
+        if (s_loadedPath == path)
         {
             if (File.Exists(path))
             {
                 var info = new FileInfo(path);
-                if (info.LastWriteTimeUtc <= _lastWriteUtc)
+                if (info.LastWriteTimeUtc <= s_lastWriteUtc)
                     return;
             }
             else
             {
-                _groups.Clear();
-                _loadedPath = path;
-                _lastWriteUtc = DateTime.MinValue;
+                s_groups.Clear();
+                s_loadedPath = path;
+                s_lastWriteUtc = DateTime.MinValue;
                 return;
             }
         }
 
-        _groups.Clear();
-        _loadedPath = path;
+        s_groups.Clear();
+        s_loadedPath = path;
         if (!File.Exists(path))
             return;
 
@@ -66,10 +66,10 @@ public static class OverrideHelper
                     continue;
                 int primary = parts[0];
                 foreach (var id in parts)
-                    _groups.TryAdd(id, parts);
+                    s_groups.TryAdd(id, parts);
             }
             var info = new FileInfo(path);
-            _lastWriteUtc = info.LastWriteTimeUtc;
+            s_lastWriteUtc = info.LastWriteTimeUtc;
         }
         catch { }
     }
@@ -90,7 +90,7 @@ public static class OverrideHelper
         if (s == null || s.AnidbAnimeID <= 0)
             return shokoSeriesId;
         int anidb = s.AnidbAnimeID;
-        if (_groups.TryGetValue(anidb, out var grp) && grp.Count > 0)
+        if (s_groups.TryGetValue(anidb, out var grp) && grp.Count > 0)
         {
             var primaryAni = grp[0];
             var primarySeries = metadataService.GetShokoSeriesByAnidbID(primaryAni);
@@ -112,7 +112,7 @@ public static class OverrideHelper
         if (s == null || s.AnidbAnimeID <= 0)
             return [shokoSeriesId];
         int anidb = s.AnidbAnimeID;
-        if (_groups.TryGetValue(anidb, out var grp) && grp.Count > 0)
+        if (s_groups.TryGetValue(anidb, out var grp) && grp.Count > 0)
         {
             var list = new List<int>();
             foreach (var ani in grp)

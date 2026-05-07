@@ -11,7 +11,7 @@ public static class ContentRatingHelper
 
     // csharpier-ignore-start
     /// <summary>Tags used to determine Assumed Content Ratings.</summary>
-    private static readonly FrozenSet<string> RatingTags = new[] {
+    private static readonly FrozenSet<string> s_ratingTags = new[] {
         "kodomo", "mina", "shoujo", "shounen", "josei", "seinen", "borderline porn", "18 restricted", "nudity", "sex", "violence", "sexual humour"
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
     // csharpier-ignore-end
@@ -38,7 +38,7 @@ public static class ContentRatingHelper
                 var name = t.Name?.Trim();
                 if (string.IsNullOrWhiteSpace(name))
                     continue;
-                if (!RatingTags.Contains(name))
+                if (!s_ratingTags.Contains(name))
                     continue;
                 anidbWeights[name.ToLowerInvariant()] = t.Weight;
             }
@@ -127,7 +127,7 @@ public static class ContentRatingHelper
                 if (!string.IsNullOrEmpty(srcVal) && srcVal.Equals("User", StringComparison.OrdinalIgnoreCase))
                     continue;
             }
-            if (!RatingTags.Contains(name))
+            if (!s_ratingTags.Contains(name))
                 continue;
             set.Add(name);
         }
@@ -140,7 +140,7 @@ public static class ContentRatingHelper
                 var name = at?.Name?.Trim();
                 if (string.IsNullOrWhiteSpace(name))
                     continue;
-                if (!RatingTags.Contains(name))
+                if (!s_ratingTags.Contains(name))
                     continue;
                 set.Add(name.ToLowerInvariant());
             }

@@ -51,26 +51,26 @@ public class ShokoController(
         if (!run)
             return Ok(new RelayResponse<object>(Status: "skipped", Message: "Set run=true to build the VFS"));
 
-        const string taskName = ShokoRelayConstants.TaskVfsBuild;
-        TaskHelper.StartTask(taskName);
+        const string TaskName = ShokoRelayConstants.TaskVfsBuild;
+        TaskHelper.StartTask(TaskName);
         try
         {
             var result = filterIds.Count > 0 ? _vfsBuilder.Build(filterIds, clean) : _vfsBuilder.Build((int?)null, clean);
 
-            if (_plexLibrary.IsEnabled && ShokoRelay.Settings.Automation.ScanOnVfsRefresh && filterIds.Count > 0)
+            if (PlexLibrary.IsEnabled && ShokoRelay.Settings.Automation.ScanOnVfsRefresh && filterIds.Count > 0)
             {
                 var toProcess = ResolveSeriesList(null, filterIds).Where(s => s != null).Cast<IShokoSeries>().ToList();
                 _ = SchedulePlexRefreshForSeriesAsync(toProcess);
             }
 
             var actionResult = LogAndReturn(ShokoRelayConstants.LogVfs, result, LogHelper.BuildVfsReport);
-            TaskHelper.CompleteTask(taskName, (actionResult as OkObjectResult)?.Value!);
+            TaskHelper.CompleteTask(TaskName, (actionResult as OkObjectResult)?.Value!);
             return actionResult;
         }
         catch (Exception ex)
         {
             var err = new { status = "error", message = ex.Message };
-            TaskHelper.CompleteTask(taskName, err);
+            TaskHelper.CompleteTask(TaskName, err);
             return BadRequest(new RelayResponse<object>(Status: "error", Message: ex.Message));
         }
     }
@@ -106,7 +106,7 @@ public class ShokoController(
     public async Task<IActionResult> RemoveMissingFiles([FromQuery] bool? dryRun = null)
     {
         bool doDry = dryRun ?? true;
-        const string taskName = ShokoRelayConstants.TaskShokoRemoveMissing;
+        const string TaskName = ShokoRelayConstants.TaskShokoRemoveMissing;
 
         try
         {
@@ -123,14 +123,14 @@ public class ShokoController(
             var actionResult = LogAndReturn(ShokoRelayConstants.LogRemoveMissing, resultData, (sb, r) => LogHelper.BuildRemoveMissingReport(sb, r.dryRun, r.removed));
 
             if (!doDry)
-                TaskHelper.CompleteTask(taskName, (actionResult as OkObjectResult)?.Value!);
+                TaskHelper.CompleteTask(TaskName, (actionResult as OkObjectResult)?.Value!);
             return actionResult;
         }
         catch (Exception ex)
         {
             var err = new { status = "error", message = ex.Message };
             if (!doDry)
-                TaskHelper.CompleteTask(taskName, err);
+                TaskHelper.CompleteTask(TaskName, err);
             return BadRequest(new RelayResponse<object>(Status: "error", Message: ex.Message));
         }
     }
@@ -188,7 +188,7 @@ public class ShokoController(
         [FromQuery] bool? excludeAdmin = null
     )
     {
-        if (!_plexLibrary.IsEnabled)
+        if (!PlexLibrary.IsEnabled)
             return BadRequest(new RelayResponse<object>(Status: "error", Message: "Plex configuration missing."));
         var (parsedDry, err) = ParseDryRunParam(dryRun);
         if (err != null)
@@ -284,7 +284,7 @@ public class ShokoController(
                 {
                     var roots = new HashSet<string>(VfsShared.PathComparer);
                     string rootName = VfsShared.ResolveRootFolderName();
-                    var fileData = MapHelper.GetSeriesFileData(s, _metadataService);
+                    var fileData = MapHelper.GetSeriesFileData(s, MetadataService);
                     foreach (var mapping in fileData.Mappings)
                     {
                         var location = mapping.Video.Files.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l.Path)) ?? mapping.Video.Files.FirstOrDefault();
@@ -295,7 +295,7 @@ public class ShokoController(
                             roots.Add(Path.Combine(importRoot, rootName, s.ID.ToString()));
                     }
                     foreach (var path in roots)
-                        await _plexLibrary.RefreshSectionPathAsync(path).ConfigureAwait(false);
+                        await PlexLibrary.RefreshSectionPathAsync(path).ConfigureAwait(false);
                 }
                 catch { }
             }

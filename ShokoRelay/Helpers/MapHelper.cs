@@ -190,11 +190,11 @@ public static class MapHelper
                 var sel = SelectPreferredTmdbOrdering(se.TmdbEpisodes, prefId).ElementAtOrDefault(fIdx);
                 if (sel != null)
                 {
-                    var (Season, Episode) = GetOrderingCoords(sel, prefId);
+                    var (season, episode) = GetOrderingCoords(sel, prefId);
                     tmdbEp = new
                     {
-                        SeasonNumber = Season,
-                        EpisodeNumber = Episode,
+                        SeasonNumber = season,
+                        EpisodeNumber = episode,
                         PreferredTitle = sel.PreferredTitle?.Value,
                     };
                 }

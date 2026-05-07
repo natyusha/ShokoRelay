@@ -13,8 +13,8 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
 {
     #region Fields & Constructor
 
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
-    private static readonly SemaphoreSlim _mappingSemaphore = new(1, 1);
+    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
+    private static readonly SemaphoreSlim s_mappingSemaphore = new(1, 1);
     private readonly IMetadataService _metadataService = metadataService;
     private readonly IVideoService _videoService = videoService;
     private readonly AnimeThemesApi _apiClient = new(httpClient);
@@ -48,7 +48,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
         }
         catch (Exception ex)
         {
-            Logger.Warn(ex, "AnimeThemes: Failed to import mapping from URL");
+            s_logger.Warn(ex, "AnimeThemes: Failed to import mapping from URL");
             return (0, "Import failed: " + ex.Message);
         }
     }
@@ -58,9 +58,9 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
     /// <returns>A build result with statistics.</returns>
     public async Task<AnimeThemesMappingBuildResult> BuildMappingFileAsync(CancellationToken ct = default)
     {
-        const string taskName = ShokoRelayConstants.TaskAtMapBuild;
-        TaskHelper.StartTask(taskName);
-        Logger.Info("AnimeThemes: Starting mapping task...");
+        const string TaskName = ShokoRelayConstants.TaskAtMapBuild;
+        TaskHelper.StartTask(TaskName);
+        s_logger.Info("AnimeThemes: Starting mapping task...");
 
         try
         {
@@ -163,12 +163,12 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
 
             var finalEntries = entries.GroupBy(e => e.FilePath).Select(g => g.First()).ToList();
             await File.WriteAllTextAsync(mapPath, AnimeThemesHelper.SerializeMapping(finalEntries), ct);
-            Logger.Info("AnimeThemes: Finished mapping task -> {0} entries written.", finalEntries.Count);
+            s_logger.Info("AnimeThemes: Finished mapping task -> {0} entries written.", finalEntries.Count);
             return new AnimeThemesMappingBuildResult(mapPath, finalEntries.Count, entries.Count - toProcess.Count, errors, messages);
         }
         finally
         {
-            TaskHelper.FinishTask(taskName);
+            TaskHelper.FinishTask(TaskName);
         }
     }
 
@@ -214,12 +214,12 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
     public async Task<AnimeThemesMappingApplyResult> ApplyMappingAsync(IReadOnlyCollection<int>? seriesFilter = null, CancellationToken ct = default)
     {
         // Acquire the async lock
-        await _mappingSemaphore.WaitAsync(ct).ConfigureAwait(false);
+        await s_mappingSemaphore.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            const string taskName = ShokoRelayConstants.TaskAtVfsBuild;
-            TaskHelper.StartTask(taskName);
-            Logger.Info("AnimeThemes VFS: Starting task...");
+            const string TaskName = ShokoRelayConstants.TaskAtVfsBuild;
+            TaskHelper.StartTask(TaskName);
+            s_logger.Info("AnimeThemes VFS: Starting task...");
             string mapPath = Path.Combine(_configDirectory, ShokoRelayConstants.FileAtMapping);
             if (!File.Exists(mapPath))
                 throw new FileNotFoundException("Mapping file not found");
@@ -349,12 +349,12 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
 
                             string targetOverride = AnimeThemesHelper.BuildThemeRelativeTarget(item.RelativePath, themeRoot);
 
-                            if (VfsShared.TryCreateLink(item.SourcePath, destPath, Logger, targetOverride: targetOverride))
+                            if (VfsShared.TryCreateLink(item.SourcePath, destPath, s_logger, targetOverride: targetOverride))
                             {
                                 Interlocked.Increment(ref state.Created);
                                 lock (state.CacheEntries)
                                     state.CacheEntries.Add(new WebmCacheEntry(destPath, item.Entry.VideoId, AnimeThemesHelper.CalculateBitmask(item.Entry)));
-                                Logger.Info("AnimeThemes VFS: Created link '{0}' (VideoID: {1})", Path.GetFileName(destPath), item.Entry.VideoId);
+                                s_logger.Info("AnimeThemes VFS: Created link '{0}' (VideoID: {1})", Path.GetFileName(destPath), item.Entry.VideoId);
                             }
                             else
                             {
@@ -409,12 +409,12 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                 }
             );
 
-            Logger.Info("AnimeThemes VFS: Task finished -> {0} links created in {1}ms.", state.Created, sw.ElapsedMilliseconds);
+            s_logger.Info("AnimeThemes VFS: Task finished -> {0} links created in {1}ms.", state.Created, sw.ElapsedMilliseconds);
             return new AnimeThemesMappingApplyResult(state.Created, state.Skipped, state.Matched, state.Errors, state.CacheEntries, sw.Elapsed);
         }
         finally
         {
-            _mappingSemaphore.Release();
+            s_mappingSemaphore.Release();
             TaskHelper.FinishTask(ShokoRelayConstants.TaskAtVfsBuild);
         }
     }

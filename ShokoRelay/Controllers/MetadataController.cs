@@ -77,7 +77,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
         if (!seriesId.HasValue)
             return EmptyMatch();
 
-        var series = _metadataService.GetShokoSeriesByID(seriesId.Value);
+        var series = MetadataService.GetShokoSeriesByID(seriesId.Value);
         if (series == null)
         {
             Logger.Info("Metadata: No Shoko series found for id {SeriesId}", seriesId.Value);
@@ -142,7 +142,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             if (!int.TryParse(parts[0], out int id))
                 return NotFound();
             int? partIdx = parts.Length > 1 && int.TryParse(parts[1], out int p) ? p : null;
-            var episode = isAniDbEp ? _metadataService.GetShokoEpisodeByAnidbID(id) : _metadataService.GetShokoEpisodeByID(id);
+            var episode = isAniDbEp ? MetadataService.GetShokoEpisodeByAnidbID(id) : MetadataService.GetShokoEpisodeByID(id);
             if (episode == null)
                 return NotFound();
             var m = ctx.FileData.Mappings.FirstOrDefault(x => x.Episodes.Any(e => e.ID == episode.ID));
@@ -162,8 +162,8 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
 
                     if (matchedTe != null)
                     {
-                        var (Season, Episode) = GetOrderingCoords(matchedTe, prefId);
-                        coords = new PlexCoords { Season = Season ?? coords.Season, Episode = Episode };
+                        var (sNum, epNum) = GetOrderingCoords(matchedTe, prefId);
+                        coords = new PlexCoords { Season = sNum ?? coords.Season, Episode = epNum };
                         tmdbOverride = matchedTe;
                     }
                 }
@@ -242,7 +242,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             if (!int.TryParse(parts[0], out int id))
                 return NotFound();
             int? partIdx = parts.Length > 1 && int.TryParse(parts[1], out int p) ? p : null;
-            var episode = isAniDbEp ? _metadataService.GetShokoEpisodeByAnidbID(id) : _metadataService.GetShokoEpisodeByID(id);
+            var episode = isAniDbEp ? MetadataService.GetShokoEpisodeByAnidbID(id) : MetadataService.GetShokoEpisodeByID(id);
             var m = episode != null ? ctx.FileData.Mappings.FirstOrDefault(x => x.Episodes.Any(e => e.ID == episode.ID)) : null;
             images = (episode != null && m != null) ? ExtractImages(_mapper.MapEpisode(episode, m.Coords, ctx.Series, ctx.Titles, partIdx, m.TmdbEpisode)) : [];
         }
@@ -284,7 +284,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     [HttpGet("collections/{groupId}")]
     public IActionResult GetCollection(int groupId)
     {
-        var group = _metadataService.GetShokoGroupByID(groupId);
+        var group = MetadataService.GetShokoGroupByID(groupId);
         if (group == null)
             return NotFound();
         var primarySeries = group.MainSeries ?? group.Series?.FirstOrDefault();
@@ -297,13 +297,13 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     [HttpGet("collections/user/{groupId}")]
     public IActionResult GetCollectionPoster(int groupId)
     {
-        var group = _metadataService.GetShokoGroupByID(groupId);
+        var group = MetadataService.GetShokoGroupByID(groupId);
         if (group == null)
             return NotFound();
         var primarySeries = group.MainSeries ?? group.Series?.FirstOrDefault();
         if (primarySeries == null)
             return NotFound();
-        var posterPath = PlexHelper.FindCollectionPosterPathByGroup(primarySeries, groupId, _metadataService);
+        var posterPath = PlexHelper.FindCollectionPosterPathByGroup(primarySeries, groupId, MetadataService);
         return string.IsNullOrWhiteSpace(posterPath) || !System.IO.File.Exists(posterPath)
             ? NotFound()
             : PhysicalFile(posterPath, GetCollectionContentTypeForExtension(Path.GetExtension(posterPath)) ?? "application/octet-stream");

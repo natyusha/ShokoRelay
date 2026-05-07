@@ -10,20 +10,20 @@ public sealed class FfmpegService
 {
     #region Fields & Constructor
 
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
-    private static readonly Lock FfmpegLock = new();
-    private static bool _ffmpegConfigured;
-    private static string _ffmpegPath = "ffmpeg";
-    private static string _ffprobePath = "ffprobe";
-    private static string _pluginDirectory = string.Empty;
-    private static string _workingDirectory = string.Empty;
+    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
+    private static readonly Lock s_ffmpegLock = new();
+    private static bool s_ffmpegConfigured;
+    private static string s_ffmpegPath = "ffmpeg";
+    private static string s_ffprobePath = "ffprobe";
+    private static string s_pluginDirectory = string.Empty;
+    private static string s_workingDirectory = string.Empty;
 
     /// <summary>Construct the service, supplying the path to the plugin directory which will be searched for binaries.</summary>
     /// <param name="pluginDirectory">The root directory for the plugin.</param>
     public FfmpegService(string pluginDirectory)
     {
-        _pluginDirectory = pluginDirectory;
-        _workingDirectory = _pluginDirectory;
+        s_pluginDirectory = pluginDirectory;
+        s_workingDirectory = s_pluginDirectory;
     }
 
     #endregion
@@ -40,7 +40,7 @@ public sealed class FfmpegService
         EnsureFfmpegConfigured();
         var args = new List<string> { "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", inputPath };
 
-        string output = await RunProcessCaptureAsync(_ffprobePath, args, ct);
+        string output = await RunProcessCaptureAsync(s_ffprobePath, args, ct);
         return double.TryParse(output.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out double seconds)
             ? TimeSpan.FromSeconds(seconds)
             : throw new InvalidOperationException("Unable to parse duration from ffprobe output.");
@@ -74,7 +74,7 @@ public sealed class FfmpegService
         };
         // csharpier-ignore-end
 
-        await RunProcessAsync(_ffmpegPath, args, null, null, ct, workingDir).ConfigureAwait(false);
+        await RunProcessAsync(s_ffmpegPath, args, null, null, ct, workingDir).ConfigureAwait(false);
     }
 
     /// <summary>Convert a media file to MP3 audio and return it in a MemoryStream.</summary>
@@ -87,7 +87,7 @@ public sealed class FfmpegService
         var ms = new MemoryStream();
         var args = new List<string> { "-loglevel", "error", "-i", inputPath, "-vn", "-acodec", "libmp3lame", "-b:a", "320k", "-f", "mp3", "pipe:1" };
 
-        await RunProcessAsync(_ffmpegPath, args, null, ms, ct);
+        await RunProcessAsync(s_ffmpegPath, args, null, ms, ct);
         ms.Position = 0;
         return ms;
     }
@@ -99,16 +99,16 @@ public sealed class FfmpegService
     /// <summary>Ensures that the paths to the FFmpeg and FFprobe binaries are resolved and verified. Searches configured paths, the plugin directory, and the system PATH.</summary>
     private static void EnsureFfmpegConfigured()
     {
-        if (_ffmpegConfigured)
+        if (s_ffmpegConfigured)
             return;
 
-        lock (FfmpegLock)
+        lock (s_ffmpegLock)
         {
-            if (_ffmpegConfigured)
+            if (s_ffmpegConfigured)
                 return;
 
             string configured = ShokoRelay.Settings.Advanced.FFmpegPath;
-            string pluginDir = _pluginDirectory;
+            string pluginDir = s_pluginDirectory;
             string ffmpegName = OperatingSystem.IsWindows() ? "ffmpeg.exe" : "ffmpeg";
             string ffprobeName = OperatingSystem.IsWindows() ? "ffprobe.exe" : "ffprobe";
 
@@ -126,7 +126,7 @@ public sealed class FfmpegService
                         candidates.Add(full);
                     else if (File.Exists(full))
                     {
-                        _ffmpegPath = full;
+                        s_ffmpegPath = full;
                         ffmpegFound = true;
                         string? dir = Path.GetDirectoryName(full);
                         if (!string.IsNullOrWhiteSpace(dir) && Directory.Exists(dir))
@@ -134,11 +134,11 @@ public sealed class FfmpegService
                         locatedDir ??= dir;
                     }
                     else
-                        Logger.Warn("FfmpegService: FFmpeg path does not exist ->{Path}", full);
+                        s_logger.Warn("FfmpegService: FFmpeg path does not exist ->{Path}", full);
                 }
                 catch (Exception ex)
                 {
-                    Logger.Warn(ex, "FfmpegService: Failed to configure FFmpeg path");
+                    s_logger.Warn(ex, "FfmpegService: Failed to configure FFmpeg path");
                 }
             }
 
@@ -148,27 +148,27 @@ public sealed class FfmpegService
             foreach (string dir in candidates)
             {
                 if (!ffmpegFound)
-                    (ffmpegFound, locatedDir) = TryFindBinary(dir, ffmpegName, ref _ffmpegPath, locatedDir);
+                    (ffmpegFound, locatedDir) = TryFindBinary(dir, ffmpegName, ref s_ffmpegPath, locatedDir);
                 if (!ffprobeFound)
-                    (ffprobeFound, locatedDir) = TryFindBinary(dir, ffprobeName, ref _ffprobePath, locatedDir);
+                    (ffprobeFound, locatedDir) = TryFindBinary(dir, ffprobeName, ref s_ffprobePath, locatedDir);
                 if (ffmpegFound && ffprobeFound)
                     break;
             }
 
             if (ffmpegFound || ffprobeFound)
             {
-                _workingDirectory = DetermineWorkingDirectory(locatedDir ?? pluginDir);
-                Logger.Info("FfmpegService: FFmpeg binaries configured at {Path}", locatedDir ?? "system PATH");
+                s_workingDirectory = DetermineWorkingDirectory(locatedDir ?? pluginDir);
+                s_logger.Info("FfmpegService: FFmpeg binaries configured at {Path}", locatedDir ?? "system PATH");
             }
             else
             {
-                _ffmpegPath = ffmpegName;
-                _ffprobePath = ffprobeName;
-                _workingDirectory = DetermineWorkingDirectory(pluginDir);
-                Logger.Warn("FfmpegService: FFmpeg binaries not found in configured paths -> falling back to system PATH");
+                s_ffmpegPath = ffmpegName;
+                s_ffprobePath = ffprobeName;
+                s_workingDirectory = DetermineWorkingDirectory(pluginDir);
+                s_logger.Warn("FfmpegService: FFmpeg binaries not found in configured paths -> falling back to system PATH");
             }
 
-            _ffmpegConfigured = true;
+            s_ffmpegConfigured = true;
         }
     }
 
@@ -200,7 +200,7 @@ public sealed class FfmpegService
                 return dir;
         }
 
-        return Directory.Exists(preferred) ? preferred : _pluginDirectory;
+        return Directory.Exists(preferred) ? preferred : s_pluginDirectory;
     }
 
     #endregion
@@ -316,7 +316,7 @@ public sealed class FfmpegService
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
-            WorkingDirectory = workingDir ?? _workingDirectory,
+            WorkingDirectory = workingDir ?? s_workingDirectory,
         };
 
         foreach (var arg in args)

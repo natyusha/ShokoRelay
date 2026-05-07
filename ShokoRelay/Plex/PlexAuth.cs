@@ -60,8 +60,8 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
     #region Fields & Constructor
 
     private const string BaseUrl = "https://plex.tv";
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
+    private static readonly JsonSerializerOptions s_jsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true,
@@ -199,11 +199,11 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
         CancellationToken ct = default
     )
     {
-        var (TokenValid, Servers, _) = await GetPlexServerListAsync(token, cid, ct).ConfigureAwait(false);
+        var (tokenValid, servers, _) = await GetPlexServerListAsync(token, cid, ct).ConfigureAwait(false);
         var list = new List<(PlexLibraryInfo, PlexServerInfo)>();
-        if (TokenValid)
+        if (tokenValid)
         {
-            foreach (var srv in Servers.Where(s => !string.IsNullOrEmpty(s.PreferredUri)))
+            foreach (var srv in servers.Where(s => !string.IsNullOrEmpty(s.PreferredUri)))
             {
                 try
                 {
@@ -214,7 +214,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
                 catch { }
             }
         }
-        return (TokenValid, Servers, list);
+        return (tokenValid, servers, list);
     }
 
     #endregion
@@ -259,7 +259,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
         }
         catch (Exception ex)
         {
-            Logger.Warn(ex, "PlexAuth: Failed to parse Switch User XML response");
+            s_logger.Warn(ex, "PlexAuth: Failed to parse Switch User XML response");
             return null;
         }
     }
@@ -296,7 +296,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
         }
         catch
         {
-            Logger.Warn("PlexAuth: Failed to revoke Plex token");
+            s_logger.Warn("PlexAuth: Failed to revoke Plex token");
         }
     }
 
@@ -326,12 +326,12 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
         var content = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
         try
         {
-            return JsonSerializer.Deserialize<T>(content, JsonOptions);
+            return JsonSerializer.Deserialize<T>(content, s_jsonOptions);
         }
         catch (JsonException ex)
         {
             string snippet = content.Length > 512 ? content[..512] : content;
-            Logger.Warn(ex, "PlexAuth: Failed to parse JSON -> Body starts with {0}", snippet);
+            s_logger.Warn(ex, "PlexAuth: Failed to parse JSON -> Body starts with {0}", snippet);
             return default;
         }
     }

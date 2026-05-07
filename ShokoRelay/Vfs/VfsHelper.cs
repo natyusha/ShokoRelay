@@ -9,12 +9,12 @@ public static class VfsHelper
     #region Regex and Mappings
 
     /// <summary>Regex to match standard quotes with the intention of turning them curly.</summary>
-    private static readonly Regex _quotedTextRegex = new("\"(.*?)\"", RegexOptions.Compiled);
+    private static readonly Regex s_quotedTextRegex = new("\"(.*?)\"", RegexOptions.Compiled);
 
     /// <summary>Regex to match whitespace except for Hair Space and Zero Width Spaceas they are part of some Plex Extra filename formatting.</summary>
-    private static readonly Regex _whitespaceRegex = new(@"((?![\u200A\u200B])\s)+", RegexOptions.Compiled);
-    private static readonly (string Find, string Replace)[] _styledReplacements = [("1/2", "½"), ("1/6", "⅙"), ("-->", "→"), ("<--", "←"), ("->", "→"), ("<-", "←")];
-    private static readonly IReadOnlyDictionary<string, string> _extraTypePrefixes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    private static readonly Regex s_whitespaceRegex = new(@"((?![\u200A\u200B])\s)+", RegexOptions.Compiled);
+    private static readonly (string Find, string Replace)[] s_styledReplacements = [("1/2", "½"), ("1/6", "⅙"), ("-->", "→"), ("<--", "←"), ("->", "→"), ("<-", "←")];
+    private static readonly IReadOnlyDictionary<string, string> s_extraTypePrefixes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
         ["trailer"] = "T",
         ["sceneOrSample"] = "P",
@@ -43,10 +43,10 @@ public static class VfsHelper
         if (string.IsNullOrWhiteSpace(title))
             return "";
         string c = title;
-        foreach (var (f, r) in _styledReplacements)
+        foreach (var (f, r) in s_styledReplacements)
             c = c.Replace(f, r, StringComparison.Ordinal);
-        c = _quotedTextRegex.Replace(c, "“$1”");
-        return _whitespaceRegex.Replace(new string([.. c.Select(ch => TextHelper.ReplacementCharMap.TryGetValue(ch, out var m) ? m : ch)]), " ").Trim(' ');
+        c = s_quotedTextRegex.Replace(c, "“$1”");
+        return s_whitespaceRegex.Replace(new string([.. c.Select(ch => TextHelper.ReplacementCharMap.TryGetValue(ch, out var m) ? m : ch)]), " ").Trim(' ');
     }
 
     #endregion
@@ -114,7 +114,7 @@ public static class VfsHelper
         bool isVariation = false
     )
     {
-        string ep = _extraTypePrefixes.TryGetValue(ex.Subtype, out var pref) ? pref + mapping.Coords.Episode.ToString($"D{pad}") : mapping.Coords.Episode.ToString($"D{pad}");
+        string ep = s_extraTypePrefixes.TryGetValue(ex.Subtype, out var pref) ? pref + mapping.Coords.Episode.ToString($"D{pad}") : mapping.Coords.Episode.ToString($"D{pad}");
         int totalParts = partCount ?? mapping.PartCount;
         string part = totalParts > 1 ? $"-pt{partIdx ?? mapping.PartIndex}" : (vIdx.HasValue ? $"-v{vIdx}" : "");
 

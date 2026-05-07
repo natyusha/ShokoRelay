@@ -19,8 +19,8 @@ public class ConfigProvider
 {
     #region Fields & Constructor
 
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
-    private static readonly JsonSerializerOptions Options = new() { AllowTrailingCommas = true, WriteIndented = true };
+    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
+    private static readonly JsonSerializerOptions s_options = new() { AllowTrailingCommas = true, WriteIndented = true };
 
     private readonly string _filePath,
         _tokenPath;
@@ -93,7 +93,7 @@ public class ConfigProvider
             _cachedServers = null;
             _cachedAdminUsername = null;
         }
-        Logger.Info("Config: Settings invalidated due to external file change");
+        s_logger.Info("Config: Settings invalidated due to external file change");
     }
 
     #endregion
@@ -108,7 +108,7 @@ public class ConfigProvider
         {
             JsonElement je => SanitizeConfigElement(je),
             null => null!,
-            _ => SanitizeConfigObject(JsonSerializer.Deserialize<object>(JsonSerializer.Serialize(obj, Options), Options)!),
+            _ => SanitizeConfigObject(JsonSerializer.Deserialize<object>(JsonSerializer.Serialize(obj, s_options), s_options)!),
         };
 
     private object SanitizeConfigElement(JsonElement je) =>
@@ -137,7 +137,7 @@ public class ConfigProvider
     /// <returns>A sanitized configuration object for dashboard consumption.</returns>
     public object GetDashboardConfig()
     {
-        var dict = JsonSerializer.Deserialize<Dictionary<string, object>>(JsonSerializer.Serialize(GetSettings(), Options))!;
+        var dict = JsonSerializer.Deserialize<Dictionary<string, object>>(JsonSerializer.Serialize(GetSettings(), s_options))!;
         dict["PlexLibrary"] = new
         {
             HasToken = !string.IsNullOrWhiteSpace(GetPlexToken()),
@@ -161,7 +161,7 @@ public class ConfigProvider
         NormalizePathMappings(settings);
         NormalizeCsvFields(settings);
         lock (_settingsLock)
-            File.WriteAllText(_filePath, JsonSerializer.Serialize(settings, Options));
+            File.WriteAllText(_filePath, JsonSerializer.Serialize(settings, s_options));
         _settings = settings;
     }
 
@@ -170,11 +170,11 @@ public class ConfigProvider
         RelayConfig s;
         try
         {
-            s = File.Exists(_filePath) ? JsonSerializer.Deserialize<RelayConfig>(File.ReadAllText(_filePath), Options) ?? new() : new();
+            s = File.Exists(_filePath) ? JsonSerializer.Deserialize<RelayConfig>(File.ReadAllText(_filePath), s_options) ?? new() : new();
         }
         catch (Exception ex)
         {
-            Logger.Warn(ex, "Config: Invalid settings -> Using defaults");
+            s_logger.Warn(ex, "Config: Invalid settings -> Using defaults");
             s = new();
         }
         ApplyDefaultValues(s);
@@ -207,7 +207,7 @@ public class ConfigProvider
         }
         catch (Exception ex)
         {
-            Logger.Warn(ex, "Config: Failed to delete token file");
+            s_logger.Warn(ex, "Config: Failed to delete token file");
         }
     }
 
@@ -235,7 +235,7 @@ public class ConfigProvider
                     Servers = s ?? [],
                     Libraries = l ?? [],
                 },
-                Options
+                s_options
             )
         );
 
@@ -411,7 +411,7 @@ public class ConfigProvider
                 if (currentVal != clampedVal)
                 {
                     prop.SetValue(obj, clampedVal);
-                    Logger.Trace("Config: Clamped {0} from {1} to {2}", prop.Name, currentVal, clampedVal);
+                    s_logger.Trace("Config: Clamped {0} from {1} to {2}", prop.Name, currentVal, clampedVal);
                 }
             }
             // Recurse into nested config classes (AutomationConfig, AdvancedConfig, etc.)

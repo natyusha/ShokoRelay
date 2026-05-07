@@ -62,7 +62,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
 {
     #region Fields & Constructor
 
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
 
     #endregion
 
@@ -71,9 +71,9 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
     /// <inheritdoc/>
     public async Task<BuildCollectionsResult> BuildCollectionsAsync(IEnumerable<IShokoSeries?> seriesList, CancellationToken cancellationToken = default)
     {
-        const string taskName = ShokoRelayConstants.TaskPlexCollectionsBuild;
-        TaskHelper.StartTask(taskName);
-        Logger.Info("CollectionService: Starting task...");
+        const string TaskName = ShokoRelayConstants.TaskPlexCollectionsBuild;
+        TaskHelper.StartTask(TaskName);
+        s_logger.Info("CollectionService: Starting task...");
 
         try
         {
@@ -111,7 +111,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                     var series = metadataService.GetShokoSeriesByID(sid.Value);
                     var collectionName = series != null ? mapper.GetCollectionName(series) : null;
 
-                    Logger.Trace("CollectionService: Processing series {0} (Plex Key: {1})", sid.Value, item.RatingKey);
+                    s_logger.Trace("CollectionService: Processing series {0} (Plex Key: {1})", sid.Value, item.RatingKey);
 
                     var currentPlexCollections = item.Collection?.Select(c => c.Tag).Where(t => !string.IsNullOrEmpty(t)).ToList() ?? [];
                     bool alreadyHasCorrect = !string.IsNullOrEmpty(collectionName) && currentPlexCollections.Any(c => string.Equals(c, collectionName, StringComparison.OrdinalIgnoreCase));
@@ -122,7 +122,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                         if (collectionName == null || !string.Equals(staleName, collectionName, StringComparison.OrdinalIgnoreCase))
                         {
                             if (await plexCollections.RemoveCollectionFromItemAsync(plexKey, staleName!, target, cancellationToken).ConfigureAwait(false))
-                                Logger.Info("CollectionService: Removed incorrect collection '{0}' from '{1}'", staleName, item.Title);
+                                s_logger.Info("CollectionService: Removed incorrect collection '{0}' from '{1}'", staleName, item.Title);
                         }
                     }
 
@@ -133,7 +133,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                         if (assignmentOk)
                         {
                             created++;
-                            Logger.Info("CollectionService: Assigned '{0}' to '{1}'", collectionName, item.Title);
+                            s_logger.Info("CollectionService: Assigned '{0}' to '{1}'", collectionName, item.Title);
                             createdList.Add(
                                 new
                                 {
@@ -166,19 +166,19 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                             if (await TryApplyPoster(series!, collectionName, cid, target, cancellationToken).ConfigureAwait(false))
                             {
                                 uploaded++;
-                                Logger.Debug("CollectionService: Applied poster for '{0}'", collectionName);
+                                s_logger.Debug("CollectionService: Applied poster for '{0}'", collectionName);
                             }
                         }
                     }
                 }
             }
             int deleted = await plexCollections.DeleteEmptyCollectionsAsync(cancellationToken).ConfigureAwait(false);
-            Logger.Info("CollectionService: Task finished -> {0} collections assigned", created);
+            s_logger.Info("CollectionService: Task finished -> {0} collections assigned", created);
             return new BuildCollectionsResult(uniqueSeries.Count, created, uploaded, 0, uniqueSeries.Count - created, errs, deleted, createdList, errorsList);
         }
         finally
         {
-            TaskHelper.FinishTask(taskName);
+            TaskHelper.FinishTask(TaskName);
         }
     }
 

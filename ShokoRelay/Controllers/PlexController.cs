@@ -83,11 +83,11 @@ public class PlexController(
                 return Ok(new RelayResponse<object>(Status: "pending"));
 
             Logger.Info("Plex: Authentication successful -> Saving token and discovering libraries...");
-            _configProvider.UpdatePlexTokenInfo(token: pin.AuthToken);
+            ConfigProvider.UpdatePlexTokenInfo(token: pin.AuthToken);
 
             try
             {
-                await _configProvider.RefreshAdminUsername(_plexAuth, cancellationToken).ConfigureAwait(false);
+                await ConfigProvider.RefreshAdminUsername(_plexAuth, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -96,7 +96,7 @@ public class PlexController(
 
             try
             {
-                string clientIdentifier = _configProvider.GetPlexClientIdentifier();
+                string clientIdentifier = ConfigProvider.GetPlexClientIdentifier();
                 var discovery = await _plexAuth.DiscoverShokoLibrariesAsync(pin.AuthToken, clientIdentifier, cancellationToken).ConfigureAwait(false);
                 PersistDiscoveryResults(discovery);
             }
@@ -119,13 +119,13 @@ public class PlexController(
     [HttpPost("plex/auth/refresh")]
     public async Task<IActionResult> RefreshPlexLibraries(CancellationToken cancellationToken = default)
     {
-        var token = _configProvider.GetPlexToken();
+        var token = ConfigProvider.GetPlexToken();
         if (string.IsNullOrWhiteSpace(token))
             return Unauthorized(new RelayResponse<object>(Status: "error", Message: "Plex token is missing."));
 
         Logger.Info("Plex: Refreshing servers and libraries...");
-        await _configProvider.RefreshAdminUsername(_plexAuth, cancellationToken).ConfigureAwait(false);
-        string clientIdentifier = _configProvider.GetPlexClientIdentifier();
+        await ConfigProvider.RefreshAdminUsername(_plexAuth, cancellationToken).ConfigureAwait(false);
+        string clientIdentifier = ConfigProvider.GetPlexClientIdentifier();
 
         try
         {
@@ -146,15 +146,15 @@ public class PlexController(
     [HttpPost("plex/auth/unlink")]
     public async Task<IActionResult> UnlinkPlex(CancellationToken cancellationToken = default)
     {
-        var token = _configProvider.GetPlexToken();
+        var token = ConfigProvider.GetPlexToken();
         if (string.IsNullOrWhiteSpace(token))
             return Ok(new RelayResponse<object>());
 
         Logger.Info("Plex: Unlinking account and revoking token...");
-        string clientIdentifier = _configProvider.GetPlexClientIdentifier();
+        string clientIdentifier = ConfigProvider.GetPlexClientIdentifier();
         await _plexAuth.RevokePlexTokenAsync(token, clientIdentifier, cancellationToken).ConfigureAwait(false);
 
-        _configProvider.DeleteTokenFile();
+        ConfigProvider.DeleteTokenFile();
         return Ok(new RelayResponse<object>());
     }
 
@@ -173,19 +173,19 @@ public class PlexController(
         if (validation != null)
             return validation;
 
-        if (!_plexLibrary.IsEnabled)
+        if (!PlexLibrary.IsEnabled)
             return BadRequest(new RelayResponse<object>(Status: "error", Message: "Plex is not configured."));
 
         int triggeredCount = 0;
         foreach (var id in ids)
         {
-            var series = _metadataService.GetShokoSeriesByID(id);
+            var series = MetadataService.GetShokoSeriesByID(id);
             if (series == null)
                 continue;
 
-            foreach (var path in VfsShared.ResolveSeriesVfsPaths(series, _metadataService))
+            foreach (var path in VfsShared.ResolveSeriesVfsPaths(series, MetadataService))
             {
-                if (await _plexLibrary.RefreshSectionPathAsync(path).ConfigureAwait(false))
+                if (await PlexLibrary.RefreshSectionPathAsync(path).ConfigureAwait(false))
                     triggeredCount++;
             }
         }
@@ -203,19 +203,19 @@ public class PlexController(
         if (guard != null)
             return guard;
 
-        const string taskName = ShokoRelayConstants.TaskPlexCollectionsBuild;
-        TaskHelper.StartTask(taskName);
+        const string TaskName = ShokoRelayConstants.TaskPlexCollectionsBuild;
+        TaskHelper.StartTask(TaskName);
         try
         {
             var r = await _collectionService.BuildCollectionsAsync(seriesList, CancellationToken.None).ConfigureAwait(false);
             var actionResult = LogAndReturn(ShokoRelayConstants.LogCollections, r, LogHelper.BuildCollectionsReport);
-            TaskHelper.CompleteTask(taskName, (actionResult as OkObjectResult)?.Value!);
+            TaskHelper.CompleteTask(TaskName, (actionResult as OkObjectResult)?.Value!);
             return actionResult;
         }
         catch (Exception ex)
         {
             var err = new { status = "error", message = ex.Message };
-            TaskHelper.CompleteTask(taskName, err);
+            TaskHelper.CompleteTask(TaskName, err);
             return BadRequest(new RelayResponse<object>(Status: "error", Message: ex.Message));
         }
     }
@@ -231,7 +231,7 @@ public class PlexController(
         if (guard != null)
             return guard;
 
-        var targets = _plexLibrary.GetConfiguredTargets();
+        var targets = PlexLibrary.GetConfiguredTargets();
         if (targets == null || targets.Count == 0)
             return NoPlexTargetsResponse(seriesList);
 
@@ -259,20 +259,20 @@ public class PlexController(
         if (guard != null)
             return guard;
 
-        const string taskName = ShokoRelayConstants.TaskPlexRatingsApply;
-        TaskHelper.StartTask(taskName);
+        const string TaskName = ShokoRelayConstants.TaskPlexRatingsApply;
+        TaskHelper.StartTask(TaskName);
         try
         {
             var allowedIds = new HashSet<int>(seriesList.Select(s => s?.ID ?? 0));
             var result = await _criticRatingService.ApplyRatingsAsync(allowedIds, CancellationToken.None).ConfigureAwait(false);
             var actionResult = LogAndReturn(ShokoRelayConstants.LogRatings, result, LogHelper.BuildRatingsReport);
-            TaskHelper.CompleteTask(taskName, (actionResult as OkObjectResult)?.Value!);
+            TaskHelper.CompleteTask(TaskName, (actionResult as OkObjectResult)?.Value!);
             return actionResult;
         }
         catch (Exception ex)
         {
             var err = new { status = "error", message = ex.Message };
-            TaskHelper.CompleteTask(taskName, err);
+            TaskHelper.CompleteTask(TaskName, err);
             return BadRequest(new RelayResponse<object>(Status: "error", Message: ex.Message));
         }
     }
@@ -283,12 +283,12 @@ public class PlexController(
     [HttpGet("plex/automation/run")]
     public async Task<IActionResult> RunPlexAutomationNow(CancellationToken cancellationToken = default)
     {
-        if (!_plexLibrary.IsEnabled)
+        if (!PlexLibrary.IsEnabled)
             return BadRequest(new RelayResponse<object>(Status: "error", Message: "Plex configuration missing."));
 
         try
         {
-            var allSeries = _metadataService.GetAllShokoSeries()?.Cast<Shoko.Abstractions.Metadata.Shoko.IShokoSeries?>().ToList() ?? [];
+            var allSeries = MetadataService.GetAllShokoSeries()?.Cast<Shoko.Abstractions.Metadata.Shoko.IShokoSeries?>().ToList() ?? [];
             if (_collectionService != null)
                 await _collectionService.BuildCollectionsAsync(allSeries, cancellationToken).ConfigureAwait(false);
             if (_criticRatingService != null)
@@ -336,7 +336,7 @@ public class PlexController(
         if (!shokoEpisodeId.HasValue)
             return Ok(new { status = "ignored", reason = "no_shoko_guid" });
 
-        var shokoEpisode = _metadataService.GetShokoEpisodeByID(shokoEpisodeId.Value);
+        var shokoEpisode = MetadataService.GetShokoEpisodeByID(shokoEpisodeId.Value);
         if (shokoEpisode == null)
             return Ok(new { status = "ignored", reason = "episode_not_found" });
 
@@ -394,23 +394,23 @@ public class PlexController(
 
     private async Task<(bool Allowed, string Reason)> ValidateWebhookSource(PlexWebhookPayload evt, RelayConfig cfg, CancellationToken ct)
     {
-        if (!_configProvider.IsManagedServer(evt.Server?.Uuid))
+        if (!ConfigProvider.IsManagedServer(evt.Server?.Uuid))
             return (false, "unrecognized_server_uuid");
         var plexUser = evt.Account?.Title?.Trim();
         if (string.IsNullOrWhiteSpace(plexUser))
             return (false, "empty_account_title");
 
-        var extraEntries = _configProvider.GetExtraPlexUserEntries();
+        var extraEntries = ConfigProvider.GetExtraPlexUserEntries();
         if (extraEntries.Any(e => string.Equals(e.Name, plexUser, StringComparison.OrdinalIgnoreCase)))
             return (true, "allowed_extra_user");
 
         if (evt.Owner == true)
         {
-            string? adminName = _configProvider.GetAdminUsername();
+            string? adminName = ConfigProvider.GetAdminUsername();
             if (string.IsNullOrEmpty(adminName))
             {
-                await _configProvider.RefreshAdminUsername(_plexAuth, ct);
-                adminName = _configProvider.GetAdminUsername();
+                await ConfigProvider.RefreshAdminUsername(_plexAuth, ct);
+                adminName = ConfigProvider.GetAdminUsername();
             }
             if (string.IsNullOrEmpty(adminName))
                 return cfg.Automation.ShokoSyncWatchedExcludeAdmin ? (false, "admin_excluded_identity_unknown") : (true, "allowed_owner_identity_assumed");

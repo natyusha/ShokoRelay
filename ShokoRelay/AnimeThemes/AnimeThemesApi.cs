@@ -9,8 +9,8 @@ public class AnimeThemesApi
 {
     #region Fields & Constructor
 
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
-    private static readonly TimeSpan RateLimitDelay = TimeSpan.FromSeconds(0.7);
+    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
+    private static readonly TimeSpan s_rateLimitDelay = TimeSpan.FromSeconds(0.7);
 
     private readonly HttpClient _http;
     private readonly JsonSerializerOptions _jsonOptions;
@@ -88,7 +88,7 @@ public class AnimeThemesApi
         using var response = await _http.GetAsync(url, ct);
         if (!response.IsSuccessStatusCode)
         {
-            Logger.Warn("AnimeThemes: API returned {Status} for {Url}", response.StatusCode, url);
+            s_logger.Warn("AnimeThemes: API returned {Status} for {Url}", response.StatusCode, url);
             return default;
         }
 
@@ -104,7 +104,7 @@ public class AnimeThemesApi
         try
         {
             var now = DateTimeOffset.UtcNow;
-            var wait = _lastRequest + RateLimitDelay - now;
+            var wait = _lastRequest + s_rateLimitDelay - now;
             if (wait > TimeSpan.Zero)
                 await Task.Delay(wait, ct);
             _lastRequest = DateTimeOffset.UtcNow;

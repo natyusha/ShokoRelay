@@ -15,20 +15,20 @@ public static class PlexHelper
     #region GUID Parsing
 
     /// <summary>Regex which extracts the ID from a Show GUID.</summary>
-    private static readonly Regex _showIdRegex = new(@"/show/(\d+)", RegexOptions.Compiled);
+    private static readonly Regex s_showIdRegex = new(@"/show/(\d+)", RegexOptions.Compiled);
 
     /// <summary>Regex which extracts the ID from an Episode GUID.</summary>
-    private static readonly Regex _episodeIdRegex = new(@"/episode/e(\d+)", RegexOptions.Compiled);
+    private static readonly Regex s_episodeIdRegex = new(@"/episode/e(\d+)", RegexOptions.Compiled);
 
     /// <summary>Parse a Plex GUID string and return the embedded Shoko series ID.</summary>
     /// <param name="guid">Plex GUID.</param>
     /// <returns>Extracted ID or null.</returns>
-    public static int? ExtractShokoSeriesIdFromGuid(string? guid) => ExtractIdFromGuid(guid, _showIdRegex);
+    public static int? ExtractShokoSeriesIdFromGuid(string? guid) => ExtractIdFromGuid(guid, s_showIdRegex);
 
     /// <summary>Parse Shoko episode ID from GUID.</summary>
     /// <param name="guid">Plex GUID.</param>
     /// <returns>Extracted ID or null.</returns>
-    public static int? ExtractShokoEpisodeIdFromGuid(string? guid) => ExtractIdFromGuid(guid, _episodeIdRegex);
+    public static int? ExtractShokoEpisodeIdFromGuid(string? guid) => ExtractIdFromGuid(guid, s_episodeIdRegex);
 
     private static int? ExtractIdFromGuid(string? guid, Regex regex)
     {

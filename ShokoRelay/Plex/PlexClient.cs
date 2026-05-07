@@ -9,7 +9,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
 {
     #region Fields & Properties
 
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
 
     /// <summary>Internal access to the shared HttpClient instance.</summary>
     internal HttpClient HttpClient => httpClient;
@@ -56,11 +56,11 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
             if (resp.IsSuccessStatusCode)
             {
                 anyOk = true;
-                Logger.Debug("PlexClient: refresh triggered for folder -> '{0}' on {1}:{2} (Match: {3})", logFolderName, target.ServerUrl, target.SectionId, matchingTargets.Any());
+                s_logger.Debug("PlexClient: refresh triggered for folder -> '{0}' on {1}:{2} (Match: {3})", logFolderName, target.ServerUrl, target.SectionId, matchingTargets.Any());
             }
             else
             {
-                Logger.Warn("PlexClient: refresh failed ({0}) for folder -> '{1}' in section {2}", resp.StatusCode, logFolderName, target.SectionId);
+                s_logger.Warn("PlexClient: refresh failed ({0}) for folder -> '{1}' in section {2}", resp.StatusCode, logFolderName, target.SectionId);
             }
         }
         return anyOk;
@@ -155,7 +155,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         }
         catch (Exception ex)
         {
-            Logger.Trace(ex, "PlexClient: Failed to find rating key for Shoko series {0} in section {1}", shokoSeriesId, target.SectionId);
+            s_logger.Trace(ex, "PlexClient: Failed to find rating key for Shoko series {0} in section {1}", shokoSeriesId, target.SectionId);
             return null;
         }
     }

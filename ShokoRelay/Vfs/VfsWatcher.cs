@@ -22,7 +22,7 @@ public class VfsWatcher(
 {
     #region Fields & Constructor
 
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
     private readonly IVideoService _videoService = videoService;
     private readonly IVideoReleaseService _releaseService = releaseService;
     private readonly VfsBuilder _builder = builder;
@@ -49,7 +49,7 @@ public class VfsWatcher(
         _videoService.VideoFileDeleted += OnVideoFileDeleted;
         _releaseService.ReleaseSaved += OnVideoReleaseSaved;
 
-        Logger.Info("VFS: VfsWatcher -> Started (listening for relocation, matching and deletion events)");
+        s_logger.Info("VFS: VfsWatcher -> Started (listening for relocation, matching and deletion events)");
     }
 
     /// <summary>Unsubscribe from Shoko video-file events and stop watching.</summary>
@@ -70,7 +70,7 @@ public class VfsWatcher(
         }
         catch { }
 
-        Logger.Info("VFS: VfsWatcher -> Stopped");
+        s_logger.Info("VFS: VfsWatcher -> Stopped");
     }
 
     #endregion
@@ -79,13 +79,13 @@ public class VfsWatcher(
 
     private void OnVideoFileRelocated(object? sender, VideoFileRelocatedEventArgs e)
     {
-        Logger.Info("VFS: File relocated/renamed: {0}", Path.GetFileName(e.RelativePath));
+        s_logger.Info("VFS: File relocated/renamed: {0}", Path.GetFileName(e.RelativePath));
         HandleFileEvent(e);
     }
 
     private void OnVideoFileDeleted(object? sender, VideoFileEventArgs e)
     {
-        Logger.Info("VFS: File deleted: {0}", Path.GetFileName(e.RelativePath));
+        s_logger.Info("VFS: File deleted: {0}", Path.GetFileName(e.RelativePath));
         HandleFileEvent(e);
     }
 
@@ -96,11 +96,11 @@ public class VfsWatcher(
             return;
 
         string fileName = e.Video.EarliestKnownName ?? "Unknown File";
-        Logger.Info("VFS: Release saved for video '{0}'", Path.GetFileName(fileName));
+        s_logger.Info("VFS: Release saved for video '{0}'", Path.GetFileName(fileName));
 
         foreach (var series in e.Video.Series)
         {
-            Logger.Debug("VFS: Adding series '{0}' (ID: {1}) to pending queue due to release save", series.PreferredTitle?.Value, series.ID);
+            s_logger.Debug("VFS: Adding series '{0}' (ID: {1}) to pending queue due to release save", series.PreferredTitle?.Value, series.ID);
             _pending[series.ID] = 1;
         }
 
@@ -160,7 +160,7 @@ public class VfsWatcher(
                     var sw = Stopwatch.StartNew();
                     var result = _builder.Build(seriesIds, cleanRoot: false, pruneSeries: true);
                     sw.Stop();
-                    Logger.Info(
+                    s_logger.Info(
                         "VFS: batch refreshed for {0} series in {1}ms -> created={2} planned={3} skipped={4} seriesProcessed={5} errors={6}",
                         seriesIds.Count,
                         sw.ElapsedMilliseconds,
@@ -176,7 +176,7 @@ public class VfsWatcher(
                 }
                 catch (Exception ex)
                 {
-                    Logger.Warn(ex, "VFS: Batch refresh failed");
+                    s_logger.Warn(ex, "VFS: Batch refresh failed");
                 }
 
                 await Task.Delay(400).ConfigureAwait(false);
@@ -247,14 +247,14 @@ public class VfsWatcher(
                         if (Directory.Exists(path) && Directory.EnumerateFileSystemEntries(path).Any())
                             _ = _plexLibrary.RefreshSectionPathAsync(path, cts.Token);
                         else
-                            Logger.Debug("VFS: Library scan for '{0}' skipped -> path '{1}' not ready or empty", series.PreferredTitle?.Value, path);
+                            s_logger.Debug("VFS: Library scan for '{0}' skipped -> path '{1}' not ready or empty", series.PreferredTitle?.Value, path);
                     }
                 }
             }
             catch (OperationCanceledException) { }
             catch (Exception ex)
             {
-                Logger.Error(ex, "VFS: Library scan failed for series {0}", series.ID);
+                s_logger.Error(ex, "VFS: Library scan failed for series {0}", series.ID);
             }
             finally
             {
@@ -276,7 +276,7 @@ public class VfsWatcher(
             oldCts.Dispose();
         }
 
-        Logger.Debug("VFS: Scheduling metadata fixup for '{0}' (ID: {1}) in {2} minute(s)", series.PreferredTitle?.Value, series.ID, delayMinutes);
+        s_logger.Debug("VFS: Scheduling metadata fixup for '{0}' (ID: {1}) in {2} minute(s)", series.PreferredTitle?.Value, series.ID, delayMinutes);
 
         var cts = new CancellationTokenSource();
         _pendingMetadataFixups[series.ID] = cts;
@@ -314,7 +314,7 @@ public class VfsWatcher(
             // Regenerate the VFS to account for cases where the episode/season numbering was updated in Shoko after the initial file event was processed (a metadata refresh can't do this on its own)
             var vfsResult = _builder.Build(series.ID, cleanRoot: false, pruneSeries: true);
             if (vfsResult.CreatedLinks > 0)
-                Logger.Info("VFS: Re-generated links for '{0}' during fixup phase", series.PreferredTitle?.Value);
+                s_logger.Info("VFS: Re-generated links for '{0}' during fixup phase", series.PreferredTitle?.Value);
 
             int bufferSeconds = ShokoRelay.Settings.Advanced.PlexScanDelay;
             if (bufferSeconds > 0)
@@ -335,18 +335,18 @@ public class VfsWatcher(
                 if (ratingKey.HasValue)
                 {
                     foundInAnyTarget = true;
-                    Logger.Info("VFS: Triggering debounced metadata fixup for '{0}' (RatingKey: {1}) on {2}", series.PreferredTitle?.Value, ratingKey.Value, target.ServerName);
+                    s_logger.Info("VFS: Triggering debounced metadata fixup for '{0}' (RatingKey: {1}) on {2}", series.PreferredTitle?.Value, ratingKey.Value, target.ServerName);
                     await _plexLibrary.RefreshMetadataAsync(ratingKey.Value, target, token).ConfigureAwait(false);
                 }
             }
 
             if (!foundInAnyTarget)
-                Logger.Debug("VFS: Debounced fixup for '{0}' skipped; rating key not found in Plex yet", series.PreferredTitle?.Value);
+                s_logger.Debug("VFS: Debounced fixup for '{0}' skipped; rating key not found in Plex yet", series.PreferredTitle?.Value);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            Logger.Error(ex, "VFS: Metadata fixup failed for series {0}", series.ID);
+            s_logger.Error(ex, "VFS: Metadata fixup failed for series {0}", series.ID);
         }
     }
 
@@ -420,7 +420,7 @@ public class VfsWatcher(
         }
         catch (Exception ex)
         {
-            Logger.Error(ex, "VFS: Collection update failed for series {0}", series.ID);
+            s_logger.Error(ex, "VFS: Collection update failed for series {0}", series.ID);
         }
     }
 

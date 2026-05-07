@@ -14,7 +14,7 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
 {
     #region Fields & Constructor
 
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
     private readonly PlexClient _plexClient = plexClient;
     private readonly IMetadataService _metadataService = metadataService;
     private readonly IUserDataService _userDataService = userDataService;
@@ -62,12 +62,12 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
             var userBuckets = new List<(string Name, List<PlexMetadataItem> Items)>();
             if (!actualExclude)
                 userBuckets.Add(("admin", adminItems ?? []));
-            foreach (var (Name, Pin) in extraEntries)
+            foreach (var (name, pin) in extraEntries)
             {
-                var (eps, err) = await SyncHelper.FetchManagedUserSectionEpisodesAsync(_plexAuth, _plexClient, _configProvider, target, Name, Pin, sinceHours, cancellationToken).ConfigureAwait(false);
+                var (eps, err) = await SyncHelper.FetchManagedUserSectionEpisodesAsync(_plexAuth, _plexClient, _configProvider, target, name, pin, sinceHours, cancellationToken).ConfigureAwait(false);
                 if (!string.IsNullOrEmpty(err))
-                    result = SyncHelper.RecordError(result, result.PerUser, Name, err);
-                userBuckets.Add((Name, eps));
+                    result = SyncHelper.RecordError(result, result.PerUser, name, err);
+                userBuckets.Add((name, eps));
             }
 
             foreach (var (uName, items) in userBuckets)
@@ -110,7 +110,7 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                             await _userDataService.SetEpisodeWatchedStatus(ep, defaultUser, true, watchedAt, videoReason: VideoUserDataSaveReason.UserInteraction).ConfigureAwait(false);
                         appliedIds.Add(ep.ID);
                         result = SyncHelper.IncMarkedWatched(result, result.PerUser, uName);
-                        Logger.Info("WatchedSyncService: {0}Plex->Shoko: {1} marked {2} S{3}E{4}", logPrefix, uName, ep.Series?.PreferredTitle?.Value, ep.SeasonNumber, ep.EpisodeNumber);
+                        s_logger.Info("WatchedSyncService: {0}Plex->Shoko: {1} marked {2} S{3}E{4}", logPrefix, uName, ep.Series?.PreferredTitle?.Value, ep.SeasonNumber, ep.EpisodeNumber);
                     }
                     else
                         result = SyncHelper.IncSkipped(result, result.PerUser, uName);

@@ -71,7 +71,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
 {
     #region Fields & Constructor
 
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
     private readonly HttpClient _http = httpClient;
     private readonly FfmpegService _ffmpegService = ffmpegService;
     private readonly PlexClient _plexClient = plexClient;
@@ -128,7 +128,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
 
     private void RefreshThemeMp3CacheInternal()
     {
-        Logger.Info("AnimeThemes: Building Theme.mp3 cache -> scanning all managed import folders...");
+        s_logger.Info("AnimeThemes: Building Theme.mp3 cache -> scanning all managed import folders...");
         var excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { VfsShared.ResolveRootFolderName(), VfsShared.ResolveCollectionPostersFolderName(), VfsShared.ResolveAnimeThemesFolderName() };
         try
         {
@@ -149,11 +149,11 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
                     .OfType<string>(),
             ];
             SaveCacheToFile();
-            Logger.Info("AnimeThemes: Theme.mp3 cache refreshed -> {0} folders found across {1} roots", _themeMp3Cache.Count, roots.Count);
+            s_logger.Info("AnimeThemes: Theme.mp3 cache refreshed -> {0} folders found across {1} roots", _themeMp3Cache.Count, roots.Count);
         }
         catch (Exception ex)
         {
-            Logger.Warn(ex, "AnimeThemes: RefreshThemeMp3Cache -> Repositories not ready");
+            s_logger.Warn(ex, "AnimeThemes: RefreshThemeMp3Cache -> Repositories not ready");
             _themeMp3Cache ??= [];
         }
     }
@@ -173,7 +173,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
             }
             catch
             {
-                Logger.Warn("AnimeThemes: Failed to read {0} -> Attempting full scan", ShokoRelayConstants.FileAtMp3Cache);
+                s_logger.Warn("AnimeThemes: Failed to read {0} -> Attempting full scan", ShokoRelayConstants.FileAtMp3Cache);
             }
         }
         RefreshThemeMp3CacheInternal();
@@ -202,7 +202,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         string root = query.Path ?? "";
         if (!Directory.Exists(root))
         {
-            Logger.Warn("AnimeThemes MP3: Batch root not found -> {0}", root);
+            s_logger.Warn("AnimeThemes MP3: Batch root not found -> {0}", root);
             return new ThemeMp3BatchResult(root, [new(root, "error", "Batch root not found.")], 0, 0, 1);
         }
 
@@ -210,11 +210,11 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         if (!string.IsNullOrWhiteSpace(query.Season) && GetSeasonRange(query.Season) == null)
         {
             string msg = $"Malformed season filter '{query.Season}' -> Expected format 'Season Year' (e.g. 'Spring 2025').";
-            Logger.Warn("AnimeThemes MP3: {0}", msg);
+            s_logger.Warn("AnimeThemes MP3: {0}", msg);
             return new ThemeMp3BatchResult(root, [new(root, "error", msg)], 0, 0, 1);
         }
 
-        Logger.Info("AnimeThemes MP3: Starting batch generation for root -> {0}", root);
+        s_logger.Info("AnimeThemes MP3: Starting batch generation for root -> {0}", root);
         var (results, p, s, e) = (new List<ThemeMp3OperationResult>(), 0, 0, 0);
         var folders = Directory.EnumerateDirectories(root).Prepend(root).Where(f => query.Force || !File.Exists(Path.Combine(f, "Theme.mp3"))).ToList();
         var excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { VfsShared.ResolveRootFolderName(), VfsShared.ResolveCollectionPostersFolderName(), VfsShared.ResolveAnimeThemesFolderName() };
@@ -248,7 +248,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
             }
         );
 
-        Logger.Info("AnimeThemes MP3: Batch generation finished -> {0} processed, {1} skipped, {2} errors", p, s, e);
+        s_logger.Info("AnimeThemes MP3: Batch generation finished -> {0} processed, {1} skipped, {2} errors", p, s, e);
         return new ThemeMp3BatchResult(root, results, p, s, e);
     }
 
@@ -258,10 +258,10 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
     /// <returns>An operation result object.</returns>
     public async Task<ThemeMp3OperationResult> ProcessSingleAsync(AnimeThemesMp3Query query, CancellationToken ct)
     {
-        var (Error, Data) = PrepareContext(query, false);
-        if (Error != null)
-            return Error;
-        var (folder, themePath, videoFile, series) = Data!.Value;
+        var (error, data) = PrepareContext(query, false);
+        if (error != null)
+            return error;
+        var (folder, themePath, videoFile, series) = data!.Value;
 
         // Season Filter: Only applied when Batch is true. Ignored for individual folder requests.
         if (query.Batch && !string.IsNullOrWhiteSpace(query.Season))
@@ -270,7 +270,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
             if (range != null && (!series.AirDate.HasValue || series.AirDate.Value < range.Value.Start || series.AirDate.Value > range.Value.End))
             {
                 string skipMsg = $"Series does not match season filter '{query.Season}'.";
-                Logger.Debug("AnimeThemes MP3: Skipped series '{0}' ({1})", series.PreferredTitle?.Value, skipMsg);
+                s_logger.Debug("AnimeThemes MP3: Skipped series '{0}' ({1})", series.PreferredTitle?.Value, skipMsg);
                 return new(folder, "skipped", skipMsg);
             }
         }
@@ -279,14 +279,14 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         try
         {
             if (!query.Batch)
-                Logger.Info("AnimeThemes MP3: Generating Theme.mp3 for series '{0}' in {1}", series.PreferredTitle?.Value ?? series.ID.ToString(), folder);
+                s_logger.Info("AnimeThemes MP3: Generating Theme.mp3 for series '{0}' in {1}", series.PreferredTitle?.Value ?? series.ID.ToString(), folder);
 
             var sel = await FetchThemeAsync(series.AnidbAnimeID, query.Slug, query.Offset, ct);
             if (sel == null)
             {
                 string skipMsg = string.IsNullOrWhiteSpace(query.Slug) ? "Entry not found." : $"No entry for slug '{query.Slug}'.";
                 if (!query.Batch)
-                    Logger.Info("AnimeThemes MP3: Skipped series '{0}' ({1})", series.PreferredTitle?.Value, skipMsg);
+                    s_logger.Info("AnimeThemes MP3: Skipped series '{0}' ({1})", series.PreferredTitle?.Value, skipMsg);
 
                 return new(folder, "skipped", skipMsg);
             }
@@ -295,7 +295,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
             var dur = await _ffmpegService.ProbeDurationAsync(temp, ct);
             string title = dur.TotalSeconds < 100 && !string.IsNullOrEmpty(sel.SongTitle) ? sel.SongTitle + " (TV Size)" : sel.SongTitle;
 
-            Logger.Debug("AnimeThemes MP3: Converting audio for '{0}' ({1})", series.PreferredTitle?.Value, sel.SlugDisplay);
+            s_logger.Debug("AnimeThemes MP3: Converting audio for '{0}' ({1})", series.PreferredTitle?.Value, sel.SlugDisplay);
             await _ffmpegService.ConvertToMp3FileAsync(temp, "Theme.mp3", title, sel.SlugDisplay, sel.Artist, sel.AnimeTitle, ct, folder).ConfigureAwait(false);
 
             int primaryId = OverrideHelper.GetPrimary(series.ID, metadataService);
@@ -305,12 +305,12 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
             if (!string.IsNullOrEmpty(vfsLink) && _plexClient.IsEnabled)
                 TriggerPlexRefresh(series.ID);
 
-            Logger.Info("AnimeThemes MP3: Successfully generated '{0}' ({1})", series.PreferredTitle?.Value, sel.SlugDisplay);
+            s_logger.Info("AnimeThemes MP3: Successfully generated '{0}' ({1})", series.PreferredTitle?.Value, sel.SlugDisplay);
             return new(folder, "ok", null, themePath, vfsLink, sel.AnimeTitle, sel.AnimeSlug, series.ID, sel.SlugDisplay, dur.TotalSeconds);
         }
         catch (Exception ex)
         {
-            Logger.Error(ex, "AnimeThemes MP3: Failed to process for {0}", folder);
+            s_logger.Error(ex, "AnimeThemes MP3: Failed to process for {0}", folder);
             return new(folder, "error", ex.Message);
         }
         finally
@@ -325,14 +325,14 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
     /// <returns>A tuple containing a preview result or an error result.</returns>
     public async Task<(ThemePreviewResult? Preview, ThemeMp3OperationResult? Error)> PreviewAsync(AnimeThemesMp3Query query, CancellationToken ct)
     {
-        var (Error, Data) = PrepareContext(query, true);
-        if (Error != null)
-            return (null, Error);
-        var (folder, _, _, series) = Data!.Value;
+        var (error, data) = PrepareContext(query, true);
+        if (error != null)
+            return (null, error);
+        var (folder, _, _, series) = data!.Value;
         string? temp = null;
         try
         {
-            Logger.Info("AnimeThemes MP3: Previewing theme for series '{0}'", series.PreferredTitle?.Value);
+            s_logger.Info("AnimeThemes MP3: Previewing theme for series '{0}'", series.PreferredTitle?.Value);
             var sel = await FetchThemeAsync(series.AnidbAnimeID, query.Slug, query.Offset, ct);
             if (sel == null)
                 return (null, new(folder, "error", "Entry not found."));
@@ -341,7 +341,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         }
         catch (Exception ex)
         {
-            Logger.Error(ex, "AnimeThemes MP3: Failed to preview for {0}", folder);
+            s_logger.Error(ex, "AnimeThemes MP3: Failed to preview for {0}", folder);
             return (null, new(folder, "error", ex.Message));
         }
         finally
@@ -361,7 +361,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
             return (new("", "error", "Path is required."), null);
         string folder = q.Path;
 
-        Logger.Debug("AnimeThemes MP3: Preparing context for folder -> {0}", folder);
+        s_logger.Debug("AnimeThemes MP3: Preparing context for folder -> {0}", folder);
         if (!Directory.Exists(folder))
             return (new(folder, "error", "Folder not found."), null);
 
@@ -372,7 +372,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         string? vid = Directory.EnumerateFiles(folder).FirstOrDefault(f => AnimeThemesHelper.VideoFileExtensions.Contains(Path.GetExtension(f)));
         if (vid == null)
         {
-            Logger.Debug("AnimeThemes MP3: No recognized video files in folder -> {0}", folder);
+            s_logger.Debug("AnimeThemes MP3: No recognized video files in folder -> {0}", folder);
             return (new(folder, "error", "No video files found."), null);
         }
 
@@ -381,11 +381,11 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
 
         if (s == null)
         {
-            Logger.Warn("AnimeThemes MP3: Series lookup failed for video {0} in {1}", vid, folder);
+            s_logger.Warn("AnimeThemes MP3: Series lookup failed for video {0} in {1}", vid, folder);
             return (new(folder, "error", vf == null ? "Video not recognized." : "Series lookup failed."), null);
         }
 
-        Logger.Debug("AnimeThemes MP3: Folder {0} maps to series '{1}' (AniDB: {2})", folder, s.PreferredTitle?.Value, s.AnidbAnimeID);
+        s_logger.Debug("AnimeThemes MP3: Folder {0} maps to series '{1}' (AniDB: {2})", folder, s.PreferredTitle?.Value, s.AnidbAnimeID);
         return (null, (folder, themePath, vf!, s));
     }
 
@@ -413,7 +413,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         if (!string.IsNullOrWhiteSpace(slugArg) && !AnimeThemesHelper.SlugRegex.IsMatch(slugArg))
             throw new ArgumentException("Invalid slug format.");
 
-        Logger.Debug("AnimeThemes MP3: Fetching metadata for AniDB ID {0} (Slug: {1}, Offset: {2})", aid, slugArg ?? "Auto", offset);
+        s_logger.Debug("AnimeThemes MP3: Fetching metadata for AniDB ID {0} (Slug: {1}, Offset: {2})", aid, slugArg ?? "Auto", offset);
         var (parsedBase, _) = AnimeThemesHelper.ParseSlug(slugArg ?? "");
         string filter = string.IsNullOrEmpty(slugArg)
             ? "&filter[animetheme][type]=OP,ED"
@@ -435,7 +435,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         string display = $"{(bp.StartsWith("OP", StringComparison.OrdinalIgnoreCase) ? "Opening" : "Ending")} {bp[2..]}".Trim() + AnimeThemesHelper.FormatSlugTag(sp);
         var artists = themeDetail.Animetheme.Song?.Artists;
 
-        Logger.Debug("AnimeThemes MP3: Selected theme: {0} - {1}", display, themeDetail.Animetheme.Song?.Title);
+        s_logger.Debug("AnimeThemes MP3: Selected theme: {0} - {1}", display, themeDetail.Animetheme.Song?.Title);
         return new ThemeSelection(
             audio,
             themeDetail.Animetheme.Slug ?? "",
@@ -450,7 +450,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
     /// <summary>Downloads an audio file to a temporary location.</summary>
     private async Task<string> DownloadAudioAsync(string url, CancellationToken ct)
     {
-        Logger.Debug("AnimeThemes MP3: Downloading audio from {0}", url);
+        s_logger.Debug("AnimeThemes MP3: Downloading audio from {0}", url);
         using var resp = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
         resp.EnsureSuccessStatusCode();
         string temp = Path.Combine(Path.GetTempPath(), $"at-{Guid.NewGuid():N}{Path.GetExtension(url)}");
@@ -471,8 +471,8 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         Directory.CreateDirectory(destDir);
         string dest = Path.Combine(destDir, "Theme.mp3");
 
-        Logger.Debug("AnimeThemes MP3: Linking Theme.mp3 to VFS -> {0}", dest);
-        return VfsShared.TryCreateLink(src, dest, Logger) ? dest : null;
+        s_logger.Debug("AnimeThemes MP3: Linking Theme.mp3 to VFS -> {0}", dest);
+        return VfsShared.TryCreateLink(src, dest, s_logger) ? dest : null;
     }
 
     /// <summary>Deletes a temporary file from disk.</summary>
@@ -482,7 +482,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         {
             if (File.Exists(path))
             {
-                Logger.Trace("AnimeThemes MP3: Cleaning up temporary file -> {0}", path);
+                s_logger.Trace("AnimeThemes MP3: Cleaning up temporary file -> {0}", path);
                 File.Delete(path);
             }
         }
@@ -507,14 +507,14 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
                     var ratingKey = await _plexClient.FindRatingKeyForShokoSeriesInSectionAsync(seriesId, target).ConfigureAwait(false);
                     if (ratingKey.HasValue)
                     {
-                        Logger.Debug("AnimeThemes MP3: Refreshing Plex metadata for ratingKey {0} on {1}", ratingKey.Value, target.ServerName);
+                        s_logger.Debug("AnimeThemes MP3: Refreshing Plex metadata for ratingKey {0} on {1}", ratingKey.Value, target.ServerName);
                         await _plexClient.RefreshMetadataAsync(ratingKey.Value, target).ConfigureAwait(false);
                     }
                 }
             }
             catch (Exception ex)
             {
-                Logger.Warn(ex, "AnimeThemes MP3: Failed to trigger Plex refresh for series {0}", seriesId);
+                s_logger.Warn(ex, "AnimeThemes MP3: Failed to trigger Plex refresh for series {0}", seriesId);
             }
         });
     }

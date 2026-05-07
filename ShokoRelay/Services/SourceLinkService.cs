@@ -8,7 +8,7 @@ namespace ShokoRelay.Services;
 /// <param name="videoService">Shoko video service for import root discovery.</param>
 public class SourceLinkService(IVideoService videoService)
 {
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
 
     /// <summary>Scans all import roots for the specified mapping file and processes pending entries, or purges existing links.</summary>
     /// <param name="mapFile">The relative path to the mapping file.</param>
@@ -107,7 +107,7 @@ public class SourceLinkService(IVideoService videoService)
         }
         catch (Exception ex)
         {
-            Logger.Trace(ex, "SourceLinkService: Purge failed for ->{0}", path);
+            s_logger.Trace(ex, "SourceLinkService: Purge failed for ->{0}", path);
         }
         return deleted;
     }
@@ -121,7 +121,7 @@ public class SourceLinkService(IVideoService videoService)
             string fullDest = Path.Combine(root, relDest);
             if (!File.Exists(fullSrc))
             {
-                Logger.Warn("SourceLinkService: Source file not found -> {0}", fullSrc);
+                s_logger.Warn("SourceLinkService: Source file not found -> {0}", fullSrc);
                 return false;
             }
 
@@ -160,16 +160,16 @@ public class SourceLinkService(IVideoService videoService)
                         File.Delete(targetPath);
                     Directory.CreateDirectory(targetPath);
                     foreach (var subFile in Directory.EnumerateFiles(entry))
-                        VfsShared.TryCreateLink(subFile, Path.Combine(targetPath, Path.GetFileName(subFile)), Logger);
+                        VfsShared.TryCreateLink(subFile, Path.Combine(targetPath, Path.GetFileName(subFile)), s_logger);
                 }
-                else if (VfsShared.TryCreateLink(entry, targetPath, Logger) && name.Equals(Path.GetFileName(fullSrc)))
+                else if (VfsShared.TryCreateLink(entry, targetPath, s_logger) && name.Equals(Path.GetFileName(fullSrc)))
                     mainLinked = true;
             }
             return mainLinked;
         }
         catch (Exception ex)
         {
-            Logger.Error(ex, "SourceLinkService: SourceLink failed for {0}", relSrc);
+            s_logger.Error(ex, "SourceLinkService: SourceLink failed for {0}", relSrc);
             return false;
         }
     }

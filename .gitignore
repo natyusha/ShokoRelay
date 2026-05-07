@@ -5,6 +5,5 @@ publish-linux/
 
 # VS Code
 *.code-workspace
-.editorconfig
 .config/
 .vscode/

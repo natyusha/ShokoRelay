@@ -83,17 +83,17 @@ public class ShokoRelay : BackgroundService
 {
     #region Fields & Constructor
 
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
-    private static ConfigProvider? _configProvider;
+    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
+    private static ConfigProvider? s_configProvider;
 
     /// <summary>Access current plugin settings.</summary>
-    public static RelayConfig Settings => _configProvider?.GetSettings() ?? new RelayConfig();
+    public static RelayConfig Settings => s_configProvider?.GetSettings() ?? new RelayConfig();
 
     /// <summary>Access the Shoko server base URL.</summary>
-    public static string ServerBaseUrl => _configProvider?.ServerBaseUrl ?? "http://localhost:8111";
+    public static string ServerBaseUrl => s_configProvider?.ServerBaseUrl ?? "http://localhost:8111";
 
     /// <summary>Access the plugin config directory.</summary>
-    public static string ConfigDirectory => _configProvider?.ConfigDirectory ?? string.Empty;
+    public static string ConfigDirectory => s_configProvider?.ConfigDirectory ?? string.Empty;
 
     private readonly VfsWatcher _watcher;
     private readonly ISystemService _systemService;
@@ -103,9 +103,9 @@ public class ShokoRelay : BackgroundService
     private readonly Services.ICriticRatingService? _criticRatingService;
     private readonly IMetadataService _metadataService;
 
-    private static DateTime? _lastImportRunUtc;
-    private static DateTime? _lastPlexAutomationUtc;
-    private static DateTime? _lastSyncWatchedUtc;
+    private static DateTime? s_lastImportRunUtc;
+    private static DateTime? s_lastPlexAutomationUtc;
+    private static DateTime? s_lastSyncWatchedUtc;
 
     /// <summary>Returns the effective degree of parallelism clamped to at least 1 without appearing in the config file.</summary>
     public static int GetMaxParallelism() => Math.Max(1, Settings.Advanced.Parallelism);
@@ -123,8 +123,8 @@ public class ShokoRelay : BackgroundService
         Services.ICriticRatingService? criticRatingService = null
     )
     {
-        _configProvider = configProvider;
-        _configProvider.HttpContextAccessor = httpContextAccessor;
+        s_configProvider = configProvider;
+        s_configProvider.HttpContextAccessor = httpContextAccessor;
         _watcher = watcher;
         _systemService = systemService;
         _metadataService = metadataService ?? throw new ArgumentNullException(nameof(metadataService));
@@ -132,7 +132,7 @@ public class ShokoRelay : BackgroundService
         _shokoImportService = shokoImportService;
         _collectionService = collectionService;
         _criticRatingService = criticRatingService;
-        Logger.Info($"ShokoRelay v{ShokoRelayConstants.Version} initialized");
+        s_logger.Info($"ShokoRelay v{ShokoRelayConstants.Version} initialized");
     }
 
     #endregion
@@ -144,24 +144,24 @@ public class ShokoRelay : BackgroundService
     {
         try
         {
-            Logger.Info("Relay waiting for Shoko Server to reach 'Started' state...");
+            s_logger.Info("Relay waiting for Shoko Server to reach 'Started' state...");
             while (!_systemService.IsStarted && !stoppingToken.IsCancellationRequested)
                 await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken);
             if (stoppingToken.IsCancellationRequested)
                 return;
 
-            Logger.Info("Shoko Server started -> Initializing Relay scheduling anchors...");
+            s_logger.Info("Shoko Server started -> Initializing Relay scheduling anchors...");
             var now = DateTime.UtcNow;
             int offset = Math.Clamp(Settings.Automation.UtcOffsetHours, -12, 14);
             if (Settings.Automation.ShokoImportFrequencyHours > 0)
-                _lastImportRunUtc = ComputeSchedule(now, offset, Settings.Automation.ShokoImportFrequencyHours).LastScheduled;
+                s_lastImportRunUtc = ComputeSchedule(now, offset, Settings.Automation.ShokoImportFrequencyHours).LastScheduled;
             if (Settings.Automation.ShokoSyncWatchedFrequencyHours > 0)
-                _lastSyncWatchedUtc = ComputeSchedule(now, offset, Settings.Automation.ShokoSyncWatchedFrequencyHours).LastScheduled;
+                s_lastSyncWatchedUtc = ComputeSchedule(now, offset, Settings.Automation.ShokoSyncWatchedFrequencyHours).LastScheduled;
             if (Settings.Automation.PlexAutomationFrequencyHours > 0)
-                _lastPlexAutomationUtc = ComputeSchedule(now, offset, Settings.Automation.PlexAutomationFrequencyHours).LastScheduled;
+                s_lastPlexAutomationUtc = ComputeSchedule(now, offset, Settings.Automation.PlexAutomationFrequencyHours).LastScheduled;
 
             _watcher.Start();
-            Logger.Info("Relay started -> Entering automation loop");
+            s_logger.Info("Relay started -> Entering automation loop");
             await AutomationLoop(stoppingToken).ConfigureAwait(false);
         }
         finally
@@ -177,7 +177,7 @@ public class ShokoRelay : BackgroundService
     /// <inheritdoc/>
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        Logger.Info("Relay stopping...");
+        s_logger.Info("Relay stopping...");
         _watcher.Stop();
         await base.StopAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -187,13 +187,13 @@ public class ShokoRelay : BackgroundService
     #region Automation Schedule
 
     /// <summary>Manually mark import as run.</summary>
-    public static void MarkImportRunNow() => _lastImportRunUtc = DateTime.UtcNow;
+    public static void MarkImportRunNow() => s_lastImportRunUtc = DateTime.UtcNow;
 
     /// <summary>Manually mark automation as run.</summary>
-    public static void MarkPlexAutomationRunNow() => _lastPlexAutomationUtc = DateTime.UtcNow;
+    public static void MarkPlexAutomationRunNow() => s_lastPlexAutomationUtc = DateTime.UtcNow;
 
     /// <summary>Manually mark sync as run.</summary>
-    public static void MarkSyncRunNow() => _lastSyncWatchedUtc = DateTime.UtcNow;
+    public static void MarkSyncRunNow() => s_lastSyncWatchedUtc = DateTime.UtcNow;
 
     /// <summary>Computes the last scheduled time and the next scheduled time for a task based on UTC offsets.</summary>
     /// <param name="now">Current time context.</param>
@@ -228,11 +228,11 @@ public class ShokoRelay : BackgroundService
                 {
                     var (lastSched, next) = ComputeSchedule(now, offset, importFreq);
                     nextRuns.Add(next);
-                    if (_lastImportRunUtc == null || _lastImportRunUtc < lastSched)
+                    if (s_lastImportRunUtc == null || s_lastImportRunUtc < lastSched)
                     {
-                        Logger.Info("Automation: triggering scheduled Shoko import ({0}h)", importFreq);
+                        s_logger.Info("Automation: triggering scheduled Shoko import ({0}h)", importFreq);
                         await _shokoImportService.TriggerImportAsync().ConfigureAwait(false);
-                        _lastImportRunUtc = lastSched;
+                        s_lastImportRunUtc = lastSched;
                     }
                 }
                 int syncFreq = settings.Automation.ShokoSyncWatchedFrequencyHours;
@@ -240,11 +240,11 @@ public class ShokoRelay : BackgroundService
                 {
                     var (lastSched, next) = ComputeSchedule(now, offset, syncFreq);
                     nextRuns.Add(next);
-                    if (_lastSyncWatchedUtc == null || _lastSyncWatchedUtc < lastSched)
+                    if (s_lastSyncWatchedUtc == null || s_lastSyncWatchedUtc < lastSched)
                     {
-                        Logger.Info("Automation: triggering scheduled Plex->Shoko sync ({0}h)", syncFreq);
+                        s_logger.Info("Automation: triggering scheduled Plex->Shoko sync ({0}h)", syncFreq);
                         await _watchedSyncService.SyncWatchedAsync(false, syncFreq + 1, cancellationToken: ct).ConfigureAwait(false);
-                        _lastSyncWatchedUtc = lastSched;
+                        s_lastSyncWatchedUtc = lastSched;
                     }
                 }
                 int plexFreq = settings.Automation.PlexAutomationFrequencyHours;
@@ -252,9 +252,9 @@ public class ShokoRelay : BackgroundService
                 {
                     var (lastSched, next) = ComputeSchedule(now, offset, plexFreq);
                     nextRuns.Add(next);
-                    if (_lastPlexAutomationUtc == null || _lastPlexAutomationUtc < lastSched)
+                    if (s_lastPlexAutomationUtc == null || s_lastPlexAutomationUtc < lastSched)
                     {
-                        Logger.Info("Automation: triggering scheduled Plex Collection/Rating update ({0}h)", plexFreq);
+                        s_logger.Info("Automation: triggering scheduled Plex Collection/Rating update ({0}h)", plexFreq);
                         var allSeries = _metadataService.GetAllShokoSeries()?.Cast<Shoko.Abstractions.Metadata.Shoko.IShokoSeries?>().ToList();
                         if (allSeries?.Count > 0)
                         {
@@ -263,7 +263,7 @@ public class ShokoRelay : BackgroundService
                             if (_criticRatingService != null)
                                 await _criticRatingService.ApplyRatingsAsync(null, ct).ConfigureAwait(false);
                         }
-                        _lastPlexAutomationUtc = lastSched;
+                        s_lastPlexAutomationUtc = lastSched;
                     }
                 }
                 double delayMs = nextRuns.Any() ? (nextRuns.Min() - DateTime.UtcNow).TotalMilliseconds : 60000;
@@ -275,7 +275,7 @@ public class ShokoRelay : BackgroundService
             }
             catch (Exception ex)
             {
-                Logger.Warn(ex, "Automation: loop error");
+                s_logger.Warn(ex, "Automation: loop error");
                 await Task.Delay(TimeSpan.FromMinutes(1), ct).ConfigureAwait(false);
             }
         }

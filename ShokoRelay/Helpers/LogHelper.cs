@@ -10,7 +10,7 @@ namespace ShokoRelay.Helpers;
 /// <summary>Utility methods for writing plugin-specific diagnostic logs and structured reports.</summary>
 public static class LogHelper
 {
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
 
     #region Logging Interface
 
@@ -44,7 +44,7 @@ public static class LogHelper
         }
         catch (Exception ex)
         {
-            Logger.Warn(ex, "LogHelper: Failed to write {FileName}", fileName);
+            s_logger.Warn(ex, "LogHelper: Failed to write {FileName}", fileName);
         }
     }
 
