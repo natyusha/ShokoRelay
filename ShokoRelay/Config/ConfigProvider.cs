@@ -137,6 +137,8 @@ public class ConfigProvider
     /// <returns>A sanitized configuration object for dashboard consumption.</returns>
     public object GetDashboardConfig()
     {
+        _ = ServerBaseUrl; // Explicitly access ServerBaseUrl to trigger the HttpContext based auto discovery on dashboard load
+
         var dict = JsonSerializer.Deserialize<Dictionary<string, object>>(JsonSerializer.Serialize(GetSettings(), s_options))!;
         dict["PlexLibrary"] = new
         {
