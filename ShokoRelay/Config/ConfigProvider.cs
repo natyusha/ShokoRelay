@@ -36,19 +36,28 @@ public class ConfigProvider
     /// <summary>Service for accessing the current HTTP context, used for URL discovery.</summary>
     public IHttpContextAccessor? HttpContextAccessor { get; set; }
 
-    /// <summary>The externally-reachable base URL of the Shoko server. Priority: 1. Advanced.ShokoServerUrl setting, 2. Current HTTP Context, 3. Last known good value.</summary>
+    /// <summary>The externally-reachable base URL of Shoko server. Priority: 1. Advanced.ShokoServerUrl setting, 2. Current HTTP Context, 3. Last discovered value, 4. Localhost fallback.</summary>
     public string ServerBaseUrl
     {
         get
         {
-            var configUrl = GetSettings()?.Advanced.ShokoServerUrl;
-            if (!string.IsNullOrWhiteSpace(configUrl))
-                return configUrl.Trim().TrimEnd('/');
+            var settings = GetSettings();
+            if (!string.IsNullOrWhiteSpace(settings.Advanced.ShokoServerUrl))
+                return settings.Advanced.ShokoServerUrl.Trim().TrimEnd('/');
             if (HttpContextAccessor?.HttpContext is { } ctx)
-                field = $"{ctx.Request.Scheme}://{ctx.Request.Host}";
-            return field;
+            {
+                var request = ctx.Request;
+                var detectedUrl = $"{request.Scheme}://{request.Host}{request.PathBase}".TrimEnd('/');
+                if (settings.Advanced.ShokoServerUrlContext != detectedUrl)
+                {
+                    settings.Advanced.ShokoServerUrlContext = detectedUrl;
+                    SaveSettings(settings);
+                }
+                return detectedUrl;
+            }
+            return !string.IsNullOrWhiteSpace(settings.Advanced.ShokoServerUrlContext) ? settings.Advanced.ShokoServerUrlContext : "http://localhost:8111";
         }
-    } = "http://localhost:8111";
+    }
 
     /// <summary>Creates a new ConfigProvider using the specified paths provided by the host application.</summary>
     /// <param name="applicationPaths">Paths provided by the host application.</param>

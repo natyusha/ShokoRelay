@@ -323,7 +323,13 @@ public class PlaybackConfig
 /// <summary>Low-level path and system configuration.</summary>
 public class AdvancedConfig
 {
-    /// <summary>The base Shoko server URL.</summary>
+    /// <summary>The base Shoko server URL derived from an active HTTP request. Used as a fallback for background tasks.</summary>
+    [Display(Name = "Auto Shoko Server URL", Description = "An automatically detected URL and port that Plex can access Shoko server from")]
+    [Browsable(false)]
+    [DefaultValue("")]
+    public string ShokoServerUrlContext { get; set; } = "";
+
+    /// <summary>The base Shoko server URL as defined by the user.</summary>
     [Display(Name = "Shoko Server URL", Description = "A URL and port that Plex can access Shoko server from (e.g. http://localhost:8111)")]
     [RegularExpression(@"^https?://[a-zA-Z0-9.-]+(:\d+)?$", ErrorMessage = "Invalid URL format. Use http(s)://HOST:PORT")]
     [DefaultValue("")]
