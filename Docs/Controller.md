@@ -226,7 +226,7 @@ GET  /shoko/import/start                                       -> StartShokoImpo
 
 GET  /sync-watched                                             -> SyncPlexWatched           (for preview/testing)
 POST /sync-watched                                             -> SyncPlexWatched
-     [?dryRun={true|false}&sinceHours={int}&ratings={true|false}&import={true|false}&excludeAdmin={true|false}]
+     [?dryRun={true|false}&sinceHours={int}&ratings={true|false}&import={true|false}&users={all|admin|extra|none}&libraryName={name}]
 
 GET  /sync-watched/start                                       -> StartWatchedSyncNow
 ```
@@ -239,7 +239,8 @@ GET  /sync-watched/start                                       -> StartWatchedSy
   - `sinceHours`: (optional) limit processing to items viewed within this window.
   - `ratings`: (default to configuration) set to true/false to override the `Automation.ShokoSyncWatchedIncludeRatings` setting.
   - `import`: (default false) set to true for `Plex←Shoko`. Default is `Plex→Shoko`.
-  - `excludeAdmin`: (default to configuration) set to true/false to override the `Automation.ShokoSyncWatchedExcludeAdmin` setting.
+  - `users`: (default to configuration) restrict sync to `all`, `admin`, `extra`, or `none`. Overrides the `Automation.ShokoSyncWatchedUserType` setting.
+  - `libraryName`: (optional) restrict processing to a specific Plex library name (e.g. `Anime`).
   - Direction and exclusion settings are read from `AutomationConfig`.
 
 **Notes:**

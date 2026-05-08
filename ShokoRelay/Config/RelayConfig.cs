@@ -89,6 +89,26 @@ public enum MinimumTagWeight
     SixHundred = 600,
 }
 
+/// <summary>Defines which Plex users are included in synchronization tasks.</summary>
+public enum SyncUserType
+{
+    /// <summary>Sync all configured users.</summary>
+    [Display(Name = "All Users")]
+    All = 0,
+
+    /// <summary>Sync only the Plex server admin.</summary>
+    [Display(Name = "Admin Only")]
+    Admin = 1,
+
+    /// <summary>Sync only the extra users.</summary>
+    [Display(Name = "Extra Users Only")]
+    Extra = 2,
+
+    /// <summary>Disable sync for all users.</summary>
+    [Display(Name = "None")]
+    None = 3,
+}
+
 /// <summary>Levels of overlap allowed for AnimeThemes .webm files.</summary>
 public enum OverlapLevel
 {
@@ -283,11 +303,11 @@ public class AutomationConfig
     [DefaultValue(false)]
     public bool ShokoSyncWatchedIncludeRatings { get; set; } = false;
 
-    /// <summary>Whether to ignore the Plex admin user during sync.</summary>
-    [Display(Name = "Exclude Admin (for Scheduled Sync)", Description = "When enabled, all sync/scrobble actions will ignore items scrobbled by the Plex token owner/admin")]
+    /// <summary>Defines which users are included during watched-state synchronization.</summary>
+    [Display(Name = "Sync Users", Description = "Defines which users are included during all sync/scrobble actions")]
     [Browsable(false)]
-    [DefaultValue(false)]
-    public bool ShokoSyncWatchedExcludeAdmin { get; set; } = false;
+    [DefaultValue(SyncUserType.None)]
+    public SyncUserType ShokoSyncWatchedUserType { get; set; } = SyncUserType.None;
 }
 
 #endregion

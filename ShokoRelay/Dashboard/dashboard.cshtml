@@ -347,7 +347,7 @@
             </button>
           </div>
           <hr />
-          <small>The checkboxes below also apply to the webhook</small>
+          <small>The settings below also apply to the webhook</small>
           <label class="shoko-checkbox">
             <input id="sync-ratings" type="checkbox" />
             <span class="shoko-checkbox-icon" aria-hidden="true">
@@ -359,17 +359,21 @@
               <small>Sync user vote/rating values</small>
             </span>
           </label>
-          <label class="shoko-checkbox">
-            <input id="sync-exclude-admin" type="checkbox" />
-            <span class="shoko-checkbox-icon" aria-hidden="true">
-              <svg class="unchecked"><use href="img/icons.svg#checkbox-blank-circle-outline"></use></svg>
-              <svg class="checked"><use href="img/icons.svg#checkbox-marked-circle-outline"></use></svg>
-            </span>
-            <span class="shoko-checkbox-text">
-              <span class="shoko-checkbox-title">Exclude Admin</span><br />
-              <small>Only sync to extra Plex users</small>
-            </span>
-          </label>
+          <div class="full">
+            <div class="w100">
+              <label for="sync-users">Sync Users</label>
+              <select id="sync-users">
+                <option value="0">All</option>
+                <option value="1">Admin</option>
+                <option value="2">Extra</option>
+                <option value="3">None</option>
+              </select>
+            </div>
+            <div>
+              <label for="sync-library">Temporary Library Filter</label>
+              <input id="sync-library" type="text" placeholder="Plex Library Name (Optional)" />
+            </div>
+          </div>
         </div>
         <footer>
           <button id="sync-cancel-button" class="cancel">Cancel</button>

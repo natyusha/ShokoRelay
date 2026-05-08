@@ -254,7 +254,7 @@ public static class SyncHelper
         return userToken;
     }
 
-    /// <summary>Fetches episodes for a managed user section.</summary>
+    /// <summary>Fetches episodes for a managed user section, resolving the correct Server Access Token.</summary>
     /// <param name="plexAuth">Plex Auth service.</param>
     /// <param name="plexClient">Plex Client service.</param>
     /// <param name="configProvider">Config Provider service.</param>
@@ -262,9 +262,10 @@ public static class SyncHelper
     /// <param name="userName">Managed username.</param>
     /// <param name="pin">Optional user PIN.</param>
     /// <param name="sinceHours">Optional lookback window.</param>
+    /// <param name="onlyUnwatched">If true, only returns unwatched episodes.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A tuple containing the list of episodes and an optional error message.</returns>
-    public static async Task<(List<PlexMetadataItem> Episodes, string? ErrorMessage)> FetchManagedUserSectionEpisodesAsync(
+    /// <returns>A tuple containing the list of episodes, the resolved token, and an optional error message.</returns>
+    public static async Task<(List<PlexMetadataItem> Episodes, string? ResolvedToken, string? ErrorMessage)> FetchManagedUserSectionEpisodesAsync(
         PlexAuth plexAuth,
         PlexClient plexClient,
         ConfigProvider configProvider,
@@ -272,6 +273,7 @@ public static class SyncHelper
         string userName,
         string? pin,
         int? sinceHours,
+        bool onlyUnwatched = false,
         CancellationToken cancellationToken = default
     )
     {
@@ -280,7 +282,7 @@ public static class SyncHelper
         {
             string? userToken = await FetchManagedUserTokenAsync(plexAuth, configProvider, userName, pin, cancellationToken).ConfigureAwait(false);
             if (string.IsNullOrWhiteSpace(userToken))
-                return ([], null);
+                return ([], null, null);
             string? serverAccessToken = null;
             try
             {
@@ -325,45 +327,15 @@ public static class SyncHelper
 
             var effectiveToken = !string.IsNullOrWhiteSpace(serverAccessToken) ? serverAccessToken : userToken;
             long? minLast = (sinceHours.HasValue && sinceHours.Value > 0) ? DateTimeOffset.UtcNow.ToUnixTimeSeconds() - (sinceHours.Value * 3600) : null;
-            var list = await plexClient.GetSectionEpisodesAsync(target, effectiveToken, cancellationToken, onlyUnwatched: false, guidFilter: null, minLastViewed: minLast).ConfigureAwait(false);
-            logger.Info("WatchedSyncService: fetched {Count} watched episodes for user {User} (since={Since})", list?.Count ?? 0, userName, minLast);
-            return (list ?? [], null);
+            var list = await plexClient.GetSectionEpisodesAsync(target, effectiveToken, cancellationToken, onlyUnwatched: onlyUnwatched, guidFilter: null, minLastViewed: minLast).ConfigureAwait(false);
+            logger.Info("WatchedSyncService: fetched {Count} episodes for user {User} (since={Since})", list?.Count ?? 0, userName, minLast);
+            return (list ?? [], effectiveToken, null); // Return the resolved token so callers can use it for subsequent PUT requests
         }
         catch (Exception ex)
         {
             logger.Warn(ex, "Failed to fetch episodes for Plex user '{User}' on {Server}:{Section}", userName, target.ServerUrl, target.SectionId);
-            return (new List<PlexMetadataItem>(), $"Failed to fetch episodes for Plex user '{userName}' from {target.ServerUrl}:{target.SectionId} -> {ex.Message}");
+            return ([], null, $"Failed to fetch episodes for Plex user '{userName}' from {target.ServerUrl}:{target.SectionId} -> {ex.Message}");
         }
-    }
-
-    /// <summary>Checks if a user has access to a section.</summary>
-    public static async Task<bool> UserHasAccessToSectionAsync(
-        HttpClient httpClient,
-        PlexClient plexClient,
-        PlexLibraryTarget target,
-        string plexUserName,
-        string? plexToken,
-        Dictionary<string, bool> accessCache,
-        CancellationToken cancellationToken = default
-    )
-    {
-        if (string.Equals(plexUserName, "admin", StringComparison.OrdinalIgnoreCase))
-            return true;
-        var accessKey = $"{plexUserName}::{target.ServerUrl}::{target.SectionId}";
-        if (accessCache.TryGetValue(accessKey, out var hasAccess))
-            return hasAccess;
-        try
-        {
-            using var accessReq = plexClient.CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?X-Plex-Container-Size=1", target.ServerUrl, plexToken);
-            using var resp = await httpClient.SendAsync(accessReq, cancellationToken).ConfigureAwait(false);
-            hasAccess = resp.IsSuccessStatusCode;
-        }
-        catch
-        {
-            hasAccess = false;
-        }
-        accessCache[accessKey] = hasAccess;
-        return hasAccess;
     }
 
     #endregion

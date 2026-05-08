@@ -30,17 +30,28 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
     /// <param name="dryRun">If true, skip database writes.</param>
     /// <param name="sinceHours">Optional window to limit processed items.</param>
     /// <param name="includeVotes">Include user ratings.</param>
-    /// <param name="excludeAdmin">Ignore admin account.</param>
+    /// <param name="userTypeOverride">Optional override for the sync users configuration.</param>
+    /// <param name="libraryName">Optional filter to restrict sync to a specific Plex library.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>Execution result result.</returns>
-    public async Task<PlexWatchedSyncResult> SyncWatchedAsync(bool dryRun, int? sinceHours, bool? includeVotes = null, bool? excludeAdmin = null, CancellationToken cancellationToken = default)
+    /// <returns>Execution result.</returns>
+    public async Task<PlexWatchedSyncResult> SyncWatchedAsync(
+        bool dryRun,
+        int? sinceHours,
+        bool? includeVotes = null,
+        SyncUserType? userTypeOverride = null,
+        string? libraryName = null,
+        CancellationToken cancellationToken = default
+    )
     {
         var result = new PlexWatchedSyncResult();
-        var logPrefix = (result = result with { DryRun = dryRun }).DryRun ? "[DRYRUN] " : "";
         var auto = ShokoRelay.Settings.Automation;
+        var userType = userTypeOverride ?? auto.ShokoSyncWatchedUserType;
 
+        if (userType == SyncUserType.None)
+            return result;
+
+        var logPrefix = (result = result with { DryRun = dryRun }).DryRun ? "[DRYRUN] " : "";
         bool actualVotes = includeVotes ?? auto.ShokoSyncWatchedIncludeRatings;
-        bool actualExclude = excludeAdmin ?? auto.ShokoSyncWatchedExcludeAdmin;
 
         if (!_plexClient.IsEnabled || _userService.GetUsers().FirstOrDefault() is not { } defaultUser)
             return result;
@@ -56,18 +67,32 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
         foreach (var target in targets)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var adminItems = await _plexClient
-                .GetSectionEpisodesAsync(target, null, cancellationToken, false, null, sinceHours > 0 ? DateTimeOffset.UtcNow.ToUnixTimeSeconds() - (sinceHours.Value * 3600) : null)
-                .ConfigureAwait(false);
+
+            // Apply Library Name Filter
+            if (!string.IsNullOrWhiteSpace(libraryName) && !string.Equals(target.Title, libraryName, StringComparison.OrdinalIgnoreCase))
+                continue;
+
             var userBuckets = new List<(string Name, List<PlexMetadataItem> Items)>();
-            if (!actualExclude)
-                userBuckets.Add(("admin", adminItems ?? []));
-            foreach (var (name, pin) in extraEntries)
+
+            if (userType is SyncUserType.All or SyncUserType.Admin)
             {
-                var (eps, err) = await SyncHelper.FetchManagedUserSectionEpisodesAsync(_plexAuth, _plexClient, _configProvider, target, name, pin, sinceHours, cancellationToken).ConfigureAwait(false);
-                if (!string.IsNullOrEmpty(err))
-                    result = SyncHelper.RecordError(result, result.PerUser, name, err);
-                userBuckets.Add((name, eps));
+                var adminItems = await _plexClient
+                    .GetSectionEpisodesAsync(target, null, cancellationToken, false, null, sinceHours > 0 ? DateTimeOffset.UtcNow.ToUnixTimeSeconds() - (sinceHours.Value * 3600) : null)
+                    .ConfigureAwait(false);
+                userBuckets.Add(("admin", adminItems ?? []));
+            }
+            if (userType is SyncUserType.All or SyncUserType.Extra)
+            {
+                foreach (var (name, pin) in extraEntries)
+                {
+                    var (eps, _, err) = await SyncHelper
+                        .FetchManagedUserSectionEpisodesAsync(_plexAuth, _plexClient, _configProvider, target, name, pin, sinceHours, false, cancellationToken)
+                        .ConfigureAwait(false);
+                    if (!string.IsNullOrEmpty(err))
+                        result = SyncHelper.RecordError(result, result.PerUser, name, err);
+                    else
+                        userBuckets.Add((name, eps));
+                }
             }
 
             foreach (var (uName, items) in userBuckets)
@@ -110,7 +135,7 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                             await _userDataService.SetEpisodeWatchedStatus(ep, defaultUser, true, watchedAt, videoReason: VideoUserDataSaveReason.UserInteraction).ConfigureAwait(false);
                         appliedIds.Add(ep.ID);
                         result = SyncHelper.IncMarkedWatched(result, result.PerUser, uName);
-                        s_logger.Info("WatchedSyncService: {0}Plex->Shoko: {1} marked {2} S{3}E{4}", logPrefix, uName, ep.Series?.PreferredTitle?.Value, ep.SeasonNumber, ep.EpisodeNumber);
+                        s_logger.Info("WatchedSyncService: {0}Plex -> Shoko: {1} marked {2} S{3}E{4}", logPrefix, uName, ep.Series?.PreferredTitle?.Value, ep.SeasonNumber, ep.EpisodeNumber);
                     }
                     else
                         result = SyncHelper.IncSkipped(result, result.PerUser, uName);

@@ -144,7 +144,7 @@
     if (res.ok) {
       const display = summary || envMsg || (envStatus !== "ok" ? envStatus : null) || text || "Complete";
       const toastType = type || (errorCount > 0 ? "error" : "success");
-      const persistence = logUrl || errorCount > 0 ? 0 : (hideOnSucceed ?? TOAST_MS); // Log-enabled tasks or tasks with errors are persistent (timeout=0).
+      const persistence = errorCount > 0 ? 0 : (hideOnSucceed ?? (logUrl ? 0 : TOAST_MS)); // Always persist if there are errors. Otherwise, respect the hideOnSucceed override.
       showToast(`${label}: ${display} ${logLink}`, toastType, persistence);
     } else {
       const display = summary || envMsg || text || (typeof res.data === "string" ? res.data : JSON.stringify(res.data));
@@ -190,6 +190,11 @@
         if (btn?.classList.contains("clicking")) continue;
         const label = taskName.replace(/-/g, " ");
         const isOk = (result.status || result.Status || "").toLowerCase() === "ok"; // Ensure the ok status is correctly identified regardless of property casing
+
+        // Check if the button is configured to persist only when the filter is empty.
+        const pSelector = btn?.dataset.relayPersistIfEmpty;
+        const fInput = pSelector ? document.querySelector(pSelector) : null;
+        const hideOnSucceed = pSelector && fInput?.value.trim() ? TOAST_MS : 0;
 
         toastOperation({ ok: isOk, data: result }, label, { hideOnSucceed: 0 }); // Polled task completions with logs are always persistent
         await fetch(window._sr.base + `/tasks/clear/${taskName}`, { method: "POST" });

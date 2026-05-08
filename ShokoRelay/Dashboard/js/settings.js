@@ -158,7 +158,7 @@
     b("shoko-sync-frequency", "Automation.ShokoSyncWatchedFrequencyHours", "number");
     b("plex-auto-frequency", "Automation.PlexAutomationFrequencyHours", "number");
     b("sync-ratings", "Automation.ShokoSyncWatchedIncludeRatings", "check");
-    b("sync-exclude-admin", "Automation.ShokoSyncWatchedExcludeAdmin", "check");
+    b("sync-users", "Automation.ShokoSyncWatchedUserType", "number");
     b("plex-scrobble", "Automation.AutoScrobble", "check");
 
     window._sr.initAtConfig?.(config, saveSettings);

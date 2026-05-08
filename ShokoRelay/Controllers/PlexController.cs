@@ -400,22 +400,30 @@ public class PlexController(
         if (string.IsNullOrWhiteSpace(plexUser))
             return (false, "empty_account_title");
 
-        var extraEntries = ConfigProvider.GetExtraPlexUserEntries();
-        if (extraEntries.Any(e => string.Equals(e.Name, plexUser, StringComparison.OrdinalIgnoreCase)))
-            return (true, "allowed_extra_user");
+        var userType = cfg.Automation.ShokoSyncWatchedUserType;
+        if (userType == SyncUserType.None)
+            return (false, "sync_users_set_to_none");
+
+        if (userType is SyncUserType.All or SyncUserType.Extra)
+        {
+            var extraEntries = ConfigProvider.GetExtraPlexUserEntries();
+            if (extraEntries.Any(e => string.Equals(e.Name, plexUser, StringComparison.OrdinalIgnoreCase)))
+                return (true, "allowed_extra_user");
+        }
 
         if (evt.Owner == true)
         {
+            bool adminAllowed = userType is SyncUserType.All or SyncUserType.Admin;
             string? adminName = ConfigProvider.GetAdminUsername();
             if (string.IsNullOrEmpty(adminName))
             {
-                await ConfigProvider.RefreshAdminUsername(_plexAuth, ct);
+                await ConfigProvider.RefreshAdminUsername(_plexAuth, ct).ConfigureAwait(false);
                 adminName = ConfigProvider.GetAdminUsername();
             }
             if (string.IsNullOrEmpty(adminName))
-                return cfg.Automation.ShokoSyncWatchedExcludeAdmin ? (false, "admin_excluded_identity_unknown") : (true, "allowed_owner_identity_assumed");
+                return !adminAllowed ? (false, "admin_excluded_identity_unknown") : (true, "allowed_owner_identity_assumed");
             if (string.Equals(plexUser, adminName, StringComparison.OrdinalIgnoreCase))
-                return cfg.Automation.ShokoSyncWatchedExcludeAdmin ? (false, "admin_excluded_by_config") : (true, "allowed_admin");
+                return !adminAllowed ? (false, "admin_excluded_by_config") : (true, "allowed_admin");
             return (false, $"unauthorized_managed_user ({plexUser})");
         }
         return (false, $"user_not_authorized ({plexUser})");

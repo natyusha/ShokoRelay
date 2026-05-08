@@ -175,7 +175,8 @@ public class ShokoController(
     /// <param name="sinceHours">Lookback window.</param>
     /// <param name="ratings">Include ratings.</param>
     /// <param name="import">Direction: true for Plex-to-Shoko.</param>
-    /// <param name="excludeAdmin">Ignore admin user.</param>
+    /// <param name="users">Optional override for the sync users configuration (e.g., 'all', 'admin', 'extra', 'none').</param>
+    /// <param name="libraryName">Optional filter to restrict sync to a specific Plex library.</param>
     /// <returns>Sync report result.</returns>
     [Route("sync-watched")]
     [HttpGet]
@@ -185,7 +186,8 @@ public class ShokoController(
         [FromQuery] int? sinceHours = null,
         [FromQuery] bool? ratings = null,
         [FromQuery] bool? import = null,
-        [FromQuery] bool? excludeAdmin = null
+        [FromQuery] string? users = null,
+        [FromQuery] string? libraryName = null
     )
     {
         if (!PlexLibrary.IsEnabled)
@@ -198,11 +200,15 @@ public class ShokoController(
         bool includeRatings = ratings.GetValueOrDefault(false);
         string direction = doImport ? "Plex<-Shoko" : "Plex->Shoko";
 
+        SyncUserType userType = ShokoRelay.Settings.Automation.ShokoSyncWatchedUserType;
+        if (!string.IsNullOrWhiteSpace(users) && Enum.TryParse<SyncUserType>(users, true, out var parsed))
+            userType = parsed;
+
         try
         {
             PlexWatchedSyncResult result = doImport
-                ? await _syncToPlexService.SyncWatchedAsync(parsedDry, sinceHours, ratings, excludeAdmin, cancellationToken: HttpContext.RequestAborted).ConfigureAwait(false)
-                : await _watchedSyncService.SyncWatchedAsync(parsedDry, sinceHours, ratings, excludeAdmin, cancellationToken: HttpContext.RequestAborted).ConfigureAwait(false);
+                ? await _syncToPlexService.SyncWatchedAsync(parsedDry, sinceHours, ratings, userType, libraryName, cancellationToken: HttpContext.RequestAborted).ConfigureAwait(false)
+                : await _watchedSyncService.SyncWatchedAsync(parsedDry, sinceHours, ratings, userType, libraryName, cancellationToken: HttpContext.RequestAborted).ConfigureAwait(false);
 
             result = result with { Direction = direction };
             return LogAndReturn(ShokoRelayConstants.LogSyncWatched, result, (sb, r) => LogHelper.BuildSyncWatchedReport(sb, r, r.Direction, r.DryRun, includeRatings));

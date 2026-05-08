@@ -165,6 +165,7 @@ public class ConfigProvider
         lock (_settingsLock)
             File.WriteAllText(_filePath, JsonSerializer.Serialize(settings, s_options));
         _settings = settings;
+        _cachedExtraUsers = null; // Clear the cached extra users so they are re-parsed on the next sync after settings changes
     }
 
     private RelayConfig GetSettingsFromFile()
