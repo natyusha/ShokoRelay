@@ -259,6 +259,7 @@ public class PlexMetadata(IMetadataService metadataService)
 
             // Force addEveryImage to true if TMDB season posters are present, otherwise fallback to the configuration. (Remove this once Shoko's WebUI supports selecting the preferred poster)
             ["Image"]                 = ImageHelper.BuildCoverPosterArray(images, seasonTitle, posters != null || ShokoRelay.Settings.AddEveryImage, posters, cb).ToArray(),
+            ["Guid"]                  = BuildSeasonXrefGuidArray(tmdbSeason),
             //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
         };
         // csharpier-ignore-end
@@ -345,6 +346,7 @@ public class PlexMetadata(IMetadataService metadataService)
             ["parentIndex"]           = mapped.Season,
 
             ["Image"]                 = ShokoRelay.Settings.TmdbThumbnails ? [.. ImageHelper.GenerateImageArray(images, epTitle, ShokoRelay.Settings.AddEveryImage, cb).Where(img => img.Type == "snapshot")] : Array.Empty<ImageInfo>(),
+            ["Guid"]                  = BuildEpisodeXrefGuidArray(ep, tmdbEpisode),
             //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
             //["Role"]                = CastHelper.GetCastAndCrew(ep), // Large array not used by Plex clients and present in grandparent series metadata
             ["Director"]              = CastHelper.GetDirectors(ep),
@@ -433,6 +435,51 @@ public class PlexMetadata(IMetadataService metadataService)
             if (s.ID > 0)
                 Add($"tmdb://{s.ID}");
         }
+        return [.. guids];
+    }
+
+    /// <summary>Builds an array of external cross-reference GUIDs (TMDB) for a season.</summary>
+    /// <param name="tmdbSeason">The TMDB season metadata object.</param>
+    /// <returns>An array of objects containing external IDs.</returns>
+    private object[] BuildSeasonXrefGuidArray(ITmdbSeason? tmdbSeason) => tmdbSeason?.ID is { Length: > 0 } id ? [new { id = $"tmdb://{id}" }] : [];
+
+    /// <summary>Builds an array of external cross-reference GUIDs (TMDB/TVDB) for an episode.</summary>
+    /// <param name="ep">The base episode metadata.</param>
+    /// <param name="tmdbEpisodeOverride">An optional TMDB episode object (used for groups/parts).</param>
+    /// <returns>An array of objects containing external IDs.</returns>
+    private object[] BuildEpisodeXrefGuidArray(IEpisode ep, object? tmdbEpisodeOverride)
+    {
+        var guids = new List<object>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        void Add(string id)
+        {
+            if (!string.IsNullOrWhiteSpace(id) && seen.Add(id))
+                guids.Add(new { id });
+        }
+
+        // Explicit TMDB override (from Episode Groups or Multi-part files)
+        if (tmdbEpisodeOverride is ITmdbEpisode tmdbEpisode)
+        {
+            Add($"tmdb://{tmdbEpisode.ID}");
+            if (tmdbEpisode.TvdbEpisodeID > 0)
+                Add($"tvdb://{tmdbEpisode.TvdbEpisodeID}");
+        }
+        else if (tmdbEpisodeOverride is ITmdbEpisodeOrderingInformation orderingInfo)
+        {
+            Add($"tmdb://{orderingInfo.EpisodeID}");
+        }
+
+        // Standard Shoko metadata fallback
+        if (ep is IShokoEpisode shokoEp && shokoEp.TmdbEpisodes != null)
+        {
+            foreach (var tmdbEp in shokoEp.TmdbEpisodes)
+            {
+                Add($"tmdb://{tmdbEp.ID}");
+                if (tmdbEp.TvdbEpisodeID > 0)
+                    Add($"tvdb://{tmdbEp.TvdbEpisodeID}");
+            }
+        }
+
         return [.. guids];
     }
 
