@@ -366,9 +366,16 @@ public class PlexMetadata(IMetadataService metadataService)
     /// <returns>The group's preferred title, or null if no collection applies.</returns>
     public string? GetCollectionName(ISeries series)
     {
-        return series is not IShokoSeries { TopLevelGroupID: > 0 } ss ? null
-            : _metadataService.GetShokoGroupByID(ss.TopLevelGroupID) is IShokoGroup { Series.Count: > 1 } g && g is IWithTitles { PreferredTitle.Value: { } title } ? title
-            : null;
+        if (series is not IShokoSeries { TopLevelGroupID: > 0 } ss)
+            return null;
+        var group = _metadataService.GetShokoGroupByID(ss.TopLevelGroupID);
+        if (group == null)
+            return null;
+
+        // Count how many distinct Primary IDs exist in this group. This ensures that VFS Overrides are respected if they merge the entirety of a Shoko Group into a single series in Plex.
+        OverrideHelper.EnsureLoaded();
+        var distinctPlexEntries = group.Series.Select(s => OverrideHelper.GetPrimary(s.ID, _metadataService)).Distinct().Count();
+        return (distinctPlexEntries > 1 && group is IWithTitles { PreferredTitle.Value: { } title }) ? title : null;
     }
 
     /// <summary>Builds a Plex-compatible metadata dictionary for a Shoko group collection.</summary>
