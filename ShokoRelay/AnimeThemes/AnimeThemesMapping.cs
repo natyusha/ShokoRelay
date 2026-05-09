@@ -9,7 +9,7 @@ using ShokoRelay.Vfs;
 namespace ShokoRelay.AnimeThemes;
 
 /// <summary>Provides operations for building and applying mappings between anime theme files and AniDB/video identifiers.</summary>
-public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadataService, IVideoService videoService, ConfigProvider configProvider)
+public class AnimeThemesMapping(IHttpClientFactory httpClientFactory, IMetadataService metadataService, IVideoService videoService, ConfigProvider configProvider)
 {
     #region Fields & Constructor
 
@@ -17,7 +17,8 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
     private static readonly SemaphoreSlim s_mappingSemaphore = new(1, 1);
     private readonly IMetadataService _metadataService = metadataService;
     private readonly IVideoService _videoService = videoService;
-    private readonly AnimeThemesApi _apiClient = new(httpClient);
+    private readonly HttpClient _httpClient = httpClientFactory.CreateClient("ShokoRelay");
+    private readonly AnimeThemesApi _apiClient = new(httpClientFactory.CreateClient("ShokoRelay"));
     private readonly string _configDirectory = configProvider.ConfigDirectory;
 
     #endregion
@@ -37,8 +38,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
     {
         try
         {
-            AnimeThemesHelper.EnsureUserAgent(httpClient);
-            var content = await httpClient.GetStringAsync(rawUrl, ct).ConfigureAwait(false);
+            var content = await _httpClient.GetStringAsync(rawUrl, ct).ConfigureAwait(false);
             if (string.IsNullOrWhiteSpace(content))
                 return (0, "Downloaded content empty");
 

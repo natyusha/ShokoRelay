@@ -319,7 +319,7 @@
     if (playerAnime) {
       playerAnime.textContent = playerAnime.title = item ? item.series : "Select a theme to begin...";
       if (item?.seriesId) {
-        const shokoBase = location.origin + base.split("/api/")[0]; // Reverse Proxy Support
+        const shokoBase = location.origin + base.split(/\/api\//i)[0]; // Reverse Proxy Support
         playerAnime.href = `${shokoBase}/webui/collection/series/${item.seriesId}/overview`;
         playerAnime.style.pointerEvents = "auto";
       } else {

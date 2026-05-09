@@ -23,7 +23,6 @@ public class AnimeThemesApi
     {
         _http = httpClient ?? new HttpClient();
         _jsonOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true, WriteIndented = true };
-        AnimeThemesHelper.EnsureUserAgent(_http);
     }
 
     #endregion
@@ -83,7 +82,6 @@ public class AnimeThemesApi
     private async Task<T?> GetJsonAsync<T>(string url, CancellationToken ct)
     {
         await RateLimitAsync(ct);
-        AnimeThemesHelper.EnsureUserAgent(_http);
 
         using var response = await _http.GetAsync(url, ct);
         if (!response.IsSuccessStatusCode)

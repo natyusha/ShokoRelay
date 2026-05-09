@@ -25,11 +25,15 @@ public class ServiceRegistration : IPluginServiceRegistration
         serviceCollection.AddHttpContextAccessor();
 
         serviceCollection.AddSingleton(new ConfigProvider(applicationPaths));
-        serviceCollection.AddSingleton(provider =>
-        {
-            var handler = new HttpClientHandler { UseCookies = true, CookieContainer = new System.Net.CookieContainer() };
-            return new HttpClient(handler, disposeHandler: true);
-        });
+        serviceCollection
+            .AddHttpClient(
+                "ShokoRelay",
+                client =>
+                {
+                    client.DefaultRequestHeaders.Add("User-Agent", $"ShokoRelay/{ShokoRelayConstants.Version}");
+                }
+            )
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { UseCookies = true, CookieContainer = new System.Net.CookieContainer() });
         serviceCollection.AddSingleton<AnimeThemesMp3Generator>();
         serviceCollection.AddSingleton<AnimeThemesMapping>();
         serviceCollection.AddSingleton<PlexMetadata>();
@@ -47,7 +51,7 @@ public class ServiceRegistration : IPluginServiceRegistration
         {
             var cp = provider.GetRequiredService<ConfigProvider>();
             var plexAuthConfig = new PlexAuthConfig { ClientIdentifier = cp.GetPlexClientIdentifier() };
-            return new PlexAuth(provider.GetRequiredService<HttpClient>(), plexAuthConfig);
+            return new PlexAuth(provider.GetRequiredService<IHttpClientFactory>(), plexAuthConfig);
         });
         serviceCollection.AddSingleton<PlexClient>();
         serviceCollection.AddSingleton<PlexCollections>();

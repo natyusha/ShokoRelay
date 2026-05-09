@@ -67,15 +67,22 @@ internal sealed record ThemeSelection(string AudioUrl, string SlugRaw, string Sl
 #endregion
 
 /// <summary>Provides functionality for fetching, converting and previewing anime theme audio from the AnimeThemes API.</summary>
-public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService metadataService, IVideoService videoService, ConfigProvider configProvider, FfmpegService ffmpegService, PlexClient plexClient)
+public class AnimeThemesMp3Generator(
+    IHttpClientFactory httpClientFactory,
+    IMetadataService metadataService,
+    IVideoService videoService,
+    ConfigProvider configProvider,
+    FfmpegService ffmpegService,
+    PlexClient plexClient
+)
 {
     #region Fields & Constructor
 
     private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
-    private readonly HttpClient _http = httpClient;
+    private readonly HttpClient _http = httpClientFactory.CreateClient("ShokoRelay");
     private readonly FfmpegService _ffmpegService = ffmpegService;
     private readonly PlexClient _plexClient = plexClient;
-    private readonly AnimeThemesApi _apiClient = new();
+    private readonly AnimeThemesApi _apiClient = new(httpClientFactory.CreateClient("ShokoRelay"));
     private List<string>? _themeMp3Cache;
     private readonly Lock _cacheLock = new();
 

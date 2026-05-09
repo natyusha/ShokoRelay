@@ -1,5 +1,4 @@
 using System.Collections.Frozen;
-using System.Net.Http.Headers;
 using System.Text.RegularExpressions;
 using ShokoRelay.Helpers;
 using ShokoRelay.Vfs;
@@ -140,18 +139,6 @@ internal static class AnimeThemesHelper
         { "WEB", "Web" },
         { "YorinukiGintamaSan", "Yorinuki Gintama-san" },
     };
-
-    #endregion
-
-    #region Initialization
-
-    /// <summary>Add a default User-Agent header to the client if none is present.</summary>
-    /// <param name="client">The HttpClient to configure.</param>
-    internal static void EnsureUserAgent(HttpClient client)
-    {
-        if (!client.DefaultRequestHeaders.UserAgent.Any())
-            client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("ShokoRelay", ShokoRelayConstants.Version));
-    }
 
     #endregion
 

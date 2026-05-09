@@ -1,8 +1,8 @@
 # Controller
 
-All of the endpoints below are available under the plugin base path: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay`
-
-They can be interacted with easily using **/swagger/** at: `http(s)://{ShokoHost}:{ShokoPort}/swagger` and changing the dropdown in the top right to "Shoko Relay V1"
+- All of the endpoints below are available under the plugin base path: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay`
+- They can be interacted with easily using **/swagger/** at: `http(s)://{ShokoHost}:{ShokoPort}/swagger` and changing the dropdown in the top right to "Shoko Relay V1"
+  - There is a small `API` button in the top right of the dashboard's "Quick Actions" panel that will go straight there
 
 ## Table of Contents
 

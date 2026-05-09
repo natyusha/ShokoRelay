@@ -5,14 +5,14 @@ using ShokoRelay.Helpers;
 namespace ShokoRelay.Plex;
 
 /// <summary>HTTP client wrapper that communicates with one or more Plex servers.</summary>
-public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
+public class PlexClient(IHttpClientFactory httpClientFactory, ConfigProvider configProvider)
 {
     #region Fields & Properties
 
     private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
 
     /// <summary>Internal access to the shared HttpClient instance.</summary>
-    internal HttpClient HttpClient => httpClient;
+    internal HttpClient HttpClient { get; } = httpClientFactory.CreateClient("ShokoRelay");
 
     private string Token => configProvider.GetPlexToken();
     private string ClientIdentifier => configProvider.GetPlexClientIdentifier();
@@ -52,7 +52,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         foreach (var target in targetsToProcess)
         {
             using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/refresh?path={Uri.EscapeDataString(mapped)}", target.ServerUrl);
-            using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+            using var resp = await HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
             if (resp.IsSuccessStatusCode)
             {
                 anyOk = true;
@@ -77,7 +77,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
             return false;
 
         using var req = CreateRequest(HttpMethod.Put, $"/library/metadata/{ratingKey}/refresh", target.ServerUrl);
-        using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+        using var resp = await HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
 
         return resp.IsSuccessStatusCode;
     }
@@ -149,7 +149,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         {
             string guid = $"{ShokoRelayConstants.AgentScheme}://show/{shokoSeriesId}";
             using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?guid={Uri.EscapeDataString(guid)}", target.ServerUrl);
-            using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+            using var resp = await HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
             var item = (await PlexApi.ReadContainerAsync(resp, cancellationToken).ConfigureAwait(false))?.Metadata?.FirstOrDefault();
             return int.TryParse(item?.RatingKey, out int key) ? key : null;
         }
@@ -196,7 +196,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
                 q.Add($"lastViewedAt>={minLastViewed.Value}");
 
             using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?{string.Join("&", q)}", target.ServerUrl, token);
-            using var resp = await httpClient.SendAsync(req, ct).ConfigureAwait(false);
+            using var resp = await HttpClient.SendAsync(req, ct).ConfigureAwait(false);
             var cont = resp.IsSuccessStatusCode ? await PlexApi.ReadContainerAsync(resp, ct).ConfigureAwait(false) : null;
             if (cont?.Metadata == null || cont.Metadata.Count == 0)
                 break;
