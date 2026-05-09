@@ -90,15 +90,10 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
     /// <param name="productName">Product name to show in Plex.</param>
     /// <param name="forwardUrl">Optional redirection URL.</param>
     /// <returns>An authorization URL.</returns>
-    public string BuildAuthUrl(string pinCode, string productName, string? forwardUrl = null)
-    {
-        if (pinCode.Length <= 4)
-            return $"https://plex.tv/link/?pin={Uri.EscapeDataString(pinCode)}";
-        var query = $"clientID={Uri.EscapeDataString(_config.ClientIdentifier)}&code={Uri.EscapeDataString(pinCode)}&context%5Bdevice%5D%5Bproduct%5D={Uri.EscapeDataString(productName)}";
-        if (!string.IsNullOrWhiteSpace(forwardUrl))
-            query += $"&forwardUrl={Uri.EscapeDataString(forwardUrl)}";
-        return $"https://app.plex.tv/auth#?{query}";
-    }
+    public string BuildAuthUrl(string pinCode, string productName, string? forwardUrl = null) =>
+        pinCode.Length <= 4
+            ? $"https://plex.tv/link/?pin={Uri.EscapeDataString(pinCode)}"
+            : $"https://app.plex.tv/auth#?clientID={Uri.EscapeDataString(_config.ClientIdentifier)}&code={Uri.EscapeDataString(pinCode)}&context%5Bdevice%5D%5Bproduct%5D={Uri.EscapeDataString(productName)}{(string.IsNullOrWhiteSpace(forwardUrl) ? "" : $"&forwardUrl={Uri.EscapeDataString(forwardUrl)}")}";
 
     /// <summary>Retrieve the status for a specific Plex PIN from the v2 API.</summary>
     /// <param name="pinId">The PIN identifier.</param>

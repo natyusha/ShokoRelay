@@ -280,9 +280,8 @@ public class ShokoController(
 
     #region Private Helpers
 
-    private Task SchedulePlexRefreshForSeriesAsync(IEnumerable<IShokoSeries> series)
-    {
-        return Task.Run(async () =>
+    private Task SchedulePlexRefreshForSeriesAsync(IEnumerable<IShokoSeries> series) =>
+        Task.Run(async () =>
         {
             foreach (var s in series)
             {
@@ -306,7 +305,6 @@ public class ShokoController(
                 catch { }
             }
         });
-    }
 
     #endregion
 }

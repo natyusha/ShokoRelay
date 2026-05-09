@@ -76,19 +76,6 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
         var extraEntries = _configProvider.GetExtraPlexUserEntries();
         result = result with { PerUser = SyncHelper.CreatePerUserBuckets(extraEntries.Select(e => e.Name)) };
 
-        var plexUsers = new List<(string Name, string? Token)>();
-        if (userType is SyncUserType.All or SyncUserType.Admin)
-            plexUsers.Add(("admin", null));
-        if (userType is SyncUserType.All or SyncUserType.Extra)
-        {
-            foreach (var (name, pin) in extraEntries)
-            {
-                var token = await SyncHelper.FetchManagedUserTokenAsync(_plexAuth, _configProvider, name, pin, cancellationToken).ConfigureAwait(false);
-                if (token != null)
-                    plexUsers.Add((name, token));
-            }
-        }
-
         var matchedGlobal = new HashSet<int>();
         foreach (var target in targets)
         {
@@ -98,28 +85,12 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
             if (!string.IsNullOrWhiteSpace(libraryName) && !string.Equals(target.Title, libraryName, StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            var userBuckets = new List<(string Name, List<PlexMetadataItem> Items, string? Token)>();
-
-            if (userType is SyncUserType.All or SyncUserType.Admin)
-            {
-                var adminUnwatched = await _plexClient.GetSectionEpisodesAsync(target, null, cancellationToken, true).ConfigureAwait(false);
-                userBuckets.Add(("admin", adminUnwatched ?? [], null));
-            }
-
-            if (userType is SyncUserType.All or SyncUserType.Extra)
-            {
-                foreach (var (name, pin) in extraEntries)
-                {
-                    // Pass sinceHours: null to Plex here to return ALL unwatched items in Plex. The Shoko list is already filtered by sinceHours.
-                    var (eps, resolvedToken, err) = await SyncHelper
-                        .FetchManagedUserSectionEpisodesAsync(_plexAuth, _plexClient, _configProvider, target, name, pin, null, true, cancellationToken)
-                        .ConfigureAwait(false);
-                    if (!string.IsNullOrEmpty(err))
-                        result = SyncHelper.RecordError(result, result.PerUser, name, err);
-                    else
-                        userBuckets.Add((name, eps, resolvedToken));
-                }
-            }
+            // Fetch user item buckets and automatically handle managed token resolution and user filtering.
+            // Pass sinceHours: null here to return ALL unwatched items in Plex. The Shoko list is already filtered by sinceHours.
+            var (userBuckets, newResult) = await SyncHelper
+                .FetchUserBucketsAsync(_plexAuth, _plexClient, _configProvider, target, userType, extraEntries, true, null, result, cancellationToken)
+                .ConfigureAwait(false);
+            result = newResult;
 
             foreach (var (uName, unwatched, uToken) in userBuckets)
             {

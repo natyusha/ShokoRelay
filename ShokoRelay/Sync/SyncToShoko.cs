@@ -72,30 +72,13 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
             if (!string.IsNullOrWhiteSpace(libraryName) && !string.Equals(target.Title, libraryName, StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            var userBuckets = new List<(string Name, List<PlexMetadataItem> Items)>();
+            // Fetch user item buckets and automatically handle managed token resolution and user filtering.
+            var (userBuckets, newResult) = await SyncHelper
+                .FetchUserBucketsAsync(_plexAuth, _plexClient, _configProvider, target, userType, extraEntries, false, sinceHours, result, cancellationToken)
+                .ConfigureAwait(false);
+            result = newResult;
 
-            if (userType is SyncUserType.All or SyncUserType.Admin)
-            {
-                var adminItems = await _plexClient
-                    .GetSectionEpisodesAsync(target, null, cancellationToken, false, null, sinceHours > 0 ? DateTimeOffset.UtcNow.ToUnixTimeSeconds() - (sinceHours.Value * 3600) : null)
-                    .ConfigureAwait(false);
-                userBuckets.Add(("admin", adminItems ?? []));
-            }
-            if (userType is SyncUserType.All or SyncUserType.Extra)
-            {
-                foreach (var (name, pin) in extraEntries)
-                {
-                    var (eps, _, err) = await SyncHelper
-                        .FetchManagedUserSectionEpisodesAsync(_plexAuth, _plexClient, _configProvider, target, name, pin, sinceHours, false, cancellationToken)
-                        .ConfigureAwait(false);
-                    if (!string.IsNullOrEmpty(err))
-                        result = SyncHelper.RecordError(result, result.PerUser, name, err);
-                    else
-                        userBuckets.Add((name, eps));
-                }
-            }
-
-            foreach (var (uName, items) in userBuckets)
+            foreach (var (uName, items, _) in userBuckets)
             {
                 foreach (var item in items)
                 {

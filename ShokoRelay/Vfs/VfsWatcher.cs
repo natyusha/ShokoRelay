@@ -214,6 +214,47 @@ public class VfsWatcher(
         ScheduleCollectionUpdate(series);
     }
 
+    /// <summary>Generic debouncer wrapper to handle delaying tasks and managing cancellations efficiently.</summary>
+    /// <param name="seriesId">The ID of the series being processed.</param>
+    /// <param name="delaySeconds">The delay in seconds before executing the action.</param>
+    /// <param name="tracker">The dictionary tracking cancellation tokens for pending actions.</param>
+    /// <param name="action">The asynchronous action to execute after the delay.</param>
+    private void ScheduleDebouncedAction(int seriesId, int delaySeconds, ConcurrentDictionary<int, CancellationTokenSource> tracker, Func<CancellationToken, Task> action)
+    {
+        if (tracker.TryRemove(seriesId, out var oldCts))
+        {
+            oldCts.Cancel();
+            oldCts.Dispose();
+        }
+
+        var cts = new CancellationTokenSource();
+        tracker[seriesId] = cts;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(delaySeconds), cts.Token).ConfigureAwait(false);
+                lock (VfsBuilder.GlobalBuildLock)
+                {
+                    if (_pending.ContainsKey(seriesId))
+                        return;
+                }
+                await action(cts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                s_logger.Error(ex, "VFS: Scheduled action failed for series {0}", seriesId);
+            }
+            finally
+            {
+                tracker.TryRemove(new KeyValuePair<int, CancellationTokenSource>(seriesId, cts));
+                cts.Dispose();
+            }
+        });
+    }
+
     /// <summary>Schedules or resets the timer for a partial Plex library scan for the given series.</summary>
     /// <param name="series">The Shoko series being updated.</param>
     private void ScheduleLibraryScan(IShokoSeries series)
@@ -221,86 +262,29 @@ public class VfsWatcher(
         if (!_plexLibrary.ScanOnVfsRefresh)
             return;
 
-        int delaySeconds = ShokoRelay.Settings.Advanced.PlexScanDelay;
-
-        if (_pendingLibraryScans.TryRemove(series.ID, out var oldCts))
-        {
-            oldCts.Cancel();
-            oldCts.Dispose();
-        }
-
-        var cts = new CancellationTokenSource();
-        _pendingLibraryScans[series.ID] = cts;
-
-        _ = Task.Run(async () =>
-        {
-            try
+        ScheduleDebouncedAction(
+            series.ID,
+            ShokoRelay.Settings.Advanced.PlexScanDelay,
+            _pendingLibraryScans,
+            async token =>
             {
-                await Task.Delay(TimeSpan.FromSeconds(delaySeconds), cts.Token).ConfigureAwait(false);
-
-                lock (VfsBuilder.GlobalBuildLock)
+                foreach (var path in VfsShared.ResolveSeriesVfsPaths(series, _metadataService))
                 {
-                    if (_pending.ContainsKey(series.ID))
-                        return;
-                    foreach (var path in VfsShared.ResolveSeriesVfsPaths(series, _metadataService))
-                    {
-                        if (Directory.Exists(path) && Directory.EnumerateFileSystemEntries(path).Any())
-                            _ = _plexLibrary.RefreshSectionPathAsync(path, cts.Token);
-                        else
-                            s_logger.Debug("VFS: Library scan for '{0}' skipped -> path '{1}' not ready or empty", series.PreferredTitle?.Value, path);
-                    }
+                    if (Directory.Exists(path) && Directory.EnumerateFileSystemEntries(path).Any())
+                        await _plexLibrary.RefreshSectionPathAsync(path, token).ConfigureAwait(false);
+                    else
+                        s_logger.Debug("VFS: Library scan for '{0}' skipped -> path '{1}' not ready or empty", series.PreferredTitle?.Value, path);
                 }
             }
-            catch (OperationCanceledException) { }
-            catch (Exception ex)
-            {
-                s_logger.Error(ex, "VFS: Library scan failed for series {0}", series.ID);
-            }
-            finally
-            {
-                _pendingLibraryScans.TryRemove(new KeyValuePair<int, CancellationTokenSource>(series.ID, cts));
-                cts.Dispose();
-            }
-        });
+        );
     }
 
     /// <summary>Schedules or resets the timer for a full Plex metadata refresh for the given series.</summary>
     /// <param name="series">The Shoko series being updated.</param>
     private void ScheduleMetadataFixup(IShokoSeries series)
     {
-        int delayMinutes = ShokoRelay.Settings.Advanced.PlexFixupDelay;
-
-        if (_pendingMetadataFixups.TryRemove(series.ID, out var oldCts))
-        {
-            oldCts.Cancel();
-            oldCts.Dispose();
-        }
-
-        s_logger.Debug("VFS: Scheduling metadata fixup for '{0}' (ID: {1}) in {2} minute(s)", series.PreferredTitle?.Value, series.ID, delayMinutes);
-
-        var cts = new CancellationTokenSource();
-        _pendingMetadataFixups[series.ID] = cts;
-
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await Task.Delay(TimeSpan.FromMinutes(delayMinutes), cts.Token).ConfigureAwait(false);
-                lock (VfsBuilder.GlobalBuildLock)
-                {
-                    if (_pending.ContainsKey(series.ID))
-                        return;
-
-                    _ = RunMetadataFixupAsync(series, cts.Token);
-                }
-            }
-            catch (OperationCanceledException) { }
-            finally
-            {
-                _pendingMetadataFixups.TryRemove(new KeyValuePair<int, CancellationTokenSource>(series.ID, cts));
-                cts.Dispose();
-            }
-        });
+        s_logger.Debug("VFS: Scheduling metadata fixup for '{0}' (ID: {1}) in {2} minute(s)", series.PreferredTitle?.Value, series.ID, ShokoRelay.Settings.Advanced.PlexFixupDelay);
+        ScheduleDebouncedAction(series.ID, ShokoRelay.Settings.Advanced.PlexFixupDelay * 60, _pendingMetadataFixups, token => RunMetadataFixupAsync(series, token));
     }
 
     /// <summary>Worker task that performs the actual metadata fixup logic after the debounce delay has settled.</summary>
@@ -352,40 +336,8 @@ public class VfsWatcher(
 
     /// <summary>Schedules or resets the timer for updating collections and posters in Plex for the given series.</summary>
     /// <param name="series">The Shoko series being updated.</param>
-    private void ScheduleCollectionUpdate(IShokoSeries series)
-    {
-        int delayMinutes = ShokoRelay.Settings.Advanced.PlexFixupDelay;
-
-        if (_pendingCollectionUpdates.TryRemove(series.ID, out var oldCts))
-        {
-            oldCts.Cancel();
-            oldCts.Dispose();
-        }
-
-        var cts = new CancellationTokenSource();
-        _pendingCollectionUpdates[series.ID] = cts;
-
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await Task.Delay(TimeSpan.FromMinutes(delayMinutes), cts.Token).ConfigureAwait(false);
-                lock (VfsBuilder.GlobalBuildLock)
-                {
-                    if (_pending.ContainsKey(series.ID))
-                        return;
-
-                    _ = RunCollectionUpdateAsync(series, cts.Token);
-                }
-            }
-            catch (OperationCanceledException) { }
-            finally
-            {
-                _pendingCollectionUpdates.TryRemove(new KeyValuePair<int, CancellationTokenSource>(series.ID, cts));
-                cts.Dispose();
-            }
-        });
-    }
+    private void ScheduleCollectionUpdate(IShokoSeries series) =>
+        ScheduleDebouncedAction(series.ID, ShokoRelay.Settings.Advanced.PlexFixupDelay * 60, _pendingCollectionUpdates, token => RunCollectionUpdateAsync(series, token));
 
     /// <summary>Worker task that performs the collection assignment and poster upload logic.</summary>
     /// <param name="series">The Shoko series to update.</param>

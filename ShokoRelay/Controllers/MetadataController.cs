@@ -134,15 +134,11 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
         var ctx = _mapper.GetSeriesContext(ratingKey);
         if (ctx == null)
             return NotFound();
-        bool isAniDbEp = ratingKey.StartsWith(PlexConstants.AniDbPrefix + PlexConstants.EpisodePrefix, StringComparison.OrdinalIgnoreCase);
-        if (isAniDbEp || ratingKey.StartsWith(PlexConstants.EpisodePrefix))
+
+        bool isEpKey = ratingKey.StartsWith(PlexConstants.EpisodePrefix) || ratingKey.StartsWith(PlexConstants.AniDbPrefix + PlexConstants.EpisodePrefix, StringComparison.OrdinalIgnoreCase);
+        if (isEpKey)
         {
-            var idPart = isAniDbEp ? ratingKey[(PlexConstants.AniDbPrefix.Length + PlexConstants.EpisodePrefix.Length)..] : ratingKey[PlexConstants.EpisodePrefix.Length..];
-            var parts = idPart.Split(PlexConstants.PartPrefix);
-            if (!int.TryParse(parts[0], out int id))
-                return NotFound();
-            int? partIdx = parts.Length > 1 && int.TryParse(parts[1], out int p) ? p : null;
-            var episode = isAniDbEp ? MetadataService.GetShokoEpisodeByAnidbID(id) : MetadataService.GetShokoEpisodeByID(id);
+            var episode = TryParseEpisodeRatingKey(ratingKey, out int? partIdx);
             if (episode == null)
                 return NotFound();
             var m = ctx.FileData.Mappings.FirstOrDefault(x => x.Episodes.Any(e => e.ID == episode.ID));
@@ -152,19 +148,19 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             // Handle Episode Groups (One Shoko ID mapped to multiple TMDB IDs)
             object? tmdbOverride = m.TmdbEpisode;
             var coords = m.Coords;
-            if (ShokoRelay.Settings.TmdbEpNumbering && episode is IShokoEpisode { TmdbEpisodes.Count: > 1 } se)
+            if (ShokoRelay.Settings.TmdbEpNumbering && episode.TmdbEpisodes?.Count > 1)
             {
                 // If Plex specifies an index (e.g. index=2), find the specific TMDB metadata for that position
                 if (int.TryParse(Request.Query["index"], out int reqIndex))
                 {
                     string? prefId = MapHelper.GetPreferredTmdbOrderingId(ctx.Series);
-                    var matchedTe = SelectPreferredTmdbOrdering(se.TmdbEpisodes, prefId).FirstOrDefault(te => GetOrderingCoords(te, prefId).Episode == reqIndex);
+                    var matchedTmdbEp = SelectPreferredTmdbOrdering(episode.TmdbEpisodes, prefId).FirstOrDefault(tmdbEp => GetOrderingCoords(tmdbEp, prefId).Episode == reqIndex);
 
-                    if (matchedTe != null)
+                    if (matchedTmdbEp != null)
                     {
-                        var (sNum, epNum) = GetOrderingCoords(matchedTe, prefId);
+                        var (sNum, epNum) = GetOrderingCoords(matchedTmdbEp, prefId);
                         coords = new PlexCoords { Season = sNum ?? coords.Season, Episode = epNum };
-                        tmdbOverride = matchedTe;
+                        tmdbOverride = matchedTmdbEp;
                     }
                 }
             }
@@ -234,17 +230,14 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
         if (ctx == null)
             return NotFound();
         object[] images;
-        bool isAniDbEp = ratingKey.StartsWith(PlexConstants.AniDbPrefix + PlexConstants.EpisodePrefix, StringComparison.OrdinalIgnoreCase);
-        if (isAniDbEp || ratingKey.StartsWith(PlexConstants.EpisodePrefix))
+        bool isEpKey = ratingKey.StartsWith(PlexConstants.EpisodePrefix) || ratingKey.StartsWith(PlexConstants.AniDbPrefix + PlexConstants.EpisodePrefix, StringComparison.OrdinalIgnoreCase);
+        if (isEpKey)
         {
-            var idPart = isAniDbEp ? ratingKey[(PlexConstants.AniDbPrefix.Length + PlexConstants.EpisodePrefix.Length)..] : ratingKey[PlexConstants.EpisodePrefix.Length..];
-            var parts = idPart.Split(PlexConstants.PartPrefix);
-            if (!int.TryParse(parts[0], out int id))
+            var episode = TryParseEpisodeRatingKey(ratingKey, out int? partIdx);
+            if (episode == null)
                 return NotFound();
-            int? partIdx = parts.Length > 1 && int.TryParse(parts[1], out int p) ? p : null;
-            var episode = isAniDbEp ? MetadataService.GetShokoEpisodeByAnidbID(id) : MetadataService.GetShokoEpisodeByID(id);
-            var m = episode != null ? ctx.FileData.Mappings.FirstOrDefault(x => x.Episodes.Any(e => e.ID == episode.ID)) : null;
-            images = (episode != null && m != null) ? ExtractImages(_mapper.MapEpisode(episode, m.Coords, ctx.Series, ctx.Titles, partIdx, m.TmdbEpisode)) : [];
+            var m = ctx.FileData.Mappings.FirstOrDefault(x => x.Episodes.Any(e => e.ID == episode.ID));
+            images = m != null ? ExtractImages(_mapper.MapEpisode(episode, m.Coords, ctx.Series, ctx.Titles, partIdx, m.TmdbEpisode)) : [];
         }
         else if (ratingKey.Contains(PlexConstants.SeasonPrefix))
         {
@@ -312,6 +305,25 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     #endregion
 
     #region Private Helpers
+
+    /// <summary>Extracts the Shoko Episode ID and optional part index from a Plex ratingKey.</summary>
+    private IShokoEpisode? TryParseEpisodeRatingKey(string ratingKey, out int? partIdx)
+    {
+        partIdx = null;
+        bool isAniDbEp = ratingKey.StartsWith(PlexConstants.AniDbPrefix + PlexConstants.EpisodePrefix, StringComparison.OrdinalIgnoreCase);
+        if (!isAniDbEp && !ratingKey.StartsWith(PlexConstants.EpisodePrefix))
+            return null;
+
+        var idPart = isAniDbEp ? ratingKey[(PlexConstants.AniDbPrefix.Length + PlexConstants.EpisodePrefix.Length)..] : ratingKey[PlexConstants.EpisodePrefix.Length..];
+        var parts = idPart.Split(PlexConstants.PartPrefix);
+        if (!int.TryParse(parts[0], out int id))
+            return null;
+
+        if (parts.Length > 1 && int.TryParse(parts[1], out int p))
+            partIdx = p;
+
+        return isAniDbEp ? MetadataService.GetShokoEpisodeByAnidbID(id) : MetadataService.GetShokoEpisodeByID(id);
+    }
 
     private static object[] ExtractImages(object metadata) => metadata is IDictionary<string, object?> dict && dict.TryGetValue("Image", out var img) && img is object[] arr ? arr : [];
 

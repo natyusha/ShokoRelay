@@ -142,28 +142,13 @@ public static class PlexHelper
         OverrideHelper.EnsureLoaded();
         var seriesList = new List<IShokoSeries> { series };
         if (ShokoRelay.Settings.TmdbEpNumbering)
-        {
-            int primaryId = OverrideHelper.GetPrimary(series.ID, metadataService);
-            var group = OverrideHelper.GetGroup(primaryId, metadataService);
-            foreach (var id in group.Skip(1))
-            {
-                var s = metadataService.GetShokoSeriesByID(id);
-                if (s != null)
-                    seriesList.Add(s);
-            }
-        }
+            seriesList.AddRange(OverrideHelper.GetGroup(OverrideHelper.GetPrimary(series.ID, metadataService), metadataService).Skip(1).Select(metadataService.GetShokoSeriesByID).OfType<IShokoSeries>());
         foreach (var s in seriesList)
+        foreach (var mapping in MapHelper.GetSeriesFileData(s, metadataService).Mappings)
         {
-            var fileData = MapHelper.GetSeriesFileData(s, metadataService);
-            foreach (var mapping in fileData.Mappings)
-            {
-                var location = mapping.Video.Files.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l.Path)) ?? mapping.Video.Files.FirstOrDefault();
-                if (location == null)
-                    continue;
-                string? importRoot = Vfs.VfsShared.ResolveImportRootPath(location);
-                if (!string.IsNullOrWhiteSpace(importRoot))
-                    roots.Add(importRoot);
-            }
+            var location = mapping.Video.Files.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l.Path)) ?? mapping.Video.Files.FirstOrDefault();
+            if (location != null && Vfs.VfsShared.ResolveImportRootPath(location) is string importRoot)
+                roots.Add(importRoot);
         }
         return roots;
     }

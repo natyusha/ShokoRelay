@@ -55,54 +55,27 @@ public static class TagHelper
             return [];
         var userBlacklist = ShokoRelay.Settings.TagBlacklist.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         var sourceSetting = ShokoRelay.Settings.TagSources;
-        var shokoNames = shokoTags.Select(t => t.Name).Where(n => !string.IsNullOrWhiteSpace(n)).Cast<string>().ToList();
+        var shokoNames = shokoTags.Select(t => t.Name).Where(n => !string.IsNullOrWhiteSpace(n)).Cast<string>();
 
         if (sourceSetting == TagSources.UserOnly)
-            return
-            [
-                .. shokoNames
-                    .Where(tagName => !s_tagBlacklistAniDBHelpers.Contains(tagName) && !userBlacklist.Contains(tagName, StringComparer.OrdinalIgnoreCase))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .Select(tagName => new { tag = TitleCase(tagName) }),
-            ];
+            return [.. FilterAndFormat(shokoNames, userBlacklist)];
 
-        var anidbNames = new List<string>();
+        IEnumerable<string> anidbNames = [];
         int minWeight = (int)ShokoRelay.Settings.MinimumTagWeight;
-        if (
-            (sourceSetting == TagSources.Combined || sourceSetting == TagSources.AniDB)
-            && shokoSeries != null
-            && shokoSeries.AnidbAnime?.Tags is IReadOnlyList<IAnidbTagForAnime> anidbTags
-            && anidbTags.Count > 0
-        )
-        {
-            foreach (var t in anidbTags)
-            {
-                if (string.IsNullOrWhiteSpace(t.Name) || (minWeight > 0 && t.Weight < minWeight))
-                    continue;
-                anidbNames.Add(t.Name);
-            }
-        }
-        var tmdbNames = new List<string>();
-        if ((sourceSetting == TagSources.Combined || sourceSetting == TagSources.TMDB) && shokoSeries != null)
-        {
-            var tmdb = shokoSeries.TmdbShows?.FirstOrDefault();
-            if (tmdb != null)
-            {
-                if (tmdb.Keywords != null)
-                    tmdbNames.AddRange(tmdb.Keywords.Where(k => !string.IsNullOrWhiteSpace(k)));
-                if (tmdb.Genres != null)
-                    tmdbNames.AddRange(tmdb.Genres.Where(g => !string.IsNullOrWhiteSpace(g)));
-            }
-        }
-        var combined = anidbNames.Concat(tmdbNames).Concat(shokoNames);
-        return
-        [
-            .. combined
-                .Where(tagName => !string.IsNullOrWhiteSpace(tagName) && !s_tagBlacklistAniDBHelpers.Contains(tagName) && !userBlacklist.Contains(tagName, StringComparer.OrdinalIgnoreCase))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Select(tagName => new { tag = TitleCase(tagName) }),
-        ];
+        if ((sourceSetting == TagSources.Combined || sourceSetting == TagSources.AniDB) && shokoSeries?.AnidbAnime?.Tags is IReadOnlyList<IAnidbTagForAnime> anidbTags)
+            anidbNames = anidbTags.Where(t => !string.IsNullOrWhiteSpace(t.Name) && (minWeight <= 0 || t.Weight >= minWeight)).Select(t => t.Name);
+
+        IEnumerable<string> tmdbNames = [];
+        if ((sourceSetting == TagSources.Combined || sourceSetting == TagSources.TMDB) && shokoSeries?.TmdbShows?.FirstOrDefault() is { } tmdb)
+            tmdbNames = (tmdb.Keywords ?? []).Concat(tmdb.Genres ?? []).Where(k => !string.IsNullOrWhiteSpace(k));
+
+        return [.. FilterAndFormat(anidbNames.Concat(tmdbNames).Concat(shokoNames), userBlacklist)];
     }
+
+    private static IEnumerable<object> FilterAndFormat(IEnumerable<string> tags, string[] userBlacklist) =>
+        tags.Where(tagName => !string.IsNullOrWhiteSpace(tagName) && !s_tagBlacklistAniDBHelpers.Contains(tagName) && !userBlacklist.Contains(tagName, StringComparer.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(tagName => new { tag = TitleCase(tagName) });
 
     #endregion
 

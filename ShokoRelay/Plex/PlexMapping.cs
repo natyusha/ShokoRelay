@@ -31,20 +31,15 @@ public static class PlexMapping
     /// <param name="seasonNumber">The season ID.</param>
     /// <param name="info">Result folder/subtype tuple.</param>
     /// <returns>True if special.</returns>
-    public static bool TryGetExtraSeason(int seasonNumber, out (string Folder, string Subtype) info)
-    {
-        return PlexConstants.ExtraSeasons.TryGetValue(seasonNumber, out info);
-    }
+    public static bool TryGetExtraSeason(int seasonNumber, out (string Folder, string Subtype) info) => PlexConstants.ExtraSeasons.TryGetValue(seasonNumber, out info);
 
     /// <summary>Obtain the Plex folder name for a season.</summary>
     /// <param name="seasonNumber">The season ID.</param>
     /// <returns>Folder name string.</returns>
-    public static string GetSeasonFolder(int seasonNumber)
-    {
-        return TryGetExtraSeason(seasonNumber, out var special) ? special.Folder
-            : seasonNumber == 0 ? "Specials"
-            : $"Season {seasonNumber}";
-    }
+    public static string GetSeasonFolder(int seasonNumber) =>
+        TryGetExtraSeason(seasonNumber, out var special) ? special.Folder
+        : seasonNumber == 0 ? "Specials"
+        : $"Season {seasonNumber}";
 
     #endregion
 

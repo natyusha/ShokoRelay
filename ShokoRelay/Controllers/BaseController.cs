@@ -262,17 +262,8 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
     /// <summary>Parses a query parameter into a boolean dry-run flag.</summary>
     /// <param name="dryRun">String value ("true" or "false").</param>
     /// <returns>A tuple containing the parsed bool and an error IActionResult if parsing failed.</returns>
-    protected static (bool Parsed, IActionResult? Error) ParseDryRunParam(string? dryRun)
-    {
-        if (string.IsNullOrWhiteSpace(dryRun))
-            return (true, null);
-        var v = dryRun.Trim();
-        if (string.Equals(v, "true", StringComparison.OrdinalIgnoreCase))
-            return (true, null);
-        if (string.Equals(v, "false", StringComparison.OrdinalIgnoreCase))
-            return (false, null);
-        return (true, null);
-    }
+    protected static (bool Parsed, IActionResult? Error) ParseDryRunParam(string? dryRun) =>
+        (string.IsNullOrWhiteSpace(dryRun) || !string.Equals(dryRun.Trim(), "false", StringComparison.OrdinalIgnoreCase), null);
 
     #endregion
 

@@ -191,17 +191,10 @@ public sealed class FfmpegService
     /// <summary>Resolves a valid working directory for process execution based on a preferred path hint.</summary>
     /// <param name="preferred">The preferred directory or file path to evaluate.</param>
     /// <returns>A confirmed absolute directory path.</returns>
-    private static string DetermineWorkingDirectory(string preferred)
-    {
-        if (File.Exists(preferred))
-        {
-            string? dir = Path.GetDirectoryName(preferred);
-            if (!string.IsNullOrWhiteSpace(dir) && Directory.Exists(dir))
-                return dir;
-        }
-
-        return Directory.Exists(preferred) ? preferred : s_pluginDirectory;
-    }
+    private static string DetermineWorkingDirectory(string preferred) =>
+        File.Exists(preferred) && Path.GetDirectoryName(preferred) is string dir && Directory.Exists(dir) ? dir
+        : Directory.Exists(preferred) ? preferred
+        : s_pluginDirectory;
 
     #endregion
 
