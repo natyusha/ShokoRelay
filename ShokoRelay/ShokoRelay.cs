@@ -74,7 +74,7 @@ public class Plugin : IPlugin
     public string Name => ShokoRelayConstants.Name;
 
     /// <summary>Plugin description.</summary>
-    public string? Description => "A Custom Metadata Provider and Automation Tools for Plex and AnimeThemes in the form of a Shoko Server plugin";
+    public string? Description => "A Custom Metadata Provider and Automation Tools for Plex and AnimeThemes in the form of a Shoko Server plugin.";
 
     /// <summary>Plugin thumbnail resource.</summary>
     public string? EmbeddedThumbnailResourceName => "ShokoRelay.Assets.shoko-relay-thumbnail.png";

@@ -1,6 +1,6 @@
 <!-- prettier-ignore-start -->
 
-![Shoko Relay Logo](https://github.com/natyusha/ShokoRelay.bundle/assets/985941/23bfd7c2-eb89-46d5-a7cb-558c374393d6 "Shoko Relay")  
+![Shoko Relay Logo](https://github.com/natyusha/ShokoRelay.bundle/assets/985941/23bfd7c2-eb89-46d5-a7cb-558c374393d6 "Shoko Relay")
 [![Discord](https://img.shields.io/discord/96234011612958720?logo=discord&logoColor=fff&label=Discord&color=5865F2 "Shoko Discord")](https://discord.gg/shokoanime)
 [![Shoko Docs](https://img.shields.io/badge/VitePress-Shoko_Docs-4E7CF5?logo=vitepress&logoColor=fff)](https://docs.shokoanime.com/)
 [![GitHub Latest](https://img.shields.io/github/v/tag/natyusha/ShokoRelay?label=Latest&logo=github&logoColor=fff)](https://github.com/natyusha/ShokoRelay/releases/latest)
@@ -14,23 +14,24 @@ Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File Sy
 
 ## Installation
 
-### Shoko
+### GUI (Recommended)
 
-> [!IMPORTANT]
-> The VFS is created inside each of Shoko's "destination" type folders under a subfolder named `!ShokoRelayVFS` (configurable under `Advanced Settings > VFS Root Path`). To stop Shoko from scanning the generated links, navigate to Shoko's installation directory and add the following regex entries to `settings-server.json` under `Exclude`:
->
-> ```json
-> "Exclude": [
->   "[\\\\\\/]!AnimeThemes[\\\\\\/]",
->   "[\\\\\\/]!ShokoRelayVFS[\\\\\\/]"
-> ],
-> ```
+1. Open the Shoko Web UI and navigate to **Settings → Plugins → Repositories**.
+2. Add the manifest URL:
+   ```
+   https://raw.githubusercontent.com/natyusha/ShokoRelay/master/manifest.json
+   ```
+3. Go to **Settings → Plugins → Browse** and find **Shoko Relay**.
+4. Click **Install** on the desired version.
+5. Restart Shoko.
 
-- Be sure to also exclude the `AnimeThemes Root Path` (default `!AnimeThemes`) if you plan on using AnimeThemes.
-- After excluding the VFS in Shoko's settings, extract [the latest release](https://github.com/natyusha/ShokoRelay/releases/latest) into Shoko Server's `plugins` directory
-- Restart Shoko Server
+### Manual
 
-#### Setup
+1. Download the latest `ShokoRelay-<rid>.zip` from the [Releases](../../releases) page.
+2. Extract the ZIP and place all the files into your Shoko **Plugins** folder.
+3. Restart Shoko.
+
+### Setup
 
 - Once the Server has loaded navigate to Shoko Relay's dashboard at the following URL:
   - `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/dashboard`
