@@ -125,7 +125,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     /// - 'e567' (Shoko Episode ID) / 'ae567' (AniDB Episode ID)
     /// - _AniDB IDs resolve to Shoko IDs and must be known to Shoko_
     /// </remarks>
-    /// <param name="ratingKey">Plex-style rating key.</param>
+    /// <param name="ratingKey">Custom Plex-style rating key.</param>
     /// <param name="includeChildren">Whether to embed immediate children (seasons/episodes).</param>
     /// <returns>Metadata MediaContainer.</returns>
     [HttpGet("metadata/{ratingKey}")]
@@ -188,7 +188,8 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     }
 
     /// <summary>Lists the immediate children for the provided ratingKey.</summary>
-    /// <param name="ratingKey">Parent rating key.</param>
+    /// <remarks>See <c>/metadata/{ratingKey}</c> for supported ratingKey formats and resolution behavior.</remarks>
+    /// <param name="ratingKey">Custom Plex-style rating key.</param>
     /// <returns>Paged MediaContainer.</returns>
     [HttpGet("metadata/{ratingKey}/children")]
     public IActionResult GetChildren(string ratingKey)
@@ -203,7 +204,8 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     }
 
     /// <summary>Lists the second-level children (episodes) for a show-level ratingKey.</summary>
-    /// <param name="ratingKey">Show rating key.</param>
+    /// <remarks>See <c>/metadata/{ratingKey}</c> for supported ratingKey formats and resolution behavior.</remarks>
+    /// <param name="ratingKey">Custom Plex-style rating key.</param>
     /// <returns>Paged MediaContainer.</returns>
     [HttpGet("metadata/{ratingKey}/grandchildren")]
     public IActionResult GetGrandchildren(string ratingKey)
@@ -221,7 +223,8 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     }
 
     /// <summary>Enumerates all available artwork for the specified ratingKey.</summary>
-    /// <param name="ratingKey">Target rating key.</param>
+    /// <remarks>See <c>/metadata/{ratingKey}</c> for supported ratingKey formats and resolution behavior.</remarks>
+    /// <param name="ratingKey">Custom Plex-style rating key.</param>
     /// <returns>Image MediaContainer.</returns>
     [HttpGet("metadata/{ratingKey}/images")]
     public IActionResult GetImages(string ratingKey)
