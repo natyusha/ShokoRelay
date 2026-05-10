@@ -119,8 +119,7 @@ public static class TextHelper
         string? alt = GetTitleByLanguage(series, ShokoRelay.Settings.SeriesAltTitleLanguage);
 
         // Duplicate check to avoid redundant metadata
-        bool isDup = string.IsNullOrEmpty(alt) || alt.Equals(raw, StringComparison.OrdinalIgnoreCase) || alt.Equals(display, StringComparison.OrdinalIgnoreCase);
-        string? finalAlt = isDup ? null : alt;
+        string? finalAlt = (string.IsNullOrEmpty(alt) || alt.Equals(raw, StringComparison.OrdinalIgnoreCase) || alt.Equals(display, StringComparison.OrdinalIgnoreCase)) ? null : alt;
 
         // Append Alternate to Sort Title to make it searchable in Plex UI
         string sortTitle = string.IsNullOrWhiteSpace(finalAlt) ? display : $"{display} – {finalAlt}";

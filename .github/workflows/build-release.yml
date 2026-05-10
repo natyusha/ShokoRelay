@@ -1,4 +1,5 @@
 name: Build & Release ShokoRelay
+run-name: "${{ github.event_name == 'workflow_dispatch' && format('Manual Build: {0}', github.event.inputs.tag_name) || format('Release: {0}', github.event.release.name || github.event.release.tag_name) }}"
 
 on:
   release:
@@ -29,26 +30,34 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.inputs.tag_name || github.event.release.tag_name }}
 
       - name: Setup .NET 10
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: "10.0.x"
 
       - name: Set Version Variables
         id: vars
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Use input if manual run, else use release tag
           TAG="${{ github.event.inputs.tag_name || github.event.release.tag_name }}"
           VERSION="${TAG#v}"
           # Strip the 4th digit (revision) for filenames (1.00.0.1 -> 1.00.0)
           VERSION_BASE=$(echo "$VERSION" | cut -d'.' -f1-3)
-          # Check if pre-release via event or if tag contains 'dev'
-          if [[ "${{ github.event.release.prerelease }}" == "true" || "$TAG" == *"-dev"* ]]; then
+
+          # Determine if this is a pre-release (Dev channel)
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            IS_PRERELEASE=$(gh release view "$TAG" --repo "${{ github.repository }}" --json isPrerelease -q .isPrerelease)
+          else
+            IS_PRERELEASE="${{ github.event.release.prerelease }}"
+          fi
+
+          if [[ "$IS_PRERELEASE" == "true" ]]; then
             echo "file_ver=v${VERSION_BASE}-dev" >> $GITHUB_OUTPUT
             echo "is_dev=true" >> $GITHUB_OUTPUT
           else
@@ -100,7 +109,7 @@ jobs:
     needs: [publish]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -110,16 +119,13 @@ jobs:
         run: |
           TAG="${{ github.event.inputs.tag_name || github.event.release.tag_name }}"
           VERSION="${TAG#v}"
-          # If manual run, we need to find the commit hash for the provided tag
           SOURCE_REVISION=$(git rev-list -n 1 "$TAG")
-          # Use CLI to get the published date if manual, else event data
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            RELEASED_AT=$(gh release view "$TAG" --json publishedAt -q .publishedAt)
-            CHANNEL=$([[ "$TAG" == *"-dev"* ]] && echo "Dev" || echo "Stable")
-          else
-            RELEASED_AT="${{ github.event.release.published_at }}"
-            CHANNEL="${{ github.event.release.prerelease == true && 'Dev' || 'Stable' }}"
-          fi
+
+          # Fetch release metadata from API to ensure accuracy regardless of trigger type
+          RELEASE_DATA=$(gh release view "$TAG" --repo "${{ github.repository }}" --json publishedAt,isPrerelease)
+          RELEASED_AT=$(echo "$RELEASE_DATA" | jq -r .publishedAt)
+          IS_PRERELEASE=$(echo "$RELEASE_DATA" | jq -r .isPrerelease)
+          CHANNEL=$([[ "$IS_PRERELEASE" == "true" ]] && echo "Dev" || echo "Stable")
 
           # Download all release assets
           gh release download "$TAG" --repo "${{ github.repository }}" --pattern "ShokoRelay-v*.zip"
@@ -128,9 +134,7 @@ jobs:
           ARCHIVES_JSON="[]"
           shopt -s nullglob
           for ZIP in ShokoRelay-v*.zip; do
-            # Extract RID: everything after the underscore
             RID=$(echo "$ZIP" | sed -E 's/.*_(.*)\.zip/\1/')
-            
             CHECKSUM=$(sha256sum "$ZIP" | awk '{ print $1 }')
             URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${ZIP}"
             ARCHIVE_ENTRY=$(jq -n \
