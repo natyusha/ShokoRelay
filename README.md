@@ -24,6 +24,7 @@ Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File Sy
   - Click `Install` on the appropriate version
 - **Manual**
   - Extract [the latest pre-release](https://github.com/natyusha/ShokoRelay/releases) into Shoko Server's `plugins` directory
+  - It may be necessary to create the `plugins` (all lowercase) folder first which should be in the same directory as the `webui` folder
 - Restart Shoko Server after finishing either of the above installation methods
 
 #### Setup

@@ -5,6 +5,8 @@ using NLog;
 using Shoko.Abstractions.Core.Services;
 using Shoko.Abstractions.Metadata.Services;
 using Shoko.Abstractions.Plugin;
+using Shoko.Abstractions.Video;
+using Shoko.Abstractions.Video.Services;
 using ShokoRelay.AnimeThemes;
 using ShokoRelay.Config;
 using ShokoRelay.Plex;
@@ -26,13 +28,7 @@ public class ServiceRegistration : IPluginServiceRegistration
 
         string clientName = ShokoRelayConstants.Name.Replace(" ", "");
         serviceCollection
-            .AddHttpClient(
-                clientName,
-                client =>
-                {
-                    client.DefaultRequestHeaders.Add("User-Agent", $"{clientName}/{ShokoRelayConstants.Version}");
-                }
-            )
+            .AddHttpClient(clientName, client => client.DefaultRequestHeaders.Add("User-Agent", $"{clientName}/{ShokoRelayConstants.Version}"))
             .SetHandlerLifetime(Timeout.InfiniteTimeSpan)
             .ConfigurePrimaryHttpMessageHandler(() =>
                 new SocketsHttpHandler
@@ -58,6 +54,7 @@ public class ServiceRegistration : IPluginServiceRegistration
         serviceCollection.AddSingleton(provider => new Services.FfmpegService(provider.GetRequiredService<ConfigProvider>().PluginDirectory));
         serviceCollection.AddSingleton<Sync.SyncToShoko>();
         serviceCollection.AddSingleton<Sync.SyncToPlex>();
+        serviceCollection.AddSingleton<IManagedFolderIgnoreRule, VfsIgnoreRule>();
         serviceCollection.AddSingleton(provider =>
         {
             var cp = provider.GetRequiredService<ConfigProvider>();
@@ -85,7 +82,7 @@ public class Plugin : IPlugin
     public string Name => ShokoRelayConstants.Name;
 
     /// <summary>Plugin description.</summary>
-    public string? Description => "A Custom Metadata Provider and Automation Tools for Plex and AnimeThemes in the form of a Shoko Server plugin.";
+    public string? Description => "A custom Plex metadata provider and automation toolset for integrating Plex and AnimeThemes with Shoko Server.";
 
     /// <summary>Plugin thumbnail resource.</summary>
     public string? EmbeddedThumbnailResourceName => "ShokoRelay.Assets.shoko-relay-thumbnail.png";
@@ -126,12 +123,23 @@ public class ShokoRelay : BackgroundService
     public static int GetMaxParallelism() => Math.Max(1, Settings.Advanced.Parallelism);
 
     /// <summary>Initializes the Relay hosted service.</summary>
+    /// <param name="watcher">VFS filesystem event watcher.</param>
+    /// <param name="configProvider">Configuration and secrets management service.</param>
+    /// <param name="systemService">Shoko system state service.</param>
+    /// <param name="metadataService">Shoko metadata query service.</param>
+    /// <param name="httpContextAccessor">Access to the current HTTP request context.</param>
+    /// <param name="videoService">Shoko video and import folder service.</param>
+    /// <param name="watchedSyncService">Service for syncing watched states to Shoko.</param>
+    /// <param name="shokoImportService">Service for triggering server-side imports.</param>
+    /// <param name="collectionService">Service for managing Plex collections.</param>
+    /// <param name="criticRatingService">Service for applying audience ratings to Plex.</param>
     public ShokoRelay(
         VfsWatcher watcher,
         ConfigProvider configProvider,
         ISystemService systemService,
         IMetadataService metadataService,
         IHttpContextAccessor httpContextAccessor,
+        IVideoService videoService,
         Sync.SyncToShoko? watchedSyncService = null,
         Services.ShokoImportService? shokoImportService = null,
         Services.ICollectionService? collectionService = null,
@@ -147,6 +155,7 @@ public class ShokoRelay : BackgroundService
         _shokoImportService = shokoImportService;
         _collectionService = collectionService;
         _criticRatingService = criticRatingService;
+        videoService.AddParts([new VfsIgnoreRule()]);
         s_logger.Info($"ShokoRelay v{ShokoRelayConstants.Version} initialized");
     }
 

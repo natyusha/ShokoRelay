@@ -198,3 +198,17 @@ internal static class VfsShared
 
     #endregion
 }
+
+#region VFS Ignore Rule
+
+/// <summary>Automatically ignores Shoko Relay's internal VFS and local asset directories during Shoko's import scans.</summary>
+public class VfsIgnoreRule : IManagedFolderIgnoreRule
+{
+    /// <inheritdoc/>
+    public string Name => "Shoko Relay Ignore Rule";
+
+    /// <inheritdoc/>
+    public bool ShouldIgnore(IManagedFolder folder, FileSystemInfo fileSystemInfo) => VfsShared.GetIgnoredFolderNames(ShokoRelay.Settings).Contains(fileSystemInfo.Name);
+}
+
+#endregion

@@ -18,8 +18,14 @@
     <VersionRegex>Version\s*=\s*"([^"]+)"</VersionRegex>
     <ShokoRelayConstantsFile>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/ShokoRelayConstants.cs'))</ShokoRelayConstantsFile>
     <Version>$([System.Text.RegularExpressions.Regex]::Match($(ShokoRelayConstantsFile), $(VersionRegex)).Groups[1].Value)</Version>
+
+    <!-- Default to Stable (0) and If the Release Channel is Dev (set via GitHub Actions), use revision 1 to trigger Shoko's Dev Channel detection -->
+    <BuildRevision>0</BuildRevision>
+    <BuildRevision Condition="'$(RELEASE_CHANNEL)' == 'Dev'">1</BuildRevision>
+
     <AssemblyVersion>$(Version).0</AssemblyVersion>
     <FileVersion>$(Version).0</FileVersion>
+    <InformationalVersion Condition="'$(BuildRevision)' == '1'">$(Version)-dev.1</InformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>
