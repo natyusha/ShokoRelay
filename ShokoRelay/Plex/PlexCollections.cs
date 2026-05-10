@@ -4,12 +4,12 @@ using ShokoRelay.Config;
 namespace ShokoRelay.Plex;
 
 /// <summary>Provides utilities for working with Plex collections.</summary>
-public class PlexCollections(IHttpClientFactory httpClientFactory, PlexClient plexClient)
+public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
 {
     #region Fields and Data Types
 
     private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
-    private readonly HttpClient _httpClient = httpClientFactory.CreateClient("ShokoRelay");
+    private readonly HttpClient _httpClient = httpClient;
     private readonly PlexClient _plexClient = plexClient;
 
     /// <summary>Whether Plex integration is enabled.</summary>

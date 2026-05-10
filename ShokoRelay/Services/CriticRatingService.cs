@@ -41,12 +41,12 @@ public sealed record ApplyRatingsResult(int ProcessedShows, int UpdatedShows, in
 #endregion
 
 /// <summary>Default implementation of <see cref="ICriticRatingService"/>.</summary>
-public class CriticRatingService(IHttpClientFactory httpClientFactory, PlexClient plexClient, IMetadataService metadataService) : ICriticRatingService
+public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, IMetadataService metadataService) : ICriticRatingService
 {
     #region Fields & Constructor
 
     private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
-    private readonly HttpClient _httpClient = httpClientFactory.CreateClient("ShokoRelay");
+    private readonly HttpClient _httpClient = httpClient;
 
     #endregion
 

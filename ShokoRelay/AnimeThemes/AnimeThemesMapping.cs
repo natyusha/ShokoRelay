@@ -9,7 +9,7 @@ using ShokoRelay.Vfs;
 namespace ShokoRelay.AnimeThemes;
 
 /// <summary>Provides operations for building and applying mappings between anime theme files and AniDB/video identifiers.</summary>
-public class AnimeThemesMapping(IHttpClientFactory httpClientFactory, IMetadataService metadataService, IVideoService videoService, ConfigProvider configProvider)
+public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadataService, IVideoService videoService, ConfigProvider configProvider)
 {
     #region Fields & Constructor
 
@@ -17,8 +17,8 @@ public class AnimeThemesMapping(IHttpClientFactory httpClientFactory, IMetadataS
     private static readonly SemaphoreSlim s_mappingSemaphore = new(1, 1);
     private readonly IMetadataService _metadataService = metadataService;
     private readonly IVideoService _videoService = videoService;
-    private readonly HttpClient _httpClient = httpClientFactory.CreateClient("ShokoRelay");
-    private readonly AnimeThemesApi _apiClient = new(httpClientFactory.CreateClient("ShokoRelay"));
+    private readonly HttpClient _httpClient = httpClient;
+    private readonly AnimeThemesApi _apiClient = new(httpClient);
     private readonly string _configDirectory = configProvider.ConfigDirectory;
 
     #endregion

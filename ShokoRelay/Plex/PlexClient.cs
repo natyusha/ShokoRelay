@@ -5,14 +5,14 @@ using ShokoRelay.Helpers;
 namespace ShokoRelay.Plex;
 
 /// <summary>HTTP client wrapper that communicates with one or more Plex servers.</summary>
-public class PlexClient(IHttpClientFactory httpClientFactory, ConfigProvider configProvider)
+public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
 {
     #region Fields & Properties
 
     private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
 
     /// <summary>Internal access to the shared HttpClient instance.</summary>
-    internal HttpClient HttpClient { get; } = httpClientFactory.CreateClient("ShokoRelay");
+    internal HttpClient HttpClient => httpClient;
 
     private string Token => configProvider.GetPlexToken();
     private string ClientIdentifier => configProvider.GetPlexClientIdentifier();

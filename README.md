@@ -1,6 +1,6 @@
 <!-- prettier-ignore-start -->
 
-![Shoko Relay Logo](https://github.com/natyusha/ShokoRelay.bundle/assets/985941/23bfd7c2-eb89-46d5-a7cb-558c374393d6 "Shoko Relay")
+![Shoko Relay Logo](https://github.com/natyusha/ShokoRelay.bundle/assets/985941/23bfd7c2-eb89-46d5-a7cb-558c374393d6 "Shoko Relay")  
 [![Discord](https://img.shields.io/discord/96234011612958720?logo=discord&logoColor=fff&label=Discord&color=5865F2 "Shoko Discord")](https://discord.gg/shokoanime)
 [![Shoko Docs](https://img.shields.io/badge/VitePress-Shoko_Docs-4E7CF5?logo=vitepress&logoColor=fff)](https://docs.shokoanime.com/)
 [![GitHub Latest](https://img.shields.io/github/v/tag/natyusha/ShokoRelay?label=Latest&logo=github&logoColor=fff)](https://github.com/natyusha/ShokoRelay/releases/latest)
@@ -8,30 +8,25 @@
 
 <!-- prettier-ignore-end -->
 
-This is a plugin for Shoko Server that acts as a [Custom Metadata Provider](https://forums.plex.tv/t/announcement-custom-metadata-providers/934384) for Plex. It is a successor to the [ShokoRelay.bundle](https://github.com/natyusha/ShokoRelay.bundle) legacy agent/scanner and mirrors all of its functionality (including the automation scripts). Scanning is much faster and there are many new features included as well. Just like the old bundle this is intended to work with series of all types within a single "TV Shows" library. All you need to get started is a populated [Shoko Server](https://shokoanime.com/downloads/shoko-server) and [Plex Media Server](https://www.plex.tv/media-server-downloads/).
+This is a plugin for Shoko Server that acts as a [Custom Metadata Provider](https://forums.plex.tv/t/announcement-custom-metadata-providers/934384) for Plex. It is a successor to the [ShokoRelay.bundle](https://github.com/natyusha/ShokoRelay.bundle) legacy agent/scanner and mirrors all of its functionality (including the automation scripts). Scanning is much faster and there are many new features included as well. Just like the old bundle this is intended to work with series of all types within a single "TV Shows" library. All you need to get started is a populated [Shoko Server](https://shokoanime.com/downloads/shoko-server) (using a daily build) and [Plex Media Server](https://www.plex.tv/media-server-downloads/).
 
 Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File System) to ensure that varied folder structures are supported. This means that your anime can be organised with whatever file or folder structure you want. There is one caveat though. A folder cannot contain more than one AniDB series at a time if you want it to correctly support [local media assets](https://support.plex.tv/articles/200220717-local-media-assets-tv-shows/) (like posters or theme songs). The VFS will be automatically updated when a file move or rename is detected by Shoko.
 
 ## Installation
 
-### GUI (Recommended)
+> [!TIP]
+> Installation can be completed via Shoko's WebUI (Recommended) or Manually. Both Methods will be detailed below.
 
-1. Open the Shoko Web UI and navigate to **Settings → Plugins → Repositories**.
-2. Add the manifest URL:
-   ```
-   https://raw.githubusercontent.com/natyusha/ShokoRelay/master/manifest.json
-   ```
-3. Go to **Settings → Plugins → Browse** and find **Shoko Relay**.
-4. Click **Install** on the desired version.
-5. Restart Shoko.
+- **WebUI** _currently unavailable in public builds_
+  - Open the Shoko WebUI and navigate to: `Settings > Plugins > Repositories`
+  - Add the manifest URL: `https://raw.githubusercontent.com/natyusha/ShokoRelay/master/manifest.json`
+  - Go to `Settings > Plugins > Browse` and find "Shoko Relay"
+  - Click `Install` on the appropriate version
+- **Manual**
+  - Extract [the latest pre-release](https://github.com/natyusha/ShokoRelay/releases) into Shoko Server's `plugins` directory
+- Restart Shoko Server after finishing either of the above installation methods
 
-### Manual
-
-1. Download the latest `ShokoRelay-<rid>.zip` from the [Releases](../../releases) page.
-2. Extract the ZIP and place all the files into your Shoko **Plugins** folder.
-3. Restart Shoko.
-
-### Setup
+#### Setup
 
 - Once the Server has loaded navigate to Shoko Relay's dashboard at the following URL:
   - `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/dashboard`
@@ -230,6 +225,9 @@ You can mark any theme as a favourite by clicking the heart icon `❤` next to i
 ## Information
 
 ### VFS Mapping
+
+> [!IMPORTANT]
+> The VFS is created inside each of Shoko's "destination" or "none" type folders under a subfolder named `!ShokoRelayVFS` (configurable under `Advanced Settings > VFS Root Path`). Do not manage anything inside these folder manually.
 
 When building the VFS files are placed into folders which are named according to their Shoko SeriesID. Within those folders they will be split into subfolders depending on the type of episode. For regular episodes or specials this means placement into a `Season #` or `Specials` folder. Files placed into those folders are named with the following pattern: `S##E##(-pt#)(-v#) [{ShokoFileID}]([{isVariation}]).ext` (the parts in parenthesis are conditional). Files with `-pt#` in their name will also have `[{ShokoFileID}]([{isVariation}])` stripped to fully follow the format described in [Combining Episodes](#combining-episodes). To avoid conflicts any file which is a crossover episode will not trigger local metadata/subtitle linking.\
 _The ShokoFileID is unused by Plex and is there purely to help users visualise the file mappings._

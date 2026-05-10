@@ -24,16 +24,28 @@ public class ServiceRegistration : IPluginServiceRegistration
     {
         serviceCollection.AddHttpContextAccessor();
 
-        serviceCollection.AddSingleton(new ConfigProvider(applicationPaths));
+        string clientName = ShokoRelayConstants.Name.Replace(" ", "");
         serviceCollection
             .AddHttpClient(
-                "ShokoRelay",
+                clientName,
                 client =>
                 {
-                    client.DefaultRequestHeaders.Add("User-Agent", $"ShokoRelay/{ShokoRelayConstants.Version}");
+                    client.DefaultRequestHeaders.Add("User-Agent", $"{clientName}/{ShokoRelayConstants.Version}");
                 }
             )
-            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { UseCookies = true, CookieContainer = new System.Net.CookieContainer() });
+            .SetHandlerLifetime(Timeout.InfiniteTimeSpan)
+            .ConfigurePrimaryHttpMessageHandler(() =>
+                new SocketsHttpHandler
+                {
+                    UseCookies = true,
+                    AllowAutoRedirect = true,
+                    AutomaticDecompression = System.Net.DecompressionMethods.All,
+                    PooledConnectionLifetime = TimeSpan.FromMinutes(2),
+                }
+            );
+
+        serviceCollection.AddSingleton(provider => provider.GetRequiredService<IHttpClientFactory>().CreateClient(clientName));
+        serviceCollection.AddSingleton(new ConfigProvider(applicationPaths));
         serviceCollection.AddSingleton<AnimeThemesMp3Generator>();
         serviceCollection.AddSingleton<AnimeThemesMapping>();
         serviceCollection.AddSingleton<PlexMetadata>();
@@ -46,12 +58,11 @@ public class ServiceRegistration : IPluginServiceRegistration
         serviceCollection.AddSingleton(provider => new Services.FfmpegService(provider.GetRequiredService<ConfigProvider>().PluginDirectory));
         serviceCollection.AddSingleton<Sync.SyncToShoko>();
         serviceCollection.AddSingleton<Sync.SyncToPlex>();
-
         serviceCollection.AddSingleton(provider =>
         {
             var cp = provider.GetRequiredService<ConfigProvider>();
             var plexAuthConfig = new PlexAuthConfig { ClientIdentifier = cp.GetPlexClientIdentifier() };
-            return new PlexAuth(provider.GetRequiredService<IHttpClientFactory>(), plexAuthConfig);
+            return new PlexAuth(provider.GetRequiredService<HttpClient>(), plexAuthConfig);
         });
         serviceCollection.AddSingleton<PlexClient>();
         serviceCollection.AddSingleton<PlexCollections>();

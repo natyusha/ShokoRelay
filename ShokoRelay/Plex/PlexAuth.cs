@@ -55,7 +55,7 @@ public sealed record PlexHomeUser(
 #endregion
 
 /// <summary>Handles authentication with Plex.tv, utilizing modern v2 JSON endpoints and legacy XML for user switching.</summary>
-public class PlexAuth(IHttpClientFactory httpClientFactory, PlexAuthConfig config)
+public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
 {
     #region Fields & Constructor
 
@@ -67,7 +67,7 @@ public class PlexAuth(IHttpClientFactory httpClientFactory, PlexAuthConfig confi
         PropertyNameCaseInsensitive = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
-    private readonly HttpClient _httpClient = httpClientFactory.CreateClient("ShokoRelay");
+    private readonly HttpClient _httpClient = httpClient;
     private readonly PlexAuthConfig _config = config;
 
     #endregion
