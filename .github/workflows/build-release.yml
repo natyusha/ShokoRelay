@@ -3,6 +3,11 @@ name: Build & Release ShokoRelay
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Tag to build from (e.g. v1.00.0)"
+        required: true
 
 permissions:
   contents: write
@@ -17,60 +22,78 @@ jobs:
         include:
           - os: ubuntu-latest
             rid: linux-arm64
-            zip_name: ShokoRelay-linux-arm64.zip
           - os: ubuntu-latest
             rid: linux-x64
-            zip_name: ShokoRelay-linux-x64.zip
           - os: windows-latest
             rid: win-x64
-            zip_name: ShokoRelay-win-x64.zip
 
     steps:
-      - name: Checkout tag
+      - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ github.event.inputs.tag_name || github.event.release.tag_name }}
 
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: "10.0.x"
+
+      - name: Set Version Variables
+        id: vars
+        shell: bash
+        run: |
+          # Use input if manual run, else use release tag
+          TAG="${{ github.event.inputs.tag_name || github.event.release.tag_name }}"
+          VERSION="${TAG#v}"
+          # Strip the 4th digit (revision) for filenames (1.00.0.1 -> 1.00.0)
+          VERSION_BASE=$(echo "$VERSION" | cut -d'.' -f1-3)
+          # Check if pre-release via event or if tag contains 'dev'
+          if [[ "${{ github.event.release.prerelease }}" == "true" || "$TAG" == *"-dev"* ]]; then
+            echo "file_ver=v${VERSION_BASE}-dev" >> $GITHUB_OUTPUT
+            echo "is_dev=true" >> $GITHUB_OUTPUT
+          else
+            echo "file_ver=v${VERSION_BASE}" >> $GITHUB_OUTPUT
+            echo "is_dev=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Publish
         run: dotnet publish ShokoRelay/ShokoRelay.csproj -c Release -r ${{ matrix.rid }} --no-self-contained -o publish
         env:
-          DOTNET_CLI_TELEMETRY_OPTOUT: '1'
-          RELEASE_CHANNEL: ${{ github.event.release.prerelease == true && 'Dev' || 'Stable' }}
+          DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+          RELEASE_CHANNEL: ${{ steps.vars.outputs.is_dev == 'true' && 'Dev' || 'Stable' }}
 
       - name: Package ZIP (Linux)
         if: runner.os == 'Linux'
+        id: pkg_linux
+        shell: bash
         run: |
+          ZIP_NAME="ShokoRelay-${{ steps.vars.outputs.file_ver }}_${{ matrix.rid }}.zip"
           rm -rf ShokoRelay || true
           mkdir -p ShokoRelay
           cp -r publish/* ShokoRelay/
-          apt-get update && apt-get install -y zip >/dev/null
-          zip -r "${{ matrix.zip_name }}" ShokoRelay
-          ls -la "${{ matrix.zip_name }}"
+          zip -r "$ZIP_NAME" ShokoRelay
+          echo "zip_path=$ZIP_NAME" >> $GITHUB_OUTPUT
 
       - name: Package ZIP (Windows)
         if: runner.os == 'Windows'
+        id: pkg_win
         shell: pwsh
         run: |
+          $ZipName = "ShokoRelay-${{ steps.vars.outputs.file_ver }}_${{ matrix.rid }}.zip"
           Remove-Item -Recurse -Force ShokoRelay -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Force -Path ShokoRelay | Out-Null
           Copy-Item -Path publish\* -Destination ShokoRelay -Recurse -Force
-          Compress-Archive -Path ShokoRelay -DestinationPath "$env:GITHUB_WORKSPACE\${{ matrix.zip_name }}" -Force
-          Get-ChildItem -Path "$env:GITHUB_WORKSPACE\${{ matrix.zip_name }}"
+          Compress-Archive -Path ShokoRelay -DestinationPath "$env:GITHUB_WORKSPACE\$ZipName" -Force
+          echo "zip_path=$ZipName" >> $env:GITHUB_OUTPUT
 
       - name: Upload asset to GitHub Release
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: ${{ matrix.zip_name }}
-          asset_name: ${{ matrix.zip_name }}
-          asset_content_type: application/zip
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.inputs.tag_name || github.event.release.tag_name }}
+          ZIP_PATH: ${{ runner.os == 'Windows' && steps.pkg_win.outputs.zip_path || steps.pkg_linux.outputs.zip_path }}
+        run: |
+          gh release upload "$TAG" "$ZIP_PATH" --clobber
 
   update-manifest:
     name: Update plugin manifest
@@ -85,23 +108,29 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${{ github.event.release.tag_name }}"
+          TAG="${{ github.event.inputs.tag_name || github.event.release.tag_name }}"
           VERSION="${TAG#v}"
-          SOURCE_REVISION=$(git rev-parse HEAD)
-          RELEASED_AT="${{ github.event.release.published_at }}"
-          CHANNEL="${{ github.event.release.prerelease == true && 'Dev' || 'Stable' }}"
+          # If manual run, we need to find the commit hash for the provided tag
+          SOURCE_REVISION=$(git rev-list -n 1 "$TAG")
+          # Use CLI to get the published date if manual, else event data
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            RELEASED_AT=$(gh release view "$TAG" --json publishedAt -q .publishedAt)
+            CHANNEL=$([[ "$TAG" == *"-dev"* ]] && echo "Dev" || echo "Stable")
+          else
+            RELEASED_AT="${{ github.event.release.published_at }}"
+            CHANNEL="${{ github.event.release.prerelease == true && 'Dev' || 'Stable' }}"
+          fi
 
           # Download all release assets
-          gh release download "$TAG" \
-            --repo "${{ github.repository }}" \
-            --pattern "ShokoRelay-*.zip"
+          gh release download "$TAG" --repo "${{ github.repository }}" --pattern "ShokoRelay-v*.zip"
 
           # Build archives JSON array
           ARCHIVES_JSON="[]"
           shopt -s nullglob
-          for ZIP in ShokoRelay-*.zip; do
-            RID="${ZIP#ShokoRelay-}"
-            RID="${RID%.zip}"
+          for ZIP in ShokoRelay-v*.zip; do
+            # Extract RID: everything after the underscore
+            RID=$(echo "$ZIP" | sed -E 's/.*_(.*)\.zip/\1/')
+            
             CHECKSUM=$(sha256sum "$ZIP" | awk '{ print $1 }')
             URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${ZIP}"
             ARCHIVE_ENTRY=$(jq -n \
@@ -131,4 +160,3 @@ jobs:
           git add manifest.json
           git commit -m "ci: update manifest for ${TAG}"
           git push origin HEAD:master
-

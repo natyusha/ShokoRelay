@@ -228,7 +228,7 @@ You can mark any theme as a favourite by clicking the heart icon `❤` next to i
 ### VFS Mapping
 
 > [!IMPORTANT]
-> The VFS is created inside each of Shoko's "destination" or "none" type folders under a subfolder named `!ShokoRelayVFS` (configurable under `Advanced Settings > VFS Root Path`). Do not manage anything inside these folder manually.
+> The VFS is created inside each of Shoko's managed folders, if they are configured as a "Destination" or have no type set. A subfolder named `!ShokoRelayVFS` (renaming it is possible under `Advanced Settings > VFS Root Path`) will house it. Do not manage anything inside the VFS folders manually.
 
 When building the VFS files are placed into folders which are named according to their Shoko SeriesID. Within those folders they will be split into subfolders depending on the type of episode. For regular episodes or specials this means placement into a `Season #` or `Specials` folder. Files placed into those folders are named with the following pattern: `S##E##(-pt#)(-v#) [{ShokoFileID}]([{isVariation}]).ext` (the parts in parenthesis are conditional). Files with `-pt#` in their name will also have `[{ShokoFileID}]([{isVariation}])` stripped to fully follow the format described in [Combining Episodes](#combining-episodes). To avoid conflicts any file which is a crossover episode will not trigger local metadata/subtitle linking.\
 _The ShokoFileID is unused by Plex and is there purely to help users visualise the file mappings._
