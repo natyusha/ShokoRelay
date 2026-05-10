@@ -425,10 +425,11 @@
               <li><code>Left Column</code> <small>Plex Base Paths</small></li>
               <li><code>Right Column</code> <small>Shoko Base Paths</small></li>
             </ul>
-            <h4>Path Exclusions</h4>
+            <h4>Folder Exclusions</h4>
             <small>
-              Allows specific folders within your Shoko managed destinations to be ignored during VFS generation. Any Shoko import folders that are not marked as a "Destination" as well as the: VFS Root Path,
-              AnimeThemes Root Path and Collection Posters Root Path are excluded by default.
+              Allows specific folders within your Shoko managed destinations to be ignored during VFS generation. Any Shoko import folders that are not marked as "Destination" or "None" as well as the: VFS Root
+              Path, AnimeThemes Root Path and Collection Posters Root Path are excluded by default. These exclusions are also registered with Shoko's video service as "Ignored Folders" which will not be scanned
+              as media. To avoid cases where Shoko isn't scanning things you might want it to ensure unique folder names are used here.
             </small>
             <h4>Plex Fixup Delay</h4>
             <small>

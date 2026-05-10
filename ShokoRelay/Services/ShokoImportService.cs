@@ -59,6 +59,8 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
         if (!dryRun)
             TaskHelper.StartTask(TaskName);
 
+        s_logger.Info("ShokoImportService: Starting remove missing files task (Mode: {0})", dryRun ? "Dry Run" : "Live");
+
         try
         {
             var all = _videoService.GetAllVideoFiles() ?? [];
