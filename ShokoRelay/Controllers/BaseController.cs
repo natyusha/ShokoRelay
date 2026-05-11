@@ -120,7 +120,6 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
         if (errors.Count > 0)
             return BadRequest(new RelayResponse<object>(Status: "error", Message: "Invalid filter values.", Data: new { errors }));
 
-        OverrideHelper.EnsureLoaded();
         if (ShokoRelay.Settings.TmdbEpNumbering)
             ids = [.. ids.Select(i => OverrideHelper.GetPrimary(i, MetadataService)).Distinct()];
         return null;

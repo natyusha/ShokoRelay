@@ -141,7 +141,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             var episode = TryParseEpisodeRatingKey(ratingKey, out int? partIdx);
             if (episode == null)
                 return NotFound();
-            var m = ctx.FileData.Mappings.FirstOrDefault(x => x.Episodes.Any(e => e.ID == episode.ID));
+            var m = ctx.FileData.Mappings.FirstOrDefault(x => x.Episodes.Any(e => e.ID == episode.ID) && x.PartIndex == partIdx);
             if (m == null)
                 return NotFound();
 
@@ -239,7 +239,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             var episode = TryParseEpisodeRatingKey(ratingKey, out int? partIdx);
             if (episode == null)
                 return NotFound();
-            var m = ctx.FileData.Mappings.FirstOrDefault(x => x.Episodes.Any(e => e.ID == episode.ID));
+            var m = ctx.FileData.Mappings.FirstOrDefault(x => x.Episodes.Any(e => e.ID == episode.ID) && x.PartIndex == partIdx);
             images = m != null ? ExtractImages(_mapper.MapEpisode(episode, m.Coords, ctx.Series, ctx.Titles, partIdx, m.TmdbEpisode)) : [];
         }
         else if (ratingKey.Contains(PlexConstants.SeasonPrefix))

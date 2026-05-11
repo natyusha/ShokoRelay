@@ -62,7 +62,6 @@ public class PlexMetadata(IMetadataService metadataService)
         if (series == null)
             return null;
 
-        OverrideHelper.EnsureLoaded();
         int primaryId = OverrideHelper.GetPrimary(series.ID, _metadataService);
         var primarySeries = _metadataService.GetShokoSeriesByID(primaryId) ?? series;
 
@@ -141,7 +140,7 @@ public class PlexMetadata(IMetadataService metadataService)
     /// <returns>An ordered list of episode metadata objects for the season.</returns>
     public List<object> BuildEpisodeList(SeriesContext ctx, int seasonNum)
     {
-        var items = new List<(PlexCoords Coords, object Meta)>();
+        var items = new List<(PlexCoords Coords, int? Part, object Meta)>();
         var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         string? prefId = MapHelper.GetPreferredTmdbOrderingId(ctx.Series);
 
@@ -157,7 +156,9 @@ public class PlexMetadata(IMetadataService metadataService)
                     if (season != seasonNum)
                         continue;
                     var tmdbCoords = new PlexCoords { Season = season ?? 0, Episode = episode };
-                    items.Add((tmdbCoords, MapEpisode(se, tmdbCoords, ctx.Series, ctx.Titles, m.PartIndex, tmdbEpisode)));
+                    var meta = MapEpisode(se, tmdbCoords, ctx.Series, ctx.Titles, m.PartIndex, tmdbEpisode);
+                    if (meta is Dictionary<string, object?> d && d.TryGetValue("ratingKey", out var rk) && rk is string key && seenKeys.Add(key))
+                        items.Add((tmdbCoords, m.PartIndex, meta));
                 }
                 continue;
             }
@@ -170,25 +171,19 @@ public class PlexMetadata(IMetadataService metadataService)
                     var coordsEp = GetPlexCoordinates(ep, prefId);
                     if (coordsEp.Season != seasonNum)
                         continue;
-                    var meta = MapEpisode(ep, coordsEp, ctx.Series, ctx.Titles);
-                    if (meta is Dictionary<string, object?> dict && dict.TryGetValue("ratingKey", out var rk) && rk is string key)
-                    {
-                        if (seenKeys.Add(key))
-                            items.Add((coordsEp, meta));
-                    }
+                    var meta = MapEpisode(ep, coordsEp, ctx.Series, ctx.Titles, m.PartIndex);
+                    if (meta is Dictionary<string, object?> d && d.TryGetValue("ratingKey", out var rk) && rk is string key && seenKeys.Add(key))
+                        items.Add((coordsEp, m.PartIndex, meta));
                 }
                 continue;
             }
 
             // Standard or Relation-linked files: Use the PrimaryEpisode resolved by MapHelper, which filters out unwanted relations.
             var primaryMeta = MapEpisode(m.PrimaryEpisode, m.Coords, ctx.Series, ctx.Titles, m.PartIndex, m.TmdbEpisode);
-            if (primaryMeta is Dictionary<string, object?> pDict && pDict.TryGetValue("ratingKey", out var pRk) && pRk is string pKey)
-            {
-                if (seenKeys.Add(pKey))
-                    items.Add((m.Coords, primaryMeta));
-            }
+            if (primaryMeta is Dictionary<string, object?> pDict && pDict.TryGetValue("ratingKey", out var pRk) && pRk is string pKey && seenKeys.Add(pKey))
+                items.Add((m.Coords, m.PartIndex, primaryMeta));
         }
-        return [.. items.OrderBy(x => x.Coords.Episode).Select(x => x.Meta)];
+        return [.. items.OrderBy(x => x.Coords.Episode).ThenBy(x => x.Part ?? 0).Select(x => x.Meta)];
     }
 
     /// <summary>Builds a Plex-compatible metadata dictionary for a single season.</summary>
@@ -209,7 +204,6 @@ public class PlexMetadata(IMetadataService metadataService)
         string? seasonSummary = null;
 
         // When using VFS overrides find a Shoko series in the group which contains the TMDB metadata for the requisite season number.
-        OverrideHelper.EnsureLoaded();
         var groupIds = OverrideHelper.GetGroup(ps.ID, _metadataService);
         var sourceSeries = groupIds.Select(id => _metadataService.GetShokoSeriesByID(id)).OfType<IShokoSeries>().FirstOrDefault(s => s.TmdbSeasons?.Any(ts => ts.SeasonNumber == seasonNum) == true) ?? ps;
 
@@ -373,7 +367,6 @@ public class PlexMetadata(IMetadataService metadataService)
             return null;
 
         // Count how many distinct Primary IDs exist in this group. This ensures that VFS Overrides are respected if they merge the entirety of a Shoko Group into a single series in Plex.
-        OverrideHelper.EnsureLoaded();
         var distinctPlexEntries = group.Series.Select(s => OverrideHelper.GetPrimary(s.ID, _metadataService)).Distinct().Count();
         return (distinctPlexEntries > 1 && group is IWithTitles { PreferredTitle.Value: { } title }) ? title : null;
     }

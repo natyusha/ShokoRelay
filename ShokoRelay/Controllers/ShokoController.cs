@@ -86,7 +86,7 @@ public class ShokoController(
             Logger.Info("Shoko: Updating VFS overrides file...");
             string path = Path.Combine(ShokoRelay.ConfigDirectory, ShokoRelayConstants.FileVfsOverrides);
             System.IO.File.WriteAllText(path, content ?? string.Empty);
-            OverrideHelper.EnsureLoaded();
+            OverrideHelper.Reload(); // Force the override cache to refresh with the new data
             return Ok(new RelayResponse<object>());
         }
         catch (Exception ex)

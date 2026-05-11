@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Shoko.Abstractions.Metadata.Containers;
@@ -139,7 +138,6 @@ public static class PlexHelper
     public static HashSet<string> ResolveImportRoots(IShokoSeries series, IMetadataService metadataService)
     {
         var roots = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
-        OverrideHelper.EnsureLoaded();
         var seriesList = new List<IShokoSeries> { series };
         if (ShokoRelay.Settings.TmdbEpNumbering)
             seriesList.AddRange(OverrideHelper.GetGroup(OverrideHelper.GetPrimary(series.ID, metadataService), metadataService).Skip(1).Select(metadataService.GetShokoSeriesByID).OfType<IShokoSeries>());
@@ -212,13 +210,7 @@ public static class PlexHelper
         if (string.IsNullOrWhiteSpace(value))
             return null;
         var invalid = Path.GetInvalidFileNameChars();
-        var sb = new StringBuilder(value.Length);
-        foreach (char c in value)
-        {
-            if (!invalid.Contains(c))
-                sb.Append(c);
-        }
-        string cleaned = TextHelper.CondenseSpaces(sb.ToString().Trim());
+        string cleaned = TextHelper.CondenseSpaces(new string([.. value.Where(c => !invalid.Contains(c))]).Trim());
         return cleaned.Length == 0 ? null : cleaned.ToLowerInvariant();
     }
 

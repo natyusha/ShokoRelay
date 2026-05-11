@@ -83,7 +83,6 @@ public class VfsBuilder
             Directory.CreateDirectory(_pluginDataPath);
         }
         catch { }
-        OverrideHelper.EnsureLoaded();
     }
 
     #endregion
@@ -207,7 +206,6 @@ public class VfsBuilder
             int totalInScope = seriesList.Count();
             int consolidatedCount = 0;
 
-            OverrideHelper.EnsureLoaded();
             if (ShokoRelay.Settings.TmdbEpNumbering)
             {
                 // Group by primary ID and count how many secondary series are being merged
@@ -572,17 +570,21 @@ public class VfsBuilder
         foreach (var l in GetSeriesFileDataCached(series).Mappings.SelectMany(m => m.Video.Files))
         {
             string? root = VfsShared.ResolveImportRootPath(l);
-            if (root != null && paths.Add(Path.Combine(root, rootFolderName, series.ID.ToString())))
+            if (string.IsNullOrEmpty(root))
+                continue;
+
+            string path = Path.Combine(root, rootFolderName, series.ID.ToString());
+            if (paths.Add(path))
             {
                 try
                 {
-                    if (Directory.Exists(paths.Last()))
-                        Directory.Delete(paths.Last(), true);
+                    if (Directory.Exists(path))
+                        Directory.Delete(path, true);
                 }
                 catch (Exception ex)
                 {
-                    _warningsForBuild?.Add($"Prune failed {paths.Last()}: {ex.Message}");
-                    s_logger.Warn(ex, "VFS: Failed to prune series path {Path}", paths.Last());
+                    _warningsForBuild?.Add($"Prune failed {path}: {ex.Message}");
+                    s_logger.Warn(ex, "VFS: Failed to prune series path {Path}", path);
                 }
             }
         }

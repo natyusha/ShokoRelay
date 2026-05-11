@@ -34,30 +34,6 @@ public class PlexAuthConfig
     public string ClientIdentifier { get; set; } = "";
 }
 
-/// <summary>Configuration options specific to an individual Plex library.</summary>
-public class PlexLibraryConfig
-{
-    /// <summary>Plex token used for server API calls.</summary>
-    [Display(Name = "Plex Token", Description = "Plex token used for server API calls.")]
-    [DefaultValue("")]
-    [Browsable(false)]
-    public string Token { get; set; } = "";
-
-    /// <summary>Optional X-Plex-Client-Identifier header value.</summary>
-    [Display(Name = "Client Identifier", Description = "Optional X-Plex-Client-Identifier header value.")]
-    [DefaultValue("")]
-    [Browsable(false)]
-    public string ClientIdentifier { get; set; } = "";
-
-    /// <summary>Cached list of discovered servers.</summary>
-    [Browsable(false)]
-    public List<PlexAvailableServer> DiscoveredServers { get; set; } = [];
-
-    /// <summary>Cached list of discovered libraries.</summary>
-    [Browsable(false)]
-    public List<PlexAvailableLibrary> DiscoveredLibraries { get; set; } = [];
-}
-
 #endregion
 
 #region Targets

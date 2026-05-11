@@ -58,7 +58,7 @@ internal static class VfsShared
         return null;
     }
 
-    /// <summary>Resolves the list of physical VFS series directories associated with a series across all import roots.</summary>
+    /// <summary>Resolves the list of physical VFS series directories associated with a series across all import roots. Respects Primary ID overrides.</summary>
     /// <param name="series">The Shoko series metadata.</param>
     /// <param name="metadataService">Metadata service used for override resolution.</param>
     /// <returns>An enumerable of absolute directory paths.</returns>
@@ -66,6 +66,7 @@ internal static class VfsShared
     {
         var roots = new HashSet<string>(PathComparer);
         string rootName = ResolveRootFolderName();
+        int folderId = ShokoRelay.Settings.TmdbEpNumbering ? OverrideHelper.GetPrimary(series.ID, metadataService) : series.ID;
 
         var fileData = MapHelper.GetSeriesFileData(series, metadataService);
         foreach (var mapping in fileData.Mappings)
@@ -78,7 +79,7 @@ internal static class VfsShared
             if (string.IsNullOrWhiteSpace(importRoot))
                 continue;
 
-            string seriesPath = Path.Combine(importRoot, rootName, series.ID.ToString());
+            string seriesPath = Path.Combine(importRoot, rootName, folderId.ToString());
             roots.Add(seriesPath);
         }
 

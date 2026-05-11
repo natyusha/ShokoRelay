@@ -171,7 +171,7 @@ public static class PlexMapping
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<(int EpId, string? OrderingId), bool> s_tmdbAllOrderingsContainsCache = new();
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<(int EpId, string? OrderingId), (int? Season, int Episode)> s_orderingCoordsCache = new();
 
-    /// <summary>Filter a list of TMDB episode entries to the preferred ordering.</summary>
+    /// <summary>Filter a list of TMDB episode entries to the preferred ordering using a single-pass weighted sort.</summary>
     /// <param name="entries">TMDB episodes.</param>
     /// <param name="showPreferredOrderingId">Preferred ordering ID.</param>
     /// <returns>Reordered list.</returns>
@@ -180,40 +180,28 @@ public static class PlexMapping
         if (entries == null)
             return [];
         var list = entries.ToList();
-        if (!list.Any())
+        if (list.Count == 0)
             return list;
-        if (!string.IsNullOrWhiteSpace(showPreferredOrderingId))
-        {
-            var preferredDirect = list.Where(te => string.Equals(te.OrderingID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase))
-                .OrderBy(te => te.SeasonNumber ?? 0)
-                .ThenBy(te => te.EpisodeNumber)
-                .ToList();
-            var remainder = list.Except(preferredDirect).ToList();
-            var preferredFromAll = remainder
-                .Where(te =>
+        if (string.IsNullOrWhiteSpace(showPreferredOrderingId))
+            return [.. list.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber)];
+
+        // Weight-based sorting: 0 for direct match, 1 for match in AllOrderings, 2 for others.
+        return
+        [
+            .. list.OrderBy(te =>
                 {
-                    try
-                    {
-                        var key = (EpId: te.ID, OrderingId: showPreferredOrderingId);
-                        if (s_tmdbAllOrderingsContainsCache.TryGetValue(key, out var cached))
-                            return cached;
-                        bool found = te.AllOrderings != null && te.AllOrderings.Any(o => string.Equals(o.OrderingID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase));
-                        s_tmdbAllOrderingsContainsCache[key] = found;
-                        return found;
-                    }
-                    catch
-                    {
-                        return false;
-                    }
+                    if (string.Equals(te.OrderingID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase))
+                        return 0;
+                    var key = (te.ID, showPreferredOrderingId);
+                    if (s_tmdbAllOrderingsContainsCache.TryGetValue(key, out var cached))
+                        return cached ? 1 : 2;
+                    bool found = te.AllOrderings?.Any(o => string.Equals(o.OrderingID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase)) == true;
+                    s_tmdbAllOrderingsContainsCache[key] = found;
+                    return found ? 1 : 2;
                 })
-                .OrderBy(te => te.SeasonNumber ?? 0)
-                .ThenBy(te => te.EpisodeNumber)
-                .ToList();
-            var preferred = preferredDirect.Concat(preferredFromAll).ToList();
-            var others = list.Except(preferred).OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber);
-            return [.. preferred, .. others];
-        }
-        return [.. list.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber)];
+                .ThenBy(te => te.SeasonNumber ?? 0)
+                .ThenBy(te => te.EpisodeNumber),
+        ];
     }
 
     /// <summary>Convert a TMDB episode into season/episode coordinates.</summary>

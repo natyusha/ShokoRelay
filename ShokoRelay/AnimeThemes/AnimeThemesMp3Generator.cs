@@ -75,14 +75,12 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
     private readonly HttpClient _http = httpClient;
     private readonly FfmpegService _ffmpegService = ffmpegService;
     private readonly PlexClient _plexClient = plexClient;
+    private readonly ConfigProvider _configProvider = configProvider;
     private readonly AnimeThemesApi _apiClient = new(httpClient);
     private List<string>? _themeMp3Cache;
     private readonly Lock _cacheLock = new();
 
-    private string ThemeCacheFilePath
-    {
-        get => Path.Combine(field, ShokoRelayConstants.FileAtMp3Cache);
-    } = configProvider.ConfigDirectory;
+    private string ThemeCacheFilePath => Path.Combine(_configProvider.ConfigDirectory, ShokoRelayConstants.FileAtMp3Cache);
 
     #endregion
 

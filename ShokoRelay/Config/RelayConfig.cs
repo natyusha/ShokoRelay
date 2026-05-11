@@ -419,27 +419,3 @@ public class AdvancedConfig
 }
 
 #endregion
-
-#region Secrets
-
-/// <summary>Container for sensitive authentication data.</summary>
-public class RelaySecrets
-{
-    /// <summary>Plex authentication secrets.</summary>
-    public PlexAuthSecrets PlexAuth { get; set; } = new();
-
-    /// <summary>Whether the secrets container is empty.</summary>
-    public bool IsEmpty => PlexAuth.IsEmpty;
-}
-
-/// <summary>Authentication data for Plex.tv.</summary>
-public class PlexAuthSecrets
-{
-    /// <summary>Plex client identifier.</summary>
-    public string ClientIdentifier { get; set; } = "";
-
-    /// <summary>Whether the secrets are empty.</summary>
-    public bool IsEmpty => string.IsNullOrWhiteSpace(ClientIdentifier);
-}
-
-#endregion
