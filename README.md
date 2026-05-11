@@ -23,7 +23,8 @@ Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File Sy
   - Go to `Settings > Plugins > Browse` and find "Shoko Relay"
   - Click `Install` on the appropriate version
 - **Manual**
-  - Extract [the latest pre-release](https://github.com/natyusha/ShokoRelay/releases) into Shoko Server's `plugins` directory
+  - Navigate to Shoko Server's `plugins` directory and create a new subfolder called `ShokoRelay`
+  - Extract [the latest pre-release](https://github.com/natyusha/ShokoRelay/releases) into the `plugins/ShokoRelay` directory
   - It may be necessary to create the `plugins` (all lowercase) folder first which should be in the same directory as the `webui` folder
 - Restart Shoko Server after finishing either of the above installation methods
 
@@ -197,7 +198,7 @@ This plugin includes full [AnimeThemes](https://animethemes.moe/) integration. I
 
 ### Themes as Series BGM
 
-There is also support for generating `Theme.mp3` files as local metadata. This will add them to the VFS automatically and can be run for either a single series or as a batch operation. This process requires Shoko Server to have access to [FFmpeg/FFprobe](https://ffmpeg.org/download.html) (place system appropriate binaries in the ShokoRelay plugin folder or system PATH) as AnimeThemes does not provide the '.mp3' files that plex requires for this feature.
+There is also support for generating `Theme.mp3` files as local metadata. This will add them to the VFS automatically and can be run for either a single series or as a batch operation. This process requires Shoko Relay to have access to [FFmpeg/FFprobe](https://ffmpeg.org/download.html). Place system appropriate binaries in one of the following locations: Shoko Server's `Utilities` folder in a subfolder named `FFmpeg` (case sensitive), the ShokoRelay plugin folder, or the system PATH. This is required due to AnimeThemes not providing the '.mp3' files that Plex requires for this feature (they use '.ogg').
 
 - This is available under the "AnimeThemes: MP3" section of the dashboard
 - Input the path (relative to Plex or Shoko) to a folder containing an anime series and then click `Generate`

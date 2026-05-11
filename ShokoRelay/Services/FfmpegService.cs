@@ -17,13 +17,21 @@ public sealed class FfmpegService
     private static string s_ffprobePath = "ffprobe";
     private static string s_pluginDirectory = string.Empty;
     private static string s_workingDirectory = string.Empty;
+    private static readonly List<string> s_utilitiesDirectories = [];
 
-    /// <summary>Construct the service, supplying the path to the plugin directory which will be searched for binaries.</summary>
+    /// <summary>Construct the service, supplying the path to the plugin directory and Shoko roots which will be searched for binaries.</summary>
     /// <param name="pluginDirectory">The root directory for the plugin.</param>
-    public FfmpegService(string pluginDirectory)
+    /// <param name="applicationPath">The parent directory of the Shoko Server executable.</param>
+    /// <param name="dataPath">The Shoko Server data directory.</param>
+    public FfmpegService(string pluginDirectory, string applicationPath, string dataPath)
     {
         s_pluginDirectory = pluginDirectory;
         s_workingDirectory = s_pluginDirectory;
+        // Search for Utilities in both the binary location and the data location to support various Linux/Docker environments
+        if (!string.IsNullOrWhiteSpace(applicationPath))
+            s_utilitiesDirectories.Add(Path.Combine(applicationPath, "Utilities", "FFmpeg"));
+        if (!string.IsNullOrWhiteSpace(dataPath))
+            s_utilitiesDirectories.Add(Path.Combine(dataPath, "Utilities", "FFmpeg"));
     }
 
     #endregion
@@ -96,27 +104,33 @@ public sealed class FfmpegService
 
     #region Configuration Logic
 
-    /// <summary>Ensures that the paths to the FFmpeg and FFprobe binaries are resolved and verified. Searches configured paths, the plugin directory, and the system PATH.</summary>
+    /// <summary>Ensures that the paths to the FFmpeg and FFprobe binaries are resolved and verified. Searches the Shoko utilities folders, configured paths, the plugin directory, and the system PATH.</summary>
     private static void EnsureFfmpegConfigured()
     {
-        if (s_ffmpegConfigured)
-            return;
-
         lock (s_ffmpegLock)
         {
-            if (s_ffmpegConfigured)
-                return;
-
-            string configured = ShokoRelay.Settings.Advanced.FFmpegPath;
-            string pluginDir = s_pluginDirectory;
             string ffmpegName = OperatingSystem.IsWindows() ? "ffmpeg.exe" : "ffmpeg";
             string ffprobeName = OperatingSystem.IsWindows() ? "ffprobe.exe" : "ffprobe";
+
+            // Verify if the current paths are still valid physically on disk. If the paths are just the filenames (e.g., "ffmpeg"), we assume they are on the system PATH and skip the File.Exists check.
+            bool ffmpegValid = s_ffmpegPath == ffmpegName || File.Exists(s_ffmpegPath);
+            bool ffprobeValid = s_ffprobePath == ffprobeName || File.Exists(s_ffprobePath);
+
+            if (s_ffmpegConfigured && ffmpegValid && ffprobeValid)
+                return;
+
+            s_ffmpegConfigured = false;
+            s_logger.Info("FfmpegService: Binaries moved or missing -> Re-scanning...");
+
+            // Reset paths to defaults before performing discovery
+            s_ffmpegPath = ffmpegName;
+            s_ffprobePath = ffprobeName;
 
             bool ffmpegFound = false;
             bool ffprobeFound = false;
             string? locatedDir = null;
-
             var candidates = new List<string>();
+            string configured = ShokoRelay.Settings.Advanced.FFmpegPath;
             if (!string.IsNullOrWhiteSpace(configured))
             {
                 try
@@ -134,16 +148,18 @@ public sealed class FfmpegService
                         locatedDir ??= dir;
                     }
                     else
-                        s_logger.Warn("FfmpegService: FFmpeg path does not exist ->{Path}", full);
+                        s_logger.Warn("FfmpegService: Configured FFmpeg path does not exist -> {0}", full);
                 }
                 catch (Exception ex)
                 {
-                    s_logger.Warn(ex, "FfmpegService: Failed to configure FFmpeg path");
+                    s_logger.Warn(ex, "FfmpegService: Failed to resolve configured FFmpeg path");
                 }
             }
-
-            if (Directory.Exists(pluginDir))
-                candidates.Add(pluginDir);
+            foreach (var dir in s_utilitiesDirectories)
+                if (Directory.Exists(dir))
+                    candidates.Add(dir);
+            if (Directory.Exists(s_pluginDirectory))
+                candidates.Add(s_pluginDirectory);
 
             foreach (string dir in candidates)
             {
@@ -157,15 +173,13 @@ public sealed class FfmpegService
 
             if (ffmpegFound || ffprobeFound)
             {
-                s_workingDirectory = DetermineWorkingDirectory(locatedDir ?? pluginDir);
-                s_logger.Info("FfmpegService: FFmpeg binaries configured at {Path}", locatedDir ?? "system PATH");
+                s_workingDirectory = DetermineWorkingDirectory(locatedDir ?? s_pluginDirectory);
+                s_logger.Info("FfmpegService: FFmpeg binaries configured at {0}", locatedDir ?? "multiple locations");
             }
             else
             {
-                s_ffmpegPath = ffmpegName;
-                s_ffprobePath = ffprobeName;
-                s_workingDirectory = DetermineWorkingDirectory(pluginDir);
-                s_logger.Warn("FfmpegService: FFmpeg binaries not found in configured paths -> falling back to system PATH");
+                s_workingDirectory = DetermineWorkingDirectory(s_pluginDirectory);
+                s_logger.Warn("FfmpegService: FFmpeg binaries not found in priority folders -> falling back to system PATH");
             }
 
             s_ffmpegConfigured = true;

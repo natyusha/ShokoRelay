@@ -33,6 +33,9 @@ public class ConfigProvider
     /// <summary>The absolute path to the plugin's base directory.</summary>
     public string PluginDirectory { get; }
 
+    /// <summary>The absolute path to the plugin's configuration directory.</summary>
+    public string ConfigDirectory { get; }
+
     /// <summary>Service for accessing the current HTTP context, used for URL discovery.</summary>
     public IHttpContextAccessor? HttpContextAccessor { get; set; }
 
@@ -63,11 +66,17 @@ public class ConfigProvider
     /// <param name="applicationPaths">Paths provided by the host application.</param>
     public ConfigProvider(IApplicationPaths applicationPaths)
     {
-        PluginDirectory = Path.Combine(applicationPaths.PluginsPath, ShokoRelayConstants.FolderPluginSubfolder);
-        string configDir = Path.Combine(PluginDirectory, ShokoRelayConstants.FolderConfigSubfolder);
-        Directory.CreateDirectory(configDir);
-        _filePath = Path.Combine(configDir, ShokoRelayConstants.FilePreferences);
-        _tokenPath = Path.Combine(configDir, ShokoRelayConstants.FilePlexToken);
+        PluginDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? string.Empty;
+
+        var legacyConfig = Path.Combine(PluginDirectory, ShokoRelayConstants.FolderConfigSubfolder);
+        var modernConfig = Path.Combine(applicationPaths.ConfigurationsPath, ShokoRelayConstants.PluginId);
+
+        // Prioritize existing legacy configuration for manual installs. Fallback to the standard Shoko configuration directory for new installs
+        ConfigDirectory = Directory.Exists(legacyConfig) ? legacyConfig : modernConfig;
+        Directory.CreateDirectory(ConfigDirectory);
+
+        _filePath = Path.Combine(ConfigDirectory, ShokoRelayConstants.FilePreferences);
+        _tokenPath = Path.Combine(ConfigDirectory, ShokoRelayConstants.FilePlexToken);
 
         SetupWatcher(_filePath);
         SetupWatcher(_tokenPath);
@@ -150,9 +159,6 @@ public class ConfigProvider
         dict["PlexAuth"] = new { ClientIdentifier = GetPlexClientIdentifier() };
         return SanitizeConfigObject(dict);
     }
-
-    /// <summary>The absolute path to the plugin's configuration directory.</summary>
-    public string ConfigDirectory => Path.GetDirectoryName(_filePath)!;
 
     /// <summary>Validate, normalize and persist the supplied <paramref name="settings"/> to disk.</summary>
     /// <param name="settings">The <see cref="RelayConfig"/> instance to save.</param>

@@ -51,7 +51,11 @@ public class ServiceRegistration : IPluginServiceRegistration
         serviceCollection.AddSingleton<Services.ICriticRatingService, Services.CriticRatingService>();
         serviceCollection.AddSingleton<Services.ShokoImportService>();
         serviceCollection.AddSingleton<Services.SourceLinkService>();
-        serviceCollection.AddSingleton(provider => new Services.FfmpegService(provider.GetRequiredService<ConfigProvider>().PluginDirectory));
+        serviceCollection.AddSingleton(provider =>
+        {
+            var cp = provider.GetRequiredService<ConfigProvider>();
+            return new Services.FfmpegService(cp.PluginDirectory, applicationPaths.ApplicationPath, applicationPaths.DataPath);
+        });
         serviceCollection.AddSingleton<Sync.SyncToShoko>();
         serviceCollection.AddSingleton<Sync.SyncToPlex>();
         serviceCollection.AddSingleton<IManagedFolderIgnoreRule, VfsIgnoreRule>();
@@ -76,7 +80,7 @@ public class ServiceRegistration : IPluginServiceRegistration
 public class Plugin : IPlugin
 {
     /// <summary>Unique plugin ID.</summary>
-    public Guid ID => new("2b0f5a7e-3d2b-4f3d-9e6b-7f0a6b2d8c9a");
+    public Guid ID => new(ShokoRelayConstants.PluginId);
 
     /// <summary>Plugin display name.</summary>
     public string Name => ShokoRelayConstants.Name;

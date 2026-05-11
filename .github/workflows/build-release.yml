@@ -1,5 +1,5 @@
 name: Build & Release ShokoRelay
-run-name: "${{ github.event_name == 'workflow_dispatch' && format('Manual Build: {0}', github.event.inputs.tag_name) || format('Release: {0}', github.event.release.name || github.event.release.tag_name) }}"
+run-name: "${{ github.event_name == 'workflow_dispatch' && format('Manual Build: {0}', github.event.inputs.tag_name) || format('{0}', github.event.release.name || github.event.release.tag_name) }}"
 
 on:
   release:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: "Tag to build from (e.g. v1.00.0)"
+        description: "Tag to build from (e.g. v1.0.0)"
         required: true
 
 permissions:
@@ -47,7 +47,7 @@ jobs:
         run: |
           TAG="${{ github.event.inputs.tag_name || github.event.release.tag_name }}"
           VERSION="${TAG#v}"
-          # Strip the 4th digit (revision) for filenames (1.00.0.1 -> 1.00.0)
+          # Strip the 4th digit (revision) for filenames (1.0.0.1 -> 1.0.0)
           VERSION_BASE=$(echo "$VERSION" | cut -d'.' -f1-3)
 
           # Determine if this is a pre-release (Dev channel)
@@ -77,10 +77,8 @@ jobs:
         shell: bash
         run: |
           ZIP_NAME="ShokoRelay-${{ steps.vars.outputs.file_ver }}_${{ matrix.rid }}.zip"
-          rm -rf ShokoRelay || true
-          mkdir -p ShokoRelay
-          cp -r publish/* ShokoRelay/
-          zip -r "$ZIP_NAME" ShokoRelay
+          cd publish
+          zip -r "../$ZIP_NAME" .
           echo "zip_path=$ZIP_NAME" >> $GITHUB_OUTPUT
 
       - name: Package ZIP (Windows)
@@ -89,10 +87,7 @@ jobs:
         shell: pwsh
         run: |
           $ZipName = "ShokoRelay-${{ steps.vars.outputs.file_ver }}_${{ matrix.rid }}.zip"
-          Remove-Item -Recurse -Force ShokoRelay -ErrorAction SilentlyContinue
-          New-Item -ItemType Directory -Force -Path ShokoRelay | Out-Null
-          Copy-Item -Path publish\* -Destination ShokoRelay -Recurse -Force
-          Compress-Archive -Path ShokoRelay -DestinationPath "$env:GITHUB_WORKSPACE\$ZipName" -Force
+          Compress-Archive -Path publish\* -DestinationPath "$env:GITHUB_WORKSPACE\$ZipName" -Force
           echo "zip_path=$ZipName" >> $env:GITHUB_OUTPUT
 
       - name: Upload asset to GitHub Release
