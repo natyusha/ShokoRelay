@@ -1,0 +1,47 @@
+name: Lint & Format Check
+
+on:
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Enforce Code Style
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Install CSharpier
+        run: dotnet tool install -g csharpier
+
+      - name: Check C# Formatting (CSharpier)
+        run: dotnet csharpier --check .
+
+      - name: Check C# Style & Naming
+        run: dotnet format --verify-no-changes --severity info --verbosity normal
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Check Dashboard Layout (Prettier)
+        run: |
+          npm install --save-dev prettier
+          npx prettier --check "ShokoRelay/Dashboard/**/*.js" "ShokoRelay/Dashboard/**/*.css"
+          npx prettier --check "ShokoRelay/Dashboard/**/*.cshtml" --parser html
+
+      - name: Check CSS Property Order (Stylelint Concentric)
+        run: |
+          npm install --save-dev stylelint stylelint-config-concentric
+          echo '{ "extends": ["stylelint-config-concentric"] }' > .stylelintrc.json
+          npx stylelint "ShokoRelay/Dashboard/**/*.css"

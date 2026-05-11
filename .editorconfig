@@ -6,11 +6,12 @@ max_line_length = 210
 indent_style = space
 charset = utf-8
 
-[*.csproj]
+[*.{js,css,cshtml,csproj}]
 indent_size = 2
 
 [*.cs]
 # CSharpier for all .cs files
+indent_size = 4
 
 ## NAMING RULES ##
 # https://learn.microsoft.com/en-us/dotnet/csharp/fundamentals/coding-style/identifier-names
@@ -69,29 +70,14 @@ dotnet_naming_style.i_prefix_style.required_prefix = I
 
 ## EXCLUSIONS ##
 
-# Add braces
-dotnet_diagnostic.IDE0011.severity = none
-
-# Use 'var' instead of explicit type
-dotnet_diagnostic.IDE0008.severity = none
-
-# Use expression body for methods
-dotnet_diagnostic.IDE0022.severity = none
-
-# Formatting rule
-dotnet_diagnostic.IDE0055.severity = none
-
-# Remove unnecessary expression value
-dotnet_diagnostic.IDE0058.severity = none
-
-# Use expression body for local functions
-dotnet_diagnostic.IDE0061.severity = none
-
-# Add missing cases to switch expression
-dotnet_diagnostic.IDE0072.severity = none
-
-# Use block-scoped namespace
-dotnet_diagnostic.IDE0160.severity = none
+dotnet_diagnostic.IDE0011.severity = none # Add braces
+dotnet_diagnostic.IDE0008.severity = none # Use 'var' instead of explicit type
+dotnet_diagnostic.IDE0022.severity = none # Use expression body for methods
+dotnet_diagnostic.IDE0055.severity = none # Formatting rule (CSharpier handles this)
+dotnet_diagnostic.IDE0058.severity = none # Remove unnecessary expression value
+dotnet_diagnostic.IDE0061.severity = none # Use expression body for local functions
+dotnet_diagnostic.IDE0072.severity = none # Add missing cases to switch expression
+dotnet_diagnostic.IDE0160.severity = none # Use block-scoped namespace
 
 ## DASHBOARD RULES ##
 # Prettier for all dashboard files with additional Concentric sorting for CSS files
