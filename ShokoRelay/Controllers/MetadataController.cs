@@ -138,11 +138,8 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
         bool isEpKey = ratingKey.StartsWith(PlexConstants.EpisodePrefix) || ratingKey.StartsWith(PlexConstants.AniDbPrefix + PlexConstants.EpisodePrefix, StringComparison.OrdinalIgnoreCase);
         if (isEpKey)
         {
-            var episode = TryParseEpisodeRatingKey(ratingKey, out int? partIdx);
-            if (episode == null)
-                return NotFound();
-            var m = ctx.FileData.Mappings.FirstOrDefault(x => x.Episodes.Any(e => e.ID == episode.ID) && x.PartIndex == partIdx);
-            if (m == null)
+            var (episode, partIdx, m) = TryResolveEpisodeContext(ctx, ratingKey);
+            if (episode == null || m == null)
                 return NotFound();
 
             // Handle Episode Groups (One Shoko ID mapped to multiple TMDB IDs)
@@ -236,11 +233,8 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
         bool isEpKey = ratingKey.StartsWith(PlexConstants.EpisodePrefix) || ratingKey.StartsWith(PlexConstants.AniDbPrefix + PlexConstants.EpisodePrefix, StringComparison.OrdinalIgnoreCase);
         if (isEpKey)
         {
-            var episode = TryParseEpisodeRatingKey(ratingKey, out int? partIdx);
-            if (episode == null)
-                return NotFound();
-            var m = ctx.FileData.Mappings.FirstOrDefault(x => x.Episodes.Any(e => e.ID == episode.ID) && x.PartIndex == partIdx);
-            images = m != null ? ExtractImages(_mapper.MapEpisode(episode, m.Coords, ctx.Series, ctx.Titles, partIdx, m.TmdbEpisode)) : [];
+            var (episode, partIdx, m) = TryResolveEpisodeContext(ctx, ratingKey);
+            images = (episode != null && m != null) ? ExtractImages(_mapper.MapEpisode(episode, m.Coords, ctx.Series, ctx.Titles, partIdx, m.TmdbEpisode)) : [];
         }
         else if (ratingKey.Contains(PlexConstants.SeasonPrefix))
         {
@@ -309,25 +303,33 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
 
     #region Private Helpers
 
-    /// <summary>Extracts the Shoko Episode ID and optional part index from a Plex ratingKey.</summary>
-    private IShokoEpisode? TryParseEpisodeRatingKey(string ratingKey, out int? partIdx)
+    /// <summary>Parses the ratingKey and resolves the corresponding episode, part index, and file mapping from the VFS collection.</summary>
+    /// <param name="ctx">The series context containing the mapping collection.</param>
+    /// <param name="ratingKey">The custom Plex rating key for the episode.</param>
+    /// <returns>A tuple containing the resolved IShokoEpisode, the 1-based PartIndex, and the FileMapping.</returns>
+    private (IShokoEpisode? Episode, int? PartIndex, MapHelper.FileMapping? Mapping) TryResolveEpisodeContext(PlexMetadata.SeriesContext ctx, string ratingKey)
     {
-        partIdx = null;
+        int? partIdx = null;
         bool isAniDbEp = ratingKey.StartsWith(PlexConstants.AniDbPrefix + PlexConstants.EpisodePrefix, StringComparison.OrdinalIgnoreCase);
         if (!isAniDbEp && !ratingKey.StartsWith(PlexConstants.EpisodePrefix))
-            return null;
+            return (null, null, null);
 
         var idPart = isAniDbEp ? ratingKey[(PlexConstants.AniDbPrefix.Length + PlexConstants.EpisodePrefix.Length)..] : ratingKey[PlexConstants.EpisodePrefix.Length..];
         var parts = idPart.Split(PlexConstants.PartPrefix);
         if (!int.TryParse(parts[0], out int id))
-            return null;
-
+            return (null, null, null);
         if (parts.Length > 1 && int.TryParse(parts[1], out int p))
             partIdx = p;
 
-        return isAniDbEp ? MetadataService.GetShokoEpisodeByAnidbID(id) : MetadataService.GetShokoEpisodeByID(id);
+        var episode = isAniDbEp ? MetadataService.GetShokoEpisodeByAnidbID(id) : MetadataService.GetShokoEpisodeByID(id);
+        if (episode == null)
+            return (null, partIdx, null);
+        var mapping =
+            ctx.FileData.Mappings.FirstOrDefault(x => x.Episodes.Any(e => e.ID == episode.ID) && x.PartIndex == partIdx) ?? ctx.FileData.Mappings.FirstOrDefault(x => x.Episodes.Any(e => e.ID == episode.ID));
+        return (episode, partIdx, mapping);
     }
 
+    /// <summary>Extracts the Image array from a mapped metadata object.</summary>
     private static object[] ExtractImages(object metadata) => metadata is IDictionary<string, object?> dict && dict.TryGetValue("Image", out var img) && img is object[] arr ? arr : [];
 
     #endregion

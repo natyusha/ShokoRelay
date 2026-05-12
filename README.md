@@ -25,7 +25,7 @@ Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File Sy
 - **Manual**
   - Navigate to Shoko Server's `plugins` directory and create a new subfolder called `ShokoRelay`
   - Extract [the latest pre-release](https://github.com/natyusha/ShokoRelay/releases) into the `plugins/ShokoRelay` directory
-  - It may be necessary to create the `plugins` (all lowercase) folder first which should be in the same directory as the `webui` folder
+  - It may be necessary to create the `plugins` (all lowercase) folder in Shoko's root first
 - Restart Shoko Server after finishing either of the above installation methods
 
 #### Setup
@@ -187,7 +187,7 @@ This plugin includes full [AnimeThemes](https://animethemes.moe/) integration. I
 
 1. Download anime theme videos and place them in the `!AnimeThemes` folder
    - There is a torrent available with over 19000+ themes
-2. Generate a mapping for the the videos by clicking the `Build Mapping File` button:
+2. Generate a mapping for the videos by clicking the `Build Mapping File` button:
    - If you have the torrent click the `Import Curated Mapping File` button to download the [current torrent mapping](https://gist.github.com/natyusha/bb33a3b3bc95bc7a3869633e23d522bb)
    - Mapping the torrent takes ~8 hours (due to rate limits) and generated mappings will be appended to it
 3. Apply the mapping to the VFS by clicking the `Generate` button

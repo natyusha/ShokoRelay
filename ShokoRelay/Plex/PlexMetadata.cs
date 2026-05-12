@@ -150,15 +150,17 @@ public class PlexMetadata(IMetadataService metadataService)
             if (ShokoRelay.Settings.TmdbEpNumbering && m.Episodes.Count == 1 && m.PrimaryEpisode is IShokoEpisode { TmdbEpisodes.Count: > 1 } se)
             {
                 var tmdbEpisodes = SelectPreferredTmdbOrdering(se.TmdbEpisodes, prefId);
-                foreach (var tmdbEpisode in tmdbEpisodes)
+                for (int i = 0; i < tmdbEpisodes.Count; i++)
                 {
-                    var (season, episode) = GetOrderingCoords(tmdbEpisode, prefId);
+                    var tmdbEp = tmdbEpisodes[i];
+                    var (season, episode) = GetOrderingCoords(tmdbEp, prefId);
                     if (season != seasonNum)
                         continue;
                     var tmdbCoords = new PlexCoords { Season = season ?? 0, Episode = episode };
-                    var meta = MapEpisode(se, tmdbCoords, ctx.Series, ctx.Titles, m.PartIndex, tmdbEpisode);
+                    int? effectivePart = m.PartIndex ?? (i + 1); // Assign a virtual part index based on the TMDB segment order to ensure unique ratingKeys (e.g. e123p1, e123p2)
+                    var meta = MapEpisode(se, tmdbCoords, ctx.Series, ctx.Titles, effectivePart, tmdbEp);
                     if (meta is Dictionary<string, object?> d && d.TryGetValue("ratingKey", out var rk) && rk is string key && seenKeys.Add(key))
-                        items.Add((tmdbCoords, m.PartIndex, meta));
+                        items.Add((tmdbCoords, effectivePart, meta));
                 }
                 continue;
             }
