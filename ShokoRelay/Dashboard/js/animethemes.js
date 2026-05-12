@@ -125,8 +125,8 @@
       const title = res.headers.get("X-Theme-Title");
       if (!title) return;
       const slug = (res.headers.get("X-Theme-Slug") || "").replace(/\bOpening\s?/gi, "OP").replace(/\bEnding\s?/gi, "ED");
-      const artist = res.headers.get("X-Theme-Artist"),
-        album = res.headers.get("X-Theme-Album");
+      const artist = res.headers.get("X-Theme-Artist");
+      const album = res.headers.get("X-Theme-Album");
       let html = `<span class="np-line title">${title}</span>${artist ? `<span class="np-line artist">${artist}</span>` : ""}`;
       const meta = [album, slug].filter(Boolean).join(" \u2014 ");
       if (meta) html += `<small class="np-line">${meta}</small>`;

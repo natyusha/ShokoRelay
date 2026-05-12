@@ -113,7 +113,9 @@ GET  /metadata/{ratingKey}/extras                              -> GetExtras
   - `123` (Shoko Series ID) / `a890` (AniDB Series ID)
   - `123s4` (Shoko Series Season 4) / `a123s4` (AniDB Series Season 4)
   - `e567` (Shoko Episode ID) / `ae567` (AniDB Episode ID)
+  - `e567p2` (Shoko Episode Part 2) / `ae567p2` (AniDB Episode Part 2)
   - _AniDB IDs resolve to Shoko IDs and must be known to Shoko_
+- Part suffixes support both physical multi-part files and virtual TMDB episode segments.
 - Crossover episodes (files belonging to multiple series) are skipped for local metadata/subtitle linking to avoid conflicts.
 
 ---
@@ -153,10 +155,10 @@ GET  /plex/ratings/apply?filter={csv}                          -> ApplyAudienceR
 GET  /plex/automation/run                                      -> RunPlexAutomationNow
 ```
 
-- `RefreshPlexSeries` manually triggers a partial library scan in Plex for the specified series.
-- `BuildPlexCollections` generate Plex collections for the specified series or filter.
-- `ApplyCollectionPosters` upload or refresh posters for the same series set.
-- `ApplyAudienceRatings` update series/episode ratings based on the configured source (TMDB/AniDB).
+- `RefreshPlexSeries` triggers a partial library scan in Plex for a comma-separated list of series IDs.
+- `BuildPlexCollections` generates Plex collections for a comma-separated list of series IDs (or all series if omitted).
+- `ApplyCollectionPosters` uploads or refreshes posters for a comma-separated list of series IDs.
+- `ApplyAudienceRatings` updates ratings for a comma-separated list of series IDs based on the configured source (TMDB/AniDB).
 - `RunPlexAutomationNow` triggers collection building and rating application back-to-back for all series.
 
 **Notes:**
@@ -218,7 +220,7 @@ POST /vfs/overrides                                            -> SaveVfsOverrid
 ### Shoko: Automation
 
 ```
-GET  /shoko/remove-missing?dryRun={true|false}                 -> RemoveMissingFiles       (for preview/testing)
+GET  /shoko/remove-missing?dryRun={true|false}                 -> RemoveMissingFiles        (for preview/testing)
 POST /shoko/remove-missing?dryRun={true|false}                 -> RemoveMissingFiles
 
 POST /shoko/import                                             -> RunShokoImport
@@ -226,7 +228,7 @@ GET  /shoko/import/start                                       -> StartShokoImpo
 
 GET  /sync-watched                                             -> SyncPlexWatched           (for preview/testing)
 POST /sync-watched                                             -> SyncPlexWatched
-     [?dryRun={true|false}&sinceHours={int}&ratings={true|false}&import={true|false}&users={all|admin|extra|none}&libraryName={name}]
+     [?dryRun={true|false}&sinceHours={int}&ratings={true|false}&import={true|false}&users={All|Admin|Extra|None}&libraryName={name}]
 
 GET  /sync-watched/start                                       -> StartWatchedSyncNow
 ```
@@ -235,16 +237,17 @@ GET  /sync-watched/start                                       -> StartWatchedSy
   - `dryRun`: (default true) set to false to actually remove records from Shoko and AniDB MyList.
 - `RunShokoImport` triggers a scan of managed folders marked as "Source".
 - `SyncPlexWatched` synchronizes watched state between Plex and Shoko (Bi-directional).
-  - `dryRun`: (default true) set to false to write watched states/ratings to databases.
+  - `dryRun`: (default true) If true, skip database and Plex server writes.
   - `sinceHours`: (optional) limit processing to items viewed within this window.
   - `ratings`: (default to configuration) set to true/false to override the `Automation.ShokoSyncWatchedIncludeRatings` setting.
-  - `import`: (default false) set to true for `Plex←Shoko`. Default is `Plex→Shoko`.
-  - `users`: (default to configuration) restrict sync to `all`, `admin`, `extra`, or `none`. Overrides the `Automation.ShokoSyncWatchedUserType` setting.
+  - `import`: (default false) Direction: true for Plex←Shoko, false for Plex→Shoko.
+  - `users`: (default to configuration) Restrict sync to specific user groups.
   - `libraryName`: (optional) restrict processing to a specific Plex library name (e.g. `Anime`).
   - Direction and exclusion settings are read from `AutomationConfig`.
 
 **Notes:**
 
+- The response for `RemoveMissingFiles` includes a Processed property containing the count of records removed.
 - Scheduled automations are anchored to UTC midnight using `Automation.UtcOffsetHours`.
 - Managed user tokens are obtained transiently via Plex Home switching and are never persisted.
 

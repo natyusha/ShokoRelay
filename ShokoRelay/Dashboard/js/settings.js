@@ -41,28 +41,27 @@
     const [schemaRes, configRes] = await Promise.all([fetchJson(configUrl + "/schema"), fetchJson(configUrl)]);
     if (!schemaRes.ok || !configRes.ok) return showToast("Failed To Load Config", "error", 0);
 
-    const schema = schemaRes.data.properties || [],
-      rawCfg = configRes.data || {},
-      config = unwrapConfig(rawCfg);
+    const schema = schemaRes.data.properties || [];
+    const rawCfg = configRes.data || {};
+    const config = unwrapConfig(rawCfg);
     const overridesBtn = el("vfs-overrides");
-    const tmdbEnabled = getValueByPath(config, "TmdbEpNumbering") ?? getValueByPath(config, "Advanced.TmdbEpNumbering");
-    if (overridesBtn) overridesBtn.disabled = !tmdbEnabled;
+    if (overridesBtn) overridesBtn.disabled = !(getValueByPath(config, "TmdbEpNumbering") ?? getValueByPath(config, "Advanced.TmdbEpNumbering"));
 
     el("config-form").innerHTML = "";
-    el("overrides-text") && (el("overrides-text").value = rawCfg.overrides || "");
+    if (el("overrides-text")) el("overrides-text").value = rawCfg.overrides || "";
 
-    const advSection = document.createElement("details"),
-      advContent = document.createElement("div");
+    const advSection = document.createElement("details");
+    const advContent = document.createElement("div");
     advSection.className = "details-anim";
     advContent.className = "details-content";
     advSection.innerHTML = "<summary>Advanced Settings</summary>";
     advContent.appendChild(document.createElement("hr"));
 
     schema.forEach((p) => {
-      const wrap = document.createElement("div"),
-        label = document.createElement("label");
-      let input,
-        value = getValueByPath(config, p.Path);
+      const wrap = document.createElement("div");
+      const label = document.createElement("label");
+      const value = getValueByPath(config, p.Path);
+      let input;
 
       if (p.Type === "bool") {
         wrap.innerHTML = `<label class="shoko-checkbox"><input type="checkbox">
@@ -72,39 +71,33 @@
         bindConfig(input, p.Path, config, saveSettings, "check");
 
         // UI Logic: Toggle dependent button states when TMDB Ep numbering changes
-        if (overridesBtn && (p.Path === "TmdbEpNumbering" || p.Path === "Advanced.TmdbEpNumbering")) {
-          input.addEventListener("change", (e) => {
-            overridesBtn.disabled = !e.target.checked;
-          });
-        }
+        if (overridesBtn && (p.Path === "TmdbEpNumbering" || p.Path === "Advanced.TmdbEpNumbering")) input.addEventListener("change", (e) => (overridesBtn.disabled = !e.target.checked));
       } else if (p.Path.endsWith("PathMappings")) {
         label.innerHTML = `<span>${p.Display || p.Path.split(".").pop()}</span>${p.Description ? `<small>${p.Description}</small>` : ""}`;
         wrap.appendChild(label);
         const mappingContainer = document.createElement("div");
         mappingContainer.innerHTML = `<div class="full"><div><small>Plex Base Paths</small><textarea id="path-mappings-left"></textarea></div><div><small>Shoko Base Paths</small><textarea id="path-mappings-right"></textarea></div></div>`;
         wrap.appendChild(mappingContainer);
-        const l = mappingContainer.querySelector("#path-mappings-left"),
-          r = mappingContainer.querySelector("#path-mappings-right"),
-          m = value || {};
+        const l = mappingContainer.querySelector("#path-mappings-left");
+        const r = mappingContainer.querySelector("#path-mappings-right");
+        const m = value || {};
         const keys = Object.keys(m).sort();
         l.value = keys.map((k) => m[k]).join("\n");
         r.value = keys.join("\n");
-        const onMapChange = async () => {
+        l.onchange = r.onchange = async () => {
           const val = {};
-          const lLines = l.value.split("\n"),
-            rLines = r.value.split("\n");
+          const lLines = l.value.split("\n");
+          const rLines = r.value.split("\n");
           lLines.forEach((lv, idx) => {
             if (lv.trim() && rLines[idx]?.trim()) val[rLines[idx].trim()] = lv.trim();
           });
           setValueByPath(config, p.Path, val);
           await saveSettings(config);
         };
-        l.onchange = r.onchange = onMapChange;
       } else {
         label.innerHTML = `<span>${p.Display || p.Path.split(".").pop()}</span>${p.Description ? `<small>${p.Description}</small>` : ""}`;
         wrap.appendChild(label);
         input = document.createElement(p.Type === "enum" ? "select" : p.Type === "json" || p.Path.endsWith("TagBlacklist") || p.Path.endsWith("FolderExclusions") ? "textarea" : "input");
-
         if (p.Type === "enum") {
           (p.EnumValues || []).forEach((ev) => {
             const opt = new Option(ev.name, ev.value);
@@ -113,13 +106,10 @@
           });
         } else if (p.Type === "number") {
           input.type = "number";
-        } else if (p.Type === "json") {
-          input.placeholder = "JSON object";
         } else {
           input.type = "text";
           if (p.Path.endsWith("ShokoServerUrl")) input.placeholder = "e.g. http://localhost:8111";
         }
-
         wrap.appendChild(input);
 
         // Custom validation for ShokoServerUrl
@@ -128,20 +118,16 @@
           input.onchange = async () => {
             const urlRegex = /^https?:\/\/[a-zA-Z0-9.-]+(:\d+)?$/;
             const cleanVal = input.value.trim().replace(/\/+$/, "");
-
             if (cleanVal && !urlRegex.test(cleanVal)) {
               showToast("Invalid Shoko URL. Use http(s)://HOST:PORT", "error", 5000);
               input.value = getValueByPath(config, p.Path) || "";
               return;
             }
-
             input.value = cleanVal;
             setValueByPath(config, p.Path, cleanVal);
             await saveSettings(config);
           };
-        } else {
-          bindConfig(input, p.Path, config, saveSettings, p.Type === "bool" ? "check" : p.Type === "number" ? "number" : "text");
-        }
+        } else bindConfig(input, p.Path, config, saveSettings, p.Type === "bool" ? "check" : p.Type === "number" ? "number" : "text");
       }
       (p.Advanced ? advContent : el("config-form")).appendChild(wrap);
     });
@@ -153,14 +139,17 @@
     }
 
     const b = (id, path, type) => bindConfig(id, path, config, saveSettings, type);
-    b("shoko-utc-offset", "Automation.UtcOffsetHours", "number");
-    b("shoko-import-frequency", "Automation.ShokoImportFrequencyHours", "number");
-    b("shoko-sync-frequency", "Automation.ShokoSyncWatchedFrequencyHours", "number");
-    b("plex-auto-frequency", "Automation.PlexAutomationFrequencyHours", "number");
+    const autoMap = {
+      "shoko-utc-offset": "UtcOffsetHours",
+      "shoko-import-frequency": "ShokoImportFrequencyHours",
+      "shoko-sync-frequency": "ShokoSyncWatchedFrequencyHours",
+      "plex-auto-frequency": "PlexAutomationFrequencyHours",
+    };
+    for (const [id, path] of Object.entries(autoMap)) b(id, "Automation." + path, "number");
+
     b("sync-ratings", "Automation.ShokoSyncWatchedIncludeRatings", "check");
     b("sync-users", "Automation.ShokoSyncWatchedUserType", "number");
     b("plex-scrobble", "Automation.AutoScrobble", "check");
-
     window._sr.initAtConfig?.(config, saveSettings);
   }
   // #endregion

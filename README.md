@@ -42,7 +42,7 @@ Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File Sy
   - Link the plugin to your Plex account via the `Start Plex Auth` button in the "Plex Authentication" section
     - Once clicked it will change to a `Login` link which will redirect you to `app.plex.tv/auth`
     - From there you can login to Plex as normal using your credentials and then close the tab
-    - This will enable: Auto Scanning, Scrobbling (webhooks) and enhanced collection/ratings support
+    - This will enable: Auto Scanning, Scrobbling (via sync or webhook) and enhanced collection/ratings support
 - There are additional options at the bottom under "Provider Settings" which also contains a "Help" button in the top right.
 
 > [!TIP]
@@ -131,6 +131,7 @@ com.plexapp.agents.shokorelay
   - Click `Save Changes` to complete the process
 - The webhook respects the `Include Ratings` and `Sync Users` settings in the `Sync Watched States Menu`
   - `Sync Users` defaults to "None" and must be configured before the webook will function
+  - For clarity "All" users means both the admin and the configured extra Plex users
 - Managed users must be added to `Extra Plex Users` on the dashboard if you wish them to be included
 - _Requires a Plex Pass subscription_
 
@@ -181,9 +182,6 @@ As a bonus this supports using the primary series poster as the collection poste
 ### Themes as Video Extras
 
 This plugin includes full [AnimeThemes](https://animethemes.moe/) integration. It will look for '.webm' theme files in a folder called `!AnimeThemes` (or the configured `AnimeThemes Root Path`) which is located in the root of your anime library (this works for any "destination" type folder managed by Shoko). These files must have the same name as they do on the AnimeThemes website and then a mapping must be generated for them, in what is essentially a 3 step process. Simply navigate to the "AnimeThemes: VFS" section of the dashboard page to get started.
-
-> [!IMPORTANT]
-> Similar to the VFS you must exclude the `!AnimeThemes` folder from Shoko scans using the `Exclude` server option. An example `settings-server.json` entry is shown [above](#shoko).
 
 1. Download anime theme videos and place them in the `!AnimeThemes` folder
    - There is a torrent available with over 19000+ themes

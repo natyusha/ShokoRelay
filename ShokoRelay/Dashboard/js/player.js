@@ -126,44 +126,20 @@
 
     const words = rawFt.split(/\s+/).filter((w) => w.length > 0);
     const isFavQuery = words.includes("favs");
-    const tagExclusions = [],
-      tagInclusions = [],
-      searchTerms = [];
+    const tagExclusions = [];
+    const tagInclusions = [];
+    const searchTerms = [];
 
     words.forEach((w) => {
       if (w === "favs") return;
-      if (w.startsWith("-")) tagExclusions.push(w.substring(1));
-      else if (w.startsWith("+")) tagInclusions.push(w.substring(1));
-      else searchTerms.push(w);
+      w.startsWith("-") ? tagExclusions.push(w.substring(1)) : w.startsWith("+") ? tagInclusions.push(w.substring(1)) : searchTerms.push(w);
     });
 
-    const matchesTag = (tag, item) => {
-      switch (tag) {
-        case "spoil":
-          return item.spoiler;
-        case "nsfw":
-          return item.nsfw;
-        case "lyrics":
-          return item.lyrics;
-        case "subs":
-          return item.subs;
-        case "uncen":
-          return item.uncen;
-        case "nc":
-          return item.nc;
-        case "trans":
-          return item.trans;
-        case "over":
-          return item.over;
-        default:
-          return false;
-      }
-    };
+    const matchesTag = (tag, item) => ({ spoil: item.spoiler, nsfw: item.nsfw, lyrics: item.lyrics, subs: item.subs, uncen: item.uncen, nc: item.nc, trans: item.trans, over: item.over })[tag] || false;
 
     return webmTreeData.filter((item) => {
       if (isFavQuery && (!item.videoId || !favourites.has(item.videoId))) return false;
-      for (const tag of tagExclusions) if (matchesTag(tag, item)) return false;
-      for (const tag of tagInclusions) if (!matchesTag(tag, item)) return false;
+      if (tagExclusions.some((tag) => matchesTag(tag, item)) || tagInclusions.some((tag) => !matchesTag(tag, item))) return false;
       return searchTerms.every((word) => item._searchIndex.includes(word));
     });
   };
@@ -220,10 +196,10 @@
     });
 
     const makeNode = (name, children, isOpen) => {
-      const li = document.createElement("li"),
-        det = document.createElement("details"),
-        sum = document.createElement("summary"),
-        ul = document.createElement("ul");
+      const li = document.createElement("li");
+      const det = document.createElement("details");
+      const sum = document.createElement("summary");
+      const ul = document.createElement("ul");
       det.open = isOpen;
       sum.title = name;
       sum.dataset.tooltipOverflowOnly = "true";

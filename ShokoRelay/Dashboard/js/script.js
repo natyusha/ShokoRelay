@@ -11,17 +11,10 @@
   const TOAST_MS = 5000;
 
   /** Standardized labels for playback controls used by both MP3 and Video players. */
-  const PLAYBACK_LABELS = {
-    loop: "Loop",
-    shuffle: "Shuffle",
-    next: "Next",
-    off: "Once",
-    idle: "Play",
-    playing: "Next",
-  };
+  const PLAYBACK_LABELS = { loop: "Loop", shuffle: "Shuffle", next: "Next", off: "Once", idle: "Play", playing: "Next" };
 
-  /** List of values that correspond to server task names for spinner synchronization. Fallback to empty if tasks missing. */
-  const MANAGED_TASK_IDS = Object.values(window._sr.tasks || {});
+  /** List of values that correspond to server task names for spinner synchronization. */
+  const MANAGED_TASK_IDS = Object.values(window._sr?.tasks || {});
 
   // #region Helpers
   /**
@@ -32,8 +25,8 @@
    */
   async function fetchJson(url, opts) {
     try {
-      const res = await fetch(url, opts),
-        text = await res.text();
+      const res = await fetch(url, opts);
+      const text = await res.text();
       try {
         return { ok: res.ok, data: JSON.parse(text) };
       } catch {
@@ -52,10 +45,7 @@
    */
   function getData(res) {
     const d = res?.data;
-    if (!d) return null;
-    if (d.Data !== undefined && d.Data !== null) return d.Data;
-    if (d.data !== undefined && d.data !== null) return d.data;
-    return d;
+    return d?.Data !== undefined ? d.Data : d?.data !== undefined ? d.data : d;
   }
 
   /**
@@ -66,16 +56,13 @@
   function summarizeResult(res) {
     const d = getData(res);
     if (!d) return { text: "", errorCount: 0 };
-
     if (d.errors && typeof d.errors === "object" && !Array.isArray(d.errors)) {
-      const messages = Object.values(d.errors).flat();
-      if (messages.length > 0) return { text: messages.join(", "), errorCount: messages.length };
+      const msgs = Object.values(d.errors).flat();
+      if (msgs.length > 0) return { text: msgs.join(", "), errorCount: msgs.length };
     }
-
     if (res.ok === false && d.title && !d.message) return { text: d.title, errorCount: 1 };
 
     const parts = [];
-    let errorCount = 0;
     const keys = {
       processed: ["SeriesProcessed", "Processed", "ScannedCount", "ProcessedShows"],
       created: ["LinksCreated", "Created", "UpdatedShows"],
@@ -84,6 +71,7 @@
       errors: ["Errors", "ErrorsList", "Message"],
       uploaded: ["Uploaded"],
     };
+    let errorCount = 0;
 
     Object.entries(keys).forEach(([label, aliases]) => {
       const match = aliases.find((k) => d[k] !== undefined && d[k] !== null);
@@ -93,7 +81,6 @@
       if (label === "errors") errorCount = n;
       if (label !== "errors" || n > 0) parts.push(`${label}: ${n}`);
     });
-
     const text = parts.length ? parts.join(", ") : typeof d === "string" ? (d.length > 200 ? d.substring(0, 200) + "..." : d) : "";
     return { text, errorCount };
   }
@@ -138,16 +125,13 @@
     const logUrl = res.data?.logUrl || res.data?.LogUrl;
     const logLink = logUrl ? `[<a href="${logUrl}" target="_blank" class="log-link">view log</a>]` : "";
 
-    const envMsg = res.data?.message || res.data?.Message,
-      envStatus = res.data?.status || res.data?.Status;
-
     if (res.ok) {
-      const display = summary || envMsg || (envStatus !== "ok" ? envStatus : null) || text || "Complete";
+      const display = summary || res.data?.message || res.data?.Message || (res.data?.status !== "ok" ? res.data?.status : null) || text || "Complete";
       const toastType = type || (errorCount > 0 ? "error" : "success");
       const persistence = errorCount > 0 ? 0 : (hideOnSucceed ?? (logUrl ? 0 : TOAST_MS)); // Always persist if there are errors. Otherwise, respect the hideOnSucceed override.
       showToast(`${label}: ${display} ${logLink}`, toastType, persistence);
     } else {
-      const display = summary || envMsg || text || (typeof res.data === "string" ? res.data : JSON.stringify(res.data));
+      const display = summary || res.data?.message || res.data?.Message || text || (typeof res.data === "string" ? res.data : JSON.stringify(res.data));
       showToast(`${label} Failed: ${display} ${logLink}`, "error", 0);
     }
   }
@@ -176,10 +160,7 @@
     const activeTasks = getData(res) || [];
     MANAGED_TASK_IDS.forEach((id) => {
       const btn = el(id);
-      if (!btn) return;
-      const isActive = activeTasks.includes(id);
-      if (!isActive && !btn.classList.contains("clicking")) setButtonLoading(btn, false);
-      else if (isActive) setButtonLoading(btn, true);
+      if (btn) setButtonLoading(btn, activeTasks.includes(id) || btn.classList.contains("clicking"));
     });
 
     const completeRes = await fetchJson(window._sr.base + "/tasks/completed");
@@ -188,15 +169,10 @@
       for (const [taskName, result] of Object.entries(completeData)) {
         const btn = el(taskName);
         if (btn?.classList.contains("clicking")) continue;
-        const label = taskName.replace(/-/g, " ");
+        const fInput = btn?.dataset.relayPersistIfEmpty ? document.querySelector(btn.dataset.relayPersistIfEmpty) : null;
         const isOk = (result.status || result.Status || "").toLowerCase() === "ok"; // Ensure the ok status is correctly identified regardless of property casing
 
-        // Check if the button is configured to persist only when the filter is empty.
-        const pSelector = btn?.dataset.relayPersistIfEmpty;
-        const fInput = pSelector ? document.querySelector(pSelector) : null;
-        const hideOnSucceed = pSelector && fInput?.value.trim() ? TOAST_MS : 0;
-
-        toastOperation({ ok: isOk, data: result }, label, { hideOnSucceed: 0 }); // Polled task completions with logs are always persistent
+        toastOperation({ ok: isOk, data: result }, taskName.replace(/-/g, " "), { hideOnSucceed: fInput?.value.trim() ? TOAST_MS : 0 });
         await fetch(window._sr.base + `/tasks/clear/${taskName}`, { method: "POST" });
       }
     }
@@ -210,22 +186,16 @@
    */
   async function runAction(btn, handler) {
     if (!btn || btn.classList.contains("clicking")) return;
-    const MANAGED_TASK_IDS = Object.values(window._sr.tasks || {});
     btn.classList.add("clicking");
     setButtonLoading(btn, true);
     const taskId = btn.id;
     try {
       await handler(btn);
-      if (taskId && MANAGED_TASK_IDS.includes(taskId)) {
-        await fetch(window._sr.base + `/tasks/clear/${taskId}`, { method: "POST" });
-      }
+      if (taskId && MANAGED_TASK_IDS.includes(taskId)) await fetch(window._sr.base + `/tasks/clear/${taskId}`, { method: "POST" });
     } finally {
       btn.classList.remove("clicking");
-      if (taskId && !MANAGED_TASK_IDS.includes(taskId)) {
-        setTimeout(() => setButtonLoading(btn, false), TOAST_MS);
-      } else {
-        syncActiveTasks();
-      }
+      if (taskId && !MANAGED_TASK_IDS.includes(taskId)) setTimeout(() => setButtonLoading(btn, false), TOAST_MS);
+      else syncActiveTasks();
     }
   }
 
