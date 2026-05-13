@@ -7,6 +7,7 @@ using Shoko.Abstractions.Video.Enums;
 using ShokoRelay.Config;
 using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
+using static ShokoRelay.ShokoRelay;
 
 namespace ShokoRelay.Vfs;
 
@@ -120,7 +121,7 @@ public class VfsBuilder
             var seriesDetailsBag = new ConcurrentBag<SeriesProcessDetails>();
             var cleanupDetails = new List<RootCleanupDetails>();
             var skippedDetailsBag = new ConcurrentBag<string>();
-            var ignoredFolders = VfsShared.GetIgnoredFolderNames(ShokoRelay.Settings);
+            var ignoredFolders = VfsShared.GetIgnoredFolderNames(Settings);
 
             // Initialize build-session caches
             (_seriesFileDataCacheForBuild, _subtitleFileCacheForBuild, _metadataFileCacheForBuild, _warningsForBuild, _createdDirsForBuild) = (
@@ -206,7 +207,7 @@ public class VfsBuilder
             int totalInScope = seriesList.Count();
             int consolidatedCount = 0;
 
-            if (ShokoRelay.Settings.TmdbEpNumbering)
+            if (Settings.TmdbEpNumbering)
             {
                 // Group by primary ID and count how many secondary series are being merged
                 var grouped = seriesList.GroupBy(s => OverrideHelper.GetPrimary(s.ID, _metadataService)).ToList();
@@ -217,7 +218,7 @@ public class VfsBuilder
             // Process series in parallel
             Parallel.ForEach(
                 seriesList,
-                new ParallelOptions { MaxDegreeOfParallelism = ShokoRelay.GetMaxParallelism() },
+                DefaultParallelOptions(),
                 series =>
                 {
                     try
@@ -320,7 +321,7 @@ public class VfsBuilder
     {
         var (created, skipped, planned, errors, skippedDetails, sSw) = (0, 0, 0, new List<string>(), new List<string>(), Stopwatch.StartNew());
         var (displayTitle, _, _) = TextHelper.ResolveFullSeriesTitles(series);
-        int folderId = ShokoRelay.Settings.TmdbEpNumbering ? OverrideHelper.GetPrimary(series.ID, _metadataService) : series.ID;
+        int folderId = Settings.TmdbEpNumbering ? OverrideHelper.GetPrimary(series.ID, _metadataService) : series.ID;
         var fileData = GetSeriesFileDataCached(series);
         if (!fileData.Mappings.Any())
             return (0, 0, skippedDetails, errors, 0);
@@ -592,7 +593,7 @@ public class VfsBuilder
 
     private MapHelper.SeriesFileData GetSeriesFileDataCached(IShokoSeries series)
     {
-        if (!ShokoRelay.Settings.TmdbEpNumbering)
+        if (!Settings.TmdbEpNumbering)
             return _seriesFileDataCacheForBuild?.GetOrAdd(series.ID, _ => MapHelper.GetSeriesFileData(series, _metadataService)) ?? MapHelper.GetSeriesFileData(series, _metadataService);
 
         int pId = OverrideHelper.GetPrimary(series.ID, _metadataService);

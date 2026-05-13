@@ -33,42 +33,31 @@ public class AnimeThemesController(
     /// <param name="filter">Optional comma-separated Shoko Series IDs to restrict the build.</param>
     /// <returns>Statistics on links created and errors encountered.</returns>
     [HttpGet("animethemes/vfs/build")]
-    public async Task<IActionResult> AnimeThemesVfsBuild([FromQuery] string? filter = null)
-    {
-        var validation = ValidateFilterOrBadRequest(filter, out var filterIds);
-        if (validation != null)
-            return validation;
-
-        const string TaskName = ShokoRelayConstants.TaskAtVfsBuild;
-        TaskHelper.StartTask(TaskName);
-        try
-        {
-            var result = await _animeThemesMapping.ApplyMappingAsync(filterIds, CancellationToken.None).ConfigureAwait(false);
-
-            if (filterIds == null || filterIds.Count == 0)
-            {
-                try
+    public Task<IActionResult> AnimeThemesVfsBuild([FromQuery] string? filter = null) =>
+        ValidateFilterOrBadRequest(filter, out var filterIds) is { } guard
+            ? Task.FromResult(guard)
+            : ExecuteTrackedTaskAsync(
+                ShokoRelayConstants.TaskAtVfsBuild,
+                ShokoRelayConstants.LogAtVfs,
+                (sb, r) => LogHelper.BuildAtVfsBuildReport(sb, r, filterIds ?? []),
+                async () =>
                 {
-                    var cacheLines = result.CacheEntries.Select(ce => $"{ce.VfsPath.Replace('\\', '/')}|{ce.VideoId}|{ce.Bitmask}");
-                    System.IO.File.WriteAllLines(Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileAtWebmCache), cacheLines);
+                    var result = await _animeThemesMapping.ApplyMappingAsync(filterIds, CancellationToken.None).ConfigureAwait(false);
+                    if (filterIds == null || filterIds.Count == 0)
+                    {
+                        try
+                        {
+                            var path = Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileAtWebmCache);
+                            System.IO.File.WriteAllLines(path, result.CacheEntries.Select(ce => $"{ce.VfsPath.Replace('\\', '/')}|{ce.VideoId}|{ce.Bitmask}"));
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.Warn(ex, "AnimeThemes: Failed to save webm cache");
+                        }
+                    }
+                    return result;
                 }
-                catch (Exception ex)
-                {
-                    Logger.Warn(ex, "AnimeThemes: Failed to save webm cache");
-                }
-            }
-
-            var actionResult = LogAndReturn(ShokoRelayConstants.LogAtVfs, result, (sb, r) => LogHelper.BuildAtVfsBuildReport(sb, r, filterIds ?? []));
-            TaskHelper.CompleteTask(TaskName, (actionResult as OkObjectResult)?.Value!);
-            return actionResult;
-        }
-        catch (Exception ex)
-        {
-            var err = new { status = "error", message = ex.Message };
-            TaskHelper.CompleteTask(TaskName, err);
-            return BadRequest(new RelayResponse<object>(Status: "error", Message: ex.Message));
-        }
-    }
+            );
 
     /// <summary>Generates the anime‑themes mapping CSV or tests a single filename mapping.</summary>
     /// <param name="testPath">Optional webm filename to test mapping logic against.</param>
@@ -79,37 +68,28 @@ public class AnimeThemesController(
         if (!string.IsNullOrWhiteSpace(testPath))
         {
             var (entry, error, gen) = await _animeThemesMapping.TestMappingEntryAsync(testPath, CancellationToken.None).ConfigureAwait(false);
-            if (error != null)
-                return Ok(new RelayResponse<object>(Status: "error", Message: error, Data: new { testPath }));
-
-            return Ok(
-                new RelayResponse<object>(
-                    Data: new
-                    {
-                        testPath,
-                        generatedFilename = gen,
-                        csvLine = entry != null ? AnimeThemesMapping.SerializeMappingEntry(entry) : null,
-                        entry,
-                    }
-                )
-            );
+            return error != null
+                ? Ok(new RelayResponse<object>(Status: "error", Message: error, Data: new { testPath }))
+                : Ok(
+                    new RelayResponse<object>(
+                        Data: new
+                        {
+                            testPath,
+                            generatedFilename = gen,
+                            csvLine = entry != null ? AnimeThemesMapping.SerializeMappingEntry(entry) : null,
+                            entry,
+                        }
+                    )
+                );
         }
 
-        const string TaskName = ShokoRelayConstants.TaskAtMapBuild;
-        TaskHelper.StartTask(TaskName);
-        try
-        {
-            var result = await _animeThemesMapping.BuildMappingFileAsync(CancellationToken.None).ConfigureAwait(false);
-            var actionResult = LogAndReturn(ShokoRelayConstants.LogAtMap, result, LogHelper.BuildAtVfsMapReport);
-            TaskHelper.CompleteTask(TaskName, (actionResult as OkObjectResult)?.Value!);
-            return actionResult;
-        }
-        catch (Exception ex)
-        {
-            var err = new { status = "error", message = ex.Message };
-            TaskHelper.CompleteTask(TaskName, err);
-            return BadRequest(new RelayResponse<object>(Status: "error", Message: ex.Message));
-        }
+        return await ExecuteTrackedTaskAsync(
+                ShokoRelayConstants.TaskAtMapBuild,
+                ShokoRelayConstants.LogAtMap,
+                LogHelper.BuildAtVfsMapReport,
+                () => _animeThemesMapping.BuildMappingFileAsync(CancellationToken.None)
+            )
+            .ConfigureAwait(false);
     }
 
     /// <summary>Downloads and imports the curated mapping CSV from GitHub.</summary>
@@ -130,9 +110,7 @@ public class AnimeThemesController(
     #region MP3 Generation
 
     /// <summary>Generates Theme.mp3 files for anime series.</summary>
-    /// <remarks>
-    /// Can be run for a single folder or as a recursive batch. Supports automatic path translation from Plex paths to Shoko paths.
-    /// </remarks>
+    /// <remarks>Can be run for a single folder or as a recursive batch. Supports automatic path translation from Plex paths to Shoko paths.</remarks>
     /// <param name="query">Parameters for the MP3 generation request.</param>
     /// <returns>An operation result or batch report.</returns>
     [HttpGet("animethemes/mp3")]
@@ -140,32 +118,28 @@ public class AnimeThemesController(
     {
         if (string.IsNullOrWhiteSpace(query.Path))
             return BadRequest(new RelayResponse<object>(Status: "error", Message: "path is required"));
-
         string reverse = PlexLibrary.MapPlexPathToShokoPath(query.Path);
         if (!string.Equals(reverse, query.Path, StringComparison.Ordinal))
             query = query with { Path = reverse };
 
         if (query.Batch)
         {
-            const string TaskName = ShokoRelayConstants.TaskAtMp3Build;
-            TaskHelper.StartTask(TaskName);
-            try
-            {
-                var batch = await _animeThemesMp3Generator.ProcessBatchAsync(query, CancellationToken.None);
-                foreach (var item in batch.Items.Where(i => i.Status == "ok" && !string.IsNullOrWhiteSpace(i.Folder)))
-                    _animeThemesMp3Generator.AddToThemeMp3Cache(item.Folder);
-
-                var actionResult = LogAndReturn(ShokoRelayConstants.LogAtMp3, batch, LogHelper.BuildAtMp3Report);
-                TaskHelper.CompleteTask(TaskName, (actionResult as OkObjectResult)?.Value!);
-                return actionResult;
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new RelayResponse<object>(Status: "error", Message: ex.Message));
-            }
+            return await ExecuteTrackedTaskAsync(
+                    ShokoRelayConstants.TaskAtMp3Build,
+                    ShokoRelayConstants.LogAtMp3,
+                    LogHelper.BuildAtMp3Report,
+                    async () =>
+                    {
+                        var batch = await _animeThemesMp3Generator.ProcessBatchAsync(query, CancellationToken.None).ConfigureAwait(false);
+                        foreach (var item in batch.Items.Where(i => i.Status == "ok" && !string.IsNullOrWhiteSpace(i.Folder)))
+                            _animeThemesMp3Generator.AddToThemeMp3Cache(item.Folder);
+                        return batch;
+                    }
+                )
+                .ConfigureAwait(false);
         }
 
-        var single = await _animeThemesMp3Generator.ProcessSingleAsync(query, CancellationToken.None);
+        var single = await _animeThemesMp3Generator.ProcessSingleAsync(query, CancellationToken.None).ConfigureAwait(false);
         return single.Status == "error" ? BadRequest(new RelayResponse<object>(Status: "error", Message: single.Message, Data: single)) : Ok(new RelayResponse<ThemeMp3OperationResult>(Data: single));
     }
 

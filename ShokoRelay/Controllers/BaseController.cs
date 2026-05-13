@@ -51,6 +51,32 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
 
     #region Logging Helper
 
+
+    /// <summary>Executes a background task with full lifecycle tracking, logging, and standardized response formatting.</summary>
+    /// <typeparam name="T">The type of the result data.</typeparam>
+    /// <param name="taskName">Unique identifier for UI tracking.</param>
+    /// <param name="logName">Filename for the generated report.</param>
+    /// <param name="reportBuilder">Logic to generate the text report.</param>
+    /// <param name="action">The asynchronous operation to perform.</param>
+    /// <returns>An IActionResult containing the standardized RelayResponse.</returns>
+    protected async Task<IActionResult> ExecuteTrackedTaskAsync<T>(string taskName, string logName, Action<StringBuilder, T> reportBuilder, Func<Task<T>> action)
+    {
+        TaskHelper.StartTask(taskName);
+        try
+        {
+            T result = await action().ConfigureAwait(false);
+            IActionResult actionResult = LogAndReturn(logName, result, reportBuilder);
+            TaskHelper.CompleteTask(taskName, (actionResult as OkObjectResult)?.Value!);
+            return actionResult;
+        }
+        catch (Exception ex)
+        {
+            var err = new { status = "error", message = ex.Message };
+            TaskHelper.CompleteTask(taskName, err);
+            return BadRequest(new RelayResponse<object>(Status: "error", Message: ex.Message));
+        }
+    }
+
     /// <summary>Standardized helper for tasks: writes a report and returns a JSON response with a log link.</summary>
     /// <typeparam name="T">The type of the result data object.</typeparam>
     /// <param name="logName">The name of the log file to generate.</param>

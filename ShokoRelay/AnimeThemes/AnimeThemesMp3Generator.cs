@@ -8,6 +8,7 @@ using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
 using ShokoRelay.Services;
 using ShokoRelay.Vfs;
+using static ShokoRelay.ShokoRelay;
 
 namespace ShokoRelay.AnimeThemes;
 
@@ -219,7 +220,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
 
         await Parallel.ForEachAsync(
             folders,
-            new ParallelOptions { MaxDegreeOfParallelism = ShokoRelay.GetMaxParallelism(), CancellationToken = ct },
+            DefaultParallelOptions(ct),
             async (folder, token) =>
             {
                 if (excluded.Contains(Path.GetFileName(folder)))
@@ -495,7 +496,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         {
             try
             {
-                int bufferSeconds = ShokoRelay.Settings.Advanced.PlexScanDelay;
+                int bufferSeconds = Settings.Advanced.PlexScanDelay;
                 if (bufferSeconds > 0)
                     await Task.Delay(TimeSpan.FromSeconds(bufferSeconds)).ConfigureAwait(false);
 

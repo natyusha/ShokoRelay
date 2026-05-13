@@ -10,6 +10,8 @@ using Shoko.Abstractions.Video.Services;
 using ShokoRelay.AnimeThemes;
 using ShokoRelay.Config;
 using ShokoRelay.Plex;
+using ShokoRelay.Services;
+using ShokoRelay.Sync;
 using ShokoRelay.Vfs;
 
 namespace ShokoRelay;
@@ -47,17 +49,17 @@ public class ServiceRegistration : IPluginServiceRegistration
         serviceCollection.AddSingleton<PlexMetadata>();
         serviceCollection.AddSingleton<VfsBuilder>();
         serviceCollection.AddSingleton<VfsWatcher>();
-        serviceCollection.AddSingleton<Services.ICollectionService, Services.CollectionService>();
-        serviceCollection.AddSingleton<Services.ICriticRatingService, Services.CriticRatingService>();
-        serviceCollection.AddSingleton<Services.ShokoImportService>();
-        serviceCollection.AddSingleton<Services.SourceLinkService>();
+        serviceCollection.AddSingleton<ICollectionService, CollectionService>();
+        serviceCollection.AddSingleton<ICriticRatingService, CriticRatingService>();
+        serviceCollection.AddSingleton<ShokoImportService>();
+        serviceCollection.AddSingleton<SourceLinkService>();
         serviceCollection.AddSingleton(provider =>
         {
             var cp = provider.GetRequiredService<ConfigProvider>();
-            return new Services.FfmpegService(cp.PluginDirectory, applicationPaths.ApplicationPath, applicationPaths.DataPath);
+            return new FfmpegService(cp.PluginDirectory, applicationPaths.ApplicationPath, applicationPaths.DataPath);
         });
-        serviceCollection.AddSingleton<Sync.SyncToShoko>();
-        serviceCollection.AddSingleton<Sync.SyncToPlex>();
+        serviceCollection.AddSingleton<SyncToShoko>();
+        serviceCollection.AddSingleton<SyncToPlex>();
         serviceCollection.AddSingleton<IManagedFolderIgnoreRule, VfsIgnoreRule>();
         serviceCollection.AddSingleton(provider =>
         {
@@ -113,18 +115,20 @@ public class ShokoRelay : BackgroundService
 
     private readonly VfsWatcher _watcher;
     private readonly ISystemService _systemService;
-    private readonly Sync.SyncToShoko? _watchedSyncService;
-    private readonly Services.ShokoImportService? _shokoImportService;
-    private readonly Services.ICollectionService? _collectionService;
-    private readonly Services.ICriticRatingService? _criticRatingService;
+    private readonly SyncToShoko? _watchedSyncService;
+    private readonly ShokoImportService? _shokoImportService;
+    private readonly ICollectionService? _collectionService;
+    private readonly ICriticRatingService? _criticRatingService;
     private readonly IMetadataService _metadataService;
 
     private static DateTime? s_lastImportRunUtc;
     private static DateTime? s_lastPlexAutomationUtc;
     private static DateTime? s_lastSyncWatchedUtc;
 
-    /// <summary>Returns the effective degree of parallelism clamped to at least 1 without appearing in the config file.</summary>
-    public static int GetMaxParallelism() => Math.Max(1, Settings.Advanced.Parallelism);
+    /// <summary>Generates ParallelOptions pre-configured with the maximum degree of parallelism (clamped to at least 1) and an optional cancellation token.</summary>
+    /// <param name="token">Optional cancellation token.</param>
+    /// <returns>A configured ParallelOptions instance.</returns>
+    public static ParallelOptions DefaultParallelOptions(CancellationToken token = default) => new() { MaxDegreeOfParallelism = Math.Max(1, Settings.Advanced.Parallelism), CancellationToken = token };
 
     /// <summary>Initializes the Relay hosted service.</summary>
     /// <param name="watcher">VFS filesystem event watcher.</param>
@@ -144,10 +148,10 @@ public class ShokoRelay : BackgroundService
         IMetadataService metadataService,
         IHttpContextAccessor httpContextAccessor,
         IVideoService videoService,
-        Sync.SyncToShoko? watchedSyncService = null,
-        Services.ShokoImportService? shokoImportService = null,
-        Services.ICollectionService? collectionService = null,
-        Services.ICriticRatingService? criticRatingService = null
+        SyncToShoko? watchedSyncService = null,
+        ShokoImportService? shokoImportService = null,
+        ICollectionService? collectionService = null,
+        ICriticRatingService? criticRatingService = null
     )
     {
         s_configProvider = configProvider;

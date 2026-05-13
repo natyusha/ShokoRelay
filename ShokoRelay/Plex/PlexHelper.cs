@@ -5,6 +5,7 @@ using Shoko.Abstractions.Metadata.Enums;
 using Shoko.Abstractions.Metadata.Services;
 using Shoko.Abstractions.Metadata.Shoko;
 using ShokoRelay.Helpers;
+using ShokoRelay.Vfs;
 
 namespace ShokoRelay.Plex;
 
@@ -61,7 +62,7 @@ public static class PlexHelper
         if (roots.Count == 0)
             return null;
 
-        string postersFolderName = Vfs.VfsShared.ResolveCollectionPostersFolderName();
+        string postersFolderName = VfsShared.ResolveCollectionPostersFolderName();
         foreach (var root in roots)
         {
             string postersPath = Path.Combine(root, postersFolderName);
@@ -97,7 +98,7 @@ public static class PlexHelper
         if (roots.Count == 0)
             return null;
 
-        string postersFolderName = Vfs.VfsShared.ResolveCollectionPostersFolderName();
+        string postersFolderName = VfsShared.ResolveCollectionPostersFolderName();
         foreach (var root in roots)
         {
             string postersPath = Path.Combine(root, postersFolderName);
@@ -137,7 +138,7 @@ public static class PlexHelper
     /// <returns>Unique set of root paths.</returns>
     public static HashSet<string> ResolveImportRoots(IShokoSeries series, IMetadataService metadataService)
     {
-        var roots = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+        var roots = new HashSet<string>(VfsShared.PathComparer);
         var seriesList = new List<IShokoSeries> { series };
         if (ShokoRelay.Settings.TmdbEpNumbering)
             seriesList.AddRange(OverrideHelper.GetGroup(OverrideHelper.GetPrimary(series.ID, metadataService), metadataService).Skip(1).Select(metadataService.GetShokoSeriesByID).OfType<IShokoSeries>());
@@ -145,7 +146,7 @@ public static class PlexHelper
         foreach (var mapping in MapHelper.GetSeriesFileData(s, metadataService).Mappings)
         {
             var location = mapping.Video.Files.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l.Path)) ?? mapping.Video.Files.FirstOrDefault();
-            if (location != null && Vfs.VfsShared.ResolveImportRootPath(location) is string importRoot)
+            if (location != null && VfsShared.ResolveImportRootPath(location) is string importRoot)
                 roots.Add(importRoot);
         }
         return roots;

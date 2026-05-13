@@ -5,7 +5,9 @@ using Shoko.Abstractions.User.Services;
 using ShokoRelay.Config;
 using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
+using ShokoRelay.Services;
 using ShokoRelay.Vfs;
+using static ShokoRelay.ShokoRelay;
 
 namespace ShokoRelay.Controllers;
 
@@ -18,8 +20,8 @@ public class PlexController(
     IMetadataService metadataService,
     PlexClient plexLibrary,
     PlexAuth plexAuth,
-    Services.ICollectionService collectionService,
-    Services.ICriticRatingService criticRatingService,
+    ICollectionService collectionService,
+    ICriticRatingService criticRatingService,
     IUserService userService,
     IUserDataService userDataService
 ) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
@@ -27,8 +29,8 @@ public class PlexController(
     #region Fields
 
     private readonly PlexAuth _plexAuth = plexAuth;
-    private readonly Services.ICollectionService _collectionService = collectionService;
-    private readonly Services.ICriticRatingService _criticRatingService = criticRatingService;
+    private readonly ICollectionService _collectionService = collectionService;
+    private readonly ICriticRatingService _criticRatingService = criticRatingService;
     private readonly IUserService _userService = userService;
     private readonly IUserDataService _userDataService = userDataService;
 
@@ -197,28 +199,15 @@ public class PlexController(
     /// <param name="filter">Optional comma-separated list of Shoko or AniDB IDs.</param>
     /// <returns>A collection build report.</returns>
     [HttpGet("plex/collections/build")]
-    public async Task<IActionResult> BuildPlexCollections([FromQuery] string? filter = null)
-    {
-        var guard = ValidatePlexFilterRequest(filter, out var seriesList, out _);
-        if (guard != null)
-            return guard;
-
-        const string TaskName = ShokoRelayConstants.TaskPlexCollectionsBuild;
-        TaskHelper.StartTask(TaskName);
-        try
-        {
-            var r = await _collectionService.BuildCollectionsAsync(seriesList, CancellationToken.None).ConfigureAwait(false);
-            var actionResult = LogAndReturn(ShokoRelayConstants.LogCollections, r, LogHelper.BuildCollectionsReport);
-            TaskHelper.CompleteTask(TaskName, (actionResult as OkObjectResult)?.Value!);
-            return actionResult;
-        }
-        catch (Exception ex)
-        {
-            var err = new { status = "error", message = ex.Message };
-            TaskHelper.CompleteTask(TaskName, err);
-            return BadRequest(new RelayResponse<object>(Status: "error", Message: ex.Message));
-        }
-    }
+    public Task<IActionResult> BuildPlexCollections([FromQuery] string? filter = null) =>
+        ValidatePlexFilterRequest(filter, out var seriesList, out _) is { } guard
+            ? Task.FromResult(guard)
+            : ExecuteTrackedTaskAsync(
+                ShokoRelayConstants.TaskPlexCollectionsBuild,
+                ShokoRelayConstants.LogCollections,
+                LogHelper.BuildCollectionsReport,
+                () => _collectionService.BuildCollectionsAsync(seriesList, CancellationToken.None)
+            );
 
     /// <summary>Refreshes posters for Plex collections.</summary>
     /// <param name="filter">Optional comma-separated list of Shoko or AniDB IDs.</param>
@@ -253,29 +242,15 @@ public class PlexController(
     /// <param name="filter">Optional comma-separated list of Shoko or AniDB IDs.</param>
     /// <returns>A ratings update report.</returns>
     [HttpGet("plex/ratings/apply")]
-    public async Task<IActionResult> ApplyAudienceRatings([FromQuery] string? filter = null)
-    {
-        var guard = ValidatePlexFilterRequest(filter, out var seriesList, out _);
-        if (guard != null)
-            return guard;
-
-        const string TaskName = ShokoRelayConstants.TaskPlexRatingsApply;
-        TaskHelper.StartTask(TaskName);
-        try
-        {
-            var allowedIds = new HashSet<int>(seriesList.Select(s => s?.ID ?? 0));
-            var result = await _criticRatingService.ApplyRatingsAsync(allowedIds, CancellationToken.None).ConfigureAwait(false);
-            var actionResult = LogAndReturn(ShokoRelayConstants.LogRatings, result, LogHelper.BuildRatingsReport);
-            TaskHelper.CompleteTask(TaskName, (actionResult as OkObjectResult)?.Value!);
-            return actionResult;
-        }
-        catch (Exception ex)
-        {
-            var err = new { status = "error", message = ex.Message };
-            TaskHelper.CompleteTask(TaskName, err);
-            return BadRequest(new RelayResponse<object>(Status: "error", Message: ex.Message));
-        }
-    }
+    public Task<IActionResult> ApplyAudienceRatings([FromQuery] string? filter = null) =>
+        ValidatePlexFilterRequest(filter, out var seriesList, out _) is { } guard
+            ? Task.FromResult(guard)
+            : ExecuteTrackedTaskAsync(
+                ShokoRelayConstants.TaskPlexRatingsApply,
+                ShokoRelayConstants.LogRatings,
+                LogHelper.BuildRatingsReport,
+                () => _criticRatingService.ApplyRatingsAsync(seriesList.Select(s => s?.ID ?? 0).OfType<int>(), CancellationToken.None)
+            );
 
     /// <summary>Triggers collection and rating automation back-to-back.</summary>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -294,7 +269,7 @@ public class PlexController(
             if (_criticRatingService != null)
                 await _criticRatingService.ApplyRatingsAsync(null, cancellationToken).ConfigureAwait(false);
 
-            ShokoRelay.MarkPlexAutomationRunNow();
+            MarkPlexAutomationRunNow();
             return Ok(new RelayResponse<object>());
         }
         catch (Exception ex)
@@ -312,7 +287,7 @@ public class PlexController(
     [HttpPost("plex/webhook")]
     public async Task<IActionResult> PluginPlexWebhook()
     {
-        if (!ShokoRelay.Settings.Automation.AutoScrobble)
+        if (!Settings.Automation.AutoScrobble)
             return Ok(new { status = "ignored", reason = "auto_scrobble_disabled" });
 
         var evt = await ExtractPlexWebhookPayloadAsync().ConfigureAwait(false);
@@ -322,10 +297,10 @@ public class PlexController(
         bool isScrobble = string.Equals(evt.Event, "media.scrobble", StringComparison.OrdinalIgnoreCase);
         bool isRate = string.Equals(evt.Event, "media.rate", StringComparison.OrdinalIgnoreCase);
 
-        if (!(isScrobble || (isRate && ShokoRelay.Settings.Automation.ShokoSyncWatchedIncludeRatings)))
+        if (!(isScrobble || (isRate && Settings.Automation.ShokoSyncWatchedIncludeRatings)))
             return Ok(new { status = "ignored", reason = "unsupported_event_type" });
 
-        var (allowed, reason) = await ValidateWebhookSource(evt, ShokoRelay.Settings, HttpContext.RequestAborted);
+        var (allowed, reason) = await ValidateWebhookSource(evt, Settings, HttpContext.RequestAborted);
         if (!allowed)
         {
             Logger.Info("Plex: Webhook ignored -> {Reason} | User: {User} | Event: {Event}", reason, evt.Account?.Title, evt.Event);

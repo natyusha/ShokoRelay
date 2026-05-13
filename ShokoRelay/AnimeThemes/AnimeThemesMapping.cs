@@ -112,7 +112,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
             int errors = 0;
             await Parallel.ForEachAsync(
                 toProcess,
-                new ParallelOptions { MaxDegreeOfParallelism = ShokoRelay.GetMaxParallelism(), CancellationToken = ct },
+                ShokoRelay.DefaultParallelOptions(ct),
                 async (item, token) =>
                 {
                     try
@@ -238,7 +238,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
 
             Parallel.ForEach(
                 folderGroups,
-                new ParallelOptions { MaxDegreeOfParallelism = ShokoRelay.GetMaxParallelism(), CancellationToken = ct },
+                ShokoRelay.DefaultParallelOptions(ct),
                 folderGroup =>
                 {
                     ct.ThrowIfCancellationRequested();

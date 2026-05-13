@@ -4,8 +4,10 @@ using Shoko.Abstractions.Metadata.Shoko;
 using ShokoRelay.Config;
 using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
+using ShokoRelay.Services;
 using ShokoRelay.Sync;
 using ShokoRelay.Vfs;
+using static ShokoRelay.ShokoRelay;
 
 namespace ShokoRelay.Controllers;
 
@@ -18,19 +20,19 @@ public class ShokoController(
     IMetadataService metadataService,
     PlexClient plexLibrary,
     VfsBuilder vfsBuilder,
-    Services.ShokoImportService shokoImportService,
+    ShokoImportService shokoImportService,
     SyncToShoko watchedSyncService,
     SyncToPlex syncToPlexService,
-    Services.SourceLinkService sourceLinkService
+    SourceLinkService sourceLinkService
 ) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
 {
     #region Fields
 
     private readonly VfsBuilder _vfsBuilder = vfsBuilder;
-    private readonly Services.ShokoImportService _shokoImportService = shokoImportService;
+    private readonly ShokoImportService _shokoImportService = shokoImportService;
     private readonly SyncToShoko _watchedSyncService = watchedSyncService;
     private readonly SyncToPlex _syncToPlexService = syncToPlexService;
-    private readonly Services.SourceLinkService _sourceLinkService = sourceLinkService;
+    private readonly SourceLinkService _sourceLinkService = sourceLinkService;
 
     #endregion
 
@@ -42,38 +44,21 @@ public class ShokoController(
     /// <param name="filter">Optional list of series IDs.</param>
     /// <returns>A summary of the build outcome.</returns>
     [HttpGet("vfs")]
-    public IActionResult BuildVfs([FromQuery] bool clean = true, [FromQuery] bool run = false, [FromQuery] string? filter = null)
-    {
-        var validation = ValidateFilterOrBadRequest(filter, out var filterIds);
-        if (validation != null)
-            return validation;
-
-        if (!run)
-            return Ok(new RelayResponse<object>(Status: "skipped", Message: "Set run=true to build the VFS"));
-
-        const string TaskName = ShokoRelayConstants.TaskVfsBuild;
-        TaskHelper.StartTask(TaskName);
-        try
-        {
-            var result = filterIds.Count > 0 ? _vfsBuilder.Build(filterIds, clean) : _vfsBuilder.Build((int?)null, clean);
-
-            if (PlexLibrary.IsEnabled && ShokoRelay.Settings.Automation.ScanOnVfsRefresh && filterIds.Count > 0)
+    public Task<IActionResult> BuildVfs([FromQuery] bool clean = true, [FromQuery] bool run = false, [FromQuery] string? filter = null) =>
+        ValidateFilterOrBadRequest(filter, out var filterIds) is { } guard ? Task.FromResult(guard)
+        : !run ? Task.FromResult<IActionResult>(Ok(new RelayResponse<object>(Status: "skipped", Message: "Set run=true to build the VFS")))
+        : ExecuteTrackedTaskAsync(
+            ShokoRelayConstants.TaskVfsBuild,
+            ShokoRelayConstants.LogVfs,
+            LogHelper.BuildVfsReport,
+            () =>
             {
-                var toProcess = ResolveSeriesList(null, filterIds).Where(s => s != null).Cast<IShokoSeries>().ToList();
-                _ = SchedulePlexRefreshForSeriesAsync(toProcess);
+                var result = filterIds.Count > 0 ? _vfsBuilder.Build(filterIds, clean) : _vfsBuilder.Build((int?)null, clean);
+                if (PlexLibrary.IsEnabled && Settings.Automation.ScanOnVfsRefresh && filterIds.Count > 0)
+                    _ = SchedulePlexRefreshForSeriesAsync(ResolveSeriesList(null, filterIds).Where(s => s != null).Cast<IShokoSeries>());
+                return Task.FromResult(result);
             }
-
-            var actionResult = LogAndReturn(ShokoRelayConstants.LogVfs, result, LogHelper.BuildVfsReport);
-            TaskHelper.CompleteTask(TaskName, (actionResult as OkObjectResult)?.Value!);
-            return actionResult;
-        }
-        catch (Exception ex)
-        {
-            var err = new { status = "error", message = ex.Message };
-            TaskHelper.CompleteTask(TaskName, err);
-            return BadRequest(new RelayResponse<object>(Status: "error", Message: ex.Message));
-        }
-    }
+        );
 
     /// <summary>Updates the local VFS overrides CSV file.</summary>
     /// <param name="content">Raw CSV text.</param>
@@ -84,7 +69,7 @@ public class ShokoController(
         try
         {
             Logger.Info("Shoko: Updating VFS overrides file...");
-            string path = Path.Combine(ShokoRelay.ConfigDirectory, ShokoRelayConstants.FileVfsOverrides);
+            string path = Path.Combine(ConfigDirectory, ShokoRelayConstants.FileVfsOverrides);
             System.IO.File.WriteAllText(path, content ?? string.Empty);
             OverrideHelper.Reload(); // Force the override cache to refresh with the new data
             return Ok(new RelayResponse<object>());
@@ -151,8 +136,8 @@ public class ShokoController(
     public async Task<IActionResult> StartShokoImportNow()
     {
         var scanned = await _shokoImportService.TriggerImportAsync().ConfigureAwait(false);
-        ShokoRelay.MarkImportRunNow();
-        var freqHours = ShokoRelay.Settings.Automation.ShokoImportFrequencyHours;
+        MarkImportRunNow();
+        var freqHours = Settings.Automation.ShokoImportFrequencyHours;
         return Ok(
             new RelayResponse<object>(
                 Data: new
@@ -193,9 +178,9 @@ public class ShokoController(
         if (!PlexLibrary.IsEnabled)
             return BadRequest(new RelayResponse<object>(Status: "error", Message: "Plex configuration missing."));
 
-        bool includeRatings = ratings ?? ShokoRelay.Settings.Automation.ShokoSyncWatchedIncludeRatings;
+        bool includeRatings = ratings ?? Settings.Automation.ShokoSyncWatchedIncludeRatings;
         string direction = import ? "Plex<-Shoko" : "Plex->Shoko";
-        SyncUserType userType = users ?? ShokoRelay.Settings.Automation.ShokoSyncWatchedUserType;
+        SyncUserType userType = users ?? Settings.Automation.ShokoSyncWatchedUserType;
 
         try
         {
@@ -217,11 +202,11 @@ public class ShokoController(
     [HttpGet("sync-watched/start")]
     public async Task<IActionResult> StartWatchedSyncNow()
     {
-        int freqHours = ShokoRelay.Settings.Automation.ShokoSyncWatchedFrequencyHours;
+        int freqHours = Settings.Automation.ShokoSyncWatchedFrequencyHours;
         try
         {
             var result = await _watchedSyncService.SyncWatchedAsync(false, freqHours, cancellationToken: HttpContext.RequestAborted).ConfigureAwait(false);
-            ShokoRelay.MarkSyncRunNow();
+            MarkSyncRunNow();
             return Ok(
                 new RelayResponse<object>(
                     Data: new

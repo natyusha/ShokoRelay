@@ -5,6 +5,7 @@ using Shoko.Abstractions.Metadata.Shoko;
 using Shoko.Abstractions.Video;
 using ShokoRelay.Plex;
 using static ShokoRelay.Plex.PlexMapping;
+using static ShokoRelay.ShokoRelay;
 
 namespace ShokoRelay.Helpers;
 
@@ -55,7 +56,7 @@ public static class MapHelper
     /// <returns>Ordering ID or null.</returns>
     public static string? GetPreferredTmdbOrderingId(ISeries series)
     {
-        if (!ShokoRelay.Settings.TmdbEpNumbering)
+        if (!Settings.TmdbEpNumbering)
             return null;
         var tmdbShow = series.Episodes.OfType<IShokoEpisode>().FirstOrDefault()?.Series?.TmdbShows?.FirstOrDefault();
         string? pref = tmdbShow?.PreferredOrdering?.OrderingID;
@@ -181,9 +182,7 @@ public static class MapHelper
 
             // TMDB Episode metadata override for multi-part files
             object? tmdbEp =
-                (allowPt && ShokoRelay.Settings.TmdbEpNumbering && firstEp is IShokoEpisode se && se.TmdbEpisodes?.Any() == true)
-                    ? SelectPreferredTmdbOrdering(se.TmdbEpisodes, prefId).ElementAtOrDefault(fIdx)
-                    : null;
+                (allowPt && Settings.TmdbEpNumbering && firstEp is IShokoEpisode se && se.TmdbEpisodes?.Any() == true) ? SelectPreferredTmdbOrdering(se.TmdbEpisodes, prefId).ElementAtOrDefault(fIdx) : null;
             result.Add(new FileMapping(video, [.. deduped.Select(x => x.Episode)], firstEp, coords, fileName, allowPt ? fIdx + 1 : null, allowPt ? fCount : 1, tmdbEp, video.IsVariation));
         }
         // Deduplicate mappings by Video ID and Coordinates. This prevents duplicate VFS entries (v1/v2) for crossover series that have been consolidated into a single folder via VFS Overrides.
