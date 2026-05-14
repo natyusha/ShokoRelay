@@ -16,6 +16,7 @@
     <Title>Shoko Relay</Title>
     <Authors>natyusha</Authors>
     <VersionRegex>Version\s*=\s*"([^"]+)"</VersionRegex>
+    <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
     <ShokoRelayConstantsFile>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/ShokoRelayConstants.cs'))</ShokoRelayConstantsFile>
     <Version>$([System.Text.RegularExpressions.Regex]::Match($(ShokoRelayConstantsFile), $(VersionRegex)).Groups[1].Value)</Version>
 
@@ -29,9 +30,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Mvc.Versioning" Version="5.1.0" ExcludeAssets="runtime" />
-    <PackageReference Include="NLog" Version="6.1.1" ExcludeAssets="runtime" />
-    <PackageReference Include="Shoko.Abstractions" Version="6.0.0-alpha.19" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Versioning.ApiExplorer" Version="5.1.0" ExcludeAssets="runtime" />
+    <PackageReference Include="NLog" Version="6.1.2" ExcludeAssets="runtime" />
+    <PackageReference Include="Shoko.Abstractions" Version="6.0.0-alpha.20" ExcludeAssets="runtime" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
