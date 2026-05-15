@@ -183,8 +183,8 @@ public class ShokoRelay : BackgroundService
                 await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken);
             if (stoppingToken.IsCancellationRequested)
                 return;
-
-            s_logger.Info("Shoko Server started -> Initializing Relay scheduling anchors...");
+            s_logger.Info("Shoko Server started -> Caching overrides & initializing scheduling anchors...");
+            OverrideHelper.Reload(_metadataService); // Warm up the VFS override cache.
             var now = DateTime.UtcNow;
             int offset = Math.Clamp(Settings.Automation.UtcOffsetHours, -12, 14);
             if (Settings.Automation.ShokoImportFrequencyHours > 0)
