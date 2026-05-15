@@ -47,7 +47,7 @@ public static class ContentRatingHelper
         // 18 restricted => X (adult) immediately
         if (tagSet.Contains("18 restricted"))
             return ("X", true);
-        if (!ShokoRelay.Settings.AssumedContentRatings)
+        if (!Settings.AssumedContentRatings)
             return (null, false);
 
         // A rough approximation of: https://www.tvguidelines.org/resources/TheRatings.pdf

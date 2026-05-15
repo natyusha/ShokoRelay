@@ -3,8 +3,6 @@ using System.ComponentModel.DataAnnotations;
 using System.Reflection;
 using Microsoft.AspNetCore.Mvc;
 using Shoko.Abstractions.Metadata.Services;
-using ShokoRelay.Config;
-using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
 
 namespace ShokoRelay.Controllers;
@@ -69,7 +67,7 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
         var payload = ConfigProvider.GetDashboardConfig();
         try
         {
-            var path = Path.Combine(ShokoRelay.ConfigDirectory, ShokoRelayConstants.FileVfsOverrides);
+            var path = Path.Combine(ConfigDirectory, ShokoRelayConstants.FileVfsOverrides);
             string overrides = System.IO.File.Exists(path) ? System.IO.File.ReadAllText(path) : string.Empty;
             return Ok(new { payload, overrides });
         }

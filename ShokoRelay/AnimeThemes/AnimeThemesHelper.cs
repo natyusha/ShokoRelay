@@ -1,6 +1,5 @@
 using System.Collections.Frozen;
 using System.Text.RegularExpressions;
-using ShokoRelay.Helpers;
 using ShokoRelay.Vfs;
 
 namespace ShokoRelay.AnimeThemes;
@@ -292,7 +291,7 @@ internal static class AnimeThemesHelper
         else if (lookup.Overlap == "Over")
             attr.Add("OVER");
 
-        string attrStr = (ShokoRelay.Settings.Advanced.AnimeThemesAppendTags && attr.Count > 0) ? $" [{string.Join(", ", attr)}]" : "";
+        string attrStr = (Settings.Advanced.AnimeThemesAppendTags && attr.Count > 0) ? $" [{string.Join(", ", attr)}]" : "";
         return VfsHelper.CleanEpisodeTitleForFilename($"{overridePrefix}{nc}{slug}{ver}{title}{slugTag}{artistStr}{attrStr}{extension}");
     }
 

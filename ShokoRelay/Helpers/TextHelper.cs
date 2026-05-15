@@ -3,7 +3,6 @@ using System.Text.RegularExpressions;
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Shoko;
-using ShokoRelay.Config;
 
 namespace ShokoRelay.Helpers;
 
@@ -110,13 +109,13 @@ public static class TextHelper
     public static (string DisplayTitle, string SortTitle, string? OriginalTitle) ResolveFullSeriesTitles(ISeries series)
     {
         // Get Title according to the language preference
-        string raw = GetTitleByLanguage(series, ShokoRelay.Settings.SeriesTitleLanguage);
+        string raw = GetTitleByLanguage(series, Settings.SeriesTitleLanguage);
 
         // Move common title prefixes to the end of the title (e.g. OVA, Eiga)
-        string display = (ShokoRelay.Settings.MoveCommonSeriesTitlePrefixes && !string.IsNullOrWhiteSpace(raw)) ? s_seriesPrefixRegex.Replace(raw, "$2 — $1") : raw;
+        string display = (Settings.MoveCommonSeriesTitlePrefixes && !string.IsNullOrWhiteSpace(raw)) ? s_seriesPrefixRegex.Replace(raw, "$2 — $1") : raw;
 
         // Get Alternate Title according to the language preference
-        string? alt = GetTitleByLanguage(series, ShokoRelay.Settings.SeriesAltTitleLanguage);
+        string? alt = GetTitleByLanguage(series, Settings.SeriesAltTitleLanguage);
 
         // Duplicate check to avoid redundant metadata
         string? finalAlt = (string.IsNullOrEmpty(alt) || alt.Equals(raw, StringComparison.OrdinalIgnoreCase) || alt.Equals(display, StringComparison.OrdinalIgnoreCase)) ? null : alt;
@@ -133,7 +132,7 @@ public static class TextHelper
     /// <returns>The resolved episode title string.</returns>
     public static string ResolveEpisodeTitle(IEpisode ep, string displaySeriesTitle)
     {
-        string raw = GetTitleByLanguage(ep, ShokoRelay.Settings.EpisodeTitleLanguage);
+        string raw = GetTitleByLanguage(ep, Settings.EpisodeTitleLanguage);
         string? tmdbTitle = (ep as IShokoEpisode)?.TmdbEpisodes.FirstOrDefault()?.PreferredTitle?.Value;
 
         // Replace ambiguous single entry titles (like "OVA") with the series title
@@ -156,7 +155,7 @@ public static class TextHelper
         }
 
         // If TMDB episode group names enabled and multiple links exist, prefer TMDB titles
-        if (ShokoRelay.Settings.TmdbEpGroupNames && ep is IShokoEpisode { TmdbEpisodes.Count: > 1 } && !string.IsNullOrEmpty(tmdbTitle))
+        if (Settings.TmdbEpGroupNames && ep is IShokoEpisode { TmdbEpisodes.Count: > 1 } && !string.IsNullOrEmpty(tmdbTitle))
             return tmdbTitle;
 
         // Standard enumeration override (e.g. "Episode 1" -> "Actual Title")

@@ -45,7 +45,10 @@
     const rawCfg = configRes.data || {};
     const config = unwrapConfig(rawCfg);
     const overridesBtn = el("vfs-overrides");
-    if (overridesBtn) overridesBtn.disabled = !(getValueByPath(config, "TmdbEpNumbering") ?? getValueByPath(config, "Advanced.TmdbEpNumbering"));
+
+    /** Synchronizes the disabled state of the VFS Overrides button based on the current config state. */
+    const syncOverridesBtn = () => overridesBtn && (overridesBtn.disabled = !(getValueByPath(config, "TmdbEpNumbering") || getValueByPath(config, "Advanced.MergeTmdbSeries")));
+    syncOverridesBtn();
 
     el("config-form").innerHTML = "";
     if (el("overrides-text")) el("overrides-text").value = rawCfg.overrides || "";
@@ -70,8 +73,8 @@
         input = wrap.querySelector("input");
         bindConfig(input, p.Path, config, saveSettings, "check");
 
-        // UI Logic: Toggle dependent button states when TMDB Ep numbering changes
-        if (overridesBtn && (p.Path === "TmdbEpNumbering" || p.Path === "Advanced.TmdbEpNumbering")) input.addEventListener("change", (e) => (overridesBtn.disabled = !e.target.checked));
+        // Re-evaluate the overrides button state when either relevant setting is toggled.
+        if (overridesBtn && ["TmdbEpNumbering", "Advanced.MergeTmdbSeries"].includes(p.Path)) input.addEventListener("change", syncOverridesBtn);
       } else if (p.Path.endsWith("PathMappings")) {
         label.innerHTML = `<span>${p.Display || p.Path.split(".").pop()}</span>${p.Description ? `<small>${p.Description}</small>` : ""}`;
         wrap.appendChild(label);

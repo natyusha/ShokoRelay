@@ -2,8 +2,6 @@ using System.Diagnostics;
 using NLog;
 using Shoko.Abstractions.Metadata.Services;
 using Shoko.Abstractions.Video.Services;
-using ShokoRelay.Config;
-using ShokoRelay.Helpers;
 using ShokoRelay.Vfs;
 
 namespace ShokoRelay.AnimeThemes;
@@ -112,7 +110,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
             int errors = 0;
             await Parallel.ForEachAsync(
                 toProcess,
-                ShokoRelay.DefaultParallelOptions(ct),
+                DefaultParallelOptions(ct),
                 async (item, token) =>
                 {
                     try
@@ -238,7 +236,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
 
             Parallel.ForEach(
                 folderGroups,
-                ShokoRelay.DefaultParallelOptions(ct),
+                DefaultParallelOptions(ct),
                 folderGroup =>
                 {
                     ct.ThrowIfCancellationRequested();
@@ -248,7 +246,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                     var allAnidbIdsInFolder = folderGroup.Select(s => s!.AnidbAnimeID).Distinct().ToHashSet();
 
                     // Get all themes for all AniDB IDs associated with this VFS folder
-                    var matchedThemes = entries.Where(e => allAnidbIdsInFolder.Contains(e.AniDbId) && IsAllowed(e, ShokoRelay.Settings.Advanced.AnimeThemesOverlapLevel)).ToList();
+                    var matchedThemes = entries.Where(e => allAnidbIdsInFolder.Contains(e.AniDbId) && IsAllowed(e, Settings.Advanced.AnimeThemesOverlapLevel)).ToList();
 
                     if (!matchedThemes.Any())
                         return;
@@ -332,7 +330,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
 
                         // NC Filtering: If enabled, prefer versions without credits over those with credits
                         var finalSurvivors = sourceSurvivors;
-                        if (ShokoRelay.Settings.Advanced.AnimeThemesPreferNc && sourceSurvivors.Any(x => x!.Entry.NC))
+                        if (Settings.Advanced.AnimeThemesPreferNc && sourceSurvivors.Any(x => x!.Entry.NC))
                             finalSurvivors = [.. sourceSurvivors.Where(x => x!.Entry.NC)];
 
                         // De-duplicate survivors via numbering

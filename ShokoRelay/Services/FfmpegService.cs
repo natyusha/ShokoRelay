@@ -130,7 +130,7 @@ public sealed class FfmpegService
             bool ffprobeFound = false;
             string? locatedDir = null;
             var candidates = new List<string>();
-            string configured = ShokoRelay.Settings.Advanced.FFmpegPath;
+            string configured = Settings.Advanced.FFmpegPath;
             if (!string.IsNullOrWhiteSpace(configured))
             {
                 try

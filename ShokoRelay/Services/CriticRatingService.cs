@@ -2,8 +2,6 @@ using System.Globalization;
 using NLog;
 using Shoko.Abstractions.Metadata.Services;
 using Shoko.Abstractions.Metadata.Shoko;
-using ShokoRelay.Config;
-using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
 
 namespace ShokoRelay.Services;
@@ -160,7 +158,7 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
     private async Task<bool> ApplyRatingAsync(string key, double? val, PlexLibraryTarget target, CancellationToken ct)
     {
         string path =
-            (val == null || ShokoRelay.Settings.CriticRatingMode == CriticRatingMode.None)
+            (val == null || Settings.CriticRatingMode == CriticRatingMode.None)
                 ? $"/library/metadata/{key}?rating=0&rating.locked=0"
                 : $"/library/metadata/{key}?rating={val.Value.ToString(CultureInfo.InvariantCulture)}&rating.locked=1";
 
@@ -179,7 +177,7 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
     private static bool NeedsRatingUpdate(double? plex, double? shoko) => shoko.HasValue ? (!plex.HasValue || Math.Abs(plex.Value - shoko.Value) > 0.05) : (plex.HasValue && plex.Value > 0.05);
 
     private static double? ComputeSeriesRating(IShokoSeries s) =>
-        ShokoRelay.Settings.CriticRatingMode switch
+        Settings.CriticRatingMode switch
         {
             CriticRatingMode.TMDB => s.TmdbShows?.FirstOrDefault()?.Rating > 0 ? s.TmdbShows.First().Rating : null,
             CriticRatingMode.AniDB => s.Rating > 0 ? s.Rating : null,
@@ -187,7 +185,7 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
         };
 
     private static double? ComputeEpisodeRating(IShokoEpisode e) =>
-        ShokoRelay.Settings.CriticRatingMode switch
+        Settings.CriticRatingMode switch
         {
             CriticRatingMode.TMDB => e.TmdbEpisodes?.FirstOrDefault()?.Rating > 0 ? e.TmdbEpisodes.First().Rating : null,
             CriticRatingMode.AniDB => e.Rating > 0 ? e.Rating : null,

@@ -2,12 +2,9 @@ using Microsoft.AspNetCore.Mvc;
 using Shoko.Abstractions.Metadata.Services;
 using Shoko.Abstractions.User.Enums;
 using Shoko.Abstractions.User.Services;
-using ShokoRelay.Config;
-using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
 using ShokoRelay.Services;
 using ShokoRelay.Vfs;
-using static ShokoRelay.ShokoRelay;
 
 namespace ShokoRelay.Controllers;
 

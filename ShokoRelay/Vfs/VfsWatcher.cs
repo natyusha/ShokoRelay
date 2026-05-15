@@ -264,7 +264,7 @@ public class VfsWatcher(
 
         ScheduleDebouncedAction(
             series.ID,
-            ShokoRelay.Settings.Advanced.PlexScanDelay,
+            Settings.Advanced.PlexScanDelay,
             _pendingLibraryScans,
             async token =>
             {
@@ -283,8 +283,8 @@ public class VfsWatcher(
     /// <param name="series">The Shoko series being updated.</param>
     private void ScheduleMetadataFixup(IShokoSeries series)
     {
-        s_logger.Debug("VFS: Scheduling metadata fixup for '{0}' (ID: {1}) in {2} minute(s)", series.PreferredTitle?.Value, series.ID, ShokoRelay.Settings.Advanced.PlexFixupDelay);
-        ScheduleDebouncedAction(series.ID, ShokoRelay.Settings.Advanced.PlexFixupDelay * 60, _pendingMetadataFixups, token => RunMetadataFixupAsync(series, token));
+        s_logger.Debug("VFS: Scheduling metadata fixup for '{0}' (ID: {1}) in {2} minute(s)", series.PreferredTitle?.Value, series.ID, Settings.Advanced.PlexFixupDelay);
+        ScheduleDebouncedAction(series.ID, Settings.Advanced.PlexFixupDelay * 60, _pendingMetadataFixups, token => RunMetadataFixupAsync(series, token));
     }
 
     /// <summary>Worker task that performs the actual metadata fixup logic after the debounce delay has settled.</summary>
@@ -300,7 +300,7 @@ public class VfsWatcher(
             if (vfsResult.CreatedLinks > 0)
                 s_logger.Info("VFS: Re-generated links for '{0}' during fixup phase", series.PreferredTitle?.Value);
 
-            int bufferSeconds = ShokoRelay.Settings.Advanced.PlexScanDelay;
+            int bufferSeconds = Settings.Advanced.PlexScanDelay;
             if (bufferSeconds > 0)
                 await Task.Delay(TimeSpan.FromSeconds(bufferSeconds), token).ConfigureAwait(false);
 
@@ -337,7 +337,7 @@ public class VfsWatcher(
     /// <summary>Schedules or resets the timer for updating collections and posters in Plex for the given series.</summary>
     /// <param name="series">The Shoko series being updated.</param>
     private void ScheduleCollectionUpdate(IShokoSeries series) =>
-        ScheduleDebouncedAction(series.ID, ShokoRelay.Settings.Advanced.PlexFixupDelay * 60, _pendingCollectionUpdates, token => RunCollectionUpdateAsync(series, token));
+        ScheduleDebouncedAction(series.ID, Settings.Advanced.PlexFixupDelay * 60, _pendingCollectionUpdates, token => RunCollectionUpdateAsync(series, token));
 
     /// <summary>Worker task that performs the collection assignment and poster upload logic.</summary>
     /// <param name="series">The Shoko series to update.</param>
@@ -364,7 +364,7 @@ public class VfsWatcher(
                     if (!collectionId.HasValue)
                         continue;
 
-                    string? posterUrl = PlexHelper.GetCollectionPosterUrl(series, collectionName, collectionId.Value, _metadataService, ShokoRelay.Settings.CollectionPosters);
+                    string? posterUrl = PlexHelper.GetCollectionPosterUrl(series, collectionName, collectionId.Value, _metadataService, Settings.CollectionPosters);
                     if (!string.IsNullOrWhiteSpace(posterUrl))
                         await _plexCollections.UploadCollectionPosterByUrlAsync(collectionId.Value, posterUrl, target, token).ConfigureAwait(false);
                 }

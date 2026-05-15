@@ -1,6 +1,4 @@
 using NLog;
-using ShokoRelay.Config;
-using ShokoRelay.Helpers;
 
 namespace ShokoRelay.Plex;
 
@@ -22,7 +20,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
     public bool IsEnabled => !string.IsNullOrWhiteSpace(Token) && GetConfiguredTargets().Count > 0;
 
     /// <summary>Expose the configuration setting controlling automatic library scans.</summary>
-    public bool ScanOnVfsRefresh => ShokoRelay.Settings.Automation.ScanOnVfsRefresh;
+    public bool ScanOnVfsRefresh => Settings.Automation.ScanOnVfsRefresh;
 
     #endregion
 
@@ -244,12 +242,12 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
     /// <summary>Map a Shoko path to the Plex path using configured mappings.</summary>
     /// <param name="path">Input Shoko path.</param>
     /// <returns>The mapped Plex path.</returns>
-    public string MapShokoPathToPlexPath(string path) => MapPath(path, ShokoRelay.Settings.Advanced.PathMappings, true);
+    public string MapShokoPathToPlexPath(string path) => MapPath(path, Settings.Advanced.PathMappings, true);
 
     /// <summary>Reverse-map a Plex path back to Shoko.</summary>
     /// <param name="path">Input Plex path.</param>
     /// <returns>The original Shoko path.</returns>
-    public string MapPlexPathToShokoPath(string path) => MapPath(path, ShokoRelay.Settings.Advanced.PathMappings, false);
+    public string MapPlexPathToShokoPath(string path) => MapPath(path, Settings.Advanced.PathMappings, false);
 
     /// <summary>Internal core for mapping paths between Shoko and Plex.</summary>
     /// <param name="path">The input path.</param>

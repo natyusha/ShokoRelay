@@ -3,8 +3,6 @@ using Microsoft.AspNetCore.Mvc;
 using NLog;
 using Shoko.Abstractions.Metadata.Services;
 using Shoko.Abstractions.Metadata.Shoko;
-using ShokoRelay.Config;
-using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
 
 namespace ShokoRelay.Controllers;
@@ -146,7 +144,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
         if (errors.Count > 0)
             return BadRequest(new RelayResponse<object>(Status: "error", Message: "Invalid filter values.", Data: new { errors }));
 
-        if (ShokoRelay.Settings.TmdbEpNumbering)
+        if (EnforceTmdbNumbering)
             ids = [.. ids.Select(i => OverrideHelper.GetPrimary(i, MetadataService)).Distinct()];
         return null;
     }

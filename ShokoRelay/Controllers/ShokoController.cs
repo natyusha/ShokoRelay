@@ -1,13 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
 using Shoko.Abstractions.Metadata.Services;
 using Shoko.Abstractions.Metadata.Shoko;
-using ShokoRelay.Config;
-using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
 using ShokoRelay.Services;
 using ShokoRelay.Sync;
 using ShokoRelay.Vfs;
-using static ShokoRelay.ShokoRelay;
 
 namespace ShokoRelay.Controllers;
 
@@ -71,7 +68,7 @@ public class ShokoController(
             Logger.Info("Shoko: Updating VFS overrides file...");
             string path = Path.Combine(ConfigDirectory, ShokoRelayConstants.FileVfsOverrides);
             System.IO.File.WriteAllText(path, content ?? string.Empty);
-            OverrideHelper.Reload(); // Force the override cache to refresh with the new data
+            OverrideHelper.Reload(MetadataService); // Pass the service to trigger TMDB discovery
             return Ok(new RelayResponse<object>());
         }
         catch (Exception ex)

@@ -3,8 +3,6 @@ using NLog;
 using Shoko.Abstractions.Metadata.Services;
 using Shoko.Abstractions.Metadata.Shoko;
 using Shoko.Abstractions.Video;
-using ShokoRelay.Config;
-using ShokoRelay.Helpers;
 
 namespace ShokoRelay.Vfs;
 
@@ -66,7 +64,7 @@ internal static class VfsShared
     {
         var roots = new HashSet<string>(PathComparer);
         string rootName = ResolveRootFolderName();
-        int folderId = ShokoRelay.Settings.TmdbEpNumbering ? OverrideHelper.GetPrimary(series.ID, metadataService) : series.ID;
+        int folderId = EnforceTmdbNumbering ? OverrideHelper.GetPrimary(series.ID, metadataService) : series.ID;
 
         var fileData = MapHelper.GetSeriesFileData(series, metadataService);
         foreach (var mapping in fileData.Mappings)
@@ -104,13 +102,13 @@ internal static class VfsShared
     }
 
     /// <summary>Resolves the VFS root folder name.</summary>
-    public static string ResolveRootFolderName() => ResolveFolderName(ShokoRelay.Settings.Advanced.VfsRootPath, ShokoRelayConstants.FolderVfsDefault);
+    public static string ResolveRootFolderName() => ResolveFolderName(Settings.Advanced.VfsRootPath, ShokoRelayConstants.FolderVfsDefault);
 
     /// <summary>Resolves the anime themes folder name.</summary>
-    public static string ResolveAnimeThemesFolderName() => ResolveFolderName(ShokoRelay.Settings.Advanced.AnimeThemesRootPath, ShokoRelayConstants.FolderAnimeThemesDefault);
+    public static string ResolveAnimeThemesFolderName() => ResolveFolderName(Settings.Advanced.AnimeThemesRootPath, ShokoRelayConstants.FolderAnimeThemesDefault);
 
     /// <summary>Resolves the collection posters folder name.</summary>
-    public static string ResolveCollectionPostersFolderName() => ResolveFolderName(ShokoRelay.Settings.Advanced.CollectionPostersRootPath, ShokoRelayConstants.FolderCollectionPostersDefault);
+    public static string ResolveCollectionPostersFolderName() => ResolveFolderName(Settings.Advanced.CollectionPostersRootPath, ShokoRelayConstants.FolderCollectionPostersDefault);
 
     /// <summary>Assembles a unique set of folder names that should be ignored by VFS and Link operations based on current settings.</summary>
     /// <param name="settings">The current relay configuration.</param>
@@ -209,7 +207,7 @@ public class VfsIgnoreRule : IManagedFolderIgnoreRule
     public string Name => "Shoko Relay Ignore Rule";
 
     /// <inheritdoc/>
-    public bool ShouldIgnore(IManagedFolder folder, FileSystemInfo fileSystemInfo) => VfsShared.GetIgnoredFolderNames(ShokoRelay.Settings).Contains(fileSystemInfo.Name);
+    public bool ShouldIgnore(IManagedFolder folder, FileSystemInfo fileSystemInfo) => VfsShared.GetIgnoredFolderNames(Settings).Contains(fileSystemInfo.Name);
 }
 
 #endregion

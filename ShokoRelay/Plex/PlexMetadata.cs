@@ -4,7 +4,6 @@ using Shoko.Abstractions.Metadata.Enums;
 using Shoko.Abstractions.Metadata.Services;
 using Shoko.Abstractions.Metadata.Shoko;
 using Shoko.Abstractions.Metadata.Tmdb;
-using ShokoRelay.Helpers;
 using static ShokoRelay.Plex.PlexMapping;
 
 namespace ShokoRelay.Plex;
@@ -84,7 +83,7 @@ public class PlexMetadata(IMetadataService metadataService)
     {
         var cb = GetCacheBuster(series);
         var images = (IWithImages)series;
-        var description = TextHelper.GetDescriptionByLanguage(series, ShokoRelay.Settings.SeriesDescriptionLanguage);
+        var description = TextHelper.GetDescriptionByLanguage(series, Settings.SeriesDescriptionLanguage);
         var tmdbDescription = (series as IShokoSeries)?.TmdbShows?.FirstOrDefault()?.PreferredDescription?.Value;
         var studios = CastHelper.GetStudioTags(series);
         var (rating, isAdult) = ContentRatingHelper.GetContentRatingAndAdult(series);
@@ -104,14 +103,14 @@ public class PlexMetadata(IMetadataService metadataService)
             ["originalTitle"]         = titles.OriginalTitle,
             ["titleSort"]             = titles.SortTitle,
             ["year"]                  = series.AirDate?.Year,
-            ["summary"]               = TextHelper.SanitizeSummaryWithFallback(description, tmdbDescription, ShokoRelay.Settings.SummaryMode),
+            ["summary"]               = TextHelper.SanitizeSummaryWithFallback(description, tmdbDescription, Settings.SummaryMode),
             ["isAdult"]               = isAdult,
             ["duration"]              = series.Episodes.Any() ? (int)series.Episodes.Sum(e => e.Runtime.TotalMilliseconds) : (int?)null,
             //["tagline"]             = TMDB has this but it is not exposed
             ["studio"]                = studios.FirstOrDefault()?.Tag,
             ["theme"]                 = plexTheme,
 
-            ["Image"]                 = ImageHelper.GenerateImageArray(images, titles.DisplayTitle, ShokoRelay.Settings.AddEveryImage, cb),
+            ["Image"]                 = ImageHelper.GenerateImageArray(images, titles.DisplayTitle, Settings.AddEveryImage, cb),
             //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
             ["Genre"]                 = TagHelper.GetFilteredTags(series),
             ["Guid"]                  = BuildXrefGuidArray(series),
@@ -147,7 +146,7 @@ public class PlexMetadata(IMetadataService metadataService)
         foreach (var m in ctx.FileData.GetForSeason(seasonNum))
         {
             // TMDB Episode Groups: One Shoko episode maps to multiple TMDB entries.
-            if (ShokoRelay.Settings.TmdbEpNumbering && m.Episodes.Count == 1 && m.PrimaryEpisode is IShokoEpisode { TmdbEpisodes.Count: > 1 } se)
+            if (EnforceTmdbNumbering && m.Episodes.Count == 1 && m.PrimaryEpisode is IShokoEpisode { TmdbEpisodes.Count: > 1 } se)
             {
                 var tmdbEpisodes = SelectPreferredTmdbOrdering(se.TmdbEpisodes, prefId);
                 for (int i = 0; i < tmdbEpisodes.Count; i++)
@@ -215,13 +214,13 @@ public class PlexMetadata(IMetadataService metadataService)
         if (tmdbSeason != null)
         {
             seasonTitle = tmdbSeason.PreferredTitle?.Value ?? seasonTitle;
-            seasonSummary = TextHelper.SummarySanitizer(tmdbSeason.PreferredDescription?.Value, ShokoRelay.Settings.SummaryMode);
+            seasonSummary = TextHelper.SummarySanitizer(tmdbSeason.PreferredDescription?.Value, Settings.SummaryMode);
         }
 
         // Only apply TMDB season posters if there is more than one season present in the consolidated VFS. This accounts for extra seasons brought in via overrides.
         int totalSeasons = ctx.FileData.Seasons.Count(s => s >= 0);
         List<string>? posters =
-            (ShokoRelay.Settings.TmdbSeasonPosters && totalSeasons > 1 && tmdbSeason != null)
+            (Settings.TmdbSeasonPosters && totalSeasons > 1 && tmdbSeason != null)
                 ? [.. tmdbSeason.GetImages(ImageEntityType.Poster).OrderByDescending(i => i.IsPreferred).Select(i => ImageHelper.GetImageUrl(i, cacheBuster: cb))]
                 : null;
 
@@ -254,7 +253,7 @@ public class PlexMetadata(IMetadataService metadataService)
             ["index"]                 = seasonNum,
 
             // Force addEveryImage to true if TMDB season posters are present, otherwise fallback to the configuration. (Remove this once Shoko's WebUI supports selecting the preferred poster)
-            ["Image"]                 = ImageHelper.BuildCoverPosterArray(images, seasonTitle, posters != null || ShokoRelay.Settings.AddEveryImage, posters, cb).ToArray(),
+            ["Image"]                 = ImageHelper.BuildCoverPosterArray(images, seasonTitle, posters != null || Settings.AddEveryImage, posters, cb).ToArray(),
             ["Guid"]                  = BuildSeasonXrefGuidArray(tmdbSeason),
             //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
         };
@@ -286,7 +285,7 @@ public class PlexMetadata(IMetadataService metadataService)
         var images = (IWithImages)ep;
         var seriesImages = (IWithImages)series;
         string epTitle = TextHelper.ResolveEpisodeTitle(ep, titles.DisplayTitle);
-        string epDescription = TextHelper.GetDescriptionByLanguage(ep, ShokoRelay.Settings.EpisodeDescriptionLanguage);
+        string epDescription = TextHelper.GetDescriptionByLanguage(ep, Settings.EpisodeDescriptionLanguage);
 
         if (tmdbEpisode is not null)
         {
@@ -297,7 +296,7 @@ public class PlexMetadata(IMetadataService metadataService)
         }
 
         string? parentThumb = null;
-        if (ShokoRelay.Settings.TmdbSeasonPosters && mapped.Season >= 0 && string.IsNullOrEmpty(MapHelper.GetPreferredTmdbOrderingId(series)))
+        if (Settings.TmdbSeasonPosters && mapped.Season >= 0 && string.IsNullOrEmpty(MapHelper.GetPreferredTmdbOrderingId(series)))
         {
             var s = _metadataService.GetShokoSeriesByID(OverrideHelper.GetPrimary(series.ID, _metadataService));
             var seasonObj = s?.TmdbSeasons?.FirstOrDefault(ts => ts.SeasonNumber == mapped.Season);
@@ -313,13 +312,13 @@ public class PlexMetadata(IMetadataService metadataService)
             ["subtype"]               = (mapped.Season < 0 && TryGetExtraSeason(mapped.Season, out var ex)) ? ex.Subtype : null,
             ["title"]                 = epTitle,
             ["originallyAvailableAt"] = ep.AirDate?.ToString("yyyy-MM-dd"),
-            ["thumb"]                 = ShokoRelay.Settings.TmdbThumbnails && images.GetImages(ImageEntityType.Thumbnail).FirstOrDefault() is { } t ? ImageHelper.GetImageUrl(t, cacheBuster: cb) : null,
+            ["thumb"]                 = Settings.TmdbThumbnails && images.GetImages(ImageEntityType.Thumbnail).FirstOrDefault() is { } t ? ImageHelper.GetImageUrl(t, cacheBuster: cb) : null,
             //["art"]                 = No source for episode level background images
             ["contentRating"]         = ContentRatingHelper.GetContentRatingAndAdult(series).Rating,
             //["originalTitle"]       = No source for original episode titles
             ["titleSort"]             = epTitle,
             ["year"]                  = ep.AirDate?.Year,
-            ["summary"]               = TextHelper.SanitizeSummaryWithFallback(epDescription, (ep as IShokoEpisode)?.TmdbEpisodes?.FirstOrDefault()?.PreferredDescription?.Value, ShokoRelay.Settings.SummaryMode),
+            ["summary"]               = TextHelper.SanitizeSummaryWithFallback(epDescription, (ep as IShokoEpisode)?.TmdbEpisodes?.FirstOrDefault()?.PreferredDescription?.Value, Settings.SummaryMode),
             ["isAdult"]               = ContentRatingHelper.GetContentRatingAndAdult(series).IsAdult,
             ["duration"]              = (int)ep.Runtime.TotalMilliseconds,
 
@@ -341,7 +340,7 @@ public class PlexMetadata(IMetadataService metadataService)
             ["grandparentArt"]        = seriesImages.GetImages(ImageEntityType.Backdrop).FirstOrDefault() is { } ga ? ImageHelper.GetImageUrl(ga, cacheBuster: cb) : null,
             ["parentIndex"]           = mapped.Season,
 
-            ["Image"]                 = ShokoRelay.Settings.TmdbThumbnails ? [.. ImageHelper.GenerateImageArray(images, epTitle, ShokoRelay.Settings.AddEveryImage, cb).Where(img => img.Type == "snapshot")] : Array.Empty<ImageInfo>(),
+            ["Image"]                 = Settings.TmdbThumbnails ? [.. ImageHelper.GenerateImageArray(images, epTitle, Settings.AddEveryImage, cb).Where(img => img.Type == "snapshot")] : Array.Empty<ImageInfo>(),
             ["Guid"]                  = BuildEpisodeXrefGuidArray(ep, tmdbEpisode),
             //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
             //["Role"]                = CastHelper.GetCastAndCrew(ep), // Large array not used by Plex clients and present in grandparent series metadata

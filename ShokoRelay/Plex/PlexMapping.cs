@@ -56,7 +56,7 @@ public static class PlexMapping
         string? showPrefId = seriesPreferredOrderingId;
         PlexCoords result;
 
-        if (ShokoRelay.Settings.TmdbEpNumbering && e is IShokoEpisode shokoEpisode && shokoEpisode.TmdbEpisodes != null && shokoEpisode.TmdbEpisodes.Any())
+        if (EnforceTmdbNumbering && e is IShokoEpisode shokoEpisode && shokoEpisode.TmdbEpisodes != null && shokoEpisode.TmdbEpisodes.Any())
         {
             var tmdbEpisodes = string.IsNullOrWhiteSpace(showPrefId)
                 ? [.. shokoEpisode.TmdbEpisodes.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber)]
@@ -112,7 +112,7 @@ public static class PlexMapping
                 Episode = 1,
                 EndEpisode = null,
             };
-        if (ShokoRelay.Settings.TmdbEpNumbering && eps.Select(ep => ep.Type).Distinct().Count() == 1)
+        if (EnforceTmdbNumbering && eps.Select(ep => ep.Type).Distinct().Count() == 1)
         {
             var tmdbEntriesRaw = eps.OfType<IShokoEpisode>().Where(se => se.TmdbEpisodes != null && se.TmdbEpisodes.Any()).SelectMany(se => se.TmdbEpisodes).ToList();
             string? showPrefId = eps.OfType<IShokoEpisode>().Select(se => se.Series).FirstOrDefault()?.TmdbShows?.FirstOrDefault()?.PreferredOrdering?.OrderingID;

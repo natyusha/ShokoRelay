@@ -37,7 +37,7 @@ public static class ImageHelper
     /// <returns>A full URL string.</returns>
     public static string GetImageUrl(IImage image, string? imageTypeOverride = null, string? cacheBuster = null)
     {
-        var url = $"{ShokoRelay.ServerBaseUrl}/api/v3/Image/{image.Source}/{imageTypeOverride ?? image.ImageType.ToString()}/{image.ID}";
+        var url = $"{ServerBaseUrl}/api/v3/Image/{image.Source}/{imageTypeOverride ?? image.ImageType.ToString()}/{image.ID}";
         return string.IsNullOrEmpty(cacheBuster) ? url : $"{url}?t={cacheBuster}";
     }
 

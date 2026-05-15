@@ -37,6 +37,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Using Include="ShokoRelay.Config" />
+    <Using Include="ShokoRelay.Helpers" />
+    <Using Include="ShokoRelay.ShokoRelay" Static="true" />
+  </ItemGroup>
+
+  <ItemGroup>
     <EmbeddedResource Include="Assets\shoko-relay-thumbnail.png">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </EmbeddedResource>

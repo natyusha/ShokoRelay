@@ -8,7 +8,6 @@ using Shoko.Abstractions.Plugin;
 using Shoko.Abstractions.Video;
 using Shoko.Abstractions.Video.Services;
 using ShokoRelay.AnimeThemes;
-using ShokoRelay.Config;
 using ShokoRelay.Plex;
 using ShokoRelay.Services;
 using ShokoRelay.Sync;
@@ -129,6 +128,9 @@ public class ShokoRelay : BackgroundService
     /// <param name="token">Optional cancellation token.</param>
     /// <returns>A configured ParallelOptions instance.</returns>
     public static ParallelOptions DefaultParallelOptions(CancellationToken token = default) => new() { MaxDegreeOfParallelism = Math.Max(1, Settings.Advanced.Parallelism), CancellationToken = token };
+
+    /// <summary>Returns whether TMDB episode numbering should be used, forced to true if TMDB auto-merging is enabled.</summary>
+    public static bool EnforceTmdbNumbering => Settings.TmdbEpNumbering || Settings.Advanced.MergeTmdbSeries;
 
     /// <summary>Initializes the Relay hosted service.</summary>
     /// <param name="watcher">VFS filesystem event watcher.</param>

@@ -4,7 +4,6 @@ using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Enums;
 using Shoko.Abstractions.Metadata.Services;
 using Shoko.Abstractions.Metadata.Shoko;
-using ShokoRelay.Helpers;
 using ShokoRelay.Vfs;
 
 namespace ShokoRelay.Plex;
@@ -140,7 +139,7 @@ public static class PlexHelper
     {
         var roots = new HashSet<string>(VfsShared.PathComparer);
         var seriesList = new List<IShokoSeries> { series };
-        if (ShokoRelay.Settings.TmdbEpNumbering)
+        if (EnforceTmdbNumbering)
             seriesList.AddRange(OverrideHelper.GetGroup(OverrideHelper.GetPrimary(series.ID, metadataService), metadataService).Skip(1).Select(metadataService.GetShokoSeriesByID).OfType<IShokoSeries>());
         foreach (var s in seriesList)
         foreach (var mapping in MapHelper.GetSeriesFileData(s, metadataService).Mappings)
@@ -177,7 +176,7 @@ public static class PlexHelper
                 ticks = new FileInfo(posterPath).LastWriteTimeUtc.Ticks;
             }
             catch { }
-            string b = string.IsNullOrWhiteSpace(baseUrl) ? ShokoRelay.ServerBaseUrl : baseUrl?.TrimEnd('/') ?? string.Empty;
+            string b = string.IsNullOrWhiteSpace(baseUrl) ? ServerBaseUrl : baseUrl?.TrimEnd('/') ?? string.Empty;
             return $"{b}{ShokoRelayConstants.BasePath}/collections/user/{series.TopLevelGroupID}?t={ticks}";
         }
         if (allowPrimarySeriesFallback && metadataService != null)

@@ -5,7 +5,6 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using NLog;
 using Shoko.Abstractions.Plugin;
-using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
 using ShokoRelay.Vfs;
 

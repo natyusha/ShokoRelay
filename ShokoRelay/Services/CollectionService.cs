@@ -1,8 +1,6 @@
 using NLog;
 using Shoko.Abstractions.Metadata.Services;
 using Shoko.Abstractions.Metadata.Shoko;
-using ShokoRelay.Config;
-using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
 
 namespace ShokoRelay.Services;
@@ -238,7 +236,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
 
     private async Task<bool> TryApplyPoster(IShokoSeries series, string name, int cid, PlexLibraryTarget target, CancellationToken ct)
     {
-        string? url = PlexHelper.GetCollectionPosterUrl(series, name, cid, metadataService, ShokoRelay.Settings.CollectionPosters);
+        string? url = PlexHelper.GetCollectionPosterUrl(series, name, cid, metadataService, Settings.CollectionPosters);
         return !string.IsNullOrEmpty(url) && await plexCollections.UploadCollectionPosterByUrlAsync(cid, url, target, ct);
     }
 

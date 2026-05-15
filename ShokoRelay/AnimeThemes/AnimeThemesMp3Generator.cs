@@ -3,12 +3,9 @@ using Shoko.Abstractions.Metadata.Services;
 using Shoko.Abstractions.Metadata.Shoko;
 using Shoko.Abstractions.Video;
 using Shoko.Abstractions.Video.Services;
-using ShokoRelay.Config;
-using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
 using ShokoRelay.Services;
 using ShokoRelay.Vfs;
-using static ShokoRelay.ShokoRelay;
 
 namespace ShokoRelay.AnimeThemes;
 

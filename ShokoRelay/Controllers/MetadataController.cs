@@ -4,11 +4,8 @@ using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Enums;
 using Shoko.Abstractions.Metadata.Services;
 using Shoko.Abstractions.Metadata.Shoko;
-using ShokoRelay.Config;
-using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
 using static ShokoRelay.Plex.PlexMapping;
-using static ShokoRelay.ShokoRelay;
 
 namespace ShokoRelay.Controllers;
 
@@ -146,7 +143,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             // Handle Episode Groups (One Shoko ID mapped to multiple TMDB IDs)
             object? tmdbOverride = m.TmdbEpisode;
             var coords = m.Coords;
-            if (Settings.TmdbEpNumbering && episode.TmdbEpisodes?.Count > 1)
+            if (EnforceTmdbNumbering && episode.TmdbEpisodes?.Count > 1)
             {
                 // If Plex specifies an index (e.g. index=2), find the specific TMDB metadata for that position
                 if (int.TryParse(Request.Query["index"], out int reqIndex))

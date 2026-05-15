@@ -43,7 +43,7 @@ public static class CastHelper
                 .ToArray()
             ?? [];
 
-        if (!ShokoRelay.Settings.CrewListings)
+        if (!Settings.CrewListings)
             return cast;
 
         var crew =

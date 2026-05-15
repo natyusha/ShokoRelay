@@ -1,8 +1,6 @@
 using NLog;
 using Shoko.Abstractions.Metadata.Services;
 using Shoko.Abstractions.User.Services;
-using ShokoRelay.Config;
-using ShokoRelay.Helpers;
 using ShokoRelay.Plex;
 
 namespace ShokoRelay.Sync;
@@ -42,7 +40,7 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
     )
     {
         var result = new PlexWatchedSyncResult();
-        var auto = ShokoRelay.Settings.Automation;
+        var auto = Settings.Automation;
         var userType = userTypeOverride ?? auto.ShokoSyncWatchedUserType;
 
         if (userType == SyncUserType.None)

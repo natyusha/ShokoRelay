@@ -364,6 +364,11 @@ public class AdvancedConfig
     [DefaultValue("")]
     public string FolderExclusions { get; set; } = "";
 
+    /// <summary>Whether to automatically merge Shoko series that are linked to the same TMDB series.</summary>
+    [Display(Name = "Auto Merge TMDB Series", Description = "Enable to automatically merge Shoko series that share a TMDB series link. *requires a VFS rebuild to change")]
+    [DefaultValue(false)]
+    public bool MergeTmdbSeries { get; set; } = false;
+
     /// <summary>Whether to append metadata tags to AnimeThemes filenames.</summary>
     [Display(Name = "Append AnimeThemes Tags", Description = "Enable to append attributes like [SPOIL, SUBS] to AnimeThemes VFS filenames (extra names in Plex are the same)")]
     [DefaultValue(true)]
@@ -395,7 +400,7 @@ public class AdvancedConfig
     public string CollectionPostersRootPath { get; set; } = ShokoRelayConstants.FolderCollectionPostersDefault;
 
     /// <summary>Path to FFmpeg binaries.</summary>
-    [Display(Name = "FFmpeg Path", Description = "An optional folder containing FFmpeg/FFprobe. Leave empty to use the plugin root or PATH")]
+    [Display(Name = "FFmpeg Path", Description = "An optional folder for FFmpeg/FFprobe. Leave empty to use Utilities/FFmpeg, the plugin root or PATH")]
     [DefaultValue("")]
     public string FFmpegPath { get; set; } = "";
 
@@ -406,7 +411,7 @@ public class AdvancedConfig
     public int PlexFixupDelay { get; set; } = 2;
 
     /// <summary>Plex partial scan delay.</summary>
-    [Display(Name = "Plex Scan Delay", Description = "The delay (in seconds) after the VFS adds a file to trigger a partial library scan in Plex")]
+    [Display(Name = "Plex Scan Delay", Description = "The delay (in seconds) after the VFS adds a file to trigger a partial scan in Plex *req. 'Force Partial Scans'")]
     [Range(1, 60, ErrorMessage = "Plex Scan Delay must be between 1 and 60")]
     [DefaultValue(5)]
     public int PlexScanDelay { get; set; } = 5;

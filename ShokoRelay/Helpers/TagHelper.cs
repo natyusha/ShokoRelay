@@ -2,7 +2,6 @@ using System.Collections.Frozen;
 using System.Text.RegularExpressions;
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Anidb;
-using ShokoRelay.Config;
 
 namespace ShokoRelay.Helpers;
 
@@ -53,15 +52,15 @@ public static class TagHelper
         var shokoTags = shokoSeries?.Tags;
         if (shokoTags == null)
             return [];
-        var userBlacklist = ShokoRelay.Settings.TagBlacklist.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        var sourceSetting = ShokoRelay.Settings.TagSources;
+        var userBlacklist = Settings.TagBlacklist.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var sourceSetting = Settings.TagSources;
         var shokoNames = shokoTags.Select(t => t.Name).Where(n => !string.IsNullOrWhiteSpace(n)).Cast<string>();
 
         if (sourceSetting == TagSources.UserOnly)
             return [.. FilterAndFormat(shokoNames, userBlacklist)];
 
         IEnumerable<string> anidbNames = [];
-        int minWeight = (int)ShokoRelay.Settings.MinimumTagWeight;
+        int minWeight = (int)Settings.MinimumTagWeight;
         if ((sourceSetting == TagSources.Combined || sourceSetting == TagSources.AniDB) && shokoSeries?.AnidbAnime?.Tags is IReadOnlyList<IAnidbTagForAnime> anidbTags)
             anidbNames = anidbTags.Where(t => !string.IsNullOrWhiteSpace(t.Name) && (minWeight <= 0 || t.Weight >= minWeight)).Select(t => t.Name);
 
