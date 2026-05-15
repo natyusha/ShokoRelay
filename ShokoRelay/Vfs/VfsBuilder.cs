@@ -111,6 +111,9 @@ public class VfsBuilder
     /// <returns>A result object containing statistics and details for the log report.</returns>
     private VfsBuildResult BuildInternal(IReadOnlyCollection<int>? seriesIds, bool cleanRoot, bool pruneSeries, bool cleanOnly)
     {
+        // Refresh the override cache to catch any link changes made in Shoko since the last operation. This includes VFS Overrides and if MergeTmdbSeries is enabled auto merged TMDB series as well.
+        OverrideHelper.Reload(_metadataService);
+
         // Prevent multiple concurrent build/clean operations
         lock (GlobalBuildLock)
         {
