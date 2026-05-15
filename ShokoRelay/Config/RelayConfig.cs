@@ -193,11 +193,6 @@ public class RelayConfig
     [DefaultValue(true)]
     public bool PlexThemeMusic { get; set; } = true;
 
-    /// <summary>Whether to apply TMDB numbering to the VFS and metadata.</summary>
-    [Display(Name = "TMDB Episode Numbering", Description = "Enable to apply TMDB episode numbering to the provider and VFS *requires a VFS rebuild to change")]
-    [DefaultValue(true)]
-    public bool TmdbEpNumbering { get; set; } = true;
-
     /// <summary>Whether to prefer TMDB titles for grouped episodes.</summary>
     [Display(Name = "TMDB Episode Group Names", Description = "Enable to prefer TMDB titles for grouped episodes, which often fixes duped titles")]
     [DefaultValue(true)]
@@ -365,12 +360,17 @@ public class AdvancedConfig
     public string FolderExclusions { get; set; } = "";
 
     /// <summary>Whether to automatically merge Shoko series that are linked to the same TMDB series.</summary>
-    [Display(Name = "Auto Merge TMDB Series", Description = "Enable to automatically merge Shoko series that share a TMDB series link. *requires a VFS rebuild to change")]
+    [Display(Name = "Auto Merge TMDB Series", Description = "Enable to automatically merge Shoko series that share a TMDB series link. *requires a VFS rebuild")]
     [DefaultValue(false)]
     public bool MergeTmdbSeries { get; set; } = false;
 
+    /// <summary>Whether to apply TMDB numbering to the VFS and metadata.</summary>
+    [Display(Name = "TMDB Episode Numbering", Description = "Enable to apply TMDB episode numbering to the provider and VFS *requires a VFS rebuild")]
+    [DefaultValue(true)]
+    public bool TmdbEpNumbering { get; set; } = true;
+
     /// <summary>Whether to append metadata tags to AnimeThemes filenames.</summary>
-    [Display(Name = "Append AnimeThemes Tags", Description = "Enable to append attributes like [SPOIL, SUBS] to AnimeThemes VFS filenames (extra names in Plex are the same)")]
+    [Display(Name = "Append AnimeThemes Tags", Description = "Enable to append attributes like [SPOIL, SUBS] to AnimeThemes VFS filenames (displayed in Plex) *requires a VFS rebuild")]
     [DefaultValue(true)]
     public bool AnimeThemesAppendTags { get; set; } = true;
 

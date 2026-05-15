@@ -281,7 +281,7 @@ If you have a TMDB link for a given series in Shoko, it will have access to seve
 - Fallback for series/episode descriptions and titles (if AniDB is missing that information)
 - Background/backdrop/logo image support as well as additional main series poster options (if available)
 
-With `TMDB Episode Numbering` enabled in the Provider Settings the following will also be supported:
+With `TMDB Episode Numbering` enabled in the Advanced Provider Settings the following will also be supported:
 
 - Season support for long running anime including names, posters, titles and descriptions
 - Combining multiple Shoko series into a single Plex entry
@@ -307,7 +307,7 @@ This allows shows which are separated on AniDB but part of the same TMDB listing
 An example `anidb_vfs_overrides.csv` is available [here](https://gist.github.com/natyusha/a9ad00a5c16276cfbe2553346c745f1c).
 
 > [!TIP]
-> If you want all Shoko series which share a TMDB series link to be merged automatically this can be achieved by enabling "Auto Merge TMDB Series" in the dashboard's advanced provider settings. Modifying TMDB links in Shoko for a series will require the VFS to be regenerated for it.
+> If you want all Shoko series which share a TMDB series link to be merged automatically this can be achieved by enabling `Auto Merge TMDB Series` in the dashboard's Advanced Provider Settings. This will disable AniDB numbering automatically for the affected series. Modifying TMDB links in Shoko for a series will also require the VFS to be regenerated for it.
 
 ### Combining Episodes
 

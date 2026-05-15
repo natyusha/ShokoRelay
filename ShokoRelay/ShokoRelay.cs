@@ -130,7 +130,7 @@ public class ShokoRelay : BackgroundService
     public static ParallelOptions DefaultParallelOptions(CancellationToken token = default) => new() { MaxDegreeOfParallelism = Math.Max(1, Settings.Advanced.Parallelism), CancellationToken = token };
 
     /// <summary>Returns whether TMDB episode numbering should be used, forced to true if TMDB auto-merging is enabled.</summary>
-    public static bool EnforceTmdbNumbering => Settings.TmdbEpNumbering || Settings.Advanced.MergeTmdbSeries;
+    public static bool EnforceTmdbNumbering => Settings.Advanced.TmdbEpNumbering || Settings.Advanced.MergeTmdbSeries;
 
     /// <summary>Initializes the Relay hosted service.</summary>
     /// <param name="watcher">VFS filesystem event watcher.</param>
