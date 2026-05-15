@@ -3,6 +3,15 @@ using System.ComponentModel.DataAnnotations;
 
 namespace ShokoRelay.Config;
 
+#region Attributes
+
+/// <summary>Metadata attribute used to flag configuration properties that require a full VFS rebuild to take effect.</summary>
+[AttributeUsage(AttributeTargets.Property)]
+public class VfsRebuildAttribute : Attribute { }
+
+#endregion
+
+
 #region Enum Definitions
 
 /// <summary>Levels of sanitization to apply when transferring the series summary to Plex.</summary>
@@ -357,41 +366,49 @@ public class AdvancedConfig
     /// <summary>Folders to ignore when generating the VFS.</summary>
     [Display(Name = "Folder Exclusions", Description = "Folders within Shoko destinations which you do not want VFS generation to consider. One per line")]
     [DefaultValue("")]
+    [VfsRebuild]
     public string FolderExclusions { get; set; } = "";
 
     /// <summary>Whether to automatically merge Shoko series that are linked to the same TMDB series.</summary>
-    [Display(Name = "Auto Merge TMDB Series", Description = "Enable to automatically merge Shoko series that share a TMDB series link. *requires a VFS rebuild")]
+    [Display(Name = "Auto Merge TMDB Series", Description = "Enable to automatically merge Shoko series that share a TMDB series link")]
     [DefaultValue(false)]
+    [VfsRebuild]
     public bool MergeTmdbSeries { get; set; } = false;
 
     /// <summary>Whether to apply TMDB numbering to the VFS and metadata.</summary>
-    [Display(Name = "TMDB Episode Numbering", Description = "Enable to apply TMDB episode numbering to the provider and VFS *requires a VFS rebuild")]
+    [Display(Name = "TMDB Episode Numbering", Description = "Enable to apply TMDB episode numbering to the provider and VFS")]
     [DefaultValue(true)]
+    [VfsRebuild]
     public bool TmdbEpNumbering { get; set; } = true;
 
     /// <summary>Whether to append metadata tags to AnimeThemes filenames.</summary>
-    [Display(Name = "Append AnimeThemes Tags", Description = "Enable to append attributes like [SPOIL, SUBS] to AnimeThemes VFS filenames (displayed in Plex) *requires a VFS rebuild")]
+    [Display(Name = "Append AnimeThemes Tags", Description = "Enable to append attributes like [SPOIL, SUBS] to AnimeThemes VFS filenames (displayed in Plex)")]
     [DefaultValue(true)]
+    [VfsRebuild]
     public bool AnimeThemesAppendTags { get; set; } = true;
 
     /// <summary>Whether to include duplicate AnimeThemes entries when a version with no credits exists.</summary>
     [Display(Name = "Prefer NC AnimeThemes Entries", Description = "Enable to remove regular OP/ED entries if the exact same 'No Credits' version exists")]
     [DefaultValue(true)]
+    [VfsRebuild]
     public bool AnimeThemesPreferNc { get; set; } = true;
 
     /// <summary>Minimum overlap level for AnimeThemes.</summary>
     [Display(Name = "AnimeThemes Overlap Level", Description = "The amount of overlap allowed for AnimeThemes .webm files to be added to the VFS")]
     [DefaultValue(OverlapLevel.All)]
+    [VfsRebuild]
     public OverlapLevel AnimeThemesOverlapLevel { get; set; } = OverlapLevel.All;
 
     /// <summary>Folder name for the ShokoRelay VFS root.</summary>
     [Display(Name = "VFS Root Path", Description = "The location of the virtual links inside each import root")]
     [DefaultValue(ShokoRelayConstants.FolderVfsDefault)]
+    [VfsRebuild]
     public string VfsRootPath { get; set; } = ShokoRelayConstants.FolderVfsDefault;
 
     /// <summary>Folder name for downloaded themes.</summary>
     [Display(Name = "AnimeThemes Root Path", Description = "The location of AnimeThemes .webm files inside each import root")]
     [DefaultValue(ShokoRelayConstants.FolderAnimeThemesDefault)]
+    [VfsRebuild]
     public string AnimeThemesRootPath { get; set; } = ShokoRelayConstants.FolderAnimeThemesDefault;
 
     /// <summary>Folder name for custom collection posters.</summary>

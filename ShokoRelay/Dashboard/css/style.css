@@ -271,6 +271,16 @@ label > small::before {
   margin: 0 0.6rem;
   color: var(--highlight-color);
 }
+.vfs-rebuild label small::after {
+  display: inline-block;
+  vertical-align: -0.06em;
+  margin-left: 4px;
+  content: "⟳";
+  color: var(--warning-color);
+  font-weight: bold;
+  font-size: 1.4em;
+  line-height: 0;
+}
 /* #endregion */
 
 /* #region MARK: Tooltips

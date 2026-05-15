@@ -62,6 +62,7 @@
 
     schema.forEach((p) => {
       const wrap = document.createElement("div");
+      if (p.Rebuild) wrap.classList.add("vfs-rebuild");
       const label = document.createElement("label");
       const value = getValueByPath(config, p.Path);
       let input;

@@ -5,5 +5,6 @@ publish-linux/
 
 # VS Code
 *.code-workspace
+*.lscache
 .config/
 .vscode/

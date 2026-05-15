@@ -169,7 +169,8 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
     /// <param name="DefaultValue">The hardcoded default value.</param>
     /// <param name="EnumValues">Possible values for enums.</param>
     /// <param name="Advanced">Whether this is an advanced setting.</param>
-    private sealed record ConfigPropertySchema(string Path, string Type, string? Display, string? Description, object? DefaultValue, object? EnumValues, bool Advanced);
+    /// <param name="Rebuild">Whether the setting requires a VFS rebuild.</param>
+    private sealed record ConfigPropertySchema(string Path, string Type, string? Display, string? Description, object? DefaultValue, object? EnumValues, bool Advanced, bool Rebuild);
 
     private static List<ConfigPropertySchema> BuildConfigSchema(Type type, string prefix, bool isAdvancedBranch = false)
     {
@@ -183,6 +184,7 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
                 continue;
 
             bool isAdvanced = isAdvancedBranch || prop.Name == "Advanced";
+            bool needsRebuild = prop.GetCustomAttribute<VfsRebuildAttribute>() != null; // Detect the custom attribute
             string path = string.IsNullOrWhiteSpace(prefix) ? prop.Name : $"{prefix}.{prop.Name}";
             var display = prop.GetCustomAttribute<DisplayAttribute>();
             var defaultValue = prop.GetCustomAttribute<DefaultValueAttribute>()?.Value;
@@ -200,27 +202,27 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
                         return new { name = field?.GetCustomAttribute<DisplayAttribute>()?.Name ?? memberName, value = iv };
                     })
                     .ToArray();
-                props.Add(new ConfigPropertySchema(path, "enum", display?.Name, display?.Description, defaultValue, values, isAdvanced));
+                props.Add(new ConfigPropertySchema(path, "enum", display?.Name, display?.Description, defaultValue, values, isAdvanced, needsRebuild));
                 continue;
             }
             if (propType == typeof(bool))
             {
-                props.Add(new ConfigPropertySchema(path, "bool", display?.Name, display?.Description, defaultValue, null, isAdvanced));
+                props.Add(new ConfigPropertySchema(path, "bool", display?.Name, display?.Description, defaultValue, null, isAdvanced, needsRebuild));
                 continue;
             }
             if (propType == typeof(string))
             {
-                props.Add(new ConfigPropertySchema(path, "string", display?.Name, display?.Description, defaultValue, null, isAdvanced));
+                props.Add(new ConfigPropertySchema(path, "string", display?.Name, display?.Description, defaultValue, null, isAdvanced, needsRebuild));
                 continue;
             }
             if (propType.IsPrimitive || propType == typeof(decimal))
             {
-                props.Add(new ConfigPropertySchema(path, "number", display?.Name, display?.Description, defaultValue, null, isAdvanced));
+                props.Add(new ConfigPropertySchema(path, "number", display?.Name, display?.Description, defaultValue, null, isAdvanced, needsRebuild));
                 continue;
             }
             if (typeof(System.Collections.IDictionary).IsAssignableFrom(propType))
             {
-                props.Add(new ConfigPropertySchema(path, "json", display?.Name, display?.Description, defaultValue, null, isAdvanced));
+                props.Add(new ConfigPropertySchema(path, "json", display?.Name, display?.Description, defaultValue, null, isAdvanced, needsRebuild));
                 continue;
             }
             if (propType.IsClass && propType != typeof(string))
