@@ -46,9 +46,10 @@ public static class OverrideHelper
 
     private static void LoadInternal(IMetadataService? metadataService)
     {
-        s_groups.Clear();
+        // Use a local dictionary to build the groups, then perform an atomic swap to prevent race conditions where other threads see a cleared or partially-loaded static dictionary.
+        var newGroups = new Dictionary<int, List<int>>();
         string path = OverridesPath;
-        static void AddGroup(List<int> ids) => ids.ForEach(id => s_groups.TryAdd(id, ids)); // Helper to add a list of IDs to the group registry
+        void AddGroup(List<int> ids) => ids.ForEach(id => newGroups.TryAdd(id, ids)); // Helper to add a list of IDs to the group registry
 
         // Load Manual CSV Overrides (Priority)
         if (File.Exists(path))
@@ -94,12 +95,19 @@ public static class OverrideHelper
 
             foreach (var group in tmdbGroups)
             {
-                if (group.Any(x => s_groups.ContainsKey(x.AnidbAnimeID)))
+                if (group.Any(x => newGroups.ContainsKey(x.AnidbAnimeID)))
                     continue;
-
                 var ids = group.OrderBy(x => x.AirDate ?? DateTime.MaxValue).ThenBy(x => x.AnidbAnimeID).Select(x => x.AnidbAnimeID).ToList();
                 AddGroup(ids);
             }
+        }
+
+        // Atomic swap
+        lock (s_loadLock)
+        {
+            s_groups.Clear();
+            foreach (var kvp in newGroups)
+                s_groups.Add(kvp.Key, kvp.Value);
         }
     }
 

@@ -307,7 +307,7 @@ This allows shows which are separated on AniDB but part of the same TMDB listing
 An example `anidb_vfs_overrides.csv` is available [here](https://gist.github.com/natyusha/a9ad00a5c16276cfbe2553346c745f1c).
 
 > [!TIP]
-> If you want all Shoko series which share a TMDB series link to be merged automatically this can be achieved by enabling `Auto Merge TMDB Series` in the dashboard's Advanced Provider Settings. This will disable AniDB numbering automatically for the affected series. Modifying TMDB links in Shoko for a series will also require the VFS to be regenerated for it.
+> If you want all Shoko series which share a TMDB series link to be merged automatically this can be achieved by enabling `Advanced Settings > Auto Merge TMDB Series`. This will automatically disable AniDB numbering for the affected series regardless of the configured `TMDB Episode Numbering` setting.
 
 ### Combining Episodes
 

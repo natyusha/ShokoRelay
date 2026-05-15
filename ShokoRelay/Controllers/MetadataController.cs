@@ -139,26 +139,8 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             var (episode, partIdx, m) = TryResolveEpisodeContext(ctx, ratingKey);
             if (episode == null || m == null)
                 return NotFound();
-
-            // Handle Episode Groups (One Shoko ID mapped to multiple TMDB IDs)
             object? tmdbOverride = m.TmdbEpisode;
             var coords = m.Coords;
-            if (EnforceTmdbNumbering && episode.TmdbEpisodes?.Count > 1)
-            {
-                // If Plex specifies an index (e.g. index=2), find the specific TMDB metadata for that position
-                if (int.TryParse(Request.Query["index"], out int reqIndex))
-                {
-                    string? prefId = MapHelper.GetPreferredTmdbOrderingId(ctx.Series);
-                    var matchedTmdbEp = SelectPreferredTmdbOrdering(episode.TmdbEpisodes, prefId).FirstOrDefault(tmdbEp => GetOrderingCoords(tmdbEp, prefId).Episode == reqIndex);
-
-                    if (matchedTmdbEp != null)
-                    {
-                        var (sNum, epNum) = GetOrderingCoords(matchedTmdbEp, prefId);
-                        coords = new PlexCoords { Season = sNum ?? coords.Season, Episode = epNum };
-                        tmdbOverride = matchedTmdbEp;
-                    }
-                }
-            }
             return WrapInContainer(_mapper.MapEpisode(episode, coords, ctx.Series, ctx.Titles, partIdx, tmdbOverride));
         }
         if (ratingKey.Contains(PlexConstants.SeasonPrefix))
@@ -324,6 +306,17 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             return (null, partIdx, null);
         var mapping =
             ctx.FileData.Mappings.FirstOrDefault(x => x.Episodes.Any(e => e.ID == episode.ID) && x.PartIndex == partIdx) ?? ctx.FileData.Mappings.FirstOrDefault(x => x.Episodes.Any(e => e.ID == episode.ID));
+        if (mapping == null)
+            return (episode, partIdx, null);
+
+        // Handle Episode Groups (One Shoko ID mapped to multiple TMDB IDs)
+        if (EnforceTmdbNumbering && episode.TmdbEpisodes?.Count > 1 && int.TryParse(Request.Query["index"], out int reqIndex))
+        {
+            string? prefId = MapHelper.GetPreferredTmdbOrderingId(ctx.Series);
+            var matchedTmdbEp = SelectPreferredTmdbOrdering(episode.TmdbEpisodes, prefId).FirstOrDefault(te => GetOrderingCoords(te, prefId).Episode == reqIndex);
+            if (matchedTmdbEp != null)
+                mapping = mapping with { TmdbEpisode = matchedTmdbEp };
+        }
         return (episode, partIdx, mapping);
     }
 

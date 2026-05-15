@@ -417,7 +417,7 @@ public class AdvancedConfig
     public string CollectionPostersRootPath { get; set; } = ShokoRelayConstants.FolderCollectionPostersDefault;
 
     /// <summary>Path to FFmpeg binaries.</summary>
-    [Display(Name = "FFmpeg Path", Description = "An optional folder for FFmpeg/FFprobe. Leave empty to use Utilities/FFmpeg, the plugin root or PATH")]
+    [Display(Name = "FFmpeg Path", Description = "An optional folder for FFmpeg/FFprobe. Leave empty to use 'Utilities/FFmpeg', or the plugin root / PATH")]
     [DefaultValue("")]
     public string FFmpegPath { get; set; } = "";
 

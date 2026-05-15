@@ -41,6 +41,7 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
         CancellationToken cancellationToken = default
     )
     {
+        OverrideHelper.Reload(_metadataService);
         var result = new PlexWatchedSyncResult();
         var auto = Settings.Automation;
         var userType = userTypeOverride ?? auto.ShokoSyncWatchedUserType;

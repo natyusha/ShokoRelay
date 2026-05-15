@@ -271,15 +271,18 @@ label > small::before {
   margin: 0 0.6rem;
   color: var(--highlight-color);
 }
-.vfs-rebuild label small::after {
+.vfs-rebuild label small::after,
+.modal-body small strong {
   display: inline-block;
   vertical-align: -0.06em;
-  margin-left: 4px;
-  content: "⟳";
-  color: var(--warning-color);
-  font-weight: bold;
+  color: var(--highlight-color);
   font-size: 1.4em;
   line-height: 0;
+}
+.vfs-rebuild label small::after {
+  margin-left: 4px;
+  content: "⟳";
+  font-weight: bold;
 }
 /* #endregion */
 
