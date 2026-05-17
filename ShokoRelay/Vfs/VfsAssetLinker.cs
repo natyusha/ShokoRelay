@@ -88,7 +88,8 @@ public class VfsAssetLinker(IVideoService videoService)
     /// <param name="fileData">Mapping data for the current series.</param>
     /// <param name="vfsSeriesPath">The target VFS series root path.</param>
     /// <param name="videoBaseNames">A set of base names for indexed video files to prevent naming collisions.</param>
-    public void LinkLocalExtras(MapHelper.SeriesFileData fileData, string vfsSeriesPath, HashSet<string> videoBaseNames)
+    /// <param name="epPad">The episode number padding used for naming consistency.</param>
+    public void LinkLocalExtras(MapHelper.SeriesFileData fileData, string vfsSeriesPath, HashSet<string> videoBaseNames, int epPad)
     {
         var sourceDirs = fileData
             .Mappings.SelectMany(m => m.Video.Files)
@@ -98,7 +99,7 @@ public class VfsAssetLinker(IVideoService videoService)
             .ToList();
         foreach (var srcDir in sourceDirs)
         {
-            // A. Show and Season-Level Extras (Subdirectory pattern matching)
+            // Show and Season-Level Extras (Subdirectory pattern matching)
             foreach (var subDir in Directory.EnumerateDirectories(srcDir!))
             {
                 var match = TextHelper.MatchLocalExtraDir(Path.GetFileName(subDir));
@@ -107,8 +108,6 @@ public class VfsAssetLinker(IVideoService videoService)
 
                 string type = match.Groups[1].Value;
                 string seasonNum = match.Groups[3].Value;
-
-                // Ensure standard Plex casing for the VFS folder (e.g., "trailers" -> "Trailers")
                 string plexDirName = PlexConstants.LocalExtraDirs.First(d => string.Equals(d, type, StringComparison.OrdinalIgnoreCase));
 
                 string destDir = string.IsNullOrEmpty(seasonNum)
@@ -117,16 +116,20 @@ public class VfsAssetLinker(IVideoService videoService)
 
                 foreach (var file in Directory.EnumerateFiles(subDir).Where(f => AnimeThemesHelper.VideoFileExtensions.Contains(Path.GetExtension(f))))
                 {
-                    if (videoService.GetVideoFileByAbsolutePath(file) != null)
+                    if (videoService.GetVideoFileByAbsolutePath(file)?.Video?.CrossReferences?.Any(cr => cr.ShokoEpisode != null) == true)
                         continue;
                     Directory.CreateDirectory(destDir);
                     VfsShared.TryCreateLink(file, Path.Combine(destDir, Path.GetFileName(file)), s_logger);
                 }
             }
+
+            // Episode-Level Inline Extras
             foreach (var file in Directory.EnumerateFiles(srcDir!).Where(f => AnimeThemesHelper.VideoFileExtensions.Contains(Path.GetExtension(f))))
             {
                 string name = Path.GetFileNameWithoutExtension(file);
-                if (videoBaseNames.Contains(name) || videoService.GetVideoFileByAbsolutePath(file) != null)
+                if (videoBaseNames.Contains(name))
+                    continue;
+                if (videoService.GetVideoFileByAbsolutePath(file)?.Video?.CrossReferences?.Any(cr => cr.ShokoEpisode != null) == true)
                     continue;
                 string parentBase = PlexConstants.LocalExtraSuffixes.Select(s => name.Split(s)[0]).OrderByDescending(s => s.Length).FirstOrDefault(videoBaseNames.Contains) ?? string.Empty;
                 if (string.IsNullOrEmpty(parentBase))
@@ -134,7 +137,7 @@ public class VfsAssetLinker(IVideoService videoService)
                 foreach (var m in fileData.Mappings.Where(m => Path.GetFileNameWithoutExtension(m.FileName).Equals(parentBase, StringComparison.OrdinalIgnoreCase)))
                 {
                     string vfsSeasonDir = Path.Combine(vfsSeriesPath, VfsHelper.SanitizeName(PlexMapping.GetSeasonFolder(m.Coords.Season)));
-                    string vfsParentName = Path.GetFileNameWithoutExtension(VfsHelper.BuildStandardFileName(m, 2, "", m.Video.ID));
+                    string vfsParentName = Path.GetFileNameWithoutExtension(VfsHelper.BuildStandardFileName(m, epPad, "", m.Video.ID));
                     VfsShared.TryCreateLink(file, Path.Combine(vfsSeasonDir, vfsParentName + name[parentBase.Length..] + Path.GetExtension(file)), s_logger);
                 }
             }

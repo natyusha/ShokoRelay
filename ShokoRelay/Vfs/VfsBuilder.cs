@@ -456,7 +456,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         // Plex Local Extras: Run for every unique VFS series folder created across different roots for this series.
         if (Settings.Advanced.PlexLocalExtras)
             foreach (var seriesPath in resolvedVfsSeriesPaths)
-                _assetLinker.LinkLocalExtras(fileData, seriesPath, videoBaseNames);
+                _assetLinker.LinkLocalExtras(fileData, seriesPath, videoBaseNames, epPad); // Pass epPad
 
         return (created, skipped, skippedDetails, errors, planned);
     }
