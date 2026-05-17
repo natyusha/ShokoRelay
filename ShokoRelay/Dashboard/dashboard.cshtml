@@ -159,6 +159,7 @@
               data-relay-label="Remove Missing"
               data-relay-persist="true"
               data-relay-confirm="Are you sure you want to remove all records for missing files?<br><br><small>This will permanently remove them from Shoko's database and your AniDB MyList.</small>"
+              data-relay-confirm-dry="true"
               data-relay-confirm-button="Remove Files"
             >
               Remove Missing
@@ -319,6 +320,7 @@
         </div>
         <footer>
           <button id="confirm-cancel" class="cancel">Cancel</button>
+          <button id="confirm-dry" class="cancel">Dry Run</button>
           <button id="confirm-exec" class="danger">Confirm</button>
         </footer>
       </div>
@@ -377,6 +379,7 @@
         </div>
         <footer>
           <button id="sync-cancel-button" class="cancel">Cancel</button>
+          <button id="sync-dry-button" class="cancel">Dry Run</button>
           <button id="sync-start-button">Start Sync</button>
         </footer>
       </div>
@@ -430,7 +433,7 @@
               Path, AnimeThemes Root Path and Collection Posters Root Path are excluded by default. These exclusions are also registered with Shoko's video service as "Ignored Folders" which will not be scanned
               as media. To avoid cases where Shoko isn't scanning things you might want it to, ensure unique folder names are used here. Anything which matches Plex's
               <a href="https://support.plex.tv/articles/local-files-for-tv-show-trailers-and-extras/" title="Plex Articles">Local Files for TV Show Trailers and Extras</a>
-              will also be ignored unless the Plex Local Extras setting is disabled.
+              will also be ignored unless the "Plex Local Extras" setting is disabled.
             </small>
             <h4>VFS Rebuild Required</h4>
             <small>Any setting that includes a <strong>↻</strong> symbol requires a VFS rebuild to take effect. This is because they directly affect how the VFS is generated.</small>

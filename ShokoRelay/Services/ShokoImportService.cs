@@ -1,6 +1,7 @@
 using NLog;
 using Shoko.Abstractions.Video.Enums;
 using Shoko.Abstractions.Video.Services;
+using ShokoRelay.Vfs;
 
 namespace ShokoRelay.Services;
 
@@ -49,9 +50,9 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
 
     #region Housekeeping Logic
 
-    /// <summary>Scan for video file entries whose physical file has disappeared and optionally remove those records from the database and release info (MyList).</summary>
+    /// <summary>Scan for video file entries whose physical file has disappeared or is now in an ignored location, and optionally remove those records.</summary>
     /// <param name="dryRun">When <c>true</c>, list missing files without deleting them.</param>
-    /// <returns>A read-only list of paths for files that were identified as missing.</returns>
+    /// <returns>A read-only list of paths for files that were identified as missing or ignored.</returns>
     public async Task<IReadOnlyList<string>> RemoveMissingFilesAsync(bool dryRun = false)
     {
         const string TaskName = ShokoRelayConstants.TaskShokoRemoveMissing;
@@ -63,7 +64,8 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
         try
         {
             var all = _videoService.GetAllVideoFiles() ?? [];
-            var missing = all.Where(f => !File.Exists(f.Path)).Select(f => f.Path).ToHashSet();
+            // A file is considered "missing" if it doesn't exist on disk OR if its path is now blocked by Relay ignore rules.
+            var missing = all.Where(f => !File.Exists(f.Path) || VfsShared.IsPathIgnored(f.Path)).Select(f => f.Path).ToHashSet();
 
             if (!dryRun && missing.Count > 0)
             {

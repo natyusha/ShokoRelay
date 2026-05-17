@@ -378,9 +378,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
             }
 
             // Check if any segment of the source path is in the ignored folders set
-            var pathSegments = src.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries);
-            bool isIgnored = pathSegments.Any(seg => ignoredFolders.Contains(seg) || (Settings.Advanced.PlexLocalExtras && TextHelper.MatchLocalExtraDir(seg).Success));
-            if (isIgnored)
+            if (VfsShared.IsPathIgnored(src, ignoredFolders))
             {
                 skipped++;
                 skippedDetails.Add($"[Excluded Folder] {series.PreferredTitle?.Value} S{mapping.Coords.Season}E{mapping.Coords.Episode} - {mapping.FileName}");

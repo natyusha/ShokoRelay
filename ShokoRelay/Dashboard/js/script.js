@@ -438,27 +438,28 @@
     const target = e.target.closest("[data-relay-endpoint], [data-relay-action]");
     if (!target) return;
 
-    const action = async (btn) => {
-      const endpoint = btn.dataset.relayEndpoint,
-        actionKey = btn.dataset.relayAction;
-      const label = btn.dataset.relayLabel,
-        paramFnName = btn.dataset.relayParams;
-      const method = btn.dataset.relayMethod || "GET",
-        persistAttr = btn.dataset.relayPersist === "true";
+    const action = async (btn, forceDryRun = false) => {
+      let endpoint = btn.dataset.relayEndpoint;
+      const actionKey = btn.dataset.relayAction;
+      const label = btn.dataset.relayLabel;
+      const paramFnName = btn.dataset.relayParams;
+      const method = btn.dataset.relayMethod || "GET";
+      const persistAttr = btn.dataset.relayPersist === "true";
       const persistIfEmptySelector = btn.dataset.relayPersistIfEmpty;
 
       if (endpoint) {
+        if (forceDryRun) endpoint = endpoint.replace(/dryRun=false/i, "dryRun=true"); // If a dry run is forced by the modal button, swap any dryRun=false parameter to true
         let url = base + endpoint;
         if (paramFnName && typeof window._sr[paramFnName] === "function") {
           const ps = window._sr[paramFnName]();
           url += (url.includes("?") ? "&" : "?") + ps.toString();
         }
-        let hideOnSucceed = persistAttr ? 0 : TOAST_MS;
+        let hideOnSucceed = persistAttr || forceDryRun ? 0 : TOAST_MS;
         if (persistIfEmptySelector) {
           const input = document.querySelector(persistIfEmptySelector);
           if (input && !input.value.trim()) hideOnSucceed = 0;
         }
-        showToast(`${label}: Processing...`, "info", TOAST_MS);
+        showToast(`${label}${forceDryRun ? " (Dry Run)" : ""}: Processing...`, "info", TOAST_MS);
         const res = await fetchJson(url, { method });
         toastOperation(res, label, { hideOnSucceed });
       } else if (actionKey) {
@@ -470,16 +471,21 @@
     e.preventDefault();
     const confirmMsg = target.dataset.relayConfirm;
     if (confirmMsg) {
-      const modal = el("confirm-modal"),
-        msg = el("confirm-message"),
-        execBtn = el("confirm-exec");
+      const modal = el("confirm-modal");
+      const msg = el("confirm-message");
+      const execBtn = el("confirm-exec");
+      const dryBtn = el("confirm-dry");
       msg.innerHTML = confirmMsg;
       execBtn.textContent = target.dataset.relayConfirmButton || "Confirm";
       const close = openModal(modal);
       el("confirm-cancel").onclick = close;
       execBtn.onclick = () => {
         close();
-        runAction(target, action);
+        runAction(target, (btn) => action(btn, false));
+      };
+      dryBtn.onclick = () => {
+        close();
+        runAction(target, (btn) => action(btn, true));
       };
     } else {
       runAction(target, action);

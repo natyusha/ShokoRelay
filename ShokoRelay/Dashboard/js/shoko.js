@@ -79,10 +79,11 @@
   // Managed User and Admin Watched-State Synchronization Modal.
   if (el("shoko-sync-watched")) {
     el("shoko-sync-watched").onclick = () => {
-      const modal = el("sync-modal"),
-        startBtn = el("sync-start-button"),
-        dirToggle = el("sync-direction-toggle"),
-        dirArrow = el("sync-direction-arrow");
+      const modal = el("sync-modal");
+      const startBtn = el("sync-start-button");
+      const dryBtn = el("sync-dry-button");
+      const dirToggle = el("sync-direction-toggle");
+      const dirArrow = el("sync-direction-arrow");
 
       /** @type {boolean} dirImport - true if syncing Plex to Shoko, false for Shoko to Plex. */
       let dirImport = localStorage.getItem("shoko-sync-direction") === "import";
@@ -100,12 +101,18 @@
         updateDir();
         localStorage.setItem("shoko-sync-direction", dirImport ? "import" : "export");
       };
-      startBtn.onclick = async () => {
-        setButtonLoading(startBtn, true);
-        const startToast = showToast(`Sync: Plex ${dirImport ? "←" : "→"} Shoko...`, "info", 0);
+
+      /**
+       * Orchestrates the watched state synchronization request.
+       * @param {boolean} isDryRun - Whether to perform a dry run preview.
+       */
+      const performSync = async (isDryRun) => {
+        const targetBtn = isDryRun ? dryBtn : startBtn;
+        setButtonLoading(targetBtn, true);
+        const startToast = showToast(`Sync: Plex ${dirImport ? "←" : "→"} Shoko${isDryRun ? " (Dry Run)" : ""}...`, "info", 0);
 
         const ps = new URLSearchParams({
-          dryRun: "false",
+          dryRun: isDryRun,
           ratings: el("sync-ratings").checked,
         });
 
@@ -120,7 +127,7 @@
 
         const res = await fetchJson(`${base}/sync-watched?${ps}`);
         startToast?.remove();
-        setButtonLoading(startBtn, false);
+        setButtonLoading(targetBtn, false);
 
         if (res.ok) {
           const d = getData(res);
@@ -134,6 +141,9 @@
           toastOperation(res, "Sync", { hideOnSucceed: 0 });
         }
       };
+
+      startBtn.onclick = () => performSync(false);
+      dryBtn.onclick = () => performSync(true);
       el("sync-cancel-button").onclick = close;
     };
   }

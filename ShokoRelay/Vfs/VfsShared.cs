@@ -189,10 +189,14 @@ internal static class VfsShared
 
     #region Validate & Normalize
 
-    /// <summary>Normalizes directory separators.</summary>
+    /// <summary>Normalizes directory separators to the current platform's standard.</summary>
+    /// <param name="path">The filesystem path to normalize.</param>
+    /// <returns>A path string utilizing platform-specific directory separators.</returns>
     public static string NormalizeSeparators(string path) => path.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
 
-    /// <summary>Checks if a path is safe to delete.</summary>
+    /// <summary>Checks if a path is safe to delete by ensuring it is not a filesystem root.</summary>
+    /// <param name="path">The absolute path to evaluate.</param>
+    /// <returns><c>true</c> if the path is not a root directory and is safe for recursive deletion.</returns>
     public static bool IsSafeToDelete(string path)
     {
         if (string.IsNullOrWhiteSpace(path))
@@ -201,6 +205,26 @@ internal static class VfsShared
         var root = Path.GetPathRoot(full)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         return !string.Equals(full, root, StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>Determines if a directory or file name should be ignored based on current settings.</summary>
+    /// <param name="name">The name of the file or directory.</param>
+    /// <param name="isDirectory">True if checking a directory; false for a file.</param>
+    /// <param name="ignoredNames">Optional pre-computed set of ignored folder names for performance.</param>
+    /// <returns>True if the name matches a folder exclusion or an extra naming convention.</returns>
+    public static bool IsNameIgnored(string name, bool isDirectory, HashSet<string>? ignoredNames = null) =>
+        (ignoredNames ?? GetIgnoredFolderNames(Settings)).Contains(name)
+        || (Settings.Advanced.PlexLocalExtras && (TextHelper.MatchLocalExtraDir(name).Success || (!isDirectory && TextHelper.MatchLocalExtraFile(Path.GetFileNameWithoutExtension(name)).Success)));
+
+    /// <summary>Determines if any segment of a path or the file itself should be ignored based on current settings.</summary>
+    /// <param name="path">The absolute or relative path to evaluate.</param>
+    /// <param name="ignoredNames">Optional pre-computed set of ignored folder names for performance.</param>
+    /// <returns>True if any segment of the path or the filename matches an ignore rule.</returns>
+    public static bool IsPathIgnored(string path, HashSet<string>? ignoredNames = null) =>
+        !string.IsNullOrEmpty(path)
+        && (
+            path.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries).Any(seg => IsNameIgnored(seg, true, ignoredNames))
+            || IsNameIgnored(Path.GetFileName(path), false, ignoredNames)
+        );
 
     #endregion
 }
@@ -214,12 +238,7 @@ public class VfsIgnoreRule : IManagedFolderIgnoreRule
     public string Name => "Shoko Relay Ignore Rule";
 
     /// <inheritdoc/>
-    public bool ShouldIgnore(IManagedFolder folder, FileSystemInfo fileSystemInfo) =>
-        VfsShared.GetIgnoredFolderNames(Settings).Contains(fileSystemInfo.Name)
-        || (
-            Settings.Advanced.PlexLocalExtras
-            && (TextHelper.MatchLocalExtraDir(fileSystemInfo.Name).Success || (fileSystemInfo is FileInfo && TextHelper.MatchLocalExtraFile(Path.GetFileNameWithoutExtension(fileSystemInfo.Name)).Success))
-        );
+    public bool ShouldIgnore(IManagedFolder folder, FileSystemInfo fileSystemInfo) => VfsShared.IsNameIgnored(fileSystemInfo.Name, fileSystemInfo is DirectoryInfo);
 }
 
 #endregion

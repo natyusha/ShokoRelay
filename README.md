@@ -171,6 +171,7 @@ As a bonus this supports using the primary series poster as the collection poste
 
 - `Remove Missing` A button which will remove files that are no longer present from Shoko
   - Unlike the "Remove Missing Files" action in Shoko's WebUI this will remove all traces of the files from the Shoko DB
+  - This will also remove files that are in folders which the plugin has told Shoko to ignore
   - Entries will _always_ be removed from the AniDB MyList as well
 - `Import` A button which will make shoko rescan all "Source" type drop folders
 - `Sync` A button which opens a modal allowing for watched state syncing from Plex to Shoko or Shoko to Plex
@@ -226,7 +227,7 @@ You can mark any theme as a favourite by clicking the heart icon `❤` next to i
 
 ### Advanced Plex Metadata
 
-Shoko Relay has full support for all of Plex's features involving local metadata or sidecar files. This includes:
+Shoko Relay has full support for all of Plex's features which involve local metadata or sidecar files. This includes:
 
 - [Local Media Assets](https://support.plex.tv/articles/200220717-local-media-assets-tv-shows/)
   - Allows custom metadata to be added to Plex at either the series or episode level
