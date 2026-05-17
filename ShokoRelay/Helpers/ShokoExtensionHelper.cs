@@ -1,6 +1,5 @@
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Shoko;
-using ShokoRelay.Plex;
 
 namespace ShokoRelay.Helpers;
 

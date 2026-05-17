@@ -1,5 +1,4 @@
 using NLog;
-using ShokoRelay.Plex;
 
 namespace ShokoRelay.Sync;
 

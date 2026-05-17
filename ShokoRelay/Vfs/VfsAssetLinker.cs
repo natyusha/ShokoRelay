@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using NLog;
 using Shoko.Abstractions.Video.Services;
 using ShokoRelay.AnimeThemes;
-using ShokoRelay.Plex;
 
 namespace ShokoRelay.Vfs;
 
@@ -99,16 +98,27 @@ public class VfsAssetLinker(IVideoService videoService)
             .ToList();
         foreach (var srcDir in sourceDirs)
         {
-            foreach (var extraDir in PlexConstants.LocalExtraDirs)
+            // A. Show and Season-Level Extras (Subdirectory pattern matching)
+            foreach (var subDir in Directory.EnumerateDirectories(srcDir!))
             {
-                string srcPath = Path.Combine(srcDir!, extraDir);
-                if (!Directory.Exists(srcPath))
+                var match = TextHelper.MatchLocalExtraDir(Path.GetFileName(subDir));
+                if (!match.Success)
                     continue;
-                foreach (var file in Directory.EnumerateFiles(srcPath).Where(f => AnimeThemesHelper.VideoFileExtensions.Contains(Path.GetExtension(f))))
+
+                string type = match.Groups[1].Value;
+                string seasonNum = match.Groups[3].Value;
+
+                // Ensure standard Plex casing for the VFS folder (e.g., "trailers" -> "Trailers")
+                string plexDirName = PlexConstants.LocalExtraDirs.First(d => string.Equals(d, type, StringComparison.OrdinalIgnoreCase));
+
+                string destDir = string.IsNullOrEmpty(seasonNum)
+                    ? Path.Combine(vfsSeriesPath, plexDirName)
+                    : Path.Combine(vfsSeriesPath, VfsHelper.SanitizeName(PlexMapping.GetSeasonFolder(int.Parse(seasonNum))), plexDirName);
+
+                foreach (var file in Directory.EnumerateFiles(subDir).Where(f => AnimeThemesHelper.VideoFileExtensions.Contains(Path.GetExtension(f))))
                 {
                     if (videoService.GetVideoFileByAbsolutePath(file) != null)
                         continue;
-                    string destDir = Path.Combine(vfsSeriesPath, extraDir);
                     Directory.CreateDirectory(destDir);
                     VfsShared.TryCreateLink(file, Path.Combine(destDir, Path.GetFileName(file)), s_logger);
                 }

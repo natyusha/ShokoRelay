@@ -3,7 +3,6 @@ using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Services;
 using Shoko.Abstractions.Metadata.Shoko;
 using Shoko.Abstractions.Video;
-using ShokoRelay.Plex;
 using static ShokoRelay.Plex.PlexMapping;
 
 namespace ShokoRelay.Helpers;

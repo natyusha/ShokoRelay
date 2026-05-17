@@ -341,7 +341,7 @@
       };
   }
 
-  /** Initializes the custom tooltip system for elements with titles. */
+  /** Initializes the custom tooltip system and automatically configures external link behavior. */
   function initTooltips() {
     if (el("shoko-tooltip")) return;
     const tpl = document.createElement("div");
@@ -352,7 +352,7 @@
     tpl.innerHTML = '<div class="tooltip-arrow"></div><div class="rt-content"></div>';
     document.body.appendChild(tpl);
     const content = tpl.querySelector(".rt-content");
-    let showTimer, hideTimer;
+    let showTimer;
 
     const show = (target) => {
       const text = target.dataset.tooltipText || target.getAttribute("data-tooltip") || target.getAttribute("title");
@@ -388,7 +388,6 @@
 
     const hide = () => {
       clearTimeout(showTimer);
-      clearTimeout(hideTimer);
       tpl.classList.remove("tooltip-show");
       tpl.classList.add("tooltip-closing");
       tpl.setAttribute("aria-hidden", "true");
@@ -399,28 +398,38 @@
     document.addEventListener("mouseleave", hide);
 
     const attach = (t) => {
-      if (!t.title) return;
-      t.dataset.tooltipText = t.title;
-      t.removeAttribute("title");
-      if (t.dataset.tooltipAttached) return;
-      t.dataset.tooltipAttached = "true";
-      t.addEventListener("mouseenter", () => {
-        clearTimeout(hideTimer);
-        showTimer = setTimeout(() => {
-          if (t.matches(":hover")) show(t);
-        }, 100);
-      });
-      t.addEventListener("mouseleave", hide);
-      t.addEventListener("mousedown", hide);
+      // 1. Tooltip logic
+      if (t.title) {
+        t.dataset.tooltipText = t.title;
+        t.removeAttribute("title");
+        if (!t.dataset.tooltipAttached) {
+          t.dataset.tooltipAttached = "true";
+          t.addEventListener("mouseenter", () => {
+            showTimer = setTimeout(() => {
+              if (t.matches(":hover")) show(t);
+            }, 100);
+          });
+          t.addEventListener("mouseleave", hide);
+          t.addEventListener("mousedown", hide);
+        }
+      }
+      // 2. Automated link behavior: Force new tab and security headers for all links
+      if (t.tagName === "A" && t.hasAttribute("href")) {
+        const href = t.getAttribute("href");
+        if (href && !href.startsWith("#") && !href.startsWith("javascript:")) {
+          t.target = "_blank";
+          t.rel = "noopener noreferrer";
+        }
+      }
     };
 
-    document.querySelectorAll("[title]").forEach(attach);
+    document.querySelectorAll("[title], a[href]").forEach(attach);
     new MutationObserver((ms) => {
       ms.forEach((m) => {
-        m.addedNodes.forEach((n) => n.nodeType === 1 && (n.title ? attach(n) : n.querySelectorAll("[title]").forEach(attach)));
-        if (m.type === "attributes" && m.attributeName === "title" && m.target.title) attach(m.target);
+        m.addedNodes.forEach((n) => n.nodeType === 1 && attach(n) && n.querySelectorAll("[title], a[href]").forEach(attach));
+        if (m.type === "attributes" && (m.attributeName === "title" || m.attributeName === "href") && m.target.nodeType === 1) attach(m.target);
       });
-    }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["title"] });
+    }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["title", "href"] });
   }
   // #endregion
 

@@ -118,6 +118,13 @@ internal static class VfsShared
         var ignored = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ResolveRootFolderName(), ResolveAnimeThemesFolderName(), ResolveCollectionPostersFolderName() };
         foreach (var folder in settings.Advanced.FolderExclusions.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             ignored.Add(folder);
+
+        // If Plex Local Extras are enabled, automatically include the standard Plex extra subdirectories in the ignore list.
+        // This prevents Shoko from attempting to index these files, removing the need for manual user intervention for show and season-level extras.
+        if (settings.Advanced.PlexLocalExtras)
+            foreach (var extraDir in PlexConstants.LocalExtraDirs)
+                ignored.Add(extraDir);
+
         return ignored;
     }
 
@@ -207,7 +214,12 @@ public class VfsIgnoreRule : IManagedFolderIgnoreRule
     public string Name => "Shoko Relay Ignore Rule";
 
     /// <inheritdoc/>
-    public bool ShouldIgnore(IManagedFolder folder, FileSystemInfo fileSystemInfo) => VfsShared.GetIgnoredFolderNames(Settings).Contains(fileSystemInfo.Name);
+    public bool ShouldIgnore(IManagedFolder folder, FileSystemInfo fileSystemInfo) =>
+        VfsShared.GetIgnoredFolderNames(Settings).Contains(fileSystemInfo.Name)
+        || (
+            Settings.Advanced.PlexLocalExtras
+            && (TextHelper.MatchLocalExtraDir(fileSystemInfo.Name).Success || (fileSystemInfo is FileInfo && TextHelper.MatchLocalExtraFile(Path.GetFileNameWithoutExtension(fileSystemInfo.Name)).Success))
+        );
 }
 
 #endregion

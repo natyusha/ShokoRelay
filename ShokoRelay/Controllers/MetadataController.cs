@@ -4,7 +4,6 @@ using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Enums;
 using Shoko.Abstractions.Metadata.Services;
 using Shoko.Abstractions.Metadata.Shoko;
-using ShokoRelay.Plex;
 using static ShokoRelay.Plex.PlexMapping;
 
 namespace ShokoRelay.Controllers;

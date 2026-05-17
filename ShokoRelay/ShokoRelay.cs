@@ -8,7 +8,6 @@ using Shoko.Abstractions.Plugin;
 using Shoko.Abstractions.Video;
 using Shoko.Abstractions.Video.Services;
 using ShokoRelay.AnimeThemes;
-using ShokoRelay.Plex;
 using ShokoRelay.Services;
 using ShokoRelay.Sync;
 using ShokoRelay.Vfs;

@@ -230,11 +230,14 @@ Shoko Relay has full support for all of Plex's features involving local metadata
 
 - [Local Media Assets](https://support.plex.tv/articles/200220717-local-media-assets-tv-shows/)
   - Allows custom metadata to be added to Plex at either the series or episode level
-  - This is primarily for posters or other artwork but local Theme songs and subtitles are supported as well
+  - This is primarily for posters or other artwork but local theme songs and subtitles are supported as well
   - _Requires the `Plex Local Media` provider to be added to the Shoko Relay Agent in Plex_
 - [Local Files for Trailers and Extras](https://support.plex.tv/articles/local-files-for-tv-show-trailers-and-extras/)
-  - Allows custom extras to be added to Plex at either the series or episode level
-  - Since these are always video files they must not be managed by Shoko Server and should be marked "Ignore"
+  - Allows custom extras to be added to Plex at either the series, season or episode level
+  - If enabled, anything inside a folder matching Plex extras naming conventions or with the inline filename suffixes will be ignored by Shoko
+  - Season level extras are applied by adding a special suffix to the standard folder names (` S#`) which is not part of Plex's spec
+    - e.g. `Scenes S2` would place the extras in `###/Season 2/Scenes`
+  - If you don't use and/or want this feature you can disable it under `Advanced Settings > Plex Local Extras`
   - _Requires the `Plex Local Media` provider to be added to the Shoko Relay Agent in Plex_
 - [NFO Metadata Files](https://support.plex.tv/articles/using-nfo-metadata-files-with-plex/).
   - Allows overriding most metadata fields for series and episodes to whatever you want

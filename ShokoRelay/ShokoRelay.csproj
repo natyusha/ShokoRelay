@@ -39,6 +39,7 @@
   <ItemGroup>
     <Using Include="ShokoRelay.Config" />
     <Using Include="ShokoRelay.Helpers" />
+    <Using Include="ShokoRelay.Plex" />
     <Using Include="ShokoRelay.ShokoRelay" Static="true" />
   </ItemGroup>
 

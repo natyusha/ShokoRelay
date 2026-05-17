@@ -1,7 +1,6 @@
 using NLog;
 using Shoko.Abstractions.Metadata.Services;
 using Shoko.Abstractions.User.Services;
-using ShokoRelay.Plex;
 
 namespace ShokoRelay.Sync;
 

@@ -30,6 +30,8 @@ public static class TextHelper
     private static readonly Regex s_plexSplitTagRegex = new(@"(?ix)(?:^|[\s._-])(cd|disc|disk|dvd|part|pt)[\s._-]*([1-8])(?!\d)", RegexOptions.Compiled);
     private static readonly Regex s_numbersRegex = new(@"\d+", RegexOptions.Compiled);
     private static readonly Regex s_unicodeEscapeRegex = new(@"\\u([0-9a-fA-F]{4})", RegexOptions.Compiled);
+    private static readonly Regex s_localExtraDirRegex = new($@"^({string.Join("|", PlexConstants.LocalExtraDirs)})(\s+[sS](\d+))?$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex s_localExtraFileRegex = new($@"-(?:behindthescenes|deleted|featurette|interview|scene|short|trailer|other)\d*$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     #endregion
 
@@ -234,6 +236,16 @@ public static class TextHelper
     /// <param name="text">The string to parse.</param>
     /// <returns>The extracted integer, or null.</returns>
     public static int? ExtractSeriesId(string? text) => (text != null && s_numbersRegex.Match(text) is { Success: true } m && int.TryParse(m.Value, out var id)) ? id : null;
+
+    /// <summary>Identifies local extra directories with optional season suffixes.</summary>
+    /// <param name="name">The directory name to evaluate.</param>
+    /// <returns>A Match object containing the extra type and optional season number.</returns>
+    public static Match MatchLocalExtraDir(string name) => s_localExtraDirRegex.Match(name);
+
+    /// <summary>Identifies local extra files based on Plex naming suffixes (e.g., "-trailer").</summary>
+    /// <param name="fileNameWithoutExtension">The filename without its extension to evaluate.</param>
+    /// <returns>A Match object indicating success or failure.</returns>
+    public static Match MatchLocalExtraFile(string fileNameWithoutExtension) => s_localExtraFileRegex.Match(fileNameWithoutExtension);
 
     #endregion
 }

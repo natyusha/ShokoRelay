@@ -6,7 +6,6 @@ using Shoko.Abstractions.Metadata.Shoko;
 using Shoko.Abstractions.Video.Events;
 using Shoko.Abstractions.Video.Services;
 using ShokoRelay.AnimeThemes;
-using ShokoRelay.Plex;
 
 namespace ShokoRelay.Vfs;
 
