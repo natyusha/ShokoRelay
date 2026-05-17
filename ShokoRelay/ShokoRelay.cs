@@ -46,6 +46,7 @@ public class ServiceRegistration : IPluginServiceRegistration
         serviceCollection.AddSingleton<AnimeThemesMp3Generator>();
         serviceCollection.AddSingleton<AnimeThemesMapping>();
         serviceCollection.AddSingleton<PlexMetadata>();
+        serviceCollection.AddSingleton<VfsAssetLinker>();
         serviceCollection.AddSingleton<VfsBuilder>();
         serviceCollection.AddSingleton<VfsWatcher>();
         serviceCollection.AddSingleton<ICollectionService, CollectionService>();

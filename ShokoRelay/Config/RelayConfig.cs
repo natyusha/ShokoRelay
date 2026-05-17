@@ -381,6 +381,12 @@ public class AdvancedConfig
     [VfsRebuild]
     public bool TmdbEpNumbering { get; set; } = true;
 
+    /// <summary>Whether to apply Plex local extras to the VFS and metadata.</summary>
+    [Display(Name = "Plex Local Extras", Description = "Enable to apply Plex local extras to the VFS")]
+    [DefaultValue(true)]
+    [VfsRebuild]
+    public bool PlexLocalExtras { get; set; } = true;
+
     /// <summary>Whether to append metadata tags to AnimeThemes filenames.</summary>
     [Display(Name = "Append AnimeThemes Tags", Description = "Enable to append attributes like [SPOIL, SUBS] to AnimeThemes VFS filenames (displayed in Plex)")]
     [DefaultValue(true)]

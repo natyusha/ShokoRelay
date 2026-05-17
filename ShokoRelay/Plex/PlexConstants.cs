@@ -81,22 +81,11 @@ namespace ShokoRelay.Plex
         /// <summary>Optional subtype lists (for reference / validation).</summary>
         public static readonly string[] CollectionSubtypes = ["movie", "show", "artist", "album"];
 
-        /// <summary>Supported Plex extras subtypes.</summary>
-        public static readonly string[] ExtrasSubtypes =
-        [
-            "trailer",
-            "deletedScene",
-            "interview",
-            "musicVideo",
-            "behindTheScenes",
-            "sceneOrSample",
-            "liveMusicVideo",
-            "lyricMusicVideo",
-            "concert",
-            "featurette",
-            "short",
-            "other",
-        ];
+        /// <summary>Subfolder names recognized by Plex for show and season-level extras.</summary>
+        public static readonly string[] LocalExtraDirs = ["Behind The Scenes", "Deleted Scenes", "Featurettes", "Interviews", "Scenes", "Shorts", "Trailers", "Other"];
+
+        /// <summary>Filename suffixes recognized by Plex for episode-level inline extras.</summary>
+        public static readonly string[] LocalExtraSuffixes = ["-behindthescenes", "-deleted", "-featurette", "-interview", "-scene", "-short", "-trailer", "-other"];
 
         /// <summary>Extra buckets used only when no TMDB match is present.</summary>
         public static readonly IReadOnlyDictionary<int, (string Folder, string Subtype)> ExtraSeasons = new Dictionary<int, (string Folder, string Subtype)>

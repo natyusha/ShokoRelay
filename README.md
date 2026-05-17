@@ -224,6 +224,24 @@ You can mark any theme as a favourite by clicking the heart icon `❤` next to i
 
 ## Information
 
+### Advanced Plex Metadata
+
+Shoko Relay has full support for all of Plex's features involving local metadata or sidecar files. This includes:
+
+- [Local Media Assets](https://support.plex.tv/articles/200220717-local-media-assets-tv-shows/)
+  - Allows custom metadata to be added to Plex at either the series or episode level
+  - This is primarily for posters or other artwork but local Theme songs and subtitles are supported as well
+  - _Requires the `Plex Local Media` provider to be added to the Shoko Relay Agent in Plex_
+- [Local Files for Trailers and Extras](https://support.plex.tv/articles/local-files-for-tv-show-trailers-and-extras/)
+  - Allows custom extras to be added to Plex at either the series or episode level
+  - Since these are always video files they must not be managed by Shoko Server and should be marked "Ignore"
+  - _Requires the `Plex Local Media` provider to be added to the Shoko Relay Agent in Plex_
+- [NFO Metadata Files](https://support.plex.tv/articles/using-nfo-metadata-files-with-plex/).
+  - Allows overriding most metadata fields for series and episodes to whatever you want
+  - Relay treats `.nfo` files just like any other local metadata and will place them in the VFS accordingly
+  - _Requires the `Plex NFO Series` provider to be added to the Shoko Relay Agent in Plex_
+- Be sure to read each of the above Plex articles if you need help figuring out the format for any of the local metadata
+
 ### VFS Mapping
 
 > [!IMPORTANT]
@@ -232,7 +250,7 @@ You can mark any theme as a favourite by clicking the heart icon `❤` next to i
 When building the VFS files are placed into folders which are named according to their Shoko SeriesID. Within those folders they will be split into subfolders depending on the type of episode. For regular episodes or specials this means placement into a `Season #` or `Specials` folder. Files placed into those folders are named with the following pattern: `S##E##(-pt#)(-v#) [{ShokoFileID}]([{isVariation}]).ext` (the parts in parenthesis are conditional). Files with `-pt#` in their name will also have `[{ShokoFileID}]([{isVariation}])` stripped to fully follow the format described in [Combining Episodes](#combining-episodes). To avoid conflicts any file which is a crossover episode will not trigger local metadata/subtitle linking.\
 _The ShokoFileID is unused by Plex and is there purely to help users visualise the file mappings._
 
-Non standard episodes on the other hand, are placed into a local series level Extra folder. Due to Plex not having individual episode pages or metadata for files placed in said folders they will be named according to the episode name (with a prefix) `X# ❯ Title.ext`. More info on local extras is available [here](https://support.plex.tv/articles/local-files-for-tv-show-trailers-and-extras/) and the following table showcases the assignments.
+Non standard episodes on the other hand, are placed into a local series level Extra folder. Due to Plex not having individual episode pages or metadata for files placed in said folders they will be named according to the episode name (with a prefix) `X# ❯ Title.ext`. The following table showcases the assignments.
 
 | Prefix | Type    | Subfolder   |
 | :----- | :------ | :---------- |
@@ -312,10 +330,6 @@ An example `anidb_vfs_overrides.csv` is available [here](https://gist.github.com
 ### Combining Episodes
 
 Sometimes you may encounter a single episode which is split across multiple files. In order to ensure that all of the files are treated as a single entity you can follow Plex's [Naming Conventions](https://support.plex.tv/articles/naming-and-organizing-your-tv-show-files/#toc-6). The VFS will automatically respect this type of file naming in the background. For an ideal playback experience however, it is recommended to merge these types of files together.
-
-### Advanced Metadata Overrides
-
-Now that Plex has support for [NFO Metadata Files](https://support.plex.tv/articles/using-nfo-metadata-files-with-plex/) you can override most metadata fields for series and episodes to whatever you want. Relay treats `.nfo` files just like any other local metadata and will place them in the VFS accordingly. All you need to do is ensure that the `Plex NFO Series` provider is added to the Shoko Relay Agent in Plex.
 
 ### Assumed Content Ratings
 
