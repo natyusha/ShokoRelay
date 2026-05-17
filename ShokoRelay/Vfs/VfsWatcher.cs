@@ -5,6 +5,7 @@ using Shoko.Abstractions.Metadata.Services;
 using Shoko.Abstractions.Metadata.Shoko;
 using Shoko.Abstractions.Video.Events;
 using Shoko.Abstractions.Video.Services;
+using ShokoRelay.AnimeThemes;
 using ShokoRelay.Plex;
 
 namespace ShokoRelay.Vfs;
@@ -17,7 +18,8 @@ public class VfsWatcher(
     IMetadataService metadataService,
     PlexMetadata plexMetadata,
     PlexClient plexLibrary,
-    PlexCollections plexCollections
+    PlexCollections plexCollections,
+    AnimeThemesMapping atMapping
 )
 {
     #region Fields & Constructor
@@ -30,6 +32,7 @@ public class VfsWatcher(
     private readonly PlexMetadata _plexMetadata = plexMetadata;
     private readonly PlexClient _plexLibrary = plexLibrary;
     private readonly PlexCollections _plexCollections = plexCollections;
+    private readonly AnimeThemesMapping _atMapping = atMapping;
 
     private readonly ConcurrentDictionary<int, byte> _pending = new();
     private readonly ConcurrentDictionary<int, CancellationTokenSource> _pendingMetadataFixups = new();
@@ -159,6 +162,11 @@ public class VfsWatcher(
                 {
                     var sw = Stopwatch.StartNew();
                     var result = _builder.Build(seriesIds, cleanRoot: false, pruneSeries: true);
+
+                    // Restore AnimeThemes links for the affected series if a mapping file exists
+                    if (File.Exists(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileAtMapping)))
+                        await _atMapping.ApplyMappingAsync(seriesIds, CancellationToken.None).ConfigureAwait(false);
+
                     sw.Stop();
                     s_logger.Info(
                         "VFS: batch refreshed for {0} series in {1}ms -> created={2} planned={3} skipped={4} seriesProcessed={5} errors={6}",

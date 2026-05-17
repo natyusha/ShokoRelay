@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Shoko.Abstractions.Metadata.Services;
 using Shoko.Abstractions.Metadata.Shoko;
+using ShokoRelay.AnimeThemes;
 using ShokoRelay.Plex;
 using ShokoRelay.Services;
 using ShokoRelay.Sync;
@@ -20,7 +21,8 @@ public class ShokoController(
     ShokoImportService shokoImportService,
     SyncToShoko watchedSyncService,
     SyncToPlex syncToPlexService,
-    SourceLinkService sourceLinkService
+    SourceLinkService sourceLinkService,
+    AnimeThemesMapping atMapping
 ) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
 {
     #region Fields
@@ -30,6 +32,7 @@ public class ShokoController(
     private readonly SyncToShoko _watchedSyncService = watchedSyncService;
     private readonly SyncToPlex _syncToPlexService = syncToPlexService;
     private readonly SourceLinkService _sourceLinkService = sourceLinkService;
+    private readonly AnimeThemesMapping _atMapping = atMapping;
 
     #endregion
 
@@ -39,7 +42,7 @@ public class ShokoController(
     /// <param name="clean">Whether to clear the existing root.</param>
     /// <param name="run">Flag required to execute build.</param>
     /// <param name="filter">Optional list of series IDs.</param>
-    /// <returns>A summary of the build outcome.</returns>
+    /// <returns>A task representing the result of the build outcome.</returns>
     [HttpGet("vfs")]
     public Task<IActionResult> BuildVfs([FromQuery] bool clean = true, [FromQuery] bool run = false, [FromQuery] string? filter = null) =>
         ValidateFilterOrBadRequest(filter, out var filterIds) is { } guard ? Task.FromResult(guard)
@@ -48,12 +51,18 @@ public class ShokoController(
             ShokoRelayConstants.TaskVfsBuild,
             ShokoRelayConstants.LogVfs,
             LogHelper.BuildVfsReport,
-            () =>
+            async () =>
             {
                 var result = filterIds.Count > 0 ? _vfsBuilder.Build(filterIds, clean) : _vfsBuilder.Build((int?)null, clean);
+
+                // Restore AnimeThemes links after the VFS build (filtered or global) if a mapping file exists
+                if (System.IO.File.Exists(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileAtMapping)))
+                    await _atMapping.ApplyMappingAsync(filterIds.Count > 0 ? filterIds : null, CancellationToken.None).ConfigureAwait(false);
+
                 if (PlexLibrary.IsEnabled && Settings.Automation.ScanOnVfsRefresh && filterIds.Count > 0)
                     _ = SchedulePlexRefreshForSeriesAsync(ResolveSeriesList(null, filterIds).Where(s => s != null).Cast<IShokoSeries>());
-                return Task.FromResult(result);
+
+                return result;
             }
         );
 
