@@ -62,7 +62,8 @@ public class ShokoController(
                     _ = SchedulePlexRefreshForSeriesAsync(ResolveSeriesList(null, filterIds).Where(s => s != null).Cast<IShokoSeries>());
 
                 return result;
-            }
+            },
+            VfsShared.VfsLock
         );
 
     /// <summary>Updates the local VFS overrides CSV file.</summary>

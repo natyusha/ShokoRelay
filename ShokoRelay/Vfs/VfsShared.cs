@@ -6,10 +6,13 @@ using Shoko.Abstractions.Video;
 
 namespace ShokoRelay.Vfs;
 
-/// <summary>Shared logic for VFS operations including symlink creation.</summary>
+/// <summary>Shared logic for VFS operations including symlink creation and concurrency management.</summary>
 internal static class VfsShared
 {
     #region Constants & Props
+
+    /// <summary>Global semaphore used to prevent concurrent structural VFS operations (Builds, Mapping, and MP3 generation).</summary>
+    public static readonly SemaphoreSlim VfsLock = new(1, 1);
 
     /// <summary>OS-aware path comparer.</summary>
     public static StringComparer PathComparer => OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;

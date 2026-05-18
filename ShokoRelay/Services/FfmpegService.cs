@@ -112,7 +112,7 @@ public sealed class FfmpegService
             string ffmpegName = OperatingSystem.IsWindows() ? "ffmpeg.exe" : "ffmpeg";
             string ffprobeName = OperatingSystem.IsWindows() ? "ffprobe.exe" : "ffprobe";
 
-            // Verify if the current paths are still valid physically on disk. If the paths are just the filenames (e.g., "ffmpeg"), we assume they are on the system PATH and skip the File.Exists check.
+            // Verify if the current paths are still valid physically on disk. If the paths are just the filenames (e.g., "ffmpeg"), assume they are on the system PATH and skip the File.Exists check.
             bool ffmpegValid = s_ffmpegPath == ffmpegName || File.Exists(s_ffmpegPath);
             bool ffprobeValid = s_ffprobePath == ffprobeName || File.Exists(s_ffprobePath);
 

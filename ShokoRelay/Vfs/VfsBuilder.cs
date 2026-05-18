@@ -56,7 +56,6 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
     #region Fields
 
     private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
-    internal static readonly Lock GlobalBuildLock = new();
     private readonly IMetadataService _metadataService = metadataService;
     private readonly VfsAssetLinker _assetLinker = assetLinker;
 
@@ -109,8 +108,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         // Refresh the override cache to catch any link changes made in Shoko since the last operation. This includes VFS Overrides and if MergeTmdbSeries is enabled auto merged TMDB series as well.
         OverrideHelper.Reload(_metadataService);
 
-        // Prevent multiple concurrent build/clean operations
-        lock (GlobalBuildLock)
+        try
         {
             var (sw, created, skipped, seriesProcessed, planned) = (Stopwatch.StartNew(), 0, 0, 0, 0);
             var seriesDetailsBag = new ConcurrentBag<SeriesProcessDetails>();
@@ -277,6 +275,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                 sw.Elapsed
             );
         }
+        finally { }
     }
 
     /// <summary>Builds the VFS structure for a specific series, handling naming and de-duplication.</summary>

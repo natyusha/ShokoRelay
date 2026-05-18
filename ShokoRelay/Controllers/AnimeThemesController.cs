@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Services;
 using ShokoRelay.AnimeThemes;
+using ShokoRelay.Vfs;
 
 namespace ShokoRelay.Controllers;
 
@@ -28,7 +29,7 @@ public class AnimeThemesController(
 
     /// <summary>Applies the anime‑themes mapping file to the directory structure.</summary>
     /// <param name="filter">Optional comma-separated Shoko Series IDs to restrict the build.</param>
-    /// <returns>Statistics on links created and errors encountered.</returns>
+    /// <returns>A task representing the result of the build outcome.</returns>
     [HttpGet("animethemes/vfs/build")]
     public Task<IActionResult> AnimeThemesVfsBuild([FromQuery] string? filter = null) =>
         ValidateFilterOrBadRequest(filter, out var filterIds) is { } guard
@@ -44,8 +45,8 @@ public class AnimeThemesController(
                     {
                         try
                         {
-                            var path = Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileAtWebmCache);
-                            System.IO.File.WriteAllLines(path, result.CacheEntries.Select(ce => $"{ce.VfsPath.Replace('\\', '/')}|{ce.VideoId}|{ce.Bitmask}"));
+                            var cacheLines = result.CacheEntries.Select(ce => $"{ce.VfsPath.Replace('\\', '/')}|{ce.VideoId}|{ce.Bitmask}");
+                            System.IO.File.WriteAllLines(Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileAtWebmCache), cacheLines);
                         }
                         catch (Exception ex)
                         {
@@ -53,12 +54,13 @@ public class AnimeThemesController(
                         }
                     }
                     return result;
-                }
+                },
+                VfsShared.VfsLock
             );
 
     /// <summary>Generates the anime‑themes mapping CSV or tests a single filename mapping.</summary>
     /// <param name="testPath">Optional webm filename to test mapping logic against.</param>
-    /// <returns>The mapping report or a test result.</returns>
+    /// <returns>A task representing the result of the mapping or test.</returns>
     [HttpGet("animethemes/vfs/map")]
     public async Task<IActionResult> AnimeThemesVfsMap(string? testPath = null)
     {
@@ -84,7 +86,8 @@ public class AnimeThemesController(
                 ShokoRelayConstants.TaskAtMapBuild,
                 ShokoRelayConstants.LogAtMap,
                 LogHelper.BuildAtVfsMapReport,
-                () => _animeThemesMapping.BuildMappingFileAsync(CancellationToken.None)
+                () => _animeThemesMapping.BuildMappingFileAsync(CancellationToken.None),
+                VfsShared.VfsLock
             )
             .ConfigureAwait(false);
     }
@@ -109,7 +112,7 @@ public class AnimeThemesController(
     /// <summary>Generates Theme.mp3 files for anime series.</summary>
     /// <remarks>Can be run for a single folder or as a recursive batch. Supports automatic path translation from Plex paths to Shoko paths.</remarks>
     /// <param name="query">Parameters for the MP3 generation request.</param>
-    /// <returns>An operation result or batch report.</returns>
+    /// <returns>A task representing the result of the generation.</returns>
     [HttpGet("animethemes/mp3")]
     public async Task<IActionResult> AnimeThemesMp3([FromQuery] AnimeThemesMp3Query query)
     {
@@ -131,13 +134,14 @@ public class AnimeThemesController(
                         foreach (var item in batch.Items.Where(i => i.Status == "ok" && !string.IsNullOrWhiteSpace(i.Folder)))
                             _animeThemesMp3Generator.AddToThemeMp3Cache(item.Folder);
                         return batch;
-                    }
+                    },
+                    VfsShared.VfsLock
                 )
                 .ConfigureAwait(false);
         }
 
-        var single = await _animeThemesMp3Generator.ProcessSingleAsync(query, CancellationToken.None).ConfigureAwait(false);
-        return single.Status == "error" ? BadRequest(new RelayResponse<object>(Status: "error", Message: single.Message, Data: single)) : Ok(new RelayResponse<ThemeMp3OperationResult>(Data: single));
+        var result = await _animeThemesMp3Generator.ProcessSingleAsync(query, CancellationToken.None).ConfigureAwait(false);
+        return result.Status == "error" ? BadRequest(new RelayResponse<object>(Status: "error", Message: result.Message, Data: result)) : Ok(new RelayResponse<ThemeMp3OperationResult>(Data: result));
     }
 
     /// <summary>Returns a random Theme.mp3 path from the current cache.</summary>

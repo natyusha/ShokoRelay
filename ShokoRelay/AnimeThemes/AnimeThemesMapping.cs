@@ -13,7 +13,6 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
     #region Fields & Constructor
 
     private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
-    private static readonly SemaphoreSlim s_mappingSemaphore = new(1, 1);
     private readonly IMetadataService _metadataService = metadataService;
     private readonly IVideoService _videoService = videoService;
     private readonly HttpClient _httpClient = httpClient;
@@ -213,7 +212,6 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
     /// <returns>An <see cref="AnimeThemesMappingApplyResult"/> with counts and results.</returns>
     public async Task<AnimeThemesMappingApplyResult> ApplyMappingAsync(IReadOnlyCollection<int>? seriesFilter = null, CancellationToken ct = default)
     {
-        await s_mappingSemaphore.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             TaskHelper.StartTask(ShokoRelayConstants.TaskAtVfsBuild);
@@ -384,7 +382,6 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
         }
         finally
         {
-            s_mappingSemaphore.Release();
             TaskHelper.FinishTask(ShokoRelayConstants.TaskAtVfsBuild);
         }
     }

@@ -157,6 +157,7 @@ public class VfsWatcher(
                         _pending.TryRemove(id, out _);
                 }
 
+                await VfsShared.VfsLock.WaitAsync().ConfigureAwait(false); // Wait for any active dashboard VFS operations to complete before processing the automated queue
                 try
                 {
                     var sw = Stopwatch.StartNew();
@@ -184,6 +185,10 @@ public class VfsWatcher(
                 catch (Exception ex)
                 {
                     s_logger.Warn(ex, "VFS: Batch refresh failed");
+                }
+                finally
+                {
+                    VfsShared.VfsLock.Release();
                 }
 
                 await Task.Delay(400).ConfigureAwait(false);
@@ -242,12 +247,18 @@ public class VfsWatcher(
             try
             {
                 await Task.Delay(TimeSpan.FromSeconds(delaySeconds), cts.Token).ConfigureAwait(false);
-                lock (VfsBuilder.GlobalBuildLock)
+                await VfsShared.VfsLock.WaitAsync(cts.Token).ConfigureAwait(false); // Acquire the lock to ensure a Plex update doesn't start while a VFS build is actively writing to the directory.
+                try
                 {
+                    // If the series is currently sitting in the build queue, skip the individual update to avoid redundant API calls.
                     if (_pending.ContainsKey(seriesId))
                         return;
+                    await action(cts.Token).ConfigureAwait(false);
                 }
-                await action(cts.Token).ConfigureAwait(false);
+                finally
+                {
+                    VfsShared.VfsLock.Release();
+                }
             }
             catch (OperationCanceledException) { }
             catch (Exception ex)
