@@ -1,6 +1,4 @@
 using NLog;
-using Shoko.Abstractions.Metadata.Services;
-using Shoko.Abstractions.Metadata.Shoko;
 using Shoko.Abstractions.User.Enums;
 using Shoko.Abstractions.User.Services;
 

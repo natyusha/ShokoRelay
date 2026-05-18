@@ -2,7 +2,6 @@ using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Reflection;
 using Microsoft.AspNetCore.Mvc;
-using Shoko.Abstractions.Metadata.Services;
 
 namespace ShokoRelay.Controllers;
 

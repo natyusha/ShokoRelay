@@ -71,17 +71,29 @@ public static class ShokoRelayConstants
 
     #region Task Names
 
+    /// <summary>Task name for refreshing Plex library discovery.</summary>
+    public const string TaskPlexAuthRefresh = "plex-auth-refresh";
+
     /// <summary>Task name for creating and assigning Plex collections.</summary>
     public const string TaskPlexCollectionsBuild = "plex-collections-build";
 
+    /// <summary>Task name for applying collection posters.</summary>
+    public const string TaskPlexCollectionsPosters = "plex-collections-posters";
+
     /// <summary>Task name for applying audience/critic ratings to Plex items.</summary>
     public const string TaskPlexRatingsApply = "plex-ratings-apply";
+
+    /// <summary>Task name for running full Plex metadata automation.</summary>
+    public const string TaskPlexAutomationRun = "plex-automation-run";
 
     /// <summary>Task name for building the standard Shoko VFS.</summary>
     public const string TaskVfsBuild = "vfs-build";
 
     /// <summary>Task name for identifying and removing missing files from the database.</summary>
     public const string TaskShokoRemoveMissing = "shoko-remove-missing";
+
+    /// <summary>Task name for synchronizing watched state between Plex and Shoko.</summary>
+    public const string TaskShokoSyncWatched = "shoko-sync-watched";
 
     /// <summary>Task name for applying AnimeThemes mappings to the VFS.</summary>
     public const string TaskAtVfsBuild = "at-vfs-build";
@@ -92,15 +104,27 @@ public static class ShokoRelayConstants
     /// <summary>Task name for generating and applying series Theme.mp3 files.</summary>
     public const string TaskAtMp3Build = "at-mp3-build";
 
+    /// <summary>Task name for processing manual source folder symlinks.</summary>
+    public const string TaskMapSymlinks = "shoko-map-symlinks";
+
     #endregion
 
     #region Log Filenames
 
+    /// <summary>Log filename for Plex library discovery reports.</summary>
+    public const string LogPlexDiscovery = "plex-discovery-report.log";
+
     /// <summary>Log filename for Plex collection build reports.</summary>
-    public const string LogCollections = "collections-report.log";
+    public const string LogPlexCollections = "collections-report.log";
+
+    /// <summary>Log filename for Plex collection poster reports.</summary>
+    public const string LogPlexPosters = "posters-report.log";
 
     /// <summary>Log filename for Plex rating application reports.</summary>
-    public const string LogRatings = "ratings-report.log";
+    public const string LogPlexRatings = "ratings-report.log";
+
+    /// <summary>Log filename for full Plex automation reports.</summary>
+    public const string LogPlexAutomation = "plex-automation-report.log";
 
     /// <summary>Log filename for VFS generation reports.</summary>
     public const string LogVfs = "vfs-report.log";
@@ -109,7 +133,7 @@ public static class ShokoRelayConstants
     public const string LogRemoveMissing = "remove-missing-report.log";
 
     /// <summary>Log filename for watched state synchronization reports.</summary>
-    public const string LogSyncWatched = "sync-watched-report.log";
+    public const string LogShokoSyncWatched = "sync-watched-report.log";
 
     /// <summary>Log filename for AnimeThemes VFS application reports.</summary>
     public const string LogAtVfs = "at-vfs-report.log";
@@ -119,6 +143,9 @@ public static class ShokoRelayConstants
 
     /// <summary>Log filename for AnimeThemes MP3 generation reports.</summary>
     public const string LogAtMp3 = "at-mp3-report.log";
+
+    /// <summary>Log filename for manual source link processing reports.</summary>
+    public const string LogMapSymlinks = "map-symlinks-report.log";
 
     #endregion
 }

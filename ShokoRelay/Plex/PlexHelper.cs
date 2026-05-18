@@ -2,8 +2,6 @@ using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Enums;
-using Shoko.Abstractions.Metadata.Services;
-using Shoko.Abstractions.Metadata.Shoko;
 using ShokoRelay.Vfs;
 
 namespace ShokoRelay.Plex;

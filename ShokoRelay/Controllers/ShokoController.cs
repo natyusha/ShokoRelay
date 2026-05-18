@@ -1,6 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using Shoko.Abstractions.Metadata.Services;
-using Shoko.Abstractions.Metadata.Shoko;
 using ShokoRelay.AnimeThemes;
 using ShokoRelay.Services;
 using ShokoRelay.Sync;
@@ -91,40 +89,28 @@ public class ShokoController(
     #region Automation
 
     /// <summary>Removes records for video files that no longer exist on disk from the Shoko database and Anidb MyList.</summary>
+    /// <param name="dryRun">Whether to skip writes.</param>
+    /// <returns>A task representing the result of the removal operation.</returns>
     [Route("shoko/remove-missing")]
     [HttpGet]
     [HttpPost]
-    public async Task<IActionResult> RemoveMissingFiles([FromQuery] bool? dryRun = null)
-    {
-        bool doDry = dryRun ?? true;
-        const string TaskName = ShokoRelayConstants.TaskShokoRemoveMissing;
-
-        try
-        {
-            var removed = await _shokoImportService.RemoveMissingFilesAsync(doDry).ConfigureAwait(false);
-
-            // Map 'count' to 'Processed' so toastOperation/summarizeResult works out of the box
-            var resultData = new
+    public Task<IActionResult> RemoveMissingFiles([FromQuery] bool dryRun = true) =>
+        ExecuteTrackedTaskAsync(
+            ShokoRelayConstants.TaskShokoRemoveMissing,
+            ShokoRelayConstants.LogRemoveMissing,
+            (sb, r) => LogHelper.BuildRemoveMissingReport(sb, r.DryRun, r.Removed),
+            async () =>
             {
-                dryRun = doDry,
-                Processed = removed?.Count ?? 0,
-                removed,
-            };
-
-            var actionResult = LogAndReturn(ShokoRelayConstants.LogRemoveMissing, resultData, (sb, r) => LogHelper.BuildRemoveMissingReport(sb, r.dryRun, r.removed));
-
-            if (!doDry)
-                TaskHelper.CompleteTask(TaskName, (actionResult as OkObjectResult)?.Value!);
-            return actionResult;
-        }
-        catch (Exception ex)
-        {
-            var err = new { status = "error", message = ex.Message };
-            if (!doDry)
-                TaskHelper.CompleteTask(TaskName, err);
-            return BadRequest(new RelayResponse<object>(Status: "error", Message: ex.Message));
-        }
-    }
+                var removed = await _shokoImportService.RemoveMissingFilesAsync(dryRun).ConfigureAwait(false);
+                return new
+                {
+                    DryRun = dryRun,
+                    Processed = removed.Count,
+                    Removed = removed,
+                };
+            },
+            VfsShared.VfsLock
+        );
 
     /// <summary>Triggers an import scan in Shoko.</summary>
     /// <returns>Scanned folder list.</returns>
@@ -167,12 +153,12 @@ public class ShokoController(
     /// <param name="ratings">Whether to include ratings in the sync. Defaults to configuration.</param>
     /// <param name="import">Direction: <c>true</c> for Plex←Shoko (Import to Plex), <c>false</c> for Plex→Shoko (Sync to Shoko).</param>
     /// <param name="users">Optional override for the sync users configuration (0: All, 1: Admin, 2: Extra, 3: None). Defaults to configuration.</param>
-    /// <param name="libraryName">Optional filter to restrict the sync to a specific Plex library name.</param>
-    /// <returns>A sync report result.</returns>
+    /// <param name="libraryName">Optional filter to restrict sync to a specific Plex library by name.</param>
+    /// <returns>A task representing the result of the synchronization.</returns>
     [Route("sync-watched")]
     [HttpGet]
     [HttpPost]
-    public async Task<IActionResult> SyncPlexWatched(
+    public Task<IActionResult> SyncPlexWatched(
         [FromQuery] bool dryRun = true,
         [FromQuery] int? sinceHours = null,
         [FromQuery] bool? ratings = null,
@@ -182,25 +168,25 @@ public class ShokoController(
     )
     {
         if (!PlexLibrary.IsEnabled)
-            return BadRequest(new RelayResponse<object>(Status: "error", Message: "Plex configuration missing."));
+            return Task.FromResult<IActionResult>(BadRequest(new RelayResponse<object>(Status: "error", Message: "Plex configuration missing.")));
 
         bool includeRatings = ratings ?? Settings.Automation.ShokoSyncWatchedIncludeRatings;
-        string direction = import ? "Plex<-Shoko" : "Plex->Shoko";
         SyncUserType userType = users ?? Settings.Automation.ShokoSyncWatchedUserType;
+        string direction = import ? "Plex<-Shoko" : "Plex->Shoko";
 
-        try
-        {
-            PlexWatchedSyncResult result = import
-                ? await _syncToPlexService.SyncWatchedAsync(dryRun, sinceHours, includeRatings, userType, libraryName, cancellationToken: HttpContext.RequestAborted).ConfigureAwait(false)
-                : await _watchedSyncService.SyncWatchedAsync(dryRun, sinceHours, includeRatings, userType, libraryName, cancellationToken: HttpContext.RequestAborted).ConfigureAwait(false);
-
-            result = result with { Direction = direction };
-            return LogAndReturn(ShokoRelayConstants.LogSyncWatched, result, (sb, r) => LogHelper.BuildSyncWatchedReport(sb, r, r.Direction, r.DryRun, includeRatings));
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new RelayResponse<object>(Status: "error", Message: ex.Message));
-        }
+        return ExecuteTrackedTaskAsync(
+            ShokoRelayConstants.TaskShokoSyncWatched,
+            ShokoRelayConstants.LogShokoSyncWatched,
+            (sb, r) => LogHelper.BuildSyncWatchedReport(sb, r, r.Direction, r.DryRun, includeRatings),
+            async () =>
+            {
+                var result = import
+                    ? await _syncToPlexService.SyncWatchedAsync(dryRun, sinceHours, includeRatings, userType, libraryName, cancellationToken: HttpContext.RequestAborted).ConfigureAwait(false)
+                    : await _watchedSyncService.SyncWatchedAsync(dryRun, sinceHours, includeRatings, userType, libraryName, cancellationToken: HttpContext.RequestAborted).ConfigureAwait(false);
+                return result with { Direction = direction };
+            },
+            SyncHelper.SyncLock
+        );
     }
 
     /// <summary>Triggers immediate sync and resets schedule.</summary>
@@ -238,27 +224,25 @@ public class ShokoController(
     /// <summary>Processes pending source symlinks or purges existing links from import roots.</summary>
     /// <param name="mapFile">The relative path to the mapping file.</param>
     /// <param name="purgeLinks">If true, all symlinks in the import roots (outside of the VFS) will be removed.</param>
-    /// <returns>The number of successful link operations.</returns>
+    /// <returns>A task representing the result of the link processing.</returns>
     [HttpPost("map-symlinks")]
-    public async Task<IActionResult> ProcessSourceLinks([FromQuery] string? mapFile = null, [FromQuery] bool purgeLinks = false)
-    {
-        if (!purgeLinks && string.IsNullOrWhiteSpace(mapFile))
-            return BadRequest(new RelayResponse<object>(Status: "error", Message: "mapFile parameter is required when not purging."));
-
-        if (purgeLinks)
-            Logger.Info("Shoko: Starting manual purge of library symlinks...");
-        else
-            Logger.Info("Shoko: Starting source link processing using map {0}", mapFile);
-
-        int count = await _sourceLinkService.ProcessLinksAsync(mapFile ?? string.Empty, purgeLinks);
-
-        if (purgeLinks)
-            Logger.Info("Shoko: Purge complete -> {0} items removed.", count);
-        else
-            Logger.Info("Shoko: Source link processing complete -> {0} links created/updated.", count);
-
-        return Ok(new RelayResponse<object>(Data: new { count }));
-    }
+    public Task<IActionResult> ProcessSourceLinks([FromQuery] string? mapFile = null, [FromQuery] bool purgeLinks = false) =>
+        (!purgeLinks && string.IsNullOrWhiteSpace(mapFile))
+            ? Task.FromResult<IActionResult>(BadRequest(new RelayResponse<object>(Status: "error", Message: "mapFile parameter is required when not purging.")))
+            : ExecuteTrackedTaskAsync(
+                ShokoRelayConstants.TaskMapSymlinks,
+                ShokoRelayConstants.LogMapSymlinks,
+                LogHelper.BuildSourceLinkReport,
+                async () =>
+                {
+                    if (purgeLinks)
+                        Logger.Info("Shoko: Starting manual purge of library symlinks...");
+                    else
+                        Logger.Info("Shoko: Starting source link processing using map {0}", mapFile);
+                    return await _sourceLinkService.ProcessLinksAsync(mapFile ?? string.Empty, purgeLinks).ConfigureAwait(false);
+                },
+                VfsShared.VfsLock
+            );
 
     #endregion
 

@@ -1,7 +1,5 @@
 using System.Collections.Concurrent;
 using Shoko.Abstractions.Metadata;
-using Shoko.Abstractions.Metadata.Services;
-using Shoko.Abstractions.Metadata.Shoko;
 using Shoko.Abstractions.Video;
 using static ShokoRelay.Plex.PlexMapping;
 

@@ -48,7 +48,7 @@ public static class TagHelper
     /// <returns>An array of tag metadata objects.</returns>
     public static object[] GetFilteredTags(ISeries series)
     {
-        var shokoSeries = series as Shoko.Abstractions.Metadata.Shoko.IShokoSeries;
+        var shokoSeries = series as IShokoSeries;
         var shokoTags = shokoSeries?.Tags;
         if (shokoTags == null)
             return [];

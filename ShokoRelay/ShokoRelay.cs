@@ -3,7 +3,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using NLog;
 using Shoko.Abstractions.Core.Services;
-using Shoko.Abstractions.Metadata.Services;
 using Shoko.Abstractions.Plugin;
 using Shoko.Abstractions.Video;
 using Shoko.Abstractions.Video.Services;
@@ -277,7 +276,17 @@ public class ShokoRelay : BackgroundService
                     if (s_lastSyncWatchedUtc == null || s_lastSyncWatchedUtc < lastSched)
                     {
                         s_logger.Info("Automation: triggering scheduled Plex->Shoko sync ({0}h)", syncFreq);
-                        await _watchedSyncService.SyncWatchedAsync(false, syncFreq + 1, cancellationToken: ct).ConfigureAwait(false);
+
+                        // Background tasks should wait for the lock to become available
+                        await SyncHelper.SyncLock.WaitAsync(ct).ConfigureAwait(false);
+                        try
+                        {
+                            await _watchedSyncService.SyncWatchedAsync(false, syncFreq + 1, cancellationToken: ct).ConfigureAwait(false);
+                        }
+                        finally
+                        {
+                            SyncHelper.SyncLock.Release();
+                        }
                         s_lastSyncWatchedUtc = lastSched;
                     }
                 }
@@ -289,7 +298,7 @@ public class ShokoRelay : BackgroundService
                     if (s_lastPlexAutomationUtc == null || s_lastPlexAutomationUtc < lastSched)
                     {
                         s_logger.Info("Automation: triggering scheduled Plex Collection/Rating update ({0}h)", plexFreq);
-                        var allSeries = _metadataService.GetAllShokoSeries()?.Cast<Shoko.Abstractions.Metadata.Shoko.IShokoSeries?>().ToList();
+                        var allSeries = _metadataService.GetAllShokoSeries()?.Cast<IShokoSeries?>().ToList();
                         if (allSeries?.Count > 0)
                         {
                             if (_collectionService != null)

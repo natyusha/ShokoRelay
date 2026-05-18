@@ -83,7 +83,22 @@ public static class LogHelper
 
     #region Report Builders
 
-    /// <summary>Build the report content for <see cref="ShokoRelayConstants.LogCollections"/>.</summary>
+    /// <summary>Build the report content for Plex library discovery.</summary>
+    /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
+    /// <param name="r">List of discovered Plex libraries.</param>
+    public static void BuildDiscoveryReport(StringBuilder sb, List<PlexAvailableLibrary> r)
+    {
+        AppendHeader(sb, "Plex Discovery Report");
+        sb.AppendLine($"  Libraries Found          : {r.Count}");
+        if (r.Count > 0)
+        {
+            sb.AppendLine().AppendLine("Discovered Libraries:");
+            foreach (var l in r)
+                sb.AppendLine($"  - [{l.ServerName}] {l.Title} ({l.Type})");
+        }
+    }
+
+    /// <summary>Build the report content for <see cref="ShokoRelayConstants.LogPlexCollections"/>.</summary>
     /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
     /// <param name="r">Build result data.</param>
     public static void BuildCollectionsReport(StringBuilder sb, BuildCollectionsResult r)
@@ -106,7 +121,22 @@ public static class LogHelper
         BuildReport(sb, "Collection Build Report", stats, "Assignments & Errors:", items);
     }
 
-    /// <summary>Build the report content for <see cref="ShokoRelayConstants.LogRatings"/>.</summary>
+    /// <summary>Build the report content for collection poster application.</summary>
+    /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
+    /// <param name="r">Build result data.</param>
+    public static void BuildApplyPostersReport(StringBuilder sb, ApplyPostersResult r)
+    {
+        var stats = new Dictionary<string, object>
+        {
+            ["Processed"] = r.Processed,
+            ["Uploaded"] = r.Uploaded,
+            ["Skipped"] = r.Skipped,
+            ["Errors"] = r.Errors,
+        };
+        BuildReport(sb, "Collection Poster Report", stats, "Errors:", r.ErrorsList);
+    }
+
+    /// <summary>Build the report content for <see cref="ShokoRelayConstants.LogPlexRatings"/>.</summary>
     /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
     /// <param name="result">Rating result data.</param>
     public static void BuildRatingsReport(StringBuilder sb, ApplyRatingsResult result)
@@ -172,7 +202,7 @@ public static class LogHelper
         BuildReport(sb, "Remove Missing Files Report", stats, "Removed Paths:", removed);
     }
 
-    /// <summary>Build the report content for <see cref="ShokoRelayConstants.LogSyncWatched"/>.</summary>
+    /// <summary>Build the report content for <see cref="ShokoRelayConstants.LogShokoSyncWatched"/>.</summary>
     /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
     /// <param name="result">Sync result data.</param>
     /// <param name="dir">Sync direction string.</param>
@@ -258,6 +288,15 @@ public static class LogHelper
             .ToList();
 
         BuildReport(sb, "AnimeThemes: MP3 Batch Report", stats, "Item Details:", items);
+    }
+
+    /// <summary>Build the report content for source link processing.</summary>
+    /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
+    /// <param name="count">Number of operations completed.</param>
+    public static void BuildSourceLinkReport(StringBuilder sb, int count)
+    {
+        AppendHeader(sb, "Source Link Report");
+        sb.AppendLine($"  Operations Completed     : {count}");
     }
 
     #endregion

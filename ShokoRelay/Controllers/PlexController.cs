@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
-using Shoko.Abstractions.Metadata.Services;
 using Shoko.Abstractions.User.Enums;
 using Shoko.Abstractions.User.Services;
 using ShokoRelay.Services;
+using ShokoRelay.Sync;
 using ShokoRelay.Vfs;
 
 namespace ShokoRelay.Controllers;
@@ -112,31 +112,24 @@ public class PlexController(
     }
 
     /// <summary>Forces a rediscovery of servers and libraries.</summary>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>New list of libraries.</returns>
     [HttpPost("plex/auth/refresh")]
-    public async Task<IActionResult> RefreshPlexLibraries(CancellationToken cancellationToken = default)
-    {
-        var token = ConfigProvider.GetPlexToken();
-        if (string.IsNullOrWhiteSpace(token))
-            return Unauthorized(new RelayResponse<object>(Status: "error", Message: "Plex token is missing."));
-
-        Logger.Info("Plex: Refreshing servers and libraries...");
-        await ConfigProvider.RefreshAdminUsername(_plexAuth, cancellationToken).ConfigureAwait(false);
-        string clientIdentifier = ConfigProvider.GetPlexClientIdentifier();
-
-        try
-        {
-            var discovery = await _plexAuth.DiscoverShokoLibrariesAsync(token, clientIdentifier, cancellationToken).ConfigureAwait(false);
-            PersistDiscoveryResults(discovery);
-            return Ok(new RelayResponse<object>(Data: new { libraries = CollectDiscoveredLibraries(discovery.ShokoLibraries) }));
-        }
-        catch (Exception ex)
-        {
-            Logger.Warn($"Plex: Failed to refresh libraries {ex.Message}");
-            return StatusCode(502, new RelayResponse<object>(Status: "error", Message: "Failed to refresh Plex libraries."));
-        }
-    }
+    public Task<IActionResult> RefreshPlexLibraries() =>
+        string.IsNullOrWhiteSpace(ConfigProvider.GetPlexToken())
+            ? Task.FromResult<IActionResult>(Unauthorized(new RelayResponse<object>(Status: "error", Message: "Plex token is missing.")))
+            : ExecuteTrackedTaskAsync(
+                ShokoRelayConstants.TaskPlexAuthRefresh,
+                ShokoRelayConstants.LogPlexDiscovery,
+                LogHelper.BuildDiscoveryReport,
+                async () =>
+                {
+                    Logger.Info("Plex: Refreshing servers and libraries...");
+                    await ConfigProvider.RefreshAdminUsername(_plexAuth, HttpContext.RequestAborted).ConfigureAwait(false);
+                    var discovery = await _plexAuth.DiscoverShokoLibrariesAsync(ConfigProvider.GetPlexToken(), ConfigProvider.GetPlexClientIdentifier(), HttpContext.RequestAborted).ConfigureAwait(false);
+                    PersistDiscoveryResults(discovery);
+                    return CollectDiscoveredLibraries(discovery.ShokoLibraries);
+                },
+                SyncHelper.SyncLock
+            );
 
     /// <summary>Revokes the current Plex token.</summary>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -200,39 +193,26 @@ public class PlexController(
             ? Task.FromResult(guard)
             : ExecuteTrackedTaskAsync(
                 ShokoRelayConstants.TaskPlexCollectionsBuild,
-                ShokoRelayConstants.LogCollections,
+                ShokoRelayConstants.LogPlexCollections,
                 LogHelper.BuildCollectionsReport,
-                () => _collectionService.BuildCollectionsAsync(seriesList, CancellationToken.None)
+                () => _collectionService.BuildCollectionsAsync(seriesList, CancellationToken.None),
+                SyncHelper.SyncLock
             );
 
     /// <summary>Refreshes posters for Plex collections.</summary>
     /// <param name="filter">Optional comma-separated list of Shoko or AniDB IDs.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>Apply status result.</returns>
+    /// <returns>A task representing the result of the poster application.</returns>
     [HttpGet("plex/collections/posters")]
-    public async Task<IActionResult> ApplyCollectionPosters([FromQuery] string? filter = null, CancellationToken cancellationToken = default)
-    {
-        var guard = ValidatePlexFilterRequest(filter, out var seriesList, out _);
-        if (guard != null)
-            return guard;
-
-        var targets = PlexLibrary.GetConfiguredTargets();
-        if (targets == null || targets.Count == 0)
-            return NoPlexTargetsResponse(seriesList);
-
-        var r = await _collectionService.ApplyCollectionPostersAsync(seriesList, cancellationToken).ConfigureAwait(false);
-        return Ok(
-            new RelayResponse<object>(
-                Data: new
-                {
-                    processed = r.Processed,
-                    uploaded = r.Uploaded,
-                    skipped = r.Skipped,
-                    errors = r.Errors,
-                }
-            )
-        );
-    }
+    public Task<IActionResult> ApplyCollectionPosters([FromQuery] string? filter = null) =>
+        ValidatePlexFilterRequest(filter, out var seriesList, out _) is { } guard
+            ? Task.FromResult(guard)
+            : ExecuteTrackedTaskAsync(
+                ShokoRelayConstants.TaskPlexCollectionsPosters,
+                ShokoRelayConstants.LogPlexPosters,
+                LogHelper.BuildApplyPostersReport,
+                () => _collectionService.ApplyCollectionPostersAsync(seriesList, HttpContext.RequestAborted),
+                SyncHelper.SyncLock
+            );
 
     /// <summary>Updates ratings in Plex based on Shoko metadata.</summary>
     /// <param name="filter">Optional comma-separated list of Shoko or AniDB IDs.</param>
@@ -243,36 +223,32 @@ public class PlexController(
             ? Task.FromResult(guard)
             : ExecuteTrackedTaskAsync(
                 ShokoRelayConstants.TaskPlexRatingsApply,
-                ShokoRelayConstants.LogRatings,
+                ShokoRelayConstants.LogPlexRatings,
                 LogHelper.BuildRatingsReport,
-                () => _criticRatingService.ApplyRatingsAsync(seriesList.Select(s => s?.ID ?? 0).OfType<int>(), CancellationToken.None)
+                () => _criticRatingService.ApplyRatingsAsync(seriesList.Select(s => s?.ID ?? 0).OfType<int>(), CancellationToken.None),
+                SyncHelper.SyncLock
             );
 
     /// <summary>Triggers collection and rating automation back-to-back.</summary>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>Success result.</returns>
+    /// <returns>A task representing the result of the automation run.</returns>
     [HttpGet("plex/automation/run")]
-    public async Task<IActionResult> RunPlexAutomationNow(CancellationToken cancellationToken = default)
-    {
-        if (!PlexLibrary.IsEnabled)
-            return BadRequest(new RelayResponse<object>(Status: "error", Message: "Plex configuration missing."));
-
-        try
-        {
-            var allSeries = MetadataService.GetAllShokoSeries()?.Cast<Shoko.Abstractions.Metadata.Shoko.IShokoSeries?>().ToList() ?? [];
-            if (_collectionService != null)
-                await _collectionService.BuildCollectionsAsync(allSeries, cancellationToken).ConfigureAwait(false);
-            if (_criticRatingService != null)
-                await _criticRatingService.ApplyRatingsAsync(null, cancellationToken).ConfigureAwait(false);
-
-            MarkPlexAutomationRunNow();
-            return Ok(new RelayResponse<object>());
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new RelayResponse<object>(Status: "error", Message: ex.Message));
-        }
-    }
+    public Task<IActionResult> RunPlexAutomationNow() =>
+        !PlexLibrary.IsEnabled
+            ? Task.FromResult<IActionResult>(BadRequest(new RelayResponse<object>(Status: "error", Message: "Plex configuration missing.")))
+            : ExecuteTrackedTaskAsync(
+                ShokoRelayConstants.TaskPlexAutomationRun,
+                ShokoRelayConstants.LogPlexAutomation,
+                (sb, _) => sb.AppendLine("Automation run complete."),
+                async () =>
+                {
+                    var allSeries = MetadataService.GetAllShokoSeries()?.Cast<IShokoSeries?>().ToList() ?? [];
+                    await _collectionService.BuildCollectionsAsync(allSeries, HttpContext.RequestAborted).ConfigureAwait(false);
+                    await _criticRatingService.ApplyRatingsAsync(null, HttpContext.RequestAborted).ConfigureAwait(false);
+                    MarkPlexAutomationRunNow();
+                    return true;
+                },
+                SyncHelper.SyncLock
+            );
 
     #endregion
 

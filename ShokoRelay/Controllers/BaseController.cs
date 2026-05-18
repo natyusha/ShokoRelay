@@ -1,8 +1,6 @@
 using System.Text;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
-using Shoko.Abstractions.Metadata.Services;
-using Shoko.Abstractions.Metadata.Shoko;
 
 namespace ShokoRelay.Controllers;
 

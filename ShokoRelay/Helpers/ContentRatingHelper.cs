@@ -1,6 +1,6 @@
 using System.Collections.Frozen;
 using Shoko.Abstractions.Metadata;
-using Shoko.Abstractions.Metadata.Shoko;
+using Shoko.Abstractions.Metadata.Anidb;
 
 namespace ShokoRelay.Helpers;
 
@@ -29,7 +29,7 @@ public static class ContentRatingHelper
 
         // Build AniDB weight dictionary for precision-based decisions (defaults to 0 when not present).
         var anidbWeights = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        if (series is IShokoSeries ss && ss.AnidbAnime?.Tags is IReadOnlyList<Shoko.Abstractions.Metadata.Anidb.IAnidbTagForAnime> atags)
+        if (series is IShokoSeries ss && ss.AnidbAnime?.Tags is IReadOnlyList<IAnidbTagForAnime> atags)
         {
             foreach (var t in atags)
             {
@@ -133,7 +133,7 @@ public static class ContentRatingHelper
         }
 
         // Also include AniDB tags so content-rating can consult them (weights are read separately).
-        if (series is IShokoSeries ss && ss.AnidbAnime?.Tags is IReadOnlyList<Shoko.Abstractions.Metadata.Anidb.IAnidbTagForAnime> anidbTags)
+        if (series is IShokoSeries ss && ss.AnidbAnime?.Tags is IReadOnlyList<IAnidbTagForAnime> anidbTags)
         {
             foreach (var at in anidbTags)
             {

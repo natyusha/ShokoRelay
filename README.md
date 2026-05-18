@@ -356,18 +356,22 @@ If `Assumed Content Ratings` are enabled in the Provider Settings the [target au
 
 ### Task Reports & Logs
 
-Most manual actions performed via the dashboard generate a detailed report. These reports help you verify which items were processed and troubleshoot any skipped files or errors. A list of the actions which generate a log is provided below:
+Most manual actions performed via the dashboard (as well as some direct API requests) generate a detailed report. These reports help you verify which items were processed and troubleshoot any skipped files or errors. A list of the actions which generate a log is provided below:
 
-| Dashboard Action                      | Log Filename                |
-| :------------------------------------ | :-------------------------- |
-| **Plex:** Generate Collections        | `collections-report.log`    |
-| **Plex:** Apply Critic Ratings        | `ratings-report.log`        |
-| **Shoko:** Generate VFS               | `vfs-report.log`            |
-| **Shoko:** Remove Missing             | `remove-missing-report.log` |
-| **Shoko:** Sync Watched States        | `sync-watched-report.log`   |
-| **AnimeThemes:** Generate VFS         | `at-vfs-report.log`         |
-| **AnimeThemes:** Build Mapping        | `at-map-report.log`         |
-| **AnimeThemes:** Generate MP3 (Batch) | `at-mp3-report.log`         |
+| Dashboard Action                      | Log Filename                 |
+| :------------------------------------ | :--------------------------- |
+| **Plex:** Auth Refresh                | `plex-discovery-report.log`  |
+| **Plex:** Generate Collections        | `collections-report.log`     |
+| **Plex:** Apply Collection Posters    | `posters-report.log`         |
+| **Plex:** Apply Critic Ratings        | `ratings-report.log`         |
+| **Plex:** Run Full Automation         | `plex-automation-report.log` |
+| **Shoko:** Generate VFS               | `vfs-report.log`             |
+| **Shoko:** Remove Missing             | `remove-missing-report.log`  |
+| **Shoko:** Sync Watched States        | `sync-watched-report.log`    |
+| **Shoko:** Map Source Symlinks        | `map-symlinks-report.log`    |
+| **AnimeThemes:** Generate VFS         | `at-vfs-report.log`          |
+| **AnimeThemes:** Build Mapping        | `at-map-report.log`          |
+| **AnimeThemes:** Generate MP3 (Batch) | `at-mp3-report.log`          |
 
 #### How Logs Work
 

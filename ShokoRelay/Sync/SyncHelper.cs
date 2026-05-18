@@ -102,6 +102,9 @@ public record PlexWatchedSyncResult(
 /// <summary>Shared helpers used by sync services.</summary>
 public static class SyncHelper
 {
+    /// <summary>Global semaphore to prevent concurrent watched-state synchronization tasks.</summary>
+    public static readonly SemaphoreSlim SyncLock = new(1, 1);
+
     #region Collection Helpers
 
     /// <summary>Create result buckets for users.</summary>

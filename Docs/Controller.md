@@ -54,14 +54,18 @@ GET  /logs/{fileName}                                          -> GetLog
 
 **Notes:**
 
-All automation endpoints utilize the `LogAndReturn` helper to provide a direct `logUrl` in the response. Reports include:
+All automation endpoints utilize the `LogAndReturn` helper (via `ExecuteTrackedTaskAsync`) to provide a direct `logUrl` in the response. Reports include:
 
 ```
+/plex/auth/refresh                                             -> plex-discovery-report.log
 /plex/collections/build                                        -> collections-report.log
+/plex/collections/posters                                      -> posters-report.log
 /plex/ratings/apply                                            -> ratings-report.log
+/plex/automation/run                                           -> plex-automation-report.log
 /vfs                                                           -> vfs-report.log
 /shoko/remove-missing                                          -> remove-missing-report.log
 /sync-watched                                                  -> sync-watched-report.log
+/map-symlinks                                                  -> map-symlinks-report.log
 /animethemes/vfs/build                                         -> at-vfs-report.log
 /animethemes/vfs/map                                           -> at-map-report.log
 /animethemes/mp3?batch=true                                    -> at-mp3-report.log

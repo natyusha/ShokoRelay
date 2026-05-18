@@ -1,7 +1,5 @@
 using System.Globalization;
 using NLog;
-using Shoko.Abstractions.Metadata.Services;
-using Shoko.Abstractions.Metadata.Shoko;
 
 namespace ShokoRelay.Services;
 

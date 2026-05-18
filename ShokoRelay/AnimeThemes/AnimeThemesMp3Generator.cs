@@ -1,6 +1,4 @@
 using NLog;
-using Shoko.Abstractions.Metadata.Services;
-using Shoko.Abstractions.Metadata.Shoko;
 using Shoko.Abstractions.Video;
 using Shoko.Abstractions.Video.Services;
 using ShokoRelay.Services;

@@ -1,8 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using NLog;
-using Shoko.Abstractions.Metadata.Services;
-using Shoko.Abstractions.Metadata.Shoko;
+using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Video.Enums;
 
 namespace ShokoRelay.Vfs;
@@ -537,7 +536,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                     var group = OverrideHelper.GetGroup(pId, _metadataService).Select(_metadataService.GetShokoSeriesByID).OfType<IShokoSeries>().ToList();
                     return group.Count <= 1
                         ? MapHelper.GetSeriesFileData(group.FirstOrDefault() ?? series, _metadataService)
-                        : MapHelper.GetSeriesFileDataMerged(group[0], group.Skip(1).Cast<Shoko.Abstractions.Metadata.ISeries>(), _metadataService);
+                        : MapHelper.GetSeriesFileDataMerged(group[0], group.Skip(1).Cast<ISeries>(), _metadataService);
                 }
             )
             ?? MapHelper.GetSeriesFileData(series, _metadataService);

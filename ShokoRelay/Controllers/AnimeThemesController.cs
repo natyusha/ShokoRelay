@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
 using Shoko.Abstractions.Metadata.Containers;
-using Shoko.Abstractions.Metadata.Services;
 using ShokoRelay.AnimeThemes;
 using ShokoRelay.Vfs;
 
@@ -110,7 +109,6 @@ public class AnimeThemesController(
     #region MP3 Generation
 
     /// <summary>Generates Theme.mp3 files for anime series.</summary>
-    /// <remarks>Can be run for a single folder or as a recursive batch. Supports automatic path translation from Plex paths to Shoko paths.</remarks>
     /// <param name="query">Parameters for the MP3 generation request.</param>
     /// <returns>A task representing the result of the generation.</returns>
     [HttpGet("animethemes/mp3")]
@@ -140,8 +138,21 @@ public class AnimeThemesController(
                 .ConfigureAwait(false);
         }
 
-        var result = await _animeThemesMp3Generator.ProcessSingleAsync(query, CancellationToken.None).ConfigureAwait(false);
-        return result.Status == "error" ? BadRequest(new RelayResponse<object>(Status: "error", Message: result.Message, Data: result)) : Ok(new RelayResponse<ThemeMp3OperationResult>(Data: result));
+        // Single generation does not require a persistent log file, but still uses the VfsLock for safety.
+        if (!await VfsShared.VfsLock.WaitAsync(0).ConfigureAwait(false))
+            return Conflict(new RelayResponse<object>(Status: "busy", Message: "A conflicting VFS operation is already in progress."));
+
+        try
+        {
+            var result = await _animeThemesMp3Generator.ProcessSingleAsync(query, CancellationToken.None).ConfigureAwait(false);
+            if (result.Status == "ok" && !string.IsNullOrWhiteSpace(result.Folder))
+                _animeThemesMp3Generator.AddToThemeMp3Cache(result.Folder);
+            return result.Status == "error" ? BadRequest(new RelayResponse<object>(Status: "error", Message: result.Message, Data: result)) : Ok(new RelayResponse<ThemeMp3OperationResult>(Data: result));
+        }
+        finally
+        {
+            VfsShared.VfsLock.Release();
+        }
     }
 
     /// <summary>Returns a random Theme.mp3 path from the current cache.</summary>
