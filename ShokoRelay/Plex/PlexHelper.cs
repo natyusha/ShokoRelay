@@ -183,7 +183,7 @@ public static class PlexHelper
             var primarySeries = group?.MainSeries ?? group?.Series?.FirstOrDefault();
             if (primarySeries != null)
             {
-                var posterImage = (primarySeries as IWithImages)?.GetImages(ImageEntityType.Poster).FirstOrDefault();
+                var posterImage = (primarySeries as IWithImages)?.GetImages(imageType: ImageEntityType.Primary).FirstOrDefault();
                 if (posterImage != null)
                     return ImageHelper.GetImageUrl(posterImage);
             }

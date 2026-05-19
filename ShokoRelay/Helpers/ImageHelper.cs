@@ -1,7 +1,7 @@
 using Newtonsoft.Json;
-using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Enums;
+using Shoko.Abstractions.Metadata.Image;
 
 namespace ShokoRelay.Helpers;
 
@@ -37,7 +37,7 @@ public static class ImageHelper
     /// <returns>A full URL string.</returns>
     public static string GetImageUrl(IImage image, string? imageTypeOverride = null, string? cacheBuster = null)
     {
-        var url = $"{ServerBaseUrl}/api/v3/Image/{image.Source}/{imageTypeOverride ?? image.ImageType.ToString()}/{image.ID}";
+        var url = $"{ServerBaseUrl}/api/v3/Image/{image.Source}/{imageTypeOverride ?? image.Type.ToString()}/{image.ID}";
         return string.IsNullOrEmpty(cacheBuster) ? url : $"{url}?t={cacheBuster}";
     }
 
@@ -55,7 +55,7 @@ public static class ImageHelper
     {
         IEnumerable<IImage> Filter(ImageEntityType type)
         {
-            var all = images.GetImages(type);
+            var all = images.GetImages(imageType: type);
             if (addEveryImage)
                 return all.OrderByDescending(i => i.IsPreferred);
             var pref = all.FirstOrDefault(i => i.IsPreferred);
@@ -74,8 +74,8 @@ public static class ImageHelper
         [
             .. Project(ImageEntityType.Backdrop, "background"),
             .. Project(ImageEntityType.Logo, "clearLogo"),
-            .. Project(ImageEntityType.Poster, "coverPoster"),
-            .. Project(ImageEntityType.Thumbnail, "snapshot"),
+            .. Project(ImageEntityType.Primary, "coverPoster"),
+            .. Project(ImageEntityType.Primary, "snapshot"),
         ];
     }
 

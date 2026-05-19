@@ -94,9 +94,9 @@ public class PlexMetadata(IMetadataService metadataService)
             ["guid"]                  = series.GetPlexGuid(),
             ["type"]                  = "show",
             ["title"]                 = titles.DisplayTitle,
-            ["originallyAvailableAt"] = series.AirDate?.ToString("yyyy-MM-dd"),
-            ["thumb"]                 = images.GetImages(ImageEntityType.Poster).FirstOrDefault() is { } p ? ImageHelper.GetImageUrl(p, cacheBuster: cb) : null,
-            ["art"]                   = images.GetImages(ImageEntityType.Backdrop).FirstOrDefault() is { } a ? ImageHelper.GetImageUrl(a, cacheBuster: cb) : null,
+            ["originallyAvailableAt"] = series.AirDate?.ToString("yyyy-MM-dd", null),
+            ["thumb"]                 = images.GetImages(imageType: ImageEntityType.Primary).FirstOrDefault() is { } p ? ImageHelper.GetImageUrl(p, cacheBuster: cb) : null,
+            ["art"]                   = images.GetImages(imageType: ImageEntityType.Backdrop).FirstOrDefault() is { } a ? ImageHelper.GetImageUrl(a, cacheBuster: cb) : null,
             ["contentRating"]         = rating,
             ["originalTitle"]         = titles.OriginalTitle,
             ["titleSort"]             = titles.SortTitle,
@@ -219,10 +219,10 @@ public class PlexMetadata(IMetadataService metadataService)
         int totalSeasons = ctx.FileData.Seasons.Count(s => s >= 0);
         List<string>? posters =
             (Settings.TmdbSeasonPosters && totalSeasons > 1 && tmdbSeason != null)
-                ? [.. tmdbSeason.GetImages(ImageEntityType.Poster).OrderByDescending(i => i.IsPreferred).Select(i => ImageHelper.GetImageUrl(i, cacheBuster: cb))]
+                ? [.. tmdbSeason.GetImages(imageType: ImageEntityType.Primary).OrderByDescending(i => i.IsPreferred).Select(i => ImageHelper.GetImageUrl(i, cacheBuster: cb))]
                 : null;
 
-        string? thumb = (posters?.Count > 0) ? posters[0] : (images.GetImages(ImageEntityType.Poster).FirstOrDefault() is { } p ? ImageHelper.GetImageUrl(p, cacheBuster: cb) : null);
+        string? thumb = (posters?.Count > 0) ? posters[0] : (images.GetImages(imageType: ImageEntityType.Primary).FirstOrDefault() is { } p ? ImageHelper.GetImageUrl(p, cacheBuster: cb) : null);
         var seasonDate = ctx.FileData.Mappings.Where(m => m.Coords.Season == seasonNum).SelectMany(m => m.Episodes).Where(e => e.AirDate.HasValue).Select(e => e.AirDate).OrderBy(d => d).FirstOrDefault();
         // csharpier-ignore-start
         return new Dictionary<string, object?>
@@ -232,7 +232,7 @@ public class PlexMetadata(IMetadataService metadataService)
             ["guid"]                  = series.GetPlexGuid(seasonNum),
             ["type"]                  = "season",
             ["title"]                 = seasonTitle,
-            ["originallyAvailableAt"] = seasonDate?.ToString("yyyy-MM-dd"),
+            ["originallyAvailableAt"] = seasonDate?.ToString("yyyy-MM-dd", null),
             ["thumb"]                 = thumb,
             ["contentRating"]         = ctx.ContentRating,
             //['originalTitle']       = No source for original season titles
@@ -246,8 +246,8 @@ public class PlexMetadata(IMetadataService metadataService)
             ["parentGuid"]            = series.GetPlexGuid(),
             ["parentType"]            = "show",
             ["parentTitle"]           = seriesTitle,
-            ["parentThumb"]           = images.GetImages(ImageEntityType.Poster).FirstOrDefault() is { } sp ? ImageHelper.GetImageUrl(sp, cacheBuster: cb) : null,
-            ["parentArt"]             = images.GetImages(ImageEntityType.Backdrop).FirstOrDefault() is { } sa ? ImageHelper.GetImageUrl(sa, cacheBuster: cb) : null,
+            ["parentThumb"]           = images.GetImages(imageType: ImageEntityType.Primary).FirstOrDefault() is { } sp ? ImageHelper.GetImageUrl(sp, cacheBuster: cb) : null,
+            ["parentArt"]             = images.GetImages(imageType: ImageEntityType.Backdrop).FirstOrDefault() is { } sa ? ImageHelper.GetImageUrl(sa, cacheBuster: cb) : null,
             ["index"]                 = seasonNum,
 
             // Force addEveryImage to true if TMDB season posters are present, otherwise fallback to the configuration. (Remove this once Shoko's WebUI supports selecting the preferred poster)
@@ -298,7 +298,7 @@ public class PlexMetadata(IMetadataService metadataService)
         {
             var s = _metadataService.GetShokoSeriesByID(OverrideHelper.GetPrimary(series.ID, _metadataService));
             var seasonObj = s?.TmdbSeasons?.FirstOrDefault(ts => ts.SeasonNumber == mapped.Season);
-            parentThumb = seasonObj?.DefaultPoster is not null ? ImageHelper.GetImageUrl(seasonObj.DefaultPoster, cacheBuster: cb) : null;
+            parentThumb = seasonObj?.PrimaryImage is not null ? ImageHelper.GetImageUrl(seasonObj.PrimaryImage, cacheBuster: cb) : null;
         }
         // csharpier-ignore-start
         return new Dictionary<string, object?>
@@ -309,8 +309,8 @@ public class PlexMetadata(IMetadataService metadataService)
             ["type"]                  = "episode",
             ["subtype"]               = (mapped.Season < 0 && TryGetExtraSeason(mapped.Season, out var ex)) ? ex.Subtype : null,
             ["title"]                 = epTitle,
-            ["originallyAvailableAt"] = ep.AirDate?.ToString("yyyy-MM-dd"),
-            ["thumb"]                 = Settings.TmdbThumbnails && images.GetImages(ImageEntityType.Thumbnail).FirstOrDefault() is { } t ? ImageHelper.GetImageUrl(t, cacheBuster: cb) : null,
+            ["originallyAvailableAt"] = ep.AirDate?.ToString("yyyy-MM-dd", null),
+            ["thumb"]                 = Settings.TmdbThumbnails && images.GetImages(imageType: ImageEntityType.Primary).FirstOrDefault() is { } t ? ImageHelper.GetImageUrl(t, cacheBuster: cb) : null,
             //["art"]                 = No source for episode level background images
             ["contentRating"]         = ContentRatingHelper.GetContentRatingAndAdult(series).Rating,
             //["originalTitle"]       = No source for original episode titles
@@ -325,8 +325,8 @@ public class PlexMetadata(IMetadataService metadataService)
             ["parentGuid"]            = series.GetPlexGuid(mapped.Season),
             ["parentType"]            = "season",
             ["parentTitle"]           = GetSeasonFolder(mapped.Season),
-            ["parentThumb"]           = parentThumb ?? (seriesImages.GetImages(ImageEntityType.Poster).FirstOrDefault() is { } p ? ImageHelper.GetImageUrl(p, cacheBuster: cb) : null),
-            ["parentArt"]             = seriesImages.GetImages(ImageEntityType.Backdrop).FirstOrDefault() is { } a ? ImageHelper.GetImageUrl(a, cacheBuster: cb) : null,
+            ["parentThumb"]           = parentThumb ?? (seriesImages.GetImages(imageType: ImageEntityType.Primary).FirstOrDefault() is { } p ? ImageHelper.GetImageUrl(p, cacheBuster: cb) : null),
+            ["parentArt"]             = seriesImages.GetImages(imageType: ImageEntityType.Backdrop).FirstOrDefault() is { } a ? ImageHelper.GetImageUrl(a, cacheBuster: cb) : null,
             ["index"]                 = mapped.Episode,
 
             ["grandparentRatingKey"]  = series.GetPlexRatingKey(),
@@ -334,8 +334,8 @@ public class PlexMetadata(IMetadataService metadataService)
             ["grandparentGuid"]       = series.GetPlexGuid(),
             ["grandparentType"]       = "show",
             ["grandparentTitle"]      = titles.DisplayTitle,
-            ["grandparentThumb"]      = seriesImages.GetImages(ImageEntityType.Poster).FirstOrDefault() is { } gp ? ImageHelper.GetImageUrl(gp, cacheBuster: cb) : null,
-            ["grandparentArt"]        = seriesImages.GetImages(ImageEntityType.Backdrop).FirstOrDefault() is { } ga ? ImageHelper.GetImageUrl(ga, cacheBuster: cb) : null,
+            ["grandparentThumb"]      = seriesImages.GetImages(imageType: ImageEntityType.Primary).FirstOrDefault() is { } gp ? ImageHelper.GetImageUrl(gp, cacheBuster: cb) : null,
+            ["grandparentArt"]        = seriesImages.GetImages(imageType: ImageEntityType.Backdrop).FirstOrDefault() is { } ga ? ImageHelper.GetImageUrl(ga, cacheBuster: cb) : null,
             ["parentIndex"]           = mapped.Season,
 
             ["Image"]                 = Settings.TmdbThumbnails ? [.. ImageHelper.GenerateImageArray(images, epTitle, Settings.AddEveryImage, cb).Where(img => img.Type == "snapshot")] : Array.Empty<ImageInfo>(),
@@ -378,8 +378,8 @@ public class PlexMetadata(IMetadataService metadataService)
     {
         var cb = GetCacheBuster(primarySeries);
         var images = (IWithImages)primarySeries;
-        var poster = images.GetImages(ImageEntityType.Poster).FirstOrDefault();
-        var backdrop = images.GetImages(ImageEntityType.Backdrop).FirstOrDefault();
+        var poster = images.GetImages(imageType: ImageEntityType.Primary).FirstOrDefault();
+        var backdrop = images.GetImages(imageType: ImageEntityType.Backdrop).FirstOrDefault();
         string title = group is IWithTitles titled && !string.IsNullOrWhiteSpace(titled.PreferredTitle?.Value) ? titled.PreferredTitle.Value : $"Group {group.ID}";
         // csharpier-ignore-start
         return new Dictionary<string, object?>
