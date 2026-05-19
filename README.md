@@ -276,7 +276,7 @@ Crossover episodes are files which are linked to multiple episodes spanning sepa
 
 **VFS Browser**
 
-In order to help visualise the VFS and all of the files it contains there is a "VFS Browser" page included with the plugin. It can be navigated to by clicking the folder icon in the top right of the "Shoko: VFS" section of the dashboard. Unlike opening the VFS in a normal file browser, this will list the AniDB ID and the series title which corresponds to each folder. It also allows VFS regeneration to be called on any VFS folder by clicking a refresh icon (this avoids having to look up Shoko or AnidDB IDs to use the filter on the dashboard).
+In order to help visualise the VFS and all of the files it contains there is a "VFS Browser" page included with the plugin. It can be navigated to by clicking the folder icon in the top right of the "Shoko: VFS" section of the dashboard. Unlike opening the VFS in a normal file browser, this will list the series title, AniDB ID and `/metadata` endpoint link which corresponds to each folder. It also allows VFS regeneration to be called on any series by clicking a refresh icon (this avoids having to look up Shoko or AnidDB IDs to use the filter on the dashboard).
 
 ### Automatic Title Modification
 
