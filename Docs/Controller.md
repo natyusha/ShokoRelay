@@ -203,6 +203,8 @@ Endpoints are managed by `ShokoController`
 GET  /vfs?run={true|false}&clean={true|false}&filter={csv}     -> BuildVfs
 
 POST /vfs/overrides                                            -> SaveVfsOverrides
+
+GET /vfs/tree                                                  -> GetVfsTree
 ```
 
 - `BuildVfs` (all query parameters are optional)
@@ -210,14 +212,17 @@ POST /vfs/overrides                                            -> SaveVfsOverrid
   - `clean`: (default true) clear the existing root before building.
   - `filter`: (optional) comma separated Shoko or AniDB (prefixed with an 'a') series IDs.
 - `SaveVfsOverrides` accepts raw text for `anidb_vfs_overrides.csv`.
+- `GetVfsTree` returns a hierarchical representation of the VFS structure by reading `vfs_blueprint.cache`.
 
 **Notes:**
 
 - When `Automation.ScanOnVfsRefresh` is enabled, the controller schedules library scans for affected series automatically.
 - When importing local metadata images, files named `Specials.<ext>` are renamed to `Season-Specials-Poster.<ext>` in the VFS.
 - Any folder name listed in the `Folder Exclusions` setting (plus system folders like !AnimeThemes) is ignored during VFS generation.
+  - If `PlexLocalExtras` is enabled all folders and files matching Plex local extra formatting will be ignored as well.
 - Overrides allow grouping multiple AniDB IDs under a single primary Shoko Series ID for Plex.
 - `VfsWatcher` automatically triggers batch VFS builds when file events are detected.
+- Executing `BuildVfs` also generates or updates `vfs_blueprint.cache`.
 
 ---
 

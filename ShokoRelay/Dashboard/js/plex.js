@@ -117,8 +117,14 @@
       if (unlinkBtn) unlinkBtn.onclick = unlinkPlex;
     }
 
-    const libCount = el("plex-libraries-count");
-    if (libCount) libCount.textContent = (plex.DiscoveredLibraries || []).length;
+    const libStatus = el("plex-libraries-status");
+    if (libStatus) {
+      const count = (plex.DiscoveredLibraries || []).length;
+      let text = "(No Libraries Detected)";
+      if (count === 1) text = "(1 Library)";
+      else if (count > 1) text = `(${count} Libraries)`;
+      libStatus.textContent = text;
+    }
   }
 
   /** Unlink the Plex account and refresh dashboard state. */

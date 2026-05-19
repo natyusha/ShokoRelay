@@ -1,35 +1,25 @@
-html {
-  overflow-x: hidden;
-  scrollbar-gutter: unset;
-}
-body {
-  margin: 0;
-  background-color: var(--panel-color);
-}
 /* #region MARK: Player
 */
-.player {
-  display: flex;
-  position: relative;
-  flex-direction: column;
-  border: none;
-  background-color: var(--panel-color);
-  max-width: 100vw;
-  max-height: 100vh;
-  overflow: hidden;
-}
-.player .video-container {
+#player .video-container {
   position: relative;
   container-type: inline-size;
   background: black;
   aspect-ratio: 16 / 9;
   width: 100%;
 }
-.player .video-container video {
+#player .video-container video {
   display: block;
   width: 100%;
   height: 100%;
   object-fit: contain;
+}
+#controls {
+  bottom: -56px;
+}
+#controls .at-btn svg {
+  margin-right: 8px;
+  width: 1.7em;
+  height: 1.7em;
 }
 .at-progress-track {
   position: absolute;
@@ -53,40 +43,22 @@ body {
 .at-progress-track:hover {
   height: 24px;
 }
-#controls {
-  display: flex;
-  position: absolute;
-  right: 8px;
-  bottom: -56px;
-  z-index: 3;
-}
-#controls .at-btn svg {
-  margin-right: 8px;
-  width: 1.7em;
-  height: 1.7em;
-}
 #details {
   display: flex;
   flex: 1;
   flex-direction: column;
   min-height: 0;
 }
-.header {
-  flex-shrink: 0;
-  border-bottom: 1px solid var(--border-color);
-  padding: 0 6px;
-  height: 61px;
+#now-playing {
+  cursor: default;
+  margin-top: 0.35em;
+  max-width: calc(100vw - 395px);
+  font-size: 1.3em;
 }
 .np-wrap {
   display: flex;
   gap: 4px;
   margin-bottom: -5px;
-}
-.now-playing {
-  cursor: default;
-  margin-top: 0.35em;
-  max-width: calc(100vw - 395px);
-  font-size: 1.3em;
 }
 #now-playing-fav,
 #locate-current {
@@ -95,71 +67,33 @@ body {
 #title {
   font-weight: 500;
 }
-#anime {
-  opacity: 0.6;
+#anime,
+#anidb {
+  opacity: 0.8;
   transition: all 0.3s ease-in-out;
   margin-top: 0.15em;
   pointer-events: none;
-  color: var(--text-color);
+  color: var(--highlight-color);
   font-size: 0.9em;
   text-decoration: none;
 }
 #title,
-#anime {
+#anime,
+#anidb {
   display: inline-block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-#anime:hover {
+#anidb {
+  margin-top: 5px;
+  font-size: 0.75em;
+}
+#anime:hover,
+#anidb:hover {
   opacity: 1;
   color: var(--highlight-color);
   text-decoration: dotted underline;
-}
-.filter-wrap {
-  display: flex;
-  position: relative;
-  align-items: center;
-  width: 295px;
-}
-.filter-icon {
-  opacity: 0.6;
-  transition: all 0.3s ease-in-out;
-  fill: var(--text-color);
-  width: 24px;
-  height: 24px;
-}
-.magnify {
-  position: absolute;
-  top: 10px;
-  left: 6px;
-  pointer-events: none;
-}
-.filter-wrap input {
-  padding: 0 2.2em;
-  font-size: 1em;
-}
-#filter-clear {
-  display: flex;
-  position: absolute;
-  top: 5px;
-  right: 3px;
-  justify-content: center;
-  align-items: center;
-  z-index: 4;
-  cursor: pointer;
-  border: none;
-  background: none;
-  padding: 4px;
-}
-#filter-clear:hover {
-  background: none;
-}
-#filter-clear[hidden] {
-  display: none;
-}
-.clear:hover {
-  opacity: 1;
 }
 /* #endregion */
 
@@ -277,134 +211,14 @@ body {
 .theme-toggle[aria-pressed="false"] {
   color: var(--highlight-color);
 }
-/* #endregion */
-
-/* #region MARK: Tree View
-*/
-#tree {
-  --spacing: 1.3rem;
-  --radius: 6px;
-  flex: 1;
-  padding: 0 8px;
-  overflow-y: auto;
-  font-size: 0.9em;
+.video-container.idle {
+  cursor: none;
 }
-#tree .placeholder {
-  opacity: 0.6;
-  padding: 40px 8px;
-  color: var(--text-color);
-  text-align: center;
-}
-#tree ul {
-  margin-top: 0;
-  margin-left: calc(var(--radius) - var(--spacing));
-  padding-left: 0;
-}
-#tree ul:first-child {
-  margin-top: 4px;
-}
-#tree li {
-  display: block;
-  position: relative;
-  padding-left: calc(2 * var(--spacing) - var(--radius) - 2px);
-}
-#tree ul li {
-  border-left: 2px solid var(--button-color);
-}
-#tree ul.tree > li::before {
-  border-bottom-color: transparent;
-}
-#tree ul li:last-child {
-  border-color: transparent;
-}
-#tree ul li::before {
-  display: block;
-  position: absolute;
-  top: calc(var(--spacing) / -2);
-  left: -2px;
-  border: solid var(--button-color);
-  border-width: 0 0 2px 2px;
-  border-bottom-left-radius: 3px;
-  width: calc(var(--spacing) + 2px);
-  height: calc(var(--spacing) + 1px);
-  content: "";
-}
-#tree summary {
-  display: block;
-  cursor: pointer;
-  border-radius: 3px;
-  padding: 2px 4px;
-  overflow: hidden;
-  list-style: none;
-  user-select: none;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-#tree summary::marker,
-#tree summary::-webkit-details-marker,
-#tree summary .tree-icon.collapse,
-#tree summary .tree-icon.collapse::after,
-#tree details[open] > summary .tree-icon.expand {
-  display: none;
-}
-#tree li::after,
-#tree summary .tree-icon {
-  display: block;
-  position: absolute;
-  top: calc(var(--spacing) / 2 - var(--radius));
-  left: calc(var(--spacing) - var(--radius) - 1px);
-  border-radius: 50%;
-  background: var(--border-color);
-  width: calc(2 * var(--radius));
-  height: calc(2 * var(--radius));
-}
-#tree summary .tree-icon {
-  display: block;
-  z-index: 1;
-  border: 1px solid var(--text-color);
-  border-radius: 2px;
-  background: var(--inset-color);
-}
-#tree summary .tree-icon::before,
-#tree summary .tree-icon::after {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: var(--text-color);
-  width: 8px;
-  height: 2px;
-  content: "";
-}
-#tree summary .tree-icon.expand::after {
-  transform: translate(-50%, -50%) rotate(90deg);
-}
-#tree details[open] > summary .tree-icon.collapse {
-  display: block;
-}
-#tree .leaf {
-  display: flex;
-  align-items: center;
-  cursor: pointer;
-  margin-left: -11px;
-  border-radius: 3px;
-  padding: 2px 4px;
-}
-#tree .leaf:hover,
-#tree summary:hover {
-  background: var(--inset-color);
-}
-#tree .leaf span:last-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-#tree .leaf.active {
-  background: var(--button-color);
-  color: var(--bg-color);
-}
-ul.tree {
-  margin-top: 8px;
+.video-container.idle::after,
+.video-container.idle .video-ui-overlay,
+.video-container.idle .at-progress-track {
+  opacity: 0;
+  pointer-events: none;
 }
 /* #endregion */
 
@@ -444,15 +258,15 @@ ul.tree {
 /* #region MARK: Layout Adjustments
 */
 @media (min-aspect-ratio: 4/3) {
-  .player {
+  #player {
     flex-direction: row;
   }
-  .player .video-container {
+  #player .video-container {
     flex: 1;
     aspect-ratio: auto;
     height: 100vh;
   }
-  .player .video-container video {
+  #player .video-container video {
     width: 100%;
   }
   #details {

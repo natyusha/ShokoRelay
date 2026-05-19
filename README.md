@@ -274,6 +274,10 @@ Non standard episodes on the other hand, are placed into a local series level Ex
 
 Crossover episodes are files which are linked to multiple episodes spanning separate AniDB series. Due to Plex's architecture they will only function in one series at a time. Since the plugin doesn't know which episode the user prefers, unwanted crossover entries must be hidden via Shoko's series page. To work around this limitation crossover episodes can also be modified (so the file's hash changes) then manually linked in Shoko to the desired episode.
 
+**VFS Browser**
+
+In order to help visualise the VFS and all of the files it contains there is a "VFS Browser" page included with the plugin. It can be navigated to by clicking the folder icon in the top right of the "Shoko: VFS" section of the dashboard. Unlike opening the VFS in a normal file browser, this will list the AniDB ID and the series title which corresponds to each folder. It also allows VFS regeneration to be called on any VFS folder by clicking a refresh icon (this avoids having to look up Shoko or AnidDB IDs to use the filter on the dashboard).
+
 ### Automatic Title Modification
 
 **Common Prefixes for Series**

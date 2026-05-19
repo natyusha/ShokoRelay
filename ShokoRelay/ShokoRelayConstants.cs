@@ -58,6 +58,9 @@ public static class ShokoRelayConstants
     /// <summary>Filename for the AnimeThemes cross-reference mapping CSV.</summary>
     public const string FileAtMapping = "anidb_animethemes_xrefs.csv";
 
+    /// <summary>Filename for the VFS structure blueprint cache.</summary>
+    public const string FileVfsBlueprintCache = "vfs_blueprint.cache";
+
     /// <summary>Filename for the Theme.mp3 folder cache.</summary>
     public const string FileAtMp3Cache = "mp3_animethemes.cache";
 

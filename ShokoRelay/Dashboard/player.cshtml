@@ -6,6 +6,7 @@
     <title>Video Player | Shoko Relay</title>
     <link rel="icon" href="favicon.ico" />
     <link rel="stylesheet" href="css/style.css" />
+    <link rel="stylesheet" href="css/tree.css" />
     <link rel="stylesheet" href="css/player.css" />
     <script>
       window._sr = window._sr || {};
@@ -14,7 +15,7 @@
   <body>
     <!--#region MARK: Player
     -->
-    <div class="player" role="main">
+    <div id="player" role="main">
       <div class="video-container">
         <div id="controls">
           <button id="next" class="at-btn" title="Play" type="button" data-state="idle">
@@ -69,8 +70,8 @@
         </div>
       </div>
       <div id="details">
-        <div class="header">
-          <div class="now-playing">
+        <div id="header">
+          <div id="now-playing">
             <div class="np-wrap">
               <span id="now-playing-fav" class="fav-icon" title="Favourite">❤</span>
               <span id="title" data-tooltip-overflow-only="true">AnimeThemes: VFS Video Player</span>
@@ -78,6 +79,7 @@
             <div class="np-wrap">
               <span id="locate-current" class="loc-icon" title="Jump">⏷</span>
               <a id="anime" href="#" target="_blank" rel="noopener noreferrer" data-tooltip-overflow-only="true">Select a theme to begin...</a>
+              <a id="anidb" href="#" target="_blank" rel="noopener noreferrer"></a>
             </div>
           </div>
         </div>
@@ -143,6 +145,7 @@
     <!-- #endregion -->
 
     <script src="js/script.js"></script>
+    <script src="js/tree.js"></script>
     <script src="js/player.js"></script>
   </body>
 </html>

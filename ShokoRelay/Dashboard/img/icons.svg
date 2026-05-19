@@ -1,6 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
   <!-- #region MARK: Header
   -->
+  <symbol id="clock-star-four-points-outline" viewBox="0 0 24 24">
+    <title>Automations</title>
+    <path d="M12 20C12.4 20 12.7 20 13.1 19.9C13.2 20.6 13.4 21.3 13.7 21.8C13.2 21.9 12.6 22 12 22C6.5 22 2 17.5 2 12C2 6.5 6.5 2 12 2C17.5 2 22 6.5 22 12C22 12.5 21.92 12.97 21.84 13.5
+             L21.8 13.7C21.2 13.4 20.6 13.2 19.9 13.1C20 12.7 20 12.4 20 12C20 7.6 16.4 4 12 4C7.6 4 4 7.6 4 12C4 16.4 7.6 20 12 20M12.5 12.3L15.6 14.1C15.2 14.4 14.8 14.7 14.5 15.1L11 13
+             V7H12.5V12.3M17.74 17.75L19 15L20.25 17.75L23 19L20.25 20.26L19 23L17.74 20.26L15 19L17.74 17.75Z" />
+  </symbol>
+
   <symbol id="database-refresh-outline" viewBox="0 0 24 24">
     <title>Shoko: VFS</title>
     <path
@@ -60,11 +67,10 @@
              C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z" />
   </symbol>
 
-  <symbol id="clock-star-four-points-outline" viewBox="0 0 24 24">
-    <title>Automations</title>
-    <path d="M12 20C12.4 20 12.7 20 13.1 19.9C13.2 20.6 13.4 21.3 13.7 21.8C13.2 21.9 12.6 22 12 22C6.5 22 2 17.5 2 12C2 6.5 6.5 2 12 2C17.5 2 22 6.5 22 12C22 12.5 21.92 12.97 21.84 13.5
-             L21.8 13.7C21.2 13.4 20.6 13.2 19.9 13.1C20 12.7 20 12.4 20 12C20 7.6 16.4 4 12 4C7.6 4 4 7.6 4 12C4 16.4 7.6 20 12 20M12.5 12.3L15.6 14.1C15.2 14.4 14.8 14.7 14.5 15.1L11 13
-             V7H12.5V12.3M17.74 17.75L19 15L20.25 17.75L23 19L20.25 20.26L19 23L17.74 20.26L15 19L17.74 17.75Z" />
+  <symbol id="folder-open" viewBox="0 0 24 24">
+    <title>Open VFS Browser</title>
+    <path
+      d="M19,20H4C2.89,20 2,19.1 2,18V6C2,4.89 2.89,4 4,4H10L12,6H19A2,2 0 0,1 21,8H21L4,8V18L6.14,10H23.21L20.93,18.5C20.7,19.37 19.92,20 19,20Z" />
   </symbol>
 
   <symbol id="database-edit-outline" viewBox="0 0 24 24">
@@ -75,22 +81,29 @@
              C21 11.95 21.33 11.95 21.53 12.15L22.85 13.47C23.05 13.67 23.05 14 22.85 14.19Z" />
   </symbol>
 
-  <symbol id="api" viewBox="0 0 24 24">
-    <title>Shoko API</title>
-    <path
-      d="M7 7H5A2 2 0 0 0 3 9V17H5V13H7V17H9V9A2 2 0 0 0 7 7M7 11H5V9H7M14 7H10V17H12V13H14A2 2 0 0 0 16 11V9A2 2 0 0 0 14 7M14 11H12V9H14M20 9V15H21V17H17V15H18V9H17V7H21V9Z" />
-  </symbol>
-
   <symbol id="broom" viewBox="0 0 24 24">
     <title>Clean VFS Toggle</title>
     <path d="M19.36,2.72L20.78,4.14L15.06,9.85C16.13,11.39 16.28,13.24 15.38,14.44L9.06,8.12C10.26,7.22 12.11,7.37 13.65,8.44M19.36,2.72M5.93,17.57C3.92,15.56 2.69,13.16 2.35,10.92
              L7.23,8.83L14.67,16.27L12.58,21.15C10.34,20.81 7.94,19.58 5.93,17.57Z" />
   </symbol>
 
+  <symbol id="api" viewBox="0 0 24 24">
+    <title>Shoko API</title>
+    <path
+      d="M7 7H5A2 2 0 0 0 3 9V17H5V13H7V17H9V9A2 2 0 0 0 7 7M7 11H5V9H7M14 7H10V17H12V13H14A2 2 0 0 0 16 11V9A2 2 0 0 0 14 7M14 11H12V9H14M20 9V15H21V17H17V15H18V9H17V7H21V9Z" />
+  </symbol>
+
   <symbol id="view-dashboard-outline" viewBox="0 0 24 24">
     <title>Shoko Dashboard</title>
     <path
       d="M19,5V7H15V5H19M9,5V11H5V5H9M19,13V19H15V13H19M9,17V19H5V17H9M21,3H13V9H21V3M11,3H3V13H11V3M21,11H13V21H21V11M11,15H3V21H11V15Z" />
+  </symbol>
+
+  <symbol id="movie-open" viewBox="0 0 24 24">
+    <title>Open Video Player</title>
+    <path
+      d="M20.84 2.18L16.91 2.96L19.65 6.5L21.62 6.1L20.84 2.18M13.97 3.54L12 3.93L14.75 7.46L16.71 7.07L13.97 3.54M9.07 4.5L7.1 4.91L9.85 8.44L11.81 8.05L9.07 4.5M4.16 5.5
+             L3.18 5.69A2 2 0 0 0 1.61 8.04L2 10L6.9 9.03L4.16 5.5M2 10V20C2 21.11 2.9 22 4 22H20C21.11 22 22 21.11 22 20V10H2Z" />
   </symbol>
 
   <symbol id="download" viewBox="0 0 24 24">
@@ -146,13 +159,6 @@
 
   <!-- #region MARK: Player
   -->
-  <symbol id="movie-open" viewBox="0 0 24 24">
-    <title>Open Theme Modal</title>
-    <path
-      d="M20.84 2.18L16.91 2.96L19.65 6.5L21.62 6.1L20.84 2.18M13.97 3.54L12 3.93L14.75 7.46L16.71 7.07L13.97 3.54M9.07 4.5L7.1 4.91L9.85 8.44L11.81 8.05L9.07 4.5M4.16 5.5
-             L3.18 5.69A2 2 0 0 0 1.61 8.04L2 10L6.9 9.03L4.16 5.5M2 10V20C2 21.11 2.9 22 4 22H20C21.11 22 22 21.11 22 20V10H2Z" />
-  </symbol>
-
   <symbol id="play" viewBox="0 0 24 24">
     <title>Play</title>
     <path d="M8,5.14V19.14L19,12.14L8,5.14Z" />

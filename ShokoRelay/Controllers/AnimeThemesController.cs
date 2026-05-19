@@ -202,13 +202,13 @@ public class AnimeThemesController(
     #region Player / Favourites
 
     /// <summary>Returns the hierarchical tree of WebM files for the standalone player.</summary>
-    /// <returns>A flat list of objects describing available WebM themes and their metadata.</returns>
+    /// <returns>A JSON object containing the hierarchical theme list.</returns>
     [HttpGet("animethemes/webm/tree")]
     public IActionResult AnimeThemesWebmTree()
     {
         string cachePath = Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileAtWebmCache);
         if (!System.IO.File.Exists(cachePath))
-            return Ok(new RelayResponse<object>(Status: "empty"));
+            return Ok(new { items = Array.Empty<object>() });
 
         string[] lines;
         try
@@ -217,11 +217,11 @@ public class AnimeThemesController(
         }
         catch
         {
-            return Ok(new RelayResponse<object>(Status: "empty"));
+            return Ok(new { items = Array.Empty<object>() });
         }
 
         var items = new List<object>();
-        var seriesTitleCache = new Dictionary<int, (string GroupTitle, string SeriesTitle)>();
+        var seriesTitleCache = new Dictionary<int, (string GroupTitle, string SeriesTitle, int AniDbId)>();
 
         foreach (var line in lines)
         {
@@ -242,26 +242,27 @@ public class AnimeThemesController(
             if (!seriesId.HasValue)
                 continue;
 
-            if (!seriesTitleCache.TryGetValue(seriesId.Value, out var titles))
+            if (!seriesTitleCache.TryGetValue(seriesId.Value, out var info))
             {
                 var series = MetadataService.GetShokoSeriesByID(seriesId.Value);
                 if (series != null)
                 {
                     var (displayTitle, _, _) = TextHelper.ResolveFullSeriesTitles(series);
                     var group = MetadataService.GetShokoGroupByID(series.TopLevelGroupID);
-                    titles = (group is IWithTitles titled && !string.IsNullOrWhiteSpace(titled.PreferredTitle?.Value) ? titled.PreferredTitle.Value : displayTitle, displayTitle);
+                    info = (group is IWithTitles titled && !string.IsNullOrWhiteSpace(titled.PreferredTitle?.Value) ? titled.PreferredTitle.Value : displayTitle, displayTitle, series.AnidbAnimeID);
                 }
                 else
-                    titles = ($"Series {seriesId.Value}", $"Series {seriesId.Value}");
-                seriesTitleCache[seriesId.Value] = titles;
+                    info = ($"Series {seriesId.Value}", $"Series {seriesId.Value}", 0);
+                seriesTitleCache[seriesId.Value] = info;
             }
 
             items.Add(
                 new
                 {
-                    group = titles.GroupTitle,
-                    series = titles.SeriesTitle,
+                    group = info.GroupTitle,
+                    series = info.SeriesTitle,
                     seriesId = seriesId.Value,
+                    anidbId = info.AniDbId,
                     file = Path.GetFileNameWithoutExtension(segments[^1]),
                     path = pathRaw.Replace('\\', '/').Trim(),
                     videoId,
@@ -276,7 +277,7 @@ public class AnimeThemesController(
                 }
             );
         }
-        return Ok(new RelayResponse<object>(Data: new { items }));
+        return Ok(new { items });
     }
 
     /// <summary>Streams a WebM theme file from the VFS.</summary>

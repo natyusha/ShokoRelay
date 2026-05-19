@@ -169,8 +169,8 @@
       for (const [taskName, result] of Object.entries(completeData)) {
         const btn = el(taskName);
         if (btn?.classList.contains("clicking")) continue;
-        const fInput = btn?.dataset.relayPersistIfEmpty ? document.querySelector(btn.dataset.relayPersistIfEmpty) : null;
         const isOk = (result.status || result.Status || "").toLowerCase() === "ok"; // Ensure the ok status is correctly identified regardless of property casing
+        const fInput = btn?.dataset.relayPersistIfEmpty ? document.querySelector(btn.dataset.relayPersistIfEmpty) : null;
 
         toastOperation({ ok: isOk, data: result }, taskName.replace(/-/g, " "), { hideOnSucceed: fInput?.value.trim() ? TOAST_MS : 0 });
         await fetch(window._sr.base + `/tasks/clear/${taskName}`, { method: "POST" });

@@ -27,7 +27,15 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
     {
         string dashboardDir = Path.Combine(ConfigProvider.PluginDirectory, "dashboard");
         bool isPlayer = "player".Equals(path, StringComparison.OrdinalIgnoreCase);
-        string fileName = (string.IsNullOrWhiteSpace(path) || isPlayer) ? (isPlayer ? "player.cshtml" : "dashboard.cshtml") : path;
+        bool isBrowser = "browser".Equals(path, StringComparison.OrdinalIgnoreCase);
+        string fileName =
+            (string.IsNullOrWhiteSpace(path) || isPlayer || isBrowser)
+                ? (
+                    isPlayer ? "player.cshtml"
+                    : isBrowser ? "browser.cshtml"
+                    : "dashboard.cshtml"
+                )
+                : path;
         string safePath = fileName.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
         string requested = Path.GetFullPath(Path.Combine(dashboardDir, safePath));
         string dashboardRoot = Path.GetFullPath(dashboardDir);

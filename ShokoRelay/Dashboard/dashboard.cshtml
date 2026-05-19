@@ -23,7 +23,7 @@
 
   <body>
     <div id="container">
-      <div class="brand-header" role="img" aria-label="Shoko Relay Dashboard"></div>
+      <div id="brand-header" role="img" aria-label="Shoko Relay Dashboard"></div>
       <!-- #region MARK: Plex
       -->
       <div class="two-cols">
@@ -42,7 +42,7 @@
           </div>
           <div class="full clear">
             <div>
-              <label for="extra-plex-users">Extra Plex Users (<span id="plex-libraries-count">0</span> Libraries)</label>
+              <label for="extra-plex-users">Extra Plex Users <span id="plex-libraries-status" class="vfs-info">(No Libraries Detected)</span></label>
               <input id="extra-plex-users" class="plex-auth" type="text" placeholder="user1;1234 (comma separated, optional PIN)" />
             </div>
           </div>
@@ -111,6 +111,9 @@
               <svg class="icon-svg"><use href="img/icons.svg#database-refresh-outline"></use></svg>
               Shoko: VFS
             </h2>
+            <a href="browser" class="at-btn" title="Open VFS Browser" aria-label="Open VFS Browser">
+              <svg class="icon-svg"><use href="img/icons.svg#folder-open"></use></svg>
+            </a>
           </div>
           <div class="full">
             <div>

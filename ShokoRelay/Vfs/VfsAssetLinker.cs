@@ -24,7 +24,8 @@ public class VfsAssetLinker(IVideoService videoService)
     /// <param name="destDir">The target VFS series directory.</param>
     /// <param name="videoBaseNames">A set of base names for video files to exclude from series-level linking.</param>
     /// <param name="cache">Build-session cache for directory enumeration results.</param>
-    public void LinkSeriesMetadata(string sourceDir, string destDir, HashSet<string> videoBaseNames, ConcurrentDictionary<string, Lazy<string[]>> cache)
+    /// <param name="onLink">Optional callback to record the created link for the VFS Browser blueprint.</param>
+    public void LinkSeriesMetadata(string sourceDir, string destDir, HashSet<string> videoBaseNames, ConcurrentDictionary<string, Lazy<string[]>> cache, Action<string, string?>? onLink = null)
     {
         if (string.IsNullOrWhiteSpace(sourceDir) || !Directory.Exists(sourceDir))
             return;
@@ -36,7 +37,8 @@ public class VfsAssetLinker(IVideoService videoService)
             if (videoBaseNames.Contains(baseName))
                 continue;
             string destName = string.Equals(baseName, "Specials", StringComparison.OrdinalIgnoreCase) ? "Season-Specials-Poster" + Path.GetExtension(name) : name;
-            VfsShared.TryCreateLink(file, Path.Combine(destDir, destName), s_logger);
+            if (VfsShared.TryCreateLink(file, Path.Combine(destDir, destName), s_logger))
+                onLink?.Invoke(destName, file);
         }
     }
 
@@ -50,6 +52,7 @@ public class VfsAssetLinker(IVideoService videoService)
     /// <param name="skipped">Reference to the skipped links counter.</param>
     /// <param name="errors">List of encountered error messages.</param>
     /// <param name="created">Reference to the successful links created counter.</param>
+    /// <param name="onLink">Optional callback to record the created link for the VFS Browser blueprint.</param>
     public void LinkEpisodeMetadata(
         string sourceFile,
         string sourceDir,
@@ -59,7 +62,8 @@ public class VfsAssetLinker(IVideoService videoService)
         ref int planned,
         ref int skipped,
         List<string> errors,
-        ref int created
+        ref int created,
+        Action<string, string?>? onLink = null
     )
     {
         if (string.IsNullOrWhiteSpace(sourceDir) || !Directory.Exists(sourceDir))
@@ -71,10 +75,12 @@ public class VfsAssetLinker(IVideoService videoService)
             string name = Path.GetFileName(sub);
             if (!name.StartsWith(originalBase, StringComparison.OrdinalIgnoreCase))
                 continue;
-            if (VfsShared.TryCreateLink(sub, Path.Combine(destDir, destBase + name[originalBase.Length..]), s_logger))
+            string destName = destBase + name[originalBase.Length..];
+            if (VfsShared.TryCreateLink(sub, Path.Combine(destDir, destName), s_logger))
             {
                 planned++;
                 created++;
+                onLink?.Invoke(destName, sub);
             }
             else
             {
@@ -89,7 +95,8 @@ public class VfsAssetLinker(IVideoService videoService)
     /// <param name="vfsSeriesPath">The target VFS series root path.</param>
     /// <param name="videoBaseNames">A set of base names for indexed video files to prevent naming collisions.</param>
     /// <param name="epPad">The episode number padding used for naming consistency.</param>
-    public void LinkLocalExtras(MapHelper.SeriesFileData fileData, string vfsSeriesPath, HashSet<string> videoBaseNames, int epPad)
+    /// <param name="onLink">Optional callback to record the created link for the VFS Browser blueprint.</param>
+    public void LinkLocalExtras(MapHelper.SeriesFileData fileData, string vfsSeriesPath, HashSet<string> videoBaseNames, int epPad, Action<string, string, string?>? onLink = null)
     {
         var sourceDirs = fileData
             .Mappings.SelectMany(m => m.Video.Files)
@@ -106,20 +113,19 @@ public class VfsAssetLinker(IVideoService videoService)
                 if (!match.Success)
                     continue;
 
-                string type = match.Groups[1].Value;
-                string seasonNum = match.Groups[3].Value;
+                string type = match.Groups[1].Value,
+                    seasonNum = match.Groups[3].Value;
                 string plexDirName = PlexConstants.LocalExtraDirs.First(d => string.Equals(d, type, StringComparison.OrdinalIgnoreCase));
-
-                string destDir = string.IsNullOrEmpty(seasonNum)
-                    ? Path.Combine(vfsSeriesPath, plexDirName)
-                    : Path.Combine(vfsSeriesPath, VfsHelper.SanitizeName(PlexMapping.GetSeasonFolder(int.Parse(seasonNum))), plexDirName);
+                string seasonFolder = string.IsNullOrEmpty(seasonNum) ? "" : VfsHelper.SanitizeName(PlexMapping.GetSeasonFolder(int.Parse(seasonNum)));
+                string destDir = string.IsNullOrEmpty(seasonFolder) ? Path.Combine(vfsSeriesPath, plexDirName) : Path.Combine(vfsSeriesPath, seasonFolder, plexDirName);
 
                 foreach (var file in Directory.EnumerateFiles(subDir).Where(f => AnimeThemesHelper.VideoFileExtensions.Contains(Path.GetExtension(f))))
                 {
                     if (videoService.GetVideoFileByAbsolutePath(file)?.Video?.CrossReferences?.Any(cr => cr.ShokoEpisode != null) == true)
                         continue;
                     Directory.CreateDirectory(destDir);
-                    VfsShared.TryCreateLink(file, Path.Combine(destDir, Path.GetFileName(file)), s_logger);
+                    if (VfsShared.TryCreateLink(file, Path.Combine(destDir, Path.GetFileName(file)), s_logger))
+                        onLink?.Invoke(seasonFolder, Path.Combine(plexDirName, Path.GetFileName(file)), file);
                 }
             }
 
@@ -127,18 +133,18 @@ public class VfsAssetLinker(IVideoService videoService)
             foreach (var file in Directory.EnumerateFiles(srcDir!).Where(f => AnimeThemesHelper.VideoFileExtensions.Contains(Path.GetExtension(f))))
             {
                 string name = Path.GetFileNameWithoutExtension(file);
-                if (videoBaseNames.Contains(name))
-                    continue;
-                if (videoService.GetVideoFileByAbsolutePath(file)?.Video?.CrossReferences?.Any(cr => cr.ShokoEpisode != null) == true)
+                if (videoBaseNames.Contains(name) || videoService.GetVideoFileByAbsolutePath(file)?.Video?.CrossReferences?.Any(cr => cr.ShokoEpisode != null) == true)
                     continue;
                 string parentBase = PlexConstants.LocalExtraSuffixes.Select(s => name.Split(s)[0]).OrderByDescending(s => s.Length).FirstOrDefault(videoBaseNames.Contains) ?? string.Empty;
                 if (string.IsNullOrEmpty(parentBase))
                     continue;
                 foreach (var m in fileData.Mappings.Where(m => Path.GetFileNameWithoutExtension(m.FileName).Equals(parentBase, StringComparison.OrdinalIgnoreCase)))
                 {
-                    string vfsSeasonDir = Path.Combine(vfsSeriesPath, VfsHelper.SanitizeName(PlexMapping.GetSeasonFolder(m.Coords.Season)));
-                    string vfsParentName = Path.GetFileNameWithoutExtension(VfsHelper.BuildStandardFileName(m, epPad, "", m.Video.ID));
-                    VfsShared.TryCreateLink(file, Path.Combine(vfsSeasonDir, vfsParentName + name[parentBase.Length..] + Path.GetExtension(file)), s_logger);
+                    string seasonFolder = VfsHelper.SanitizeName(PlexMapping.GetSeasonFolder(m.Coords.Season)),
+                        vfsSeasonDir = Path.Combine(vfsSeriesPath, seasonFolder);
+                    string destName = Path.GetFileNameWithoutExtension(VfsHelper.BuildStandardFileName(m, epPad, "", m.Video.ID)) + name[parentBase.Length..] + Path.GetExtension(file);
+                    if (VfsShared.TryCreateLink(file, Path.Combine(vfsSeasonDir, destName), s_logger))
+                        onLink?.Invoke(seasonFolder, destName, file);
                 }
             }
         }

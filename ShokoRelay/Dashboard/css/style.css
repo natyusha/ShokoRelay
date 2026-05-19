@@ -47,7 +47,7 @@
   --danger-color: #ff6c6c;
   --ok-color: #10c469;
 }
-.brand-header {
+#brand-header {
   filter: drop-shadow(0 0 5px rgb(from var(--hover-color) r g b / 0.25));
   background-image: url("../img/shoko-relay-header-dark.png");
   background-position: left center;
@@ -56,11 +56,11 @@
   width: 100%;
   height: 100px;
 }
-:root[data-theme="light"] .brand-header {
+:root[data-theme="light"] #brand-header {
   background-image: url("../img/shoko-relay-header-light.png");
 }
 @media (prefers-color-scheme: light) {
-  .brand-header {
+  #brand-header {
     background-image: url("../img/shoko-relay-header-light.png");
   }
 }
@@ -344,6 +344,75 @@ label > small::before {
 .tooltip-dark {
   background: var(--tooltip-color);
   color: var(--text-color);
+}
+/* #endregion */
+
+/* #region MARK: Toasts
+*/
+#toast-container {
+  display: flex;
+  position: fixed;
+  top: auto;
+  right: auto;
+  bottom: 12px;
+  left: 12px;
+  flex-direction: column-reverse;
+  gap: 8px;
+  z-index: 2000;
+}
+.toast {
+  transform: translateX(-18px) translateZ(0);
+  opacity: 0;
+  transition:
+    transform 260ms cubic-bezier(0.2, 0.9, 0.2, 1),
+    opacity 220ms ease;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--panel-color);
+  padding: 10px 14px;
+  min-width: 220px;
+  max-width: 420px;
+  color: var(--text-color);
+  font-weight: 500;
+  font-size: 0.95em;
+}
+.toast.visible {
+  transform: translateX(0) translateZ(0);
+  opacity: 1;
+}
+.toast.info {
+  border-left: 4px solid var(--highlight-color);
+}
+.toast.success {
+  border-left: 4px solid var(--ok-color);
+}
+.toast.error {
+  border-left: 4px solid var(--danger-color);
+}
+.toast.warning {
+  border-left: 4px solid var(--warning-color);
+}
+.toast[role="status"] {
+  outline: none;
+}
+.toast-message {
+  display: block;
+  padding-right: 4px;
+  max-height: 150px;
+  overflow-y: auto;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+.np-line {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.np-line.artist {
+  opacity: 0.8;
 }
 /* #endregion */
 

@@ -1,0 +1,97 @@
+/* #region MARK: Header & Tabs
+*/
+#controls {
+  top: 8px;
+}
+#header {
+  font-size: 1.3em;
+}
+#vfs-count {
+  opacity: 0.6;
+  font-size: 0.9em;
+}
+#title {
+  padding-top: 6px;
+  font-weight: 500;
+}
+.tabs-container {
+  display: flex;
+  gap: 8px;
+  margin-right: 8px;
+  padding: 2px 0 6px 0;
+  overflow-x: auto;
+}
+.tab-btn {
+  border-radius: 0.25em;
+  background: var(--bg-color);
+  padding: 4px 12px;
+  color: var(--text-color);
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+.tab-btn.active {
+  border-color: var(--button-color);
+  background: var(--button-color);
+  color: var(--bg-color);
+}
+.tab-btn:hover:not(.active) {
+  background: color-mix(in srgb, var(--bg-color), white 15%);
+}
+/* #endregion */
+
+/* #region MARK: Tree Styling
+*/
+.refresh-icon {
+  display: inline-block;
+  transform: rotate(90deg);
+  transition: all 0.3s ease-in-out;
+  cursor: pointer;
+  margin-left: 4px;
+  color: var(--highlight-color);
+  font-weight: bold;
+  font-size: 1.4em;
+  line-height: 0;
+}
+.refresh-icon:hover {
+  transform: rotate(180deg);
+  background: none;
+  color: var(--hover-color);
+}
+.vfs-id-link {
+  display: inline-block;
+  min-width: 50px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.vfs-sep {
+  margin: 0 10px;
+  color: var(--highlight-color);
+  font-weight: bold;
+}
+.vfs-title {
+  flex: 1;
+  min-width: 0;
+}
+a.vfs-link {
+  opacity: 0.8;
+  margin-left: 4px;
+  text-decoration: none;
+}
+a.vfs-link:hover {
+  opacity: 1;
+  color: var(--highlight-color);
+  text-decoration: dotted underline;
+}
+#tree .leaf {
+  font-variant-numeric: tabular-nums;
+}
+.source-path {
+  display: block;
+  opacity: 0.5;
+  margin-left: 8px;
+  font-size: 0.9em;
+  font-family: monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+/* #endregion */

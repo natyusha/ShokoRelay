@@ -1,4 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using Shoko.Abstractions.Video.Services;
 using ShokoRelay.AnimeThemes;
 using ShokoRelay.Services;
 using ShokoRelay.Sync;
@@ -19,7 +22,8 @@ public class ShokoController(
     SyncToShoko watchedSyncService,
     SyncToPlex syncToPlexService,
     SourceLinkService sourceLinkService,
-    AnimeThemesMapping atMapping
+    AnimeThemesMapping atMapping,
+    IVideoService videoService
 ) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
 {
     #region Fields
@@ -30,6 +34,7 @@ public class ShokoController(
     private readonly SyncToPlex _syncToPlexService = syncToPlexService;
     private readonly SourceLinkService _sourceLinkService = sourceLinkService;
     private readonly AnimeThemesMapping _atMapping = atMapping;
+    private readonly IVideoService _videoService = videoService;
 
     #endregion
 
@@ -82,6 +87,39 @@ public class ShokoController(
         {
             return BadRequest(new RelayResponse<object>(Status: "error", Message: ex.Message));
         }
+    }
+
+    /// <summary>Returns a hierarchical representation of the VFS structure grouped by import root friendly names.</summary>
+    /// <returns>A JSON object containing the folder and file hierarchy.</returns>
+    [HttpGet("vfs/tree")]
+    public IActionResult GetVfsTree()
+    {
+        var path = Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileVfsBlueprintCache);
+        if (!System.IO.File.Exists(path))
+            return Ok(new { roots = Array.Empty<object>() });
+
+        // Normalize Managed Folder paths to remove trailing slashes for consistent comparison with blueprint keys.
+        var managedFolders =
+            _videoService.GetAllManagedFolders()?.Select(f => new { Path = f.Path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), f.Name }).OrderByDescending(f => f.Path.Length).ToList()
+            ?? [];
+
+        var rawJson = System.IO.File.ReadAllText(path);
+        var data = JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, JObject>>>(rawJson);
+        if (data == null)
+            return Ok(new { roots = Array.Empty<object>() });
+
+        // Map blueprint entries to their friendly Shoko names and group them to prevent redundant tabs for sub-directories.
+        var roots = data.Select(root =>
+            {
+                var match = managedFolders.FirstOrDefault(f => root.Key.StartsWith(f.Path, StringComparison.OrdinalIgnoreCase));
+                return new { Name = match?.Name ?? Path.GetFileName(root.Key) ?? "Unknown", Series = root.Value.Values };
+            })
+            .GroupBy(x => x.Name)
+            .Select(g => new { name = g.Key, series = g.SelectMany(x => x.Series).OrderBy(s => s["title"]?.ToString() ?? "").ToList() })
+            .OrderBy(r => r.name)
+            .ToList();
+
+        return Ok(new { roots });
     }
 
     #endregion

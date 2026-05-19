@@ -3,7 +3,7 @@
  * @description Logic for the Shoko Relay stand-alone AnimeThemes VFS video player.
  */
 (() => {
-  const { base, configUrl, el, fetchJson, unwrapConfig, setValueByPath, openModal, updatePlaybackTooltip, saveSettings, getData } = window._sr;
+  const { base, configUrl, el, fetchJson, unwrapConfig, setValueByPath, openModal, updatePlaybackTooltip, saveSettings, getData, initSearchInteractions } = window._sr;
 
   // DOM Elements - UI Indicators
   const playerTime = el("time-display");
@@ -15,14 +15,15 @@
 
   // DOM Elements - Navigation & Search
   const playerTree = el("tree");
-  const playerFilter = el("filter");
-  const playerFilterClear = el("filter-clear");
+  const uiFilter = el("filter");
+  const uiFilterClear = el("filter-clear");
   const playerNextBtn = el("next");
   const playerModeBtn = el("mode");
 
   // DOM Elements - Metadata Header
   const playerTitle = el("title");
   const playerAnime = el("anime");
+  const playerAnidb = el("anidb");
   const playerNowPlayingFav = el("now-playing-fav");
   const playerLocateBtn = el("locate-current");
 
@@ -51,8 +52,20 @@
   let stackIndex = -1;
   /** @type {string} Used to detect filter changes for history reset. */
   let lastFilterValue = "";
+  /** @type {number|null} Reference to the timeout that triggers the idle state. */
+  let idleTimer;
 
   // #region Utilities
+
+  /**
+   * Resets the idle timer and reveals the UI. Suspends the timer if the cursor is over a control.
+   * @param {MouseEvent} e - The mouse movement event.
+   */
+  const resetIdle = (e) => {
+    playerContainer.classList.remove("idle");
+    clearTimeout(idleTimer);
+    if (!e.target.closest(".ui-btn, #player-progress-track")) idleTimer = setTimeout(() => playerContainer.classList.add("idle"), 2000);
+  };
 
   /**
    * Converts a numeric time in seconds to a human-readable M:SS format.
@@ -107,21 +120,12 @@
     return modes[(idx + dir + modes.length) % modes.length];
   };
 
-  /** Prevents rapid execution of expensive functions like tree rendering. */
-  const debounce = (fn, ms) => {
-    let timeout;
-    return (...args) => {
-      clearTimeout(timeout);
-      timeout = setTimeout(() => fn.apply(this, args), ms);
-    };
-  };
-
   /**
    * Evaluates the full list of themes against active search terms, heart status, and metadata tags.
    * @returns {WebmEntry[]} The filtered list of theme entries.
    */
   const getFilteredItems = () => {
-    const rawFt = (playerFilter?.value || "").toLowerCase().trim();
+    const rawFt = (uiFilter?.value || "").toLowerCase().trim();
     if (!rawFt) return webmTreeData;
 
     const words = rawFt.split(/\s+/).filter((w) => w.length > 0);
@@ -174,7 +178,7 @@
       if (playerNowPlayingFav && webmTreeData.find((i) => i.path === currentWebmPath)?.videoId === videoId) {
         playerNowPlayingFav.classList.toggle("favourited", isFav);
       }
-      if (playerFilter?.value.toLowerCase().includes("favs")) renderTree(getFilteredItems());
+      if (uiFilter?.value.toLowerCase().includes("favs")) renderTree(getFilteredItems());
     }
   }
 
@@ -183,7 +187,7 @@
     if (!playerTree) return;
     playerTree.innerHTML = "";
     if (!items.length) {
-      playerTree.innerHTML = `<div class="placeholder">${playerFilter?.value ? "No matches" : "Generate AnimeThemes VFS to populate"}</div>`;
+      playerTree.innerHTML = `<div class="placeholder">${uiFilter?.value ? "No matches" : "Generate AnimeThemes VFS to populate"}</div>`;
       return;
     }
 
@@ -218,7 +222,7 @@
       .forEach((gName) => {
         const sMap = groups.get(gName),
           sKeys = [...sMap.keys()].sort((a, b) => a.localeCompare(b)),
-          ft = (playerFilter?.value || "").trim();
+          ft = (uiFilter?.value || "").trim();
         const sNodes = sKeys.map((sName) => {
           const files = sMap.get(sName).map((f) => {
             const li = document.createElement("li"),
@@ -295,13 +299,19 @@
     if (playerAnime) {
       playerAnime.textContent = playerAnime.title = item ? item.series : "Select a theme to begin...";
       if (item?.seriesId) {
-        const shokoBase = location.origin + base.split(/\/api\//i)[0]; // Reverse Proxy Support
+        const shokoBase = location.origin + base.split("/api/")[0];
         playerAnime.href = `${shokoBase}/webui/collection/series/${item.seriesId}/overview`;
         playerAnime.style.pointerEvents = "auto";
       } else {
         playerAnime.href = "#";
         playerAnime.style.pointerEvents = "none";
       }
+    }
+
+    if (playerAnidb) {
+      playerAnidb.textContent = item && item.anidbId ? `[a${item.anidbId}]` : "";
+      playerAnidb.href = item && item.anidbId ? `https://anidb.net/a${item.anidbId}` : "#";
+      playerAnidb.style.pointerEvents = item && item.anidbId ? "auto" : "none";
     }
     playerTree?.querySelectorAll(".leaf").forEach((el) => el.classList.toggle("active", el.dataset.path === path));
   }
@@ -311,7 +321,7 @@
     const items = getFilteredItems();
     if (items.length === 0) return;
 
-    const currentFilter = (playerFilter?.value || "").trim();
+    const currentFilter = (uiFilter?.value || "").trim();
     if (currentFilter !== lastFilterValue) {
       resetNavigationHistory();
       lastFilterValue = currentFilter;
@@ -397,6 +407,12 @@
       if (!playerVideo.paused && !playerVideo.ended) progressRaf = requestAnimationFrame(updateProgressLoop);
     };
 
+    playerContainer.onmousemove = resetIdle;
+    playerContainer.onmouseleave = () => {
+      playerContainer.classList.remove("idle");
+      clearTimeout(idleTimer);
+    };
+
     playerVideo.addEventListener("play", () => {
       playerTrack?.classList.remove("paused");
       cancelAnimationFrame(progressRaf);
@@ -464,36 +480,9 @@
         if (playerVideo.src) playerVideo.muted = !playerVideo.muted;
       };
 
-    if (playerFilter) {
-      const debouncedRender = debounce(() => renderTree(getFilteredItems()), 250);
-      playerFilter.oninput = () => {
-        if (playerFilterClear) playerFilterClear.hidden = !playerFilter.value;
-        debouncedRender();
-      };
-      playerFilter.onkeydown = (e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          playerFilter.blur();
-        } else if (e.key === "Escape") {
-          e.preventDefault();
-          playerFilter.value = "";
-          if (playerFilterClear) playerFilterClear.hidden = true;
-          renderTree(getFilteredItems());
-          playerFilter.blur();
-        }
-      };
-    }
+    initSearchInteractions(uiFilter, uiFilterClear, () => renderTree(getFilteredItems()));
 
     if (playerModeBtn) playerModeBtn.onclick = () => updateMode(1);
-    if (playerFilterClear)
-      playerFilterClear.onclick = () => {
-        playerFilter.value = "";
-        playerFilterClear.hidden = true;
-        playerFilter.focus();
-        setTimeout(() => {
-          renderTree(getFilteredItems()); // Defer DOM Operation to reduce perceived lag
-        }, 10);
-      };
 
     if (playerNextBtn) {
       playerNextBtn.onclick = () => {
@@ -524,7 +513,7 @@
 
     window.addEventListener("keydown", (e) => {
       if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA") return;
-      const handledKeys = [" ", "k", "K", "'", ";", ",", ".", "/", "?", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowUp", "b", "B", "f", "F", "g", "G", "h", "H", "j", "J", "l", "L", "m", "M", "n", "N"];
+      const handledKeys = [" ", "k", "K", "'", ";", ",", ".", "?", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowUp", "b", "B", "f", "F", "g", "G", "h", "H", "j", "J", "l", "L", "m", "M", "n", "N"];
       if (!handledKeys.includes(e.key)) return;
       e.preventDefault();
       const isShuffle = playerModeBtn?.getAttribute("data-mode") === "shuffle";
@@ -547,7 +536,6 @@
         case "f": case "F": toggleFullscreen(); break;
         case "g": case "G": locateCurrentInTree(); break;
         case "h": case "H": const hItem = webmTreeData.find((i) => i.path === currentWebmPath); if (hItem) toggleFavourite(hItem.videoId); break;
-        case "/": playerFilter?.focus(); break;
         case "?": openModal(helpModal); break;
       }
     });
