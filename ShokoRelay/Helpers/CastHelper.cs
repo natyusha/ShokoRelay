@@ -35,7 +35,7 @@ public static class CastHelper
                     order = order++,
                     tag = GetName(c.Creator, c.Name),
                     role = c.Character?.Name ?? c.Name,
-                    thumb = c.Creator?.PrimaryImage is { } img ? ImageHelper.GetImageUrl(img, "Staff") : null,
+                    thumb = c.Creator?.PrimaryImage is { } img ? ImageHelper.GetImageUrl(img) : null,
                 })
                 // Filter out non-person entries (characters, vehicles, mecha, etc.) where the actor name matches the role name.
                 .Where(c => !string.Equals(c.tag, c.role, StringComparison.Ordinal))
@@ -54,7 +54,7 @@ public static class CastHelper
                             order = order++,
                             tag = GetName(c.Creator, c.Name),
                             role = c.RoleType == CrewRoleType.Music ? "Composer" : c.Name,
-                            thumb = c.Creator?.PrimaryImage is { } img ? ImageHelper.GetImageUrl(img, "Staff") : null,
+                            thumb = c.Creator?.PrimaryImage is { } img ? ImageHelper.GetImageUrl(img) : null,
                         }
                 )
                 .ToArray()

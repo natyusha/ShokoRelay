@@ -94,7 +94,7 @@ public class PlexMetadata(IMetadataService metadataService)
             ["guid"]                  = series.GetPlexGuid(),
             ["type"]                  = "show",
             ["title"]                 = titles.DisplayTitle,
-            ["originallyAvailableAt"] = series.AirDate?.ToString("yyyy-MM-dd", null),
+            ["originallyAvailableAt"] = series.AirDate?.ToString(),
             ["thumb"]                 = images.GetImages(imageType: ImageEntityType.Primary).FirstOrDefault() is { } p ? ImageHelper.GetImageUrl(p, cacheBuster: cb) : null,
             ["art"]                   = images.GetImages(imageType: ImageEntityType.Backdrop).FirstOrDefault() is { } a ? ImageHelper.GetImageUrl(a, cacheBuster: cb) : null,
             ["contentRating"]         = rating,
@@ -198,7 +198,7 @@ public class PlexMetadata(IMetadataService metadataService)
 
         var ps = ctx.Series;
         var cb = GetCacheBuster(ps);
-        var images = (IWithImages)ps;
+        var images = ps;
         var seasonTitle = GetSeasonFolder(seasonNum);
         string? seasonSummary = null;
 
@@ -232,7 +232,7 @@ public class PlexMetadata(IMetadataService metadataService)
             ["guid"]                  = series.GetPlexGuid(seasonNum),
             ["type"]                  = "season",
             ["title"]                 = seasonTitle,
-            ["originallyAvailableAt"] = seasonDate?.ToString("yyyy-MM-dd", null),
+            ["originallyAvailableAt"] = seasonDate?.ToString(),
             ["thumb"]                 = thumb,
             ["contentRating"]         = ctx.ContentRating,
             //['originalTitle']       = No source for original season titles
@@ -309,8 +309,8 @@ public class PlexMetadata(IMetadataService metadataService)
             ["type"]                  = "episode",
             ["subtype"]               = (mapped.Season < 0 && TryGetExtraSeason(mapped.Season, out var ex)) ? ex.Subtype : null,
             ["title"]                 = epTitle,
-            ["originallyAvailableAt"] = ep.AirDate?.ToString("yyyy-MM-dd", null),
-            ["thumb"]                 = Settings.TmdbThumbnails && images.GetImages(imageType: ImageEntityType.Primary).FirstOrDefault() is { } t ? ImageHelper.GetImageUrl(t, cacheBuster: cb) : null,
+            ["originallyAvailableAt"] = ep.AirDate?.ToString(),
+            ["thumb"]                 = Settings.TmdbThumbnails && images.GetImages(imageType: ImageEntityType.Backdrop).FirstOrDefault() is { } t ? ImageHelper.GetImageUrl(t, cacheBuster: cb) : null,
             //["art"]                 = No source for episode level background images
             ["contentRating"]         = ContentRatingHelper.GetContentRatingAndAdult(series).Rating,
             //["originalTitle"]       = No source for original episode titles

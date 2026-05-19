@@ -398,7 +398,7 @@
     document.addEventListener("mouseleave", hide);
 
     const attach = (t) => {
-      // 1. Tooltip logic
+      // Tooltip logic
       if (t.title) {
         t.dataset.tooltipText = t.title;
         t.removeAttribute("title");
@@ -413,7 +413,7 @@
           t.addEventListener("mousedown", hide);
         }
       }
-      // 2. Automated link behavior: Force new tab and security headers for all links
+      // Automated link behavior: Force new tab and security headers for all links
       if (t.tagName === "A" && t.hasAttribute("href")) {
         const href = t.getAttribute("href");
         if (href && !href.startsWith("#") && !href.startsWith("javascript:")) {

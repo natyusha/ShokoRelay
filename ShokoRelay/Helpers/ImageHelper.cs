@@ -32,12 +32,11 @@ public static class ImageHelper
 
     /// <summary>Construct a full URL for the given image, including an optional cache-buster.</summary>
     /// <param name="image">Image metadata object.</param>
-    /// <param name="imageTypeOverride">Optional string to override the path type.</param>
     /// <param name="cacheBuster">Optional token to defeat Plex caching.</param>
     /// <returns>A full URL string.</returns>
-    public static string GetImageUrl(IImage image, string? imageTypeOverride = null, string? cacheBuster = null)
+    public static string GetImageUrl(IImage image, string? cacheBuster = null)
     {
-        var url = $"{ServerBaseUrl}/api/v3/Image/{image.Source}/{imageTypeOverride ?? image.Type.ToString()}/{image.ID}";
+        var url = $"{ServerBaseUrl}/api/v3/Image/{image.ID}";
         return string.IsNullOrEmpty(cacheBuster) ? url : $"{url}?t={cacheBuster}";
     }
 

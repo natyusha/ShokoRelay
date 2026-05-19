@@ -96,7 +96,7 @@ public static class OverrideHelper
             {
                 if (group.Any(x => newGroups.ContainsKey(x.AnidbAnimeID)))
                     continue;
-                var ids = group.OrderBy(x => x.AirDate ?? PartialDateOnly.FromDateTime(DateTime.MaxValue)).ThenBy(x => x.AnidbAnimeID).Select(x => x.AnidbAnimeID).ToList();
+                var ids = group.OrderBy(x => x.AirDate ?? PartialDateOnly.MaxValue).ThenBy(x => x.AnidbAnimeID).Select(x => x.AnidbAnimeID).ToList();
                 AddGroup(ids);
             }
         }
