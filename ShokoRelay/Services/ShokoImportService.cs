@@ -1,5 +1,4 @@
 using NLog;
-using Shoko.Abstractions.Video.Enums;
 using Shoko.Abstractions.Video.Services;
 using ShokoRelay.Vfs;
 
@@ -18,7 +17,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
 
     #region Import Logic
 
-    /// <summary>Trigger import scans for every managed folder marked as a "Source".</summary>
+    /// <summary>Trigger import scans for every managed folder to find new or unrecognized files.</summary>
     /// <returns>A read-only list of folder names that were scheduled for scanning.</returns>
     public async Task<IReadOnlyList<string>> TriggerImportAsync()
     {
@@ -27,7 +26,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
         {
             var mf = _videoService.GetAllManagedFolders();
             if (mf != null)
-                folders = [.. mf.Where(f => f.DropFolderType.HasFlag(DropFolderType.Source)).Select(f => f.Name ?? f.Path ?? string.Empty).Where(s => !string.IsNullOrEmpty(s))];
+                folders = [.. mf.Select(f => f.Name ?? f.Path ?? string.Empty).Where(s => !string.IsNullOrEmpty(s))];
         }
         catch (Exception ex)
         {
@@ -36,7 +35,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
 
         try
         {
-            await _videoService.ScheduleScanForManagedFolders(onlyDropSources: true).ConfigureAwait(false);
+            await _videoService.ScheduleScanForManagedFolders(onlyDropSources: false).ConfigureAwait(false);
         }
         catch (Exception ex)
         {

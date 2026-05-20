@@ -328,6 +328,10 @@ public class VfsWatcher(
             if (vfsResult.CreatedLinks > 0)
                 s_logger.Info("VFS: Re-generated links for '{0}' during fixup phase", series.PreferredTitle?.Value);
 
+            // Restore AnimeThemes links for this specific series if a mapping file exists to prevent the pruned folder from losing them
+            if (File.Exists(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileAtMapping)))
+                await _atMapping.ApplyMappingAsync([series.ID], token).ConfigureAwait(false);
+
             int bufferSeconds = Settings.Advanced.PlexScanDelay;
             if (bufferSeconds > 0)
                 await Task.Delay(TimeSpan.FromSeconds(bufferSeconds), token).ConfigureAwait(false);

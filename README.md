@@ -140,8 +140,8 @@ com.plexapp.agents.shokorelay
 - `UTC Offset` An input which controls the starting time in UTC for scheduled tasks
 - `Plex Int.` An input which will schedule [Generate Collections](#collection-generation) and [Apply Critic Ratings](#critic-rating-application) every `N` hours
   - An interval of 24-hours or above is recommended as Shoko rarely updates this information
-- `Import Int.` An input which will schedule Shoko imports from "Source" type drop folders every `N` hours
-  - This is intended to replace Shoko's default Update Options for "Files With Missing Info"
+- `Import Int.` An input which will schedule Shoko to import new or unrecognized files every `N` hours
+  - Make sure to set `AniDB > Update Options > Files With Missing Info` to "Never" if you use this
 - `Sync Int.` An input which will schedule watched state syncing from Plex to Shoko every `N` hours
   - This includes ratings/votes if `Include Ratings` is enabled in the `Sync Watched States Menu`
   - To speed up the process the scheduled watched sync only considers things watched during the scheduled interval +1 hour
@@ -173,7 +173,7 @@ As a bonus this supports using the primary series poster as the collection poste
   - Unlike the "Remove Missing Files" action in Shoko's WebUI this will remove all traces of the files from the Shoko DB
   - This will also remove files that are in folders which the plugin has told Shoko to ignore
   - Entries will _always_ be removed from the AniDB MyList as well
-- `Import` A button which will make shoko rescan all "Source" type drop folders
+- `Import` A button which will make shoko rescan all managed folders for new or unrecognized files
 - `Sync` A button which opens a modal allowing for watched state syncing from Plex to Shoko or Shoko to Plex
   - This includes any users configured under `Extra Plex Users` in the "Plex Authentication" section unless `Sync Users` excludes them
   - _Requires Plex authentication_
@@ -188,6 +188,7 @@ This plugin includes full [AnimeThemes](https://animethemes.moe/) integration. I
    - There is a torrent available with over 19000+ themes
 2. Generate a mapping for the videos by clicking the `Build Mapping File` button:
    - If you have the torrent click the `Import Curated Mapping File` button to download the [current torrent mapping](https://gist.github.com/natyusha/bb33a3b3bc95bc7a3869633e23d522bb)
+     - This mapping requires the configured `!AnimeThemes` folder to be the same as the torren'ts root folder
    - Mapping the torrent takes ~8 hours (due to rate limits) and generated mappings will be appended to it
 3. Apply the mapping to the VFS by clicking the `Generate` button
    - The themes will be placed in the "Shorts" folder of their respective series

@@ -244,7 +244,7 @@ GET  /sync-watched/start                                       -> StartWatchedSy
 
 - `RemoveMissingFiles` removes missing files from Shoko and the AniDB MyList (physical files are never touched).
   - `dryRun`: (default true) set to false to actually remove records from Shoko and AniDB MyList.
-- `RunShokoImport` triggers a scan of managed folders marked as "Source".
+- `RunShokoImport` triggers a scan of managed folders.
 - `SyncPlexWatched` synchronizes watched state between Plex and Shoko (Bi-directional).
   - `dryRun`: (default true) If true, skip database and Plex server writes.
   - `sinceHours`: (optional) limit processing to items viewed within this window.
