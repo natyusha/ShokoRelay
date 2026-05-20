@@ -114,13 +114,12 @@
         refreshSeries(g.id);
       };
 
-      const titleHtml = `
-        <a href="${shokoBase}/webui/collection/series/${g.id}/overview" class="vfs-link vfs-id-link">${g.id}</a>
-        <span class="vfs-sep">❯</span>
-        <span class="vfs-title">${g.title}</span>
-        <a href="https://anidb.net/a${g.anidbId}" class="vfs-link small" target="_blank" rel="noopener noreferrer">[a${g.anidbId}]</a>
-        <a href="${base}/metadata/${g.id}?includeChildren=1" class="vfs-link small" target="_blank" rel="noopener noreferrer">[m${g.id}]</a>
-      `;
+      const titleHtml =
+        `<a href="${shokoBase}/webui/collection/series/${g.id}/overview" class="vfs-link vfs-id-link">${g.id}</a>` +
+        `<span class="vfs-sep">❯</span>` +
+        `<span class="vfs-title">${g.title}</span>` +
+        `<a href="https://anidb.net/a${g.anidbId}" class="vfs-link small" target="_blank" rel="noopener noreferrer">[a${g.anidbId}]</a>` +
+        `<a href="${base}/metadata/${g.id}?includeChildren=1" class="vfs-link small" target="_blank" rel="noopener noreferrer">[m${g.id}]</a>`;
 
       det.ontoggle = () => {
         if (det.open) {
@@ -150,9 +149,7 @@
         const seasonMatch = s.name.match(/^Season\s*(\d+)$/i);
         const isSpecials = /^Specials$/i.test(s.name.trim());
         const seasonId = seasonMatch ? seasonMatch[1] : isSpecials ? "0" : null;
-        const seasonLink = seasonId
-          ? `<a href="${base}/metadata/${g.id}s${seasonId}?includeChildren=1" class="vfs-link" target="_blank" rel="noopener noreferrer"><small>[m${g.id}s${seasonId}]</small></a>`
-          : "";
+        const seasonLink = seasonId ? `<a href="${base}/metadata/${g.id}s${seasonId}?includeChildren=1" class="vfs-link small" target="_blank" rel="noopener noreferrer">[m${g.id}s${seasonId}]</a>` : "";
         sSum.innerHTML = `<span class="tree-icon expand"></span><span class="tree-icon collapse"></span>${s.name} ${seasonLink}`;
 
         s.files.forEach((f) => {

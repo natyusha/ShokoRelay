@@ -43,12 +43,38 @@
     document.querySelectorAll(".plex-auth, .sync-user").forEach((elem) => {
       const reqPlex = elem.classList.contains("plex-auth");
       const reqSync = elem.classList.contains("sync-user");
-      elem.disabled = (reqPlex && !isPlexLinked) || (reqSync && !isSyncActive);
+      const isDisabled = (reqPlex && !isPlexLinked) || (reqSync && !isSyncActive);
+
+      if (["INPUT", "BUTTON", "SELECT", "TEXTAREA"].includes(elem.tagName)) elem.disabled = isDisabled;
+
+      const msg = isDisabled ? (reqPlex && !isPlexLinked ? "Requires Plex Authentication" : "Requires Sync Users to be enabled") : "";
+      const parent = elem.closest("label, .w100, div") || elem.parentElement;
+      if (parent) {
+        if (msg) parent.title = msg;
+        else {
+          delete parent.dataset.tooltipText;
+          parent.removeAttribute("title");
+          parent.removeAttribute("aria-describedby");
+        }
+      }
     });
 
     const overridesBtn = el("vfs-overrides");
     const cfg = config || window.relaySettings;
-    if (overridesBtn && cfg) overridesBtn.disabled = !(window._sr.getValueByPath(cfg, "Advanced.TmdbEpNumbering") || window._sr.getValueByPath(cfg, "Advanced.MergeTmdbSeries"));
+    if (overridesBtn && cfg) {
+      const isDisabled = !(window._sr.getValueByPath(cfg, "Advanced.TmdbEpNumbering") || window._sr.getValueByPath(cfg, "Advanced.MergeTmdbSeries"));
+      overridesBtn.disabled = isDisabled;
+
+      const parent = overridesBtn.closest(".w100, div") || overridesBtn.parentElement;
+      if (parent) {
+        if (isDisabled) parent.title = "Requires TMDB Episode Numbering or Auto-Merge";
+        else {
+          delete parent.dataset.tooltipText;
+          parent.removeAttribute("title");
+          parent.removeAttribute("aria-describedby");
+        }
+      }
+    }
   };
   // #endregion
 

@@ -7,7 +7,7 @@
   font-size: 1.3em;
 }
 #vfs-count {
-  opacity: 0.6;
+  color: color-mix(in srgb, currentColor 60%, transparent);
   font-size: 0.9em;
 }
 #title {
@@ -46,14 +46,13 @@
   transform: rotate(90deg);
   transition: all 0.3s ease-in-out;
   cursor: pointer;
-  margin-left: 4px;
+  margin: 0 -6px 0 4px;
   color: var(--highlight-color);
   font-weight: bold;
   font-size: 1.4em;
   line-height: 0;
 }
 .refresh-icon:hover {
-  transform: rotate(180deg);
   background: none;
   color: var(--hover-color);
 }
@@ -76,12 +75,11 @@
   font-size: 0.75em;
 }
 a.vfs-link {
-  opacity: 0.8;
   margin-left: 4px;
+  color: color-mix(in srgb, var(--highlight-color) 80%, transparent);
   text-decoration: none;
 }
 a.vfs-link:hover {
-  opacity: 1;
   color: var(--highlight-color);
   text-decoration: dotted underline;
 }
@@ -90,8 +88,8 @@ a.vfs-link:hover {
 }
 .source-path {
   display: block;
-  opacity: 0.5;
   margin-left: 8px;
+  color: color-mix(in srgb, currentColor 50%, transparent);
   font-size: 0.9em;
   font-family: monospace;
   white-space: pre-wrap;

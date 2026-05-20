@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using NLog;
 using Shoko.Abstractions.Video;
+using Shoko.Abstractions.Video.Enums;
 
 namespace ShokoRelay.Vfs;
 
@@ -71,7 +72,7 @@ internal static class VfsShared
         foreach (var mapping in fileData.Mappings)
         {
             var location = mapping.Video.Files.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l.Path)) ?? mapping.Video.Files.FirstOrDefault();
-            if (location == null)
+            if (location == null || location.ManagedFolder == null || location.ManagedFolder.DropFolderType.HasFlag(DropFolderType.Source))
                 continue;
 
             string? importRoot = ResolveImportRootPath(location);

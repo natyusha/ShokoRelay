@@ -1,6 +1,6 @@
 /**
  * @file script.js
- * @description Main dashboard script for UI interactions, server fetching, and shared utilities like toasts/modals.
+ * @description Core shared layout utilities for the Shoko Relay client interface.
  */
 (() => {
   const base = location.pathname.split(/\/dashboard/i)[0];
@@ -12,9 +12,6 @@
 
   /** Standardized labels for playback controls used by both MP3 and Video players. */
   const PLAYBACK_LABELS = { loop: "Loop", shuffle: "Shuffle", next: "Next", off: "Once", idle: "Play", playing: "Next" };
-
-  /** List of values that correspond to server task names for spinner synchronization. */
-  const MANAGED_TASK_IDS = Object.values(window._sr?.tasks || {});
 
   // #region Helpers
   /**
@@ -118,6 +115,7 @@
    * @param {Object} res - The fetchJson response object.
    * @param {string} label - Identifies the operation.
    * @param {Object} [opts] - Display options.
+   * @returns {void}
    */
   function toastOperation(res, label, opts = {}) {
     const { summary, hideOnSucceed, type } = opts;
@@ -134,83 +132,6 @@
       const display = summary || res.data?.message || res.data?.Message || text || (typeof res.data === "string" ? res.data : JSON.stringify(res.data));
       showToast(`${label} Failed: ${display} ${logLink}`, "error", 0);
     }
-  }
-
-  /**
-   * Toggle a button's loading state by adding/removing a spinner overlay.
-   * @param {HTMLElement} btn - The button element to modify.
-   * @param {boolean} isLoading - Whether to enable or disable the loading state.
-   */
-  function setButtonLoading(btn, isLoading) {
-    if (!btn) return;
-    btn.classList.toggle("loading", isLoading);
-    isLoading ? btn.setAttribute("disabled", "") : btn.removeAttribute("disabled");
-    if (isLoading && !btn.querySelector(".button-spinner")) {
-      const s = document.createElement("span");
-      s.className = "button-spinner";
-      s.innerHTML = '<svg class="icon-svg"><use href="img/icons.svg#loading"></use></svg>';
-      btn.appendChild(s);
-    } else if (!isLoading) btn.querySelector(".button-spinner")?.remove();
-  }
-
-  /** Polls the server for active tasks and completed results, synchronizing the UI state. */
-  async function syncActiveTasks() {
-    const res = await fetchJson(window._sr.base + "/tasks/active");
-    if (!res.ok) return;
-    const activeTasks = getData(res) || [];
-    MANAGED_TASK_IDS.forEach((id) => {
-      const btn = el(id);
-      if (btn) setButtonLoading(btn, activeTasks.includes(id) || btn.classList.contains("clicking"));
-    });
-
-    const completeRes = await fetchJson(window._sr.base + "/tasks/completed");
-    const completeData = getData(completeRes);
-    if (completeRes.ok && completeData) {
-      for (const [taskName, result] of Object.entries(completeData)) {
-        const btn = el(taskName);
-        if (btn?.classList.contains("clicking")) continue;
-        const isOk = (result.status || result.Status || "").toLowerCase() === "ok"; // Ensure the ok status is correctly identified regardless of property casing
-        const fInput = btn?.dataset.relayPersistIfEmpty ? document.querySelector(btn.dataset.relayPersistIfEmpty) : null;
-
-        toastOperation({ ok: isOk, data: result }, taskName.replace(/-/g, " "), { hideOnSucceed: fInput?.value.trim() ? TOAST_MS : 0 });
-        await fetch(window._sr.base + `/tasks/clear/${taskName}`, { method: "POST" });
-      }
-    }
-  }
-
-  /**
-   * Core logic to wrap an async action with loading states and task management.
-   * @param {HTMLElement} btn - The button element trigger.
-   * @param {Function} handler - The async function to execute.
-   * @returns {Promise<void>}
-   */
-  async function runAction(btn, handler) {
-    if (!btn || btn.classList.contains("clicking")) return;
-    btn.classList.add("clicking");
-    setButtonLoading(btn, true);
-    const taskId = btn.id;
-    try {
-      await handler(btn);
-      if (taskId && MANAGED_TASK_IDS.includes(taskId)) await fetch(window._sr.base + `/tasks/clear/${taskId}`, { method: "POST" });
-    } finally {
-      btn.classList.remove("clicking");
-      if (taskId && !MANAGED_TASK_IDS.includes(taskId)) setTimeout(() => setButtonLoading(btn, false), TOAST_MS);
-      else syncActiveTasks();
-    }
-  }
-
-  /**
-   * Initialize a button as an aria-pressed toggle with a click handler.
-   * @param {HTMLElement|string} btn - The button element or its DOM id.
-   * @param {boolean} [defaultState=false] - Initial pressed state.
-   * @returns {HTMLElement|null} The resolved button element.
-   */
-  function initToggle(btn, defaultState = false) {
-    const elBtn = typeof btn === "string" ? el(btn) : btn;
-    if (!elBtn) return null;
-    if (!elBtn.hasAttribute("aria-pressed")) elBtn.setAttribute("aria-pressed", String(!!defaultState));
-    elBtn.onclick = () => elBtn.setAttribute("aria-pressed", elBtn.getAttribute("aria-pressed") === "true" ? "false" : "true");
-    return elBtn;
   }
 
   /**
@@ -242,6 +163,7 @@
   /**
    * Updates element title from data-mode or data-state for tooltips.
    * @param {HTMLElement} el - The target element.
+   * @returns {void}
    */
   function updatePlaybackTooltip(el) {
     if (!el) return;
@@ -272,7 +194,7 @@
   }
   // #endregion
 
-  // #region Glogal Object
+  // #region Global Object
   // Populate shared global object IMMEDIATELY so feature scripts can destructure it
   window._sr = Object.assign(window._sr || {}, {
     base,
@@ -282,15 +204,10 @@
     fetchJson,
     showToast,
     toastOperation,
-    summarizeResult,
-    runAction,
-    initToggle,
     openModal,
-    setButtonLoading,
     updatePlaybackTooltip,
-    syncActiveTasks,
-    saveSettings,
     getData,
+    saveSettings,
     actions: {},
     unwrapConfig: (data) => (data?.payload !== undefined ? data.payload || {} : data || {}),
     getValueByPath: (obj, path) => path.split(".").reduce((o, k) => o?.[k], obj),
@@ -315,10 +232,6 @@
     setIfNotEmpty: (ps, k, v) => {
       if (v != null && String(v) !== "") ps.set(k, String(v));
     },
-    withButtonAction: (btn, handler) => {
-      const elBtn = typeof btn === "string" ? el(btn) : btn;
-      if (elBtn) elBtn.onclick = () => runAction(elBtn, handler);
-    },
   });
   // #endregion
 
@@ -340,8 +253,10 @@
         applyTheme(next);
       };
   }
-
-  /** Initializes the custom tooltip system and automatically configures external link behavior. */
+  /**
+   * Initializes the custom hover tooltip overlay and configures secure external link target behaviors.
+   * @returns {void}
+   */
   function initTooltips() {
     if (el("shoko-tooltip")) return;
     const tpl = document.createElement("div");
@@ -361,13 +276,14 @@
       content.textContent = text;
       tpl.className = "tooltip-core tooltip-box tooltip-dark tooltip-show";
       tpl.setAttribute("aria-hidden", "false");
-      const rect = target.getBoundingClientRect(),
-        vw = document.documentElement.clientWidth,
-        vh = document.documentElement.clientHeight,
-        margin = 10;
-      let place = "top",
-        top = rect.top - tpl.offsetHeight - margin,
-        left = rect.left + rect.width / 2 - tpl.offsetWidth / 2;
+      const disabledChild = target.tagName !== "LABEL" ? target.querySelector(":disabled, [disabled]") : null;
+      const rect = disabledChild ? disabledChild.getBoundingClientRect() : target.getBoundingClientRect();
+      const vw = document.documentElement.clientWidth;
+      const vh = document.documentElement.clientHeight;
+      const margin = 10;
+      let place = "top";
+      let top = rect.top - tpl.offsetHeight - margin;
+      let left = rect.left + rect.width / 2 - tpl.offsetWidth / 2;
       if (top < margin) {
         const spaceBelow = vh - rect.bottom;
         if (spaceBelow > tpl.offsetHeight + margin) {
@@ -433,69 +349,7 @@
   }
   // #endregion
 
-  // #region Global Dispatcher
-  document.addEventListener("click", (e) => {
-    const target = e.target.closest("[data-relay-endpoint], [data-relay-action]");
-    if (!target) return;
-
-    const action = async (btn, forceDryRun = false) => {
-      let endpoint = btn.dataset.relayEndpoint;
-      const actionKey = btn.dataset.relayAction;
-      const label = btn.dataset.relayLabel;
-      const paramFnName = btn.dataset.relayParams;
-      const method = btn.dataset.relayMethod || "GET";
-      const persistAttr = btn.dataset.relayPersist === "true";
-      const persistIfEmptySelector = btn.dataset.relayPersistIfEmpty;
-
-      if (endpoint) {
-        if (forceDryRun) endpoint = endpoint.replace(/dryRun=false/i, "dryRun=true"); // If a dry run is forced by the modal button, swap any dryRun=false parameter to true
-        let url = base + endpoint;
-        if (paramFnName && typeof window._sr[paramFnName] === "function") {
-          const ps = window._sr[paramFnName]();
-          url += (url.includes("?") ? "&" : "?") + ps.toString();
-        }
-        let hideOnSucceed = persistAttr || forceDryRun ? 0 : TOAST_MS;
-        if (persistIfEmptySelector) {
-          const input = document.querySelector(persistIfEmptySelector);
-          if (input && !input.value.trim()) hideOnSucceed = 0;
-        }
-        showToast(`${label}${forceDryRun ? " (Dry Run)" : ""}: Processing...`, "info", TOAST_MS);
-        const res = await fetchJson(url, { method });
-        toastOperation(res, label, { hideOnSucceed });
-      } else if (actionKey) {
-        const handler = window._sr.actions[actionKey];
-        if (handler) await handler(btn);
-      }
-    };
-
-    e.preventDefault();
-    const confirmMsg = target.dataset.relayConfirm;
-    if (confirmMsg) {
-      const modal = el("confirm-modal");
-      const msg = el("confirm-message");
-      const execBtn = el("confirm-exec");
-      const dryBtn = el("confirm-dry");
-      msg.innerHTML = confirmMsg;
-      execBtn.textContent = target.dataset.relayConfirmButton || "Confirm";
-      const close = openModal(modal);
-      el("confirm-cancel").onclick = close;
-      execBtn.onclick = () => {
-        close();
-        runAction(target, (btn) => action(btn, false));
-      };
-      dryBtn.onclick = () => {
-        close();
-        runAction(target, (btn) => action(btn, true));
-      };
-    } else {
-      runAction(target, action);
-    }
-  });
-  // #endregion
-
   // Lifecycle Execution
   initTooltips();
   initTheme();
-  setInterval(syncActiveTasks, 3000);
-  syncActiveTasks();
 })();

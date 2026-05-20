@@ -42,9 +42,8 @@ body {
   width: 295px;
 }
 .filter-icon {
-  opacity: 0.6;
   transition: all 0.3s ease-in-out;
-  fill: var(--text-color);
+  fill: color-mix(in srgb, var(--text-color) 60%, transparent);
   width: 24px;
   height: 24px;
 }
@@ -78,7 +77,7 @@ body {
   display: none;
 }
 .clear:hover {
-  opacity: 1;
+  fill: var(--text-color);
 }
 /* #endregion */
 
@@ -93,9 +92,8 @@ body {
   font-size: 0.9em;
 }
 #tree .placeholder {
-  opacity: 0.6;
   padding: 40px 8px;
-  color: var(--text-color);
+  color: color-mix(in srgb, var(--text-color) 60%, transparent);
   text-align: center;
 }
 #tree ul {

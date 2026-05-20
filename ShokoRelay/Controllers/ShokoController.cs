@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Shoko.Abstractions.Video.Enums;
 using Shoko.Abstractions.Video.Services;
 using ShokoRelay.AnimeThemes;
 using ShokoRelay.Services;
@@ -98,9 +99,14 @@ public class ShokoController(
         if (!System.IO.File.Exists(path))
             return Ok(new { roots = Array.Empty<object>() });
 
-        // Normalize Managed Folder paths to remove trailing slashes for consistent comparison with blueprint keys.
+        // Normalize Managed Folder paths to remove trailing slashes for consistent comparison with blueprint keys. Filter out folders marked as Source since the VFS only builds in none or destination folders.
         var managedFolders =
-            _videoService.GetAllManagedFolders()?.Select(f => new { Path = f.Path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), f.Name }).OrderByDescending(f => f.Path.Length).ToList()
+            _videoService
+                .GetAllManagedFolders()
+                ?.Where(f => !f.DropFolderType.HasFlag(DropFolderType.Source))
+                .Select(f => new { Path = f.Path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), f.Name })
+                .OrderByDescending(f => f.Path.Length)
+                .ToList()
             ?? [];
 
         var rawJson = System.IO.File.ReadAllText(path);

@@ -69,11 +69,10 @@
 }
 #anime,
 #anidb {
-  opacity: 0.8;
   transition: all 0.3s ease-in-out;
   margin-top: 0.15em;
   pointer-events: none;
-  color: var(--highlight-color);
+  color: color-mix(in srgb, var(--highlight-color) 80%, transparent);
   font-size: 0.9em;
   text-decoration: none;
 }
@@ -91,7 +90,6 @@
 }
 #anime:hover,
 #anidb:hover {
-  opacity: 1;
   color: var(--highlight-color);
   text-decoration: dotted underline;
 }
@@ -153,8 +151,7 @@
 #volume-text,
 #volume-icon {
   opacity: 0;
-
-  transition: opacity 0.3s ease-in-out;
+  transition: all 0.3s ease-in-out;
 }
 .video-container:hover::after,
 .video-container:hover .ui-top-row,
@@ -233,25 +230,23 @@
   user-select: none;
 }
 .fav-icon {
-  opacity: 0.1;
+  color: color-mix(in srgb, currentColor 10%, transparent);
 }
 .loc-icon {
-  opacity: 0.6;
   margin-top: -0.1em;
-  color: var(--highlight-color);
+  color: color-mix(in srgb, var(--highlight-color) 60%, transparent);
 }
 .fav-icon:hover,
 .fav-icon.favourited,
 .leaf.active .fav-icon.favourited {
-  opacity: 1;
   color: var(--danger-color);
 }
 .loc-icon:hover {
-  opacity: 1;
+  color: var(--highlight-color);
 }
 .fav-icon.favourited:hover,
 .leaf.active .fav-icon.favourited:hover {
-  opacity: 0.5;
+  color: color-mix(in srgb, currentColor 50%, transparent);
 }
 /* #endregion */
 

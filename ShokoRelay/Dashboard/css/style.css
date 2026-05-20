@@ -190,7 +190,7 @@ label {
   margin-right: 8px;
 }
 small {
-  opacity: 0.6;
+  color: color-mix(in srgb, currentColor 60%, transparent);
 }
 a {
   transition: all 0.3s ease-in-out;
@@ -530,7 +530,7 @@ label > small::before {
   text-transform: uppercase;
 }
 .modal h4 {
-  opacity: 0.85;
+  color: color-mix(in srgb, currentColor 85%, transparent);
   font-weight: 500;
   font-size: 0.85em;
   text-transform: uppercase;

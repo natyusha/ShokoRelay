@@ -125,6 +125,7 @@ label.shoko-checkbox input[type="checkbox"]:checked + .shoko-checkbox-icon .chec
 .tmdb-ep-num:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  pointer-events: none;
 }
 button.plex-auth:disabled:hover,
 button.sync-user:disabled:hover,
