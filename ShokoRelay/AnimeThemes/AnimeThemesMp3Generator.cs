@@ -72,7 +72,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
     private readonly PlexClient _plexClient = plexClient;
     private readonly ConfigProvider _configProvider = configProvider;
     private readonly AnimeThemesApi _apiClient = new(httpClient);
-    private List<string>? _themeMp3Cache;
+    private HashSet<string>? _themeMp3Cache;
     private readonly Lock _cacheLock = new();
 
     private string ThemeCacheFilePath => Path.Combine(_configProvider.ConfigDirectory, ShokoRelayConstants.FileAtMp3Cache);
@@ -89,7 +89,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         {
             if (_themeMp3Cache == null)
                 LoadCacheFromFile();
-            return _themeMp3Cache ?? (IReadOnlyList<string>)[];
+            return _themeMp3Cache != null ? [.. _themeMp3Cache] : [];
         }
     }
 
@@ -110,15 +110,13 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         {
             if (_themeMp3Cache == null)
                 LoadCacheFromFile();
-            _themeMp3Cache ??= [];
-            if (!_themeMp3Cache.Contains(folderPath, VfsShared.PathComparer))
-            {
-                _themeMp3Cache.Add(folderPath);
+            _themeMp3Cache ??= new(VfsShared.PathComparer);
+            if (_themeMp3Cache.Add(folderPath))
                 SaveCacheToFile();
-            }
         }
     }
 
+    /// <summary>Forces a re-scan of all managed import folder roots and rebuilds the HashSet cache.</summary>
     private void RefreshThemeMp3CacheInternal()
     {
         s_logger.Info("AnimeThemes: Building Theme.mp3 cache -> scanning all managed import folders...");
@@ -130,9 +128,8 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
                 .Where(p => !string.IsNullOrWhiteSpace(p) && Directory.Exists(p))
                 .Distinct(VfsShared.PathComparer)
                 .ToList();
-            _themeMp3Cache =
-            [
-                .. roots
+            _themeMp3Cache = new HashSet<string>(
+                roots
                     .SelectMany(r =>
                         Directory
                             .EnumerateFiles(r!, "Theme.mp3", SearchOption.AllDirectories)
@@ -140,27 +137,30 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
                             .Select(Path.GetDirectoryName)
                     )
                     .OfType<string>(),
-            ];
+                VfsShared.PathComparer
+            );
             SaveCacheToFile();
             s_logger.Info("AnimeThemes: Theme.mp3 cache refreshed -> {0} folders found across {1} roots", _themeMp3Cache.Count, roots.Count);
         }
         catch (Exception ex)
         {
             s_logger.Warn(ex, "AnimeThemes: RefreshThemeMp3Cache -> Repositories not ready");
-            _themeMp3Cache ??= [];
+            _themeMp3Cache ??= new(VfsShared.PathComparer);
         }
     }
 
+    /// <summary>Loads the Theme.mp3 folder paths from the local cache file, constructing a HashSet for performance.</summary>
     private void LoadCacheFromFile()
     {
         if (File.Exists(ThemeCacheFilePath))
         {
             try
             {
-                var lines = File.ReadAllLines(ThemeCacheFilePath).Where(l => !string.IsNullOrWhiteSpace(l)).ToList();
-                if (lines.Count > 0)
+                var lines = File.ReadAllLines(ThemeCacheFilePath).Where(l => !string.IsNullOrWhiteSpace(l));
+                var set = new HashSet<string>(lines, VfsShared.PathComparer);
+                if (set.Count > 0)
                 {
-                    _themeMp3Cache = lines;
+                    _themeMp3Cache = set;
                     return;
                 }
             }
@@ -172,6 +172,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         RefreshThemeMp3CacheInternal();
     }
 
+    /// <summary>Save the current cached Theme.mp3 folder list to the local cache file.</summary>
     private void SaveCacheToFile()
     {
         try
@@ -348,6 +349,9 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
     #region Internal Helpers
 
     /// <summary>Validates the directory and resolves the Shoko series for the request.</summary>
+    /// <param name="q">The query parameters of the request.</param>
+    /// <param name="preview">True if the request is only for a preview/in-memory stream; otherwise false.</param>
+    /// <returns>A tuple containing either an error operation result, or resolved context metadata (folder path, target file, and series reference).</returns>
     private (ThemeMp3OperationResult? Error, (string Folder, string ThemePath, IVideoFile VideoFile, IShokoSeries Series)? Data) PrepareContext(AnimeThemesMp3Query q, bool preview)
     {
         if (string.IsNullOrWhiteSpace(q.Path))
@@ -401,6 +405,11 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
     }
 
     /// <summary>Queries the AnimeThemes API for a specific series theme.</summary>
+    /// <param name="aid">The AniDB ID of the series.</param>
+    /// <param name="slugArg">Optional preferred theme slug identifier (e.g. OP1).</param>
+    /// <param name="offset">Offset to use when multiple themes match.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A selected theme metadata and audio reference if found; otherwise null.</returns>
     private async Task<ThemeSelection?> FetchThemeAsync(int aid, string? slugArg, int offset, CancellationToken ct)
     {
         if (!string.IsNullOrWhiteSpace(slugArg) && !AnimeThemesHelper.SlugRegex.IsMatch(slugArg))
@@ -440,7 +449,10 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         );
     }
 
-    /// <summary>Downloads an audio file to a temporary location.</summary>
+    /// <summary>Downloads an audio file to a temporary location on disk.</summary>
+    /// <param name="url">The remote audio URL to download.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The path to the local temporary file.</returns>
     private async Task<string> DownloadAudioAsync(string url, CancellationToken ct)
     {
         s_logger.Debug("AnimeThemes MP3: Downloading audio from {0}", url);
@@ -453,7 +465,11 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         return temp;
     }
 
-    /// <summary>Creates a symbolic link for the Theme.mp3 in the Shoko VFS directory.</summary>
+    /// <summary>Creates a relative symbolic link for the Theme.mp3 in the Shoko VFS directory.</summary>
+    /// <param name="loc">The video file reference to determine the import root.</param>
+    /// <param name="sid">The Shoko Series ID.</param>
+    /// <param name="src">The source Theme.mp3 file path.</param>
+    /// <returns>The destination link path if created successfully; otherwise null.</returns>
     private string? TryLinkIntoVfs(IVideoFile loc, int sid, string src)
     {
         string? root = VfsShared.ResolveImportRootPath(loc);

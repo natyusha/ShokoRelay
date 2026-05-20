@@ -77,18 +77,27 @@ public class VfsWatcher(
 
     #region Event Handlers
 
+    /// <summary>Handles Shoko video file relocation and rename events, queueing affected series for VFS updates.</summary>
+    /// <param name="sender">Event sender.</param>
+    /// <param name="e">Event parameters containing file information.</param>
     private void OnVideoFileRelocated(object? sender, VideoFileRelocatedEventArgs e)
     {
         s_logger.Info("VFS: File relocated/renamed: {0}", Path.GetFileName(e.RelativePath));
         HandleFileEvent(e);
     }
 
+    /// <summary>Handles Shoko video file deletion events, queueing affected series for VFS updates.</summary>
+    /// <param name="sender">Event sender.</param>
+    /// <param name="e">Event parameters containing file information.</param>
     private void OnVideoFileDeleted(object? sender, VideoFileEventArgs e)
     {
         s_logger.Info("VFS: File deleted: {0}", Path.GetFileName(e.RelativePath));
         HandleFileEvent(e);
     }
 
+    /// <summary>Handles Shoko release matching events, queueing affected series for VFS updates when a video is assigned.</summary>
+    /// <param name="sender">Event sender.</param>
+    /// <param name="e">Event parameters containing release associations.</param>
     private void OnVideoReleaseSaved(object? sender, VideoReleaseSavedEventArgs e)
     {
         // Trigger build when a video is successfully linked to a series (manual or automatic)
@@ -107,8 +116,8 @@ public class VfsWatcher(
         KickProcessLoop();
     }
 
-    /// <summary>Unified handler for standard video file events.</summary>
-    /// <param name="e">Video file event arguments.</param>
+    /// <summary>Aggregates multiple video file events into the pending processing queue.</summary>
+    /// <param name="e">The video file event arguments.</param>
     private void HandleFileEvent(VideoFileEventArgs? e)
     {
         var seriesList = e?.Series?.ToList() ?? e?.Video?.Series?.ToList() ?? [];
@@ -125,6 +134,7 @@ public class VfsWatcher(
 
     #region Processing Logic
 
+    /// <summary>Locks and starts the background task loop to process pending series queue updates.</summary>
     private void KickProcessLoop()
     {
         lock (_gate)
@@ -136,6 +146,8 @@ public class VfsWatcher(
         }
     }
 
+    /// <summary>Asynchronously processes queued series, re-generating VFS structures and scheduling Plex notifications.</summary>
+    /// <returns>A task representing the queue processing operation.</returns>
     private async Task ProcessQueue()
     {
         try
@@ -208,8 +220,8 @@ public class VfsWatcher(
 
     #region Plex Update Logic
 
-    /// <summary>Refresh Plex library paths and metadata for a series after VFS links are updated.</summary>
-    /// <param name="seriesId">The Shoko Series ID to update in Plex.</param>
+    /// <summary>Orchestrates debounced library scans, metadata refreshes, and collection updates for a recently modified series.</summary>
+    /// <param name="seriesId">The Shoko Series ID to update.</param>
     private void TriggerPlexUpdates(int seriesId)
     {
         if (!_plexLibrary.IsEnabled)

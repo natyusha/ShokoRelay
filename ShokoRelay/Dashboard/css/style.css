@@ -230,15 +230,6 @@ a:hover:not(.plex-login-link) {
 .divider {
   margin: 13px 0 13px 0;
 }
-.tmdb-ep-num:disabled,
-.plex-auth:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-button.tmdb-ep-num:disabled:hover,
-button.plex-auth:disabled:hover {
-  background: var(--button-color);
-}
 /* #endregion */
 
 /* #region MARK: Icons

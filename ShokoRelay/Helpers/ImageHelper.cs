@@ -45,28 +45,23 @@ public static class ImageHelper
     #region Array Builders
 
     /// <summary>Build an array of ImageInfo records from the supplied images collection.</summary>
-    /// <param name="images">Object providing images.</param>
+    /// <param name="images">The object providing images.</param>
     /// <param name="title">Alt text for entries.</param>
     /// <param name="addEveryImage">Whether to include all images or only preferred ones.</param>
     /// <param name="cacheBuster">Optional cache-buster token.</param>
     /// <returns>An array of ImageInfo objects.</returns>
     public static ImageInfo[] GenerateImageArray(IWithImages images, string title, bool addEveryImage, string? cacheBuster = null)
     {
-        IEnumerable<IImage> Filter(ImageEntityType type)
-        {
-            var all = images.GetImages(imageType: type);
-            if (addEveryImage)
-                return all.OrderByDescending(i => i.IsPreferred);
-            var pref = all.FirstOrDefault(i => i.IsPreferred);
-            return pref is not null ? [pref] : all.Take(1);
-        }
+        IEnumerable<IImage> Filter(ImageEntityType type) =>
+            images.GetImages(imageType: type) is var all && addEveryImage ? all.OrderByDescending(i => i.IsPreferred) : (all.FirstOrDefault(i => i.IsPreferred) is { } pref ? [pref] : all.Take(1));
+
         IEnumerable<ImageInfo> Project(ImageEntityType type, string kind) =>
             Filter(type)
                 .Select(i => new ImageInfo
                 {
                     Alt = title,
                     Type = kind,
-                    Url = GetImageUrl(i, cacheBuster: cacheBuster),
+                    Url = GetImageUrl(i, cacheBuster),
                 });
 
         return

@@ -133,7 +133,7 @@ com.plexapp.agents.shokorelay
   - `Sync Users` defaults to "None" and must be configured before the webook will function
   - For clarity "All" users means both the admin and the configured extra Plex users
 - Managed users must be added to `Extra Plex Users` on the dashboard if you wish them to be included
-- _Requires a Plex Pass subscription_
+- _Requires Plex authentication **and** a Plex Pass subscription_
 
 ### Scheduling
 
@@ -276,7 +276,7 @@ Crossover episodes are files which are linked to multiple episodes spanning sepa
 
 **VFS Browser**
 
-In order to help visualise the VFS and all of the files it contains there is a "VFS Browser" page included with the plugin. It can be navigated to by clicking the folder icon in the top right of the "Shoko: VFS" section of the dashboard. Unlike opening the VFS in a normal file browser, this will list the series title, AniDB ID and `/metadata` endpoint link which corresponds to each folder. It also allows VFS regeneration to be called on any series by clicking a refresh icon (this avoids having to look up Shoko or AnidDB IDs to use the filter on the dashboard).
+In order to help visualise the VFS and all of the files it contains there is a "VFS Browser" page included with the plugin. It can be navigated to by clicking the folder icon in the top right of the "Shoko: VFS" section of the dashboard. Unlike opening the VFS in a normal file browser, this will list the series title and the AniDB/Shoko IDs which correspond to each folder. Each ID will link directly to its source and there is also an included link to the `/metadata/` endpoint for series and seasons. Lastly, VFS regeneration can be called on any series by clicking a refresh icon (this avoids having to look up AniDB/Shoko IDs to use the filter on the dashboard).
 
 ### Automatic Title Modification
 

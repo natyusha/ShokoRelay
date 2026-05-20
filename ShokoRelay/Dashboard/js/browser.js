@@ -16,10 +16,10 @@
   let activeRootIndex = 0;
 
   // #region Utilities
-
   /**
    * Refreshes the VFS for a specific series and displays the result toast.
    * @param {number} id - The Shoko Series ID to rebuild.
+   * @returns {Promise<void>}
    */
   async function refreshSeries(id) {
     const label = `VFS [${id}]`;
@@ -46,7 +46,10 @@
     return root.series.filter((s) => s.title.toLowerCase().includes(ft) || String(s.id).includes(ft) || String(s.anidbId).includes(ft));
   }
 
-  /** Renders the root selection tabs and attaches click handlers. */
+  /**
+   * Renders the root selection tabs and attaches click handlers.
+   * @returns {void}
+   */
   function renderTabs() {
     if (!rootTabs) return;
     rootTabs.innerHTML = "";
@@ -67,7 +70,10 @@
 
   // #region Tree & Navigation
 
-  /** Renders the hierarchical tree for the currently active VFS root. */
+  /**
+   * Renders the hierarchical tree for the currently active VFS root.
+   * @returns {void}
+   */
   function renderActiveRoot() {
     if (!playerTree) return;
     const root = vfsRoots[activeRootIndex];
@@ -183,9 +189,7 @@
       vfsRoots = getData(res)?.roots || [];
       renderTabs();
       renderActiveRoot();
-    } else if (playerTree) {
-      playerTree.innerHTML = '<div class="placeholder">Failed to load VFS blueprint.</div>';
-    }
+    } else if (playerTree) playerTree.innerHTML = '<div class="placeholder">Failed to load VFS blueprint.</div>';
   })();
   // #endregion
 })();

@@ -171,91 +171,63 @@ public static class PlexMapping
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<(int EpId, string? OrderingId), (int? Season, int Episode)> s_orderingCoordsCache = new();
 
     /// <summary>Filter a list of TMDB episode entries to the preferred ordering using a single-pass weighted sort.</summary>
-    /// <param name="entries">TMDB episodes.</param>
-    /// <param name="showPreferredOrderingId">Preferred ordering ID.</param>
-    /// <returns>Reordered list.</returns>
-    public static List<ITmdbEpisode> SelectPreferredTmdbOrdering(IEnumerable<ITmdbEpisode>? entries, string? showPreferredOrderingId = null)
-    {
-        if (entries == null)
-            return [];
-        var list = entries.ToList();
-        if (list.Count == 0)
-            return list;
-        if (string.IsNullOrWhiteSpace(showPreferredOrderingId))
-            return [.. list.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber)];
-
-        // Weight-based sorting: 0 for direct match, 1 for match in AllOrderings, 2 for others.
-        return
+    /// <param name="entries">The collection of TMDB episodes to filter.</param>
+    /// <param name="showPreferredOrderingId">The preferred TMDB ordering identifier.</param>
+    /// <returns>A reordered and filtered list of TMDB episodes.</returns>
+    public static List<ITmdbEpisode> SelectPreferredTmdbOrdering(IEnumerable<ITmdbEpisode>? entries, string? showPreferredOrderingId = null) =>
+        entries == null ? []
+        : entries.ToList() is var list && list.Count == 0 ? list
+        : string.IsNullOrWhiteSpace(showPreferredOrderingId) ? [.. list.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber)]
+        :
         [
             .. list.OrderBy(te =>
-                {
-                    if (string.Equals(te.OrderingID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase))
-                        return 0;
-                    var key = (te.ID, showPreferredOrderingId);
-                    if (s_tmdbAllOrderingsContainsCache.TryGetValue(key, out var cached))
-                        return cached ? 1 : 2;
-                    bool found = te.AllOrderings?.Any(o => string.Equals(o.OrderingID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase)) == true;
-                    s_tmdbAllOrderingsContainsCache[key] = found;
-                    return found ? 1 : 2;
-                })
+                    string.Equals(te.OrderingID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase) ? 0
+                    : s_tmdbAllOrderingsContainsCache.GetOrAdd(
+                        (te.ID, showPreferredOrderingId),
+                        key => te.AllOrderings?.Any(o => string.Equals(o.OrderingID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase)) == true
+                    )
+                        ? 1
+                    : 2
+                )
                 .ThenBy(te => te.SeasonNumber ?? 0)
                 .ThenBy(te => te.EpisodeNumber),
         ];
-    }
 
     /// <summary>Convert a TMDB episode into season/episode coordinates.</summary>
-    /// <param name="ep">TMDB episode.</param>
-    /// <param name="showPreferredOrderingId">Ordering ID.</param>
-    /// <returns>Season and Episode tuple.</returns>
-    public static (int? Season, int Episode) GetOrderingCoords(ITmdbEpisode ep, string? showPreferredOrderingId = null)
-    {
-        if (ep == null)
-            return (null, 0);
-        if (!string.IsNullOrWhiteSpace(showPreferredOrderingId))
-        {
-            var key = (EpId: ep.ID, OrderingId: showPreferredOrderingId);
-            if (s_orderingCoordsCache.TryGetValue(key, out var cachedCoords))
-                return cachedCoords;
-            if (ep.AllOrderings != null)
-            {
-                var byAll = ep.AllOrderings.FirstOrDefault(o => string.Equals(o.OrderingID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase));
-                if (byAll != null)
-                {
-                    var result = (byAll.SeasonNumber, byAll.EpisodeNumber);
-                    s_orderingCoordsCache[key] = result;
-                    return result;
-                }
-            }
-
-            // Cache the fallback to declared season/episode as well so subsequent calls are cheap
-            var fallback = (ep.SeasonNumber, ep.EpisodeNumber);
-            s_orderingCoordsCache[key] = fallback;
-            return fallback;
-        }
-
-        // Fallback -> use the episode's declared SeasonNumber/EpisodeNumber.
-        return (ep.SeasonNumber, ep.EpisodeNumber);
-    }
+    /// <param name="ep">The TMDB episode to inspect.</param>
+    /// <param name="showPreferredOrderingId">The preferred TMDB ordering identifier.</param>
+    /// <returns>A tuple containing the resolved season and episode numbers.</returns>
+    public static (int? Season, int Episode) GetOrderingCoords(ITmdbEpisode ep, string? showPreferredOrderingId = null) =>
+        ep == null ? (null, 0)
+        : !string.IsNullOrWhiteSpace(showPreferredOrderingId)
+            ? s_orderingCoordsCache.GetOrAdd(
+                (ep.ID, showPreferredOrderingId),
+                _ =>
+                    ep.AllOrderings?.FirstOrDefault(o => string.Equals(o.OrderingID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase)) is { } byAll
+                        ? (byAll.SeasonNumber, byAll.EpisodeNumber)
+                        : (ep.SeasonNumber, ep.EpisodeNumber)
+            )
+        : (ep.SeasonNumber, ep.EpisodeNumber);
 
     #endregion
 
     #region Private Helpers
 
-    private static int ResolveSeasonNumber(IEpisode e)
-    {
-        // Prefer provider season numbers when available (covers regular episodes and specials).
-        return e.SeasonNumber
-            ?? e.Type switch
-            {
-                EpisodeType.Episode => PlexConstants.SeasonStandard,
-                EpisodeType.Special => PlexConstants.SeasonSpecials,
-                EpisodeType.Credits => PlexConstants.SeasonCredits,
-                EpisodeType.Trailer => PlexConstants.SeasonTrailers,
-                EpisodeType.Parody => PlexConstants.SeasonParody,
-                EpisodeType.Other => PlexConstants.SeasonOther,
-                _ => PlexConstants.SeasonUnknown,
-            };
-    }
+    /// <summary>Resolves the season number for an episode, falling back to Plex extra season constants for non-standard episodes.</summary>
+    /// <param name="e">The episode reference to evaluate.</param>
+    /// <returns>The resolved numeric season index.</returns>
+    private static int ResolveSeasonNumber(IEpisode e) =>
+        e.SeasonNumber
+        ?? e.Type switch
+        {
+            EpisodeType.Episode => PlexConstants.SeasonStandard,
+            EpisodeType.Special => PlexConstants.SeasonSpecials,
+            EpisodeType.Credits => PlexConstants.SeasonCredits,
+            EpisodeType.Trailer => PlexConstants.SeasonTrailers,
+            EpisodeType.Parody => PlexConstants.SeasonParody,
+            EpisodeType.Other => PlexConstants.SeasonOther,
+            _ => PlexConstants.SeasonUnknown,
+        };
 
     #endregion
 }

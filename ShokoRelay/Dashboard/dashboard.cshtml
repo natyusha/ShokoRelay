@@ -68,8 +68,8 @@
                 <small>Trigger on VFS Change</small>
               </span>
             </label>
-            <label class="shoko-checkbox">
-              <input id="plex-scrobble" type="checkbox" />
+            <label class="shoko-checkbox plex-auth sync-user">
+              <input id="plex-scrobble" class="plex-auth sync-user" type="checkbox" />
               <span class="shoko-checkbox-icon" aria-hidden="true">
                 <svg class="unchecked"><use href="img/icons.svg#checkbox-blank-circle-outline"></use></svg>
                 <svg class="checked"><use href="img/icons.svg#checkbox-marked-circle-outline"></use></svg>
@@ -382,8 +382,8 @@
         </div>
         <footer>
           <button id="sync-cancel-button" class="cancel">Cancel</button>
-          <button id="sync-dry-button" class="cancel">Dry Run</button>
-          <button id="sync-start-button">Start Sync</button>
+          <button id="sync-dry-button" class="cancel sync-user">Dry Run</button>
+          <button id="sync-start-button" class="sync-user">Start Sync</button>
         </footer>
       </div>
     </div>

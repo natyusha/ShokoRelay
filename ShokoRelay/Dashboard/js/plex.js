@@ -10,16 +10,9 @@
 
   // #region Helpers
   /**
-   * Enable or disable all Plex-dependent automation controls on the dashboard.
-   * @param {boolean} enabled - Whether Plex automation is currently possible.
+   * Stops the active Plex authentication polling timer.
+   * @returns {void}
    */
-  function setPlexAutomationControls(enabled) {
-    document.querySelectorAll(".plex-auth").forEach((e) => {
-      e.disabled = !enabled;
-    });
-  }
-
-  /** Stops the active Plex authentication polling timer. */
   function stopPlexPolling() {
     if (plexPollTimer) {
       clearInterval(plexPollTimer);
@@ -27,22 +20,24 @@
     }
   }
 
-  /** Resets the Plex section to show the 'Start Auth' button. */
+  /**
+   * Resets the Plex section to show the 'Start Auth' button.
+   * @returns {void}
+   */
   function setPlexStartAction() {
     stopPlexPolling();
     const authAction = el("plex-auth-action");
-    if (authAction) {
-      authAction.querySelectorAll(".plex-auth-state").forEach((e) => {
-        e.style.display = e.tagName === "BUTTON" ? "" : "none";
-      });
-    }
+    if (authAction) authAction.querySelectorAll(".plex-auth-state").forEach((e) => (e.style.display = e.tagName === "BUTTON" ? "" : "none"));
     el("plex-login")?.remove();
     withButtonAction("plex-start", startPlexAuth);
   }
   // #endregion
 
   // #region Logic
-  /** Initiate the Plex OAuth flow and start polling for status. */
+  /**
+   * Initiate the Plex OAuth flow and start polling for status.
+   * @returns {Promise<void>}
+   */
   async function startPlexAuth() {
     const res = await fetchJson(base + "/plex/auth");
     const d = getData(res);
@@ -87,7 +82,8 @@
   async function refreshPlexState() {
     const res = await fetchJson(configUrl);
     if (!res.ok) {
-      setPlexAutomationControls(false);
+      window._sr.isPlexLinked = false;
+      window._sr.updateControlStates?.();
       return;
     }
 
@@ -95,7 +91,8 @@
     const plex = settings.PlexLibrary || {};
     const isLinked = !!plex.HasToken;
 
-    setPlexAutomationControls(isLinked);
+    window._sr.isPlexLinked = isLinked;
+    window._sr.updateControlStates?.(settings);
 
     const b = (id, path, type) => window._sr.bindConfig(id, path, settings, saveSettings, type);
     b("extra-plex-users", "Automation.ExtraPlexUsers", "text");
@@ -103,12 +100,8 @@
     b("plex-scrobble", "Automation.AutoScrobble", "check");
 
     const authAction = el("plex-auth-action");
-    if (authAction) {
-      authAction.querySelectorAll(".plex-auth-state").forEach((e) => {
-        const shouldShow = isLinked ? e.tagName === "DIV" : e.tagName === "BUTTON";
-        e.style.display = shouldShow ? "" : "none";
-      });
-    }
+    if (authAction) authAction.querySelectorAll(".plex-auth-state").forEach((e) => (e.style.display = (isLinked ? e.tagName === "DIV" : e.tagName === "BUTTON") ? "" : "none"));
+
     if (!isLinked) {
       withButtonAction("plex-start", startPlexAuth);
     } else {
@@ -127,7 +120,10 @@
     }
   }
 
-  /** Unlink the Plex account and refresh dashboard state. */
+  /**
+   * Unlink the Plex account and refresh dashboard state.
+   * @returns {Promise<void>}
+   */
   async function unlinkPlex() {
     await fetchJson(base + "/plex/auth/unlink", { method: "POST" });
     refreshPlexState();

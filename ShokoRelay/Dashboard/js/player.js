@@ -56,7 +56,6 @@
   let idleTimer;
 
   // #region Utilities
-
   /**
    * Resets the idle timer and reveals the UI. Suspends the timer if the cursor is over a control.
    * @param {MouseEvent} e - The mouse movement event.
@@ -157,7 +156,6 @@
   // #endregion
 
   // #region Tree & Navigation
-
   /** Toggles the favourite status of a video on the server and synchronizes UI heart icons. */
   async function toggleFavourite(videoId, heartEl) {
     if (!videoId || videoId <= 0) return console.warn("VideoId missing.");
@@ -275,7 +273,6 @@
   // #endregion
 
   // #region Player Engine
-
   /** Sets the video source and updates header metadata and highlights. */
   function playFile(path) {
     if (!playerVideo) return;

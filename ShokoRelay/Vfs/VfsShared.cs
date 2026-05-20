@@ -168,6 +168,11 @@ internal static class VfsShared
         return TryCreateSymlink(dest, relativeTarget, logger);
     }
 
+    /// <summary>Internal wrapper around the OS file APIs to create standard filesystem relative symbolic links.</summary>
+    /// <param name="linkPath">The target location where the symlink should be created.</param>
+    /// <param name="target">The relative or absolute target destination of the link.</param>
+    /// <param name="logger">Logger reference.</param>
+    /// <returns>True if the symlink was created successfully; otherwise false.</returns>
     private static bool TryCreateSymlink(string linkPath, string target, Logger logger)
     {
         try

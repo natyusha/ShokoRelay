@@ -4,10 +4,10 @@
  */
 (() => {
   /**
-   * Prevents rapid execution of expensive functions like tree rendering.
-   * @param {Function} fn - The function to debounce.
-   * @param {number} ms - Delay in milliseconds.
-   * @returns {Function}
+   * Prevents rapid, consecutive execution of expensive callback operations by introducing a time buffer.
+   * @param {Function} fn - The target callback function to debounce.
+   * @param {number} ms - The debounce cooldown delay in milliseconds.
+   * @returns {Function} A debounced wrapper function.
    */
   window._sr.debounce = (fn, ms) => {
     let timeout;
@@ -18,10 +18,11 @@
   };
 
   /**
-   * Initializes common search bar interactions including global hotkeys and performance-optimized rendering.
-   * @param {HTMLInputElement} input - The filter input element.
-   * @param {HTMLElement} clearBtn - The button to clear the input.
-   * @param {Function} renderFn - The function to call when the filter changes.
+   * Attaches real-time search, clear actions, and slash hotkey bindings to a target filter element.
+   * @param {HTMLInputElement} input - The text input element serving as the filter.
+   * @param {HTMLElement} clearBtn - The button used to clear input text.
+   * @param {Function} renderFn - The draw callback invoked when filters change.
+   * @returns {void}
    */
   window._sr.initSearchInteractions = (input, clearBtn, renderFn) => {
     if (!input) return;

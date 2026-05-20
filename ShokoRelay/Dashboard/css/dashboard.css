@@ -116,11 +116,32 @@ label.shoko-checkbox input[type="checkbox"]:checked + .shoko-checkbox-icon {
 label.shoko-checkbox input[type="checkbox"]:checked + .shoko-checkbox-icon .checked {
   display: block;
 }
-label.plex-auth.shoko-checkbox input:disabled,
-label.plex-auth.shoko-checkbox input:disabled + .shoko-checkbox-icon,
-label.plex-auth.shoko-checkbox input:disabled ~ .shoko-checkbox-text {
+/* #endregion */
+
+/* #region MARK: Disabled Controls
+*/
+.plex-auth:disabled,
+.sync-user:disabled,
+.tmdb-ep-num:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+button.plex-auth:disabled:hover,
+button.sync-user:disabled:hover,
+button.tmdb-ep-num:disabled:hover {
+  background: var(--button-color);
+}
+button.cancel.sync-user:disabled:hover {
+  background: var(--bg-color);
+}
+label.shoko-checkbox input:disabled,
+label.shoko-checkbox input:disabled + .shoko-checkbox-icon,
+label.shoko-checkbox input:disabled ~ .shoko-checkbox-text {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+label.shoko-checkbox:hover input:disabled + .shoko-checkbox-icon {
+  fill: var(--highlight-color);
 }
 /* #endregion */
 

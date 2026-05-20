@@ -11,6 +11,7 @@
    * @param {HTMLElement} details - The details element.
    * @param {HTMLElement} content - The inner content container.
    * @param {number} [duration=300] - Animation duration in ms.
+   * @returns {void}
    */
   function initDetailsAnimation(details, content, duration = 300) {
     let anim = null;
@@ -29,6 +30,26 @@
       };
     });
   }
+
+  /**
+   * Consolidates dynamic state updates for the dashboard. Evaluates Plex auth, Sync user setting, and TMDB episode numbering constraints to disable controls.
+   * @param {Object} [config] - The optional active configuration object to evaluate.
+   * @returns {void}
+   */
+  window._sr.updateControlStates = (config) => {
+    const isPlexLinked = !!window._sr.isPlexLinked;
+    const isSyncActive = el("sync-users")?.value !== "3";
+
+    document.querySelectorAll(".plex-auth, .sync-user").forEach((elem) => {
+      const reqPlex = elem.classList.contains("plex-auth");
+      const reqSync = elem.classList.contains("sync-user");
+      elem.disabled = (reqPlex && !isPlexLinked) || (reqSync && !isSyncActive);
+    });
+
+    const overridesBtn = el("vfs-overrides");
+    const cfg = config || window.relaySettings;
+    if (overridesBtn && cfg) overridesBtn.disabled = !(window._sr.getValueByPath(cfg, "Advanced.TmdbEpNumbering") || window._sr.getValueByPath(cfg, "Advanced.MergeTmdbSeries"));
+  };
   // #endregion
 
   // #region Form Generation
@@ -45,10 +66,6 @@
     const rawCfg = configRes.data || {};
     const config = unwrapConfig(rawCfg);
     const overridesBtn = el("vfs-overrides");
-
-    /** Synchronizes the disabled state of the VFS Overrides button based on the current config state. */
-    const syncOverridesBtn = () => overridesBtn && (overridesBtn.disabled = !(getValueByPath(config, "Advanced.TmdbEpNumbering") || getValueByPath(config, "Advanced.MergeTmdbSeries")));
-    syncOverridesBtn();
 
     el("config-form").innerHTML = "";
     if (el("overrides-text")) el("overrides-text").value = rawCfg.overrides || "";
@@ -75,7 +92,7 @@
         bindConfig(input, p.Path, config, saveSettings, "check");
 
         // Re-evaluate the overrides button state when either relevant setting is toggled.
-        if (overridesBtn && ["Advanced.TmdbEpNumbering", "Advanced.MergeTmdbSeries"].includes(p.Path)) input.addEventListener("change", syncOverridesBtn);
+        if (overridesBtn && ["Advanced.TmdbEpNumbering", "Advanced.MergeTmdbSeries"].includes(p.Path)) input.addEventListener("change", () => window._sr.updateControlStates(config));
       } else if (p.Path.endsWith("PathMappings")) {
         label.innerHTML = `<span>${p.Display || p.Path.split(".").pop()}</span>${p.Description ? `<small>${p.Description}</small>` : ""}`;
         wrap.appendChild(label);
@@ -155,18 +172,18 @@
     b("sync-users", "Automation.ShokoSyncWatchedUserType", "number");
     b("plex-scrobble", "Automation.AutoScrobble", "check");
     window._sr.initAtConfig?.(config, saveSettings);
+    window._sr.updateControlStates(config);
   }
   // #endregion
 
   // #region Initialization
   // Help Modal Logic
   const helpBtn = el("settings-help-open");
-  if (helpBtn) {
+  if (helpBtn)
     helpBtn.onclick = () => {
       const modal = el("settings-help-modal");
       openModal(modal);
     };
-  }
 
   loadConfig();
   // #endregion

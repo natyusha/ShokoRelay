@@ -27,14 +27,12 @@ public static class VfsHelper
     #region Sanitization
 
     /// <summary>Sanitizes a string for use as a filename.</summary>
-    public static string SanitizeName(string name)
-    {
-        if (string.IsNullOrWhiteSpace(name))
-            return "Unknown";
-        var invalid = Path.GetInvalidFileNameChars();
-        string cleaned = TextHelper.CondenseSpaces(new string([.. name.Select(c => invalid.Contains(c) ? ' ' : c)])).Trim().TrimEnd('.');
-        return cleaned.Length == 0 ? "Unknown" : cleaned;
-    }
+    /// <param name="name">The name to sanitize.</param>
+    /// <returns>A sanitized filename string.</returns>
+    public static string SanitizeName(string name) =>
+        string.IsNullOrWhiteSpace(name) ? "Unknown"
+        : TextHelper.CondenseSpaces(new string([.. name.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? ' ' : c)])).Trim().TrimEnd('.') is var cleaned && cleaned.Length > 0 ? cleaned
+        : "Unknown";
 
     /// <summary>Cleans episode titles for filename use.</summary>
     public static string CleanEpisodeTitleForFilename(string? title)

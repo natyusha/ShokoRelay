@@ -5,7 +5,11 @@
 (() => {
   const { base, configUrl, el, fetchJson, showToast, toastOperation, summarizeResult, initToggle, openModal, setButtonLoading, getData } = window._sr;
 
-  /** Set the dynamic href for Shoko system links based on the current origin. */
+  // #region Helpers
+  /**
+   * Set the dynamic href for Shoko system links based on the current origin.
+   * @returns {void}
+   */
   const resolveSystemLinks = () => {
     const origin = location.origin;
     const links = {
@@ -27,9 +31,9 @@
     "The first ID is the primary series and the others will be merged into it (for both VFS builds and metadata lookups).\n" +
     "Lines that are blank or start with a '#' are ignored. An example is shown below:\n\n" +
     "## Shoko Relay VFS Overrides\n\n# Fairy Tail\n6662,8132,9980,13295\n\n# Bleach\n2369,15449,17765,18220,19079";
+  // #endregion
 
   // #region Param Providers
-
   /**
    * Collects VFS build parameters for the Action Dispatcher.
    * @returns {URLSearchParams} The compiled parameters.
@@ -76,6 +80,24 @@
   // #endregion
 
   // #region Shoko: Automation
+  const syncUsersSelect = el("sync-users");
+
+  /**
+   * Refreshes the active control states when the sync users settings change.
+   * @returns {void}
+   */
+  const updateSyncUserState = () => {
+    window._sr.updateControlStates?.();
+  };
+
+  window._sr = window._sr || {};
+  window._sr.updateSyncUserState = updateSyncUserState;
+
+  if (syncUsersSelect) {
+    syncUsersSelect.addEventListener("change", updateSyncUserState);
+    updateSyncUserState();
+  }
+
   // Managed User and Admin Watched-State Synchronization Modal.
   if (el("shoko-sync-watched")) {
     el("shoko-sync-watched").onclick = () => {
@@ -88,7 +110,10 @@
       /** @type {boolean} dirImport - true if syncing Plex to Shoko, false for Shoko to Plex. */
       let dirImport = localStorage.getItem("shoko-sync-direction") === "import";
 
-      /** Updates the UI arrow and state based on the direction toggle. */
+      /**
+       * Updates the UI arrow and state based on the direction toggle.
+       * @returns {void}
+       */
       const updateDir = () => {
         dirToggle.setAttribute("aria-pressed", String(dirImport));
         dirArrow.querySelector(".dir-icon-right")?.classList.toggle("hidden", dirImport);
@@ -102,9 +127,12 @@
         localStorage.setItem("shoko-sync-direction", dirImport ? "import" : "export");
       };
 
+      if (syncUsersSelect) updateSyncUserState();
+
       /**
        * Orchestrates the watched state synchronization request.
        * @param {boolean} isDryRun - Whether to perform a dry run preview.
+       * @returns {Promise<void>}
        */
       const performSync = async (isDryRun) => {
         const targetBtn = isDryRun ? dryBtn : startBtn;
