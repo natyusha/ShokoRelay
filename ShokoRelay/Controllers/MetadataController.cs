@@ -78,7 +78,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             Logger.Info("Metadata: No Shoko series found for id {SeriesId}", seriesId.Value);
             return EmptyMatch();
         }
-        var poster = (series as IWithImages)?.GetImages(imageType: ImageEntityType.Primary).FirstOrDefault();
+        var poster = (series as IWithImages)?.GetAvailableImages(ImageEntityType.Primary).FirstOrDefault();
         return Ok(
             new
             {

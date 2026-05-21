@@ -81,11 +81,25 @@
   }
 
   /**
+   * Renders a loading spinner inside the tree container to indicate active processing.
+   * @returns {void}
+   */
+  function showLoadingSpinner() {
+    if (vfsTree) vfsTree.innerHTML = '<div class="placeholder"><svg class="loading-spinner"><use href="img/icons.svg#loading"></use></svg><div>Loading VFS tree...</div></div>';
+  }
+
+  /**
    * Renders the root selection tabs and attaches click handlers.
    * @returns {void}
    */
   function renderTabs() {
     if (!rootTabs) return;
+
+    const existing = rootTabs.querySelectorAll(".tab-btn");
+    if (existing.length > 0) {
+      existing.forEach((btn) => btn.classList.toggle("active", btn.textContent === activeTabName));
+      return;
+    }
     rootTabs.innerHTML = "";
 
     // Validate that the activeTabName actually exists in displayRoots, fallback to the first tab (usually "All") if not
@@ -102,7 +116,8 @@
         activeTabName = r.name;
         localStorage.setItem(TABS_KEY, r.name);
         renderTabs();
-        renderActiveRoot();
+        showLoadingSpinner();
+        setTimeout(renderActiveRoot, 300);
       };
       rootTabs.appendChild(btn);
     });
@@ -217,11 +232,11 @@
 
   // #endregion
 
-  // #region MARK: Initialization
+  // #region Initialization
   initSearchInteractions(uiFilter, uiFilterClear, () => renderActiveRoot());
 
   (async () => {
-    if (vfsTree) vfsTree.innerHTML = '<div class="placeholder"><svg class="loading-spinner"><use href="img/icons.svg#loading"></use></svg><div>Loading VFS tree...</div></div>';
+    showLoadingSpinner();
 
     const res = await fetchJson(base + "/vfs/tree");
     if (res.ok) {
@@ -231,7 +246,7 @@
         displayRoots = [allRoot, ...roots];
       } else {
         displayRoots = [];
-        if (vfsTree) vfsTree.innerHTML = '<div class="placeholder"> No VFS directories found. Click the "Generate" button under the "Shoko: VFS" section on the dashboard to build your virtual folders.</div>';
+        if (vfsTree) vfsTree.innerHTML = '<div class="placeholder">No VFS directories found. Click the "Generate" button under the "Shoko: VFS" section on the dashboard to build your virtual folders.</div>';
       }
       renderTabs();
       renderActiveRoot();

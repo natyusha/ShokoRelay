@@ -42,7 +42,13 @@ public static class ImageHelper
 
     #endregion
 
-    #region Array Builders
+    #region Image Builders
+
+    /// <summary>Filters and returns only enabled and locally available images from the supplied entity.</summary>
+    /// <param name="entity">The metadata entity providing images.</param>
+    /// <param name="type">The specific image type to retrieve.</param>
+    /// <returns>A collection of available images.</returns>
+    public static IEnumerable<IImage> GetAvailableImages(this IWithImages entity, ImageEntityType type) => entity.GetImages(imageType: type).Where(i => i.IsEnabled && i.IsAvailable);
 
     /// <summary>Build an array of ImageInfo records from the supplied images collection.</summary>
     /// <param name="images">The object providing images.</param>
@@ -53,7 +59,7 @@ public static class ImageHelper
     public static ImageInfo[] GenerateImageArray(IWithImages images, string title, bool addEveryImage, string? cacheBuster = null)
     {
         IEnumerable<IImage> Filter(ImageEntityType type) =>
-            images.GetImages(imageType: type) is var all && addEveryImage ? all.OrderByDescending(i => i.IsPreferred) : (all.FirstOrDefault(i => i.IsPreferred) is { } pref ? [pref] : all.Take(1));
+            images.GetAvailableImages(type) is var all && addEveryImage ? all.OrderByDescending(i => i.IsPreferred) : (all.FirstOrDefault(i => i.IsPreferred) is { } pref ? [pref] : all.Take(1));
 
         IEnumerable<ImageInfo> Project(ImageEntityType type, string kind) =>
             Filter(type)

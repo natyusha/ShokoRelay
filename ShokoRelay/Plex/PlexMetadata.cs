@@ -95,8 +95,8 @@ public class PlexMetadata(IMetadataService metadataService)
             ["type"]                  = "show",
             ["title"]                 = titles.DisplayTitle,
             ["originallyAvailableAt"] = series.AirDate?.ToString(),
-            ["thumb"]                 = images.GetImages(imageType: ImageEntityType.Primary).FirstOrDefault() is { } p ? ImageHelper.GetImageUrl(p, cacheBuster: cb) : null,
-            ["art"]                   = images.GetImages(imageType: ImageEntityType.Backdrop).FirstOrDefault() is { } a ? ImageHelper.GetImageUrl(a, cacheBuster: cb) : null,
+            ["thumb"]                 = images.GetAvailableImages(ImageEntityType.Primary).FirstOrDefault() is { } p ? ImageHelper.GetImageUrl(p, cacheBuster: cb) : null,
+            ["art"]                   = images.GetAvailableImages(ImageEntityType.Backdrop).FirstOrDefault() is { } a ? ImageHelper.GetImageUrl(a, cacheBuster: cb) : null,
             ["contentRating"]         = rating,
             ["originalTitle"]         = titles.OriginalTitle,
             ["titleSort"]             = titles.SortTitle,
@@ -165,10 +165,10 @@ public class PlexMetadata(IMetadataService metadataService)
         int totalSeasons = ctx.FileData.Seasons.Count(s => s >= 0);
         List<string>? posters =
             (Settings.TmdbSeasonPosters && totalSeasons > 1 && tmdbSeason != null)
-                ? [.. tmdbSeason.GetImages(imageType: ImageEntityType.Primary).OrderByDescending(i => i.IsPreferred).Select(i => ImageHelper.GetImageUrl(i, cacheBuster: cb))]
+                ? [.. tmdbSeason.GetAvailableImages(ImageEntityType.Primary).OrderByDescending(i => i.IsPreferred).Select(i => ImageHelper.GetImageUrl(i, cacheBuster: cb))]
                 : null;
 
-        string? thumb = (posters?.Count > 0) ? posters[0] : (images.GetImages(imageType: ImageEntityType.Primary).FirstOrDefault() is { } p ? ImageHelper.GetImageUrl(p, cacheBuster: cb) : null);
+        string? thumb = (posters?.Count > 0) ? posters[0] : (images.GetAvailableImages(ImageEntityType.Primary).FirstOrDefault() is { } p ? ImageHelper.GetImageUrl(p, cacheBuster: cb) : null);
         var seasonDate = ctx.FileData.Mappings.Where(m => m.Coords.Season == seasonNum).SelectMany(m => m.Episodes).Where(e => e.AirDate.HasValue).Select(e => e.AirDate).OrderBy(d => d).FirstOrDefault();
         return new Dictionary<string, object?>
         {
@@ -248,7 +248,7 @@ public class PlexMetadata(IMetadataService metadataService)
             ["subtype"]               = (mapped.Season < 0 && TryGetExtraSeason(mapped.Season, out var ex)) ? ex.Subtype : null,
             ["title"]                 = epTitle,
             ["originallyAvailableAt"] = ep.AirDate?.ToString(),
-            ["thumb"]                 = Settings.TmdbThumbnails && images.GetImages(imageType: ImageEntityType.Backdrop).FirstOrDefault() is { } t ? ImageHelper.GetImageUrl(t, cacheBuster: cb) : null,
+            ["thumb"]                 = Settings.TmdbThumbnails && images.GetAvailableImages(ImageEntityType.Backdrop).FirstOrDefault() is { } t ? ImageHelper.GetImageUrl(t, cacheBuster: cb) : null,
             //["art"]                 = No source for episode level background images
             ["contentRating"]         = ContentRatingHelper.GetContentRatingAndAdult(series).Rating,
             //["originalTitle"]       = No source for original episode titles
@@ -364,8 +364,8 @@ public class PlexMetadata(IMetadataService metadataService)
             ["type"]                  = "collection",
             ["subtype"]               = "show",
             ["title"]                 = group is IWithTitles titled && !string.IsNullOrWhiteSpace(titled.PreferredTitle?.Value) ? titled.PreferredTitle.Value : $"Group {group.ID}",
-            ["thumb"]                 = (primarySeries as IWithImages)?.GetImages(imageType: ImageEntityType.Primary).FirstOrDefault() is { } poster ? ImageHelper.GetImageUrl(poster, GetCacheBuster(primarySeries)) : null,
-            ["art"]                   = (primarySeries as IWithImages)?.GetImages(imageType: ImageEntityType.Backdrop).FirstOrDefault() is { } backdrop ? ImageHelper.GetImageUrl(backdrop, GetCacheBuster(primarySeries)) : null,
+            ["thumb"]                 = (primarySeries as IWithImages)?.GetAvailableImages(ImageEntityType.Primary).FirstOrDefault() is { } poster ? ImageHelper.GetImageUrl(poster, GetCacheBuster(primarySeries)) : null,
+            ["art"]                   = (primarySeries as IWithImages)?.GetAvailableImages(ImageEntityType.Backdrop).FirstOrDefault() is { } backdrop ? ImageHelper.GetImageUrl(backdrop, GetCacheBuster(primarySeries)) : null,
             ["titleSort"]             = group is IWithTitles t && !string.IsNullOrWhiteSpace(t.PreferredTitle?.Value) ? t.PreferredTitle.Value : $"Group {group.ID}",
             //["summary"]             = There is no summary source for groups
             //["Image"]               = Likely an image array will be used here
