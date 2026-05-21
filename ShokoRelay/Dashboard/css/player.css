@@ -236,6 +236,9 @@
   margin-top: -0.1em;
   color: color-mix(in srgb, var(--highlight-color) 60%, transparent);
 }
+#tree .fav-icon {
+  padding: 0 1px 0 1px;
+}
 .fav-icon:hover,
 .fav-icon.favourited,
 .leaf.active .fav-icon.favourited {

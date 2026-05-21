@@ -203,12 +203,15 @@ body {
   margin-left: -11px;
   border-radius: 3px;
   padding: 2px 4px;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
 }
 #tree .leaf:hover,
 #tree summary:hover {
   background: var(--inset-color);
 }
-#tree .leaf span:last-child {
+#tree .leaf span {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

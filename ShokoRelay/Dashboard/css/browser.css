@@ -83,16 +83,19 @@ a.vfs-link:hover {
   color: var(--highlight-color);
   text-decoration: dotted underline;
 }
-#tree .leaf {
-  font-variant-numeric: tabular-nums;
+#tree .leaf span:first-child {
+  flex-shrink: 0;
 }
 .source-path {
   display: block;
+  flex: 1;
   margin-left: 8px;
+  min-width: 0;
+  overflow: hidden;
   color: color-mix(in srgb, currentColor 50%, transparent);
   font-size: 0.9em;
   font-family: monospace;
-  white-space: pre-wrap;
-  word-break: break-all;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* #endregion */
