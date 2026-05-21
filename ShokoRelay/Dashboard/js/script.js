@@ -208,6 +208,7 @@
     updatePlaybackTooltip,
     getData,
     saveSettings,
+    summarizeResult,
     actions: {},
     unwrapConfig: (data) => (data?.payload !== undefined ? data.payload || {} : data || {}),
     getValueByPath: (obj, path) => path.split(".").reduce((o, k) => o?.[k], obj),

@@ -3,7 +3,7 @@
  * @description Dashboard-exclusive task synchronization, lockouts, and endpoint routing.
  */
 (() => {
-  const { base, configUrl, el, TOAST_MS, fetchJson, showToast, toastOperation, saveSettings } = window._sr;
+  const { base, configUrl, el, TOAST_MS, fetchJson, showToast, toastOperation, saveSettings, getData, openModal } = window._sr;
 
   const MANAGED_TASK_IDS = Object.values(window._sr?.tasks || {});
 
@@ -48,7 +48,7 @@
         const isOk = (result.status || result.Status || "").toLowerCase() === "ok";
         const fInput = btn?.dataset.relayPersistIfEmpty ? document.querySelector(btn.dataset.relayPersistIfEmpty) : null;
 
-        toastOperation({ ok: isOk, data: result }, taskName.replace(/-/g, " "), { hideOnSucceed: fInput?.value.trim() ? TOAST_MS : 0 });
+        toastOperation({ ok: isOk, data: result }, taskName.replace(/-/g, " "), { hideOnSucceed: fInput?.value?.trim() ? TOAST_MS : 0 });
         await fetch(base + `/tasks/clear/${taskName}`, { method: "POST" });
       }
     }
@@ -94,6 +94,7 @@
   Object.assign(window._sr, {
     runAction,
     initToggle,
+    setButtonLoading,
     withButtonAction: (btn, handler) => {
       const elBtn = typeof btn === "string" ? el(btn) : btn;
       if (elBtn) elBtn.onclick = () => runAction(elBtn, handler);

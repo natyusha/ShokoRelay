@@ -106,7 +106,7 @@
 
       const ref = document.createElement("span");
       ref.className = "refresh-icon";
-      ref.textContent = "↻";
+      ref.textContent = "⟳";
       ref.title = "Refresh VFS Folder";
       ref.onclick = (e) => {
         e.preventDefault();
@@ -115,9 +115,7 @@
       };
 
       const titleHtml =
-        `<a href="${shokoBase}/webui/collection/series/${g.id}/overview" class="vfs-link vfs-id-link">${g.id}</a>` +
-        `<span class="vfs-sep">❯</span>` +
-        `<span class="vfs-title">${g.title}</span>` +
+        `<a href="${shokoBase}/webui/collection/series/${g.id}/overview" class="vfs-link vfs-id-link">${g.id}</a><span class="vfs-sep">❯</span><span class="vfs-title">${g.title}</span>` +
         `<a href="https://anidb.net/a${g.anidbId}" class="vfs-link small" target="_blank" rel="noopener noreferrer">[a${g.anidbId}]</a>` +
         `<a href="${base}/metadata/${g.id}?includeChildren=1" class="vfs-link small" target="_blank" rel="noopener noreferrer">[m${g.id}]</a>`;
 

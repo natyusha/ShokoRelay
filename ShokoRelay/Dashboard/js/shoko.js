@@ -150,13 +150,13 @@
 
         const libName = el("sync-library")?.value.trim();
         if (libName) ps.set("libraryName", libName);
-
         if (dirImport) ps.set("import", "true");
 
         const res = await fetchJson(`${base}/sync-watched?${ps}`);
         startToast?.remove();
         setButtonLoading(targetBtn, false);
 
+        await fetch(`${base}/tasks/clear/shoko-sync-watched`, { method: "POST" }); // Clear the task immediately on the server to prevent the background poller from firing a duplicate toast
         if (res.ok) {
           const d = getData(res);
 
@@ -164,7 +164,6 @@
           const summary = (summarizeResult(res).text || `processed ${d.Processed ?? 0}`) + (d.VotesFound ? `, votes: ${d.VotesFound}` : "");
 
           toastOperation(res, "Sync", { summary, hideOnSucceed: 0 });
-          close();
         } else {
           toastOperation(res, "Sync", { hideOnSucceed: 0 });
         }

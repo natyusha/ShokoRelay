@@ -117,8 +117,10 @@ public class ShokoController(
         // Map blueprint entries to their friendly Shoko names and group them to prevent redundant tabs for sub-directories.
         var roots = data.Select(root =>
             {
-                var match = managedFolders.FirstOrDefault(f => root.Key.StartsWith(f.Path, StringComparison.OrdinalIgnoreCase));
-                return new { Name = match?.Name ?? Path.GetFileName(root.Key) ?? "Unknown", Series = root.Value.Values };
+                var parentDir = Path.GetDirectoryName(root.Key)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) ?? string.Empty;
+                var match = managedFolders.FirstOrDefault(f => string.Equals(parentDir, f.Path, StringComparison.OrdinalIgnoreCase));
+                var fallback = Path.GetFileName(parentDir);
+                return new { Name = match?.Name ?? (string.IsNullOrEmpty(fallback) ? "Unknown" : fallback), Series = root.Value.Values };
             })
             .GroupBy(x => x.Name)
             .Select(g => new { name = g.Key, series = g.SelectMany(x => x.Series).OrderBy(s => s["title"]?.ToString() ?? "").ToList() })
@@ -225,8 +227,8 @@ public class ShokoController(
             async () =>
             {
                 var result = import
-                    ? await _syncToPlexService.SyncWatchedAsync(dryRun, sinceHours, includeRatings, userType, libraryName, cancellationToken: HttpContext.RequestAborted).ConfigureAwait(false)
-                    : await _watchedSyncService.SyncWatchedAsync(dryRun, sinceHours, includeRatings, userType, libraryName, cancellationToken: HttpContext.RequestAborted).ConfigureAwait(false);
+                    ? await _syncToPlexService.SyncWatchedAsync(dryRun, sinceHours, includeRatings, userType, libraryName, cancellationToken: CancellationToken.None).ConfigureAwait(false)
+                    : await _watchedSyncService.SyncWatchedAsync(dryRun, sinceHours, includeRatings, userType, libraryName, cancellationToken: CancellationToken.None).ConfigureAwait(false);
                 return result with { Direction = direction };
             },
             SyncHelper.SyncLock
@@ -241,7 +243,7 @@ public class ShokoController(
         int freqHours = Settings.Automation.ShokoSyncWatchedFrequencyHours;
         try
         {
-            var result = await _watchedSyncService.SyncWatchedAsync(false, freqHours, cancellationToken: HttpContext.RequestAborted).ConfigureAwait(false);
+            var result = await _watchedSyncService.SyncWatchedAsync(false, freqHours, cancellationToken: CancellationToken.None).ConfigureAwait(false);
             MarkSyncRunNow();
             return Ok(
                 new RelayResponse<object>(

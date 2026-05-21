@@ -42,8 +42,6 @@
 /* #region MARK: Tree Styling
 */
 .refresh-icon {
-  display: inline-block;
-  transform: rotate(90deg);
   transition: all 0.3s ease-in-out;
   cursor: pointer;
   margin: 0 -6px 0 4px;
@@ -66,6 +64,7 @@
   margin: 0 10px;
   color: var(--highlight-color);
   font-weight: bold;
+  font-size: 0.9em;
 }
 .vfs-title {
   flex: 1;
