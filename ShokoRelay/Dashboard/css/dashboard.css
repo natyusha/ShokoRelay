@@ -52,14 +52,6 @@ button.loading:hover {
 .w46-button .button-spinner {
   margin: 24px 0 0 24px;
 }
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
 /* #endregion */
 
 /* #region MARK: Styled Checkboxes

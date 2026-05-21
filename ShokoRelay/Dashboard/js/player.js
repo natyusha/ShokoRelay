@@ -44,6 +44,8 @@
   /** @type {number|null} */
   let progressRaf;
 
+  const PATH_KEY = "player-current-path";
+
   /** @type {Set<string>} Track played paths during shuffle to ensure a full cycle before repeats. */
   const shuffleHistory = new Set();
   /** @type {string[]} The specific sequence of paths played during this shuffle session. */
@@ -57,8 +59,9 @@
 
   // #region Utilities
   /**
-   * Resets the idle timer and reveals the UI. Suspends the timer if the cursor is over a control.
+   * Resets the idle timer and reveals the UI, suspending it if hovering over controls.
    * @param {MouseEvent} e - The mouse movement event.
+   * @returns {void}
    */
   const resetIdle = (e) => {
     playerContainer.classList.remove("idle");
@@ -104,7 +107,11 @@
     if (playerContainer) playerContainer.dataset.volumeLevel = level;
   };
 
-  /** Decodes unicode escape sequences in server-provided filenames. */
+  /**
+   * Decodes unicode escape sequences back into their actual Unicode characters.
+   * @param {string} s - The string containing escape sequences.
+   * @returns {string} A decoded string.
+   */
   const decodeUnicode = (s) => (s || "").replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
 
   /**
@@ -156,7 +163,12 @@
   // #endregion
 
   // #region Tree & Navigation
-  /** Toggles the favourite status of a video on the server and synchronizes UI heart icons. */
+  /**
+   * Toggles the favourite status of a video on the server and synchronizes UI heart icons.
+   * @param {number} videoId - The AnimeThemes video ID to toggle.
+   * @param {HTMLElement} [heartEl] - The optional heart icon element inside the tree to toggle.
+   * @returns {Promise<void>}
+   */
   async function toggleFavourite(videoId, heartEl) {
     if (!videoId || videoId <= 0) return console.warn("VideoId missing.");
     const res = await fetchJson(base + "/animethemes/webm/favourites", {
@@ -173,19 +185,22 @@
       const treeHeart = playerTree.querySelector(`.leaf[data-path="${CSS.escape(currentWebmPath)}"] .fav-icon`);
       if (treeHeart) treeHeart.classList.toggle("favourited", isFav);
 
-      if (playerNowPlayingFav && webmTreeData.find((i) => i.path === currentWebmPath)?.videoId === videoId) {
-        playerNowPlayingFav.classList.toggle("favourited", isFav);
-      }
+      if (playerNowPlayingFav && webmTreeData.find((i) => i.path === currentWebmPath)?.videoId === videoId) playerNowPlayingFav.classList.toggle("favourited", isFav);
       if (uiFilter?.value.toLowerCase().includes("favs")) renderTree(getFilteredItems());
     }
   }
 
-  /** Constructs the hierarchical DOM for the theme list. */
+  /**
+   * Constructs the hierarchical DOM for the theme list.
+   * @param {Object[]} items - The filtered list of theme entries.
+   * @returns {void}
+   */
   function renderTree(items) {
     if (!playerTree) return;
     playerTree.innerHTML = "";
     if (!items.length) {
-      playerTree.innerHTML = `<div class="placeholder">${uiFilter?.value ? "No matches" : "Generate AnimeThemes VFS to populate"}</div>`;
+      const emptyMsg = 'No webm themes found. Click the "Generate" button under the "AnimeThemes: VFS" section of the dashboard to build your virtual folders.';
+      playerTree.innerHTML = `<div class="placeholder">${uiFilter?.value ? "No matches" : emptyMsg}</div>`;
       return;
     }
 
@@ -273,10 +288,15 @@
   // #endregion
 
   // #region Player Engine
-  /** Sets the video source and updates header metadata and highlights. */
+  /**
+   * Sets the video source, updates header metadata, highlights, and saves the active path.
+   * @param {string} path - The relative VFS path to the WebM file.
+   * @returns {void}
+   */
   function playFile(path) {
     if (!playerVideo) return;
     currentWebmPath = path;
+    localStorage.setItem(PATH_KEY, path);
     playerVideo.src = `${base}/animethemes/webm/stream?path=${encodeURIComponent(path)}`;
     playerVideo.play().catch(() => {});
 
@@ -313,7 +333,12 @@
     playerTree?.querySelectorAll(".leaf").forEach((el) => el.classList.toggle("active", el.dataset.path === path));
   }
 
-  /** Calculates the next track based on shuffle history and current direction. */
+  /**
+   * Calculates and plays the next or previous track based on shuffle history and direction.
+   * @param {boolean} [isShuffle=false] - Whether to use shuffle-based random selection.
+   * @param {number} [direction=1] - Playback direction (1 for next, -1 for previous).
+   * @returns {void}
+   */
   function playMove(isShuffle = false, direction = 1) {
     const items = getFilteredItems();
     if (items.length === 0) return;
@@ -371,7 +396,11 @@
     }
   }
 
-  /** Toggles playback mode and persists it to the server. */
+  /**
+   * Toggles or cycles the playback mode on the dashboard and persists it to the server.
+   * @param {number} [direction=1] - Cycle direction (1 for forward, -1 for backward).
+   * @returns {Promise<void>}
+   */
   async function updateMode(direction = 1) {
     if (!playerModeBtn) return;
     const modes = ["loop", "shuffle", "next", "off"];
@@ -538,8 +567,7 @@
     });
 
     (async () => {
-      // Show loading placeholder immediately with the same formatting as the empty state
-      if (playerTree) playerTree.innerHTML = '<div class="placeholder">Working on it...</div>';
+      if (playerTree) playerTree.innerHTML = '<div class="placeholder"><svg class="loading-spinner"><use href="img/icons.svg#loading"></use></svg><div>Loading video tree...</div></div>';
       const [treeRes, cfgRes, favRes] = await Promise.all([fetchJson(base + "/animethemes/webm/tree"), fetchJson(configUrl), fetchJson(base + "/animethemes/webm/favourites")]);
       if (favRes.ok) favourites = new Set(getData(favRes) || []);
       if (treeRes.ok) {
@@ -556,6 +584,14 @@
             return a.file.localeCompare(b.file);
           });
         renderTree(getFilteredItems());
+
+        // Retrieve, validate, and restore the currently playing video across sessions
+        const savedPath = localStorage.getItem(PATH_KEY);
+        if (savedPath && webmTreeData.some((item) => item.path === savedPath)) {
+          currentWebmPath = savedPath;
+          playFile(savedPath);
+          setTimeout(locateCurrentInTree, 500);
+        }
       }
       if (cfgRes.ok && playerModeBtn) {
         const mode = unwrapConfig(getData(cfgRes)).Playback.AnimeThemesWebmMode || "off";

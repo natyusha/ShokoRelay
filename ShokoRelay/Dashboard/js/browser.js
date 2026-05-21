@@ -4,16 +4,18 @@
  */
 (() => {
   const { base, el, fetchJson, showToast, toastOperation, getData, initSearchInteractions, TOAST_MS } = window._sr;
-  const playerTree = el("tree");
+  const vfsTree = el("tree");
   const uiFilter = el("filter");
   const uiFilterClear = el("filter-clear");
   const vfsCount = el("vfs-count");
   const rootTabs = el("root-tabs");
 
-  /** @type {Object[]} vfsRoots - Array of root objects containing series and file hierarchies. */
-  let vfsRoots = [];
-  /** @type {number} activeRootIndex - The index of the currently selected VFS root tab. */
-  let activeRootIndex = 0;
+  const TABS_KEY = "vfs-active-tab";
+
+  /** @type {Object[]} displayRoots - Array of root objects (including virtual "All" tab) containing series hierarchies. */
+  let displayRoots = [];
+  /** @type {string} activeTabName - The name of the currently selected VFS root tab. */
+  let activeTabName = localStorage.getItem(TABS_KEY) || "All";
 
   // #region Utilities
   /**
@@ -39,11 +41,43 @@
    * @returns {Object[]} A filtered array of series objects.
    */
   function getFilteredItems() {
-    const root = vfsRoots[activeRootIndex];
+    const root = displayRoots.find((r) => r.name === activeTabName);
     if (!root) return [];
     const ft = (uiFilter?.value || "").toLowerCase().trim();
     if (!ft) return root.series;
     return root.series.filter((s) => s.title.toLowerCase().includes(ft) || String(s.id).includes(ft) || String(s.anidbId).includes(ft));
+  }
+
+  /**
+   * Aggregates and deduplicates series data across all roots to construct a virtual "All" tab.
+   * @param {Object[]} roots - The raw list of VFS roots from the server.
+   * @returns {Object} A unified virtual root object containing merged series listings.
+   */
+  function buildAllTab(roots) {
+    const seriesMap = new Map();
+    roots.forEach((root) => {
+      root.series.forEach((s) => {
+        if (!seriesMap.has(s.id)) {
+          // Deep copy to avoid modifying the original root series objects in memory
+          seriesMap.set(s.id, {
+            id: s.id,
+            anidbId: s.anidbId,
+            title: s.title,
+            rootFiles: [...(s.rootFiles || [])],
+            seasons: (s.seasons || []).map((se) => ({ name: se.name, files: [...se.files] })),
+          });
+        } else {
+          const existing = seriesMap.get(s.id);
+          existing.rootFiles.push(...(s.rootFiles || []));
+          (s.seasons || []).forEach((se) => {
+            const existSeason = existing.seasons.find((ese) => ese.name === se.name);
+            if (existSeason) existSeason.files.push(...se.files);
+            else existing.seasons.push({ name: se.name, files: [...se.files] });
+          });
+        }
+      });
+    });
+    return { name: "All", series: [...seriesMap.values()].sort((a, b) => a.title.localeCompare(b.title)) };
   }
 
   /**
@@ -53,12 +87,20 @@
   function renderTabs() {
     if (!rootTabs) return;
     rootTabs.innerHTML = "";
-    vfsRoots.forEach((r, i) => {
+
+    // Validate that the activeTabName actually exists in displayRoots, fallback to the first tab (usually "All") if not
+    if (displayRoots.length > 0 && !displayRoots.some((r) => r.name === activeTabName)) {
+      activeTabName = displayRoots[0].name;
+      localStorage.setItem(TABS_KEY, activeTabName);
+    }
+
+    displayRoots.forEach((r) => {
       const btn = document.createElement("button");
-      btn.className = `tab-btn ${i === activeRootIndex ? "active" : ""}`;
+      btn.className = `tab-btn ${r.name === activeTabName ? "active" : ""}`;
       btn.textContent = r.name;
       btn.onclick = () => {
-        activeRootIndex = i;
+        activeTabName = r.name;
+        localStorage.setItem(TABS_KEY, r.name);
         renderTabs();
         renderActiveRoot();
       };
@@ -75,17 +117,17 @@
    * @returns {void}
    */
   function renderActiveRoot() {
-    if (!playerTree) return;
-    const root = vfsRoots[activeRootIndex];
+    if (!vfsTree) return;
+    const root = displayRoots.find((r) => r.name === activeTabName);
     if (!root) {
-      playerTree.innerHTML = '<div class="placeholder">No VFS roots found. Ensure you have generated the VFS once.</div>';
+      vfsTree.innerHTML = '<div class="placeholder">No VFS roots found. Ensure you have generated the VFS once.</div>';
       return;
     }
 
     const items = getFilteredItems();
-    playerTree.innerHTML = "";
+    vfsTree.innerHTML = "";
     if (!items.length) {
-      playerTree.innerHTML = `<div class="placeholder">${uiFilter?.value ? "No matching folders" : "This root is empty"}</div>`;
+      vfsTree.innerHTML = `<div class="placeholder">${uiFilter?.value ? "No matching folders" : "This root is empty"}</div>`;
       return;
     }
 
@@ -115,7 +157,7 @@
       };
 
       const titleHtml =
-        `<a href="${shokoBase}/webui/collection/series/${g.id}/overview" class="vfs-link vfs-id-link">${g.id}</a><span class="vfs-sep">❯</span><span class="vfs-title">${g.title}</span>` +
+        `<a href="${shokoBase}/webui/collection/series/${g.id}/overview" class="vfs-link vfs-id-link" target="_blank" rel="noopener noreferrer">${g.id}</a><span class="vfs-sep">❯</span><span class="vfs-title">${g.title}</span>` +
         `<a href="https://anidb.net/a${g.anidbId}" class="vfs-link small" target="_blank" rel="noopener noreferrer">[a${g.anidbId}]</a>` +
         `<a href="${base}/metadata/${g.id}?includeChildren=1" class="vfs-link small" target="_blank" rel="noopener noreferrer">[m${g.id}]</a>`;
 
@@ -169,22 +211,31 @@
       rootUl.appendChild(li);
     });
 
-    playerTree.appendChild(rootUl);
+    vfsTree.appendChild(rootUl);
     if (vfsCount) vfsCount.textContent = `${items.length} Series`;
   }
 
   // #endregion
 
-  // #region Initialization
+  // #region MARK: Initialization
   initSearchInteractions(uiFilter, uiFilterClear, () => renderActiveRoot());
 
   (async () => {
+    if (vfsTree) vfsTree.innerHTML = '<div class="placeholder"><svg class="loading-spinner"><use href="img/icons.svg#loading"></use></svg><div>Loading VFS tree...</div></div>';
+
     const res = await fetchJson(base + "/vfs/tree");
     if (res.ok) {
-      vfsRoots = getData(res)?.roots || [];
+      const roots = getData(res)?.roots || [];
+      if (roots.length > 0) {
+        const allRoot = buildAllTab(roots);
+        displayRoots = [allRoot, ...roots];
+      } else {
+        displayRoots = [];
+        if (vfsTree) vfsTree.innerHTML = '<div class="placeholder"> No VFS directories found. Click the "Generate" button under the "Shoko: VFS" section on the dashboard to build your virtual folders.</div>';
+      }
       renderTabs();
       renderActiveRoot();
-    } else if (playerTree) playerTree.innerHTML = '<div class="placeholder">Failed to load VFS blueprint.</div>';
+    } else if (vfsTree) vfsTree.innerHTML = '<div class="placeholder">Failed to load VFS blueprint.</div>';
   })();
   // #endregion
 })();

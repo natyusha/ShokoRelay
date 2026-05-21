@@ -33,6 +33,19 @@ body {
 }
 /* #endregion */
 
+/* #region MARK: Loading Spinner
+*/
+.loading-spinner {
+  display: inline-block;
+  transform-origin: center center;
+  animation: spin 900ms linear infinite;
+  fill: var(--highlight-color);
+  margin-bottom: 8px;
+  width: 48px;
+  height: 48px;
+}
+/* #endregion */
+
 /* #region MARK: Filter Bar
 */
 .filter-wrap {

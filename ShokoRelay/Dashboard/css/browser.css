@@ -25,6 +25,7 @@
   border-radius: 0.25em;
   background: var(--bg-color);
   padding: 4px 12px;
+  min-width: 75px;
   color: var(--text-color);
   font-size: 0.85em;
   white-space: nowrap;
