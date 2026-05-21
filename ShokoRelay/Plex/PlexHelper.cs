@@ -292,7 +292,7 @@ public class PlexWebhookPayload
         public long? LastViewedAt { get; set; }
 
         /// <summary>Library section numeric ID.</summary>
-        [JsonPropertyName("librarySectionId")]
+        [JsonPropertyName("librarySectionID")]
         public int? LibrarySectionId { get; set; }
 
         /// <summary>Metadata type string.</summary>

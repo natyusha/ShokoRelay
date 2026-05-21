@@ -317,6 +317,8 @@ public class PlexController(
 
     #region Webhook Helpers
 
+    /// <summary>Extracts and parses the raw JSON payload from the Plex webhook request stream.</summary>
+    /// <returns>A deserialized <see cref="PlexWebhookPayload"/>, or null if empty/malformed.</returns>
     private async Task<PlexWebhookPayload?> ExtractPlexWebhookPayloadAsync()
     {
         string? payloadJson = null;
@@ -331,14 +333,21 @@ public class PlexController(
             return null;
         try
         {
-            return System.Text.Json.JsonSerializer.Deserialize<PlexWebhookPayload>(payloadJson, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            // Case sensitive to prevent a type conflict between "guid" (string) and "Guid" (array).
+            return System.Text.Json.JsonSerializer.Deserialize<PlexWebhookPayload>(payloadJson, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = false });
         }
-        catch
+        catch (Exception ex)
         {
+            Logger.Warn(ex, "Plex: Failed to deserialize webhook payload. Raw JSON: {Json}", payloadJson);
             return null;
         }
     }
 
+    /// <summary>Validates the incoming webhook request source against known servers and authorized users.</summary>
+    /// <param name="evt">The parsed Plex webhook payload.</param>
+    /// <param name="cfg">The active plugin configuration settings.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A tuple indicating whether the request is authorized (Allowed) and the descriptive reason (Reason) if rejected.</returns>
     private async Task<(bool Allowed, string Reason)> ValidateWebhookSource(PlexWebhookPayload evt, RelayConfig cfg, CancellationToken ct)
     {
         if (!ConfigProvider.IsManagedServer(evt.Server?.Uuid))
