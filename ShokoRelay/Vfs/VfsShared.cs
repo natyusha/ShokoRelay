@@ -245,7 +245,7 @@ public class VfsIgnoreRule : IManagedFolderIgnoreRule
     public string Name => "Shoko Relay Ignore Rule";
 
     /// <inheritdoc/>
-    public bool ShouldIgnore(IManagedFolder folder, FileSystemInfo fileSystemInfo) => VfsShared.IsNameIgnored(fileSystemInfo.Name, fileSystemInfo is DirectoryInfo);
+    public bool ShouldIgnore(IManagedFolder folder, FileSystemInfo fileSystemInfo) => VfsShared.IsPathIgnored(folder.Path) || VfsShared.IsNameIgnored(fileSystemInfo.Name, fileSystemInfo is DirectoryInfo);
 }
 
 #endregion

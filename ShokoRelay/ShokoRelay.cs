@@ -5,7 +5,6 @@ using NLog;
 using Shoko.Abstractions.Core.Services;
 using Shoko.Abstractions.Plugin;
 using Shoko.Abstractions.Video;
-using Shoko.Abstractions.Video.Services;
 using ShokoRelay.AnimeThemes;
 using ShokoRelay.Services;
 using ShokoRelay.Sync;
@@ -134,10 +133,9 @@ public class ShokoRelay : BackgroundService
     /// <summary>Initializes the Relay hosted service.</summary>
     /// <param name="watcher">VFS filesystem event watcher.</param>
     /// <param name="configProvider">Configuration and secrets management service.</param>
+    /// <param name="httpContextAccessor">Access to the current HTTP request context.</param>
     /// <param name="systemService">Shoko system state service.</param>
     /// <param name="metadataService">Shoko metadata query service.</param>
-    /// <param name="httpContextAccessor">Access to the current HTTP request context.</param>
-    /// <param name="videoService">Shoko video and import folder service.</param>
     /// <param name="watchedSyncService">Service for syncing watched states to Shoko.</param>
     /// <param name="shokoImportService">Service for triggering server-side imports.</param>
     /// <param name="collectionService">Service for managing Plex collections.</param>
@@ -145,26 +143,24 @@ public class ShokoRelay : BackgroundService
     public ShokoRelay(
         VfsWatcher watcher,
         ConfigProvider configProvider,
+        IHttpContextAccessor httpContextAccessor,
         ISystemService systemService,
         IMetadataService metadataService,
-        IHttpContextAccessor httpContextAccessor,
-        IVideoService videoService,
         SyncToShoko? watchedSyncService = null,
         ShokoImportService? shokoImportService = null,
         ICollectionService? collectionService = null,
         ICriticRatingService? criticRatingService = null
     )
     {
+        _watcher = watcher;
         s_configProvider = configProvider;
         s_configProvider.HttpContextAccessor = httpContextAccessor;
-        _watcher = watcher;
         _systemService = systemService;
         _metadataService = metadataService ?? throw new ArgumentNullException(nameof(metadataService));
         _watchedSyncService = watchedSyncService;
         _shokoImportService = shokoImportService;
         _collectionService = collectionService;
         _criticRatingService = criticRatingService;
-        videoService.AddParts([new VfsIgnoreRule()]);
         s_logger.Info($"ShokoRelay v{ShokoRelayConstants.Version} initialized");
     }
 

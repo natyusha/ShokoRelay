@@ -4,6 +4,7 @@ using System.Text.Json;
 using NLog;
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Video.Enums;
+using Shoko.Abstractions.Video.Services;
 
 namespace ShokoRelay.Vfs;
 
@@ -51,7 +52,8 @@ public record VfsBuildResult(
 /// <summary>Builds a virtual filesystem tree for Plex mapping metadata to conventions.</summary>
 /// <param name="metadataService">Metadata service used for series and episode resolution.</param>
 /// <param name="assetLinker">Service for linking local media assets and Plex extras.</param>
-public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLinker)
+/// <param name="videoService">Shoko video and import folder service.</param>
+public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLinker, IVideoService videoService)
 {
     #region Fields
 
@@ -106,6 +108,20 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
     /// <returns>A result object containing statistics and details for the log report.</returns>
     private VfsBuildResult BuildInternal(IReadOnlyCollection<int>? seriesIds, bool cleanRoot, bool pruneSeries, bool cleanOnly)
     {
+        var rootName = VfsShared.ResolveRootFolderName();
+        var overlapping =
+            videoService
+                .GetAllManagedFolders()
+                ?.Where(f => !string.IsNullOrEmpty(f.Path) && f.Path.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries).Contains(rootName))
+                .Select(f => f.Path)
+                .ToList()
+            ?? [];
+
+        if (overlapping.Count > 0)
+            throw new InvalidOperationException(
+                $"VFS generation blocked: Shoko import folder '{overlapping[0]}' resides inside or matches the VFS directory. Remove this import folder in Shoko's settings before generating."
+            );
+
         // Refresh the override cache to catch any link changes made in Shoko since the last operation. This includes VFS Overrides and if MergeTmdbSeries is enabled auto merged TMDB series as well.
         OverrideHelper.Reload(_metadataService);
 
@@ -124,7 +140,6 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
             new(VfsShared.PathComparer)
         );
 
-        string rootName = VfsShared.ResolveRootFolderName();
         var (cleanedRoots, cleanedSeries, rootTasks, seriesTasks) = (
             new ConcurrentDictionary<string, byte>(VfsShared.PathComparer),
             new ConcurrentDictionary<string, byte>(VfsShared.PathComparer),
