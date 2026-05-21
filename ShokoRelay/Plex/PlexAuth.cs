@@ -193,19 +193,53 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
         CancellationToken ct = default
     )
     {
-        var (tokenValid, servers, _) = await GetPlexServerListAsync(token, cid, ct).ConfigureAwait(false);
+        var (tokenValid, servers, devices) = await GetPlexServerListAsync(token, cid, ct).ConfigureAwait(false);
         var list = new List<(PlexLibraryInfo, PlexServerInfo)>();
         if (tokenValid)
         {
-            foreach (var srv in servers.Where(s => !string.IsNullOrEmpty(s.PreferredUri)))
+            async Task<bool> TryConnectAsync(string uri, PlexServerInfo srv, bool isFallback)
             {
                 try
                 {
-                    var libs = await GetPlexLibrariesAsync(token, cid, srv.PreferredUri!, ct).ConfigureAwait(false);
-                    foreach (var l in libs.Where(l => string.Equals(l.Agent, ShokoRelayConstants.AgentScheme, StringComparison.OrdinalIgnoreCase)))
-                        list.Add((l, srv));
+                    var libs = await GetPlexLibrariesAsync(token, cid, uri, ct).ConfigureAwait(false);
+                    var matched = libs.Where(l => string.Equals(l.Agent, ShokoRelayConstants.AgentScheme, StringComparison.OrdinalIgnoreCase)).ToList();
+                    foreach (var l in matched)
+                        list.Add((l, srv with { PreferredUri = uri }));
+
+                    if (matched.Count > 0)
+                        s_logger.Info("Plex Discovery: Connected to '{Name}' at {Uri} (Type: {Type}, Libraries: {Count})", srv.Name, uri, isFallback ? "Fallback" : "Preferred", matched.Count);
+                    return true;
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    s_logger.Debug(ex, "Plex Discovery: Connection to {0} failed for {1}", uri, srv.Name);
+                    return false;
+                }
+            }
+
+            foreach (var srv in servers)
+            {
+                var ok = !string.IsNullOrEmpty(srv.PreferredUri) && await TryConnectAsync(srv.PreferredUri, srv, false).ConfigureAwait(false);
+
+                // Fallback: If preferred URI failed, try other endpoints
+                if (!ok && devices.FirstOrDefault(d => string.Equals(d.ClientIdentifier, srv.Id, StringComparison.OrdinalIgnoreCase)) is { } dev && dev.Connections != null)
+                {
+                    var conns = srv.HttpsRequired ? dev.Connections.Where(c => c.Uri?.StartsWith("https") == true) : dev.Connections;
+                    foreach (var conn in conns)
+                    {
+                        if (string.IsNullOrEmpty(conn.Uri) || string.Equals(conn.Uri, srv.PreferredUri, StringComparison.OrdinalIgnoreCase))
+                            continue;
+
+                        if (await TryConnectAsync(conn.Uri, srv, true).ConfigureAwait(false))
+                        {
+                            ok = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!ok)
+                    s_logger.Warn("Plex Discovery: Failed to establish any connection to server '{Name}' - check for DNS rebinding protection, firewall rules, or docker network isolation", srv.Name);
             }
         }
         return (tokenValid, servers, list);
