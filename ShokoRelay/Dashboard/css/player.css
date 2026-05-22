@@ -86,6 +86,7 @@
 }
 #anidb {
   margin-top: 5px;
+  min-width: min-content;
   font-size: 0.75em;
 }
 #anime:hover,

@@ -444,6 +444,11 @@ public class AdvancedConfig
     [Range(1, 16, ErrorMessage = "Parallelism must be between 1 and 16")]
     [DefaultValue(4)]
     public int Parallelism { get; set; } = 4;
+
+    /// <summary>The selected Shoko WebUI theme ID.</summary>
+    [Display(Name = "Plugin Theme", Description = "Select a Shoko WebUI theme to apply its colour scheme to the dashboard/player/browser")]
+    [DefaultValue("default")]
+    public string SelectedTheme { get; set; } = "default";
 }
 
 #endregion

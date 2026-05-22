@@ -70,6 +70,21 @@ body {
   padding: 0 2.2em;
   font-size: 1em;
 }
+.filter-placeholder {
+  position: absolute;
+  bottom: 0.85em;
+  left: 2.25em;
+  transition: all 0.2s ease-in-out;
+  pointer-events: none;
+  color: color-mix(in srgb, var(--text-color) 40%, transparent);
+  font-size: 1em;
+  user-select: none;
+}
+#filter:focus ~ .filter-placeholder,
+#filter:not(:placeholder-shown) ~ .filter-placeholder {
+  visibility: hidden;
+  opacity: 0;
+}
 #filter-clear {
   display: flex;
   position: absolute;

@@ -19,6 +19,13 @@
 
   // #region Utilities
   /**
+   * Escapes double quotes inside a string to prevent HTML attribute syntax corruption.
+   * @param {string} str - The raw string to escape.
+   * @returns {string} The HTML-safe escaped string.
+   */
+  const esc = (str) => (str || "").replace(/"/g, "&quot;");
+
+  /**
    * Refreshes the VFS for a specific series and displays the result toast.
    * @param {number} id - The Shoko Series ID to rebuild.
    * @returns {Promise<void>}
@@ -172,7 +179,8 @@
       };
 
       const titleHtml =
-        `<a href="${shokoBase}/webui/collection/series/${g.id}/overview" class="vfs-link vfs-id-link" target="_blank" rel="noopener noreferrer">${g.id}</a><span class="vfs-sep">❯</span><span class="vfs-title">${g.title}</span>` +
+        `<a href="${shokoBase}/webui/collection/series/${g.id}/overview" class="vfs-link vfs-id-link" target="_blank" rel="noopener noreferrer">${g.id}</a><span class="vfs-sep">❯</span>` +
+        `<span class="vfs-title" title="${esc(g.title)}" data-tooltip-overflow-only="true">${g.title}</span>` +
         `<a href="https://anidb.net/a${g.anidbId}" class="vfs-link small" target="_blank" rel="noopener noreferrer">[a${g.anidbId}]</a>` +
         `<a href="${base}/metadata/${g.id}?includeChildren=1" class="vfs-link small" target="_blank" rel="noopener noreferrer">[m${g.id}]</a>`;
 
@@ -190,7 +198,9 @@
         const fLi = document.createElement("li");
         const leaf = document.createElement("div");
         leaf.className = "leaf";
-        leaf.innerHTML = `<span>${f.name}</span><span class="source-path">${f.source || "Unknown"}</span>`;
+        leaf.innerHTML =
+          `<span title="${esc(f.name)}" data-tooltip-overflow-only="true">${f.name}</span>` +
+          `<span class="source-path" title="${esc(f.source || "Unknown")}" data-tooltip-overflow-only="true">${f.source || "Unknown"}</span>`;
         fLi.appendChild(leaf);
         ul.appendChild(fLi);
       });
@@ -205,13 +215,15 @@
         const isSpecials = /^Specials$/i.test(s.name.trim());
         const seasonId = seasonMatch ? seasonMatch[1] : isSpecials ? "0" : null;
         const seasonLink = seasonId ? `<a href="${base}/metadata/${g.id}s${seasonId}?includeChildren=1" class="vfs-link small" target="_blank" rel="noopener noreferrer">[m${g.id}s${seasonId}]</a>` : "";
-        sSum.innerHTML = `<span class="tree-icon expand"></span><span class="tree-icon collapse"></span>${s.name} ${seasonLink}`;
+        sSum.innerHTML = `<span class="tree-icon expand"></span><span class="tree-icon collapse"></span>${s.name}${seasonLink}`;
 
         s.files.forEach((f) => {
           const eLi = document.createElement("li");
           const leaf = document.createElement("div");
           leaf.className = "leaf";
-          leaf.innerHTML = `<span>${f.name}</span><span class="source-path">${f.source || "Unknown"}</span>`;
+          leaf.innerHTML =
+            `<span title="${esc(f.name)}" data-tooltip-overflow-only="true">${f.name}</span>` +
+            `<span class="source-path" title="${esc(f.source || "Unknown")}" data-tooltip-overflow-only="true">${f.source || "Unknown"}</span>`;
           eLi.appendChild(leaf);
           sUl.appendChild(eLi);
         });
@@ -233,7 +245,10 @@
   // #endregion
 
   // #region Initialization
-  initSearchInteractions(uiFilter, uiFilterClear, () => renderActiveRoot());
+  initSearchInteractions(uiFilter, uiFilterClear, () => {
+    showLoadingSpinner();
+    setTimeout(renderActiveRoot, 50);
+  });
 
   (async () => {
     showLoadingSpinner();

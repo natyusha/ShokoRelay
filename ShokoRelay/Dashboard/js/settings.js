@@ -110,7 +110,29 @@
       const value = getValueByPath(config, p.Path);
       let input;
 
-      if (p.Type === "bool") {
+      if (p.Path.endsWith("SelectedTheme")) {
+        label.innerHTML = `<span>${p.Display || p.Path.split(".").pop()}</span>${p.Description ? `<small>${p.Description}</small>` : ""}`;
+        wrap.appendChild(label);
+        input = document.createElement("select");
+        input.add(new Option("Default", "default"));
+        input.add(new Option("Shoko Gray", "shoko-gray"));
+
+        (rawCfg.themes || []).forEach((t) => {
+          const opt = new Option(t.name, t.id);
+          opt.selected = t.id === value;
+          input.add(opt);
+        });
+        wrap.appendChild(input);
+
+        // Custom save handler to force-reload the dynamic theme stylesheet instantly on dropdown change
+        const customSave = async (cfg) => {
+          await saveSettings(cfg);
+          const link = document.querySelector('link[href*="theme.css"]');
+          if (link) link.href = `../theme.css?t=${new Date().getTime()}`;
+        };
+
+        bindConfig(input, p.Path, config, customSave, "text");
+      } else if (p.Type === "bool") {
         wrap.innerHTML = `<label class="shoko-checkbox"><input type="checkbox">
           <span class="shoko-checkbox-icon" aria-hidden="true"><svg class="unchecked"><use href="img/icons.svg#checkbox-blank-circle-outline"></use></svg><svg class="checked"><use href="img/icons.svg#checkbox-marked-circle-outline"></use></svg></span>
           <span class="shoko-checkbox-text"><span class="shoko-checkbox-title">${p.Display || p.Path}</span><small class="shoko-checkbox-desc" style="display:block">${p.Description || ""}</small></span></label>`;

@@ -27,6 +27,8 @@ GET  /config                                                   -> GetConfig
 POST /config                                                   -> SaveConfig
 GET  /config/schema                                            -> GetConfigSchema
 
+GET /theme.css                                                 -> GetDynamicThemeCss
+
 GET  /tasks/active                                             -> GetActiveTasks
 GET  /tasks/completed                                          -> GetCompletedTasks
 POST /tasks/clear/{taskName}                                   -> ClearTaskResult
@@ -46,6 +48,9 @@ GET  /logs/{fileName}                                          -> GetLog
   - `/config` does not expose the Plex token. Instead the response includes `PlexLibrary.HasToken`.
 - `GetConfigSchema` returns a JSON schema representation of `RelayConfig` properties.
   - Properties within the `AdvancedConfig` class are automatically flagged with `Advanced: true`.
+- `GetDynamicThemeCss` generates and serves a dynamically mapped CSS stylesheet.
+  - It reads the selected Shoko WebUI theme (configured under `Advanced.SelectedTheme`) from Shoko's `themes/` directory via `IApplicationPaths`.
+  - For custom WebUI themes, it appends a translation block that bridges Shoko's native CSS variables onto the plugin's custom layout variables.
 - `GetActiveTasks` returns a list of unique task identifiers currently running on the server.
 - `GetCompletedTasks` returns a dictionary of results for tasks that finished while the dashboard was disconnected or before a refresh.
 - `ClearTaskResult` acknowledges and removes a stored result from the server's memory.

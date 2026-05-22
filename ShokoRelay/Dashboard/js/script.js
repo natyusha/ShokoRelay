@@ -237,23 +237,6 @@
   // #endregion
 
   // #region Feature Logic
-  /** Initializes the dashboard color theme from storage. */
-  function initTheme() {
-    const THEME_KEY = "dashboard-theme";
-    const getSavedTheme = () => localStorage.getItem(THEME_KEY) || (window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-    const applyTheme = (theme) => {
-      document.documentElement.setAttribute("data-theme", theme);
-      el("theme-toggle")?.setAttribute("aria-pressed", String(theme === "dark"));
-    };
-    applyTheme(getSavedTheme());
-    const toggle = el("theme-toggle");
-    if (toggle)
-      toggle.onclick = () => {
-        const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
-        localStorage.setItem(THEME_KEY, next);
-        applyTheme(next);
-      };
-  }
   /**
    * Initializes the custom hover tooltip overlay and configures secure external link target behaviors.
    * @returns {void}
@@ -343,7 +326,12 @@
     document.querySelectorAll("[title], a[href]").forEach(attach);
     new MutationObserver((ms) => {
       ms.forEach((m) => {
-        m.addedNodes.forEach((n) => n.nodeType === 1 && attach(n) && n.querySelectorAll("[title], a[href]").forEach(attach));
+        m.addedNodes.forEach((n) => {
+          if (n.nodeType === 1) {
+            attach(n);
+            n.querySelectorAll("[title], a[href]").forEach(attach);
+          }
+        });
         if (m.type === "attributes" && (m.attributeName === "title" || m.attributeName === "href") && m.target.nodeType === 1) attach(m.target);
       });
     }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["title", "href"] });
@@ -352,5 +340,4 @@
 
   // Lifecycle Execution
   initTooltips();
-  initTheme();
 })();

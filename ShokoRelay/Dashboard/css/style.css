@@ -1,27 +1,7 @@
 /* #region MARK: Themes
 */
 :root {
-  color-scheme: light dark;
-  --bg-color: light-dark(#282e38, #0f0f0f);
-  --panel-color: light-dark(#2c333e, #1c1c1c);
-  --border-color: light-dark(#21242b, #0f0f0f);
-  --inset-color: light-dark(#1e2027, #151515);
-  --text-color: light-dark(#cfd8e3, #ddd);
-  --highlight-color: light-dark(#44a3ff, #94aad1);
-  --button-color: light-dark(#44a3ff, #a497b0);
-  --hover-color: light-dark(#64b3ff, #ea005e);
-  --danger-color: light-dark(#ff6c6c, #cc0000);
-  --ok-color: light-dark(#10c469, #00ab3f);
-  --tooltip-color: #222;
-  --warning-color: #f9c851;
-  --at-color: #9f93b8;
-  --plex-color: #ffc826;
-  --black-t60: #00000099;
-  --glow: #94aad14d;
-}
-/* Dark Mode:  Shoko NN (https://shokoanime.com/downloads/webui-themes/shoko-nn) */
-:root[data-theme="dark"] {
-  color-scheme: dark;
+  /* Default Theme: Shoko NN (https://shokoanime.com/downloads/webui-themes/shoko-nn) */
   --bg-color: #0f0f0f;
   --panel-color: #1c1c1c;
   --border-color: #0f0f0f;
@@ -31,38 +11,13 @@
   --button-color: #a497b0;
   --hover-color: #ea005e;
   --danger-color: #cc0000;
+  --warning-color: #f9c851;
   --ok-color: #00ab3f;
-}
-/* Light Mode: Shoko Grey (Default) */
-:root[data-theme="light"] {
-  color-scheme: light;
-  --bg-color: #282e38;
-  --panel-color: #2c333e;
-  --border-color: #21242b;
-  --inset-color: #1e2027;
-  --text-color: #cfd8e3;
-  --highlight-color: #44a3ff;
-  --button-color: #44a3ff;
-  --hover-color: #64b3ff;
-  --danger-color: #ff6c6c;
-  --ok-color: #10c469;
-}
-#brand-header {
-  filter: drop-shadow(0 0 5px rgb(from var(--hover-color) r g b / 0.25));
-  background-image: url("../img/shoko-relay-header-dark.png");
-  background-position: left center;
-  background-size: contain;
-  background-repeat: no-repeat;
-  width: 100%;
-  height: 100px;
-}
-:root[data-theme="light"] #brand-header {
-  background-image: url("../img/shoko-relay-header-light.png");
-}
-@media (prefers-color-scheme: light) {
-  #brand-header {
-    background-image: url("../img/shoko-relay-header-light.png");
-  }
+  --tooltip-color: #222;
+  --at-color: #9f93b8;
+  --plex-color: #ebaf00;
+  --black-t60: #00000099;
+  --glow: #94aad14d;
 }
 /* #endregion */
 
@@ -209,6 +164,24 @@ a:hover:not(.plex-login-link) {
   opacity: 1;
   color: var(--hover-color);
 }
+kbd {
+  cursor: default;
+  box-shadow: 0 2px 0 1px var(--border-color);
+  border: 1px solid var(--border-color);
+  background: var(--inset-color);
+  color: var(--highlight-color);
+  font-family: monospace;
+}
+kbd:hover {
+  top: 1px;
+  box-shadow: 0 1px 0 0.5px var(--border-color);
+}
+kbd,
+code {
+  border-radius: 3px;
+  padding: 2px 6px;
+  text-align: center;
+}
 #container {
   margin: 0 auto;
   max-width: 900px;
@@ -249,6 +222,13 @@ svg {
 h2 .icon-svg {
   fill: var(--highlight-color);
 }
+h2 .plex-svg,
+.plex-svg {
+  fill: var(--plex-color);
+}
+h2 .plex-svg {
+  scale: 75%;
+}
 .icon-svg {
   margin: 0 2px -4px 2px;
 }
@@ -257,14 +237,9 @@ h2 .icon-svg {
   margin-bottom: -4px;
   width: 1.6em;
 }
-label > small::before,
-.plex::before {
+label > small::before {
   content: "❯";
   font-weight: 900;
-}
-.plex::before {
-  margin: 0 12px 0 8px;
-  color: var(--plex-color);
 }
 label > small::before {
   margin: 0 0.6rem;
@@ -500,12 +475,15 @@ label > small::before {
   display: flex;
 }
 .modal {
+  display: flex;
+  flex-direction: column;
   box-shadow: 0 12px 40px var(--black-t60);
   border: 1px solid var(--border-color);
   border-radius: 10px;
   background: var(--panel-color);
   width: 390px;
   max-width: calc(100% - 48px);
+  max-height: 90vh;
   overflow: hidden;
   color: var(--text-color);
 }
@@ -557,22 +535,7 @@ label > small::before {
 .modal kbd,
 .modal code {
   margin-right: 10px;
-  border-radius: 3px;
-  padding: 2px 6px;
   min-width: 30px;
-  text-align: center;
-}
-.modal kbd {
-  cursor: default;
-  box-shadow: 0 2px 0 1px var(--border-color);
-  border: 1px solid var(--border-color);
-  background: var(--inset-color);
-  color: var(--highlight-color);
-  font-family: monospace;
-}
-.modal kbd:hover {
-  top: 1px;
-  box-shadow: 0 1px 0 0.5px var(--border-color);
 }
 .modal code {
   border: 1px solid var(--border-color);
@@ -606,6 +569,8 @@ footer {
 }
 .modal-body {
   padding: 14px 16px;
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 .modal-body .shoko-checkbox {
   margin-top: 10px;

@@ -1,3 +1,57 @@
+/* #region MARK: Logo
+*/
+:root {
+  /* Default Theme: Shoko NN (https://shokoanime.com/downloads/webui-themes/shoko-nn) */
+  --logo-skin: #eea47b;
+  --logo-outline: #000000;
+  --logo-face-shadow: #925648;
+  --logo-eye-ref1: #fafcf9;
+  --logo-eye-ref2: #efeefa;
+  --logo-eye-ref3: #f8e8ff;
+  --logo-eye-gradient1: #514271;
+  --logo-eye-gradient2: #c98ccb;
+  --logo-eye-gradient3: #f9c2ff;
+  --logo-hair-gradient1: #b8977f;
+  --logo-hair-gradient2: #eddeaf;
+  --logo-hair-gradient3: #ece1b8;
+}
+@font-face {
+  font-style: normal;
+  font-weight: 200;
+  src: url("../fonts/iosevka-extralight.subset.woff2") format("woff2");
+  font-family: "Iosevka Extralight";
+  font-display: swap;
+}
+#brand-header {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  filter: drop-shadow(0 0 5px rgb(from var(--hover-color) r g b / 0.25));
+  width: 100%;
+  height: 100px;
+}
+#header-logo {
+  margin-right: 12px;
+  width: auto;
+  height: 92px;
+}
+#header-chevron,
+#header-title {
+  height: inherit;
+}
+#header-chevron {
+  width: 100px;
+}
+#header-title {
+  margin-left: 20px;
+  font-size: 6em;
+  line-height: 1.1;
+  font-family: "Iosevka Extralight";
+  letter-spacing: -4px;
+  user-select: none;
+}
+/* #endregion */
+
 /* #region MARK: Toggle Buttons
 */
 .w46-button {

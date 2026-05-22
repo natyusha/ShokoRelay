@@ -2,18 +2,22 @@ using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Reflection;
 using Microsoft.AspNetCore.Mvc;
+using Shoko.Abstractions.Plugin;
+using Shoko.Abstractions.Web.Services;
 
 namespace ShokoRelay.Controllers;
 
-/// <summary>Handles the plugin's frontend components, serving static assets and dynamic configuration data.</summary>
+/// <summary>Provides operations for serving the dashboard pages, static assets, and dynamic theme stylesheets.</summary>
 [ApiController]
 [ApiVersion(ShokoRelayConstants.ApiVersion)]
 [Route(ShokoRelayConstants.BasePath)]
-public class DashboardController(ConfigProvider configProvider, IMetadataService metadataService, PlexClient plexLibrary) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
+public class DashboardController(ConfigProvider configProvider, IMetadataService metadataService, PlexClient plexLibrary, IWebThemeService webThemeService, IApplicationPaths applicationPaths)
+    : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
 {
     #region Fields & Constructor
 
     private static readonly Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider s_contentTypeProvider = new();
+    private readonly IWebThemeService _webThemeService = webThemeService;
 
     #endregion
 
@@ -66,20 +70,36 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
     #region Config Management
 
     /// <summary>Returns the current configuration payload used by the dashboard UI.</summary>
-    /// <returns>A JSON payload containing settings and VFS overrides.</returns>
+    /// <returns>A JSON payload containing settings, VFS overrides, and available WebUI themes.</returns>
     [HttpGet("config")]
     public IActionResult GetConfig()
     {
         var payload = ConfigProvider.GetDashboardConfig();
+        var themes = _webThemeService.GetThemes(forceRefresh: false).Select(t => new { id = t.ID, name = t.Name }).ToList();
+
         try
         {
             var path = Path.Combine(ConfigDirectory, ShokoRelayConstants.FileVfsOverrides);
             string overrides = System.IO.File.Exists(path) ? System.IO.File.ReadAllText(path) : string.Empty;
-            return Ok(new { payload, overrides });
+            return Ok(
+                new
+                {
+                    payload,
+                    overrides,
+                    themes,
+                }
+            );
         }
         catch
         {
-            return Ok(new { payload, overrides = string.Empty });
+            return Ok(
+                new
+                {
+                    payload,
+                    overrides = string.Empty,
+                    themes,
+                }
+            );
         }
     }
 
@@ -104,6 +124,83 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
     {
         var props = BuildConfigSchema(typeof(RelayConfig), "");
         return Ok(new { properties = props });
+    }
+
+    /// <summary>Generates and serves a dynamically mapped CSS file combining the selected Shoko WebUI theme with custom Relay variables.</summary>
+    /// <returns>A dynamic CSS stylesheet content result.</returns>
+    [HttpGet("theme.css")]
+    public IActionResult GetDynamicThemeCss()
+    {
+        var settings = ConfigProvider.GetSettings();
+        string themeId = settings.Advanced.SelectedTheme;
+
+        if (string.IsNullOrWhiteSpace(themeId) || themeId.Equals("default", StringComparison.OrdinalIgnoreCase))
+            return Content(string.Empty, "text/css");
+
+        if (string.Equals(themeId, "shoko-gray", StringComparison.OrdinalIgnoreCase))
+        {
+            var shokoGrayBuilder = new System.Text.StringBuilder();
+            shokoGrayBuilder.AppendLine("/* Shoko Gray Theme Variables */");
+            shokoGrayBuilder.AppendLine(":root {");
+            shokoGrayBuilder.AppendLine("  --bg-color: #282e38;");
+            shokoGrayBuilder.AppendLine("  --panel-color: #2c333e;");
+            shokoGrayBuilder.AppendLine("  --border-color: #21242b;");
+            shokoGrayBuilder.AppendLine("  --inset-color: #1e2027;");
+            shokoGrayBuilder.AppendLine("  --text-color: #cfd8e3;");
+            shokoGrayBuilder.AppendLine("  --highlight-color: #44a3ff;");
+            shokoGrayBuilder.AppendLine("  --button-color: #44a3ff;");
+            shokoGrayBuilder.AppendLine("  --hover-color: #64b3ff;");
+            shokoGrayBuilder.AppendLine("  --danger-color: #ff6c6c;");
+            shokoGrayBuilder.AppendLine("  --warning-color: #f9c851;");
+            shokoGrayBuilder.AppendLine("  --ok-color: #10c469;");
+            shokoGrayBuilder.AppendLine("  --logo-outline: #000;");
+            shokoGrayBuilder.AppendLine("  --logo-skin: #fdf5e8;");
+            shokoGrayBuilder.AppendLine("  --logo-face-shadow: #fe514d;");
+            shokoGrayBuilder.AppendLine("  --logo-eye-ref1: #e3e4d6;");
+            shokoGrayBuilder.AppendLine("  --logo-eye-ref2: #e8c8bb;");
+            shokoGrayBuilder.AppendLine("  --logo-eye-ref3: #ffc2b2;");
+            shokoGrayBuilder.AppendLine("  --logo-eye-gradient1: #ae303b;");
+            shokoGrayBuilder.AppendLine("  --logo-eye-gradient2: #ec4050;");
+            shokoGrayBuilder.AppendLine("  --logo-eye-gradient3: #fd877d;");
+            shokoGrayBuilder.AppendLine("  --logo-hair-gradient1: #c33144;");
+            shokoGrayBuilder.AppendLine("  --logo-hair-gradient2: #6b8cdb;");
+            shokoGrayBuilder.AppendLine("  --logo-hair-gradient3: #79f0f8;");
+            shokoGrayBuilder.AppendLine("}");
+
+            return Content(shokoGrayBuilder.ToString(), "text/css");
+        }
+
+        try
+        {
+            string cssPath = Path.Combine(applicationPaths.ThemesPath, $"{themeId}.css");
+
+            if (!System.IO.File.Exists(cssPath))
+                return Content(string.Empty, "text/css");
+
+            string rawCss = System.IO.File.ReadAllText(cssPath);
+
+            var mappingBuilder = new System.Text.StringBuilder();
+            mappingBuilder.AppendLine().AppendLine("/* Shoko Relay Theme Variable Mapping */").AppendLine(":root {");
+            mappingBuilder.AppendLine("  --bg-color: var(--panel-background-alt, #0f0f0f);");
+            mappingBuilder.AppendLine("  --panel-color: var(--panel-background, #1c1c1c);");
+            mappingBuilder.AppendLine("  --border-color: var(--panel-border, #0f0f0f);");
+            mappingBuilder.AppendLine("  --inset-color: var(--panel-input, #151515);");
+            mappingBuilder.AppendLine("  --text-color: var(--panel-text, #ddd);");
+            mappingBuilder.AppendLine("  --highlight-color: var(--panel-icon-action, #94aad1);");
+            mappingBuilder.AppendLine("  --button-color: var(--button-primary, #a497b0);");
+            mappingBuilder.AppendLine("  --hover-color: var(--button-primary-hover, #ea005e);");
+            mappingBuilder.AppendLine("  --danger-color: var(--panel-icon-danger, #cc0000);");
+            mappingBuilder.AppendLine("  --warning-color: var(--panel-icon-warning, #f9c851);");
+            mappingBuilder.AppendLine("  --ok-color: var(--panel-text-important, #00ab3f);");
+            mappingBuilder.AppendLine("}");
+
+            return Content(rawCss + mappingBuilder.ToString(), "text/css");
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, "Theme: Failed to generate dynamic mapped CSS for theme {0}", themeId);
+            return Content(string.Empty, "text/css");
+        }
     }
 
     #endregion

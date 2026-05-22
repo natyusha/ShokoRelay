@@ -68,11 +68,16 @@
   font-size: 0.9em;
 }
 .vfs-title {
-  flex: 1;
-  min-width: 0;
+  display: inline-block;
+  vertical-align: bottom;
+  max-width: calc(100% - 200px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .vfs-link.small {
   font-size: 0.75em;
+  white-space: nowrap;
 }
 a.vfs-link {
   margin-left: 4px;

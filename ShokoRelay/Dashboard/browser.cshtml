@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="css/style.css" />
     <link rel="stylesheet" href="css/tree.css" />
     <link rel="stylesheet" href="css/browser.css" />
+    <link rel="stylesheet" href="../theme.css" />
     <script>
       window._sr = window._sr || {};
       window._sr.tasks = {
@@ -23,7 +24,8 @@
         <div id="root-tabs" class="tabs-container"></div>
         <span class="filter-wrap">
           <svg class="filter-icon magnify"><use href="img/icons.svg#magnify"></use></svg>
-          <input id="filter" type="text" placeholder="Search..." />
+          <input id="filter" type="text" placeholder=" " />
+          <label for="filter" class="filter-placeholder">Type <kbd>/</kbd> to filter</label>
           <button id="filter-clear" title="Clear" type="button" hidden>
             <svg class="filter-icon clear"><use href="img/icons.svg#close"></use></svg>
           </button>

@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="css/style.css" />
     <link rel="stylesheet" href="css/tree.css" />
     <link rel="stylesheet" href="css/player.css" />
+    <link rel="stylesheet" href="../theme.css" />
     <script>
       window._sr = window._sr || {};
     </script>
@@ -30,7 +31,8 @@
           </button>
           <span class="filter-wrap">
             <svg class="filter-icon magnify"><use href="img/icons.svg#magnify"></use></svg>
-            <input id="filter" type="text" placeholder="Filter..." />
+            <input id="filter" type="text" placeholder=" " />
+            <label for="filter" class="filter-placeholder">Type <kbd>/</kbd> to filter</label>
             <button id="filter-clear" title="Clear" type="button" hidden>
               <svg class="filter-icon clear"><use href="img/icons.svg#close"></use></svg>
             </button>
@@ -39,9 +41,6 @@
         <video id="video" autoplay></video>
         <div id="video-ui" class="video-ui-overlay">
           <div class="ui-top-row">
-            <button id="theme-toggle" class="ui-btn theme-toggle" title="Theme Toggle" aria-label="Theme Toggle" aria-pressed="false">
-              <svg class="icon-svg"><use href="img/icons.svg#theme-light-dark"></use></svg>
-            </button>
             <button id="help-open" class="ui-btn" title="Help" type="button">
               <svg class="icon-svg"><use href="img/icons.svg#help-box"></use></svg>
             </button>
