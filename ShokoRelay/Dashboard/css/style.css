@@ -213,53 +213,6 @@ code {
 }
 /* #endregion */
 
-/* #region MARK: Icons
-*/
-svg {
-  width: 1.282em;
-  height: 1.282em;
-}
-h2 .icon-svg {
-  fill: var(--highlight-color);
-}
-h2 .plex-svg,
-.plex-svg {
-  fill: var(--plex-color);
-}
-h2 .plex-svg {
-  scale: 75%;
-}
-.icon-svg {
-  margin: 0 2px -4px 2px;
-}
-.at-svg {
-  fill: var(--at-color);
-  margin-bottom: -4px;
-  width: 1.6em;
-}
-label > small::before {
-  content: "❯";
-  font-weight: 900;
-}
-label > small::before {
-  margin: 0 0.6rem;
-  color: var(--highlight-color);
-}
-.vfs-rebuild label small::after,
-.modal-body small strong {
-  display: inline-block;
-  vertical-align: -0.06em;
-  color: var(--highlight-color);
-  font-size: 1.4em;
-  line-height: 0;
-}
-.vfs-rebuild label small::after {
-  margin-left: 4px;
-  content: "⟳";
-  font-weight: bold;
-}
-/* #endregion */
-
 /* #region MARK: Tooltips
 */
 .tooltip-core {
