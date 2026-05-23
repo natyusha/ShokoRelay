@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: "Tag to build from (e.g. v1.0.0)"
+        description: "Tag or branch to build from (e.g. v1.0.0 or master)"
         required: true
 
 permissions:
@@ -46,23 +46,33 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ github.event.inputs.tag_name || github.event.release.tag_name }}"
-          VERSION="${TAG#v}"
-          # Strip the 4th digit (revision) for filenames (1.0.0.1 -> 1.0.0)
-          VERSION_BASE=$(echo "$VERSION" | cut -d'.' -f1-3)
 
-          # Determine if this is a pre-release (Dev channel)
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            IS_PRERELEASE=$(gh release view "$TAG" --repo "${{ github.repository }}" --json isPrerelease -q .isPrerelease)
+          # Check if the input/release reference looks like a standard tag (e.g. starts with v)
+          if [[ "$TAG" =~ ^v[0-9] ]]; then
+            echo "is_tag=true" >> $GITHUB_OUTPUT
+            VERSION="${TAG#v}"
+            # Strip the 4th digit (revision) for filenames (1.0.0.1 -> 1.0.0)
+            VERSION_BASE=$(echo "$VERSION" | cut -d'.' -f1-3)
+
+            # Determine if this is a pre-release (Dev channel)
+            if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+              IS_PRERELEASE=$(gh release view "$TAG" --repo "${{ github.repository }}" --json isPrerelease -q .isPrerelease)
+            else
+              IS_PRERELEASE="${{ github.event.release.prerelease }}"
+            fi
+
+            if [[ "$IS_PRERELEASE" == "true" ]]; then
+              echo "file_ver=v${VERSION_BASE}-dev" >> $GITHUB_OUTPUT
+              echo "is_dev=true" >> $GITHUB_OUTPUT
+            else
+              echo "file_ver=v${VERSION_BASE}" >> $GITHUB_OUTPUT
+              echo "is_dev=false" >> $GITHUB_OUTPUT
+            fi
           else
-            IS_PRERELEASE="${{ github.event.release.prerelease }}"
-          fi
-
-          if [[ "$IS_PRERELEASE" == "true" ]]; then
-            echo "file_ver=v${VERSION_BASE}-dev" >> $GITHUB_OUTPUT
+            # Fallback for branch-based test builds
+            echo "is_tag=false" >> $GITHUB_OUTPUT
+            echo "file_ver=$TAG" >> $GITHUB_OUTPUT
             echo "is_dev=true" >> $GITHUB_OUTPUT
-          else
-            echo "file_ver=v${VERSION_BASE}" >> $GITHUB_OUTPUT
-            echo "is_dev=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Publish
@@ -91,6 +101,7 @@ jobs:
           echo "zip_path=$ZipName" >> $env:GITHUB_OUTPUT
 
       - name: Upload asset to GitHub Release
+        if: steps.vars.outputs.is_tag == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -99,9 +110,18 @@ jobs:
         run: |
           gh release upload "$TAG" "$ZIP_PATH" --clobber
 
+      - name: Upload Artifacts
+        if: steps.vars.outputs.is_tag == 'false'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ShokoRelay-${{ steps.vars.outputs.file_ver }}-${{ matrix.rid }}
+          path: ${{ runner.os == 'Windows' && steps.pkg_win.outputs.zip_path || steps.pkg_linux.outputs.zip_path }}
+
   update-manifest:
     name: Update plugin manifest
     needs: [publish]
+    # Only run the manifest generator if the build was triggered by a release or a tag dispatch
+    if: startsWith(github.event.inputs.tag_name, 'v') || github.event_name == 'release'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
