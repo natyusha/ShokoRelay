@@ -21,7 +21,8 @@ public sealed record PlexDeviceConnection(string? Uri, bool Local, bool Relay);
 /// <param name="AccessToken">Device access token.</param>
 /// <param name="HttpsRequired">True if the server requires secure connections.</param>
 /// <param name="Connections">Available network connections.</param>
-public sealed record PlexDevice(string? ClientIdentifier, string? Name, string? Provides, string? AccessToken, bool HttpsRequired, List<PlexDeviceConnection>? Connections);
+/// <param name="Owned">True if the server is owned by the user; false if it is a shared server.</param>
+public sealed record PlexDevice(string? ClientIdentifier, string? Name, string? Provides, string? AccessToken, bool HttpsRequired, List<PlexDeviceConnection>? Connections, bool Owned);
 
 /// <summary>Summary of a Plex server connection.</summary>
 /// <param name="Id">Server identifier.</param>
@@ -124,7 +125,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
         var devices = await ReadJsonAsync<List<PlexDevice>>(response, ct).ConfigureAwait(false) ?? [];
 
         var servers = devices
-            .Where(d => d.Provides?.Contains("server", StringComparison.OrdinalIgnoreCase) == true)
+            .Where(d => d.Owned && d.Provides?.Contains("server", StringComparison.OrdinalIgnoreCase) == true) // Filter out any servers where d.Owned is false to completely ignore shared servers
             .Select(d =>
             {
                 var validConnections = d.HttpsRequired ? d.Connections?.Where(c => c.Uri?.StartsWith("https") == true) : d.Connections;
@@ -201,7 +202,11 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
             {
                 try
                 {
-                    var libs = await GetPlexLibrariesAsync(token, cid, uri, ct).ConfigureAwait(false);
+                    // Create a linked token source that cancels after 5 seconds to prevent offline servers from hanging discovery
+                    using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    cts.CancelAfter(TimeSpan.FromSeconds(5));
+
+                    var libs = await GetPlexLibrariesAsync(token, cid, uri, cts.Token).ConfigureAwait(false);
                     var matched = libs.Where(l => string.Equals(l.Agent, ShokoRelayConstants.AgentScheme, StringComparison.OrdinalIgnoreCase)).ToList();
                     foreach (var l in matched)
                         list.Add((l, srv with { PreferredUri = uri }));
@@ -210,6 +215,10 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
                         s_logger.Info("Plex Discovery: Connected to '{Name}' at {Uri} (Type: {Type}, Libraries: {Count})", srv.Name, uri, isFallback ? "Fallback" : "Preferred", matched.Count);
                     return true;
                 }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
                 catch (Exception ex)
                 {
                     s_logger.Debug(ex, "Plex Discovery: Connection to {0} failed for {1}", uri, srv.Name);
@@ -217,8 +226,9 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
                 }
             }
 
-            foreach (var srv in servers)
+            for (int i = 0; i < servers.Count; i++)
             {
+                var srv = servers[i];
                 var ok = !string.IsNullOrEmpty(srv.PreferredUri) && await TryConnectAsync(srv.PreferredUri, srv, false).ConfigureAwait(false);
 
                 // Fallback: If preferred URI failed, try other endpoints
@@ -230,8 +240,10 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
                         if (string.IsNullOrEmpty(conn.Uri) || string.Equals(conn.Uri, srv.PreferredUri, StringComparison.OrdinalIgnoreCase))
                             continue;
 
-                        if (await TryConnectAsync(conn.Uri, srv, true).ConfigureAwait(false))
+                        var workingSrv = srv with { PreferredUri = conn.Uri };
+                        if (await TryConnectAsync(conn.Uri, workingSrv, true).ConfigureAwait(false))
                         {
+                            servers[i] = workingSrv;
                             ok = true;
                             break;
                         }
