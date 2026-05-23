@@ -28,27 +28,34 @@
   align-items: center;
   filter: drop-shadow(0 0 5px rgb(from var(--hover-color) r g b / 0.25));
   width: 100%;
-  height: 100px;
+  height: 6.25em;
 }
 #header-logo {
-  margin-right: 12px;
+  flex-shrink: 0;
+  margin-right: 0.75rem;
   width: auto;
-  height: 92px;
+  height: 5.75rem;
 }
 #header-chevron,
 #header-title {
   height: inherit;
 }
 #header-chevron {
-  width: 100px;
+  flex-shrink: 0;
+  width: 6.25rem;
 }
 #header-title {
-  margin-left: 20px;
-  font-size: 6em;
+  flex-shrink: 1;
+  margin-left: 1.25rem;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 6rem;
   line-height: 1.1;
   font-family: "Iosevka Extralight";
-  letter-spacing: -4px;
+  letter-spacing: -0.06em;
   user-select: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* #endregion */
 
