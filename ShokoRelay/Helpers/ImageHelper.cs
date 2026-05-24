@@ -44,11 +44,11 @@ public static class ImageHelper
 
     #region Image Builders
 
-    /// <summary>Filters and returns only enabled and locally available images from the supplied entity.</summary>
+    /// <summary>Filters and returns only enabled, desired, and locally available images from the supplied entity.</summary>
     /// <param name="entity">The metadata entity providing images.</param>
     /// <param name="type">The specific image type to retrieve.</param>
     /// <returns>A collection of available images.</returns>
-    public static IEnumerable<IImage> GetAvailableImages(this IWithImages entity, ImageEntityType type) => entity.GetImages(imageType: type).Where(i => i.IsEnabled && i.IsAvailable);
+    public static IEnumerable<IImage> GetAvailableImages(this IWithImages entity, ImageEntityType type) => entity.GetImages(imageType: type).Where(i => i.IsEnabled && i.IsAvailable && i.IsDesired);
 
     /// <summary>Build an array of ImageInfo records from the supplied images collection.</summary>
     /// <param name="images">The object providing images.</param>

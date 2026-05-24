@@ -201,7 +201,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     /// <param name="ratingKey">Custom Plex-style rating key.</param>
     /// <returns>Image MediaContainer.</returns>
     [HttpGet("metadata/{ratingKey}/images")]
-    public IActionResult GetImages(string ratingKey)
+    public IActionResult GetMetadataImages(string ratingKey)
     {
         var ctx = _mapper.GetSeriesContext(ratingKey);
         if (ctx == null)
@@ -239,7 +239,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     /// <summary>Returns an empty extras container to satisfy Plex's automated metadata queries.</summary>
     /// <returns>An empty MediaContainer.</returns>
     [HttpGet("metadata/{ratingKey}/extras")]
-    public IActionResult GetExtras() => EmptyMatch();
+    public IActionResult GetMetadataExtras() => EmptyMatch();
 
     #endregion
 

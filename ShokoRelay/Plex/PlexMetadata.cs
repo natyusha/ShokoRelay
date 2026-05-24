@@ -192,8 +192,8 @@ public class PlexMetadata(IMetadataService metadataService)
             ["parentGuid"]            = series.GetPlexGuid(),
             ["parentType"]            = "show",
             ["parentTitle"]           = seriesTitle,
-            ["parentThumb"]           = images.GetImages(imageType: ImageEntityType.Primary).FirstOrDefault() is { } sp ? ImageHelper.GetImageUrl(sp, cacheBuster: cb) : null,
-            ["parentArt"]             = images.GetImages(imageType: ImageEntityType.Backdrop).FirstOrDefault() is { } sa ? ImageHelper.GetImageUrl(sa, cacheBuster: cb) : null,
+            ["parentThumb"]           = images.GetAvailableImages(ImageEntityType.Primary).FirstOrDefault() is { } sp ? ImageHelper.GetImageUrl(sp, cacheBuster: cb) : null,
+            ["parentArt"]             = images.GetAvailableImages(ImageEntityType.Backdrop).FirstOrDefault() is { } sa ? ImageHelper.GetImageUrl(sa, cacheBuster: cb) : null,
             ["index"]                 = seasonNum,
 
             // Force addEveryImage to true if TMDB season posters are present, otherwise fallback to the configuration. (Remove this once Shoko's WebUI supports selecting the preferred poster)
@@ -263,8 +263,8 @@ public class PlexMetadata(IMetadataService metadataService)
             ["parentGuid"]            = series.GetPlexGuid(mapped.Season),
             ["parentType"]            = "season",
             ["parentTitle"]           = GetSeasonFolder(mapped.Season),
-            ["parentThumb"]           = parentThumb ?? (seriesImages.GetImages(imageType: ImageEntityType.Primary).FirstOrDefault() is { } p ? ImageHelper.GetImageUrl(p, cacheBuster: cb) : null),
-            ["parentArt"]             = seriesImages.GetImages(imageType: ImageEntityType.Backdrop).FirstOrDefault() is { } a ? ImageHelper.GetImageUrl(a, cacheBuster: cb) : null,
+            ["parentThumb"]           = parentThumb ?? (seriesImages.GetAvailableImages(ImageEntityType.Primary).FirstOrDefault() is { } p ? ImageHelper.GetImageUrl(p, cacheBuster: cb) : null),
+            ["parentArt"]             = seriesImages.GetAvailableImages(ImageEntityType.Backdrop).FirstOrDefault() is { } a ? ImageHelper.GetImageUrl(a, cacheBuster: cb) : null,
             ["index"]                 = mapped.Episode,
 
             ["grandparentRatingKey"]  = series.GetPlexRatingKey(),
@@ -272,8 +272,8 @@ public class PlexMetadata(IMetadataService metadataService)
             ["grandparentGuid"]       = series.GetPlexGuid(),
             ["grandparentType"]       = "show",
             ["grandparentTitle"]      = titles.DisplayTitle,
-            ["grandparentThumb"]      = seriesImages.GetImages(imageType: ImageEntityType.Primary).FirstOrDefault() is { } gp ? ImageHelper.GetImageUrl(gp, cacheBuster: cb) : null,
-            ["grandparentArt"]        = seriesImages.GetImages(imageType: ImageEntityType.Backdrop).FirstOrDefault() is { } ga ? ImageHelper.GetImageUrl(ga, cacheBuster: cb) : null,
+            ["grandparentThumb"]      = seriesImages.GetAvailableImages(ImageEntityType.Primary).FirstOrDefault() is { } gp ? ImageHelper.GetImageUrl(gp, cacheBuster: cb) : null,
+            ["grandparentArt"]        = seriesImages.GetAvailableImages(ImageEntityType.Backdrop).FirstOrDefault() is { } ga ? ImageHelper.GetImageUrl(ga, cacheBuster: cb) : null,
             ["parentIndex"]           = mapped.Season,
 
             ["Image"]                 = Settings.TmdbThumbnails ? [.. ImageHelper.GenerateImageArray(images, epTitle, Settings.AddEveryImage, cb).Where(img => img.Type == "snapshot")] : Array.Empty<ImageInfo>(),
