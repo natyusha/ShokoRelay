@@ -188,7 +188,7 @@ This plugin includes full [AnimeThemes](https://animethemes.moe/) integration. I
    - There is a torrent available with over 19000+ themes
 2. Generate a mapping for the videos by clicking the `Build Mapping File` button:
    - If you have the torrent click the `Import Curated Mapping File` button to download the [current torrent mapping](https://gist.github.com/natyusha/bb33a3b3bc95bc7a3869633e23d522bb)
-     - This mapping requires the configured `!AnimeThemes` folder to be the same as the torren'ts root folder
+     - This mapping requires the configured `!AnimeThemes` folder to be the same as the torrent's root folder
    - Mapping the torrent takes ~8 hours (due to rate limits) and generated mappings will be appended to it
 3. Apply the mapping to the VFS by clicking the `Generate` button
    - The themes will be placed in the "Shorts" folder of their respective series
@@ -215,7 +215,7 @@ Any subfolder named after the configured `VFS Root Path`, `Collection Posters Ro
 
 ### AnimeThemes Video Player
 
-Shoko Relay includes a stand-alone, browser-based video player designed specifically for your AnimeThemes collection. It can be accessed via the `Open Video Player` icon (clap board) within the "AnimeThemes: VFS" section of the dashboard (or by a dedicated url: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/dashboard/player`). There is an included tree view which allows you to browse your themes by Group/Series as they would appear in Plex. Support for Loop, Shuffle, and Sequential playback is also available via a 4 stage toggle button. A search box is included which will filter the tree view based on series, group, or filename level queries. The filter supports tag-based filtering syntax using `+` (inclusion) and `-` (exclusion) operators.
+Shoko Relay includes a browser based video player designed specifically for local AnimeThemes playback. It can be accessed via the `Open Video Player` icon (clap board) within the "AnimeThemes: VFS" section of the dashboard (or by a dedicated url: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/dashboard/player`). There is an included tree view which allows you to browse your themes by Group/Series as they would appear in Plex. Support for Loop, Shuffle, and Sequential playback is also available via a 4 stage toggle button. A search box is included which will filter the tree view based on series, group, or filename level queries. The filter supports tag-based filtering syntax using `+` (inclusion) and `-` (exclusion) operators.
 
 > [!TIP]
 > There is a help button in the top right of the video player which will show a full list of keybinds and filters.
@@ -277,7 +277,7 @@ Crossover episodes are files which are linked to multiple episodes spanning sepa
 
 **VFS Browser**
 
-In order to help visualise the VFS and all of the files it contains there is a "VFS Browser" page included with the plugin. It can be navigated to by clicking the folder icon in the top right of the "Shoko: VFS" section of the dashboard. Unlike opening the VFS in a normal file browser, this will list the series title and the AniDB/Shoko IDs which correspond to each folder. Each ID will link directly to its source and there is also an included link to the `/metadata/` endpoint for series and seasons. Lastly, VFS regeneration can be called on any series by clicking a refresh icon (this avoids having to look up AniDB/Shoko IDs to use the filter on the dashboard).
+In order to help visualise the VFS and all of the files it contains there is a "VFS Browser" page included with the plugin. It can be navigated to by clicking the folder icon in the top right of the "Shoko: VFS" section of the dashboard (or by a dedicated url: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/dashboard/browser`). Unlike opening the VFS in a normal file browser, this will list the series title and the AniDB/Shoko IDs which correspond to each folder. Each ID will link directly to its source and there is also an included link to the `/metadata/` endpoint for series and seasons. Lastly, VFS regeneration can be called on any series by clicking the "Refresh VFS Folder" `⟳` icon next to its name in the tree view (this avoids having to look up AniDB/Shoko IDs to use the filter on the dashboard).
 
 ### Automatic Title Modification
 
