@@ -1,13 +1,13 @@
 /**
  * @file tree.js
- * @description Shared utilities for tree-based UI components including search interactions and debouncing.
+ * @description Shared utilities for tree-based UI components including search interactions, debouncing, and lazy loading.
  */
 (() => {
   /**
-   * Prevents rapid, consecutive execution of expensive callback operations by introducing a time buffer.
-   * @param {Function} fn - The target callback function to debounce.
-   * @param {number} ms - The debounce cooldown delay in milliseconds.
-   * @returns {Function} A debounced wrapper function.
+   * Prevents rapid execution of expensive functions like tree rendering.
+   * @param {Function} fn - The function to debounce.
+   * @param {number} ms - Delay in milliseconds.
+   * @returns {Function}
    */
   window._sr.debounce = (fn, ms) => {
     let timeout;
@@ -18,10 +18,10 @@
   };
 
   /**
-   * Attaches real-time search, clear actions, and slash hotkey bindings to a target filter element.
-   * @param {HTMLInputElement} input - The text input element serving as the filter.
-   * @param {HTMLElement} clearBtn - The button used to clear input text.
-   * @param {Function} renderFn - The draw callback invoked when filters change.
+   * Initializes common search bar interactions including global hotkeys and performance-optimized rendering.
+   * @param {HTMLInputElement} input - The filter input element.
+   * @param {HTMLElement} clearBtn - The button to clear the input.
+   * @param {Function} renderFn - The function to call when the filter changes.
    * @returns {void}
    */
   window._sr.initSearchInteractions = (input, clearBtn, renderFn) => {
@@ -63,5 +63,37 @@
         input.focus();
       }
     });
+  };
+
+  /**
+   * Constructs a standard folder details node with deferred child rendering.
+   * @param {string} name - The display text or HTML for the folder summary.
+   * @param {HTMLUListElement} ul - The container element to append items to.
+   * @param {Function} renderFn - The callback function that generates and appends children.
+   * @param {boolean} isOpen - If true, forces children to render immediately.
+   * @returns {HTMLDetailsElement} The completed folder details node.
+   */
+  window._sr.createLazyDetails = (name, ul, renderFn, isOpen) => {
+    const det = document.createElement("details");
+    const sum = document.createElement("summary");
+    det.open = isOpen;
+    sum.title = name.replace(/<[^>]*>/g, ""); // strip HTML tags for tooltip title attribute
+    sum.dataset.tooltipOverflowOnly = "true";
+    sum.innerHTML = `<span class="tree-icon expand"></span><span class="tree-icon collapse"></span>${name}`;
+    det.appendChild(sum);
+
+    if (isOpen) {
+      renderFn(ul);
+      det.appendChild(ul);
+    } else {
+      det.ontoggle = () => {
+        if (det.open && !det.dataset.rendered) {
+          det.dataset.rendered = "true";
+          renderFn(ul);
+          det.appendChild(ul);
+        }
+      };
+    }
+    return det;
   };
 })();

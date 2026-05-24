@@ -9,6 +9,7 @@
   const playerTime = el("time-display");
   const playerVolText = el("volume-text");
   const playerFullscreenBtn = el("fullscreen");
+  const playerCloseBtn = el("close-session");
   const playerMuteBtn = el("volume-icon");
   const playerContainer = el("video").parentElement;
   const playerVideo = el("video");
@@ -35,6 +36,8 @@
   const helpModal = el("player-help-modal");
   const helpOpenBtn = el("help-open");
 
+  /** @type {Function|null} Track the active modal close callback to support toggle hotkeys */
+  let activeModalClose = null;
   /** @type {WebmEntry[]} */
   let webmTreeData = [];
   /** @type {string} */
@@ -127,6 +130,25 @@
   };
 
   /**
+   * Toggles the help modal visibility, safely managing event listeners via the close callback.
+   * @returns {void}
+   */
+  const toggleHelpModal = () => {
+    if (helpModal.classList.contains("open")) {
+      if (activeModalClose) {
+        activeModalClose();
+        activeModalClose = null;
+      } else {
+        helpModal.setAttribute("aria-hidden", "true");
+        helpModal.classList.remove("open");
+        document.body.style.overflow = "";
+      }
+    } else {
+      activeModalClose = openModal(helpModal);
+    }
+  };
+
+  /**
    * Evaluates the full list of themes against active search terms, heart status, and metadata tags.
    * @returns {WebmEntry[]} The filtered list of theme entries.
    */
@@ -212,17 +234,24 @@
       sMap.get(i.series).push(i);
     });
 
+    /**
+     * Helper to construct a standard folder node in the tree with deferred child rendering.
+     * @param {string} name - The display name for the folder.
+     * @param {HTMLElement[]} children - The array of child list-item elements.
+     * @param {boolean} isOpen - If true, forces children to render immediately.
+     * @returns {HTMLLIElement} The completed folder list item node.
+     */
     const makeNode = (name, children, isOpen) => {
       const li = document.createElement("li");
-      const det = document.createElement("details");
-      const sum = document.createElement("summary");
       const ul = document.createElement("ul");
-      det.open = isOpen;
-      sum.title = name;
-      sum.dataset.tooltipOverflowOnly = "true";
-      sum.innerHTML = `<span class="tree-icon expand"></span><span class="tree-icon collapse"></span>${name}`;
-      det.append(sum, ul);
-      children.forEach((c) => ul.appendChild(c));
+      const det = window._sr.createLazyDetails(
+        name,
+        ul,
+        (container) => {
+          children.forEach((c) => container.appendChild(c));
+        },
+        isOpen,
+      );
       li.appendChild(det);
       return li;
     };
@@ -534,12 +563,43 @@
       playerFullscreenBtn.title = isFS ? "Exit Fullscreen" : "Fullscreen";
     });
 
+    if (playerCloseBtn) {
+      playerCloseBtn.onclick = () => {
+        if (!playerVideo) return;
+        playerVideo.pause();
+        playerVideo.removeAttribute("src");
+        playerVideo.load();
+        localStorage.removeItem(PATH_KEY);
+        currentWebmPath = "";
+
+        if (playerTitle) playerTitle.textContent = playerTitle.title = "Video Player";
+        if (playerAnime) {
+          playerAnime.textContent = playerAnime.title = "Select a theme to begin...";
+          playerAnime.href = "#";
+          playerAnime.style.pointerEvents = "none";
+        }
+        if (playerAnidb) {
+          playerAnidb.textContent = "";
+          playerAnidb.href = "#";
+          playerAnidb.style.pointerEvents = "none";
+        }
+        if (playerNowPlayingFav) {
+          playerNowPlayingFav.style.pointerEvents = "none";
+          playerNowPlayingFav.classList.remove("favourited");
+        }
+        if (playerLocateBtn) playerLocateBtn.style.pointerEvents = "none";
+        playerTree?.querySelectorAll(".leaf").forEach((el) => el.classList.remove("active"));
+        if (playerFill) playerFill.style.width = "0%";
+        if (playerTime) playerTime.textContent = "0:00 / 0:00";
+      };
+    }
+
     playerLocateBtn.onclick = locateCurrentInTree;
-    helpOpenBtn.onclick = () => openModal(helpModal);
+    helpOpenBtn.onclick = toggleHelpModal;
 
     window.addEventListener("keydown", (e) => {
       if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA") return;
-      const handledKeys = [" ", "k", "K", "'", ";", ",", ".", "?", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowUp", "b", "B", "f", "F", "g", "G", "h", "H", "j", "J", "l", "L", "m", "M", "n", "N"];
+      const handledKeys = [" ", "k", "K", "'", ";", ",", ".", "?", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowUp", "b", "B", "f", "F", "q", "Q", "g", "G", "h", "H", "j", "J", "l", "L", "m", "M", "n", "N"];
       if (!handledKeys.includes(e.key)) return;
       e.preventDefault();
       const isShuffle = playerModeBtn?.getAttribute("data-mode") === "shuffle";
@@ -560,9 +620,10 @@
         case "ArrowUp": playerVideo.volume = Math.min(1, playerVideo.volume + 0.1); break;
         case "ArrowDown": playerVideo.volume = Math.max(0, playerVideo.volume - 0.1); break;
         case "f": case "F": toggleFullscreen(); break;
+        case "q": case "Q": playerCloseBtn?.click(); break;
         case "g": case "G": locateCurrentInTree(); break;
         case "h": case "H": const hItem = webmTreeData.find((i) => i.path === currentWebmPath); if (hItem) toggleFavourite(hItem.videoId); break;
-        case "?": openModal(helpModal); break;
+        case "?": toggleHelpModal(); break;
       }
     });
 
