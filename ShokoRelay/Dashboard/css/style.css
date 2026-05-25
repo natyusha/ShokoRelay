@@ -168,7 +168,7 @@ kbd {
   cursor: default;
   box-shadow: 0 2px 0 1px var(--border-color);
   border: 1px solid var(--border-color);
-  background: var(--inset-color);
+  background: color-mix(in srgb, var(--inset-color), white 5%);
   color: var(--highlight-color);
   font-family: monospace;
 }

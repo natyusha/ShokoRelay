@@ -42,17 +42,26 @@
 
 /* #region MARK: Tree Styling
 */
-.refresh-icon {
+.refresh-btn,
+.theme-btn {
   transition: all 0.3s ease-in-out;
   cursor: pointer;
-  margin: 0 -6px 0 4px;
   color: var(--highlight-color);
   font-weight: bold;
   font-size: 1.4em;
   line-height: 0;
 }
-.refresh-icon:hover {
-  background: none;
+.theme-btn {
+  margin-left: 8px;
+}
+.theme-btn.exists {
+  cursor: default;
+}
+.theme-btn.missing {
+  color: color-mix(in srgb, var(--highlight-color) 60%, transparent);
+}
+.refresh-btn:hover,
+.theme-btn.missing:hover {
   color: var(--hover-color);
 }
 .vfs-id-link {

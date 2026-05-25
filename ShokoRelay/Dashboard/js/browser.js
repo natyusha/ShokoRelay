@@ -41,6 +41,8 @@
     if (taskName) await fetch(`${base}/tasks/clear/${taskName}`, { method: "POST" });
 
     toastOperation(res, label, { hideOnSucceed: TOAST_MS });
+
+    if (res.ok) await loadVfsTree(false); // Reload the tree data in-place without showing the full loading spinner
   }
 
   /**
@@ -128,6 +130,31 @@
       };
       rootTabs.appendChild(btn);
     });
+  }
+
+  /**
+   * Fetches the latest VFS blueprint from the server and renders the tabs and tree view.
+   * @param {boolean} [showLoading=true] - If true, displays the loading spinner before fetching.
+   * @returns {Promise<void>}
+   */
+  async function loadVfsTree(showLoading = true) {
+    if (showLoading) showLoadingSpinner();
+
+    const res = await fetchJson(base + "/vfs/tree");
+    if (res.ok) {
+      const roots = getData(res)?.roots || [];
+      if (roots.length > 0) {
+        const allRoot = buildAllTab(roots);
+        displayRoots = [allRoot, ...roots];
+      } else {
+        displayRoots = [];
+        if (vfsTree) vfsTree.innerHTML = '<div class="placeholder">No VFS directories found. Click the "Generate" button under the "Shoko: VFS" section on the dashboard to build your virtual folders.</div>';
+      }
+      renderTabs();
+      renderActiveRoot();
+    } else if (vfsTree) {
+      vfsTree.innerHTML = '<div class="placeholder">Failed to load VFS blueprint.</div>';
+    }
   }
   // #endregion
 
@@ -231,15 +258,55 @@
         forceRender,
       );
       const sum = det.querySelector("summary");
-      const ref = document.createElement("span");
-      ref.className = "refresh-icon";
-      ref.textContent = "⟳";
-      ref.title = "Refresh VFS Folder";
-      ref.onclick = (e) => {
+
+      const refresh = document.createElement("span");
+      refresh.className = "refresh-btn";
+      refresh.textContent = "⟳";
+      refresh.title = "Refresh VFS Folder";
+      refresh.onclick = (e) => {
         e.preventDefault();
         e.stopPropagation();
         refreshSeries(g.id);
       };
+
+      const hasTheme = (g.rootFiles || []).some((f) => f.name === "Theme.mp3");
+      const theme = document.createElement("span");
+      theme.className = `theme-btn ${hasTheme ? "exists" : "missing"}`;
+      theme.textContent = "♫";
+      theme.title = hasTheme ? "Theme.mp3 Exists" : "Theme.mp3 Missing (Click to Generate)";
+
+      if (!hasTheme) {
+        theme.onclick = async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+
+          const firstFile = g.rootFiles && g.rootFiles.length > 0 ? g.rootFiles[0] : g.seasons && g.seasons.length > 0 && g.seasons[0].files && g.seasons[0].files.length > 0 ? g.seasons[0].files[0] : null;
+
+          if (!firstFile || !firstFile.source) {
+            showToast("VFS: No physical source files found to resolve paths", "error", TOAST_MS);
+            return;
+          }
+
+          const parts = firstFile.source.replace(/\\/g, "/").split("/");
+          parts.pop();
+          const physicalPath = parts.join("/");
+
+          const label = `Theme MP3 [${g.id}]`;
+          showToast(`${label}: Generating...`, "info", TOAST_MS);
+
+          const res = await fetchJson(`${base}/animethemes/mp3?path=${encodeURIComponent(physicalPath)}`);
+          toastOperation(res, label, { hideOnSucceed: TOAST_MS });
+
+          const d = getData(res);
+          if (res.ok && (d?.Status === "ok" || d?.status === "ok")) refreshSeries(g.id);
+        };
+      } else {
+        // Swallows the click to prevent the parent VFS details folder from toggling
+        theme.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        };
+      }
 
       const titleHtml =
         `<a href="${shokoBase}/webui/collection/series/${g.id}/overview" class="vfs-link vfs-id-link" target="_blank" rel="noopener noreferrer">${g.id}</a><span class="vfs-sep">❯</span>` +
@@ -247,7 +314,8 @@
         `<a href="https://anidb.net/a${g.anidbId}" class="vfs-link small" target="_blank" rel="noopener noreferrer">[a${g.anidbId}]</a>` +
         `<a href="${base}/metadata/${g.id}?includeChildren=1" class="vfs-link small" target="_blank" rel="noopener noreferrer">[m${g.id}]</a>`;
 
-      sum.appendChild(ref);
+      sum.appendChild(refresh);
+      sum.appendChild(theme);
       sum.insertAdjacentHTML("beforeend", titleHtml);
       sum.title = g.title; // Set exact title override
       li.appendChild(det);
@@ -263,21 +331,7 @@
   initSearchInteractions(uiFilter, uiFilterClear, () => renderActiveRoot());
 
   (async () => {
-    showLoadingSpinner();
-
-    const res = await fetchJson(base + "/vfs/tree");
-    if (res.ok) {
-      const roots = getData(res)?.roots || [];
-      if (roots.length > 0) {
-        const allRoot = buildAllTab(roots);
-        displayRoots = [allRoot, ...roots];
-      } else {
-        displayRoots = [];
-        if (vfsTree) vfsTree.innerHTML = '<div class="placeholder">No VFS directories found. Click the "Generate" button under the "Shoko: VFS" section on the dashboard to build your virtual folders.</div>';
-      }
-      renderTabs();
-      renderActiveRoot();
-    } else if (vfsTree) vfsTree.innerHTML = '<div class="placeholder">Failed to load VFS blueprint.</div>';
+    await loadVfsTree(true);
   })();
   // #endregion
 })();

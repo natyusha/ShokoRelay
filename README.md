@@ -208,10 +208,11 @@ There is also support for generating `Theme.mp3` files as local metadata. This w
 - If you want a specific OP/ED you can enter it under `Slug` i.e. `OP2`
 - Rarely a single AniDB entry will be mapped to multiple AnimeThemes entries. In cases like this the `Off.` or "Index Override" can be set to pick the next match
   - Generally this means entering a `1`
+- _Theme.mp3 generation can be run per folder from the [VFS Browser](#vfs-browser) page (uses the default settings)_
 
-**Notes:**
+**Miniplayer:**
 
-Any subfolder named after the configured `VFS Root Path`, `Collection Posters Root Path`, or `AnimeThemes Root Path` are ignored during batch operations. This is due to those directories only being used internally and never containing series data. There is also a little media player included which will play downloaded themes if enabled. You can set it to looped playback or even have it shuffle through all of your Theme.mp3 files if desired. The progress bar is fully functional and you can pause playback by middle clicking it.
+There is a mini media player included on the dashboard which will play downloaded themes if enabled. You can set it to looped playback or even have it shuffle through all of your Theme.mp3 files if desired. The progress bar is fully functional and you can pause playback by middle clicking it.
 
 ### AnimeThemes Video Player
 
@@ -275,9 +276,9 @@ Non standard episodes on the other hand, are placed into a local series level Ex
 
 Crossover episodes are files which are linked to multiple episodes spanning separate AniDB series. Due to Plex's architecture they will only function in one series at a time. Since the plugin doesn't know which episode the user prefers, unwanted crossover entries must be hidden via Shoko's series page. To work around this limitation crossover episodes can also be modified (so the file's hash changes) then manually linked in Shoko to the desired episode.
 
-**VFS Browser**
+### VFS Browser
 
-In order to help visualise the VFS and all of the files it contains there is a "VFS Browser" page included with the plugin. It can be navigated to by clicking the folder icon in the top right of the "Shoko: VFS" section of the dashboard (or by a dedicated url: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/dashboard/browser`). Unlike opening the VFS in a normal file browser, this will list the series title and the AniDB/Shoko IDs which correspond to each folder. Each ID will link directly to its source and there is also an included link to the `/metadata/` endpoint for series and seasons. Lastly, VFS regeneration can be called on any series by clicking the "Refresh VFS Folder" `⟳` icon next to its name in the tree view (this avoids having to look up AniDB/Shoko IDs to use the filter on the dashboard).
+In order to help visualise the VFS and all of the files it contains there is a "VFS Browser" page included with the plugin. It can be navigated to by clicking the folder icon in the top right of the "Shoko: VFS" section of the dashboard (or by a dedicated url: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/dashboard/browser`). Unlike opening the VFS in a normal file browser, this will list the series title and the AniDB/Shoko IDs which correspond to each folder. Each ID will link directly to its source and there is also an included link to the `/metadata/` endpoint for series and seasons. VFS regeneration can be called on any series by clicking the "Refresh VFS Folder" `⟳` icon next to its name in the tree view (this avoids having to look up AniDB/Shoko IDs to use the filter on the dashboard). Similar to the refresh button, there is a "Theme.mp3" `♫` button which tracks if a given VFS entry has a local AnimeThemes `.mp3` attached to it or not. Clicking the button will attempt to generate a theme for any series missing one.
 
 ### Automatic Title Modification
 

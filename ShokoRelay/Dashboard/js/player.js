@@ -304,15 +304,29 @@
   /** Expands folders in the tree view and scrolls the currently playing theme into center view. */
   function locateCurrentInTree() {
     if (!currentWebmPath) return;
-    const leaf = playerTree.querySelector(`.leaf[data-path="${CSS.escape(currentWebmPath)}"]`);
-    if (!leaf) return;
 
-    let parent = leaf.closest("details");
-    while (parent) {
-      parent.open = true;
-      parent = parent.parentElement.closest("details");
+    const item = webmTreeData.find((i) => i.path === currentWebmPath);
+    if (!item) return;
+    const getSummaryTitle = (summary) => (summary ? summary.dataset.tooltipText || "" : "");
+    const topDetails = [...playerTree.querySelectorAll(".tree > li > details")];
+
+    //  Find and expand the Group folder (if it exists as a parent)
+    const groupDet = topDetails.find((d) => getSummaryTitle(d.querySelector("summary")) === item.group);
+    if (groupDet) {
+      groupDet.open = true;
+      if (!groupDet.dataset.rendered) groupDet.dispatchEvent(new Event("toggle"));
     }
-    leaf.scrollIntoView({ behavior: "smooth", block: "center" });
+
+    // Find and expand the Series folder (top-level or nested)
+    const searchScope = groupDet || playerTree;
+    const seriesDet = [...searchScope.querySelectorAll("details")].find((d) => getSummaryTitle(d.querySelector("summary")) === item.series);
+    if (seriesDet) {
+      seriesDet.open = true;
+      if (!seriesDet.dataset.rendered) seriesDet.dispatchEvent(new Event("toggle"));
+    }
+
+    const leaf = playerTree.querySelector(`.leaf[data-path="${CSS.escape(currentWebmPath)}"]`);
+    if (leaf) leaf.scrollIntoView({ behavior: "smooth", block: "center" });
   }
   // #endregion
 
