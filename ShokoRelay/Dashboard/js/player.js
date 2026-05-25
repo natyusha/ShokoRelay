@@ -326,7 +326,10 @@
     }
 
     const leaf = playerTree.querySelector(`.leaf[data-path="${CSS.escape(currentWebmPath)}"]`);
-    if (leaf) leaf.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (leaf) {
+      playerTree.querySelectorAll(".leaf").forEach((el) => el.classList.toggle("active", el.dataset.path === currentWebmPath)); // Force sync active highlights for newly appended lazy elements
+      leaf.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
   }
   // #endregion
 
