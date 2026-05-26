@@ -88,7 +88,7 @@ body {
 #filter-clear {
   display: flex;
   position: absolute;
-  top: 5px;
+  top: -1px;
   right: 3px;
   justify-content: center;
   align-items: center;
