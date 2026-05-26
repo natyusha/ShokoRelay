@@ -81,7 +81,7 @@ public class PlexMetadata(IMetadataService metadataService)
     {
         var cb = GetCacheBuster(series);
         var images = (IWithImages)series;
-        var description = TextHelper.GetDescriptionByLanguage(series, Settings.SeriesDescriptionLanguage);
+        var description = TextHelper.GetDescriptionByLanguage(series, Settings.DescriptionLanguage);
         var tmdbDescription = (series as IShokoSeries)?.TmdbShows?.FirstOrDefault()?.PreferredDescription?.Value;
         var studios = CastHelper.GetStudioTags(series);
         var (rating, isAdult) = ContentRatingHelper.GetContentRatingAndAdult(series);
@@ -229,7 +229,7 @@ public class PlexMetadata(IMetadataService metadataService)
         var images = (IWithImages)ep;
         var seriesImages = (IWithImages)series;
         string epTitle = tmdbEpisode is IWithTitles { PreferredTitle.Value: { Length: > 0 } pt } ? pt : TextHelper.ResolveEpisodeTitle(ep, titles.DisplayTitle);
-        string epDescription = tmdbEpisode is IWithDescriptions { PreferredDescription.Value: { Length: > 0 } pd } ? pd : TextHelper.GetDescriptionByLanguage(ep, Settings.EpisodeDescriptionLanguage);
+        string epDescription = tmdbEpisode is IWithDescriptions { PreferredDescription.Value: { Length: > 0 } pd } ? pd : TextHelper.GetDescriptionByLanguage(ep, Settings.DescriptionLanguage);
 
         string? parentThumb = null;
         if (Settings.TmdbSeasonPosters && mapped.Season >= 0 && string.IsNullOrEmpty(MapHelper.GetPreferredTmdbOrderingId(series)))
