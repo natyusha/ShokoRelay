@@ -13,7 +13,8 @@
   const resolveSystemLinks = () => {
     const origin = location.origin;
     const links = {
-      "shoko-api-link": "/swagger/index.html?urls.primaryName=Shoko+Relay+V1",
+      "relay-api-link": "/swagger/index.html?urls.primaryName=Shoko+Relay+V1",
+      "shoko-api-link": "/swagger/index.html",
       "shoko-dashboard-link": "/webui/dashboard",
     };
 

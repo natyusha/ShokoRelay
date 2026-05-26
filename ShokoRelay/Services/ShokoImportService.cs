@@ -4,8 +4,25 @@ using ShokoRelay.Vfs;
 
 namespace ShokoRelay.Services;
 
-/// <summary>Helper for triggering server-side import and housekeeping actions using Shoko's internal service abstractions.</summary>
-public class ShokoImportService(IVideoService videoService, IVideoReleaseService releaseService)
+#region Interface
+
+/// <summary>Service responsible for triggering server-side import and housekeeping actions.</summary>
+public interface IShokoImportService
+{
+    /// <summary>Trigger import scans for every managed folder to find new or unrecognized files.</summary>
+    /// <returns>A read-only list of folder names that were scheduled for scanning.</returns>
+    Task<IReadOnlyList<string>> TriggerImportAsync();
+
+    /// <summary>Scan for video file entries whose physical file has disappeared or is now in an ignored location, and optionally remove those records.</summary>
+    /// <param name="dryRun">When <c>true</c>, list missing files without deleting them.</param>
+    /// <returns>A read-only list of paths for files that were identified as missing or ignored.</returns>
+    Task<IReadOnlyList<string>> RemoveMissingFilesAsync(bool dryRun = false);
+}
+
+#endregion
+
+/// <summary>Default implementation of <see cref="IShokoImportService"/>.</summary>
+public class ShokoImportService(IVideoService videoService, IVideoReleaseService releaseService) : IShokoImportService
 {
     #region Fields & Constructor
 

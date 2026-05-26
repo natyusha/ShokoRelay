@@ -7,7 +7,7 @@ using ShokoRelay.Vfs;
 
 namespace ShokoRelay.Controllers;
 
-/// <summary>Manages Plex-specific integrations including authentication and automation.</summary>
+/// <summary>Manages Plex-specific integrations including authentication, metadata automation, and image sync.</summary>
 [ApiController]
 [ApiVersion(ShokoRelayConstants.ApiVersion)]
 [Route(ShokoRelayConstants.BasePath)]
@@ -19,7 +19,8 @@ public class PlexController(
     ICollectionService collectionService,
     ICriticRatingService criticRatingService,
     IUserService userService,
-    IUserDataService userDataService
+    IUserDataService userDataService,
+    IImageSyncService imageSyncService
 ) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
 {
     #region Fields
@@ -29,6 +30,7 @@ public class PlexController(
     private readonly ICriticRatingService _criticRatingService = criticRatingService;
     private readonly IUserService _userService = userService;
     private readonly IUserDataService _userDataService = userDataService;
+    private readonly IImageSyncService _imageSyncService = imageSyncService;
 
     #endregion
 
@@ -229,7 +231,21 @@ public class PlexController(
                 SyncHelper.SyncLock
             );
 
-    /// <summary>Triggers collection and rating automation back-to-back.</summary>
+    /// <summary>Synchronizes Plex-generated episode screenshots back to Shoko.</summary>
+    /// <returns>A task representing the result of the image synchronization run.</returns>
+    [HttpGet("plex/images/sync")]
+    public Task<IActionResult> SyncPlexImages() =>
+        !PlexLibrary.IsEnabled
+            ? Task.FromResult<IActionResult>(BadRequest(new RelayResponse<object>(Status: "error", Message: "Plex server configuration is missing or no library selected.")))
+            : ExecuteTrackedTaskAsync(
+                ShokoRelayConstants.TaskPlexImagesSync,
+                ShokoRelayConstants.LogPlexImages,
+                LogHelper.BuildImageSyncReport,
+                () => _imageSyncService.SyncImagesAsync(CancellationToken.None),
+                SyncHelper.SyncLock
+            );
+
+    /// <summary>Triggers collection, rating, and image sync automation back-to-back.</summary>
     /// <returns>A task representing the result of the automation run.</returns>
     [HttpGet("plex/automation/run")]
     public Task<IActionResult> RunPlexAutomationNow() =>
@@ -244,6 +260,8 @@ public class PlexController(
                     var allSeries = MetadataService.GetAllShokoSeries()?.Cast<IShokoSeries?>().ToList() ?? [];
                     await _collectionService.BuildCollectionsAsync(allSeries, HttpContext.RequestAborted).ConfigureAwait(false);
                     await _criticRatingService.ApplyRatingsAsync(null, HttpContext.RequestAborted).ConfigureAwait(false);
+                    if (Settings.Advanced.EnableImageSync)
+                        await _imageSyncService.SyncImagesAsync(HttpContext.RequestAborted).ConfigureAwait(false);
                     MarkPlexAutomationRunNow();
                     return true;
                 },

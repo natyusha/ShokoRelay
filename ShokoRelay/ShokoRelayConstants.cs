@@ -61,6 +61,9 @@ public static class ShokoRelayConstants
     /// <summary>Filename for the VFS structure blueprint cache.</summary>
     public const string FileVfsBlueprintCache = "vfs_blueprint.cache";
 
+    /// <summary>Filename for the Plex-generated episode image sync cache.</summary>
+    public const string FilePlexImagesCache = "images_shokorelay.cache";
+
     /// <summary>Filename for the Theme.mp3 folder cache.</summary>
     public const string FileAtMp3Cache = "mp3_animethemes.cache";
 
@@ -85,6 +88,9 @@ public static class ShokoRelayConstants
 
     /// <summary>Task name for applying audience/critic ratings to Plex items.</summary>
     public const string TaskPlexRatingsApply = "plex-ratings-apply";
+
+    /// <summary>Task name for synchronizing Plex-generated episode screenshots back to Shoko.</summary>
+    public const string TaskPlexImagesSync = "plex-images-sync";
 
     /// <summary>Task name for running full Plex metadata automation.</summary>
     public const string TaskPlexAutomationRun = "plex-automation-run";
@@ -118,13 +124,16 @@ public static class ShokoRelayConstants
     public const string LogPlexDiscovery = "plex-discovery-report.log";
 
     /// <summary>Log filename for Plex collection build reports.</summary>
-    public const string LogPlexCollections = "collections-report.log";
+    public const string LogPlexCollections = "plex-collections-report.log";
 
     /// <summary>Log filename for Plex collection poster reports.</summary>
-    public const string LogPlexPosters = "posters-report.log";
+    public const string LogPlexPosters = "plex-posters-report.log";
 
     /// <summary>Log filename for Plex rating application reports.</summary>
-    public const string LogPlexRatings = "ratings-report.log";
+    public const string LogPlexRatings = "plex-ratings-report.log";
+
+    /// <summary>Log filename for Plex episode image synchronization reports.</summary>
+    public const string LogPlexImages = "plex-images-report.log";
 
     /// <summary>Log filename for full Plex automation reports.</summary>
     public const string LogPlexAutomation = "plex-automation-report.log";

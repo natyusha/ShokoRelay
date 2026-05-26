@@ -82,6 +82,10 @@ public class PlexMetadataItem
     [JsonPropertyName("index")]
     public int? Index { get; set; }
 
+    /// <summary>The relative URL path to the generated media thumbnail.</summary>
+    [JsonPropertyName("thumb")]
+    public string? Thumb { get; set; }
+
     /// <summary>The total number of times this item has been viewed.</summary>
     [JsonPropertyName("viewCount")]
     public int? ViewCount { get; set; }

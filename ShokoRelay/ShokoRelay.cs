@@ -48,7 +48,8 @@ public class ServiceRegistration : IPluginServiceRegistration
         serviceCollection.AddSingleton<VfsWatcher>();
         serviceCollection.AddSingleton<ICollectionService, CollectionService>();
         serviceCollection.AddSingleton<ICriticRatingService, CriticRatingService>();
-        serviceCollection.AddSingleton<ShokoImportService>();
+        serviceCollection.AddSingleton<IImageSyncService, ImageSyncService>();
+        serviceCollection.AddSingleton<IShokoImportService, ShokoImportService>();
         serviceCollection.AddSingleton<SourceLinkService>();
         serviceCollection.AddSingleton(provider =>
         {
@@ -113,10 +114,11 @@ public class ShokoRelay : BackgroundService
     private readonly VfsWatcher _watcher;
     private readonly ISystemService _systemService;
     private readonly SyncToShoko? _watchedSyncService;
-    private readonly ShokoImportService? _shokoImportService;
+    private readonly IShokoImportService? _shokoImportService;
     private readonly ICollectionService? _collectionService;
     private readonly ICriticRatingService? _criticRatingService;
     private readonly IMetadataService _metadataService;
+    private readonly IImageSyncService? _imageSyncService;
 
     private static DateTime? s_lastImportRunUtc;
     private static DateTime? s_lastPlexAutomationUtc;
@@ -140,6 +142,7 @@ public class ShokoRelay : BackgroundService
     /// <param name="shokoImportService">Service for triggering server-side imports.</param>
     /// <param name="collectionService">Service for managing Plex collections.</param>
     /// <param name="criticRatingService">Service for applying audience ratings to Plex.</param>
+    /// <param name="imageSyncService">Service for syncing thumbnails from Plex to Shoko.</param>
     public ShokoRelay(
         VfsWatcher watcher,
         ConfigProvider configProvider,
@@ -147,9 +150,10 @@ public class ShokoRelay : BackgroundService
         ISystemService systemService,
         IMetadataService metadataService,
         SyncToShoko? watchedSyncService = null,
-        ShokoImportService? shokoImportService = null,
+        IShokoImportService? shokoImportService = null,
         ICollectionService? collectionService = null,
-        ICriticRatingService? criticRatingService = null
+        ICriticRatingService? criticRatingService = null,
+        IImageSyncService? imageSyncService = null
     )
     {
         _watcher = watcher;
@@ -161,6 +165,7 @@ public class ShokoRelay : BackgroundService
         _shokoImportService = shokoImportService;
         _collectionService = collectionService;
         _criticRatingService = criticRatingService;
+        _imageSyncService = imageSyncService;
         s_logger.Info($"ShokoRelay v{ShokoRelayConstants.Version} initialized");
     }
 
@@ -301,6 +306,8 @@ public class ShokoRelay : BackgroundService
                                 await _collectionService.BuildCollectionsAsync(allSeries, ct).ConfigureAwait(false);
                             if (_criticRatingService != null)
                                 await _criticRatingService.ApplyRatingsAsync(null, ct).ConfigureAwait(false);
+                            if (settings.Advanced.EnableImageSync && _imageSyncService != null)
+                                await _imageSyncService.SyncImagesAsync(ct).ConfigureAwait(false);
                         }
                         s_lastPlexAutomationUtc = lastSched;
                     }

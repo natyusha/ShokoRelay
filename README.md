@@ -167,16 +167,23 @@ As a bonus this supports using the primary series poster as the collection poste
 - The rating source for this can be configured (or disabled) under `Critic Rating Mode` in the Provider Settings
 - _Requires Plex authentication_
 
+### Plex Image Sync
+
+- An optional Plex automation which syncs Plex's auto generated episode thumbnails back to Shoko and marks them as preferred
+- This allows Shoko and Plex to share the same episode preview thumbnails without relying on TMDB for the metadata
+- This will not run during the scheduled Plex Automation Interval unless `Advanced Settings -> Plex Image Sync` is enabled
+- _Requires Plex authentication_
+
 ### Shoko Actions
 
-- `Remove Missing` A button which will remove files that are no longer present from Shoko
+- `Run Import` A button which will make shoko rescan all managed folders for new or unrecognized files
+- `Sync Menu` A button which opens a modal allowing for watched state syncing from Plex to Shoko or Shoko to Plex
+  - This includes any users configured under `Extra Plex Users` in the "Plex Authentication" section unless `Sync Users` excludes them
+  - _Requires Plex authentication_
+- `Purge Missing` A button which will remove files that are no longer present from Shoko
   - Unlike the "Remove Missing Files" action in Shoko's WebUI this will remove all traces of the files from the Shoko DB
   - This will also remove files that are in folders which the plugin has told Shoko to ignore
   - Entries will _always_ be removed from the AniDB MyList as well
-- `Import` A button which will make shoko rescan all managed folders for new or unrecognized files
-- `Sync` A button which opens a modal allowing for watched state syncing from Plex to Shoko or Shoko to Plex
-  - This includes any users configured under `Extra Plex Users` in the "Plex Authentication" section unless `Sync Users` excludes them
-  - _Requires Plex authentication_
 
 ## AnimeThemes Integration
 
@@ -364,20 +371,21 @@ If `Assumed Content Ratings` are enabled in the Provider Settings the [target au
 
 Most manual actions performed via the dashboard (as well as some direct API requests) generate a detailed report. These reports help you verify which items were processed and troubleshoot any skipped files or errors. A list of the actions which generate a log is provided below:
 
-| Dashboard Action                      | Log Filename                 |
-| :------------------------------------ | :--------------------------- |
-| **Plex:** Auth Refresh                | `plex-discovery-report.log`  |
-| **Plex:** Generate Collections        | `collections-report.log`     |
-| **Plex:** Apply Collection Posters    | `posters-report.log`         |
-| **Plex:** Apply Critic Ratings        | `ratings-report.log`         |
-| **Plex:** Run Full Automation         | `plex-automation-report.log` |
-| **Shoko:** Generate VFS               | `vfs-report.log`             |
-| **Shoko:** Remove Missing             | `remove-missing-report.log`  |
-| **Shoko:** Sync Watched States        | `sync-watched-report.log`    |
-| **Shoko:** Map Source Symlinks        | `map-symlinks-report.log`    |
-| **AnimeThemes:** Generate VFS         | `at-vfs-report.log`          |
-| **AnimeThemes:** Build Mapping        | `at-map-report.log`          |
-| **AnimeThemes:** Generate MP3 (Batch) | `at-mp3-report.log`          |
+| Dashboard Action                      | Log Filename                  |
+| :------------------------------------ | :---------------------------- |
+| **Plex:** Auth Refresh                | `plex-discovery-report.log`   |
+| **Plex:** Generate Collections        | `plex-collections-report.log` |
+| **Plex:** Apply Collection Posters    | `plex-posters-report.log`     |
+| **Plex:** Apply Critic Ratings        | `plex-ratings-report.log`     |
+| **Plex:** Sync Plex Images            | `plex-images-report.log`      |
+| **Plex:** Run Full Automation         | `plex-automation-report.log`  |
+| **Shoko:** Generate VFS               | `vfs-report.log`              |
+| **Shoko:** Remove Missing             | `remove-missing-report.log`   |
+| **Shoko:** Sync Watched States        | `sync-watched-report.log`     |
+| **Shoko:** Map Source Symlinks        | `map-symlinks-report.log`     |
+| **AnimeThemes:** Generate VFS         | `at-vfs-report.log`           |
+| **AnimeThemes:** Build Mapping        | `at-map-report.log`           |
+| **AnimeThemes:** Generate MP3 (Batch) | `at-mp3-report.log`           |
 
 #### How Logs Work
 

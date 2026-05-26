@@ -63,9 +63,10 @@ All automation endpoints utilize the `LogAndReturn` helper (via `ExecuteTrackedT
 
 ```
 /plex/auth/refresh                                             -> plex-discovery-report.log
-/plex/collections/build                                        -> collections-report.log
-/plex/collections/posters                                      -> posters-report.log
-/plex/ratings/apply                                            -> ratings-report.log
+/plex/collections/build                                        -> plex-collections-report.log
+/plex/collections/posters                                      -> plex-posters-report.log
+/plex/ratings/apply                                            -> plex-ratings-report.log
+/plex/images/sync                                              -> plex-images-report.log
 /plex/automation/run                                           -> plex-automation-report.log
 /vfs                                                           -> vfs-report.log
 /shoko/remove-missing                                          -> remove-missing-report.log
@@ -161,6 +162,8 @@ GET  /plex/collections/posters?filter={csv}                    -> ApplyCollectio
 
 GET  /plex/ratings/apply?filter={csv}                          -> ApplyAudienceRatings
 
+GET  /plex/images/sync                                         -> SyncPlexImages
+
 GET  /plex/automation/run                                      -> RunPlexAutomationNow
 ```
 
@@ -168,6 +171,7 @@ GET  /plex/automation/run                                      -> RunPlexAutomat
 - `BuildPlexCollections` generates Plex collections for a comma-separated list of series IDs (or all series if omitted).
 - `ApplyCollectionPosters` uploads or refreshes posters for a comma-separated list of series IDs.
 - `ApplyAudienceRatings` updates ratings for a comma-separated list of series IDs based on the configured source (TMDB/AniDB).
+- `SyncPlexImages` queries Plex for generated episode screenshots and uploads them back to Shoko as preferred primary images.
 - `RunPlexAutomationNow` triggers collection building and rating application back-to-back for all series.
 
 **Notes:**

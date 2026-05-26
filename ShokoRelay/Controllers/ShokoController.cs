@@ -19,7 +19,7 @@ public class ShokoController(
     IMetadataService metadataService,
     PlexClient plexLibrary,
     VfsBuilder vfsBuilder,
-    ShokoImportService shokoImportService,
+    IShokoImportService shokoImportService,
     SyncToShoko watchedSyncService,
     SyncToPlex syncToPlexService,
     SourceLinkService sourceLinkService,
@@ -30,7 +30,7 @@ public class ShokoController(
     #region Fields
 
     private readonly VfsBuilder _vfsBuilder = vfsBuilder;
-    private readonly ShokoImportService _shokoImportService = shokoImportService;
+    private readonly IShokoImportService _shokoImportService = shokoImportService;
     private readonly SyncToShoko _watchedSyncService = watchedSyncService;
     private readonly SyncToPlex _syncToPlexService = syncToPlexService;
     private readonly SourceLinkService _sourceLinkService = sourceLinkService;

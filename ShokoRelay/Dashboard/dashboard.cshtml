@@ -14,6 +14,7 @@
         plexAuthRefresh: "{{TaskPlexAuthRefresh}}",
         plexCollectionsBuild: "{{TaskPlexCollectionsBuild}}",
         plexRatingsApply: "{{TaskPlexRatingsApply}}",
+        plexImagesSync: "{{TaskPlexImagesSync}}",
         vfsBuild: "{{TaskVfsBuild}}",
         shokoRemoveMissing: "{{TaskShokoRemoveMissing}}",
         shokoSyncWatched: "{{TaskShokoSyncWatched}}",
@@ -189,7 +190,10 @@
               <svg class="icon-svg"><use href="img/icons.svg#auto-fix"></use></svg>
               Quick Actions
             </h2>
-            <a id="shoko-api-link" href="#" class="at-btn" title="Open Swagger" aria-label="Open Swagger">
+            <a id="relay-api-link" href="#" class="at-btn" title="Open Swagger (Relay)" aria-label="Open Relay Swagger">
+              <svg class="icon-svg"><use href="img/icons.svg#api"></use></svg>
+            </a>
+            <a id="shoko-api-link" href="#" class="at-btn" title="Open Swagger" aria-label="Open Shoko Swagger">
               <svg class="icon-svg"><use href="img/icons.svg#api"></use></svg>
             </a>
             <a id="shoko-dashboard-link" href="#" class="at-btn" title="Open Shoko Dashboard" aria-label="Open Shoko Dashboard">
@@ -197,30 +201,56 @@
             </a>
           </div>
           <div class="full">
-            <button id="{{ TaskPlexCollectionsBuild }}" class="plex-auth" data-relay-endpoint="/plex/collections/build" data-relay-label="Collections" data-relay-persist="true">Generate Collections</button>
-            <button id="{{ TaskPlexRatingsApply }}" class="plex-auth" data-relay-endpoint="/plex/ratings/apply" data-relay-label="Critic Ratings" data-relay-persist="true">Apply Critic Ratings</button>
+            <button
+              id="{{ TaskPlexCollectionsBuild }}"
+              title="Generate Plex Collections From Shoko Groups"
+              class="plex-auth"
+              data-relay-endpoint="/plex/collections/build"
+              data-relay-label="Collections"
+              data-relay-persist="true"
+            >
+              Generate Collections
+            </button>
+            <button
+              id="{{ TaskPlexRatingsApply }}"
+              title="Apply Legacy Critic Ratings to Plex"
+              class="plex-auth"
+              data-relay-endpoint="/plex/ratings/apply"
+              data-relay-label="Critic Ratings"
+              data-relay-persist="true"
+            >
+              Apply Critic Ratings
+            </button>
+            <button
+              id="{{ TaskPlexImagesSync }}"
+              title="Sync Unique Plex Images to Shoko"
+              class="plex-auth"
+              data-relay-endpoint="/plex/images/sync"
+              data-relay-label="Shoko Image Sync"
+              data-relay-persist="true"
+              data-relay-confirm="Are you sure you want to upload Plex's generated episode thumbnails to Shoko?<br><br><small>This will mark these images as the preferred image for their corresponding episode.</small>"
+              data-relay-confirm-button="Sync Images"
+            >
+              Sync Plex Images
+            </button>
           </div>
           <hr class="divider" />
           <div class="full">
+            <button id="shoko-import-run" title="Import New/Unrecognized Files" data-relay-endpoint="/shoko/import" data-relay-method="POST" data-relay-label="Shoko Import">Run Import</button>
+            <button id="shoko-sync-watched" class="plex-auth" title="Sync Watched States Menu">Sync Menu</button>
             <button
               id="{{ TaskShokoRemoveMissing }}"
-              title="Remove Missing Files From Shoko and MyList"
+              title="Purge Missing Files From Shoko and MyList"
               data-relay-endpoint="/shoko/remove-missing?dryRun=false"
               data-relay-method="POST"
-              data-relay-label="Remove Missing"
+              data-relay-label="Purge Missing"
               data-relay-persist="true"
-              data-relay-confirm="Are you sure you want to remove all records for missing files?<br><br><small>This will permanently remove them from Shoko's database and your AniDB MyList.</small>"
+              data-relay-confirm="Are you sure you want to purge all records for missing files?<br><br><small>This will permanently remove them from Shoko's database and your AniDB MyList.</small>"
               data-relay-confirm-dry="true"
-              data-relay-confirm-button="Remove Files"
+              data-relay-confirm-button="Purge Files"
             >
-              Remove Missing
+              Purge Missing
             </button>
-            <div class="w100">
-              <button id="shoko-import-run" title="Import New/Unrecognized Files" data-relay-endpoint="/shoko/import" data-relay-method="POST" data-relay-label="Shoko Import">Import</button>
-            </div>
-            <div class="w100">
-              <button id="shoko-sync-watched" class="plex-auth" title="Sync Watched States Menu">Sync</button>
-            </div>
           </div>
         </section>
       </div>

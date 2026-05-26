@@ -146,6 +146,7 @@
       const dryBtn = el("confirm-dry");
       msg.innerHTML = confirmMsg;
       execBtn.textContent = target.dataset.relayConfirmButton || "Confirm";
+      dryBtn.style.display = target.dataset.relayConfirmDry === "true" ? "" : "none"; // Dynamically display the Dry Run button only if explicitly supported by the action
       const close = openModal(modal);
       el("confirm-cancel").onclick = close;
       execBtn.onclick = () => {

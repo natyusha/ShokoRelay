@@ -156,6 +156,21 @@ public static class LogHelper
         BuildReport(sb, "Audience Rating Report", stats, "Updates & Errors:", items);
     }
 
+    /// <summary>Build the report content for Plex-generated episode image synchronization.</summary>
+    /// <param name="sb">Target builder.</param>
+    /// <param name="r">Image sync result data.</param>
+    public static void BuildImageSyncReport(StringBuilder sb, ImageSyncResult r)
+    {
+        var stats = new Dictionary<string, object>
+        {
+            ["Processed Episodes"] = r.Processed,
+            ["Uploaded Screenshots"] = r.Uploaded,
+            ["Skipped Episodes"] = r.Skipped,
+            ["Errors"] = r.Errors,
+        };
+        BuildReport(sb, "Plex Image Sync Report", stats, "Errors:", r.ErrorsList);
+    }
+
     /// <summary>Build the report content for <see cref="ShokoRelayConstants.LogVfs"/>.</summary>
     /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
     /// <param name="r">Build result data.</param>
