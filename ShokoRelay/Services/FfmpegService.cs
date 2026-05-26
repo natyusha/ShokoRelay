@@ -10,14 +10,14 @@ public sealed class FfmpegService
 {
     #region Fields & Constructor
 
-    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
-    private static readonly Lock s_ffmpegLock = new();
-    private static bool s_ffmpegConfigured;
-    private static string s_ffmpegPath = "ffmpeg";
-    private static string s_ffprobePath = "ffprobe";
-    private static string s_pluginDirectory = string.Empty;
-    private static string s_workingDirectory = string.Empty;
-    private static readonly List<string> s_utilitiesDirectories = [];
+    private readonly Logger _logger = LogManager.GetCurrentClassLogger();
+    private readonly Lock _ffmpegLock = new();
+    private bool _ffmpegConfigured;
+    private string _ffmpegPath = "ffmpeg";
+    private string _ffprobePath = "ffprobe";
+    private readonly string _pluginDirectory = string.Empty;
+    private string _workingDirectory = string.Empty;
+    private readonly List<string> _utilitiesDirectories = [];
 
     /// <summary>Construct the service, supplying the path to the plugin directory and Shoko roots which will be searched for binaries.</summary>
     /// <param name="pluginDirectory">The root directory for the plugin.</param>
@@ -25,13 +25,13 @@ public sealed class FfmpegService
     /// <param name="dataPath">The Shoko Server data directory.</param>
     public FfmpegService(string pluginDirectory, string applicationPath, string dataPath)
     {
-        s_pluginDirectory = pluginDirectory;
-        s_workingDirectory = s_pluginDirectory;
+        _pluginDirectory = pluginDirectory;
+        _workingDirectory = _pluginDirectory;
         // Search for Utilities in both the binary location and the data location to support various Linux/Docker environments
         if (!string.IsNullOrWhiteSpace(applicationPath))
-            s_utilitiesDirectories.Add(Path.Combine(applicationPath, "Utilities", "FFmpeg"));
+            _utilitiesDirectories.Add(Path.Combine(applicationPath, "Utilities", "FFmpeg"));
         if (!string.IsNullOrWhiteSpace(dataPath))
-            s_utilitiesDirectories.Add(Path.Combine(dataPath, "Utilities", "FFmpeg"));
+            _utilitiesDirectories.Add(Path.Combine(dataPath, "Utilities", "FFmpeg"));
     }
 
     #endregion
@@ -48,7 +48,7 @@ public sealed class FfmpegService
         EnsureFfmpegConfigured();
         var args = new List<string> { "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", inputPath };
 
-        string output = await RunProcessCaptureAsync(s_ffprobePath, args, ct);
+        string output = await RunProcessCaptureAsync(_ffprobePath, args, ct);
         return double.TryParse(output.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out double seconds)
             ? TimeSpan.FromSeconds(seconds)
             : throw new InvalidOperationException("Unable to parse duration from ffprobe output.");
@@ -82,7 +82,7 @@ public sealed class FfmpegService
         };
         // csharpier-ignore-end
 
-        await RunProcessAsync(s_ffmpegPath, args, null, null, ct, workingDir).ConfigureAwait(false);
+        await RunProcessAsync(_ffmpegPath, args, null, null, ct, workingDir).ConfigureAwait(false);
     }
 
     /// <summary>Convert a media file to MP3 audio and return it in a MemoryStream.</summary>
@@ -95,7 +95,7 @@ public sealed class FfmpegService
         var ms = new MemoryStream();
         var args = new List<string> { "-loglevel", "error", "-i", inputPath, "-vn", "-acodec", "libmp3lame", "-b:a", "320k", "-f", "mp3", "pipe:1" };
 
-        await RunProcessAsync(s_ffmpegPath, args, null, ms, ct);
+        await RunProcessAsync(_ffmpegPath, args, null, ms, ct);
         ms.Position = 0;
         return ms;
     }
@@ -105,26 +105,26 @@ public sealed class FfmpegService
     #region Configuration Logic
 
     /// <summary>Ensures that the paths to the FFmpeg and FFprobe binaries are resolved and verified. Searches the Shoko utilities folders, configured paths, the plugin directory, and the system PATH.</summary>
-    private static void EnsureFfmpegConfigured()
+    private void EnsureFfmpegConfigured()
     {
-        lock (s_ffmpegLock)
+        lock (_ffmpegLock)
         {
             string ffmpegName = OperatingSystem.IsWindows() ? "ffmpeg.exe" : "ffmpeg";
             string ffprobeName = OperatingSystem.IsWindows() ? "ffprobe.exe" : "ffprobe";
 
             // Verify if the current paths are still valid physically on disk. If the paths are just the filenames (e.g., "ffmpeg"), assume they are on the system PATH and skip the File.Exists check.
-            bool ffmpegValid = s_ffmpegPath == ffmpegName || File.Exists(s_ffmpegPath);
-            bool ffprobeValid = s_ffprobePath == ffprobeName || File.Exists(s_ffprobePath);
+            bool ffmpegValid = _ffmpegPath == ffmpegName || File.Exists(_ffmpegPath);
+            bool ffprobeValid = _ffprobePath == ffprobeName || File.Exists(_ffprobePath);
 
-            if (s_ffmpegConfigured && ffmpegValid && ffprobeValid)
+            if (_ffmpegConfigured && ffmpegValid && ffprobeValid)
                 return;
 
-            s_ffmpegConfigured = false;
-            s_logger.Info("FfmpegService: Binaries moved or missing -> Re-scanning...");
+            _ffmpegConfigured = false;
+            _logger.Info("FfmpegService: Binaries moved or missing -> Re-scanning...");
 
             // Reset paths to defaults before performing discovery
-            s_ffmpegPath = ffmpegName;
-            s_ffprobePath = ffprobeName;
+            _ffmpegPath = ffmpegName;
+            _ffprobePath = ffprobeName;
 
             bool ffmpegFound = false;
             bool ffprobeFound = false;
@@ -140,7 +140,7 @@ public sealed class FfmpegService
                         candidates.Add(full);
                     else if (File.Exists(full))
                     {
-                        s_ffmpegPath = full;
+                        _ffmpegPath = full;
                         ffmpegFound = true;
                         string? dir = Path.GetDirectoryName(full);
                         if (!string.IsNullOrWhiteSpace(dir) && Directory.Exists(dir))
@@ -148,41 +148,41 @@ public sealed class FfmpegService
                         locatedDir ??= dir;
                     }
                     else
-                        s_logger.Warn("FfmpegService: Configured FFmpeg path does not exist -> {0}", full);
+                        _logger.Warn("FfmpegService: Configured FFmpeg path does not exist -> {0}", full);
                 }
                 catch (Exception ex)
                 {
-                    s_logger.Warn(ex, "FfmpegService: Failed to resolve configured FFmpeg path");
+                    _logger.Warn(ex, "FfmpegService: Failed to resolve configured FFmpeg path");
                 }
             }
-            foreach (var dir in s_utilitiesDirectories)
+            foreach (var dir in _utilitiesDirectories)
                 if (Directory.Exists(dir))
                     candidates.Add(dir);
-            if (Directory.Exists(s_pluginDirectory))
-                candidates.Add(s_pluginDirectory);
+            if (Directory.Exists(_pluginDirectory))
+                candidates.Add(_pluginDirectory);
 
             foreach (string dir in candidates)
             {
                 if (!ffmpegFound)
-                    (ffmpegFound, locatedDir) = TryFindBinary(dir, ffmpegName, ref s_ffmpegPath, locatedDir);
+                    (ffmpegFound, locatedDir) = TryFindBinary(dir, ffmpegName, ref _ffmpegPath, locatedDir);
                 if (!ffprobeFound)
-                    (ffprobeFound, locatedDir) = TryFindBinary(dir, ffprobeName, ref s_ffprobePath, locatedDir);
+                    (ffprobeFound, locatedDir) = TryFindBinary(dir, ffprobeName, ref _ffprobePath, locatedDir);
                 if (ffmpegFound && ffprobeFound)
                     break;
             }
 
             if (ffmpegFound || ffprobeFound)
             {
-                s_workingDirectory = DetermineWorkingDirectory(locatedDir ?? s_pluginDirectory);
-                s_logger.Info("FfmpegService: FFmpeg binaries configured at {0}", locatedDir ?? "multiple locations");
+                _workingDirectory = DetermineWorkingDirectory(locatedDir ?? _pluginDirectory);
+                _logger.Info("FfmpegService: FFmpeg binaries configured at {0}", locatedDir ?? "multiple locations");
             }
             else
             {
-                s_workingDirectory = DetermineWorkingDirectory(s_pluginDirectory);
-                s_logger.Warn("FfmpegService: FFmpeg binaries not found in priority folders -> falling back to system PATH");
+                _workingDirectory = DetermineWorkingDirectory(_pluginDirectory);
+                _logger.Warn("FfmpegService: FFmpeg binaries not found in priority folders -> falling back to system PATH");
             }
 
-            s_ffmpegConfigured = true;
+            _ffmpegConfigured = true;
         }
     }
 
@@ -205,10 +205,10 @@ public sealed class FfmpegService
     /// <summary>Resolves a valid working directory for process execution based on a preferred path hint.</summary>
     /// <param name="preferred">The preferred directory or file path to evaluate.</param>
     /// <returns>A confirmed absolute directory path.</returns>
-    private static string DetermineWorkingDirectory(string preferred) =>
+    private string DetermineWorkingDirectory(string preferred) =>
         File.Exists(preferred) && Path.GetDirectoryName(preferred) is string dir && Directory.Exists(dir) ? dir
         : Directory.Exists(preferred) ? preferred
-        : s_pluginDirectory;
+        : _pluginDirectory;
 
     #endregion
 
@@ -221,7 +221,7 @@ public sealed class FfmpegService
     /// <param name="stdOut">Optional output stream to capture process output.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <param name="workingDir">Optional working directory for the process.</param>
-    private static async Task RunProcessAsync(string fileName, IReadOnlyList<string> args, Stream? stdIn, Stream? stdOut, CancellationToken ct, string? workingDir = null)
+    private async Task RunProcessAsync(string fileName, IReadOnlyList<string> args, Stream? stdIn, Stream? stdOut, CancellationToken ct, string? workingDir = null)
     {
         var psi = CreateProcessStartInfo(fileName, args, workingDir);
         psi.RedirectStandardInput = stdIn != null;
@@ -288,7 +288,7 @@ public sealed class FfmpegService
     /// <param name="args">The list of command line arguments.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The full string content of the process's standard output.</returns>
-    private static async Task<string> RunProcessCaptureAsync(string fileName, IReadOnlyList<string> args, CancellationToken ct)
+    private async Task<string> RunProcessCaptureAsync(string fileName, IReadOnlyList<string> args, CancellationToken ct)
     {
         var psi = CreateProcessStartInfo(fileName, args);
         psi.RedirectStandardOutput = true;
@@ -315,7 +315,7 @@ public sealed class FfmpegService
     /// <param name="args">The list of command line arguments to provide to the process.</param>
     /// <param name="workingDir">Optional directory override for the process execution.</param>
     /// <returns>A pre-configured <see cref="ProcessStartInfo"/> instance.</returns>
-    private static ProcessStartInfo CreateProcessStartInfo(string fileName, IReadOnlyList<string> args, string? workingDir = null)
+    private ProcessStartInfo CreateProcessStartInfo(string fileName, IReadOnlyList<string> args, string? workingDir = null)
     {
         var psi = new ProcessStartInfo
         {
@@ -323,7 +323,7 @@ public sealed class FfmpegService
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
-            WorkingDirectory = workingDir ?? s_workingDirectory,
+            WorkingDirectory = workingDir ?? _workingDirectory,
         };
 
         foreach (var arg in args)

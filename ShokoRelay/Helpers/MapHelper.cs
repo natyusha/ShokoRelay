@@ -50,14 +50,16 @@ public static class MapHelper
     /// <summary>Returns the TMDB ordering ID that should be used for episode numbering.</summary>
     /// <param name="series">The series to inspect.</param>
     /// <returns>Ordering ID or null.</returns>
-    public static string? GetPreferredTmdbOrderingId(ISeries series)
-    {
-        if (!EnforceTmdbNumbering)
-            return null;
-        var tmdbShow = series.Episodes.OfType<IShokoEpisode>().FirstOrDefault()?.Series?.TmdbShows?.FirstOrDefault();
-        string? pref = tmdbShow?.PreferredOrdering?.OrderingID;
-        return (string.IsNullOrWhiteSpace(pref) || string.Equals(pref, tmdbShow?.ID.ToString(), StringComparison.OrdinalIgnoreCase)) ? null : pref;
-    }
+    public static string? GetPreferredTmdbOrderingId(ISeries series) =>
+        !EnforceTmdbNumbering ? null
+        : (
+            series.Episodes.OfType<IShokoEpisode>().FirstOrDefault()?.Series?.TmdbShows?.FirstOrDefault() is { } tmdbShow
+            && tmdbShow.PreferredOrdering?.OrderingID is var pref
+            && !string.IsNullOrWhiteSpace(pref)
+            && !string.Equals(pref, tmdbShow.ID.ToString(), StringComparison.OrdinalIgnoreCase)
+        )
+            ? pref
+        : null;
 
     /// <summary>Return merged file data for a primary series and any additional series in the group.</summary>
     /// <param name="primary">The primary series.</param>

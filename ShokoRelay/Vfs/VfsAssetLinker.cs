@@ -69,7 +69,7 @@ public class VfsAssetLinker(IVideoService videoService)
         if (string.IsNullOrWhiteSpace(sourceDir) || !Directory.Exists(sourceDir))
             return;
         string originalBase = Path.GetFileNameWithoutExtension(sourceFile);
-        var candidates = cache.GetOrAdd(sourceDir, dir => new Lazy<string[]>(() => [.. Directory.GetFiles(sourceDir).Where(f => s_episodeMetadataExtensions.Contains(Path.GetExtension(f)))])).Value;
+        var candidates = cache.GetOrAdd(sourceDir, dir => new Lazy<string[]>(() => [.. Directory.EnumerateFiles(dir).Where(f => s_episodeMetadataExtensions.Contains(Path.GetExtension(f)))])).Value;
         foreach (var sub in candidates)
         {
             string name = Path.GetFileName(sub);
