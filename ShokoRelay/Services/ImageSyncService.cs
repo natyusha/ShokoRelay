@@ -7,10 +7,10 @@ namespace ShokoRelay.Services;
 
 #region Interface & Models
 
-/// <summary>Service responsible for syncing Plex-generated episode thumbnails and local metadata assets/posters back to Shoko.</summary>
+/// <summary>Service responsible for syncing Plex-generated episode thumbnails and local metadata assets (posters, backdrops, logos) back to Shoko.</summary>
 public interface IImageSyncService
 {
-    /// <summary>Scans all configured Plex libraries and local VFS paths to upload missing or updated screenshots and posters back to Shoko.</summary>
+    /// <summary>Scans all configured Plex libraries and local VFS paths to upload missing or updated screenshots, posters, backdrops, and logos back to Shoko.</summary>
     /// <param name="allowedSeriesIds">Optional collection of series IDs to limit synchronization to.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A summary result containing statistics on the synchronization run.</returns>
@@ -57,7 +57,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
             allSeries = [.. allSeries.Where(s => s != null && allowedSet.Contains(s.ID))];
         }
 
-        s_logger.Info("ImageSyncService: Starting image synchronization (local collection/series posters + Plex episode thumbnails)...");
+        s_logger.Info("ImageSyncService: Starting image synchronization (local collection/series artwork + Plex episode thumbnails)...");
 
         var cache = LoadCache();
         var processedInRun = new HashSet<int>();
@@ -269,125 +269,43 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
             }
         }
 
-        // Sync Local Series Posters (From VFS Root)
-        var allowedNames = new[] { "poster", "folder", "show" };
+        // Sync Local Series Posters, Backdrops, and Logos (From VFS Root)
+        (string[] Names, string Prefix, ImageEntityType Type, string Label)[] configs =
+        [
+            (["poster", "folder", "show"], "s", ImageEntityType.Primary, "poster"),
+            (["art", "backdrop", "background", "fanart"], "b", ImageEntityType.Backdrop, "backdrop"),
+            (["clearlogo", "logo"], "l", ImageEntityType.Logo, "logo"),
+        ];
 
-        foreach (var series in allSeries)
+        foreach (var config in configs)
         {
-            if (series == null)
-                continue;
-
-            cancellationToken.ThrowIfCancellationRequested();
-            var cacheKey = "s" + series.ID;
-
-            // Skip secondary series in VFS overrides to prevent duplicate folder scans and upload conflicts
-            if (EnforceTmdbNumbering && OverrideHelper.GetPrimary(series.ID, metadataService) != series.ID)
+            foreach (var series in allSeries)
             {
-                if (cache.Remove(cacheKey))
-                {
+                if (series == null)
+                    continue;
+
+                cancellationToken.ThrowIfCancellationRequested();
+                var (handled, uploadedOk, skippedOk, errorOk, cacheUpdated) = await ProcessLocalSeriesImageAsync(series, config.Names, config.Prefix, config.Type, config.Label, cache, errorsList)
+                    .ConfigureAwait(false);
+
+                if (cacheUpdated)
                     updatedCache = true;
-                    try
-                    {
-                        var existingXrefs = imageManager.GetImageCrossReferencesForEntity(series, imageType: ImageEntityType.Primary);
-                        foreach (var xref in existingXrefs)
-                        {
-                            if (xref.Source == DataSource.User && xref.IsPreferred)
-                            {
-                                imageManager.RemoveImageCrossReference(xref);
-                                if (imageManager.GetImageByID(xref.ImageID) is { } oldImg)
-                                    await imageManager.PurgeImage(oldImg).ConfigureAwait(false);
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        s_logger.Warn(ex, "ImageSyncService: Failed to purge demoted poster for series {0}", series.ID);
-                    }
-                }
-                continue;
-            }
 
-            string? foundPosterFile = null;
-
-            foreach (var vfsPath in VfsShared.ResolveSeriesVfsPaths(series, metadataService))
-            {
-                if (!Directory.Exists(vfsPath))
+                if (!handled)
                     continue;
-                foreach (var name in allowedNames)
+
+                if (uploadedOk || skippedOk || errorOk)
+                    processed++;
+
+                if (uploadedOk)
                 {
-                    var matchingFile = Directory
-                        .EnumerateFiles(vfsPath)
-                        .FirstOrDefault(f =>
-                            string.Equals(Path.GetFileNameWithoutExtension(f), name, StringComparison.OrdinalIgnoreCase) && PlexConstants.LocalMediaAssets.Artwork.Contains(Path.GetExtension(f))
-                        );
-                    if (matchingFile != null)
-                    {
-                        foundPosterFile = matchingFile;
-                        break;
-                    }
+                    uploaded++;
+                    updatedCache = true;
                 }
-                if (foundPosterFile != null)
-                    break;
-            }
-
-            if (string.IsNullOrEmpty(foundPosterFile) || !File.Exists(foundPosterFile))
-                continue;
-
-            processed++;
-            var writeTime = new FileInfo(foundPosterFile).LastWriteTimeUtc.Ticks.ToString();
-            var isStale = false;
-
-            if (cache.TryGetValue(cacheKey, out var savedWriteTime))
-            {
-                if (string.Equals(savedWriteTime, writeTime, StringComparison.OrdinalIgnoreCase))
-                {
+                else if (skippedOk)
                     skipped++;
-                    continue;
-                }
-                isStale = true;
-            }
-
-            if (isStale)
-            {
-                s_logger.Debug("ImageSyncService: File changed for series poster {0} (ID: {1}) -> Purging stale poster", series.PreferredTitle?.Value, series.ID);
-                try
-                {
-                    var existingXrefs = imageManager.GetImageCrossReferencesForEntity(series, imageType: ImageEntityType.Primary);
-                    foreach (var xref in existingXrefs)
-                    {
-                        if (xref.Source is not DataSource.TMDB and not DataSource.AniDB)
-                        {
-                            imageManager.RemoveImageCrossReference(xref);
-                            if (imageManager.GetImageByID(xref.ImageID) is { } oldImg)
-                                await imageManager.PurgeImage(oldImg).ConfigureAwait(false);
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    s_logger.Warn(ex, "ImageSyncService: Failed to purge stale poster for series {0}", series.ID);
-                }
-            }
-
-            s_logger.Trace("ImageSyncService: Uploading local series poster for series {0} (ID: {1})", series.PreferredTitle?.Value, series.ID);
-
-            try
-            {
-                using var stream = new FileStream(foundPosterFile, FileMode.Open, FileAccess.Read, FileShare.Read);
-                var contentType = ImageHelper.GetMimeType(Path.GetExtension(foundPosterFile)) ?? "image/jpeg";
-                var uploadedImage = imageManager.UploadImage(stream, contentType, userSubmitted: true);
-                imageManager.SetPreferredImageForEntity(series, ImageEntityType.Primary, uploadedImage);
-
-                uploaded++;
-                cache[cacheKey] = writeTime;
-                updatedCache = true;
-                s_logger.Info("ImageSyncService: Successfully uploaded and preferred series poster for Shoko series {0} (ID: {1})", series.PreferredTitle?.Value, series.ID);
-            }
-            catch (Exception ex)
-            {
-                errors++;
-                errorsList.Add($"Failed to process series poster for Shoko series {series.ID}: {ex.Message}");
-                s_logger.Warn(ex, "ImageSyncService: Failed to upload series poster for series {0} (ID: {1})", series.PreferredTitle?.Value, series.ID);
+                else if (errorOk)
+                    errors++;
             }
         }
 
@@ -400,8 +318,10 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
 
     #endregion
 
-    #region Cache Helpers
+    #region Image Helpers
 
+    /// <summary>Loads the local image synchronization cache from disk into a case-insensitive dictionary.</summary>
+    /// <returns>A dictionary containing cached image tracking mappings.</returns>
     private Dictionary<string, string> LoadCache()
     {
         var cache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -421,6 +341,8 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
         return cache;
     }
 
+    /// <summary>Persists the current image synchronization cache to disk.</summary>
+    /// <param name="cache">The dictionary of cache keys and write times to save.</param>
     private void SaveCache(Dictionary<string, string> cache)
     {
         try
@@ -429,6 +351,124 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
             File.WriteAllLines(CacheFilePath, lines);
         }
         catch { }
+    }
+
+    /// <summary>Processes local series artwork (posters, backdrops, or logos) by validating overrides, change-stale states, and uploading to Shoko.</summary>
+    /// <param name="series">The Shoko series being processed.</param>
+    /// <param name="allowedNames">The prioritized array of allowed file names.</param>
+    /// <param name="cachePrefix">The prefix representing the image type in the cache.</param>
+    /// <param name="imageType">The Shoko target image entity type.</param>
+    /// <param name="label">The diagnostic label for logging.</param>
+    /// <param name="cache">The active session cache dictionary.</param>
+    /// <param name="errorsList">The collection of accumulated sync error messages.</param>
+    /// <returns>A tuple indicating handling completion status, upload success, skip state, error presence, and whether the cache was modified.</returns>
+    private async Task<(bool Handled, bool Uploaded, bool Skipped, bool Error, bool CacheUpdated)> ProcessLocalSeriesImageAsync(
+        IShokoSeries series,
+        string[] allowedNames,
+        string cachePrefix,
+        ImageEntityType imageType,
+        string label,
+        Dictionary<string, string> cache,
+        List<string> errorsList
+    )
+    {
+        var cacheKey = cachePrefix + series.ID;
+        var cacheUpdated = false;
+
+        // Skip secondary series in VFS overrides to prevent duplicate folder scans and upload conflicts
+        if (EnforceTmdbNumbering && OverrideHelper.GetPrimary(series.ID, metadataService) != series.ID)
+        {
+            if (cache.Remove(cacheKey))
+            {
+                cacheUpdated = true;
+                try
+                {
+                    var existingXrefs = imageManager.GetImageCrossReferencesForEntity(series, imageType: imageType);
+                    foreach (var xref in existingXrefs)
+                        if (xref.Source == DataSource.User && xref.IsPreferred)
+                        {
+                            imageManager.RemoveImageCrossReference(xref);
+                            if (imageManager.GetImageByID(xref.ImageID) is { } oldImg)
+                                await imageManager.PurgeImage(oldImg).ConfigureAwait(false);
+                        }
+                }
+                catch (Exception ex)
+                {
+                    s_logger.Warn(ex, "ImageSyncService: Failed to purge demoted {0} for series {1}", label, series.ID);
+                }
+            }
+            return (false, false, false, false, cacheUpdated);
+        }
+
+        var foundFile = VfsShared
+            .ResolveSeriesVfsPaths(series, metadataService)
+            .Where(Directory.Exists)
+            .SelectMany(vfsPath =>
+                allowedNames
+                    .Select(name =>
+                        Directory
+                            .EnumerateFiles(vfsPath)
+                            .FirstOrDefault(f =>
+                                string.Equals(Path.GetFileNameWithoutExtension(f), name, StringComparison.OrdinalIgnoreCase) && PlexConstants.LocalMediaAssets.Artwork.Contains(Path.GetExtension(f))
+                            )
+                    )
+                    .Where(f => f != null)
+            )
+            .FirstOrDefault();
+
+        if (string.IsNullOrEmpty(foundFile) || !File.Exists(foundFile))
+            return (true, false, false, false, false);
+
+        var writeTime = new FileInfo(foundFile).LastWriteTimeUtc.Ticks.ToString();
+        var isStale = false;
+
+        if (cache.TryGetValue(cacheKey, out var savedWriteTime))
+        {
+            if (string.Equals(savedWriteTime, writeTime, StringComparison.OrdinalIgnoreCase))
+                return (true, false, true, false, false);
+
+            isStale = true;
+        }
+
+        if (isStale)
+        {
+            s_logger.Debug("ImageSyncService: File changed for series {0} {1} (ID: {2}) -> Purging stale image", label, series.PreferredTitle?.Value, series.ID);
+            try
+            {
+                var existingXrefs = imageManager.GetImageCrossReferencesForEntity(series, imageType: imageType);
+                foreach (var xref in existingXrefs)
+                    if (xref.Source is not DataSource.TMDB and not DataSource.AniDB)
+                    {
+                        imageManager.RemoveImageCrossReference(xref);
+                        if (imageManager.GetImageByID(xref.ImageID) is { } oldImg)
+                            await imageManager.PurgeImage(oldImg).ConfigureAwait(false);
+                    }
+            }
+            catch (Exception ex)
+            {
+                s_logger.Warn(ex, "ImageSyncService: Failed to purge stale {0} for series {1}", label, series.ID);
+            }
+        }
+
+        s_logger.Trace("ImageSyncService: Uploading local series {0} for series {1} (ID: {2})", label, series.PreferredTitle?.Value, series.ID);
+
+        try
+        {
+            using var stream = new FileStream(foundFile, FileMode.Open, FileAccess.Read, FileShare.Read);
+            var contentType = ImageHelper.GetMimeType(Path.GetExtension(foundFile)) ?? "image/jpeg";
+            var uploadedImage = imageManager.UploadImage(stream, contentType, userSubmitted: true);
+            imageManager.SetPreferredImageForEntity(series, imageType, uploadedImage);
+
+            cache[cacheKey] = writeTime;
+            s_logger.Info("ImageSyncService: Successfully uploaded and preferred series {0} for Shoko series {1} (ID: {2})", label, series.PreferredTitle?.Value, series.ID);
+            return (true, true, false, false, true);
+        }
+        catch (Exception ex)
+        {
+            errorsList.Add($"Failed to process series {label} for Shoko series {series.ID}: {ex.Message}");
+            s_logger.Warn(ex, "ImageSyncService: Failed to upload series {0} for series {1} (ID: {2})", label, series.PreferredTitle?.Value, series.ID);
+            return (true, false, false, true, false);
+        }
     }
 
     #endregion

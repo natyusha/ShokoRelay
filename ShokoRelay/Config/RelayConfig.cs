@@ -368,8 +368,8 @@ public class AdvancedConfig
     [VfsRebuild]
     public string FolderExclusions { get; set; } = "";
 
-    /// <summary>Whether to sync unique local metadata posters and Plex-generated episode screenshots back to Shoko and mark them as preferred.</summary>
-    [Display(Name = "Plex Image Sync", Description = "Enable to automatically upload unique local posters and Plex-generated episode thumbnails back to Shoko")]
+    /// <summary>Whether to sync unique local images and Plex-generated episode thumbnails back to Shoko and mark them as preferred.</summary>
+    [Display(Name = "Plex Image Sync", Description = "Enable to automatically upload unique local images and Plex-generated episode thumbnails back to Shoko")]
     [DefaultValue(false)]
     public bool EnableImageSync { get; set; } = false;
 
