@@ -298,7 +298,7 @@ public class ShokoController(
 
     /// <summary>Wipes and purges all custom user-submitted posters and Plex-generated episode screenshots from Shoko.</summary>
     /// <returns>A JSON response with the total number of purged images.</returns>
-    [HttpPost("shoko/purge-images")]
+    [HttpPost("shoko/purge-custom-images")]
     public async Task<IActionResult> PurgeLocalImages()
     {
         Logger.Info("Shoko: Starting a manual purge of all user and locally-generated images...");
@@ -310,6 +310,25 @@ public class ShokoController(
                 purgedCount++;
 
         Logger.Info("Shoko: Purging complete. Purged {0} images.", purgedCount);
+        return Ok(new RelayResponse<object>(Data: new { purged = purgedCount }));
+    }
+
+    /// <summary>Wipes and purges all default non-locally-generated episode backdrops from Shoko.</summary>
+    /// <returns>A JSON response with the total number of purged backdrops.</returns>
+    [HttpPost("shoko/purge-episode-images")]
+    public async Task<IActionResult> PurgeEpisodeImages()
+    {
+        Logger.Info("Shoko: Starting a manual purge of all default (non-LocallyGenerated) episode backdrops...");
+        var xrefs = imageManager.GetAllImageCrossReferences(imageType: ImageEntityType.Backdrop, entityType: DataEntityType.Episode).Where(x => x.ImageSource != DataSource.LocallyGenerated).ToList();
+
+        var distinctImageIds = xrefs.Select(x => x.ImageID).Distinct().ToList();
+        int purgedCount = 0;
+
+        foreach (var imageId in distinctImageIds)
+            if (imageManager.GetImageByID(imageId) is { } img && await imageManager.PurgeImage(img).ConfigureAwait(false))
+                purgedCount++;
+
+        Logger.Info("Shoko: Episode backdrop purging complete. Purged {0} images.", purgedCount);
         return Ok(new RelayResponse<object>(Data: new { purged = purgedCount }));
     }
 

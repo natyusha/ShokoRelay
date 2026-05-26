@@ -277,7 +277,8 @@ GET  /sync-watched/start                                       -> StartWatchedSy
 ```
 POST /map-symlinks?mapFile={path}&purgeLinks={true|false}      -> ProcessSourceLinks
 
-POST /shoko/purge-images                                       -> PurgeLocalImages
+POST /shoko/purge-custom-images                                -> PurgeLocalImages
+POST /shoko/purge-episode-images                               -> PurgeEpisodeImages
 ```
 
 - `ProcessSourceLinks` manages relative symlinks from protected source folders to the library based on a text-based mapping file, or purges existing links.
@@ -294,8 +295,8 @@ POST /shoko/purge-images                                       -> PurgeLocalImag
   - Destination paths are resolved relative to the Import Root.
   - Sidecar files (any file starting with `{baseName}`) and attachment folders (directories named `{baseName}_attachments`) are automatically identified and renamed to match the destination.
     - The `_attachments` folders are renamed to `_attach` at the destination to allow the `purgeLinks` operation to delete them without touching the originals.
-- `PurgeLocalImages` removes and purges all locally-generated and user-submitted images from Shoko.
-  - This endpoint will be removed once Shoko's v3 API has this ability
+- `PurgeLocalImages` removes and purges all custom user-submitted posters and Plex-generated episode screenshots from Shoko.
+- `PurgeEpisodeImages` removes and purges all default non-locally-generated episode backdrops from Shoko.
 
 ---
 
@@ -325,6 +326,7 @@ The mapping file uses a pipe-delimited (`|`) and semicolon-delimited (`;`) struc
   - This distinction ensures the `purgeLinks` command can safely remove generated links without touching original source files.
 - Relative Pathing: Links are created with relative targets. They remain valid as long as the relative depth between the source and destination remains consistent.
 - Bookkeeping: Lines that are successfully processed are automatically prefixed with `#` to prevent redundant processing in future runs.
+- `PurgeLocalImages` / `PurgeEpisodeImages` will be removed once Shoko's v3 API has similar functionality
 
 ## AnimeThemes
 
