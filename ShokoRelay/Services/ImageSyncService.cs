@@ -351,7 +351,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
 
     #endregion
 
-    #region Internal Cache Helpers
+    #region Cache Helpers
 
     private Dictionary<string, string> LoadCache()
     {

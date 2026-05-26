@@ -2,6 +2,7 @@ using System.Collections.Frozen;
 using System.Text.RegularExpressions;
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Containers;
+using Shoko.Abstractions.Metadata.Enums;
 
 namespace ShokoRelay.Helpers;
 
@@ -60,16 +61,33 @@ public static class TextHelper
 
     #region Metadata Resolution
 
+    /// <summary>Set of ambiguous AniDB episode titles that should be overridden by the series title.</summary>
     private static readonly IReadOnlySet<string> s_ambiguousTitles = new HashSet<string>(
         ["Complete Movie", "Music Video", "OAD", "OVA", "Short Movie", "Special", "TV Special", "Web"],
         StringComparer.OrdinalIgnoreCase
     );
 
-    /// <summary>Return an item's title according to a comma-separated list of preferred language codes.</summary>
+    /// <summary>Return an item's title according to preferred language codes, excluding short titles and prioritizing official/main types.</summary>
     /// <param name="item">Object that exposes a Titles collection.</param>
     /// <param name="languageSetting">Comma-separated preferred language codes.</param>
     /// <returns>The best matching title string.</returns>
-    public static string GetTitleByLanguage(IWithTitles item, string languageSetting) => GetByLanguage(languageSetting, item.PreferredTitle?.Value, item.Titles, t => t.LanguageCode, t => t.Value);
+    public static string GetTitleByLanguage(IWithTitles item, string languageSetting) =>
+        GetByLanguage(
+            languageSetting,
+            item.PreferredTitle?.Value,
+            item.Titles.Where(t => t.Type != TitleType.Short)
+                .OrderBy(t =>
+                    t.Type switch
+                    {
+                        TitleType.Main => 1,
+                        TitleType.Official => 2,
+                        TitleType.Synonym => 3,
+                        _ => 4,
+                    }
+                ),
+            t => t.LanguageCode,
+            t => t.Value
+        );
 
     /// <summary>Return an item's description according to a comma-separated list of preferred language codes.</summary>
     /// <param name="item">Object that exposes a Descriptions collection.</param>

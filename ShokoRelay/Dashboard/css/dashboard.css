@@ -65,7 +65,8 @@ svg {
   width: 1.282em;
   height: 1.282em;
 }
-h2 .icon-svg {
+h2 .icon-svg,
+.api-svg {
   fill: var(--highlight-color);
 }
 h2 .plex-svg,
@@ -77,6 +78,11 @@ h2 .plex-svg {
 }
 .icon-svg {
   margin: 0 2px -4px 2px;
+}
+.api-svg {
+  margin: 1px -2px -8px -8px;
+  width: 2.125rem;
+  font-size: 1.25rem;
 }
 .at-svg {
   fill: var(--at-color);

@@ -167,9 +167,8 @@ public class RelayConfig
 
     /// <summary>Priority list of languages for series descriptions.</summary>
     [Display(Name = "Series Description Language", Description = "Priority, comma separated")]
-    [Browsable(false)]
-    [DefaultValue("SHOKO")]
-    public string SeriesDescriptionLanguage { get; set; } = "SHOKO";
+    [DefaultValue("SHOKO, EN, X-JAT")]
+    public string SeriesDescriptionLanguage { get; set; } = "SHOKO, EN, X-JAT";
 
     /// <summary>Priority list of languages for episode descriptions.</summary>
     [Display(Name = "Episode Description Language", Description = "Priority, comma separated")]
