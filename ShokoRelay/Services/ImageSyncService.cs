@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using NLog;
 using Shoko.Abstractions.Metadata.Enums;
 using ShokoRelay.Vfs;
@@ -48,7 +49,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
         var targets = plexClient.GetConfiguredTargets();
         var allSeries = metadataService.GetAllShokoSeries() ?? [];
 
-        s_logger.Info("ImageSyncService: Starting image synchronization (Plex thumbnails, Collection posters, and Local series posters)...");
+        s_logger.Info("ImageSyncService: Starting image synchronization (local collection/series posters + Plex episode thumbnails)...");
 
         var cache = LoadCache();
         var processedInRun = new HashSet<int>();
@@ -142,15 +143,30 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                             if (!resp.IsSuccessStatusCode)
                             {
                                 errors++;
-                                errorsList.Add($"Plex download failed for episode {episode.ID} with status {resp.StatusCode}");
+                                errorsList.Add($"Plex download failed for Shoko episode {episode.ID} with status {resp.StatusCode}");
                                 continue;
                             }
 
-                            using var stream = await resp.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+                            var bytes = await resp.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+                            var md5 = Convert.ToHexString(MD5.HashData(bytes));
+                            var imageId = IImageManager.GetIDForImageSourceAndResourceID(DataSource.LocallyGenerated, md5);
+
+                            // Detect duplicate images on disk before upload and link the existing record as preferred
+                            var existingImage = imageManager.GetImageByID(imageId);
+                            if (existingImage != null)
+                            {
+                                imageManager.SetPreferredImageForEntity(episode, ImageEntityType.Backdrop, existingImage);
+                                uploaded++;
+                                cache[cacheKey] = item.Thumb;
+                                updatedCache = true;
+                                s_logger.Info("ImageSyncService: Linked existing duplicate thumbnail for episode {0} (ID: {1})", episode.EpisodeNumber, episode.ID);
+                                continue;
+                            }
+
+                            using var stream = new MemoryStream(bytes);
 
                             // Upload the thumbnail to Shoko and mark it as the preferred backdrop image
-                            var contentType = resp.Content.Headers.ContentType?.MediaType ?? "image/jpeg";
-                            var uploadedImage = imageManager.UploadImage(stream, contentType, userSubmitted: false);
+                            var uploadedImage = imageManager.UploadImage(stream, "image/jpeg", userSubmitted: false);
                             imageManager.SetPreferredImageForEntity(episode, ImageEntityType.Backdrop, uploadedImage);
 
                             uploaded++;
@@ -161,7 +177,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                         catch (Exception ex)
                         {
                             errors++;
-                            errorsList.Add($"Failed to process episode {episode.ID}: {ex.Message}");
+                            errorsList.Add($"Failed to process Shoko episode {episode.ID}: {ex.Message}");
                             s_logger.Warn(ex, "ImageSyncService: Failed to upload thumbnail for episode {0} (ID: {1})", episode.EpisodeNumber, episode.ID);
                         }
                     }
@@ -222,7 +238,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                 }
                 catch (Exception ex)
                 {
-                    s_logger.Warn(ex, "ImageSyncService: Failed to purge stale poster for group {0}", group.ID);
+                    s_logger.Warn(ex, "ImageSyncService: Failed to purge stale poster for Shoko group {0}", group.ID);
                 }
             }
 
@@ -243,7 +259,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
             catch (Exception ex)
             {
                 errors++;
-                errorsList.Add($"Failed to process collection poster for group {group.ID}: {ex.Message}");
+                errorsList.Add($"Failed to process collection poster for Shoko group {group.ID}: {ex.Message}");
                 s_logger.Warn(ex, "ImageSyncService: Failed to upload collection poster for group {0} (ID: {1})", group.PreferredTitle?.Value, group.ID);
             }
         }
@@ -257,6 +273,11 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                 continue;
 
             cancellationToken.ThrowIfCancellationRequested();
+
+            // Skip secondary series in VFS overrides to prevent duplicate folder scans and upload conflicts
+            if (EnforceTmdbNumbering && OverrideHelper.GetPrimary(series.ID, metadataService) != series.ID)
+                continue;
+
             string? foundPosterFile = null;
 
             foreach (var vfsPath in VfsShared.ResolveSeriesVfsPaths(series, metadataService))
@@ -332,12 +353,12 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                 uploaded++;
                 cache[cacheKey] = writeTime;
                 updatedCache = true;
-                s_logger.Info("ImageSyncService: Successfully uploaded and preferred series poster for series {0} (ID: {1})", series.PreferredTitle?.Value, series.ID);
+                s_logger.Info("ImageSyncService: Successfully uploaded and preferred series poster for Shoko series {0} (ID: {1})", series.PreferredTitle?.Value, series.ID);
             }
             catch (Exception ex)
             {
                 errors++;
-                errorsList.Add($"Failed to process series poster for series {series.ID}: {ex.Message}");
+                errorsList.Add($"Failed to process series poster for Shoko series {series.ID}: {ex.Message}");
                 s_logger.Warn(ex, "ImageSyncService: Failed to upload series poster for series {0} (ID: {1})", series.PreferredTitle?.Value, series.ID);
             }
         }
