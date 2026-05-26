@@ -172,6 +172,7 @@ GET  /plex/automation/run                                      -> RunPlexAutomat
 - `ApplyCollectionPosters` uploads or refreshes posters for a comma-separated list of series IDs.
 - `ApplyAudienceRatings` updates ratings for a comma-separated list of series IDs based on the configured source (TMDB/AniDB).
 - `SyncPlexImages` queries Plex for generated episode thumbnails and scans VFS/collection paths for local posters, uploading and marking them as preferred images in Shoko.
+  - The episode thumbnails will not be uploaded if `TmdbThumbnails` is enabled
 - `RunPlexAutomationNow` triggers collection building and rating application back-to-back for all series.
 
 **Notes:**

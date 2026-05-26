@@ -4,6 +4,7 @@ using NLog;
 using Shoko.Abstractions.Video.Events;
 using Shoko.Abstractions.Video.Services;
 using ShokoRelay.AnimeThemes;
+using ShokoRelay.Services;
 
 namespace ShokoRelay.Vfs;
 
@@ -16,7 +17,9 @@ public class VfsWatcher(
     PlexMetadata plexMetadata,
     PlexClient plexLibrary,
     PlexCollections plexCollections,
-    AnimeThemesMapping atMapping
+    AnimeThemesMapping atMapping,
+    ICriticRatingService criticRatingService,
+    IImageSyncService imageSyncService
 )
 {
     #region Fields & Constructor
@@ -30,6 +33,8 @@ public class VfsWatcher(
     private readonly PlexClient _plexLibrary = plexLibrary;
     private readonly PlexCollections _plexCollections = plexCollections;
     private readonly AnimeThemesMapping _atMapping = atMapping;
+    private readonly ICriticRatingService _criticRatingService = criticRatingService;
+    private readonly IImageSyncService _imageSyncService = imageSyncService;
 
     private readonly ConcurrentDictionary<int, byte> _pending = new();
     private readonly ConcurrentDictionary<int, CancellationTokenSource> _pendingMetadataFixups = new();
@@ -315,7 +320,7 @@ public class VfsWatcher(
         ScheduleDebouncedAction(series.ID, Settings.Advanced.PlexFixupDelay * 60, _pendingMetadataFixups, token => RunMetadataFixupAsync(series, token));
     }
 
-    /// <summary>Worker task that performs the actual metadata fixup logic after the debounce delay has settled.</summary>
+    /// <summary>Worker task that performs the actual metadata fixup logic, critic rating application, and optional image synchronization after the debounce delay has settled.</summary>
     /// <param name="series">The Shoko series to fix up.</param>
     /// <param name="token">Cancellation token.</param>
     /// <returns>A task representing the fixup operation.</returns>
@@ -358,6 +363,15 @@ public class VfsWatcher(
 
             if (!foundInAnyTarget)
                 s_logger.Debug("VFS: Debounced fixup for '{0}' skipped; rating key not found in Plex yet", series.PreferredTitle?.Value);
+
+            s_logger.Info("VFS: Triggering debounced critic rating application for '{0}' (ID: {1})", series.PreferredTitle?.Value, series.ID);
+            await _criticRatingService.ApplyRatingsAsync([series.ID], token).ConfigureAwait(false);
+
+            if (Settings.Advanced.EnableImageSync)
+            {
+                s_logger.Info("VFS: Triggering debounced image sync for '{0}' (ID: {1})", series.PreferredTitle?.Value, series.ID);
+                await _imageSyncService.SyncImagesAsync([series.ID], token).ConfigureAwait(false);
+            }
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)

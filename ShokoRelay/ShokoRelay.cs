@@ -307,7 +307,7 @@ public class ShokoRelay : BackgroundService
                             if (_criticRatingService != null)
                                 await _criticRatingService.ApplyRatingsAsync(null, ct).ConfigureAwait(false);
                             if (settings.Advanced.EnableImageSync && _imageSyncService != null)
-                                await _imageSyncService.SyncImagesAsync(ct).ConfigureAwait(false);
+                                await _imageSyncService.SyncImagesAsync(cancellationToken: ct).ConfigureAwait(false);
                         }
                         s_lastPlexAutomationUtc = lastSched;
                     }

@@ -241,7 +241,7 @@ public class PlexController(
                 ShokoRelayConstants.TaskPlexImagesSync,
                 ShokoRelayConstants.LogPlexImages,
                 LogHelper.BuildImageSyncReport,
-                () => _imageSyncService.SyncImagesAsync(CancellationToken.None),
+                () => _imageSyncService.SyncImagesAsync(cancellationToken: CancellationToken.None),
                 SyncHelper.SyncLock
             );
 
@@ -261,7 +261,7 @@ public class PlexController(
                     await _collectionService.BuildCollectionsAsync(allSeries, HttpContext.RequestAborted).ConfigureAwait(false);
                     await _criticRatingService.ApplyRatingsAsync(null, HttpContext.RequestAborted).ConfigureAwait(false);
                     if (Settings.Advanced.EnableImageSync)
-                        await _imageSyncService.SyncImagesAsync(HttpContext.RequestAborted).ConfigureAwait(false);
+                        await _imageSyncService.SyncImagesAsync(cancellationToken: HttpContext.RequestAborted).ConfigureAwait(false);
                     MarkPlexAutomationRunNow();
                     return true;
                 },

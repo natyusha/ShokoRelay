@@ -11,9 +11,10 @@ namespace ShokoRelay.Services;
 public interface IImageSyncService
 {
     /// <summary>Scans all configured Plex libraries and local VFS paths to upload missing or updated screenshots and posters back to Shoko.</summary>
+    /// <param name="allowedSeriesIds">Optional collection of series IDs to limit synchronization to.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A summary result containing statistics on the synchronization run.</returns>
-    Task<ImageSyncResult> SyncImagesAsync(CancellationToken cancellationToken = default);
+    Task<ImageSyncResult> SyncImagesAsync(IEnumerable<int>? allowedSeriesIds = null, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Represents the final result of an image synchronization task.</summary>
@@ -40,14 +41,21 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
     #region Public API
 
     /// <summary>Scans all configured Plex libraries and local VFS paths to upload missing or updated screenshots and posters back to Shoko.</summary>
+    /// <param name="allowedSeriesIds">Optional collection of series IDs to limit synchronization to.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A summary result containing statistics on the synchronization run.</returns>
-    public async Task<ImageSyncResult> SyncImagesAsync(CancellationToken cancellationToken = default)
+    public async Task<ImageSyncResult> SyncImagesAsync(IEnumerable<int>? allowedSeriesIds = null, CancellationToken cancellationToken = default)
     {
         var (processed, uploaded, skipped, errors) = (0, 0, 0, 0);
         var errorsList = new List<string>();
         var targets = plexClient.GetConfiguredTargets();
         var allSeries = metadataService.GetAllShokoSeries() ?? [];
+
+        if (allowedSeriesIds != null)
+        {
+            var allowedSet = new HashSet<int>(allowedSeriesIds);
+            allSeries = [.. allSeries.Where(s => s != null && allowedSet.Contains(s.ID))];
+        }
 
         s_logger.Info("ImageSyncService: Starting image synchronization (local collection/series posters + Plex episode thumbnails)...");
 
@@ -56,7 +64,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
         var updatedCache = false;
 
         // Sync Plex Episode Screenshots
-        if (targets.Count > 0)
+        if (targets.Count > 0 && !Settings.TmdbThumbnails)
         {
             foreach (var target in targets)
             {
@@ -74,18 +82,15 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                         if (!shokoEpisodeId.HasValue)
                             continue;
 
+                        var episode = metadataService.GetShokoEpisodeByID(shokoEpisodeId.Value);
+                        if (episode == null || (allowedSeriesIds != null && !allowedSeriesIds.Contains(episode.SeriesID)))
+                            continue;
+
                         // Avoid duplicate uploads/processing for the same Shoko Episode ID during this active run
                         if (!processedInRun.Add(shokoEpisodeId.Value))
                             continue;
 
                         processed++;
-                        var episode = metadataService.GetShokoEpisodeByID(shokoEpisodeId.Value);
-                        if (episode == null)
-                        {
-                            skipped++;
-                            continue;
-                        }
-
                         var isStale = false;
                         var alreadyUploaded = false;
                         var cacheKey = episode.ID.ToString();
@@ -273,10 +278,34 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                 continue;
 
             cancellationToken.ThrowIfCancellationRequested();
+            var cacheKey = "s" + series.ID;
 
             // Skip secondary series in VFS overrides to prevent duplicate folder scans and upload conflicts
             if (EnforceTmdbNumbering && OverrideHelper.GetPrimary(series.ID, metadataService) != series.ID)
+            {
+                if (cache.Remove(cacheKey))
+                {
+                    updatedCache = true;
+                    try
+                    {
+                        var existingXrefs = imageManager.GetImageCrossReferencesForEntity(series, imageType: ImageEntityType.Primary);
+                        foreach (var xref in existingXrefs)
+                        {
+                            if (xref.Source == DataSource.User && xref.IsPreferred)
+                            {
+                                imageManager.RemoveImageCrossReference(xref);
+                                if (imageManager.GetImageByID(xref.ImageID) is { } oldImg)
+                                    await imageManager.PurgeImage(oldImg).ConfigureAwait(false);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        s_logger.Warn(ex, "ImageSyncService: Failed to purge demoted poster for series {0}", series.ID);
+                    }
+                }
                 continue;
+            }
 
             string? foundPosterFile = null;
 
@@ -305,7 +334,6 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                 continue;
 
             processed++;
-            var cacheKey = "s" + series.ID;
             var writeTime = new FileInfo(foundPosterFile).LastWriteTimeUtc.Ticks.ToString();
             var isStale = false;
 
