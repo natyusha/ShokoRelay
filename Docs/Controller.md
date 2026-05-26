@@ -276,6 +276,8 @@ GET  /sync-watched/start                                       -> StartWatchedSy
 
 ```
 POST /map-symlinks?mapFile={path}&purgeLinks={true|false}      -> ProcessSourceLinks
+
+POST /shoko/purge-images                                       -> PurgeLocalImages
 ```
 
 - `ProcessSourceLinks` manages relative symlinks from protected source folders to the library based on a text-based mapping file, or purges existing links.
@@ -292,6 +294,8 @@ POST /map-symlinks?mapFile={path}&purgeLinks={true|false}      -> ProcessSourceL
   - Destination paths are resolved relative to the Import Root.
   - Sidecar files (any file starting with `{baseName}`) and attachment folders (directories named `{baseName}_attachments`) are automatically identified and renamed to match the destination.
     - The `_attachments` folders are renamed to `_attach` at the destination to allow the `purgeLinks` operation to delete them without touching the originals.
+- `PurgeLocalImages` removes and purges all locally-generated and user-submitted images from Shoko.
+  - This endpoint will be removed once Shoko's v3 API has this ability
 
 ---
 

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Shoko.Abstractions.Metadata.Enums;
 using Shoko.Abstractions.Video.Enums;
 using Shoko.Abstractions.Video.Services;
 using ShokoRelay.AnimeThemes;
@@ -24,7 +25,8 @@ public class ShokoController(
     SyncToPlex syncToPlexService,
     SourceLinkService sourceLinkService,
     AnimeThemesMapping atMapping,
-    IVideoService videoService
+    IVideoService videoService,
+    IImageManager imageManager
 ) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
 {
     #region Fields
@@ -289,6 +291,27 @@ public class ShokoController(
                 },
                 VfsShared.VfsLock
             );
+
+    #endregion
+
+    #region Temporary
+
+    /// <summary>Wipes and purges all custom user-submitted posters and Plex-generated episode screenshots from Shoko.</summary>
+    /// <returns>A JSON response with the total number of purged images.</returns>
+    [HttpPost("shoko/purge-images")]
+    public async Task<IActionResult> PurgeLocalImages()
+    {
+        Logger.Info("Shoko: Starting a manual purge of all user and locally-generated images...");
+        var images = imageManager.GetAllImages().Where(img => img.Source is DataSource.LocallyGenerated or DataSource.User).ToList();
+
+        int purgedCount = 0;
+        foreach (var img in images)
+            if (await imageManager.PurgeImage(img).ConfigureAwait(false))
+                purgedCount++;
+
+        Logger.Info("Shoko: Purging complete. Purged {0} images.", purgedCount);
+        return Ok(new RelayResponse<object>(Data: new { purged = purgedCount }));
+    }
 
     #endregion
 
