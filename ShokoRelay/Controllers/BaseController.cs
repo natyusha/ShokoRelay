@@ -268,25 +268,6 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
             : [.. MetadataService.GetAllShokoSeries().Cast<IShokoSeries?>()];
     }
 
-    /// <summary>Maps a file extension to its corresponding MIME content type for collection poster images.</summary>
-    /// <param name="ext">The file extension string.</param>
-    /// <returns>A MIME type string or null if unsupported.</returns>
-    protected static string? GetCollectionContentTypeForExtension(string ext)
-    {
-        return string.IsNullOrWhiteSpace(ext)
-            ? null
-            : ext.ToLowerInvariant() switch
-            {
-                ".jpg" or ".jpeg" or ".jpe" or ".tbn" => "image/jpeg",
-                ".png" => "image/png",
-                ".webp" => "image/webp",
-                ".gif" => "image/gif",
-                ".bmp" => "image/bmp",
-                ".tif" or ".tiff" => "image/tiff",
-                _ => null,
-            };
-    }
-
     #endregion
 
     #region Plex Helper Logic

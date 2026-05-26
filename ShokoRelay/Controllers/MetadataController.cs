@@ -273,7 +273,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
         var posterPath = PlexHelper.FindCollectionPosterPathByGroup(primarySeries, groupId, MetadataService);
         return string.IsNullOrWhiteSpace(posterPath) || !System.IO.File.Exists(posterPath)
             ? NotFound()
-            : PhysicalFile(posterPath, GetCollectionContentTypeForExtension(Path.GetExtension(posterPath)) ?? "application/octet-stream");
+            : PhysicalFile(posterPath, ImageHelper.GetMimeType(Path.GetExtension(posterPath)) ?? "application/octet-stream");
     }
 
     #endregion

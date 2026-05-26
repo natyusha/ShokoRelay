@@ -44,6 +44,23 @@ public static class ImageHelper
 
     #region Image Builders
 
+    /// <summary>Maps a file extension to its corresponding MIME content type for collection poster images.</summary>
+    /// <param name="ext">The file extension string.</param>
+    /// <returns>A MIME type string or null if unsupported.</returns>
+    public static string? GetMimeType(string ext) =>
+        string.IsNullOrWhiteSpace(ext)
+            ? null
+            : ext.ToLowerInvariant() switch
+            {
+                ".jpg" or ".jpeg" or ".jpe" or ".tbn" => "image/jpeg",
+                ".png" => "image/png",
+                ".webp" => "image/webp",
+                ".gif" => "image/gif",
+                ".bmp" => "image/bmp",
+                ".tif" or ".tiff" => "image/tiff",
+                _ => null,
+            };
+
     /// <summary>Filters and returns only enabled, desired, and locally available images from the supplied entity.</summary>
     /// <param name="entity">The metadata entity providing images.</param>
     /// <param name="type">The specific image type to retrieve.</param>

@@ -169,8 +169,11 @@ As a bonus this supports using the primary series poster as the collection poste
 
 ### Plex Image Sync
 
-- An optional Plex automation which syncs Plex's auto generated episode thumbnails back to Shoko and marks them as preferred
-- This allows Shoko and Plex to share the same episode preview thumbnails without relying on TMDB for the metadata
+- An optional Plex automation which syncs the following types of local metadata images back to Shoko and marks them as preferred:
+  - Plex's auto generated episode thumbnails
+  - Collection Posters in the configured `Collection Posters Root Path`
+  - Local posters from the VFS Root of a series (`poster.ext`, `show.ext` or `show.ext`)
+- This allows Shoko and Plex to share the same local image metadata without relying on managing it in multiple places
 - This will not run during the scheduled Plex Automation Interval unless `Advanced Settings -> Plex Image Sync` is enabled
 - _Requires Plex authentication_
 
