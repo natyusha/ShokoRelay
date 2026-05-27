@@ -170,11 +170,12 @@ As a bonus this supports using the primary series poster as the collection poste
 ### Plex Image Sync
 
 - An optional Plex automation which syncs the following types of local metadata images back to Shoko and marks them as preferred:
-  - Plex's auto generated episode thumbnails (if "TMDB Thumbnails" is disabled)
   - Collection Posters in the configured `Collection Posters Root Path`
   - Local posters from the VFS Root of a series (`poster.ext`, `show.ext` or `show.ext`)
   - Local backdrops from the VFS Root of a series (`art.ext`, `backdrop.ext`, `background.ext` or `fanart.ext`)
   - Local logos from the VFS Root of a series (`clearlogo.ext` or `logo.ext`)
+  - Local episode thumbnails from the VFS Root of a series (with the same base filename as the corresponding episode)
+  - Plex's auto generated episode thumbnails (skipped if "TMDB Thumbnails" is enabled or a local thumbnail is present)
 - This allows Shoko and Plex to share the same local image metadata with a single source of truth
 - This will not run during the Plex Metadata Fixup or scheduled Plex Automation Interval unless `Advanced Settings -> Plex Image Sync` is enabled
 - _Requires Plex authentication_

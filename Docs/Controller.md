@@ -171,8 +171,8 @@ GET  /plex/automation/run                                      -> RunPlexAutomat
 - `BuildPlexCollections` generates Plex collections for a comma-separated list of series IDs (or all series if omitted).
 - `ApplyCollectionPosters` uploads or refreshes posters for a comma-separated list of series IDs.
 - `ApplyAudienceRatings` updates ratings for a comma-separated list of series IDs based on the configured source (TMDB/AniDB).
-- `SyncPlexImages` queries Plex for generated episode thumbnails and scans VFS/collection paths for local posters/backdrops/logos, uploading and marking them as preferred images in Shoko.
-  - The episode thumbnails will not be uploaded if `TmdbThumbnails` is enabled
+- `SyncPlexImages` queries Plex for generated episode thumbnails and scans VFS/collection paths for all local images, uploading and marking them as preferred in Shoko.
+  - The generated episode thumbnails will not be uploaded if `TmdbThumbnails` is enabled or a local thumbnail is present
 - `RunPlexAutomationNow` triggers collection building and rating application back-to-back for all series.
 
 **Notes:**

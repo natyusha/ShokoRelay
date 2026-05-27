@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
 using NLog;
+using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Enums;
+using Shoko.Abstractions.Metadata.Image.CrossReferences;
 using ShokoRelay.Vfs;
 
 namespace ShokoRelay.Services;
@@ -64,7 +66,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
         var updatedCache = false;
 
         // Sync Plex Episode Screenshots
-        if (targets.Count > 0 && !Settings.TmdbThumbnails)
+        if (targets.Count > 0)
         {
             foreach (var target in targets)
             {
@@ -84,6 +86,55 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
 
                         var episode = metadataService.GetShokoEpisodeByID(shokoEpisodeId.Value);
                         if (episode == null || (allowedSeriesIds != null && !allowedSeriesIds.Contains(episode.SeriesID)))
+                            continue;
+
+                        // Check if a local physical episode thumbnail exists on disk alongside the video file
+                        var localEpisodeThumb = FindLocalEpisodeThumbnail(episode);
+                        if (localEpisodeThumb != null && File.Exists(localEpisodeThumb))
+                        {
+                            processed++;
+                            var writeTime = new FileInfo(localEpisodeThumb).LastWriteTimeUtc.Ticks.ToString();
+                            var staleLocal = false;
+                            var cacheKeyLocal = episode.ID.ToString();
+
+                            if (cache.TryGetValue(cacheKeyLocal, out var savedWriteTime))
+                            {
+                                if (string.Equals(savedWriteTime, writeTime, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    skipped++;
+                                    continue;
+                                }
+                                staleLocal = true;
+                            }
+
+                            if (staleLocal)
+                            {
+                                s_logger.Debug("ImageSyncService: Local thumbnail file changed for episode {0} (ID: {1}) -> Purging stale thumbnail", episode.EpisodeNumber, episode.ID);
+                                await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
+                            }
+
+                            s_logger.Trace("ImageSyncService: Uploading local thumbnail for episode {0} (ID: {1}) from VFS/source", episode.EpisodeNumber, episode.ID);
+
+                            try
+                            {
+                                UploadAndPreferLocalImage(localEpisodeThumb, episode, ImageEntityType.Backdrop, userSubmitted: false);
+
+                                uploaded++;
+                                cache[cacheKeyLocal] = writeTime;
+                                updatedCache = true;
+                                s_logger.Info("ImageSyncService: Successfully uploaded and preferred local thumbnail for episode {0} (ID: {1})", episode.EpisodeNumber, episode.ID);
+                            }
+                            catch (Exception ex)
+                            {
+                                errors++;
+                                errorsList.Add($"Failed to process local thumbnail for episode {episode.ID}: {ex.Message}");
+                                s_logger.Warn(ex, "ImageSyncService: Failed to upload local thumbnail for episode {0} (ID: {1})", episode.EpisodeNumber, episode.ID);
+                            }
+                            continue;
+                        }
+
+                        // Skip Plex-generated thumbnail downloads if TMDB thumbnails are enabled
+                        if (Settings.TmdbThumbnails)
                             continue;
 
                         // Avoid duplicate uploads/processing for the same Shoko Episode ID during this active run
@@ -118,24 +169,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                         if (isStale)
                         {
                             s_logger.Debug("ImageSyncService: File changed for episode {0} (ID: {1}) -> Purging stale thumbnail", episode.EpisodeNumber, episode.ID);
-                            try
-                            {
-                                // Fetch and remove all user-uploaded backdrop cross-references and purge their physical files
-                                var existingXrefs = imageManager.GetImageCrossReferencesForEntity(episode, imageType: ImageEntityType.Backdrop);
-                                foreach (var xref in existingXrefs)
-                                {
-                                    if (xref.Source is not DataSource.TMDB and not DataSource.AniDB)
-                                    {
-                                        imageManager.RemoveImageCrossReference(xref);
-                                        if (imageManager.GetImageByID(xref.ImageID) is { } oldImg)
-                                            await imageManager.PurgeImage(oldImg).ConfigureAwait(false);
-                                    }
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                s_logger.Warn(ex, "ImageSyncService: Failed to purge stale thumbnail for episode {0}", episode.ID);
-                            }
+                            await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
                         }
 
                         s_logger.Trace("ImageSyncService: Fetching Plex thumbnail for episode {0} (ID: {1})", episode.EpisodeNumber, episode.ID);
@@ -148,7 +182,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                             if (!resp.IsSuccessStatusCode)
                             {
                                 errors++;
-                                errorsList.Add($"Plex download failed for Shoko episode {episode.ID} with status {resp.StatusCode}");
+                                errorsList.Add($"Plex download failed for episode {episode.ID} with status {resp.StatusCode}");
                                 continue;
                             }
 
@@ -182,7 +216,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                         catch (Exception ex)
                         {
                             errors++;
-                            errorsList.Add($"Failed to process Shoko episode {episode.ID}: {ex.Message}");
+                            errorsList.Add($"Failed to process episode {episode.ID}: {ex.Message}");
                             s_logger.Warn(ex, "ImageSyncService: Failed to upload thumbnail for episode {0} (ID: {1})", episode.EpisodeNumber, episode.ID);
                         }
                     }
@@ -228,33 +262,14 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
             if (isStale)
             {
                 s_logger.Debug("ImageSyncService: File changed for collection poster {0} (ID: {1}) -> Purging stale poster", group.PreferredTitle?.Value, group.ID);
-                try
-                {
-                    var existingXrefs = imageManager.GetImageCrossReferencesForEntity(group, imageType: ImageEntityType.Primary);
-                    foreach (var xref in existingXrefs)
-                    {
-                        if (xref.Source is not DataSource.TMDB and not DataSource.AniDB)
-                        {
-                            imageManager.RemoveImageCrossReference(xref);
-                            if (imageManager.GetImageByID(xref.ImageID) is { } oldImg)
-                                await imageManager.PurgeImage(oldImg).ConfigureAwait(false);
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    s_logger.Warn(ex, "ImageSyncService: Failed to purge stale poster for Shoko group {0}", group.ID);
-                }
+                await PurgeEntityImagesAsync(group, ImageEntityType.Primary, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
             }
 
             s_logger.Trace("ImageSyncService: Uploading local collection poster for group {0} (ID: {1})", group.PreferredTitle?.Value, group.ID);
 
             try
             {
-                using var stream = new FileStream(groupPosterFile, FileMode.Open, FileAccess.Read, FileShare.Read);
-                var contentType = ImageHelper.GetMimeType(Path.GetExtension(groupPosterFile)) ?? "image/jpeg";
-                var uploadedImage = imageManager.UploadImage(stream, contentType, userSubmitted: true);
-                imageManager.SetPreferredImageForEntity(group, ImageEntityType.Primary, uploadedImage);
+                UploadAndPreferLocalImage(groupPosterFile, group, ImageEntityType.Primary, userSubmitted: true);
 
                 uploaded++;
                 cache[cacheKey] = writeTime;
@@ -264,7 +279,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
             catch (Exception ex)
             {
                 errors++;
-                errorsList.Add($"Failed to process collection poster for Shoko group {group.ID}: {ex.Message}");
+                errorsList.Add($"Failed to process collection poster for group {group.ID}: {ex.Message}");
                 s_logger.Warn(ex, "ImageSyncService: Failed to upload collection poster for group {0} (ID: {1})", group.PreferredTitle?.Value, group.ID);
             }
         }
@@ -353,15 +368,22 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
         catch { }
     }
 
+    /// <summary>Finds a local episode thumbnail alongside the physical video files.</summary>
+    private string? FindLocalEpisodeThumbnail(IShokoEpisode episode) =>
+        (episode.VideoList ?? [])
+            .SelectMany(v => v.Files ?? [])
+            .Select(f => f.Path)
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Select(p => (Dir: Path.GetDirectoryName(p), Base: Path.GetFileNameWithoutExtension(p)))
+            .Where(x => !string.IsNullOrEmpty(x.Dir) && Directory.Exists(x.Dir))
+            .SelectMany(x =>
+                Directory
+                    .EnumerateFiles(x.Dir!)
+                    .Where(f => string.Equals(Path.GetFileNameWithoutExtension(f), x.Base, StringComparison.OrdinalIgnoreCase) && PlexConstants.LocalMediaAssets.Artwork.Contains(Path.GetExtension(f)))
+            )
+            .FirstOrDefault();
+
     /// <summary>Processes local series artwork (posters, backdrops, or logos) by validating overrides, change-stale states, and uploading to Shoko.</summary>
-    /// <param name="series">The Shoko series being processed.</param>
-    /// <param name="allowedNames">The prioritized array of allowed file names.</param>
-    /// <param name="cachePrefix">The prefix representing the image type in the cache.</param>
-    /// <param name="imageType">The Shoko target image entity type.</param>
-    /// <param name="label">The diagnostic label for logging.</param>
-    /// <param name="cache">The active session cache dictionary.</param>
-    /// <param name="errorsList">The collection of accumulated sync error messages.</param>
-    /// <returns>A tuple indicating handling completion status, upload success, skip state, error presence, and whether the cache was modified.</returns>
     private async Task<(bool Handled, bool Uploaded, bool Skipped, bool Error, bool CacheUpdated)> ProcessLocalSeriesImageAsync(
         IShokoSeries series,
         string[] allowedNames,
@@ -381,21 +403,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
             if (cache.Remove(cacheKey))
             {
                 cacheUpdated = true;
-                try
-                {
-                    var existingXrefs = imageManager.GetImageCrossReferencesForEntity(series, imageType: imageType);
-                    foreach (var xref in existingXrefs)
-                        if (xref.Source == DataSource.User && xref.IsPreferred)
-                        {
-                            imageManager.RemoveImageCrossReference(xref);
-                            if (imageManager.GetImageByID(xref.ImageID) is { } oldImg)
-                                await imageManager.PurgeImage(oldImg).ConfigureAwait(false);
-                        }
-                }
-                catch (Exception ex)
-                {
-                    s_logger.Warn(ex, "ImageSyncService: Failed to purge demoted {0} for series {1}", label, series.ID);
-                }
+                await PurgeEntityImagesAsync(series, imageType, x => x.Source == DataSource.User && x.IsPreferred).ConfigureAwait(false);
             }
             return (false, false, false, false, cacheUpdated);
         }
@@ -433,42 +441,58 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
         if (isStale)
         {
             s_logger.Debug("ImageSyncService: File changed for series {0} {1} (ID: {2}) -> Purging stale image", label, series.PreferredTitle?.Value, series.ID);
-            try
-            {
-                var existingXrefs = imageManager.GetImageCrossReferencesForEntity(series, imageType: imageType);
-                foreach (var xref in existingXrefs)
-                    if (xref.Source is not DataSource.TMDB and not DataSource.AniDB)
-                    {
-                        imageManager.RemoveImageCrossReference(xref);
-                        if (imageManager.GetImageByID(xref.ImageID) is { } oldImg)
-                            await imageManager.PurgeImage(oldImg).ConfigureAwait(false);
-                    }
-            }
-            catch (Exception ex)
-            {
-                s_logger.Warn(ex, "ImageSyncService: Failed to purge stale {0} for series {1}", label, series.ID);
-            }
+            await PurgeEntityImagesAsync(series, imageType, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
         }
 
         s_logger.Trace("ImageSyncService: Uploading local series {0} for series {1} (ID: {2})", label, series.PreferredTitle?.Value, series.ID);
 
         try
         {
-            using var stream = new FileStream(foundFile, FileMode.Open, FileAccess.Read, FileShare.Read);
-            var contentType = ImageHelper.GetMimeType(Path.GetExtension(foundFile)) ?? "image/jpeg";
-            var uploadedImage = imageManager.UploadImage(stream, contentType, userSubmitted: true);
-            imageManager.SetPreferredImageForEntity(series, imageType, uploadedImage);
-
-            cache[cacheKey] = writeTime;
-            s_logger.Info("ImageSyncService: Successfully uploaded and preferred series {0} for Shoko series {1} (ID: {2})", label, series.PreferredTitle?.Value, series.ID);
+            UploadAndPreferLocalImage(foundFile, series, imageType, userSubmitted: true);
             return (true, true, false, false, true);
         }
         catch (Exception ex)
         {
-            errorsList.Add($"Failed to process series {label} for Shoko series {series.ID}: {ex.Message}");
+            errorsList.Add($"Failed to process series {label} for series {series.ID}: {ex.Message}");
             s_logger.Warn(ex, "ImageSyncService: Failed to upload series {0} for series {1} (ID: {2})", label, series.PreferredTitle?.Value, series.ID);
             return (true, false, false, true, false);
         }
+    }
+
+    /// <summary>Purges stale or demoted cross-referenced images for an entity based on source filters.</summary>
+    /// <param name="entity">The entity to purge images for.</param>
+    /// <param name="imageType">The target image entity type.</param>
+    /// <param name="predicate">Filter predicate to select cross-references for purging.</param>
+    private async Task PurgeEntityImagesAsync(IWithImages entity, ImageEntityType imageType, Func<IImageCrossReference, bool> predicate)
+    {
+        try
+        {
+            var existingXrefs = imageManager.GetImageCrossReferencesForEntity(entity, imageType: imageType);
+            foreach (var xref in existingXrefs)
+                if (predicate(xref))
+                {
+                    imageManager.RemoveImageCrossReference(xref);
+                    if (imageManager.GetImageByID(xref.ImageID) is { } oldImg)
+                        await imageManager.PurgeImage(oldImg).ConfigureAwait(false);
+                }
+        }
+        catch (Exception ex)
+        {
+            s_logger.Warn(ex, "ImageSyncService: Failed to purge stale images for entity of type {0}", entity.GetType().Name);
+        }
+    }
+
+    /// <summary>Uploads a local file from disk to Shoko and marks it as preferred for the specified entity.</summary>
+    /// <param name="filePath">The physical file path on disk.</param>
+    /// <param name="entity">The target entity to link the image to.</param>
+    /// <param name="imageType">The target image entity type.</param>
+    /// <param name="userSubmitted">Whether the image is user-submitted (manual) or locally generated.</param>
+    private void UploadAndPreferLocalImage(string filePath, IWithImages entity, ImageEntityType imageType, bool userSubmitted)
+    {
+        using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var contentType = ImageHelper.GetMimeType(Path.GetExtension(filePath)) ?? "image/jpeg";
+        var uploadedImage = imageManager.UploadImage(stream, contentType, userSubmitted: userSubmitted);
+        imageManager.SetPreferredImageForEntity(entity, imageType, uploadedImage);
     }
 
     #endregion
