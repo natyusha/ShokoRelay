@@ -173,33 +173,32 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         if (cleanRoot && !isFiltered)
         {
             s_logger.Info("VFS: Performing global root cleanup...");
-            var allRoots = _metadataService
-                .GetAllShokoSeries()
-                .SelectMany(s => s.Episodes.SelectMany(ep => ep.VideoList).SelectMany(v => v.Files))
-                .Select(VfsShared.ResolveImportRootPath)
-                .Where(r => !string.IsNullOrEmpty(r))
-                .Distinct();
+            List<string> allRoots = [.. (videoService.GetAllManagedFolders() ?? []).Select(f => f.Path).Where(p => !string.IsNullOrEmpty(p)).Distinct()];
 
-            foreach (var path in allRoots.Select(root => Path.Combine(root!, rootName)).Where(Directory.Exists))
+            foreach (var root in allRoots)
             {
-                if (!VfsShared.IsSafeToDelete(path))
+                string path = Path.Combine(root!, rootName);
+                if (Directory.Exists(path))
                 {
-                    s_logger.Warn("VFS: Refusing to delete unsafe path -> {0}", path);
-                    continue;
-                }
-                try
-                {
-                    var cleanSw = Stopwatch.StartNew();
-                    Directory.Delete(path, true);
-                    cleanupDetails.Add(new RootCleanupDetails(path, cleanSw.ElapsedMilliseconds));
-                    s_logger.Info("VFS: Cleaned root folder -> '{0}' in {1}ms", path, cleanSw.ElapsedMilliseconds);
+                    if (!VfsShared.IsSafeToDelete(path))
+                    {
+                        s_logger.Warn("VFS: Refusing to delete unsafe path -> {0}", path);
+                        continue;
+                    }
+                    try
+                    {
+                        var cleanSw = Stopwatch.StartNew();
+                        Directory.Delete(path, true);
+                        cleanupDetails.Add(new RootCleanupDetails(path, cleanSw.ElapsedMilliseconds));
+                        s_logger.Info("VFS: Cleaned root folder -> '{0}' in {1}ms", path, cleanSw.ElapsedMilliseconds);
 
-                    Directory.CreateDirectory(path);
-                    File.WriteAllText(Path.Combine(path, ".ignore"), ""); // Re-create the folder and add an .ignore file immediately after cleanup for Emby / Jellyfin users
-                }
-                catch (Exception ex)
-                {
-                    s_logger.Warn(ex, "VFS: Failed to clean root -> {0}", path);
+                        Directory.CreateDirectory(path);
+                        File.WriteAllText(Path.Combine(path, ".ignore"), ""); // Re-create the folder and add an .ignore file immediately after cleanup for Emby / Jellyfin users
+                    }
+                    catch (Exception ex)
+                    {
+                        s_logger.Warn(ex, "VFS: Failed to clean root -> {0}", path);
+                    }
                 }
             }
             cleanRoot = false;
@@ -357,7 +356,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
     }
 
     /// <summary>Builds the VFS structure for a specific series, handling naming and de-duplication.</summary>
-    /// <param name="series">The Shoko series metadata.</param>
+    /// <param name="series">Shoko series metadata.</param>
     /// <param name="rootFolderName">Name of the VFS root folder.</param>
     /// <param name="cleanRoot">Whether to perform cleanup.</param>
     /// <param name="cleanedRoots">Thread-safe tracker for cleaned roots.</param>
@@ -538,47 +537,34 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         return (created, skipped, skippedDetails, errors, planned);
     }
 
-    private void HandleCleanup(string path, ConcurrentDictionary<string, byte> cleaned, ConcurrentDictionary<string, Task> tasks, List<string> errors)
-    {
-        if (!cleaned.TryAdd(path, 0))
-        {
-            if (tasks.TryGetValue(path, out var t))
-                t.Wait();
-            return;
-        }
-        var tcs = new TaskCompletionSource();
-        tasks[path] = tcs.Task;
-        if (Directory.Exists(path))
-        {
-            if (!VfsShared.IsSafeToDelete(path))
-            {
-                errors.Add($"Refusing to clean: {path}");
-                s_logger.Warn("VFS: Unsafe cleanup path blocked -> {Path}", path);
-            }
-            else
-                try
-                {
-                    if (Directory.Exists(path))
-                        Directory.Delete(path, true);
-                }
-                catch (IOException ex)
-                {
-                    errors.Add($"Clean failed: Folder in use or locked by another process {path}");
-                    s_logger.Warn(ex, "VFS: Cleanup blocked due to in use path -> {Path}", path);
-                }
-                catch (Exception ex)
-                {
-                    errors.Add($"Clean failed {path}: {ex.Message}");
-                    s_logger.Error(ex, "VFS: Clean failed for path -> {Path}", path);
-                }
-        }
-        tcs.SetResult();
-    }
-
     #endregion
 
     #region Internal Helpers
 
+    /// <summary>Retrieves the files and episode mappings for a series, leveraging the build-session cache.</summary>
+    /// <param name="series">The Shoko series metadata.</param>
+    /// <returns>A data container holding files and coordinates for the series.</returns>
+    private MapHelper.SeriesFileData GetSeriesFileDataCached(IShokoSeries series)
+    {
+        if (!EnforceTmdbNumbering)
+            return _seriesFileDataCacheForBuild?.GetOrAdd(series.ID, _ => MapHelper.GetSeriesFileData(series, _metadataService)) ?? MapHelper.GetSeriesFileData(series, _metadataService);
+        int pId = OverrideHelper.GetPrimary(series.ID, _metadataService);
+        return _seriesFileDataCacheForBuild?.GetOrAdd(
+                pId,
+                _ =>
+                {
+                    var group = OverrideHelper.GetGroup(pId, _metadataService).Select(_metadataService.GetShokoSeriesByID).OfType<IShokoSeries>().ToList();
+                    return group.Count <= 1
+                        ? MapHelper.GetSeriesFileData(group.FirstOrDefault() ?? series, _metadataService)
+                        : MapHelper.GetSeriesFileDataMerged(group[0], group.Skip(1).Cast<ISeries>(), _metadataService);
+                }
+            )
+            ?? MapHelper.GetSeriesFileData(series, _metadataService);
+    }
+
+    /// <summary>Recursively deletes the virtual directory for a series across all active VFS roots.</summary>
+    /// <param name="rootFolderName">The name of the VFS root folder.</param>
+    /// <param name="series">The Shoko series metadata.</param>
     private void PruneSeries(string rootFolderName, IShokoSeries series)
     {
         var paths = new HashSet<string>(VfsShared.PathComparer);
@@ -605,22 +591,64 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         }
     }
 
-    private MapHelper.SeriesFileData GetSeriesFileDataCached(IShokoSeries series)
+    /// <summary>Recursively cleans a directory and blocks concurrent threads from writing until deletion is complete.</summary>
+    /// <param name="path">The absolute directory path to clean.</param>
+    /// <param name="cleaned">A thread-safe tracker of cleaned paths.</param>
+    /// <param name="tasks">A thread-safe tracker of active completion tasks.</param>
+    /// <param name="errors">The collection of accumulated build error messages.</param>
+    private void HandleCleanup(string path, ConcurrentDictionary<string, byte> cleaned, ConcurrentDictionary<string, Task> tasks, List<string> errors)
     {
-        if (!EnforceTmdbNumbering)
-            return _seriesFileDataCacheForBuild?.GetOrAdd(series.ID, _ => MapHelper.GetSeriesFileData(series, _metadataService)) ?? MapHelper.GetSeriesFileData(series, _metadataService);
-        int pId = OverrideHelper.GetPrimary(series.ID, _metadataService);
-        return _seriesFileDataCacheForBuild?.GetOrAdd(
-                pId,
-                _ =>
+        Task? completionTask = null;
+        TaskCompletionSource? tcs = null;
+        bool isCreator = false;
+
+        lock (tasks)
+        {
+            if (cleaned.TryAdd(path, 0))
+            {
+                tcs = new TaskCompletionSource();
+                tasks[path] = tcs.Task;
+                isCreator = true;
+                completionTask = tcs.Task;
+            }
+            else
+            {
+                tasks.TryGetValue(path, out completionTask);
+            }
+        }
+
+        if (!isCreator)
+        {
+            completionTask?.Wait();
+            return;
+        }
+
+        if (Directory.Exists(path))
+        {
+            if (!VfsShared.IsSafeToDelete(path))
+            {
+                errors.Add($"Refusing to clean: {path}");
+                s_logger.Warn("VFS: Unsafe cleanup path blocked -> {Path}", path);
+            }
+            else
+                try
                 {
-                    var group = OverrideHelper.GetGroup(pId, _metadataService).Select(_metadataService.GetShokoSeriesByID).OfType<IShokoSeries>().ToList();
-                    return group.Count <= 1
-                        ? MapHelper.GetSeriesFileData(group.FirstOrDefault() ?? series, _metadataService)
-                        : MapHelper.GetSeriesFileDataMerged(group[0], group.Skip(1).Cast<ISeries>(), _metadataService);
+                    if (Directory.Exists(path))
+                        Directory.Delete(path, true);
                 }
-            )
-            ?? MapHelper.GetSeriesFileData(series, _metadataService);
+                catch (IOException ex)
+                {
+                    errors.Add($"Clean failed: Folder in use or locked by another process {path}");
+                    s_logger.Warn(ex, "VFS: Cleanup blocked due to in use path -> {Path}", path);
+                }
+                catch (Exception ex)
+                {
+                    errors.Add($"Clean failed {path}: {ex.Message}");
+                    s_logger.Error(ex, "VFS: Clean failed for path -> {Path}", path);
+                }
+        }
+
+        tcs?.SetResult();
     }
 
     #endregion

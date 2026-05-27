@@ -138,7 +138,11 @@ public class ConfigProvider
 
     /// <summary>Return the current settings, loading from disk if not already cached.</summary>
     /// <returns>The current <see cref="RelayConfig"/> instance.</returns>
-    public RelayConfig GetSettings() => _settings ??= GetSettingsFromFile();
+    public RelayConfig GetSettings()
+    {
+        lock (_settingsLock)
+            return _settings ??= GetSettingsFromFile();
+    }
 
     /// <summary>Construct a sanitized payload of settings plus minimal Plex auth information for the dashboard.</summary>
     /// <returns>A sanitized configuration object for dashboard consumption.</returns>
@@ -265,7 +269,11 @@ public class ConfigProvider
 
     /// <summary>Retrieves the list of discovered Plex servers from the token file.</summary>
     /// <returns>A list of <see cref="PlexAvailableServer"/> instances.</returns>
-    public List<PlexAvailableServer> GetPlexDiscoveredServers() => _cachedServers ??= ReadTokenFile().Servers ?? [];
+    public List<PlexAvailableServer> GetPlexDiscoveredServers()
+    {
+        lock (_settingsLock)
+            return _cachedServers ??= ReadTokenFile().Servers ?? [];
+    }
 
     /// <summary>Retrieves the list of discovered Plex libraries from the token file.</summary>
     /// <returns>A list of <see cref="PlexAvailableLibrary"/> instances.</returns>
@@ -273,7 +281,11 @@ public class ConfigProvider
 
     /// <summary>Retrieves the cached Plex admin username.</summary>
     /// <returns>The admin username, or null if not yet discovered.</returns>
-    public string? GetAdminUsername() => _cachedAdminUsername ??= ReadTokenFile().AdminUsername;
+    public string? GetAdminUsername()
+    {
+        lock (_settingsLock)
+            return _cachedAdminUsername ??= ReadTokenFile().AdminUsername;
+    }
 
     /// <summary>Refreshes the admin username from the Plex API and updates the local storage.</summary>
     /// <param name="auth">The <see cref="PlexAuth"/> service to use.</param>
@@ -323,7 +335,11 @@ public class ConfigProvider
 
     /// <summary>Returns the parsed and cached list of extra Plex users configured in settings.</summary>
     /// <returns>A list of extra user name and PIN tuples.</returns>
-    public List<(string Name, string? Pin)> GetExtraPlexUserEntries() => _cachedExtraUsers ??= ParseExtraPlexUsers(GetSettings().Automation.ExtraPlexUsers);
+    public List<(string Name, string? Pin)> GetExtraPlexUserEntries()
+    {
+        lock (_settingsLock)
+            return _cachedExtraUsers ??= ParseExtraPlexUsers(GetSettings().Automation.ExtraPlexUsers);
+    }
 
     #endregion
 

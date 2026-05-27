@@ -8,7 +8,7 @@ public static class OverrideHelper
 {
     #region Fields & Constants
 
-    private static readonly Dictionary<int, List<int>> s_groups = [];
+    private static IReadOnlyDictionary<int, List<int>> s_groups = new Dictionary<int, List<int>>();
     private static bool s_isInitialized;
     private static readonly Lock s_loadLock = new();
     private static string OverridesPath => Path.Combine(ConfigDirectory, ShokoRelayConstants.FileVfsOverrides);
@@ -102,12 +102,7 @@ public static class OverrideHelper
         }
 
         // Atomic swap
-        lock (s_loadLock)
-        {
-            s_groups.Clear();
-            foreach (var kvp in newGroups)
-                s_groups.Add(kvp.Key, kvp.Value);
-        }
+        s_groups = newGroups;
     }
 
     #endregion
