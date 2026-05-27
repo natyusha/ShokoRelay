@@ -13,7 +13,7 @@ namespace ShokoRelay.Services;
 public interface IImageSyncService
 {
     /// <summary>Scans all configured Plex libraries and local VFS paths to upload missing or updated screenshots, posters, backdrops, and logos back to Shoko.</summary>
-    /// <param name="allowedSeriesIds">Optional collection of series IDs to limit synchronization to.</param>
+    /// <param name="allowedSeriesIds">Optional collection of series IDs to limit processing to.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A summary result containing statistics on the synchronization run.</returns>
     Task<ImageSyncResult> SyncImagesAsync(IEnumerable<int>? allowedSeriesIds = null, CancellationToken cancellationToken = default);
@@ -43,7 +43,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
     #region Public API
 
     /// <summary>Scans all configured Plex libraries and local VFS paths to upload missing or updated screenshots and posters back to Shoko.</summary>
-    /// <param name="allowedSeriesIds">Optional collection of series IDs to limit synchronization to.</param>
+    /// <param name="allowedSeriesIds">Optional collection of series IDs to limit processing to.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A summary result containing statistics on the synchronization run.</returns>
     public async Task<ImageSyncResult> SyncImagesAsync(IEnumerable<int>? allowedSeriesIds = null, CancellationToken cancellationToken = default)
@@ -369,6 +369,8 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
     }
 
     /// <summary>Finds a local episode thumbnail alongside the physical video files.</summary>
+    /// <param name="episode">The Shoko episode to inspect.</param>
+    /// <returns>The physical file path if found, otherwise null.</returns>
     private string? FindLocalEpisodeThumbnail(IShokoEpisode episode) =>
         (episode.VideoList ?? [])
             .SelectMany(v => v.Files ?? [])
@@ -384,6 +386,14 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
             .FirstOrDefault();
 
     /// <summary>Processes local series artwork (posters, backdrops, or logos) by validating overrides, change-stale states, and uploading to Shoko.</summary>
+    /// <param name="series">The Shoko series metadata.</param>
+    /// <param name="allowedNames">The prioritized array of allowed file names.</param>
+    /// <param name="cachePrefix">The prefix representing the image type in the cache.</param>
+    /// <param name="imageType">The Shoko target image entity type.</param>
+    /// <param name="label">The diagnostic label for logging.</param>
+    /// <param name="cache">The active session cache dictionary.</param>
+    /// <param name="errorsList">The collection of accumulated sync error messages.</param>
+    /// <returns>A tuple indicating handling completion status, upload success, skip state, error presence, and whether the cache was modified.</returns>
     private async Task<(bool Handled, bool Uploaded, bool Skipped, bool Error, bool CacheUpdated)> ProcessLocalSeriesImageAsync(
         IShokoSeries series,
         string[] allowedNames,
@@ -460,9 +470,10 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
     }
 
     /// <summary>Purges stale or demoted cross-referenced images for an entity based on source filters.</summary>
-    /// <param name="entity">The entity to purge images for.</param>
+    /// <param name="entity">The Shoko metadata entity.</param>
     /// <param name="imageType">The target image entity type.</param>
     /// <param name="predicate">Filter predicate to select cross-references for purging.</param>
+    /// <returns>A task representing the asynchronous purge operation.</returns>
     private async Task PurgeEntityImagesAsync(IWithImages entity, ImageEntityType imageType, Func<IImageCrossReference, bool> predicate)
     {
         try
@@ -484,7 +495,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
 
     /// <summary>Uploads a local file from disk to Shoko and marks it as preferred for the specified entity.</summary>
     /// <param name="filePath">The physical file path on disk.</param>
-    /// <param name="entity">The target entity to link the image to.</param>
+    /// <param name="entity">The Shoko metadata entity.</param>
     /// <param name="imageType">The target image entity type.</param>
     /// <param name="userSubmitted">Whether the image is user-submitted (manual) or locally generated.</param>
     private void UploadAndPreferLocalImage(string filePath, IWithImages entity, ImageEntityType imageType, bool userSubmitted)

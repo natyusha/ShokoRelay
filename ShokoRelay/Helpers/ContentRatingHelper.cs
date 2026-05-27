@@ -21,7 +21,7 @@ public static class ContentRatingHelper
     #region Content Rating Logic
 
     /// <summary>Determine a combined rating string and an adult flag for a series based on metadata and tags.</summary>
-    /// <param name="series">Series to evaluate.</param>
+    /// <param name="series">The Shoko series metadata.</param>
     /// <returns>A tuple of (Rating, IsAdult).</returns>
     public static (string? Rating, bool IsAdult) GetContentRatingAndAdult(ISeries? series)
     {

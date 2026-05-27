@@ -98,7 +98,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
     #region Validation Helpers
 
     /// <summary>Parse a comma-separated filter string into a list of valid positive integers. Supports 'a' prefix for AniDB IDs.</summary>
-    /// <param name="filter">Raw filter string from query parameter.</param>
+    /// <param name="filter">Optional comma-separated list of Shoko or AniDB series IDs to filter the operation.</param>
     /// <param name="errors">Output list of collected parse error messages.</param>
     /// <returns>A list of unique, valid Shoko Series IDs.</returns>
     protected List<int> ParseFilterIds(string? filter, out List<string> errors)
@@ -140,7 +140,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
     }
 
     /// <summary>Validates a filter query string and resolves any secondary IDs to their primary equivalents.</summary>
-    /// <param name="filter">Raw comma-separated filter string.</param>
+    /// <param name="filter">Optional comma-separated list of Shoko or AniDB series IDs to filter the operation.</param>
     /// <param name="ids">Parsed and resolved list of series IDs (output).</param>
     /// <returns>BadRequest if any ID is invalid; otherwise null.</returns>
     protected IActionResult? ValidateFilterOrBadRequest(string? filter, out List<int> ids)
@@ -155,7 +155,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
     }
 
     /// <summary>Combined guard for Plex automation requests: checks Plex configuration, validates filter, and resolves the target series list.</summary>
-    /// <param name="filter">Optional filter string.</param>
+    /// <param name="filter">Optional comma-separated list of Shoko or AniDB series IDs to filter the operation.</param>
     /// <param name="seriesList">Resolved Shoko series objects (output).</param>
     /// <param name="filterIds">Resolved numeric IDs (output).</param>
     /// <returns>BadRequest if validation fails; otherwise null.</returns>

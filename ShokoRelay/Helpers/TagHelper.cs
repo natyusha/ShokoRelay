@@ -44,7 +44,7 @@ public static class TagHelper
     #region Tag Filtering
 
     /// <summary>Return an array of tag objects derived from a series, applying filters and sources.</summary>
-    /// <param name="series">The series to extract tags from.</param>
+    /// <param name="series">The Shoko series metadata.</param>
     /// <returns>An array of tag metadata objects.</returns>
     public static object[] GetFilteredTags(ISeries series)
     {

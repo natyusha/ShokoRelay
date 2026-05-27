@@ -357,7 +357,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
     }
 
     /// <summary>Builds the VFS structure for a specific series, handling naming and de-duplication.</summary>
-    /// <param name="series">Shoko series metadata.</param>
+    /// <param name="series">The Shoko series metadata.</param>
     /// <param name="rootFolderName">Name of the VFS root folder.</param>
     /// <param name="cleanRoot">Whether to perform cleanup.</param>
     /// <param name="cleanedRoots">Thread-safe tracker for cleaned roots.</param>

@@ -74,7 +74,7 @@ public class PlexMetadata(IMetadataService metadataService)
     #region Series
 
     /// <summary>Builds a Plex-compatible metadata dictionary for a series (show).</summary>
-    /// <param name="series">The series metadata.</param>
+    /// <param name="series">The Shoko series metadata.</param>
     /// <param name="titles">The resolved title tuple.</param>
     /// <returns>A dictionary of Plex metadata properties.</returns>
     public Dictionary<string, object?> MapSeries(ISeries series, (string DisplayTitle, string SortTitle, string? OriginalTitle) titles)
@@ -132,7 +132,7 @@ public class PlexMetadata(IMetadataService metadataService)
     #region Seasons
 
     /// <summary>Builds a Plex-compatible metadata dictionary for a single season.</summary>
-    /// <param name="series">The series metadata.</param>
+    /// <param name="series">The Shoko series metadata.</param>
     /// <param name="seasonNum">The season index.</param>
     /// <param name="seriesTitle">The title of the parent series.</param>
     /// <returns>A dictionary of Plex metadata properties.</returns>
@@ -211,7 +211,7 @@ public class PlexMetadata(IMetadataService metadataService)
     /// <summary>Builds a Plex-compatible metadata dictionary for a single episode.</summary>
     /// <param name="ep">The episode metadata.</param>
     /// <param name="mapped">The resolved Plex coordinates.</param>
-    /// <param name="series">The primary series metadata.</param>
+    /// <param name="series">The Shoko series metadata.</param>
     /// <param name="titles">The resolved title tuple.</param>
     /// <param name="partIndex">Optional index for multi-part files.</param>
     /// <param name="tmdbEpisode">Optional TMDB episode metadata override.</param>
@@ -374,7 +374,7 @@ public class PlexMetadata(IMetadataService metadataService)
 
     /// <summary>Returns the collection name for a series based on its top-level Shoko group.</summary>
     /// <remarks>Count how many distinct Primary IDs exist in this group. This ensures that VFS Overrides are respected if they merge the entirety of a Shoko Group into a single series in Plex.</remarks>
-    /// <param name="series">The series to check.</param>
+    /// <param name="series">The Shoko series metadata.</param>
     /// <returns>The group's preferred title, or null if no collection applies.</returns>
     public string? GetCollectionName(ISeries series) =>
         series is IShokoSeries { TopLevelGroupID: > 0 } ss
@@ -389,7 +389,7 @@ public class PlexMetadata(IMetadataService metadataService)
     #region Key / Array Builders
 
     /// <summary>Generates a cache-busting string based on the last update timestamp of the provided entity.</summary>
-    /// <param name="entity">The metadata object to evaluate.</param>
+    /// <param name="entity">The Shoko metadata entity.</param>
     /// <returns>A Unix timestamp string if the entity implements <see cref="IWithUpdateDate"/>, otherwise null.</returns>
     private static string? GetCacheBuster(object? entity) => entity is IWithUpdateDate upd ? new DateTimeOffset(upd.LastUpdatedAt).ToUnixTimeSeconds().ToString() : null;
 
@@ -405,7 +405,7 @@ public class PlexMetadata(IMetadataService metadataService)
         tags?.Where(t => !string.IsNullOrWhiteSpace(t)).Distinct(StringComparer.OrdinalIgnoreCase).Select(t => (object)new { tag = t }).ToArray() is { Length: > 0 } arr ? arr : null;
 
     /// <summary>Builds an array of external cross-reference GUIDs (TMDB/TVDB) for a series.</summary>
-    /// <param name="series">The source series metadata.</param>
+    /// <param name="series">The Shoko series metadata.</param>
     /// <returns>An array of objects containing external IDs.</returns>
     private object[] BuildXrefGuidArray(ISeries series) =>
         series is IShokoSeries ss && ss.TmdbShows?.FirstOrDefault() is { } ts ? CreateXrefGuids($"tmdb://{ts.ID}", ts.TvdbShowID > 0 ? $"tvdb://{ts.TvdbShowID}" : null)
@@ -431,7 +431,7 @@ public class PlexMetadata(IMetadataService metadataService)
         ]);
 
     /// <summary>Resolves production country codes to English names for a series.</summary>
-    /// <param name="series">The source series metadata.</param>
+    /// <param name="series">The Shoko series metadata.</param>
     /// <returns>An array of objects containing country tags, or null if none found.</returns>
     private object[]? BuildCountryArray(ISeries series) =>
         ((series as IShokoSeries)?.TmdbShows?.FirstOrDefault()?.ProductionCountries ?? (series as IShokoSeries)?.TmdbMovies?.FirstOrDefault()?.ProductionCountries ?? (series as ITmdbShow)?.ProductionCountries)
@@ -455,7 +455,7 @@ public class PlexMetadata(IMetadataService metadataService)
 
     /// <summary>Builds an array of similar anime titles and GUIDs for items that exist in the user's local Shoko collection.</summary>
     /// <remarks>Only include similar anime if they actually exist in the local Shoko collection. This ensures Plex can successfully retrieve metadata and artwork for the linked items.</remarks>
-    /// <param name="series">The source series metadata.</param>
+    /// <param name="series">The Shoko series metadata.</param>
     /// <returns>An array of objects containing guid and tag (title), or null if no local matches found.</returns>
     private object[]? BuildSimilarArray(ISeries series) =>
         series is IShokoSeries { AnidbAnime.Similar: { Count: > 0 } list }
@@ -469,7 +469,7 @@ public class PlexMetadata(IMetadataService metadataService)
             : null;
 
     /// <summary>Extracts the broadcasting network information for a series.</summary>
-    /// <param name="series">The source series metadata.</param>
+    /// <param name="series">The Shoko series metadata.</param>
     /// <returns>An array of objects containing network tags, or null if none found.</returns>
     private object[]? BuildNetworkArray(ISeries series) =>
         ((series as IShokoSeries)?.TmdbShows?.FirstOrDefault() ?? (series as ITmdbShow)) is { } src && src.GetType().GetProperty("TmdbNetworks")?.GetValue(src) is System.Collections.IEnumerable list

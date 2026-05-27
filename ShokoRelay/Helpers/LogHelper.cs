@@ -248,7 +248,7 @@ public static class LogHelper
     /// <summary>Build the report content for <see cref="ShokoRelayConstants.LogAtVfs"/>.</summary>
     /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
     /// <param name="result">Build result data.</param>
-    /// <param name="filter">Series filter list.</param>
+    /// <param name="filter">Optional comma-separated list of Shoko or AniDB series IDs to filter the operation.</param>
     public static void BuildAtVfsBuildReport(StringBuilder sb, AnimeThemesMappingApplyResult result, List<int> filter)
     {
         var stats = new Dictionary<string, object>

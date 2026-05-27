@@ -38,7 +38,7 @@ public static class MapHelper
     #region Public API
 
     /// <summary>Generate SeriesFileData for the given series by building file mappings and seasons.</summary>
-    /// <param name="series">The series to process.</param>
+    /// <param name="series">The Shoko series metadata.</param>
     /// <param name="metadataService">Metadata service used for override resolution.</param>
     /// <returns>A SeriesFileData object.</returns>
     public static SeriesFileData GetSeriesFileData(ISeries series, IMetadataService metadataService)
@@ -48,7 +48,7 @@ public static class MapHelper
     }
 
     /// <summary>Returns the TMDB ordering ID that should be used for episode numbering.</summary>
-    /// <param name="series">The series to inspect.</param>
+    /// <param name="series">The Shoko series metadata.</param>
     /// <returns>Ordering ID or null.</returns>
     public static string? GetPreferredTmdbOrderingId(ISeries series) =>
         !EnforceTmdbNumbering ? null

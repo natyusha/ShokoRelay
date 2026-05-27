@@ -157,7 +157,7 @@ public class PlexController(
 
 
     /// <summary>Triggers a partial library scan in Plex for specific series.</summary>
-    /// <param name="filter">Comma-separated list of series IDs to refresh.</param>
+    /// <param name="filter">Optional comma-separated list of Shoko or AniDB series IDs to filter the operation.</param>
     /// <returns>A response containing the count of successful refresh requests sent.</returns>
     [HttpGet("plex/library/refresh")]
     public async Task<IActionResult> RefreshPlexSeries([FromQuery] string filter)
@@ -187,7 +187,7 @@ public class PlexController(
     }
 
     /// <summary>Triggers the generation of Plex collections.</summary>
-    /// <param name="filter">Optional comma-separated list of Shoko or AniDB IDs.</param>
+    /// <param name="filter">Optional comma-separated list of Shoko or AniDB series IDs to filter the operation.</param>
     /// <returns>A collection build report.</returns>
     [HttpGet("plex/collections/build")]
     public Task<IActionResult> BuildPlexCollections([FromQuery] string? filter = null) =>
@@ -202,7 +202,7 @@ public class PlexController(
             );
 
     /// <summary>Refreshes posters for Plex collections.</summary>
-    /// <param name="filter">Optional comma-separated list of Shoko or AniDB IDs.</param>
+    /// <param name="filter">Optional comma-separated list of Shoko or AniDB series IDs to filter the operation.</param>
     /// <returns>A task representing the result of the poster application.</returns>
     [HttpGet("plex/collections/posters")]
     public Task<IActionResult> ApplyCollectionPosters([FromQuery] string? filter = null) =>
@@ -217,7 +217,7 @@ public class PlexController(
             );
 
     /// <summary>Updates ratings in Plex based on Shoko metadata.</summary>
-    /// <param name="filter">Optional comma-separated list of Shoko or AniDB IDs.</param>
+    /// <param name="filter">Optional comma-separated list of Shoko or AniDB series IDs to filter the operation.</param>
     /// <returns>A ratings update report.</returns>
     [HttpGet("plex/ratings/apply")]
     public Task<IActionResult> ApplyAudienceRatings([FromQuery] string? filter = null) =>

@@ -84,13 +84,13 @@ public static class CastHelper
     #region Studio Logic
 
     /// <summary>Assemble an array of <see cref="TagItem"/> objects representing the series' studios.</summary>
-    /// <param name="series">Series metadata.</param>
+    /// <param name="series">The Shoko series metadata.</param>
     /// <returns>An array of <see cref="TagItem"/> instances, one per distinct studio.</returns>
     public static TagItem[] GetStudioTags(ISeries series) =>
         series.Studios?.Where(s => !string.IsNullOrWhiteSpace(s.Name)).Select(s => s.Name).Distinct(StringComparer.OrdinalIgnoreCase).Select(name => new TagItem { Tag = name }).ToArray() ?? [];
 
     /// <summary>Return the first studio name associated with a series, or <c>null</c> if none exist.</summary>
-    /// <param name="series">Series metadata.</param>
+    /// <param name="series">The Shoko series metadata.</param>
     /// <returns>The primary studio name, or null if not found.</returns>
     public static string? GetStudio(ISeries series) => series.Studios?.FirstOrDefault()?.Name;
 

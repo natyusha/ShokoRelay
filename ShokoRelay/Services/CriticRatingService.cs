@@ -9,7 +9,7 @@ namespace ShokoRelay.Services;
 public interface ICriticRatingService
 {
     /// <summary>Compute and push ratings for shows and episodes, optionally restricted to a subset of series IDs.</summary>
-    /// <param name="allowedSeriesIds">If provided, only these series will be processed.</param>
+    /// <param name="allowedSeriesIds">Optional collection of series IDs to limit processing to.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>An <see cref="ApplyRatingsResult"/> with counters and error details.</returns>
     Task<ApplyRatingsResult> ApplyRatingsAsync(IEnumerable<int>? allowedSeriesIds = null, CancellationToken cancellationToken = default);

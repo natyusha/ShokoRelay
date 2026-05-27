@@ -27,7 +27,7 @@ public class AnimeThemesController(
     #region VFS Mapping / Build
 
     /// <summary>Applies the anime‑themes mapping file to the directory structure.</summary>
-    /// <param name="filter">Optional comma-separated Shoko Series IDs to restrict the build.</param>
+    /// <param name="filter">Optional comma-separated list of Shoko or AniDB series IDs to filter the operation.</param>
     /// <returns>A task representing the result of the build outcome.</returns>
     [HttpGet("animethemes/vfs/build")]
     public Task<IActionResult> AnimeThemesVfsBuild([FromQuery] string? filter = null) =>

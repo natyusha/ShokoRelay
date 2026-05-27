@@ -369,7 +369,7 @@ public class AdvancedConfig
     public string FolderExclusions { get; set; } = "";
 
     /// <summary>Whether to sync unique local images and Plex-generated episode thumbnails back to Shoko and mark them as preferred.</summary>
-    [Display(Name = "Plex Image Sync", Description = "Enable to automatically upload unique local images and Plex-generated episode thumbnails back to Shoko")]
+    [Display(Name = "Plex Image Sync", Description = "Enable to automatically upload unique local images and Plex's generated episode thumbnails back to Shoko")]
     [DefaultValue(false)]
     public bool EnableImageSync { get; set; } = false;
 

@@ -289,7 +289,7 @@ public class VfsWatcher(
     }
 
     /// <summary>Schedules or resets the timer for a partial Plex library scan for the given series.</summary>
-    /// <param name="series">The Shoko series being updated.</param>
+    /// <param name="series">The Shoko series metadata.</param>
     private void ScheduleLibraryScan(IShokoSeries series)
     {
         if (!_plexLibrary.ScanOnVfsRefresh)
@@ -313,7 +313,7 @@ public class VfsWatcher(
     }
 
     /// <summary>Schedules or resets the timer for a full Plex metadata refresh for the given series.</summary>
-    /// <param name="series">The Shoko series being updated.</param>
+    /// <param name="series">The Shoko series metadata.</param>
     private void ScheduleMetadataFixup(IShokoSeries series)
     {
         s_logger.Debug("VFS: Scheduling metadata fixup for '{0}' (ID: {1}) in {2} minute(s)", series.PreferredTitle?.Value, series.ID, Settings.Advanced.PlexFixupDelay);
@@ -321,7 +321,7 @@ public class VfsWatcher(
     }
 
     /// <summary>Worker task that performs the actual metadata fixup logic, critic rating application, and optional image synchronization after the debounce delay has settled.</summary>
-    /// <param name="series">The Shoko series to fix up.</param>
+    /// <param name="series">The Shoko series metadata.</param>
     /// <param name="token">Cancellation token.</param>
     /// <returns>A task representing the fixup operation.</returns>
     private async Task RunMetadataFixupAsync(IShokoSeries series, CancellationToken token)
@@ -381,12 +381,12 @@ public class VfsWatcher(
     }
 
     /// <summary>Schedules or resets the timer for updating collections and posters in Plex for the given series.</summary>
-    /// <param name="series">The Shoko series being updated.</param>
+    /// <param name="series">The Shoko series metadata.</param>
     private void ScheduleCollectionUpdate(IShokoSeries series) =>
         ScheduleDebouncedAction(series.ID, Settings.Advanced.PlexFixupDelay * 60, _pendingCollectionUpdates, token => RunCollectionUpdateAsync(series, token));
 
     /// <summary>Worker task that performs the collection assignment and poster upload logic.</summary>
-    /// <param name="series">The Shoko series to update.</param>
+    /// <param name="series">The Shoko series metadata.</param>
     /// <param name="token">Cancellation token.</param>
     /// <returns>A task representing the update operation.</returns>
     private async Task RunCollectionUpdateAsync(IShokoSeries series, CancellationToken token)

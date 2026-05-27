@@ -205,7 +205,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
     /// Prioritizes BD sources: if a filename collision occurs and a BD source is available, non-BD sources are skipped.
     /// If multiple BD sources collide (or no BD sources exist), they are de-duplicated with (2), (3), etc.
     /// </remarks>
-    /// <param name="seriesFilter">Optional set of Shoko series IDs to limit processing to.</param>
+    /// <param name="seriesFilter">Optional collection of series IDs to limit processing to.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>An <see cref="AnimeThemesMappingApplyResult"/> with counts and results.</returns>
     public async Task<AnimeThemesMappingApplyResult> ApplyMappingAsync(IReadOnlyCollection<int>? seriesFilter = null, CancellationToken ct = default)

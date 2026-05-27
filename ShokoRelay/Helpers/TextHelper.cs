@@ -123,7 +123,7 @@ public static class TextHelper
     }
 
     /// <summary>Determine display, sortable, and original titles for a series based on preferences and prefix reordering settings.</summary>
-    /// <param name="series">Series metadata.</param>
+    /// <param name="series">The Shoko series metadata.</param>
     /// <returns>A tuple of (DisplayTitle, SortTitle, OriginalTitle).</returns>
     public static (string DisplayTitle, string SortTitle, string? OriginalTitle) ResolveFullSeriesTitles(ISeries series)
     {

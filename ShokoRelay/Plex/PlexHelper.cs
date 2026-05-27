@@ -40,7 +40,7 @@ public static class PlexHelper
     #region Poster Discovery
 
     /// <summary>Search for a custom collection poster image matching the series context.</summary>
-    /// <param name="series">Target series.</param>
+    /// <param name="series">The Shoko series metadata.</param>
     /// <param name="collectionName">Collection name.</param>
     /// <param name="collectionId">Collection ID.</param>
     /// <param name="metadataService">Metadata service used for root and override resolution.</param>
@@ -81,8 +81,8 @@ public static class PlexHelper
     }
 
     /// <summary>Locate a local collection poster by matching against a group ID.</summary>
-    /// <param name="series">Target series.</param>
-    /// <param name="groupId">Shoko group ID.</param>
+    /// <param name="series">The Shoko series metadata.</param>
+    /// <param name="groupId">The Shoko group identifier.</param>
     /// <param name="metadataService">Metadata service used for root and override resolution.</param>
     /// <returns>Path to poster or null.</returns>
     public static string? FindCollectionPosterPathByGroup(IShokoSeries series, int groupId, IMetadataService metadataService)
@@ -130,7 +130,7 @@ public static class PlexHelper
     #region Path Resolution
 
     /// <summary>Determine the filesystem import roots for a series.</summary>
-    /// <param name="series">Shoko series.</param>
+    /// <param name="series">The Shoko series metadata.</param>
     /// <param name="metadataService">Metadata service used for root and override resolution.</param>
     /// <returns>Unique set of root paths.</returns>
     public static HashSet<string> ResolveImportRoots(IShokoSeries series, IMetadataService metadataService)
@@ -154,7 +154,7 @@ public static class PlexHelper
     #region URL Building
 
     /// <summary>Build a URL for serving a collection poster image.</summary>
-    /// <param name="series">Series.</param>
+    /// <param name="series">The Shoko series metadata.</param>
     /// <param name="collectionName">Collection name.</param>
     /// <param name="collectionId">Collection ID.</param>
     /// <param name="metadataService">Metadata service used for root and override resolution.</param>

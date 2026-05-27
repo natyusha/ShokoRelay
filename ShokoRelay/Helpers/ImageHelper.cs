@@ -62,7 +62,7 @@ public static class ImageHelper
             };
 
     /// <summary>Filters and returns only enabled, desired, and locally available images from the supplied entity.</summary>
-    /// <param name="entity">The metadata entity providing images.</param>
+    /// <param name="entity">The Shoko metadata entity.</param>
     /// <param name="type">The specific image type to retrieve.</param>
     /// <returns>A collection of available images.</returns>
     public static IEnumerable<IImage> GetAvailableImages(this IWithImages entity, ImageEntityType type) => entity.GetImages(imageType: type).Where(i => i.IsEnabled && i.IsAvailable && i.IsDesired);

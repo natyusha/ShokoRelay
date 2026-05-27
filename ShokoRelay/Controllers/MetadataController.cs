@@ -246,7 +246,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     #region Collections
 
     /// <summary>Retrieves metadata for a Plex collection corresponding to a Shoko Group ID.</summary>
-    /// <param name="groupId">The Shoko Group ID.</param>
+    /// <param name="groupId">The Shoko group identifier.</param>
     /// <returns>Collection metadata.</returns>
     [HttpGet("collections/{groupId}")]
     public IActionResult GetCollection(int groupId)
@@ -259,7 +259,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     }
 
     /// <summary>Serves the local poster image for a user-defined collection.</summary>
-    /// <param name="groupId">Shoko Group ID.</param>
+    /// <param name="groupId">The Shoko group identifier.</param>
     /// <returns>Physical file result.</returns>
     [HttpGet("collections/user/{groupId}")]
     public IActionResult GetCollectionPoster(int groupId)
