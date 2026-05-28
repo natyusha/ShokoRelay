@@ -116,7 +116,7 @@ public class PlexMetadataItem
 
     /// <summary>True if the collection is a smart collection.</summary>
     [JsonPropertyName("smart")]
-    public bool? Smart { get; set; }
+    public string? Smart { get; set; }
 }
 
 /// <summary>Represents a tag entry within a Plex metadata item.</summary>

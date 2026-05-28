@@ -264,5 +264,10 @@ public static class TextHelper
     /// <returns>A Match object indicating success or failure.</returns>
     public static Match MatchLocalExtraFile(string fileNameWithoutExtension) => s_localExtraFileRegex.Match(fileNameWithoutExtension);
 
+    /// <summary>Checks if a Plex string value (which mimics a boolean, e.g. "1") represents true.</summary>
+    /// <param name="value">The Plex string value to check.</param>
+    /// <returns>True if the string equals "1"; otherwise, false.</returns>
+    public static bool IsPlexTrue(string? value) => string.Equals(value, "1", StringComparison.Ordinal);
+
     #endregion
 }

@@ -161,7 +161,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                 // Always handle smart collection poster application
                 foreach (var col in collections)
                 {
-                    if (col.Smart == true && int.TryParse(col.RatingKey, out int cid) && !string.IsNullOrEmpty(col.Title))
+                    if (TextHelper.IsPlexTrue(col.Smart) && int.TryParse(col.RatingKey, out int cid) && !string.IsNullOrEmpty(col.Title))
                     {
                         var posterPath = PlexHelper.FindCollectionPosterPath(null, col.Title, cid, metadataService);
                         if (!string.IsNullOrEmpty(posterPath) && File.Exists(posterPath))

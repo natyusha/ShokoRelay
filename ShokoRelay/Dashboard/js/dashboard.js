@@ -27,16 +27,29 @@
   }
 
   /**
-   * Polls the server for active tasks and completed results, synchronizing the UI state.
+   * Polls the server for active tasks and completed results, synchronizing the UI button states and disabling sub-tasks during automation runs.
    * @returns {Promise<void>}
    */
   async function syncActiveTasks() {
     const res = await fetchJson(base + "/tasks/active");
     if (!res.ok) return;
     const activeTasks = getData(res) || [];
+    const isAutoRunning = activeTasks.includes(window._sr.tasks.plexAutomationRun);
+    const isPlexLinked = !!window._sr.isPlexLinked;
+
     MANAGED_TASK_IDS.forEach((id) => {
       const btn = el(id);
-      if (btn) setButtonLoading(btn, activeTasks.includes(id) || btn.classList.contains("clicking"));
+      if (!btn) return;
+
+      if (isAutoRunning && [window._sr.tasks.plexCollectionsBuild, window._sr.tasks.plexRatingsApply, window._sr.tasks.plexImagesSync].includes(id)) {
+        setButtonLoading(btn, false);
+        btn.disabled = true;
+      } else {
+        setButtonLoading(btn, activeTasks.includes(id) || btn.classList.contains("clicking"));
+        if (btn.classList.contains("plex-auth") && !isPlexLinked) {
+          btn.disabled = true;
+        }
+      }
     });
 
     const completeRes = await fetchJson(base + "/tasks/completed");
