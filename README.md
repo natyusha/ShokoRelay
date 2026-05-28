@@ -157,7 +157,7 @@ com.plexapp.agents.shokorelay
 - Click the `Generate Collections` button in the "Quick Actions" section of the dashboard to start this process
 - _Requires Plex authentication_
 
-As a bonus this supports using the primary series poster as the collection poster (if configured under "Provider Settings"). Custom local posters can also be used by placing them in the configured `Collection Posters Root Path` (default `!CollectionPosters`) folder. These files are simply named after the Shoko group name (or ID) that you wish them to apply to. Empty collections will also be removed automatically during collection generation.
+As a bonus this supports using the primary series poster as the collection poster (if configured under "Provider Settings"). Custom local posters can also be used by placing them in the configured `Collection Posters Root Path` (default `!CollectionPosters`) folder. These files are simply named after the Shoko group name (or ID) that you wish them to apply to. If the name of a file matches that of a smart collection the poster will be applied to it too. Empty collections (excluding smart collections) will also be removed automatically during collection generation.
 
 ### Critic Rating Application
 
@@ -381,12 +381,11 @@ Most manual actions performed via the dashboard (as well as some direct API requ
 | :------------------------------------ | :---------------------------- |
 | **Plex:** Auth Refresh                | `plex-discovery-report.log`   |
 | **Plex:** Generate Collections        | `plex-collections-report.log` |
-| **Plex:** Apply Collection Posters    | `plex-posters-report.log`     |
 | **Plex:** Apply Critic Ratings        | `plex-ratings-report.log`     |
 | **Plex:** Sync Plex Images            | `plex-images-report.log`      |
 | **Plex:** Run Full Automation         | `plex-automation-report.log`  |
 | **Shoko:** Generate VFS               | `vfs-report.log`              |
-| **Shoko:** Remove Missing             | `remove-missing-report.log`   |
+| **Shoko:** Purge Missing              | `purge-missing-report.log`    |
 | **Shoko:** Sync Watched States        | `sync-watched-report.log`     |
 | **Shoko:** Map Source Symlinks        | `map-symlinks-report.log`     |
 | **AnimeThemes:** Generate VFS         | `at-vfs-report.log`           |

@@ -303,7 +303,7 @@ public class ShokoRelay : BackgroundService
                         if (allSeries?.Count > 0)
                         {
                             if (_collectionService != null)
-                                await _collectionService.BuildCollectionsAsync(allSeries, ct).ConfigureAwait(false);
+                                await _collectionService.BuildCollectionsAsync(allSeries, cancellationToken: ct).ConfigureAwait(false);
                             if (_criticRatingService != null)
                                 await _criticRatingService.ApplyRatingsAsync(null, ct).ConfigureAwait(false);
                             if (settings.Advanced.EnableImageSync && _imageSyncService != null)

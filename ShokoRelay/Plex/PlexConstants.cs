@@ -9,69 +9,71 @@ namespace ShokoRelay.Plex
 
         // csharpier-ignore-start
         /// <summary>Prefix for AniDB rating keys.</summary>
-        public const string AniDbPrefix         = "a";
+        public const string AniDbPrefix           = "a";
         /// <summary>Prefix for collection rating keys.</summary>
-        public const string CollectionPrefix    = "c";
+        public const string CollectionPrefix      = "c";
+        /// <summary>Prefix for Plex smart collection rating keys.</summary>
+        public const string SmartCollectionPrefix = "sc";
         /// <summary>Prefix for season rating keys.</summary>
-        public const string SeasonPrefix        = "s";
+        public const string SeasonPrefix          = "s";
         /// <summary>Prefix for episode rating keys.</summary>
-        public const string EpisodePrefix       = "e";
+        public const string EpisodePrefix         = "e";
         /// <summary>Prefix for multi-part file rating keys.</summary>
-        public const string PartPrefix          = "p";
+        public const string PartPrefix            = "p";
 
         #endregion
 
         #region Metadata Type IDs
 
         /// <summary>Plex metadata type ID for movies.</summary>
-        public const int TypeMovie              =  1;
+        public const int TypeMovie                =  1;
         /// <summary>Plex metadata type ID for shows.</summary>
-        public const int TypeShow               =  2;
+        public const int TypeShow                 =  2;
         /// <summary>Plex metadata type ID for seasons.</summary>
-        public const int TypeSeason             =  3;
+        public const int TypeSeason               =  3;
         /// <summary>Plex metadata type ID for episodes.</summary>
-        public const int TypeEpisode            =  4;
+        public const int TypeEpisode              =  4;
         /// <summary>Plex metadata type ID for trailers.</summary>
-        public const int TypeTrailer            =  5;
+        public const int TypeTrailer              =  5;
         /// <summary>Plex metadata type ID for people.</summary>
-        public const int TypePerson             =  7;
+        public const int TypePerson               =  7;
         /// <summary>Plex metadata type ID for artists.</summary>
-        public const int TypeArtist             =  8;
+        public const int TypeArtist               =  8;
         /// <summary>Plex metadata type ID for albums.</summary>
-        public const int TypeAlbum              =  9;
+        public const int TypeAlbum                =  9;
         /// <summary>Plex metadata type ID for tracks.</summary>
-        public const int TypeTrack              = 10;
+        public const int TypeTrack                = 10;
         /// <summary>Plex metadata type ID for clips.</summary>
-        public const int TypeClip               = 12;
+        public const int TypeClip                 = 12;
         /// <summary>Plex metadata type ID for photos.</summary>
-        public const int TypePhoto              = 13;
+        public const int TypePhoto                = 13;
         /// <summary>Plex metadata type ID for photo albums.</summary>
-        public const int TypePhotoAlbum         = 14;
+        public const int TypePhotoAlbum           = 14;
         /// <summary>Plex metadata type ID for playlists.</summary>
-        public const int TypePlaylist           = 15;
+        public const int TypePlaylist             = 15;
         /// <summary>Plex metadata type ID for playlist folders.</summary>
-        public const int TypePlaylistFolder     = 16;
+        public const int TypePlaylistFolder       = 16;
         /// <summary>Plex metadata type ID for collections.</summary>
-        public const int TypeCollection         = 18;
+        public const int TypeCollection           = 18;
 
         #endregion
 
         #region Season Numbering
 
         /// <summary>Standard season number (1).</summary>
-        public const int SeasonStandard         =  1;
+        public const int SeasonStandard           =  1;
         /// <summary>Specials season number (0).</summary>
-        public const int SeasonSpecials         =  0;
+        public const int SeasonSpecials           =  0;
         /// <summary>Credits season number (-1).</summary>
-        public const int SeasonCredits          = -1;
+        public const int SeasonCredits            = -1;
         /// <summary>Trailers season number (-2).</summary>
-        public const int SeasonTrailers         = -2;
+        public const int SeasonTrailers           = -2;
         /// <summary>Parody season number (-3).</summary>
-        public const int SeasonParody           = -3;
+        public const int SeasonParody             = -3;
         /// <summary>Other season number (-4).</summary>
-        public const int SeasonOther            = -4;
+        public const int SeasonOther              = -4;
         /// <summary>Unknown season number (-9).</summary>
-        public const int SeasonUnknown          = -9;
+        public const int SeasonUnknown            = -9;
         // csharpier-ignore-end
 
         #endregion

@@ -9,7 +9,7 @@ public static class ShokoRelayConstants
     public const string Name = "Shoko Relay";
 
     /// <summary>Current version string.</summary>
-    public const string Version = "0.12.6";
+    public const string Version = "0.12.7";
 
     /// <summary>Internal API version.</summary>
     public const string ApiVersion = "1";
@@ -83,9 +83,6 @@ public static class ShokoRelayConstants
     /// <summary>Task name for creating and assigning Plex collections.</summary>
     public const string TaskPlexCollectionsBuild = "plex-collections-build";
 
-    /// <summary>Task name for applying collection posters.</summary>
-    public const string TaskPlexCollectionsPosters = "plex-collections-posters";
-
     /// <summary>Task name for applying audience/critic ratings to Plex items.</summary>
     public const string TaskPlexRatingsApply = "plex-ratings-apply";
 
@@ -99,7 +96,7 @@ public static class ShokoRelayConstants
     public const string TaskVfsBuild = "vfs-build";
 
     /// <summary>Task name for identifying and removing missing files from the database.</summary>
-    public const string TaskShokoRemoveMissing = "shoko-remove-missing";
+    public const string TaskShokoPurgeMissing = "shoko-purge-missing";
 
     /// <summary>Task name for synchronizing watched state between Plex and Shoko.</summary>
     public const string TaskShokoSyncWatched = "shoko-sync-watched";
@@ -126,9 +123,6 @@ public static class ShokoRelayConstants
     /// <summary>Log filename for Plex collection build reports.</summary>
     public const string LogPlexCollections = "plex-collections-report.log";
 
-    /// <summary>Log filename for Plex collection poster reports.</summary>
-    public const string LogPlexPosters = "plex-posters-report.log";
-
     /// <summary>Log filename for Plex rating application reports.</summary>
     public const string LogPlexRatings = "plex-ratings-report.log";
 
@@ -142,7 +136,7 @@ public static class ShokoRelayConstants
     public const string LogVfs = "vfs-report.log";
 
     /// <summary>Log filename for missing file removal reports.</summary>
-    public const string LogRemoveMissing = "remove-missing-report.log";
+    public const string LogPurgeMissing = "purge-missing-report.log";
 
     /// <summary>Log filename for watched state synchronization reports.</summary>
     public const string LogShokoSyncWatched = "sync-watched-report.log";

@@ -187,32 +187,18 @@ public class PlexController(
     }
 
     /// <summary>Triggers the generation of Plex collections.</summary>
-    /// <param name="filter">Optional comma-separated list of Shoko or AniDB series IDs to filter the operation.</param>
+    /// <param name="filter">Optional comma-separated list of Shoko or AniDB IDs.</param>
+    /// <param name="assignment">If false, skips assigning series to collections and only applies posters.</param>
     /// <returns>A collection build report.</returns>
     [HttpGet("plex/collections/build")]
-    public Task<IActionResult> BuildPlexCollections([FromQuery] string? filter = null) =>
+    public Task<IActionResult> BuildPlexCollections([FromQuery] string? filter = null, [FromQuery] bool assignment = true) =>
         ValidatePlexFilterRequest(filter, out var seriesList, out _) is { } guard
             ? Task.FromResult(guard)
             : ExecuteTrackedTaskAsync(
                 ShokoRelayConstants.TaskPlexCollectionsBuild,
                 ShokoRelayConstants.LogPlexCollections,
                 LogHelper.BuildCollectionsReport,
-                () => _collectionService.BuildCollectionsAsync(seriesList, CancellationToken.None),
-                SyncHelper.SyncLock
-            );
-
-    /// <summary>Refreshes posters for Plex collections.</summary>
-    /// <param name="filter">Optional comma-separated list of Shoko or AniDB series IDs to filter the operation.</param>
-    /// <returns>A task representing the result of the poster application.</returns>
-    [HttpGet("plex/collections/posters")]
-    public Task<IActionResult> ApplyCollectionPosters([FromQuery] string? filter = null) =>
-        ValidatePlexFilterRequest(filter, out var seriesList, out _) is { } guard
-            ? Task.FromResult(guard)
-            : ExecuteTrackedTaskAsync(
-                ShokoRelayConstants.TaskPlexCollectionsPosters,
-                ShokoRelayConstants.LogPlexPosters,
-                LogHelper.BuildApplyPostersReport,
-                () => _collectionService.ApplyCollectionPostersAsync(seriesList, HttpContext.RequestAborted),
+                () => _collectionService.BuildCollectionsAsync(seriesList, assignment, CancellationToken.None),
                 SyncHelper.SyncLock
             );
 
@@ -258,7 +244,7 @@ public class PlexController(
                 async () =>
                 {
                     var allSeries = MetadataService.GetAllShokoSeries()?.Cast<IShokoSeries?>().ToList() ?? [];
-                    await _collectionService.BuildCollectionsAsync(allSeries, HttpContext.RequestAborted).ConfigureAwait(false);
+                    await _collectionService.BuildCollectionsAsync(allSeries, cancellationToken: HttpContext.RequestAborted).ConfigureAwait(false);
                     await _criticRatingService.ApplyRatingsAsync(null, HttpContext.RequestAborted).ConfigureAwait(false);
                     if (Settings.Advanced.EnableImageSync)
                         await _imageSyncService.SyncImagesAsync(cancellationToken: HttpContext.RequestAborted).ConfigureAwait(false);

@@ -15,8 +15,9 @@
         plexCollectionsBuild: "{{TaskPlexCollectionsBuild}}",
         plexRatingsApply: "{{TaskPlexRatingsApply}}",
         plexImagesSync: "{{TaskPlexImagesSync}}",
+        plexAutomationRun: "{{TaskPlexAutomationRun}}",
         vfsBuild: "{{TaskVfsBuild}}",
-        shokoRemoveMissing: "{{TaskShokoRemoveMissing}}",
+        shokoPurgeMissing: "{{TaskShokoPurgeMissing}}",
         shokoSyncWatched: "{{TaskShokoSyncWatched}}",
         atVfsBuild: "{{TaskAtVfsBuild}}",
         atMapBuild: "{{TaskAtMapBuild}}",
@@ -101,10 +102,23 @@
         <!-- #region MARK: Automation Controls
         -->
         <section>
-          <h2>
-            <svg class="icon-svg"><use href="img/icons.svg#clock-star-four-points-outline"></use></svg>
-            Automation Controls
-          </h2>
+          <div class="full">
+            <h2>
+              <svg class="icon-svg"><use href="img/icons.svg#clock-star-four-points-outline"></use></svg>
+              Automation Controls
+            </h2>
+            <button
+              id="{{ TaskPlexAutomationRun }}"
+              class="at-btn plex-auth"
+              title="Run Plex Automation Now"
+              data-relay-endpoint="/plex/automation/run"
+              data-relay-label="Plex Automation"
+              data-relay-persist="true"
+              aria-label="Run Plex Automation Now"
+            >
+              <svg class="icon-svg"><use href="img/icons.svg#auto-mode"></use></svg>
+            </button>
+          </div>
           <div class="full">
             <label class="shoko-checkbox plex-auth">
               <input id="plex-scan-vfs" class="plex-auth" type="checkbox" />
@@ -239,9 +253,9 @@
             <button id="shoko-import-run" title="Import New/Unrecognized Files" data-relay-endpoint="/shoko/import" data-relay-method="POST" data-relay-label="Shoko Import">Run Import</button>
             <button id="shoko-sync-watched" class="plex-auth" title="Sync Watched States Menu">Sync Menu</button>
             <button
-              id="{{ TaskShokoRemoveMissing }}"
+              id="{{ TaskShokoPurgeMissing }}"
               title="Purge Missing Files From Shoko and MyList"
-              data-relay-endpoint="/shoko/remove-missing?dryRun=false"
+              data-relay-endpoint="/shoko/purge-missing?dryRun=false"
               data-relay-method="POST"
               data-relay-label="Purge Missing"
               data-relay-persist="true"

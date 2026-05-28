@@ -139,17 +139,17 @@ public class ShokoController(
     /// <summary>Removes records for video files that no longer exist on disk from the Shoko database and Anidb MyList.</summary>
     /// <param name="dryRun">Whether to skip writes.</param>
     /// <returns>A task representing the result of the removal operation.</returns>
-    [Route("shoko/remove-missing")]
+    [Route("shoko/purge-missing")]
     [HttpGet]
     [HttpPost]
-    public Task<IActionResult> RemoveMissingFiles([FromQuery] bool dryRun = true) =>
+    public Task<IActionResult> PurgeMissingFiles([FromQuery] bool dryRun = true) =>
         ExecuteTrackedTaskAsync(
-            ShokoRelayConstants.TaskShokoRemoveMissing,
-            ShokoRelayConstants.LogRemoveMissing,
-            (sb, r) => LogHelper.BuildRemoveMissingReport(sb, r.DryRun, r.Removed),
+            ShokoRelayConstants.TaskShokoPurgeMissing,
+            ShokoRelayConstants.LogPurgeMissing,
+            (sb, r) => LogHelper.BuildPurgeMissingReport(sb, r.DryRun, r.Removed),
             async () =>
             {
-                var removed = await _shokoImportService.RemoveMissingFilesAsync(dryRun).ConfigureAwait(false);
+                var removed = await _shokoImportService.PurgeMissingFilesAsync(dryRun).ConfigureAwait(false);
                 return new
                 {
                     DryRun = dryRun,

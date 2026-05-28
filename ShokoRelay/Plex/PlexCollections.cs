@@ -141,6 +141,10 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
 
             foreach (var m in (await PlexApi.ReadContainerAsync(response, cancellationToken).ConfigureAwait(false))?.Metadata ?? [])
             {
+                // Exclude smart collections from automatic empty collection deletion
+                if (m.Smart == true)
+                    continue;
+
                 if (int.TryParse(m.RatingKey, out int id) && m.ChildCount == 0 && await DeleteCollectionAsync(id, target, cancellationToken).ConfigureAwait(false))
                 {
                     s_logger.Info("PlexCollections: Deleted empty collection {CollectionId} in section {SectionId}", id, target.SectionId);

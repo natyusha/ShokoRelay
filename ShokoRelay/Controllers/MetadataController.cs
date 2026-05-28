@@ -258,19 +258,29 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
         return primarySeries == null ? NotFound() : WrapInContainer(_mapper.MapCollection(group, primarySeries));
     }
 
-    /// <summary>Serves the local poster image for a user-defined collection.</summary>
-    /// <param name="groupId">The Shoko group identifier.</param>
+    /// <summary>Serves the local poster image for an automatically generated, or smart collection by matching its ID or name.</summary>
+    /// <param name="groupId">The Shoko group ID or the Plex rating key for a smart collection prefixed with "sc".</param>
+    /// <param name="name">The collection name for smart collections.</param>
     /// <returns>Physical file result.</returns>
     [HttpGet("collections/user/{groupId}")]
-    public IActionResult GetCollectionPoster(int groupId)
+    public IActionResult GetCollectionPoster(string groupId, [FromQuery] string? name = null)
     {
-        var group = MetadataService.GetShokoGroupByID(groupId);
-        if (group == null)
-            return NotFound();
-        var primarySeries = group.MainSeries ?? group.Series?.FirstOrDefault();
-        if (primarySeries == null)
-            return NotFound();
-        var posterPath = PlexHelper.FindCollectionPosterPathByGroup(primarySeries, groupId, MetadataService);
+        string? posterPath = null;
+
+        // If prefixed with "sc", it's a Plex smart collection with a parsed ID (bypassing Shoko Group lookup)
+        if (groupId.StartsWith(PlexConstants.SmartCollectionPrefix, StringComparison.OrdinalIgnoreCase) && int.TryParse(groupId[2..], out int cid))
+            posterPath = PlexHelper.FindCollectionPosterPath(null, name ?? string.Empty, cid, MetadataService);
+        else if (int.TryParse(groupId, out int gid))
+        {
+            var group = MetadataService.GetShokoGroupByID(gid);
+            var primarySeries = group?.MainSeries ?? group?.Series?.FirstOrDefault();
+            if (primarySeries != null)
+                posterPath = PlexHelper.FindCollectionPosterPathByGroup(primarySeries, gid, MetadataService);
+
+            if (string.IsNullOrEmpty(posterPath) || !System.IO.File.Exists(posterPath))
+                posterPath = PlexHelper.FindCollectionPosterPath(null, name ?? string.Empty, gid, MetadataService);
+        }
+
         return string.IsNullOrWhiteSpace(posterPath) || !System.IO.File.Exists(posterPath)
             ? NotFound()
             : PhysicalFile(posterPath, ImageHelper.GetMimeType(Path.GetExtension(posterPath)) ?? "application/octet-stream");

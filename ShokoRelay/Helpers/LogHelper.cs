@@ -121,21 +121,6 @@ public static class LogHelper
         BuildReport(sb, "Collection Build Report", stats, "Assignments & Errors:", items);
     }
 
-    /// <summary>Build the report content for collection poster application.</summary>
-    /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
-    /// <param name="r">Build result data.</param>
-    public static void BuildApplyPostersReport(StringBuilder sb, ApplyPostersResult r)
-    {
-        var stats = new Dictionary<string, object>
-        {
-            ["Processed"] = r.Processed,
-            ["Uploaded"] = r.Uploaded,
-            ["Skipped"] = r.Skipped,
-            ["Errors"] = r.Errors,
-        };
-        BuildReport(sb, "Collection Poster Report", stats, "Errors:", r.ErrorsList);
-    }
-
     /// <summary>Build the report content for <see cref="ShokoRelayConstants.LogPlexRatings"/>.</summary>
     /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
     /// <param name="result">Rating result data.</param>
@@ -207,14 +192,14 @@ public static class LogHelper
         BuildReport(sb, "VFS Generation Report", stats, "Report Details:", items);
     }
 
-    /// <summary>Build the report content for <see cref="ShokoRelayConstants.LogRemoveMissing"/>.</summary>
+    /// <summary>Build the report content for <see cref="ShokoRelayConstants.LogPurgeMissing"/>.</summary>
     /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
     /// <param name="dryRun">Dry run flag.</param>
     /// <param name="removed">List of removed paths.</param>
-    public static void BuildRemoveMissingReport(StringBuilder sb, bool dryRun, IReadOnlyList<string>? removed)
+    public static void BuildPurgeMissingReport(StringBuilder sb, bool dryRun, IReadOnlyList<string>? removed)
     {
         var stats = new Dictionary<string, object> { ["Mode"] = dryRun ? "Dry Run" : "Live", ["Files Found"] = removed?.Count ?? 0 };
-        BuildReport(sb, "Remove Missing Files Report", stats, "Removed Paths:", removed);
+        BuildReport(sb, "Purge Missing Files Report", stats, "Removed Paths:", removed);
     }
 
     /// <summary>Build the report content for <see cref="ShokoRelayConstants.LogShokoSyncWatched"/>.</summary>

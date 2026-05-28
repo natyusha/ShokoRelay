@@ -16,7 +16,7 @@ public interface IShokoImportService
     /// <summary>Scan for video file entries whose physical file has disappeared or is now in an ignored location, and optionally remove those records.</summary>
     /// <param name="dryRun">When <c>true</c>, list missing files without deleting them.</param>
     /// <returns>A read-only list of paths for files that were identified as missing or ignored.</returns>
-    Task<IReadOnlyList<string>> RemoveMissingFilesAsync(bool dryRun = false);
+    Task<IReadOnlyList<string>> PurgeMissingFilesAsync(bool dryRun = false);
 }
 
 #endregion
@@ -69,13 +69,13 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
     /// <summary>Scan for video file entries whose physical file has disappeared or is now in an ignored location, and optionally remove those records.</summary>
     /// <param name="dryRun">When <c>true</c>, list missing files without deleting them.</param>
     /// <returns>A read-only list of paths for files that were identified as missing or ignored.</returns>
-    public async Task<IReadOnlyList<string>> RemoveMissingFilesAsync(bool dryRun = false)
+    public async Task<IReadOnlyList<string>> PurgeMissingFilesAsync(bool dryRun = false)
     {
-        const string TaskName = ShokoRelayConstants.TaskShokoRemoveMissing;
+        const string TaskName = ShokoRelayConstants.TaskShokoPurgeMissing;
         if (!dryRun)
             TaskHelper.StartTask(TaskName);
 
-        s_logger.Info("ShokoImportService: Starting remove missing files task (Mode: {0})", dryRun ? "Dry Run" : "Live");
+        s_logger.Info("ShokoImportService: Starting purge missing files task (Mode: {0})", dryRun ? "Dry Run" : "Live");
 
         try
         {

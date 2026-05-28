@@ -64,12 +64,11 @@ All automation endpoints utilize the `LogAndReturn` helper (via `ExecuteTrackedT
 ```
 /plex/auth/refresh                                             -> plex-discovery-report.log
 /plex/collections/build                                        -> plex-collections-report.log
-/plex/collections/posters                                      -> plex-posters-report.log
 /plex/ratings/apply                                            -> plex-ratings-report.log
 /plex/images/sync                                              -> plex-images-report.log
 /plex/automation/run                                           -> plex-automation-report.log
 /vfs                                                           -> vfs-report.log
-/shoko/remove-missing                                          -> remove-missing-report.log
+/shoko/purge-missing                                           -> purge-missing-report.log
 /sync-watched                                                  -> sync-watched-report.log
 /map-symlinks                                                  -> map-symlinks-report.log
 /animethemes/vfs/build                                         -> at-vfs-report.log
@@ -91,7 +90,7 @@ GET  /matches?filename={path}&title={id}&manual=1              -> Match         
 POST /matches?filename={path}&title={id}&manual=1              -> Match
 
 GET  /collections/{groupId}                                    -> GetCollection
-GET  /collections/user/{groupId}?t={ticks}                     -> GetCollectionPoster       (image)
+GET  /collections/user/{groupId}?name={string}&t={ticks}       -> GetCollectionPoster       (image)
 
 GET  /metadata/{ratingKey}?includeChildren={0|1}               -> GetMetadata
 GET  /metadata/{ratingKey}/children                            -> GetChildren
@@ -107,8 +106,9 @@ GET  /metadata/{ratingKey}/extras                              -> GetMetadataExt
   - `manual`: (default 0) set to 1 to force identification via the `title` parameter.
   - Testing the `GET` endpoint would use the following format: `/matches?title={ShokoSeriesID}&manual=1`
 - `GetCollection` retrieves collection metadata for a given group ID.
-- `GetCollectionPoster` returns the poster image from the `!CollectionPosters` directory.
+- `GetCollectionPoster` returns the poster image from the `!CollectionPosters` directory matching the given Shoko group ID or a Plex smart collection rating key prefixed with 'sc'.
   - `t`: (optional) timestamp ticks used for cache busting.
+  - `name`: (optional) the collection name for smart collections since they have no mapping to a group ID.
 - `GetMetadata` returns full metadata for a ratingKey (series/season/episode).
   - `includeChildren`: (default 0) set to 1 to embed immediate children in the response.
 - `GetChildren` / `GetGrandchildren` return only the immediate or second-level child items respectively.
@@ -157,8 +157,7 @@ POST /plex/auth/unlink                                         -> UnlinkPlex
 ```
 GET  /plex/library/refresh?filter={csv}                        -> RefreshPlexSeries
 
-GET  /plex/collections/build?filter={csv}                      -> BuildPlexCollections
-GET  /plex/collections/posters?filter={csv}                    -> ApplyCollectionPosters
+GET  /plex/collections/build?filter={csv}&assignment={bool}    -> BuildPlexCollections
 
 GET  /plex/ratings/apply?filter={csv}                          -> ApplyAudienceRatings
 
@@ -169,7 +168,8 @@ GET  /plex/automation/run                                      -> RunPlexAutomat
 
 - `RefreshPlexSeries` triggers a partial library scan in Plex for a comma-separated list of series IDs.
 - `BuildPlexCollections` generates Plex collections for a comma-separated list of series IDs (or all series if omitted).
-- `ApplyCollectionPosters` uploads or refreshes posters for a comma-separated list of series IDs.
+  - `assignment`: (default true) if false, skips assigning series to collections and only applies posters.
+  - This will also scan Plex for smart collection names allowing their posters to be set.
 - `ApplyAudienceRatings` updates ratings for a comma-separated list of series IDs based on the configured source (TMDB/AniDB).
 - `SyncPlexImages` queries Plex for generated episode thumbnails and scans VFS/collection paths for all local images, uploading and marking them as preferred in Shoko.
   - The generated episode thumbnails will not be uploaded if `TmdbThumbnails` is enabled or a local thumbnail is present
@@ -239,8 +239,8 @@ GET /vfs/tree                                                  -> GetVfsTree
 ### Shoko: Automation
 
 ```
-GET  /shoko/remove-missing?dryRun={true|false}                 -> RemoveMissingFiles        (for preview/testing)
-POST /shoko/remove-missing?dryRun={true|false}                 -> RemoveMissingFiles
+GET  /shoko/purge-missing?dryRun={true|false}                 -> PurgeMissingFiles        (for preview/testing)
+POST /shoko/purge-missing?dryRun={true|false}                 -> PurgeMissingFiles
 
 POST /shoko/import                                             -> RunShokoImport
 GET  /shoko/import/start                                       -> StartShokoImportNow
@@ -252,7 +252,7 @@ POST /sync-watched                                             -> SyncPlexWatche
 GET  /sync-watched/start                                       -> StartWatchedSyncNow
 ```
 
-- `RemoveMissingFiles` removes missing files from Shoko and the AniDB MyList (physical files are never touched).
+- `PurgeMissingFiles` completely removes missing files from Shoko's DB and the AniDB MyList (physical files are never touched).
   - `dryRun`: (default true) set to false to actually remove records from Shoko and AniDB MyList.
 - `RunShokoImport` triggers a scan of managed folders.
 - `SyncPlexWatched` synchronizes watched state between Plex and Shoko (Bi-directional).
@@ -266,7 +266,7 @@ GET  /sync-watched/start                                       -> StartWatchedSy
 
 **Notes:**
 
-- The response for `RemoveMissingFiles` includes a Processed property containing the count of records removed.
+- The response for `PurgeMissingFiles` includes a Processed property containing the count of records removed.
 - Scheduled automations are anchored to UTC midnight using `Automation.UtcOffsetHours`.
 - Managed user tokens are obtained transiently via Plex Home switching and are never persisted.
 

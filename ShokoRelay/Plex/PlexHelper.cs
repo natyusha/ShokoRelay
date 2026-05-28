@@ -39,23 +39,23 @@ public static class PlexHelper
 
     #region Poster Discovery
 
-    /// <summary>Search for a custom collection poster image matching the series context.</summary>
-    /// <param name="series">The Shoko series metadata.</param>
-    /// <param name="collectionName">Collection name.</param>
-    /// <param name="collectionId">Collection ID.</param>
-    /// <param name="metadataService">Metadata service used for root and override resolution.</param>
+    /// <summary>Locate a local custom poster for a collection by matching against its name or ID across active roots.</summary>
+    /// <param name="series">Optional Shoko series to restrict the root path search to.</param>
+    /// <param name="collectionName">The collection name.</param>
+    /// <param name="collectionId">The collection ID.</param>
+    /// <param name="metadataService">Metadata service used to resolve roots.</param>
     /// <returns>Path to poster file or null.</returns>
-    public static string? FindCollectionPosterPath(IShokoSeries series, string collectionName, int collectionId, IMetadataService metadataService)
+    public static string? FindCollectionPosterPath(IShokoSeries? series, string collectionName, int collectionId, IMetadataService metadataService)
     {
-        if (series == null || metadataService == null)
-            return null;
-        int groupId = series.TopLevelGroupID;
-        if (groupId <= 0)
-            return null;
         string? normalizedTitle = NormalizeCollectionKey(collectionName);
         if (string.IsNullOrWhiteSpace(normalizedTitle))
             return null;
-        var roots = ResolveImportRoots(series, metadataService);
+
+        List<string> roots =
+            series != null
+                ? [.. ResolveImportRoots(series, metadataService)]
+                : [.. (metadataService.GetAllShokoSeries() ?? []).SelectMany(s => ResolveImportRoots(s, metadataService)).Distinct(VfsShared.PathComparer)];
+
         if (roots.Count == 0)
             return null;
 
@@ -73,7 +73,7 @@ public static class PlexHelper
                 string baseName = Path.GetFileNameWithoutExtension(file);
                 if (string.IsNullOrWhiteSpace(baseName))
                     continue;
-                if (IsIdMatch(baseName, groupId) || IsIdMatch(baseName, collectionId) || NormalizeCollectionKey(baseName) == normalizedTitle)
+                if ((series != null && IsIdMatch(baseName, collectionId)) || NormalizeCollectionKey(baseName) == normalizedTitle)
                     return file;
             }
         }

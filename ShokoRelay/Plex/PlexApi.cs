@@ -113,6 +113,10 @@ public class PlexMetadataItem
     /// <summary>List of collection tags assigned to the item.</summary>
     [JsonPropertyName("Collection")]
     public List<PlexTag>? Collection { get; set; }
+
+    /// <summary>True if the collection is a smart collection.</summary>
+    [JsonPropertyName("smart")]
+    public bool? Smart { get; set; }
 }
 
 /// <summary>Represents a tag entry within a Plex metadata item.</summary>

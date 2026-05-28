@@ -7,17 +7,12 @@ namespace ShokoRelay.Services;
 /// <summary>Service responsible for building and managing Plex collections based on Shoko series metadata.</summary>
 public interface ICollectionService
 {
-    /// <summary>Create or update Plex collections for the supplied series list.</summary>
+    /// <summary>Create or update Plex collections and their posters for the supplied series list.</summary>
     /// <param name="seriesList">The collection of series to process.</param>
+    /// <param name="applyAssignment">If true, perform metadata assignment; otherwise, only refresh poster assets.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A result object containing statistics on the operation.</returns>
-    Task<BuildCollectionsResult> BuildCollectionsAsync(IEnumerable<IShokoSeries?> seriesList, CancellationToken cancellationToken = default);
-
-    /// <summary>Apply collection posters for the given series list.</summary>
-    /// <param name="seriesList">The collection of series to process.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A result object containing statistics on the operation.</returns>
-    Task<ApplyPostersResult> ApplyCollectionPostersAsync(IEnumerable<IShokoSeries?> seriesList, CancellationToken cancellationToken = default);
+    Task<BuildCollectionsResult> BuildCollectionsAsync(IEnumerable<IShokoSeries?> seriesList, bool applyAssignment = true, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Result returned by <see cref="ICollectionService.BuildCollectionsAsync"/>.</summary>
@@ -42,14 +37,6 @@ public sealed record BuildCollectionsResult(
     List<string> ErrorsList
 );
 
-/// <summary>Outcome of applying collection posters via <see cref="ICollectionService.ApplyCollectionPostersAsync"/>.</summary>
-/// <param name="Processed">Number of series processed.</param>
-/// <param name="Uploaded">Number of posters successfully uploaded.</param>
-/// <param name="Skipped">Number of series skipped.</param>
-/// <param name="Errors">Count of errors encountered.</param>
-/// <param name="ErrorsList">List of specific error messages.</param>
-public sealed record ApplyPostersResult(int Processed, int Uploaded, int Skipped, int Errors, List<string> ErrorsList);
-
 #endregion
 
 /// <summary>Default implementation of <see cref="ICollectionService"/>.</summary>
@@ -64,7 +51,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
     #region Collection Building
 
     /// <inheritdoc/>
-    public async Task<BuildCollectionsResult> BuildCollectionsAsync(IEnumerable<IShokoSeries?> seriesList, CancellationToken cancellationToken = default)
+    public async Task<BuildCollectionsResult> BuildCollectionsAsync(IEnumerable<IShokoSeries?> seriesList, bool applyAssignment = true, CancellationToken cancellationToken = default)
     {
         const string TaskName = ShokoRelayConstants.TaskPlexCollectionsBuild;
         TaskHelper.StartTask(TaskName);
@@ -108,46 +95,49 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
 
                     s_logger.Trace("CollectionService: Processing series {0} (Plex Key: {1})", sid.Value, item.RatingKey);
 
-                    var currentPlexCollections = item.Collection?.Select(c => c.Tag).Where(t => !string.IsNullOrEmpty(t)).ToList() ?? [];
-                    bool alreadyHasCorrect = !string.IsNullOrEmpty(collectionName) && currentPlexCollections.Any(c => string.Equals(c, collectionName, StringComparison.OrdinalIgnoreCase));
-
-                    foreach (var staleName in currentPlexCollections)
+                    // Skip standard metadata assignment if only refreshing poster assets
+                    if (applyAssignment)
                     {
-                        // Remove if the series belongs to a different group (rename) or is now a solo group (null)
-                        if (collectionName == null || !string.Equals(staleName, collectionName, StringComparison.OrdinalIgnoreCase))
+                        var currentPlexCollections = item.Collection?.Select(c => c.Tag).Where(t => !string.IsNullOrEmpty(t)).ToList() ?? [];
+                        bool alreadyHasCorrect = !string.IsNullOrEmpty(collectionName) && currentPlexCollections.Any(c => string.Equals(c, collectionName, StringComparison.OrdinalIgnoreCase));
+
+                        foreach (var staleName in currentPlexCollections)
                         {
-                            if (await plexCollections.RemoveCollectionFromItemAsync(plexKey, staleName!, target, cancellationToken).ConfigureAwait(false))
-                                s_logger.Info("CollectionService: Removed incorrect collection '{0}' from '{1}'", staleName, item.Title);
+                            // Remove if the series belongs to a different group (rename) or is now a solo group (null)
+                            if (collectionName == null || !string.Equals(staleName, collectionName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                if (await plexCollections.RemoveCollectionFromItemAsync(plexKey, staleName!, target, cancellationToken).ConfigureAwait(false))
+                                    s_logger.Info("CollectionService: Removed incorrect collection '{0}' from '{1}'", staleName, item.Title);
+                            }
+                        }
+
+                        if (!string.IsNullOrEmpty(collectionName) && !alreadyHasCorrect)
+                        {
+                            var assignmentOk = await plexCollections.AssignCollectionToItemByMetadataAsync(plexKey, collectionName, target, cancellationToken).ConfigureAwait(false);
+                            if (assignmentOk)
+                            {
+                                created++;
+                                s_logger.Info("CollectionService: Assigned '{0}' to '{1}'", collectionName, item.Title);
+                                createdList.Add(
+                                    new
+                                    {
+                                        seriesId = sid.Value,
+                                        ratingKey = plexKey,
+                                        collectionName,
+                                        sectionId = target.SectionId,
+                                    }
+                                );
+                            }
+                            else
+                            {
+                                errs++;
+                                errorsList.Add($"Failed assignment: {sid.Value}");
+                            }
                         }
                     }
 
-                    bool assignmentOk = alreadyHasCorrect;
-                    if (!string.IsNullOrEmpty(collectionName) && !alreadyHasCorrect)
-                    {
-                        assignmentOk = await plexCollections.AssignCollectionToItemByMetadataAsync(plexKey, collectionName, target, cancellationToken).ConfigureAwait(false);
-                        if (assignmentOk)
-                        {
-                            created++;
-                            s_logger.Info("CollectionService: Assigned '{0}' to '{1}'", collectionName, item.Title);
-                            createdList.Add(
-                                new
-                                {
-                                    seriesId = sid.Value,
-                                    ratingKey = plexKey,
-                                    collectionName,
-                                    sectionId = target.SectionId,
-                                }
-                            );
-                        }
-                        else
-                        {
-                            errs++;
-                            errorsList.Add($"Failed assignment: {sid.Value}");
-                        }
-                    }
-
-                    // Handle Poster (Only once per collection per target)
-                    if (assignmentOk && !string.IsNullOrEmpty(collectionName))
+                    // Always handle standard poster application
+                    if (!string.IsNullOrEmpty(collectionName))
                     {
                         if (!collectionIdMap.TryGetValue(collectionName, out int cid))
                         {
@@ -158,7 +148,8 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
 
                         if (cid > 0 && posted.Add(cid))
                         {
-                            if (await TryApplyPoster(series!, collectionName, cid, target, cancellationToken).ConfigureAwait(false))
+                            var url = PlexHelper.GetCollectionPosterUrl(series!, collectionName, cid, metadataService, Settings.CollectionPosters);
+                            if (!string.IsNullOrEmpty(url) && await plexCollections.UploadCollectionPosterByUrlAsync(cid, url, target, cancellationToken).ConfigureAwait(false))
                             {
                                 uploaded++;
                                 s_logger.Debug("CollectionService: Applied poster for '{0}'", collectionName);
@@ -166,8 +157,29 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                         }
                     }
                 }
+
+                // Always handle smart collection poster application
+                foreach (var col in collections)
+                {
+                    if (col.Smart == true && int.TryParse(col.RatingKey, out int cid) && !string.IsNullOrEmpty(col.Title))
+                    {
+                        var posterPath = PlexHelper.FindCollectionPosterPath(null, col.Title, cid, metadataService);
+                        if (!string.IsNullOrEmpty(posterPath) && File.Exists(posterPath))
+                        {
+                            var url = $"{ServerBaseUrl}{ShokoRelayConstants.BasePath}/collections/user/sc{cid}?name={Uri.EscapeDataString(col.Title)}&t={new FileInfo(posterPath).LastWriteTimeUtc.Ticks}";
+                            if (await plexCollections.UploadCollectionPosterByUrlAsync(cid, url, target, cancellationToken).ConfigureAwait(false))
+                            {
+                                uploaded++;
+                                s_logger.Info("CollectionService: Applied custom poster to smart collection '{0}' (ID: {1})", col.Title, cid);
+                            }
+                        }
+                    }
+                }
             }
-            int deleted = await plexCollections.DeleteEmptyCollectionsAsync(cancellationToken).ConfigureAwait(false);
+            int deleted = 0;
+            if (applyAssignment)
+                deleted = await plexCollections.DeleteEmptyCollectionsAsync(cancellationToken).ConfigureAwait(false);
+
             s_logger.Info("CollectionService: Task finished -> {0} collections assigned", created);
             return new BuildCollectionsResult(uniqueSeries.Count, created, uploaded, 0, uniqueSeries.Count - created, errs, deleted, createdList, errorsList);
         }
@@ -175,66 +187,6 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
         {
             TaskHelper.FinishTask(TaskName);
         }
-    }
-
-    #endregion
-
-    #region Poster Application
-
-    /// <inheritdoc/>
-    public async Task<ApplyPostersResult> ApplyCollectionPostersAsync(IEnumerable<IShokoSeries?> seriesList, CancellationToken cancellationToken = default)
-    {
-        var (processed, uploaded, skipped, errs, errorsList) = (0, 0, 0, 0, new List<string>());
-        var allowedIds = new HashSet<int>(seriesList?.Where(s => s != null).Select(s => OverrideHelper.GetPrimary(s!.ID, metadataService)) ?? []);
-        var targets = plexClient.GetConfiguredTargets();
-
-        foreach (var target in targets)
-        {
-            var items = await plexClient.GetSectionShowsAsync(target, cancellationToken) ?? [];
-            var posted = new HashSet<int>();
-
-            foreach (var item in items)
-            {
-                if (string.IsNullOrWhiteSpace(item.Guid))
-                    continue;
-                var sid = PlexHelper.ExtractShokoSeriesIdFromGuid(item.Guid);
-                if (!sid.HasValue || (allowedIds.Count > 0 && !allowedIds.Contains(sid.Value)))
-                    continue;
-
-                processed++;
-                var series = metadataService.GetShokoSeriesByID(sid.Value);
-                var name = series != null ? mapper.GetCollectionName(series) : null;
-                if (string.IsNullOrEmpty(name))
-                {
-                    skipped++;
-                    continue;
-                }
-
-                if (await plexCollections.GetOrCreateCollectionIdAsync(name, target, cancellationToken) is { } cid && posted.Add(cid))
-                {
-                    if (await TryApplyPoster(series!, name, cid, target, cancellationToken))
-                        uploaded++;
-                    else
-                    {
-                        errs++;
-                        errorsList.Add($"Poster failed: {name}");
-                    }
-                }
-                else
-                    skipped++;
-            }
-        }
-        return new ApplyPostersResult(processed, uploaded, skipped, errs, errorsList);
-    }
-
-    #endregion
-
-    #region Internal Helpers
-
-    private async Task<bool> TryApplyPoster(IShokoSeries series, string name, int cid, PlexLibraryTarget target, CancellationToken ct)
-    {
-        string? url = PlexHelper.GetCollectionPosterUrl(series, name, cid, metadataService, Settings.CollectionPosters);
-        return !string.IsNullOrEmpty(url) && await plexCollections.UploadCollectionPosterByUrlAsync(cid, url, target, ct);
     }
 
     #endregion
