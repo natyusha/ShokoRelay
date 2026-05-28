@@ -138,8 +138,9 @@ com.plexapp.agents.shokorelay
 ### Scheduling
 
 - `UTC Offset` An input which controls the starting time in UTC for scheduled tasks
-- `Plex Int.` An input which will schedule [Generate Collections](#collection-generation) and [Apply Critic Ratings](#critic-rating-application) every `N` hours
-  - An interval of 24-hours or above is recommended as Shoko rarely updates this information
+- `Plex Int.` An input which will schedule [Generate Collections](#collection-generation), [Apply Critic Ratings](#critic-rating-application), and [Sync Plex Images](#plex-image-sync) every `N` hours
+  - These tasks will run on individual series automatically when new episodes are added regardless of the configured interval
+  - An interval of 24-hours or above is recommended as Shoko rarely updates this information for old series
 - `Import Int.` An input which will schedule Shoko to import new or unrecognized files every `N` hours
   - Make sure to set `AniDB > Update Options > Files With Missing Info` to "Never" if you use this
 - `Sync Int.` An input which will schedule watched state syncing from Plex to Shoko every `N` hours
@@ -147,6 +148,10 @@ com.plexapp.agents.shokorelay
   - To speed up the process the scheduled watched sync only considers things watched during the scheduled interval +1 hour
     - A full sync may need to be run if Shoko or Plex downtime exceeds the considered time period
   - _Requires Plex authentication_
+
+**Run Plex Automation Now**
+
+The button in the top right of the Automation Controls panel will run all three Plex automations sequentially without waiting for the scheduled interval.
 
 ## Quick Actions
 
@@ -223,7 +228,7 @@ There is also support for generating `Theme.mp3` files as local metadata. This w
   - Generally this means entering a `1`
 - _Theme.mp3 generation can be run per folder from the [VFS Browser](#vfs-browser) page (uses the default settings)_
 
-**Miniplayer:**
+**Miniplayer**
 
 There is a mini media player included on the dashboard which will play downloaded themes if enabled. You can set it to looped playback or even have it shuffle through all of your Theme.mp3 files if desired. The progress bar is fully functional and you can pause playback by middle clicking it.
 

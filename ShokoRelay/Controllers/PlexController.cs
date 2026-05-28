@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Shoko.Abstractions.User.Enums;
 using Shoko.Abstractions.User.Services;
@@ -6,6 +7,28 @@ using ShokoRelay.Sync;
 using ShokoRelay.Vfs;
 
 namespace ShokoRelay.Controllers;
+
+#region Data Models
+
+/// <summary>Result of a full Plex automation run containing elapsed times and individual sub-task results.</summary>
+/// <param name="TotalElapsed">The total elapsed time for the entire automation run.</param>
+/// <param name="CollectionsElapsed">The elapsed time for the collection building sub-task.</param>
+/// <param name="CollectionsResult">The result stats returned by the collection building service.</param>
+/// <param name="RatingsElapsed">The elapsed time for the critic rating application sub-task.</param>
+/// <param name="RatingsResult">The result stats returned by the critic rating application service.</param>
+/// <param name="ImageSyncElapsed">The optional elapsed time for the Plex image synchronization sub-task.</param>
+/// <param name="ImageSyncResult">The optional result stats returned by the Plex image synchronization service.</param>
+public sealed record PlexAutomationRunResult(
+    TimeSpan TotalElapsed,
+    TimeSpan CollectionsElapsed,
+    BuildCollectionsResult CollectionsResult,
+    TimeSpan RatingsElapsed,
+    ApplyRatingsResult RatingsResult,
+    TimeSpan? ImageSyncElapsed,
+    ImageSyncResult? ImageSyncResult
+);
+
+#endregion
 
 /// <summary>Manages Plex-specific integrations including authentication, metadata automation, and image sync.</summary>
 [ApiController]
@@ -240,16 +263,50 @@ public class PlexController(
             : ExecuteTrackedTaskAsync(
                 ShokoRelayConstants.TaskPlexAutomationRun,
                 ShokoRelayConstants.LogPlexAutomation,
-                (sb, _) => sb.AppendLine("Automation run complete."),
+                (sb, r) =>
+                {
+                    sb.AppendLine($"Plex Automation Run Report - {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                    sb.AppendLine(new string('-', 60));
+                    sb.AppendLine();
+                    sb.AppendLine($"  Total Elapsed Time         : {r.TotalElapsed.TotalSeconds:F2}s");
+                    sb.AppendLine();
+                    sb.AppendLine("Tasks Executed:");
+                    sb.AppendLine($"  - Collection Generation    : {r.CollectionsElapsed.TotalSeconds:F2}s");
+                    sb.AppendLine($"    Log File URL             : {ApiBase}/logs/{ShokoRelayConstants.LogPlexCollections}");
+                    sb.AppendLine($"  - Critic Rating Application: {r.RatingsElapsed.TotalSeconds:F2}s");
+                    sb.AppendLine($"    Log File URL             : {ApiBase}/logs/{ShokoRelayConstants.LogPlexRatings}");
+                    if (r.ImageSyncElapsed.HasValue)
+                    {
+                        sb.AppendLine($"  - Plex Image Sync          : {r.ImageSyncElapsed.Value.TotalSeconds:F2}s");
+                        sb.AppendLine($"    Log File URL             : {ApiBase}/logs/{ShokoRelayConstants.LogPlexImages}");
+                    }
+                },
                 async () =>
                 {
+                    var sw = Stopwatch.StartNew();
                     var allSeries = MetadataService.GetAllShokoSeries()?.Cast<IShokoSeries?>().ToList() ?? [];
-                    await _collectionService.BuildCollectionsAsync(allSeries, cancellationToken: HttpContext.RequestAborted).ConfigureAwait(false);
-                    await _criticRatingService.ApplyRatingsAsync(null, HttpContext.RequestAborted).ConfigureAwait(false);
+
+                    var swCollections = Stopwatch.StartNew();
+                    var collectionRes = await _collectionService.BuildCollectionsAsync(allSeries, cancellationToken: CancellationToken.None).ConfigureAwait(false);
+                    swCollections.Stop();
+
+                    var swRatings = Stopwatch.StartNew();
+                    var ratingRes = await _criticRatingService.ApplyRatingsAsync(null, cancellationToken: CancellationToken.None).ConfigureAwait(false);
+                    swRatings.Stop();
+
+                    TimeSpan? imageSyncElapsed = null;
+                    ImageSyncResult? imageSyncRes = null;
                     if (Settings.Advanced.EnableImageSync)
-                        await _imageSyncService.SyncImagesAsync(cancellationToken: HttpContext.RequestAborted).ConfigureAwait(false);
+                    {
+                        var swImages = Stopwatch.StartNew();
+                        imageSyncRes = await _imageSyncService.SyncImagesAsync(cancellationToken: CancellationToken.None).ConfigureAwait(false);
+                        swImages.Stop();
+                        imageSyncElapsed = swImages.Elapsed;
+                    }
+                    sw.Stop();
                     MarkPlexAutomationRunNow();
-                    return true;
+
+                    return new PlexAutomationRunResult(sw.Elapsed, swCollections.Elapsed, collectionRes, swRatings.Elapsed, ratingRes, imageSyncElapsed, imageSyncRes);
                 },
                 SyncHelper.SyncLock
             );

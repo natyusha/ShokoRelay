@@ -124,6 +124,10 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                                 updatedCache = true;
                                 s_logger.Info("ImageSyncService: Successfully uploaded and preferred local thumbnail for episode {0} (ID: {1})", episode.EpisodeNumber, episode.ID);
                             }
+                            catch (OperationCanceledException)
+                            {
+                                throw;
+                            }
                             catch (Exception ex)
                             {
                                 errors++;
