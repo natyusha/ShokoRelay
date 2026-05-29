@@ -22,6 +22,18 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
     /// <summary>Expose the configuration setting controlling automatic library scans.</summary>
     public bool ScanOnVfsRefresh => Settings.Automation.ScanOnVfsRefresh;
 
+    /// <summary>Cached list of prioritized Shoko-to-Plex path mappings.</summary>
+    private readonly List<(string In, string Out)> _shokoToPlexMappings = [];
+
+    /// <summary>Cached list of prioritized Plex-to-Shoko path mappings.</summary>
+    private readonly List<(string In, string Out)> _plexToShokoMappings = [];
+
+    /// <summary>Reference to the last cached raw path mappings dictionary used to detect configuration changes.</summary>
+    private Dictionary<string, string>? _lastCachedMappings;
+
+    /// <summary>Exclusive lock used to ensure thread-safe path mapping cache compilation.</summary>
+    private readonly Lock _mappingLock = new();
+
     #endregion
 
     #region Library & Section
@@ -242,35 +254,55 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
     /// <summary>Map a Shoko path to the Plex path using configured mappings.</summary>
     /// <param name="path">Input Shoko path.</param>
     /// <returns>The mapped Plex path.</returns>
-    public string MapShokoPathToPlexPath(string path) => MapPath(path, Settings.Advanced.PathMappings, true);
+    public string MapShokoPathToPlexPath(string path) => MapPath(path, true);
 
     /// <summary>Reverse-map a Plex path back to Shoko.</summary>
     /// <param name="path">Input Plex path.</param>
     /// <returns>The original Shoko path.</returns>
-    public string MapPlexPathToShokoPath(string path) => MapPath(path, Settings.Advanced.PathMappings, false);
+    public string MapPlexPathToShokoPath(string path) => MapPath(path, false);
 
-    /// <summary>Internal core for mapping paths between Shoko and Plex.</summary>
-    /// <param name="path">The input path.</param>
-    /// <param name="mappings">Dictionary of path mappings.</param>
-    /// <param name="shokoToPlex">True to map Shoko to Plex, false for Plex to Shoko.</param>
-    /// <returns>The translated path string.</returns>
-    private static string MapPath(string path, Dictionary<string, string> mappings, bool shokoToPlex)
+    /// <summary>Internal core for mapping paths between Shoko and Plex using cached, prioritized mappings.</summary>
+    /// <param name="path">The absolute or relative path string to translate.</param>
+    /// <param name="shokoToPlex">True if mapping from Shoko-to-Plex; false for Plex-to-Shoko.</param>
+    /// <returns>The mapped/translated path string.</returns>
+    private string MapPath(string path, bool shokoToPlex)
     {
-        if (string.IsNullOrWhiteSpace(path) || mappings == null || mappings.Count == 0)
+        if (string.IsNullOrWhiteSpace(path))
+            return path;
+
+        var currentMappings = configProvider.GetSettings().Advanced.PathMappings;
+        if (currentMappings == null || currentMappings.Count == 0)
+            return path;
+
+        IReadOnlyList<(string In, string Out)> list;
+        lock (_mappingLock)
+        {
+            if (!ReferenceEquals(_lastCachedMappings, currentMappings))
+            {
+                _shokoToPlexMappings.Clear();
+                _plexToShokoMappings.Clear();
+
+                var pairs = currentMappings.Select(m => new { Shoko = TextHelper.NormalizePathForPlex(m.Key), Plex = TextHelper.NormalizePathForPlex(m.Value) }).ToList();
+
+                _shokoToPlexMappings.AddRange(pairs.Select(p => (p.Shoko, p.Plex)).OrderByDescending(p => p.Shoko.Length));
+
+                _plexToShokoMappings.AddRange(pairs.Select(p => (p.Plex, p.Shoko)).OrderByDescending(p => p.Plex.Length));
+
+                _lastCachedMappings = currentMappings;
+            }
+            list = shokoToPlex ? _shokoToPlexMappings : _plexToShokoMappings;
+        }
+
+        if (list.Count == 0)
             return path;
 
         string input = TextHelper.NormalizePathForPlex(path);
-
-        var match = mappings
-            .Select(m => new { In = TextHelper.NormalizePathForPlex(shokoToPlex ? m.Key : m.Value), Out = TextHelper.NormalizePathForPlex(shokoToPlex ? m.Value : m.Key) })
-            .OrderByDescending(m => m.In.Length)
-            .FirstOrDefault(m => input.StartsWith(m.In, StringComparison.OrdinalIgnoreCase));
-
-        if (match == null)
+        var (matchIn, matchOut) = list.FirstOrDefault(m => input.StartsWith(m.In, StringComparison.OrdinalIgnoreCase));
+        if (matchIn == null)
             return path;
 
-        string remainder = input.Length > match.In.Length ? input[match.In.Length..].TrimStart('/') : "";
-        string result = string.IsNullOrEmpty(remainder) ? match.Out : $"{match.Out.TrimEnd('/')}/{remainder}";
+        string remainder = input.Length > matchIn.Length ? input[matchIn.Length..].TrimStart('/') : "";
+        string result = string.IsNullOrEmpty(remainder) ? matchOut : $"{matchOut.TrimEnd('/')}/{remainder}";
 
         return shokoToPlex ? result : result.Replace('/', Path.DirectorySeparatorChar);
     }
