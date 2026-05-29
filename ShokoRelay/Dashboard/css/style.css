@@ -539,6 +539,7 @@ footer {
   border: 1px solid var(--border-color);
   background: var(--inset-color);
   padding: 10px 6px;
+  height: auto;
   color: var(--text-color);
   user-select: none;
 }

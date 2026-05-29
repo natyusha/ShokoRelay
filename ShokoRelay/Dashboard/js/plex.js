@@ -118,6 +118,11 @@
       else if (count > 1) text = `(${count} Libraries)`;
       libStatus.textContent = text;
     }
+
+    // Resolve the Plex Web App link dynamically from discovered targets
+    const plexWebUrl = plex.DiscoveredLibraries?.[0]?.ServerUrl || plex.DiscoveredServers?.[0]?.PreferredUri || "https://app.plex.tv/desktop";
+    const webLink = el("plex-web-link");
+    if (webLink) webLink.href = isLinked ? plexWebUrl : "#";
   }
 
   /**
