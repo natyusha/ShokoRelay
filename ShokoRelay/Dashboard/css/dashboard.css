@@ -166,6 +166,10 @@ button.loading:hover {
 .w46-button .button-spinner {
   margin: 24px 0 0 24px;
 }
+#plex-automation-run .button-spinner {
+  scale: 103.5%;
+  margin: 0 0 0 -2px;
+}
 /* #endregion */
 
 /* #region MARK: Styled Checkboxes

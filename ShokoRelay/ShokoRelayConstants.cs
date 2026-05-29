@@ -9,7 +9,7 @@ public static class ShokoRelayConstants
     public const string Name = "Shoko Relay";
 
     /// <summary>Current version string.</summary>
-    public const string Version = "0.12.7";
+    public const string Version = "0.12.8";
 
     /// <summary>Internal API version.</summary>
     public const string ApiVersion = "1";

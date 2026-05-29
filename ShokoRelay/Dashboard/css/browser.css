@@ -45,6 +45,7 @@
 */
 .refresh-btn,
 .theme-btn {
+  vertical-align: -1px;
   transition: all 0.3s ease-in-out;
   cursor: pointer;
   color: var(--highlight-color);

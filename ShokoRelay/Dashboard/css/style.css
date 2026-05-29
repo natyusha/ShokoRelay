@@ -346,7 +346,7 @@ code {
 
 /* #region MARK: Playback
 */
-.at-btn {
+.img-btn {
   all: unset;
   float: right;
   transition: all 0.3s ease-in-out;
@@ -354,31 +354,31 @@ code {
   fill: var(--highlight-color);
   margin: 0 3px 5px 0;
 }
-.at-btn[hidden],
-.at-btn[data-state="playing"] .play,
-.at-btn .next,
-.at-btn .mode,
-.at-btn.toggle[aria-pressed="false"] .enabled,
-.at-btn.toggle[aria-pressed="true"] .disabled {
+.img-btn[hidden],
+.img-btn[data-state="playing"] .play,
+.img-btn .next,
+.img-btn .mode,
+.img-btn.toggle[aria-pressed="false"] .enabled,
+.img-btn.toggle[aria-pressed="true"] .disabled {
   display: none;
 }
-.at-btn:hover {
+.img-btn:hover {
   fill: var(--hover-color);
   background: none;
 }
-.at-btn[data-state="idle"] .play,
-.at-btn[data-state="playing"] .next,
-.at-btn[data-mode="loop"] .mode.loop,
-.at-btn[data-mode="shuffle"] .mode.shuffle,
-.at-btn[data-mode="next"] .mode.next,
-.at-btn[data-mode="off"] .mode.off,
-.at-btn.toggle[aria-pressed="true"] .enabled {
+.img-btn[data-state="idle"] .play,
+.img-btn[data-state="playing"] .next,
+.img-btn[data-mode="loop"] .mode.loop,
+.img-btn[data-mode="shuffle"] .mode.shuffle,
+.img-btn[data-mode="next"] .mode.next,
+.img-btn[data-mode="off"] .mode.off,
+.img-btn.toggle[aria-pressed="true"] .enabled {
   display: inline;
 }
-.at-btn.toggle[aria-pressed="false"] {
+.img-btn.toggle[aria-pressed="false"] {
   fill: var(--danger-color);
 }
-.at-btn.toggle[aria-pressed="false"] .disabled:hover {
+.img-btn.toggle[aria-pressed="false"] .disabled:hover {
   fill: color-mix(in srgb, var(--danger-color), white 25%);
 }
 #at-mp3-section {

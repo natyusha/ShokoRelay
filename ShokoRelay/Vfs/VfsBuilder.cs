@@ -567,26 +567,24 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
     /// <param name="series">The Shoko series metadata.</param>
     private void PruneSeries(string rootFolderName, IShokoSeries series)
     {
-        var paths = new HashSet<string>(VfsShared.PathComparer);
-        foreach (var l in GetSeriesFileDataCached(series).Mappings.SelectMany(m => m.Video.Files))
-        {
-            string? root = VfsShared.ResolveImportRootPath(l);
-            if (string.IsNullOrEmpty(root))
-                continue;
+        int folderId = EnforceTmdbNumbering ? OverrideHelper.GetPrimary(series.ID, _metadataService) : series.ID;
+        List<string> roots = [.. (videoService.GetAllManagedFolders() ?? []).Select(f => f.Path).Where(p => !string.IsNullOrEmpty(p)).Distinct()];
 
-            string path = Path.Combine(root, rootFolderName, series.ID.ToString());
-            if (paths.Add(path))
+        foreach (var root in roots)
+        {
+            string path = Path.Combine(root, rootFolderName, folderId.ToString());
+            try
             {
-                try
+                if (Directory.Exists(path))
                 {
-                    if (Directory.Exists(path))
-                        Directory.Delete(path, true);
+                    Directory.Delete(path, true);
+                    s_logger.Info("VFS: Pruned empty/orphaned series folder -> '{0}'", path);
                 }
-                catch (Exception ex)
-                {
-                    _warningsForBuild?.Add($"Prune failed {path}: {ex.Message}");
-                    s_logger.Warn(ex, "VFS: Failed to prune series path {Path}", path);
-                }
+            }
+            catch (Exception ex)
+            {
+                _warningsForBuild?.Add($"Prune failed {path}: {ex.Message}");
+                s_logger.Warn(ex, "VFS: Failed to prune series path {Path}", path);
             }
         }
     }

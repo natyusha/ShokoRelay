@@ -109,7 +109,7 @@
             </h2>
             <button
               id="{{ TaskPlexAutomationRun }}"
-              class="at-btn plex-auth"
+              class="img-btn plex-auth"
               title="Run Plex Automation Now"
               data-relay-endpoint="/plex/automation/run"
               data-relay-label="Plex Automation"
@@ -174,7 +174,7 @@
               <svg class="icon-svg"><use href="img/icons.svg#database-refresh-outline"></use></svg>
               Shoko: VFS
             </h2>
-            <a href="browser" class="at-btn" title="Open VFS Browser" aria-label="Open VFS Browser">
+            <a href="browser" class="img-btn" title="Open VFS Browser" aria-label="Open VFS Browser">
               <svg class="icon-svg"><use href="img/icons.svg#folder-open"></use></svg>
             </a>
           </div>
@@ -204,13 +204,13 @@
               <svg class="icon-svg"><use href="img/icons.svg#auto-fix"></use></svg>
               Quick Actions
             </h2>
-            <a id="relay-api-link" href="#" class="at-btn" title="Open Swagger (Relay)" aria-label="Open Relay Swagger">
+            <a id="relay-api-link" href="#" class="img-btn" title="Open Swagger (Relay)" aria-label="Open Relay Swagger">
               <svg class="api-svg"><use href="img/icons.svg#relay-api"></use></svg>
             </a>
-            <a id="shoko-api-link" href="#" class="at-btn" title="Open Swagger (Shoko)" aria-label="Open Shoko Swagger">
+            <a id="shoko-api-link" href="#" class="img-btn" title="Open Swagger (Shoko)" aria-label="Open Shoko Swagger">
               <svg class="api-svg"><use href="img/icons.svg#shoko-api"></use></svg>
             </a>
-            <a id="shoko-dashboard-link" href="#" class="at-btn" title="Open Shoko Dashboard" aria-label="Open Shoko Dashboard">
+            <a id="shoko-dashboard-link" href="#" class="img-btn" title="Open Shoko Dashboard" aria-label="Open Shoko Dashboard">
               <svg class="icon-svg"><use href="img/icons.svg#view-dashboard-outline"></use></svg>
             </a>
           </div>
@@ -279,7 +279,7 @@
               <svg class="at-svg"><use href="img/icons.svg#animethemes"></use></svg>
               AnimeThemes: VFS
             </h2>
-            <a href="player" class="at-btn" title="Open Video Player" aria-label="Open Video Player">
+            <a href="player" class="img-btn" title="Open Video Player" aria-label="Open Video Player">
               <svg class="icon-svg"><use href="img/icons.svg#movie-open"></use></svg>
             </a>
           </div>
@@ -316,16 +316,16 @@
               <svg class="at-svg"><use href="img/icons.svg#animethemes"></use></svg>
               AnimeThemes: MP3
             </h2>
-            <button id="at-play" class="at-btn" title="Play" type="button" aria-label="Play" hidden>
+            <button id="at-play" class="img-btn" title="Play" type="button" aria-label="Play" hidden>
               <svg class="icon-svg play"><use href="img/icons.svg#play"></use></svg>
               <svg class="icon-svg next"><use href="img/icons.svg#skip-next"></use></svg>
             </button>
-            <button id="at-mode" class="at-btn" title="Playback Mode" data-mode="loop" type="button" aria-label="Playback Mode" hidden>
+            <button id="at-mode" class="img-btn" title="Playback Mode" data-mode="loop" type="button" aria-label="Playback Mode" hidden>
               <svg class="icon-svg mode loop"><use href="img/icons.svg#sync"></use></svg>
               <svg class="icon-svg mode shuffle"><use href="img/icons.svg#shuffle-variant"></use></svg>
               <svg class="icon-svg mode off"><use href="img/icons.svg#sync-off"></use></svg>
             </button>
-            <button id="at-playback" class="at-btn toggle" title="Playback Toggle" aria-pressed="false" type="button" aria-label="Playback Toggle">
+            <button id="at-playback" class="img-btn toggle" title="Playback Toggle" aria-pressed="false" type="button" aria-label="Playback Toggle">
               <svg class="icon-svg enabled"><use href="img/icons.svg#volume-high"></use></svg>
               <svg class="icon-svg disabled"><use href="img/icons.svg#volume-mute"></use></svg>
             </button>
@@ -356,7 +356,7 @@
             <svg class="icon-svg"><use href="img/icons.svg#cog-outline"></use></svg>
             Provider Settings
           </h2>
-          <button id="settings-help-open" class="at-btn" title="Settings Help" aria-label="Settings Help">
+          <button id="settings-help-open" class="img-btn" title="Settings Help" aria-label="Settings Help">
             <svg class="icon-svg"><use href="img/icons.svg#help-box"></use></svg>
           </button>
         </div>
@@ -486,6 +486,8 @@
         <div class="modal-body">
           <section>
             <h3>Primary Settings</h3>
+            <h4>Metadata Refresh Required</h4>
+            <small>Every provider setting that isn't listed under "Advanced Settings" requires a metadata refresh in Plex to take effect.</small>
             <h4>Language Tag Examples</h4>
             <div class="full">
               <ul class="help-list">
@@ -513,6 +515,8 @@
           </section>
           <section>
             <h3>Advanced Settings</h3>
+            <h4>VFS Rebuild Required</h4>
+            <small>Any setting that includes a <strong>⟳</strong> symbol requires a VFS rebuild to take effect. This is because they directly affect how the VFS is generated.</small>
             <h4>Path Mappings</h4>
             <small><em>Required if Plex and Shoko see your files via different paths</em></small>
             <ul class="help-list inline-help">
@@ -527,8 +531,6 @@
               <a href="https://support.plex.tv/articles/local-files-for-tv-show-trailers-and-extras/" title="Plex Articles">Local Files for TV Show Trailers and Extras</a>
               will also be ignored unless the "Plex Local Extras" setting is disabled.
             </small>
-            <h4>VFS Rebuild Required</h4>
-            <small>Any setting that includes a <strong>⟳</strong> symbol requires a VFS rebuild to take effect. This is because they directly affect how the VFS is generated.</small>
             <h4>Plex Fixup Delay</h4>
             <small>
               Sometimes Shoko may not have acquired all of the metadata for a series when it is first scanned into Plex. This setting attempts to mitigate this by waiting for new files to be added to the VFS,
