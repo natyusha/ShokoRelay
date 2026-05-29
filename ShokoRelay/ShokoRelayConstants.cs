@@ -34,7 +34,7 @@ public static class ShokoRelayConstants
     public const string FolderConfigSubfolder = "config";
 
     /// <summary>Default folder name for local collection posters.</summary>
-    public const string FolderCollectionPostersDefault = "!CollectionPosters";
+    public const string FolderCollectionImagesDefault = "!CollectionImages";
 
     /// <summary>Default folder name for the virtual filesystem root.</summary>
     public const string FolderVfsDefault = "!ShokoRelayVFS";

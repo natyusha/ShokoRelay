@@ -234,7 +234,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
             }
         }
 
-        // Sync Collection Posters (From !CollectionPosters)
+        // Sync Collection Posters (From !CollectionImages)
         var groups = allSeries.Where(s => s != null && s.TopLevelGroupID > 0).Select(s => s.TopLevelGroup).Where(g => g != null).GroupBy(g => g.ID).Select(g => g.First()).ToList();
 
         foreach (var group in groups)
@@ -244,7 +244,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
             if (seriesInGroup == null)
                 continue;
 
-            var groupPosterFile = PlexHelper.FindCollectionPosterPathByGroup(seriesInGroup, group.ID, metadataService);
+            var groupPosterFile = PlexHelper.FindCollectionImagePathByGroup(seriesInGroup, group.ID, "", metadataService);
             if (string.IsNullOrEmpty(groupPosterFile) || !File.Exists(groupPosterFile))
                 continue;
 

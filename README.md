@@ -162,7 +162,14 @@ The button in the top right of the Automation Controls panel will run all three 
 - Click the `Generate Collections` button in the "Quick Actions" section of the dashboard to start this process
 - _Requires Plex authentication_
 
-As a bonus this supports using the primary series poster as the collection poster (if configured under "Provider Settings"). Custom local posters can also be used by placing them in the configured `Collection Posters Root Path` (default `!CollectionPosters`) folder. These files are simply named after the Shoko group name (or ID) that you wish them to apply to. If the name of a file matches that of a smart collection the poster will be applied to it too. Empty collections (excluding smart collections) will also be removed automatically during collection generation.
+As a bonus this supports using the primary series images as the collection images (if configured under "Provider Settings"). Custom local posters can also be used by placing them in the configured `Collection Images Root Path` (default `!CollectionImages`) folder. These files are simply named after the Shoko group name (or ID) that you wish them to apply to. If the name of a file matches that of a smart collection the images will be applied to it too. Empty collections (excluding smart collections) will also be removed automatically during collection generation.
+
+Applying a hyphenated suffix to the image that matches Plex's naming conventions for logos or backdrops will allow them to be set as well. Examples will be provided below for applying various local collection images to a group named "Bleach" in Shoko:
+
+- Bleach.jpg
+- Bleach-logo.png
+- Bleach-square.jpg
+- Bleach-background.jpg
 
 ### Critic Rating Application
 

@@ -120,7 +120,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
     private void RefreshThemeMp3CacheInternal()
     {
         s_logger.Info("AnimeThemes: Building Theme.mp3 cache -> scanning all managed import folders...");
-        var excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { VfsShared.ResolveRootFolderName(), VfsShared.ResolveCollectionPostersFolderName(), VfsShared.ResolveAnimeThemesFolderName() };
+        var excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { VfsShared.ResolveRootFolderName(), VfsShared.ResolveCollectionImagesFolderName(), VfsShared.ResolveAnimeThemesFolderName() };
         try
         {
             var roots = (videoService.GetAllManagedFolders() ?? [])
@@ -211,7 +211,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         s_logger.Info("AnimeThemes MP3: Starting batch generation for root -> {0}", root);
         var (results, p, s, e) = (new List<ThemeMp3OperationResult>(), 0, 0, 0);
         var folders = Directory.EnumerateDirectories(root).Prepend(root).Where(f => query.Force || !File.Exists(Path.Combine(f, "Theme.mp3"))).ToList();
-        var excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { VfsShared.ResolveRootFolderName(), VfsShared.ResolveCollectionPostersFolderName(), VfsShared.ResolveAnimeThemesFolderName() };
+        var excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { VfsShared.ResolveRootFolderName(), VfsShared.ResolveCollectionImagesFolderName(), VfsShared.ResolveAnimeThemesFolderName() };
 
         await Parallel.ForEachAsync(
             folders,

@@ -110,14 +110,14 @@ internal static class VfsShared
     public static string ResolveAnimeThemesFolderName() => ResolveFolderName(Settings.Advanced.AnimeThemesRootPath, ShokoRelayConstants.FolderAnimeThemesDefault);
 
     /// <summary>Resolves the collection posters folder name.</summary>
-    public static string ResolveCollectionPostersFolderName() => ResolveFolderName(Settings.Advanced.CollectionPostersRootPath, ShokoRelayConstants.FolderCollectionPostersDefault);
+    public static string ResolveCollectionImagesFolderName() => ResolveFolderName(Settings.Advanced.CollectionImagesRootPath, ShokoRelayConstants.FolderCollectionImagesDefault);
 
     /// <summary>Assembles a unique set of folder names that should be ignored by VFS and Link operations based on current settings.</summary>
     /// <param name="settings">The current relay configuration.</param>
     /// <returns>A HashSet of folder names.</returns>
     public static HashSet<string> GetIgnoredFolderNames(RelayConfig settings)
     {
-        var ignored = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ResolveRootFolderName(), ResolveAnimeThemesFolderName(), ResolveCollectionPostersFolderName() };
+        var ignored = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ResolveRootFolderName(), ResolveAnimeThemesFolderName(), ResolveCollectionImagesFolderName() };
         foreach (var folder in settings.Advanced.FolderExclusions.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             ignored.Add(folder);
 

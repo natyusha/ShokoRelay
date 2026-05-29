@@ -192,9 +192,9 @@ public class RelayConfig
     public bool CrewListings { get; set; } = true;
 
     /// <summary>Whether to set the group poster as the Plex collection poster.</summary>
-    [Display(Name = "Collection Posters", Description = "Enable to set the primary series poster in a Shoko group as Plex's collection poster")]
+    [Display(Name = "Collection Images", Description = "Enable to set the primary series poster/logo/backdrop in a Shoko group as Plex collection images")]
     [DefaultValue(true)]
-    public bool CollectionPosters { get; set; } = true;
+    public bool CollectionImages { get; set; } = true;
 
     /// <summary>Whether to grab theme music from Plex servers.</summary>
     [Display(Name = "Plex Theme Music", Description = "Enable to grab theme music files from Plex using TheTVDB IDs")]
@@ -421,10 +421,10 @@ public class AdvancedConfig
     [VfsRebuild]
     public string AnimeThemesRootPath { get; set; } = ShokoRelayConstants.FolderAnimeThemesDefault;
 
-    /// <summary>Folder name for custom collection posters.</summary>
-    [Display(Name = "Collection Posters Root Path", Description = "The location of custom local collection posters inside each import root")]
-    [DefaultValue(ShokoRelayConstants.FolderCollectionPostersDefault)]
-    public string CollectionPostersRootPath { get; set; } = ShokoRelayConstants.FolderCollectionPostersDefault;
+    /// <summary>Folder name for custom collection images.</summary>
+    [Display(Name = "Collection Images Root Path", Description = "The location of custom local collection images inside each import root")]
+    [DefaultValue(ShokoRelayConstants.FolderCollectionImagesDefault)]
+    public string CollectionImagesRootPath { get; set; } = ShokoRelayConstants.FolderCollectionImagesDefault;
 
     /// <summary>Path to FFmpeg binaries.</summary>
     [Display(Name = "FFmpeg Path", Description = "An optional folder for FFmpeg/FFprobe. Leave empty to use 'Utilities/FFmpeg', or the plugin root / PATH")]

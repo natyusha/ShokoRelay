@@ -130,6 +130,23 @@ namespace ShokoRelay.Plex
             );
         }
 
+        /// <summary>Represents a configuration for a specific collection artwork type.</summary>
+        /// <param name="Prefix">The Plex metadata sub-endpoint (e.g. posters, backdrops, logos, squares).</param>
+        /// <param name="Suffix">The representative hyphenated suffix used in the URL.</param>
+        /// <param name="Suffixes">The prioritized array of all allowed local filename suffixes.</param>
+        /// <param name="Label">The diagnostic label for logging.</param>
+        /// <param name="DefaultFallback">Whether Shoko fallback images are allowed for this type.</param>
+        public sealed record CollectionImageConfig(string Prefix, string Suffix, string[] Suffixes, string Label, bool DefaultFallback);
+
+        /// <summary>The global prioritized list of supported collection artwork configurations.</summary>
+        public static readonly IReadOnlyList<CollectionImageConfig> CollectionImageConfigs =
+        [
+            new("posters", "", ["-folder", "-poster", "-show", ""], "poster", true),
+            new("backdrops", "-backdrop", ["-art", "-backdrop", "-background", "-fanart"], "backdrop", true),
+            new("logos", "-logo", ["-clearlogo", "-logo"], "logo", true),
+            new("squares", "-square", ["-square", "-squareArt", "-backgroundSquare"], "square art", false),
+        ];
+
         #endregion
     }
 }

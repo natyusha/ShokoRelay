@@ -7,9 +7,9 @@ namespace ShokoRelay.Services;
 /// <summary>Service responsible for building and managing Plex collections based on Shoko series metadata.</summary>
 public interface ICollectionService
 {
-    /// <summary>Create or update Plex collections and their posters for the supplied series list.</summary>
+    /// <summary>Create or update Plex collections and their images for the supplied series list.</summary>
     /// <param name="seriesList">The collection of series to process.</param>
-    /// <param name="applyAssignment">If true, perform metadata assignment; otherwise, only refresh poster assets.</param>
+    /// <param name="applyAssignment">If true, perform metadata assignment; otherwise, only refresh collection image assets.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A result object containing statistics on the operation.</returns>
     Task<BuildCollectionsResult> BuildCollectionsAsync(IEnumerable<IShokoSeries?> seriesList, bool applyAssignment = true, CancellationToken cancellationToken = default);
@@ -79,7 +79,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                     .GroupBy(c => c.Title!, StringComparer.OrdinalIgnoreCase)
                     .ToDictionary(g => g.Key, g => int.Parse(g.First().RatingKey!), StringComparer.OrdinalIgnoreCase);
 
-                var posted = new HashSet<int>();
+                var posted = new HashSet<(int Cid, string Prefix)>();
 
                 foreach (var item in items)
                 {
@@ -136,7 +136,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                         }
                     }
 
-                    // Always handle standard poster application
+                    // Always handle standard poster and image application
                     if (!string.IsNullOrEmpty(collectionName))
                     {
                         if (!collectionIdMap.TryGetValue(collectionName, out int cid))
@@ -146,31 +146,42 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                                 cid = collectionIdMap[collectionName] = newId.Value;
                         }
 
-                        if (cid > 0 && posted.Add(cid))
+                        if (cid > 0)
                         {
-                            var url = PlexHelper.GetCollectionPosterUrl(series!, collectionName, cid, metadataService, Settings.CollectionPosters);
-                            if (!string.IsNullOrEmpty(url) && await plexCollections.UploadCollectionPosterByUrlAsync(cid, url, target, cancellationToken).ConfigureAwait(false))
+                            foreach (var config in PlexConstants.CollectionImageConfigs)
                             {
-                                uploaded++;
-                                s_logger.Debug("CollectionService: Applied poster for '{0}'", collectionName);
+                                if (posted.Add((cid, config.Prefix)))
+                                {
+                                    var fallback = config.DefaultFallback && Settings.CollectionImages;
+                                    var url = PlexHelper.GetCollectionImageUrl(series!, collectionName, cid, config.Suffix, config.Suffixes, metadataService, fallback);
+                                    if (!string.IsNullOrEmpty(url) && await plexCollections.UploadCollectionImageByUrlAsync(cid, url, config.Prefix, target, cancellationToken).ConfigureAwait(false))
+                                    {
+                                        uploaded++;
+                                        s_logger.Debug("CollectionService: Applied {0} for '{1}'", config.Label, collectionName);
+                                    }
+                                }
                             }
                         }
                     }
                 }
 
-                // Always handle smart collection poster application
+                // Apply custom images to smart collections
                 foreach (var col in collections)
                 {
                     if (TextHelper.IsPlexTrue(col.Smart) && int.TryParse(col.RatingKey, out int cid) && !string.IsNullOrEmpty(col.Title))
                     {
-                        var posterPath = PlexHelper.FindCollectionPosterPath(null, col.Title, cid, metadataService);
-                        if (!string.IsNullOrEmpty(posterPath) && File.Exists(posterPath))
+                        foreach (var config in PlexConstants.CollectionImageConfigs)
                         {
-                            var url = $"{ServerBaseUrl}{ShokoRelayConstants.BasePath}/collections/user/sc{cid}?name={Uri.EscapeDataString(col.Title)}&t={new FileInfo(posterPath).LastWriteTimeUtc.Ticks}";
-                            if (await plexCollections.UploadCollectionPosterByUrlAsync(cid, url, target, cancellationToken).ConfigureAwait(false))
+                            var posterPath = PlexHelper.FindCollectionImagePath(null, col.Title, cid, config.Suffixes, metadataService);
+                            if (!string.IsNullOrEmpty(posterPath) && File.Exists(posterPath))
                             {
-                                uploaded++;
-                                s_logger.Info("CollectionService: Applied custom poster to smart collection '{0}' (ID: {1})", col.Title, cid);
+                                var url =
+                                    $"{ServerBaseUrl}{ShokoRelayConstants.BasePath}/collections/user/sc{cid}?name={Uri.EscapeDataString(col.Title)}&suffix={config.Suffix}&t={new FileInfo(posterPath).LastWriteTimeUtc.Ticks}";
+                                if (await plexCollections.UploadCollectionImageByUrlAsync(cid, url, config.Prefix, target, cancellationToken).ConfigureAwait(false))
+                                {
+                                    uploaded++;
+                                    s_logger.Info("CollectionService: Applied custom {0} to smart collection '{1}' (ID: {2})", config.Label, col.Title, cid);
+                                }
                             }
                         }
                     }

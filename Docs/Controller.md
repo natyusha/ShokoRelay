@@ -90,7 +90,8 @@ GET  /matches?filename={path}&title={id}&manual=1              -> Match         
 POST /matches?filename={path}&title={id}&manual=1              -> Match
 
 GET  /collections/{groupId}                                    -> GetCollection
-GET  /collections/user/{groupId}?name={string}&t={ticks}       -> GetCollectionPoster       (image)
+GET  /collections/user/{groupId}                               -> GetCollectionImage       (image)
+     [?name={string}&suffix={string}&t={ticks}]
 
 GET  /metadata/{ratingKey}?includeChildren={0|1}               -> GetMetadata
 GET  /metadata/{ratingKey}/children                            -> GetChildren
@@ -106,9 +107,10 @@ GET  /metadata/{ratingKey}/extras                              -> GetMetadataExt
   - `manual`: (default 0) set to 1 to force identification via the `title` parameter.
   - Testing the `GET` endpoint would use the following format: `/matches?title={ShokoSeriesID}&manual=1`
 - `GetCollection` retrieves collection metadata for a given group ID.
-- `GetCollectionPoster` returns the poster image from the `!CollectionPosters` directory matching the given Shoko group ID or a Plex smart collection rating key prefixed with 'sc'.
+- `GetCollectionImage` returns the image from the `!CollectionImages` directory matching the given Shoko group name/ID or a Plex smart collection rating key prefixed with 'sc'.
   - `t`: (optional) timestamp ticks used for cache busting.
   - `name`: (optional) the collection name for smart collections since they have no mapping to a group ID.
+  - `suffix`: (optional) the artwork type suffix (e.g. -logo, -backdrop, -square)
 - `GetMetadata` returns full metadata for a ratingKey (series/season/episode).
   - `includeChildren`: (default 0) set to 1 to embed immediate children in the response.
 - `GetChildren` / `GetGrandchildren` return only the immediate or second-level child items respectively.
@@ -157,7 +159,8 @@ POST /plex/auth/unlink                                         -> UnlinkPlex
 ```
 GET  /plex/library/refresh?filter={csv}                        -> RefreshPlexSeries
 
-GET  /plex/collections/build?filter={csv}&assignment={bool}    -> BuildPlexCollections
+GET  /plex/collections/build                                   -> BuildPlexCollections
+     [?filter={csv}&assignment={true|false}]
 
 GET  /plex/ratings/apply?filter={csv}                          -> ApplyAudienceRatings
 

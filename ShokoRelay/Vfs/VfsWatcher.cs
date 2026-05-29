@@ -385,8 +385,8 @@ public class VfsWatcher(
     private void ScheduleCollectionUpdate(IShokoSeries series) =>
         ScheduleDebouncedAction(series.ID, Settings.Advanced.PlexFixupDelay * 60, _pendingCollectionUpdates, token => RunCollectionUpdateAsync(series, token));
 
-    /// <summary>Worker task that performs the collection assignment and poster upload logic.</summary>
-    /// <param name="series">The Shoko series metadata.</param>
+    /// <summary>Worker task that performs the collection assignment and poster/logo/backdrop upload logic.</summary>
+    /// <param name="series">The Shoko series to update.</param>
     /// <param name="token">Cancellation token.</param>
     /// <returns>A task representing the update operation.</returns>
     private async Task RunCollectionUpdateAsync(IShokoSeries series, CancellationToken token)
@@ -410,9 +410,13 @@ public class VfsWatcher(
                     if (!collectionId.HasValue)
                         continue;
 
-                    string? posterUrl = PlexHelper.GetCollectionPosterUrl(series, collectionName, collectionId.Value, _metadataService, Settings.CollectionPosters);
-                    if (!string.IsNullOrWhiteSpace(posterUrl))
-                        await _plexCollections.UploadCollectionPosterByUrlAsync(collectionId.Value, posterUrl, target, token).ConfigureAwait(false);
+                    foreach (var config in PlexConstants.CollectionImageConfigs)
+                    {
+                        var fallback = config.DefaultFallback && Settings.CollectionImages;
+                        var url = PlexHelper.GetCollectionImageUrl(series, collectionName, collectionId.Value, config.Suffix, config.Suffixes, _metadataService, fallback);
+                        if (!string.IsNullOrEmpty(url))
+                            await _plexCollections.UploadCollectionImageByUrlAsync(collectionId.Value, url, config.Prefix, target, token).ConfigureAwait(false);
+                    }
                 }
             }
         }

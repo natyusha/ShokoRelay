@@ -258,27 +258,29 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
         return primarySeries == null ? NotFound() : WrapInContainer(_mapper.MapCollection(group, primarySeries));
     }
 
-    /// <summary>Serves the local poster image for an automatically generated, or smart collection by matching its ID or name.</summary>
-    /// <param name="groupId">The Shoko group ID or the Plex rating key for a smart collection prefixed with "sc".</param>
-    /// <param name="name">The collection name for smart collections.</param>
+    /// <summary>Serves the local image for a user-defined, automatically generated, or smart collection by matching its ID or name.</summary>
+    /// <param name="groupId">The Shoko group ID (prefixed with 'sc' for smart collections) or Plex collection ID.</param>
+    /// <param name="name">Optional collection name.</param>
+    /// <param name="suffix">Optional image type suffix (e.g. -logo, -backdrop, -square).</param>
     /// <returns>Physical file result.</returns>
     [HttpGet("collections/user/{groupId}")]
-    public IActionResult GetCollectionPoster(string groupId, [FromQuery] string? name = null)
+    public IActionResult GetCollectionImage(string groupId, [FromQuery] string? name = null, [FromQuery] string? suffix = null)
     {
         string? posterPath = null;
+        string actualSuffix = suffix ?? "";
 
-        // If prefixed with "sc", it's a Plex smart collection with a parsed ID (bypassing Shoko Group lookup)
+        // If prefixed with 'sc', it's a Plex smart collection with a parsed ID (bypassing Shoko Group lookup)
         if (groupId.StartsWith(PlexConstants.SmartCollectionPrefix, StringComparison.OrdinalIgnoreCase) && int.TryParse(groupId[2..], out int cid))
-            posterPath = PlexHelper.FindCollectionPosterPath(null, name ?? string.Empty, cid, MetadataService);
+            posterPath = PlexHelper.FindCollectionImagePath(null, name ?? string.Empty, cid, [actualSuffix], MetadataService);
         else if (int.TryParse(groupId, out int gid))
         {
             var group = MetadataService.GetShokoGroupByID(gid);
             var primarySeries = group?.MainSeries ?? group?.Series?.FirstOrDefault();
             if (primarySeries != null)
-                posterPath = PlexHelper.FindCollectionPosterPathByGroup(primarySeries, gid, MetadataService);
+                posterPath = PlexHelper.FindCollectionImagePathByGroup(primarySeries, gid, actualSuffix, MetadataService);
 
             if (string.IsNullOrEmpty(posterPath) || !System.IO.File.Exists(posterPath))
-                posterPath = PlexHelper.FindCollectionPosterPath(null, name ?? string.Empty, gid, MetadataService);
+                posterPath = PlexHelper.FindCollectionImagePath(null, name ?? string.Empty, gid, [actualSuffix], MetadataService);
         }
 
         return string.IsNullOrWhiteSpace(posterPath) || !System.IO.File.Exists(posterPath)

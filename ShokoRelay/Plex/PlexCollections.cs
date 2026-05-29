@@ -63,14 +63,15 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
 
     #region Poster Operations
 
-    /// <summary>Uploads a poster to a collection via URL.</summary>
-    /// <param name="collectionId">Collection ID.</param>
-    /// <param name="posterUrl">Poster URL.</param>
-    /// <param name="target">Target library.</param>
+    /// <summary>Uploads a custom collection image (poster, backdrop, logo, or square art) to Plex by URL.</summary>
+    /// <param name="collectionId">Plex collection ID.</param>
+    /// <param name="imageUrl">The dynamic callback URL to fetch the image bytes.</param>
+    /// <param name="subEndpoint">Plex metadata sub-endpoint (e.g. posters, arts, logos, squareArts).</param>
+    /// <param name="target">The target Plex library.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>True on success.</returns>
-    public async Task<bool> UploadCollectionPosterByUrlAsync(int collectionId, string posterUrl, PlexLibraryTarget target, CancellationToken cancellationToken = default) =>
-        await ExecuteActionAsync(HttpMethod.Post, $"/library/metadata/{collectionId}/posters?url={Uri.EscapeDataString(posterUrl)}", target, $"Upload poster for {collectionId}", cancellationToken);
+    /// <returns>True if the upload was successful; otherwise, false.</returns>
+    public async Task<bool> UploadCollectionImageByUrlAsync(int collectionId, string imageUrl, string subEndpoint, PlexLibraryTarget target, CancellationToken cancellationToken = default) =>
+        await ExecuteActionAsync(HttpMethod.Post, $"/library/metadata/{collectionId}/{subEndpoint}?url={Uri.EscapeDataString(imageUrl)}", target, $"Upload {subEndpoint} for {collectionId}", cancellationToken);
 
     #endregion
 
