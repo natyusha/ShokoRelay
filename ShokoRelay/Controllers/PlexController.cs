@@ -212,16 +212,17 @@ public class PlexController(
     /// <summary>Triggers the generation of Plex collections.</summary>
     /// <param name="filter">Optional comma-separated list of Shoko or AniDB IDs.</param>
     /// <param name="assignment">If false, skips assigning series to collections and only applies posters.</param>
+    /// <param name="clean">If true, prunes old cached custom posters from Plex's local metadata directory.</param>
     /// <returns>A collection build report.</returns>
     [HttpGet("plex/collections/build")]
-    public Task<IActionResult> BuildPlexCollections([FromQuery] string? filter = null, [FromQuery] bool assignment = true) =>
+    public Task<IActionResult> BuildPlexCollections([FromQuery] string? filter = null, [FromQuery] bool assignment = true, [FromQuery] bool clean = true) =>
         ValidatePlexFilterRequest(filter, out var seriesList, out _) is { } guard
             ? Task.FromResult(guard)
             : ExecuteTrackedTaskAsync(
                 ShokoRelayConstants.TaskPlexCollectionsBuild,
                 ShokoRelayConstants.LogPlexCollections,
                 LogHelper.BuildCollectionsReport,
-                () => _collectionService.BuildCollectionsAsync(seriesList, assignment, CancellationToken.None),
+                () => _collectionService.BuildCollectionsAsync(seriesList, assignment, clean, CancellationToken.None),
                 SyncHelper.SyncLock
             );
 

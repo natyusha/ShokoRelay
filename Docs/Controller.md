@@ -160,7 +160,7 @@ POST /plex/auth/unlink                                         -> UnlinkPlex
 GET  /plex/library/refresh?filter={csv}                        -> RefreshPlexSeries
 
 GET  /plex/collections/build                                   -> BuildPlexCollections
-     [?filter={csv}&assignment={true|false}]
+     [?filter={csv}&assignment={true|false}&clean={true|false}]
 
 GET  /plex/ratings/apply?filter={csv}                          -> ApplyAudienceRatings
 
@@ -172,6 +172,7 @@ GET  /plex/automation/run                                      -> RunPlexAutomat
 - `RefreshPlexSeries` triggers a partial library scan in Plex for a comma-separated list of series IDs.
 - `BuildPlexCollections` generates Plex collections for a comma-separated list of series IDs (or all series if omitted).
   - `assignment`: (default true) if false, skips assigning series to collections and only applies posters.
+  - `clean`: (default true) if true and `PlexDataPath` is configured, prunes old cached custom posters from Plex's local metadata directory
   - This will also scan Plex for smart collection names allowing their posters to be set.
 - `ApplyAudienceRatings` updates ratings for a comma-separated list of series IDs based on the configured source (TMDB/AniDB).
 - `SyncPlexImages` queries Plex for generated episode thumbnails and scans VFS/collection paths for all local images, uploading and marking them as preferred in Shoko.

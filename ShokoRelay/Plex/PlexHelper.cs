@@ -60,6 +60,8 @@ public static class PlexHelper
         if (roots.Count == 0)
             return null;
 
+        int groupId = series?.TopLevelGroupID ?? 0;
+
         string postersFolderName = VfsShared.ResolveCollectionImagesFolderName();
         foreach (var root in roots)
         {
@@ -79,7 +81,7 @@ public static class PlexHelper
                 {
                     if (series != null)
                     {
-                        if (IsIdMatch(baseName, collectionId, suffix) || IsNameMatch(baseName, normalizedTitle, suffix))
+                        if (IsIdMatch(baseName, groupId, suffix) || IsIdMatch(baseName, collectionId, suffix) || IsNameMatch(baseName, normalizedTitle, suffix))
                             return file;
                     }
                     else
@@ -104,7 +106,7 @@ public static class PlexHelper
         if (series == null || groupId <= 0)
             return null;
         var group = series.TopLevelGroup;
-        string? groupTitle = group?.PreferredTitle?.Value ?? group?.DefaultTitle?.Value;
+        string? groupTitle = NormalizeCollectionKey(group?.PreferredTitle?.Value ?? group?.DefaultTitle?.Value);
         var roots = ResolveImportRoots(series, metadataService);
         if (roots.Count == 0)
             return null;
@@ -240,7 +242,7 @@ public static class PlexHelper
         return NormalizeCollectionKey(cleanedBase) == normalizedTitle;
     }
 
-    private static string? NormalizeCollectionKey(string value)
+    private static string? NormalizeCollectionKey(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
             return null;

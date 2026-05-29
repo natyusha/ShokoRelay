@@ -66,7 +66,7 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
     /// <summary>Uploads a custom collection image (poster, backdrop, logo, or square art) to Plex by URL.</summary>
     /// <param name="collectionId">Plex collection ID.</param>
     /// <param name="imageUrl">The dynamic callback URL to fetch the image bytes.</param>
-    /// <param name="subEndpoint">Plex metadata sub-endpoint (e.g. posters, arts, logos, squareArts).</param>
+    /// <param name="subEndpoint">Plex metadata sub-endpoint (e.g. posters, arts, clearLogos, squareArts).</param>
     /// <param name="target">The target Plex library.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>True if the upload was successful; otherwise, false.</returns>

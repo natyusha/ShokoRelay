@@ -131,7 +131,7 @@ namespace ShokoRelay.Plex
         }
 
         /// <summary>Represents a configuration for a specific collection artwork type.</summary>
-        /// <param name="Prefix">The Plex metadata sub-endpoint (e.g. posters, backdrops, logos, squares).</param>
+        /// <param name="Prefix">The Plex metadata sub-endpoint (e.g. posters, arts, clearLogos, squareArts).</param>
         /// <param name="Suffix">The representative hyphenated suffix used in the URL.</param>
         /// <param name="Suffixes">The prioritized array of all allowed local filename suffixes.</param>
         /// <param name="Label">The diagnostic label for logging.</param>
@@ -142,9 +142,9 @@ namespace ShokoRelay.Plex
         public static readonly IReadOnlyList<CollectionImageConfig> CollectionImageConfigs =
         [
             new("posters", "", ["-folder", "-poster", "-show", ""], "poster", true),
-            new("backdrops", "-backdrop", ["-art", "-backdrop", "-background", "-fanart"], "backdrop", true),
-            new("logos", "-logo", ["-clearlogo", "-logo"], "logo", true),
-            new("squares", "-square", ["-square", "-squareArt", "-backgroundSquare"], "square art", false),
+            new("arts", "-backdrop", ["-art", "-backdrop", "-background", "-fanart"], "backdrop", true),
+            new("clearLogos", "-logo", ["-clearlogo", "-logo"], "logo", true),
+            new("squareArts", "-square", ["-square", "-squareArt", "-backgroundSquare"], "square art", false),
         ];
 
         #endregion

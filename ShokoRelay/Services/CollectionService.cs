@@ -10,9 +10,10 @@ public interface ICollectionService
     /// <summary>Create or update Plex collections and their images for the supplied series list.</summary>
     /// <param name="seriesList">The collection of series to process.</param>
     /// <param name="applyAssignment">If true, perform metadata assignment; otherwise, only refresh collection image assets.</param>
+    /// <param name="clean">If true, prunes old cached custom posters from Plex's local metadata directory.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A result object containing statistics on the operation.</returns>
-    Task<BuildCollectionsResult> BuildCollectionsAsync(IEnumerable<IShokoSeries?> seriesList, bool applyAssignment = true, CancellationToken cancellationToken = default);
+    Task<BuildCollectionsResult> BuildCollectionsAsync(IEnumerable<IShokoSeries?> seriesList, bool applyAssignment = true, bool clean = true, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Result returned by <see cref="ICollectionService.BuildCollectionsAsync"/>.</summary>
@@ -51,7 +52,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
     #region Collection Building
 
     /// <inheritdoc/>
-    public async Task<BuildCollectionsResult> BuildCollectionsAsync(IEnumerable<IShokoSeries?> seriesList, bool applyAssignment = true, CancellationToken cancellationToken = default)
+    public async Task<BuildCollectionsResult> BuildCollectionsAsync(IEnumerable<IShokoSeries?> seriesList, bool applyAssignment = true, bool clean = true, CancellationToken cancellationToken = default)
     {
         const string TaskName = ShokoRelayConstants.TaskPlexCollectionsBuild;
         TaskHelper.StartTask(TaskName);
@@ -66,6 +67,16 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
 
             if (targets.Count == 0)
                 return new BuildCollectionsResult(0, 0, 0, 0, 0, 0, 0, createdList, errorsList);
+
+            // Execute pre-cleanup pruning of old posters, arts, logos, and square images if configured and enabled
+            if (clean && !string.IsNullOrWhiteSpace(Settings.Advanced.PlexDataPath))
+            {
+                foreach (var target in targets)
+                {
+                    var collections = await plexClient.GetSectionCollectionsAsync(target, cancellationToken).ConfigureAwait(false) ?? [];
+                    CleanOldPlexImages(collections);
+                }
+            }
 
             foreach (var target in targets)
             {
@@ -148,16 +159,16 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
 
                         if (cid > 0)
                         {
-                            foreach (var config in PlexConstants.CollectionImageConfigs)
+                            foreach (var (prefix, suffix, suffixes, label, defaultFallback) in PlexConstants.CollectionImageConfigs)
                             {
-                                if (posted.Add((cid, config.Prefix)))
+                                if (posted.Add((cid, prefix)))
                                 {
-                                    var fallback = config.DefaultFallback && Settings.CollectionImages;
-                                    var url = PlexHelper.GetCollectionImageUrl(series!, collectionName, cid, config.Suffix, config.Suffixes, metadataService, fallback);
-                                    if (!string.IsNullOrEmpty(url) && await plexCollections.UploadCollectionImageByUrlAsync(cid, url, config.Prefix, target, cancellationToken).ConfigureAwait(false))
+                                    var fallback = defaultFallback && Settings.CollectionImages;
+                                    var url = PlexHelper.GetCollectionImageUrl(series!, collectionName, cid, suffix, suffixes, metadataService, fallback);
+                                    if (!string.IsNullOrEmpty(url) && await plexCollections.UploadCollectionImageByUrlAsync(cid, url, prefix, target, cancellationToken).ConfigureAwait(false))
                                     {
                                         uploaded++;
-                                        s_logger.Debug("CollectionService: Applied {0} for '{1}'", config.Label, collectionName);
+                                        s_logger.Debug("CollectionService: Applied {0} for '{1}'", label, collectionName);
                                     }
                                 }
                             }
@@ -170,17 +181,17 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                 {
                     if (TextHelper.IsPlexTrue(col.Smart) && int.TryParse(col.RatingKey, out int cid) && !string.IsNullOrEmpty(col.Title))
                     {
-                        foreach (var config in PlexConstants.CollectionImageConfigs)
+                        foreach (var (prefix, suffix, suffixes, label, _) in PlexConstants.CollectionImageConfigs)
                         {
-                            var posterPath = PlexHelper.FindCollectionImagePath(null, col.Title, cid, config.Suffixes, metadataService);
+                            var posterPath = PlexHelper.FindCollectionImagePath(null, col.Title, cid, suffixes, metadataService);
                             if (!string.IsNullOrEmpty(posterPath) && File.Exists(posterPath))
                             {
                                 var url =
-                                    $"{ServerBaseUrl}{ShokoRelayConstants.BasePath}/collections/user/sc{cid}?name={Uri.EscapeDataString(col.Title)}&suffix={config.Suffix}&t={new FileInfo(posterPath).LastWriteTimeUtc.Ticks}";
-                                if (await plexCollections.UploadCollectionImageByUrlAsync(cid, url, config.Prefix, target, cancellationToken).ConfigureAwait(false))
+                                    $"{ServerBaseUrl}{ShokoRelayConstants.BasePath}/collections/user/sc{cid}?name={Uri.EscapeDataString(col.Title)}&suffix={suffix}&t={new FileInfo(posterPath).LastWriteTimeUtc.Ticks}";
+                                if (await plexCollections.UploadCollectionImageByUrlAsync(cid, url, prefix, target, cancellationToken).ConfigureAwait(false))
                                 {
                                     uploaded++;
-                                    s_logger.Info("CollectionService: Applied custom {0} to smart collection '{1}' (ID: {2})", config.Label, col.Title, cid);
+                                    s_logger.Info("CollectionService: Applied custom {0} to smart collection '{1}' (ID: {2})", label, col.Title, cid);
                                 }
                             }
                         }
@@ -198,6 +209,61 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
         {
             TaskHelper.FinishTask(TaskName);
         }
+    }
+
+    #endregion
+
+    #region Private Helpers
+
+    /// <summary>Prunes old custom images from Plex's local metadata directories, keeping only the most recent upload for each type.</summary>
+    /// <param name="collections">The list of discovered collections in the section.</param>
+    private void CleanOldPlexImages(IEnumerable<PlexMetadataItem> collections)
+    {
+        string dataPath = Settings.Advanced.PlexDataPath;
+        if (string.IsNullOrWhiteSpace(dataPath) || !Directory.Exists(dataPath))
+            return;
+
+        s_logger.Info("CollectionService: Scanning Plex data directory for old collection images to prune...");
+        int deletedCount = 0;
+        var subFolders = new[] { "posters", "art", "clearLogos", "squareArt" }; // 'Art' / 'squareArt' are NOT plural like the upload endpoints
+
+        foreach (var col in collections)
+        {
+            var metaDir = col.GetMetadataDirectory();
+            if (string.IsNullOrEmpty(metaDir))
+                continue;
+
+            foreach (var folder in subFolders)
+            {
+                string imagesPath = Path.Combine(dataPath, metaDir, "Uploads", folder);
+                if (!Directory.Exists(imagesPath))
+                    continue;
+
+                try
+                {
+                    var files = Directory.EnumerateFiles(imagesPath).Select(f => new FileInfo(f)).OrderBy(f => f.CreationTimeUtc).ToList();
+
+                    if (files.Count > 1)
+                    {
+                        for (int i = 0; i < files.Count - 1; i++)
+                        {
+                            try
+                            {
+                                files[i].Delete();
+                                deletedCount++;
+                            }
+                            catch { }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    s_logger.Warn(ex, "CollectionService: Failed to prune {0} for collection '{1}'", folder, col.Title);
+                }
+            }
+        }
+
+        s_logger.Info("CollectionService: Finished pruning. Deleted {0} stale collection images.", deletedCount);
     }
 
     #endregion
