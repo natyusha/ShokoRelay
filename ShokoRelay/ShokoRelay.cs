@@ -89,7 +89,7 @@ public class Plugin : IPlugin
     public string? Description => "A custom Plex metadata provider and automation toolset for integrating Plex and AnimeThemes with Shoko Server.";
 
     /// <summary>Plugin thumbnail resource.</summary>
-    public string? EmbeddedThumbnailResourceName => "ShokoRelay.Assets.shoko-relay-thumbnail.png";
+    public string? EmbeddedThumbnailResourceName => "ShokoRelay.Assets.shoko-relay-logo.png";
 }
 
 #endregion

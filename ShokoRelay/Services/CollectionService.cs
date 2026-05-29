@@ -1,4 +1,5 @@
 using NLog;
+using Shoko.Abstractions.Video.Services;
 
 namespace ShokoRelay.Services;
 
@@ -41,7 +42,7 @@ public sealed record BuildCollectionsResult(
 #endregion
 
 /// <summary>Default implementation of <see cref="ICollectionService"/>.</summary>
-public class CollectionService(PlexClient plexClient, PlexCollections plexCollections, IMetadataService metadataService, PlexMetadata mapper) : ICollectionService
+public class CollectionService(PlexClient plexClient, PlexCollections plexCollections, IMetadataService metadataService, PlexMetadata mapper, IVideoService videoService) : ICollectionService
 {
     #region Fields & Constructor
 
@@ -68,8 +69,10 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
             if (targets.Count == 0)
                 return new BuildCollectionsResult(0, 0, 0, 0, 0, 0, 0, createdList, errorsList);
 
+            List<string> globalRoots = [.. (videoService.GetAllManagedFolders() ?? []).Select(f => f.Path).Where(p => !string.IsNullOrEmpty(p)).Distinct()];
+
             // Execute pre-cleanup pruning of old posters, arts, logos, and square images if configured and enabled
-            if (clean && !string.IsNullOrWhiteSpace(Settings.Advanced.PlexDataPath))
+            if (clean && !string.IsNullOrWhiteSpace(Settings.Advanced.PlexMetadataPath))
             {
                 foreach (var target in targets)
                 {
@@ -183,7 +186,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                     {
                         foreach (var (prefix, suffix, suffixes, label, _) in PlexConstants.CollectionImageConfigs)
                         {
-                            var posterPath = PlexHelper.FindCollectionImagePath(null, col.Title, cid, suffixes, metadataService);
+                            var posterPath = PlexHelper.FindCollectionImagePath(null, col.Title, cid, suffixes, metadataService, globalRoots);
                             if (!string.IsNullOrEmpty(posterPath) && File.Exists(posterPath))
                             {
                                 var url =
@@ -219,7 +222,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
     /// <param name="collections">The list of discovered collections in the section.</param>
     private void CleanOldPlexImages(IEnumerable<PlexMetadataItem> collections)
     {
-        string dataPath = Settings.Advanced.PlexDataPath;
+        string dataPath = Settings.Advanced.PlexMetadataPath;
         if (string.IsNullOrWhiteSpace(dataPath) || !Directory.Exists(dataPath))
             return;
 

@@ -45,17 +45,18 @@ public static class PlexHelper
     /// <param name="collectionId">The collection ID.</param>
     /// <param name="suffixes">The allowed filename suffixes for this image type.</param>
     /// <param name="metadataService">Metadata service used to resolve roots.</param>
+    /// <param name="globalRoots">Optional pre-resolved list of active VFS root directories.</param>
     /// <returns>Path to poster file or null.</returns>
-    public static string? FindCollectionImagePath(IShokoSeries? series, string collectionName, int collectionId, string[] suffixes, IMetadataService metadataService)
+    public static string? FindCollectionImagePath(IShokoSeries? series, string collectionName, int collectionId, string[] suffixes, IMetadataService metadataService, IReadOnlyList<string>? globalRoots = null)
     {
         string? normalizedTitle = NormalizeCollectionKey(collectionName);
         if (string.IsNullOrWhiteSpace(normalizedTitle))
             return null;
 
         List<string> roots =
-            series != null
-                ? [.. ResolveImportRoots(series, metadataService)]
-                : [.. (metadataService.GetAllShokoSeries() ?? []).SelectMany(s => ResolveImportRoots(s, metadataService)).Distinct(VfsShared.PathComparer)];
+            series != null ? [.. ResolveImportRoots(series, metadataService)]
+            : globalRoots != null ? [.. globalRoots]
+            : [.. (metadataService.GetAllShokoSeries() ?? []).SelectMany(s => ResolveImportRoots(s, metadataService)).Distinct(VfsShared.PathComparer)];
 
         if (roots.Count == 0)
             return null;

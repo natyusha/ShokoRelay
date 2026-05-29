@@ -16,6 +16,15 @@ internal static class VfsShared
     /// <summary>OS-aware path comparer.</summary>
     public static StringComparer PathComparer => OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
+    /// <summary>The cached set of ignored folder names resolved during the last lookup.</summary>
+    private static HashSet<string>? s_lastIgnoredNames;
+
+    /// <summary>Reference to the last evaluated configuration settings instance used for cache invalidation.</summary>
+    private static RelayConfig? s_lastSettingsForIgnore;
+
+    /// <summary>Exclusive lock used to ensure thread-safe ignored folder cache compilation.</summary>
+    private static readonly Lock s_ignoreLock = new();
+
     #endregion
 
     #region Path Resolution
@@ -117,17 +126,24 @@ internal static class VfsShared
     /// <returns>A HashSet of folder names.</returns>
     public static HashSet<string> GetIgnoredFolderNames(RelayConfig settings)
     {
-        var ignored = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ResolveRootFolderName(), ResolveAnimeThemesFolderName(), ResolveCollectionImagesFolderName() };
-        foreach (var folder in settings.Advanced.FolderExclusions.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            ignored.Add(folder);
+        lock (s_ignoreLock)
+        {
+            if (ReferenceEquals(s_lastSettingsForIgnore, settings) && s_lastIgnoredNames != null)
+                return s_lastIgnoredNames;
 
-        // If Plex Local Extras are enabled, automatically include the standard Plex extra subdirectories in the ignore list.
-        // This prevents Shoko from attempting to index these files, removing the need for manual user intervention for show and season-level extras.
-        if (settings.Advanced.PlexLocalExtras)
-            foreach (var extraDir in PlexConstants.LocalExtraDirs)
-                ignored.Add(extraDir);
+            var ignored = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ResolveRootFolderName(), ResolveAnimeThemesFolderName(), ResolveCollectionImagesFolderName() };
+            foreach (var folder in settings.Advanced.FolderExclusions.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                ignored.Add(folder);
 
-        return ignored;
+            // If Plex Local Extras are enabled, automatically include the standard Plex extra subdirectories in the ignore list.
+            // This prevents Shoko from attempting to index these files, removing the need for manual user intervention for show and season-level extras.
+            if (settings.Advanced.PlexLocalExtras)
+                foreach (var extraDir in PlexConstants.LocalExtraDirs)
+                    ignored.Add(extraDir);
+
+            s_lastSettingsForIgnore = settings;
+            return s_lastIgnoredNames = ignored;
+        }
     }
 
     #endregion

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Enums;
+using Shoko.Abstractions.Video.Services;
 using static ShokoRelay.Plex.PlexMapping;
 
 namespace ShokoRelay.Controllers;
@@ -10,7 +11,7 @@ namespace ShokoRelay.Controllers;
 [ApiController]
 [ApiVersion(ShokoRelayConstants.ApiVersion)]
 [Route(ShokoRelayConstants.BasePath)]
-public class MetadataController(IMetadataService metadataService, PlexMetadata mapper, ConfigProvider configProvider, PlexClient plexLibrary)
+public class MetadataController(IMetadataService metadataService, PlexMetadata mapper, ConfigProvider configProvider, PlexClient plexLibrary, IVideoService videoService)
     : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
 {
     #region Fields & Constructor
@@ -268,10 +269,11 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     {
         string? posterPath = null;
         string actualSuffix = suffix ?? "";
+        List<string> globalRoots = [.. (videoService.GetAllManagedFolders() ?? []).Select(f => f.Path).Where(p => !string.IsNullOrEmpty(p)).Distinct()];
 
         // If prefixed with 'sc', it's a Plex smart collection with a parsed ID (bypassing Shoko Group lookup)
         if (groupId.StartsWith(PlexConstants.SmartCollectionPrefix, StringComparison.OrdinalIgnoreCase) && int.TryParse(groupId[2..], out int cid))
-            posterPath = PlexHelper.FindCollectionImagePath(null, name ?? string.Empty, cid, [actualSuffix], MetadataService);
+            posterPath = PlexHelper.FindCollectionImagePath(null, name ?? string.Empty, cid, [actualSuffix], MetadataService, globalRoots);
         else if (int.TryParse(groupId, out int gid))
         {
             var group = MetadataService.GetShokoGroupByID(gid);
@@ -280,7 +282,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
                 posterPath = PlexHelper.FindCollectionImagePathByGroup(primarySeries, gid, actualSuffix, MetadataService);
 
             if (string.IsNullOrEmpty(posterPath) || !System.IO.File.Exists(posterPath))
-                posterPath = PlexHelper.FindCollectionImagePath(null, name ?? string.Empty, gid, [actualSuffix], MetadataService);
+                posterPath = PlexHelper.FindCollectionImagePath(null, name ?? string.Empty, gid, [actualSuffix], MetadataService, globalRoots);
         }
 
         return string.IsNullOrWhiteSpace(posterPath) || !System.IO.File.Exists(posterPath)

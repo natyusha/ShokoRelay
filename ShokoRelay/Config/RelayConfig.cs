@@ -426,10 +426,10 @@ public class AdvancedConfig
     [DefaultValue(ShokoRelayConstants.FolderCollectionImagesDefault)]
     public string CollectionImagesRootPath { get; set; } = ShokoRelayConstants.FolderCollectionImagesDefault;
 
-    /// <summary>Path to Plex's data directory.</summary>
-    [Display(Name = "Plex Data Path", Description = "An optional folder for Plex's data directory *must be accessible by Shoko")]
+    /// <summary>Path to Plex's Metadata directory.</summary>
+    [Display(Name = "Plex Data Path", Description = "An optional folder for Plex's Metadata directory *must be accessible by Shoko")]
     [DefaultValue("")]
-    public string PlexDataPath { get; set; } = "";
+    public string PlexMetadataPath { get; set; } = "";
 
     /// <summary>Path to FFmpeg binaries.</summary>
     [Display(Name = "FFmpeg Path", Description = "An optional folder for FFmpeg/FFprobe. Leave empty to use 'Utilities/FFmpeg', or the plugin root / PATH")]

@@ -118,7 +118,7 @@ public class PlexMetadataItem
     [JsonPropertyName("smart")]
     public string? Smart { get; set; }
 
-    /// <summary>Gets the calculated path to the metadata bundle inside Plex's Data directory.</summary>
+    /// <summary>Gets the calculated path to the metadata bundle inside Plex's Metadata directory.</summary>
     /// <returns>The relative metadata directory path, or null if the GUID is missing.</returns>
     public string? GetMetadataDirectory()
     {
@@ -129,7 +129,7 @@ public class PlexMetadataItem
         byte[] hashBytes = System.Security.Cryptography.SHA1.HashData(bytes);
         string hash = Convert.ToHexString(hashBytes).ToLowerInvariant();
 
-        return Path.Combine("Metadata", "Collections", hash[..1], hash[1..] + ".bundle");
+        return Path.Combine("Collections", hash[..1], hash[1..] + ".bundle");
     }
 }
 
