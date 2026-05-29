@@ -336,7 +336,7 @@
             </button>
           </div>
           <div class="full">
-            <div class="at-path-col"><label>Path</label><input id="at-path" type="text" placeholder="Shoko or Plex relative anime path" /></div>
+            <div class="at-path-col"><label>Path</label><input id="at-path" type="text" placeholder="Shoko or mapping relative anime path" /></div>
             <div class="w46"><label title="Preferred Theme">Slug</label><input id="at-slug" type="text" placeholder="OP2" /></div>
             <div class="w46"><label title="Index Override">Off.</label><input id="at-offset" type="number" value="" placeholder="0" /></div>
           </div>
@@ -522,10 +522,10 @@
             <h3>Advanced Settings</h3>
             <h4>VFS Rebuild Required</h4>
             <small>Any setting that includes a <strong>⟳</strong> symbol requires a VFS rebuild to take effect. This is because they directly affect how the VFS is generated.</small>
-            <h4>Path Mappings</h4>
-            <small><em>Required if Plex and Shoko see your files via different paths</em></small>
+            <h4>Theme.mp3 Path Mappings</h4>
+            <small><em>Only configure this if you don't want to use Shoko relative paths for AnimeThemes MP3 generation.</em> Nothing else requires it.</small>
             <ul class="help-list inline-help">
-              <li><code>Left Column</code> <small>Plex Base Paths</small></li>
+              <li><code>Left Column</code> <small>Working Base Paths</small></li>
               <li><code>Right Column</code> <small>Shoko Base Paths</small></li>
             </ul>
             <h4>Folder Exclusions</h4>

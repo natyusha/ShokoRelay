@@ -145,7 +145,7 @@
         label.innerHTML = `<span>${p.Display || p.Path.split(".").pop()}</span>${p.Description ? `<small>${p.Description}</small>` : ""}`;
         wrap.appendChild(label);
         const mappingContainer = document.createElement("div");
-        mappingContainer.innerHTML = `<div class="full"><div><small>Plex Base Paths</small><textarea id="path-mappings-left"></textarea></div><div><small>Shoko Base Paths</small><textarea id="path-mappings-right"></textarea></div></div>`;
+        mappingContainer.innerHTML = `<div class="full"><div><small>Working Base Paths</small><textarea id="path-mappings-left"></textarea></div><div><small>Shoko Base Paths</small><textarea id="path-mappings-right"></textarea></div></div>`;
         wrap.appendChild(mappingContainer);
         const l = mappingContainer.querySelector("#path-mappings-left");
         const r = mappingContainer.querySelector("#path-mappings-right");

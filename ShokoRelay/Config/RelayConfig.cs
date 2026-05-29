@@ -358,8 +358,8 @@ public class AdvancedConfig
     [DefaultValue("")]
     public string ShokoServerUrl { get; set; } = "";
 
-    /// <summary>Directory mappings between Shoko and Plex.</summary>
-    [Display(Name = "Path Mappings", Description = "Mappings for Plex base paths to Shoko base paths. Enter one mapping per line")]
+    /// <summary>Directory mappings between Shoko and the working device.</summary>
+    [Display(Name = "Theme.mp3 Path Mappings", Description = "Mappings for working base paths to Shoko base paths. Enter one mapping per line")]
     public Dictionary<string, string> PathMappings { get; set; } = [];
 
     /// <summary>Folders to ignore when generating the VFS.</summary>

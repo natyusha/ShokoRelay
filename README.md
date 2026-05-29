@@ -219,7 +219,7 @@ This plugin includes full [AnimeThemes](https://animethemes.moe/) integration. I
 There is also support for generating `Theme.mp3` files as local metadata. This will add them to the VFS automatically and can be run for either a single series or as a batch operation. This process requires Shoko Relay to have access to [FFmpeg/FFprobe](https://ffmpeg.org/download.html). Place system appropriate binaries in one of the following locations: Shoko Server's `Utilities` folder in a subfolder named `FFmpeg` (case sensitive), the ShokoRelay plugin folder, or the system PATH. This is required due to AnimeThemes not providing the '.mp3' files that Plex requires for this feature (they use '.ogg').
 
 - This is available under the "AnimeThemes: MP3" section of the dashboard
-- Input the path (relative to Plex or Shoko) to a folder containing an anime series and then click `Generate`
+- Input the path (relative to Shoko or a mapping) to a folder containing an anime series and then click `Generate`
 - The `Force Overwrite Toggle` will overwrite any `Theme.mp3` files found in the configured path (or during a batch)
 - The `Recursive Batch Toggle` will enable batch operations on every subfolder of the configured path
 - By default this will grab the first available OP with a fallback to the first ED
