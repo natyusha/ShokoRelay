@@ -213,25 +213,27 @@ internal static class VfsShared
         return !string.Equals(full, root, StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>Determines if a directory or file name should be ignored based on current settings.</summary>
-    /// <param name="name">The name of the file or directory.</param>
-    /// <param name="isDirectory">True if checking a directory; false for a file.</param>
-    /// <param name="ignoredNames">Optional pre-computed set of ignored folder names for performance.</param>
-    /// <returns>True if the name matches a folder exclusion or an extra naming convention.</returns>
-    public static bool IsNameIgnored(string name, bool isDirectory, HashSet<string>? ignoredNames = null) =>
-        (ignoredNames ?? GetIgnoredFolderNames(Settings)).Contains(name)
-        || (Settings.Advanced.PlexLocalExtras && (TextHelper.MatchLocalExtraDir(name).Success || (!isDirectory && TextHelper.MatchLocalExtraFile(Path.GetFileNameWithoutExtension(name)).Success)));
-
     /// <summary>Determines if any segment of a path or the file itself should be ignored based on current settings.</summary>
     /// <param name="path">The absolute or relative path to evaluate.</param>
     /// <param name="ignoredNames">Optional pre-computed set of ignored folder names for performance.</param>
     /// <returns>True if any segment of the path or the filename matches an ignore rule.</returns>
-    public static bool IsPathIgnored(string path, HashSet<string>? ignoredNames = null) =>
-        !string.IsNullOrEmpty(path)
-        && (
-            path.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries).Any(seg => IsNameIgnored(seg, true, ignoredNames))
-            || IsNameIgnored(Path.GetFileName(path), false, ignoredNames)
-        );
+    public static bool IsPathIgnored(string path, HashSet<string>? ignoredNames = null)
+    {
+        if (string.IsNullOrEmpty(path))
+            return false;
+
+        var names = ignoredNames ?? GetIgnoredFolderNames(Settings);
+        var segments = path.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries);
+
+        foreach (var seg in segments)
+            if (names.Contains(seg) || (Settings.Advanced.PlexLocalExtras && TextHelper.MatchLocalExtraDir(seg).Success))
+                return true;
+
+        var fileName = Path.GetFileName(path);
+        var baseName = Path.GetFileNameWithoutExtension(path);
+
+        return names.Contains(fileName) || (Settings.Advanced.PlexLocalExtras && (TextHelper.MatchLocalExtraDir(fileName).Success || TextHelper.MatchLocalExtraFile(baseName).Success));
+    }
 
     #endregion
 }
@@ -245,7 +247,7 @@ public class VfsIgnoreRule : IManagedFolderIgnoreRule
     public string Name => "Shoko Relay Ignore Rule";
 
     /// <inheritdoc/>
-    public bool ShouldIgnore(IManagedFolder folder, FileSystemInfo fileSystemInfo) => VfsShared.IsPathIgnored(folder.Path) || VfsShared.IsNameIgnored(fileSystemInfo.Name, fileSystemInfo is DirectoryInfo);
+    public bool ShouldIgnore(IManagedFolder folder, FileSystemInfo fileSystemInfo) => VfsShared.IsPathIgnored(fileSystemInfo.FullName);
 }
 
 #endregion
