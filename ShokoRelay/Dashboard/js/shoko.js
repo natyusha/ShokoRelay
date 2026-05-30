@@ -143,6 +143,7 @@
         const ps = new URLSearchParams({
           dryRun: isDryRun,
           ratings: el("sync-ratings").checked,
+          progress: el("sync-progress").checked,
         });
 
         const usersVal = el("sync-users").value;

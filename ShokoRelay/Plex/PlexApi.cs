@@ -92,6 +92,14 @@ public class PlexMetadataItem
     [JsonPropertyName("viewCount")]
     public int? ViewCount { get; set; }
 
+    /// <summary>The current playback position in milliseconds.</summary>
+    [JsonPropertyName("viewOffset")]
+    public long? ViewOffset { get; set; }
+
+    /// <summary>The total duration of the item in milliseconds.</summary>
+    [JsonPropertyName("duration")]
+    public long? Duration { get; set; }
+
     /// <summary>Unix timestamp of the last viewing.</summary>
     [JsonPropertyName("lastViewedAt")]
     public long? LastViewedAt { get; set; }

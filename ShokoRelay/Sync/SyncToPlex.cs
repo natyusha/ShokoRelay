@@ -86,7 +86,7 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
             // Fetch user item buckets and automatically handle managed token resolution and user filtering.
             // Pass sinceHours: null here to return ALL unwatched items in Plex. The Shoko list is already filtered by sinceHours.
             var (userBuckets, newResult) = await SyncHelper
-                .FetchUserBucketsAsync(_plexAuth, _plexClient, _configProvider, target, userType, extraEntries, true, null, result, cancellationToken)
+                .FetchUserBucketsAsync(_plexAuth, _plexClient, _configProvider, target, userType, extraEntries, true, null, null, result, cancellationToken)
                 .ConfigureAwait(false);
             result = newResult;
 

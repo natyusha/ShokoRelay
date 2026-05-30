@@ -200,6 +200,7 @@ public class ShokoController(
     /// <param name="dryRun">Whether to skip writes.</param>
     /// <param name="sinceHours">Optional lookback window in hours to limit processed items.</param>
     /// <param name="ratings">Whether to include ratings in the sync. Defaults to configuration.</param>
+    /// <param name="progress">Whether to include playback progress in the sync. Defaults to configuration.</param>
     /// <param name="import">Direction: <c>true</c> for Plex←Shoko (Import to Plex), <c>false</c> for Plex→Shoko (Sync to Shoko).</param>
     /// <param name="users">Optional override for the sync users configuration (0: All, 1: Admin, 2: Extra, 3: None). Defaults to configuration.</param>
     /// <param name="libraryName">Optional filter to restrict sync to a specific Plex library by name.</param>
@@ -211,6 +212,7 @@ public class ShokoController(
         [FromQuery] bool dryRun = true,
         [FromQuery] int? sinceHours = null,
         [FromQuery] bool? ratings = null,
+        [FromQuery] bool? progress = null,
         [FromQuery] bool import = false,
         [FromQuery] SyncUserType? users = null,
         [FromQuery] string? libraryName = null
@@ -220,6 +222,7 @@ public class ShokoController(
             return Task.FromResult<IActionResult>(BadRequest(new RelayResponse<object>(Status: "error", Message: "Plex configuration missing.")));
 
         bool includeRatings = ratings ?? Settings.Automation.ShokoSyncWatchedIncludeRatings;
+        bool includeProgress = progress ?? Settings.Automation.ShokoSyncWatchedIncludeProgress;
         SyncUserType userType = users ?? Settings.Automation.ShokoSyncWatchedUserType;
         string direction = import ? "Plex<-Shoko" : "Plex->Shoko";
 
@@ -231,7 +234,7 @@ public class ShokoController(
             {
                 var result = import
                     ? await _syncToPlexService.SyncWatchedAsync(dryRun, sinceHours, includeRatings, userType, libraryName, cancellationToken: CancellationToken.None).ConfigureAwait(false)
-                    : await _watchedSyncService.SyncWatchedAsync(dryRun, sinceHours, includeRatings, userType, libraryName, cancellationToken: CancellationToken.None).ConfigureAwait(false);
+                    : await _watchedSyncService.SyncWatchedAsync(dryRun, sinceHours, includeRatings, includeProgress, userType, libraryName, cancellationToken: CancellationToken.None).ConfigureAwait(false);
                 return result with { Direction = direction };
             },
             SyncHelper.SyncLock

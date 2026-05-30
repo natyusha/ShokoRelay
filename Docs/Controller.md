@@ -86,11 +86,11 @@ Endpoints managed by `MetadataController`
 
 ```
 GET  /                                                         -> GetMediaProvider
-GET  /matches?filename={path}&title={id}&manual=1              -> Match                     (for preview/testing)
+GET  /matches?filename={path}&title={id}&manual=1              -> Match                      (for preview/testing)
 POST /matches?filename={path}&title={id}&manual=1              -> Match
 
 GET  /collections/{groupId}                                    -> GetCollection
-GET  /collections/user/{groupId}                               -> GetCollectionImage       (image)
+GET  /collections/user/{groupId}                               -> GetCollectionImage         (image)
      [?name={string}&suffix={string}&t={ticks}]
 
 GET  /metadata/{ratingKey}?includeChildren={0|1}               -> GetMetadata
@@ -194,7 +194,7 @@ GET  /plex/automation/run                                      -> RunPlexAutomat
 POST /plex/webhook                                             -> PluginPlexWebhook
 ```
 
-- `PluginPlexWebhook` handles Plex `media.scrobble` and `media.rate` events.
+- `PluginPlexWebhook` handles Plex `media.scrobble`, `media.rate`, `media.stop`, and `media.pause` events.
 
 **Notes:**
 
@@ -204,6 +204,7 @@ POST /plex/webhook                                             -> PluginPlexWebh
   - Managed users are only permitted to scrobble if listed in `Automation.ExtraPlexUsers`.
 - Success logs use the format: `user='Name', series='Title', episode='S01E01'`.
 - Rating events update Shoko episode ratings via `IUserDataService.RateEpisode` if `Automation.ShokoSyncWatchedIncludeRatings` is enabled.
+- Progress events (`media.stop` / `media.pause`) update the VideoUserData ProgressPosition via `IUserDataService.SaveVideoUserData`.
 
 ---
 
@@ -243,15 +244,15 @@ GET /vfs/tree                                                  -> GetVfsTree
 ### Shoko: Automation
 
 ```
-GET  /shoko/purge-missing?dryRun={true|false}                 -> PurgeMissingFiles        (for preview/testing)
+GET  /shoko/purge-missing?dryRun={true|false}                 -> PurgeMissingFiles           (for preview/testing)
 POST /shoko/purge-missing?dryRun={true|false}                 -> PurgeMissingFiles
 
 POST /shoko/import                                             -> RunShokoImport
 GET  /shoko/import/start                                       -> StartShokoImportNow
 
-GET  /sync-watched                                             -> SyncPlexWatched           (for preview/testing)
+GET  /sync-watched                                             -> SyncPlexWatched            (for preview/testing)
 POST /sync-watched                                             -> SyncPlexWatched
-     [?dryRun={true|false}&sinceHours={int}&ratings={true|false}&import={true|false}&users={All|Admin|Extra|None}&libraryName={name}]
+     [?dryRun={true|false}&sinceHours={int}&ratings={true|false}&progress={true|false}&import={true|false}&users={All|Admin|Extra|None}&libraryName={name}]
 
 GET  /sync-watched/start                                       -> StartWatchedSyncNow
 ```
@@ -263,6 +264,7 @@ GET  /sync-watched/start                                       -> StartWatchedSy
   - `dryRun`: (default true) If true, skip database and Plex server writes.
   - `sinceHours`: (optional) limit processing to items viewed within this window.
   - `ratings`: (default to configuration) set to true/false to override the `Automation.ShokoSyncWatchedIncludeRatings` setting.
+  - `progress`: (default to configuration) set to true/false to override the `Automation.ShokoSyncWatchedIncludeProgress` setting.
   - `import`: (default false) Direction: true for Plex←Shoko, false for Plex→Shoko.
   - `users`: (default to configuration) Restrict sync to specific user groups.
   - `libraryName`: (optional) restrict processing to a specific Plex library name (e.g. `Anime`).

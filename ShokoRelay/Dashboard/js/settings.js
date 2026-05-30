@@ -218,6 +218,7 @@
     for (const [id, path] of Object.entries(autoMap)) b(id, "Automation." + path, "number");
 
     b("sync-ratings", "Automation.ShokoSyncWatchedIncludeRatings", "check");
+    b("sync-progress", "Automation.ShokoSyncWatchedIncludeProgress", "check");
     b("sync-users", "Automation.ShokoSyncWatchedUserType", "number");
     b("plex-scrobble", "Automation.AutoScrobble", "check");
     window._sr.initAtConfig?.(config, saveSettings);

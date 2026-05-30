@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Shoko.Abstractions.User.Enums;
 using Shoko.Abstractions.User.Services;
+using Shoko.Abstractions.User.Update;
 using ShokoRelay.Services;
 using ShokoRelay.Sync;
 using ShokoRelay.Vfs;
@@ -317,7 +318,7 @@ public class PlexController(
 
     #region Webhook
 
-    /// <summary>Handles scrobble and rating events from Plex webhooks.</summary>
+    /// <summary>Handles scrobble, rating, and progress events from Plex webhooks.</summary>
     /// <returns>Webhook result status.</returns>
     [HttpPost("plex/webhook")]
     public async Task<IActionResult> PluginPlexWebhook()
@@ -331,8 +332,9 @@ public class PlexController(
 
         bool isScrobble = string.Equals(evt.Event, "media.scrobble", StringComparison.OrdinalIgnoreCase);
         bool isRate = string.Equals(evt.Event, "media.rate", StringComparison.OrdinalIgnoreCase);
+        bool isProgress = string.Equals(evt.Event, "media.stop", StringComparison.OrdinalIgnoreCase) || string.Equals(evt.Event, "media.pause", StringComparison.OrdinalIgnoreCase);
 
-        if (!(isScrobble || (isRate && Settings.Automation.ShokoSyncWatchedIncludeRatings)))
+        if (!(isScrobble || (isProgress && Settings.Automation.ShokoSyncWatchedIncludeProgress) || (isRate && Settings.Automation.ShokoSyncWatchedIncludeRatings)))
             return Ok(new { status = "ignored", reason = "unsupported_event_type" });
 
         var (allowed, reason) = await ValidateWebhookSource(evt, Settings, HttpContext.RequestAborted);
@@ -369,6 +371,31 @@ public class PlexController(
         }
 
         DateTime? watchedAt = evt.Metadata.LastViewedAt > 0 ? DateTimeOffset.FromUnixTimeSeconds(evt.Metadata.LastViewedAt.Value).UtcDateTime : null;
+
+        if (isProgress)
+        {
+            if (evt.Metadata.ViewOffset.HasValue && evt.Metadata.ViewOffset.Value > 0)
+            {
+                foreach (var video in shokoEpisode.VideoList ?? [])
+                {
+                    var videoData = _userDataService.GetVideoUserData(video, user);
+                    var update = videoData != null ? new VideoUserDataUpdate(videoData) : new VideoUserDataUpdate();
+                    update.ProgressPosition = TimeSpan.FromMilliseconds(evt.Metadata.ViewOffset.Value);
+                    update.LastUpdatedAt = DateTime.UtcNow;
+                    await _userDataService.SaveVideoUserData(video, user, update).ConfigureAwait(false);
+                }
+                Logger.Info(
+                    "Plex: Progress updated -> user='{User}', series='{Series}', episode='{SeasonEp}', offset={Offset}",
+                    evt.Account?.Title,
+                    seriesName,
+                    seasonEp,
+                    TimeSpan.FromMilliseconds(evt.Metadata.ViewOffset.Value)
+                );
+                return Ok(new { status = "ok", progress_updated = true });
+            }
+            return Ok(new { status = "ignored", reason = "no_view_offset" });
+        }
+
         var saved = await _userDataService.SetEpisodeWatchedStatus(shokoEpisode, user, true, watchedAt, videoReason: VideoUserDataSaveReason.PlaybackEnd).ConfigureAwait(false);
 
         if (saved != null)

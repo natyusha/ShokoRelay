@@ -7,9 +7,10 @@ namespace ShokoRelay.Sync;
 /// <summary>Per-Plex-user counters used during synchronization.</summary>
 /// <param name="Processed">Total items processed.</param>
 /// <param name="MarkedWatched">Items marked watched.</param>
+/// <param name="ProgressUpdated">Items whose playback progress was updated.</param>
 /// <param name="Skipped">Items skipped.</param>
 /// <param name="Errors">Errors encountered.</param>
-public record PlexWatchedUserResult(int Processed = 0, int MarkedWatched = 0, int Skipped = 0, int Errors = 0);
+public record PlexWatchedUserResult(int Processed = 0, int MarkedWatched = 0, int ProgressUpdated = 0, int Skipped = 0, int Errors = 0);
 
 /// <summary>Represents a single change during sync.</summary>
 /// <param name="PlexUser">Plex username.</param>
@@ -50,6 +51,7 @@ public record PlexWatchedChange(
 /// <param name="DryRun">Whether this was a dry run.</param>
 /// <param name="Processed">Global process count.</param>
 /// <param name="MarkedWatched">Global mark count.</param>
+/// <param name="ProgressUpdated">Global progress update count.</param>
 /// <param name="Skipped">Global skip count.</param>
 /// <param name="Errors">Global error count.</param>
 /// <param name="ScheduledJobs">Scheduled background jobs count.</param>
@@ -67,6 +69,7 @@ public record PlexWatchedSyncResult(
     bool DryRun = false,
     int Processed = 0,
     int MarkedWatched = 0,
+    int ProgressUpdated = 0,
     int Skipped = 0,
     int Errors = 0,
     int ScheduledJobs = 0,
@@ -193,6 +196,10 @@ public static class SyncHelper
     public static PlexWatchedSyncResult IncMarkedWatched(PlexWatchedSyncResult r, Dictionary<string, PlexWatchedUserResult>? pu, string? u = null) =>
         UpdateStat(r, pu, u, x => x with { MarkedWatched = x.MarkedWatched + 1 }, x => x with { MarkedWatched = x.MarkedWatched + 1 });
 
+    /// <summary>Increment progress update count.</summary>
+    public static PlexWatchedSyncResult IncProgressUpdated(PlexWatchedSyncResult r, Dictionary<string, PlexWatchedUserResult>? pu, string? u = null) =>
+        UpdateStat(r, pu, u, x => x with { ProgressUpdated = x.ProgressUpdated + 1 }, x => x with { ProgressUpdated = x.ProgressUpdated + 1 });
+
     /// <summary>Increment skip count.</summary>
     public static PlexWatchedSyncResult IncSkipped(PlexWatchedSyncResult r, Dictionary<string, PlexWatchedUserResult>? pu, string? u = null) =>
         UpdateStat(r, pu, u, x => x with { Skipped = x.Skipped + 1 }, x => x with { Skipped = x.Skipped + 1 });
@@ -267,7 +274,8 @@ public static class SyncHelper
     /// <param name="userName">Managed username.</param>
     /// <param name="pin">Optional user PIN.</param>
     /// <param name="sinceHours">Optional lookback window.</param>
-    /// <param name="onlyUnwatched">If true, only returns unwatched episodes.</param>
+    /// <param name="onlyUnwatched">If true, only returns unwatched episodes. If false, watched. If null, returns both.</param>
+    /// <param name="hasProgress">Filter for items actively in progress.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A tuple containing the list of episodes, the resolved token, and an optional error message.</returns>
     public static async Task<(List<PlexMetadataItem> Episodes, string? ResolvedToken, string? ErrorMessage)> FetchManagedUserSectionEpisodesAsync(
@@ -278,7 +286,8 @@ public static class SyncHelper
         string userName,
         string? pin,
         int? sinceHours,
-        bool onlyUnwatched = false,
+        bool? onlyUnwatched = false,
+        bool? hasProgress = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -332,7 +341,7 @@ public static class SyncHelper
 
             var effectiveToken = !string.IsNullOrWhiteSpace(serverAccessToken) ? serverAccessToken : userToken;
             long? minLast = (sinceHours.HasValue && sinceHours.Value > 0) ? DateTimeOffset.UtcNow.ToUnixTimeSeconds() - (sinceHours.Value * 3600) : null;
-            var list = await plexClient.GetSectionEpisodesAsync(target, effectiveToken, cancellationToken, onlyUnwatched: onlyUnwatched, guidFilter: null, minLastViewed: minLast).ConfigureAwait(false);
+            var list = await plexClient.GetSectionEpisodesAsync(target, effectiveToken, cancellationToken, onlyUnwatched, hasProgress, null, minLast).ConfigureAwait(false);
             logger.Info(
                 "WatchedSyncService: fetched {Count} episodes for user {User} in library '{Library}' on {Server} (since={Since})",
                 list?.Count ?? 0,
@@ -357,7 +366,8 @@ public static class SyncHelper
     /// <param name="target">Target library.</param>
     /// <param name="userType">Configured SyncUserType flag.</param>
     /// <param name="extraEntries">Configured list of extra users.</param>
-    /// <param name="onlyUnwatched">Filter for unwatched items only.</param>
+    /// <param name="onlyUnwatched">Filter for unwatched items only. Null to return all items.</param>
+    /// <param name="hasProgress">Filter for items actively in progress.</param>
     /// <param name="sinceHours">Optional lookback window.</param>
     /// <param name="result">Current sync results state.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -369,7 +379,8 @@ public static class SyncHelper
         PlexLibraryTarget target,
         SyncUserType userType,
         List<(string Name, string? Pin)> extraEntries,
-        bool onlyUnwatched,
+        bool? onlyUnwatched,
+        bool? hasProgress,
         int? sinceHours,
         PlexWatchedSyncResult result,
         CancellationToken cancellationToken
@@ -380,7 +391,7 @@ public static class SyncHelper
         if (userType is SyncUserType.All or SyncUserType.Admin)
         {
             long? minLast = sinceHours > 0 ? DateTimeOffset.UtcNow.ToUnixTimeSeconds() - (sinceHours.Value * 3600) : null;
-            var adminItems = await plexClient.GetSectionEpisodesAsync(target, null, cancellationToken, onlyUnwatched, null, minLast).ConfigureAwait(false);
+            var adminItems = await plexClient.GetSectionEpisodesAsync(target, null, cancellationToken, onlyUnwatched, hasProgress, null, minLast).ConfigureAwait(false);
             userBuckets.Add(("admin", adminItems ?? [], null));
         }
 
@@ -388,7 +399,7 @@ public static class SyncHelper
         {
             foreach (var (name, pin) in extraEntries)
             {
-                var (eps, resolvedToken, err) = await FetchManagedUserSectionEpisodesAsync(plexAuth, plexClient, configProvider, target, name, pin, sinceHours, onlyUnwatched, cancellationToken)
+                var (eps, resolvedToken, err) = await FetchManagedUserSectionEpisodesAsync(plexAuth, plexClient, configProvider, target, name, pin, sinceHours, onlyUnwatched, hasProgress, cancellationToken)
                     .ConfigureAwait(false);
                 if (!string.IsNullOrEmpty(err))
                     result = RecordError(result, result.PerUser, name, err);

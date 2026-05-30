@@ -295,10 +295,16 @@ public class AutomationConfig
     public int ShokoSyncWatchedFrequencyHours { get; set; } = 0;
 
     /// <summary>Whether to include ratings in sync tasks.</summary>
-    [Display(Name = "Include Ratings (for Scheduled Sync)", Description = "When enabled, all sync/scrobble actions will also include user ratings/votes")]
+    [Display(Name = "Include Ratings", Description = "When enabled, all sync/scrobble actions will also include user ratings/votes")]
     [Browsable(false)]
     [DefaultValue(false)]
     public bool ShokoSyncWatchedIncludeRatings { get; set; } = false;
+
+    /// <summary>Whether to include progress in sync tasks.</summary>
+    [Display(Name = "Include Progress", Description = "When enabled, all sync/scrobble actions will also include playback progress")]
+    [Browsable(false)]
+    [DefaultValue(false)]
+    public bool ShokoSyncWatchedIncludeProgress { get; set; } = false;
 
     /// <summary>Defines which users are included during watched-state synchronization.</summary>
     [Display(Name = "Sync Users", Description = "Defines which users are included during all sync/scrobble actions")]

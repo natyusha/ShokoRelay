@@ -217,6 +217,7 @@ public static class LogHelper
             ["Include Ratings"] = ratings,
             ["Processed"] = result.Processed,
             ["Marked"] = result.MarkedWatched,
+            ["Progress Updated"] = result.ProgressUpdated,
             ["Skipped"] = result.Skipped,
         };
 
@@ -224,7 +225,13 @@ public static class LogHelper
         foreach (var kv in result.PerUserChanges)
         {
             items.Add($"User: {kv.Key}");
-            items.AddRange(kv.Value.Select(c => $"- {c.SeriesTitle} (S{c.SeasonNumber:D2}E{c.EpisodeNumber:D2}) -> {(c.WouldMark ? "Marked" : "Already Watched")}"));
+            items.AddRange(
+                kv.Value.Select(c =>
+                {
+                    string action = c.Reason == "progress_updated" ? "Updated Progress" : (c.WouldMark && string.IsNullOrEmpty(c.Reason) ? "Marked" : "Already Watched");
+                    return $"- {c.SeriesTitle} (S{c.SeasonNumber:D2}E{c.EpisodeNumber:D2}) -> {action}";
+                })
+            );
         }
 
         BuildReport(sb, "Sync Watched Report", stats, "Change Details:", items);

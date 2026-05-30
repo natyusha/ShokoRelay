@@ -129,7 +129,7 @@ com.plexapp.agents.shokorelay
 - This can be enabled in the Plex Web/Desktop App under `Settings > Webhooks`
   - Click `Add Webhook` and enter: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/plex/webhook`
   - Click `Save Changes` to complete the process
-- The webhook respects the `Include Ratings` and `Sync Users` settings in the `Sync Watched States Menu`
+- The webhook respects the `Include Ratings`, `Include Progress` and `Sync Users` settings in the `Sync Watched States Menu`
   - `Sync Users` defaults to "None" and must be configured before the webook will function
   - For clarity "All" users means both the admin and the configured extra Plex users
 - Managed users must be added to `Extra Plex Users` on the dashboard if you wish them to be included
@@ -145,6 +145,8 @@ com.plexapp.agents.shokorelay
   - Make sure to set `AniDB > Update Options > Files With Missing Info` to "Never" if you use this
 - `Sync Int.` An input which will schedule watched state syncing from Plex to Shoko every `N` hours
   - This includes ratings/votes if `Include Ratings` is enabled in the `Sync Watched States Menu`
+  - This includes playback progress if `Include Progress` is enabled in the `Sync Watched States Menu`
+    - This will not sync progress from Shoko to Plex
   - To speed up the process the scheduled watched sync only considers things watched during the scheduled interval +1 hour
     - A full sync may need to be run if Shoko or Plex downtime exceeds the considered time period
   - _Requires Plex authentication_

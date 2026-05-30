@@ -175,6 +175,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
     /// <param name="token">Optional token override.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <param name="onlyUnwatched">Filter for unwatched.</param>
+    /// <param name="hasProgress">Filter for items actively in progress.</param>
     /// <param name="guidFilter">Filter for specific GUID.</param>
     /// <param name="minLastViewed">Filter for viewed after.</param>
     /// <param name="type">Plex type identifier.</param>
@@ -184,6 +185,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         string? token = null,
         CancellationToken ct = default,
         bool? onlyUnwatched = null,
+        bool? hasProgress = null,
         string? guidFilter = null,
         long? minLastViewed = null,
         int? type = null
@@ -200,6 +202,8 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
                 q.Add($"type={type.Value}");
             if (onlyUnwatched.HasValue)
                 q.Add($"unwatched={(onlyUnwatched.Value ? 1 : 0)}");
+            if (hasProgress.HasValue)
+                q.Add(hasProgress.Value ? "viewOffset>=1" : "viewOffset=0");
             if (!string.IsNullOrEmpty(guidFilter))
                 q.Add($"guid={Uri.EscapeDataString(guidFilter)}");
             if (minLastViewed.HasValue)
@@ -235,6 +239,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
     /// <param name="token">Token override.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <param name="onlyUnwatched">Filter for unwatched.</param>
+    /// <param name="hasProgress">Filter for items actively in progress.</param>
     /// <param name="guidFilter">Filter for specific GUID.</param>
     /// <param name="minLastViewed">Filter for viewed after.</param>
     /// <returns>A list of metadata items.</returns>
@@ -243,9 +248,10 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         string? token = null,
         CancellationToken ct = default,
         bool? onlyUnwatched = null,
+        bool? hasProgress = null,
         string? guidFilter = null,
         long? minLastViewed = null
-    ) => GetSectionItemsAsync(target, token, ct, onlyUnwatched, guidFilter, minLastViewed, PlexConstants.TypeEpisode);
+    ) => GetSectionItemsAsync(target, token, ct, onlyUnwatched, hasProgress, guidFilter, minLastViewed, PlexConstants.TypeEpisode);
 
     #endregion
 
