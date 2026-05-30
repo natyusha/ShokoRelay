@@ -66,7 +66,7 @@
   };
 
   /**
-   * Constructs a standard folder details node with deferred child rendering.
+   * Constructs a standard folder details node with deferred child rendering, wrapping the title in a flex-safe span.
    * @param {string} name - The display text or HTML for the folder summary.
    * @param {HTMLUListElement} ul - The container element to append items to.
    * @param {Function} renderFn - The callback function that generates and appends children.
@@ -79,7 +79,8 @@
     det.open = isOpen;
     sum.title = name.replace(/<[^>]*>/g, ""); // strip HTML tags for tooltip title attribute
     sum.dataset.tooltipOverflowOnly = "true";
-    sum.innerHTML = `<span class="tree-icon expand"></span><span class="tree-icon collapse"></span>${name}`;
+    const titleSpan = name ? `<span class="vfs-title" data-tooltip-overflow-only="true">${name}</span>` : "";
+    sum.innerHTML = `<span class="tree-icon expand"></span><span class="tree-icon collapse"></span>${titleSpan}`;
     det.appendChild(sum);
 
     if (isOpen) {

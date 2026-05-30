@@ -159,13 +159,20 @@ body {
   content: "";
 }
 #tree summary {
-  display: block;
+  display: flex;
+  align-items: center;
   cursor: pointer;
   border-radius: 3px;
   padding: 3px 4px;
   overflow: hidden;
   list-style: none;
   user-select: none;
+  white-space: nowrap;
+}
+.vfs-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
