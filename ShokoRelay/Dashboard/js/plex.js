@@ -55,7 +55,6 @@
       if (!loginLink) {
         loginLink = document.createElement("a");
         loginLink.id = "plex-login";
-        loginLink.className = "plex-login-link";
         loginLink.target = "_blank";
         authAction.appendChild(loginLink);
       }
@@ -120,9 +119,9 @@
     }
 
     // Resolve the Plex Web App link dynamically from discovered targets
-    const plexWebUrl = plex.DiscoveredLibraries?.[0]?.ServerUrl || plex.DiscoveredServers?.[0]?.PreferredUri || "https://app.plex.tv/desktop";
+    const plexWebUrl = plex.DiscoveredLibraries?.[0]?.ServerUrl || plex.DiscoveredServers?.[0]?.PreferredUri || "";
     const webLink = el("plex-web-link");
-    if (webLink) webLink.href = isLinked ? plexWebUrl : "#";
+    if (webLink) webLink.onclick = () => plexWebUrl && window.open(plexWebUrl, "_blank", "noopener,noreferrer");
   }
 
   /**

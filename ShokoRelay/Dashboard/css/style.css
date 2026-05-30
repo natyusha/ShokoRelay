@@ -85,9 +85,13 @@ hr {
   height: 1px;
 }
 button,
-.plex-login-link {
+#plex-login {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
   transition: all 0.3s ease-in-out;
   cursor: pointer;
+  box-sizing: border-box;
   border: 2px solid var(--bg-color);
   border-radius: 0.5rem;
   background: var(--button-color);
@@ -112,7 +116,7 @@ button.cancel:hover {
   background: color-mix(in srgb, var(--bg-color), white 15%);
 }
 button:hover,
-.plex-login-link:hover {
+#plex-login:hover {
   background: var(--hover-color);
 }
 input[type="number"] {
@@ -168,7 +172,7 @@ a {
   color: var(--highlight-color);
   text-decoration-style: dotted;
 }
-a:hover:not(.plex-login-link) {
+a:hover:not(#plex-login) {
   opacity: 1;
   color: var(--hover-color);
 }
@@ -211,10 +215,7 @@ code {
   max-width: 46px;
 }
 .w100 {
-  max-width: 98px;
-}
-.w100 > button {
-  width: 100%;
+  max-width: 100px;
 }
 .divider {
   margin: 13px 0 13px 0;
@@ -355,7 +356,6 @@ code {
 */
 .img-btn {
   all: unset;
-  float: right;
   transition: all 0.3s ease-in-out;
   cursor: pointer;
   fill: var(--highlight-color);

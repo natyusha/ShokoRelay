@@ -243,8 +243,6 @@
     rootUl.className = "tree";
 
     const shokoBase = location.origin + base.split(/\/api\//i)[0];
-    const ft = (uiFilter?.value || "").trim();
-    const forceRender = !!ft;
 
     items.forEach((g) => {
       const li = document.createElement("li");
@@ -253,9 +251,9 @@
         "",
         ul,
         (container) => {
-          renderSeriesContents(g, container, forceRender);
+          renderSeriesContents(g, container, false);
         },
-        forceRender,
+        false,
       );
       const sum = det.querySelector("summary");
 

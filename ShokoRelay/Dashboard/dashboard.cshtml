@@ -80,9 +80,9 @@
               <svg class="icon-svg plex-svg"><use href="img/icons.svg#chevron-right-mod"></use></svg>
               Plex Authentication
             </h2>
-            <a id="plex-web-link" href="#" class="img-btn plex-auth" title="Open Plex Web App" aria-label="Open Plex Web App">
+            <button id="plex-web-link" class="img-btn plex-auth" title="Open Plex Web App" aria-label="Open Plex Web App">
               <svg class="icon-svg"><use href="img/icons.svg#plex"></use></svg>
-            </a>
+            </button>
           </div>
           <div class="full" id="plex-auth-action">
             <!-- State: Unlinked -->
@@ -220,56 +220,66 @@
             </a>
           </div>
           <div class="full">
-            <button
-              id="{{ TaskPlexCollectionsBuild }}"
-              title="Generate Plex Collections From Shoko Groups"
-              class="plex-auth"
-              data-relay-endpoint="/plex/collections/build"
-              data-relay-label="Collections"
-              data-relay-persist="true"
-            >
-              Generate Collections
-            </button>
-            <button
-              id="{{ TaskPlexRatingsApply }}"
-              title="Apply Legacy Critic Ratings to Plex"
-              class="plex-auth"
-              data-relay-endpoint="/plex/ratings/apply"
-              data-relay-label="Critic Ratings"
-              data-relay-persist="true"
-            >
-              Apply Critic Ratings
-            </button>
-            <button
-              id="{{ TaskPlexImagesSync }}"
-              title="Sync Unique Plex Images to Shoko"
-              class="plex-auth"
-              data-relay-endpoint="/plex/images/sync"
-              data-relay-label="Shoko Image Sync"
-              data-relay-persist="true"
-              data-relay-confirm='Are you sure you want to upload all local images to Shoko?<br><br><small>This will mark them as "preferred" for their corresponding entry.</small>'
-              data-relay-confirm-button="Sync Images"
-            >
-              Sync Plex Images
-            </button>
+            <div class="dsbld-wrap">
+              <button
+                id="{{ TaskPlexCollectionsBuild }}"
+                title="Generate Plex Collections From Shoko Groups"
+                class="plex-auth"
+                data-relay-endpoint="/plex/collections/build"
+                data-relay-label="Collections"
+                data-relay-persist="true"
+              >
+                Generate Collections
+              </button>
+            </div>
+            <div class="dsbld-wrap">
+              <button
+                id="{{ TaskPlexRatingsApply }}"
+                title="Apply Legacy Critic Ratings to Plex"
+                class="plex-auth"
+                data-relay-endpoint="/plex/ratings/apply"
+                data-relay-label="Critic Ratings"
+                data-relay-persist="true"
+              >
+                Apply Critic Ratings
+              </button>
+            </div>
+            <div class="dsbld-wrap">
+              <button
+                id="{{ TaskPlexImagesSync }}"
+                title="Sync Unique Plex Images to Shoko"
+                class="plex-auth"
+                data-relay-endpoint="/plex/images/sync"
+                data-relay-label="Shoko Image Sync"
+                data-relay-persist="true"
+                data-relay-confirm='Are you sure you want to upload all local images to Shoko?<br><br><small>This will mark them as "preferred" for their corresponding entry.</small>'
+                data-relay-confirm-button="Sync Images"
+              >
+                Sync Plex Images
+              </button>
+            </div>
           </div>
           <hr class="divider" />
           <div class="full">
-            <button id="shoko-import-run" title="Import New/Unrecognized Files" data-relay-endpoint="/shoko/import" data-relay-method="POST" data-relay-label="Shoko Import">Run Import</button>
-            <button id="shoko-sync-watched" class="plex-auth" title="Sync Watched States Menu">Sync Menu</button>
-            <button
-              id="{{ TaskShokoPurgeMissing }}"
-              title="Purge Missing Files From Shoko and MyList"
-              data-relay-endpoint="/shoko/purge-missing?dryRun=false"
-              data-relay-method="POST"
-              data-relay-label="Purge Missing"
-              data-relay-persist="true"
-              data-relay-confirm="Are you sure you want to purge all records for missing files?<br><br><small>This will permanently remove them from Shoko's database and your AniDB MyList.</small>"
-              data-relay-confirm-dry="true"
-              data-relay-confirm-button="Purge Files"
-            >
-              Purge Missing
-            </button>
+            <div class="dsbld-wrap">
+              <button id="shoko-import-run" title="Import New/Unrecognized Files" data-relay-endpoint="/shoko/import" data-relay-method="POST" data-relay-label="Shoko Import">Run Import</button>
+            </div>
+            <div class="dsbld-wrap"><button id="shoko-sync-watched" class="plex-auth" title="Sync Watched States Menu">Sync Menu</button></div>
+            <div class="dsbld-wrap">
+              <button
+                id="{{ TaskShokoPurgeMissing }}"
+                title="Purge Missing Files From Shoko and MyList"
+                data-relay-endpoint="/shoko/purge-missing?dryRun=false"
+                data-relay-method="POST"
+                data-relay-label="Purge Missing"
+                data-relay-persist="true"
+                data-relay-confirm="Are you sure you want to purge all records for missing files?<br><br><small>This will permanently remove them from Shoko's database and your AniDB MyList.</small>"
+                data-relay-confirm-dry="true"
+                data-relay-confirm-button="Purge Files"
+              >
+                Purge Missing
+              </button>
+            </div>
           </div>
         </section>
       </div>
@@ -476,8 +486,8 @@
         </div>
         <footer>
           <button id="sync-cancel-button" class="cancel">Cancel</button>
-          <button id="sync-dry-button" class="cancel sync-user">Dry Run</button>
-          <button id="sync-start-button" class="sync-user">Start Sync</button>
+          <div class="dsbld-wrap"><button id="sync-dry-button" class="cancel sync-user">Dry Run</button></div>
+          <div class="dsbld-wrap"><button id="sync-start-button" class="sync-user">Start Sync</button></div>
         </footer>
       </div>
     </div>
@@ -545,7 +555,8 @@
             <h4>Plex Fixup Delay</h4>
             <small>
               Sometimes Shoko may not have acquired all of the metadata for a series when it is first scanned into Plex. This setting attempts to mitigate this by waiting for new files to be added to the VFS,
-              then triggering a delayed regeneration and Plex metadata refresh. This action is debounced so adding multiple episodes within the configured delay will not trigger it multiple times.
+              then triggering a delayed regeneration and Plex metadata refresh. This action is debounced so adding multiple episodes within the configured delay will not trigger it multiple times. If Plex is
+              authed all enabled Plex automations will be run for the series as well.
             </small>
           </section>
         </div>

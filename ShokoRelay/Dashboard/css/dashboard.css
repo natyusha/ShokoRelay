@@ -185,7 +185,6 @@ label.shoko-checkbox {
 }
 label.shoko-checkbox input[type="checkbox"] {
   position: absolute;
-  overflow: hidden;
   clip: rect(0 0 0 0);
   margin: -1px;
   border: 0;
@@ -220,16 +219,20 @@ label.shoko-checkbox:hover .shoko-checkbox-icon {
 label.shoko-checkbox input[type="checkbox"]:checked + .shoko-checkbox-icon .unchecked {
   display: none;
 }
-label.shoko-checkbox input[type="checkbox"]:checked + .shoko-checkbox-icon {
-  fill: var(--hover-color);
-}
 label.shoko-checkbox input[type="checkbox"]:checked + .shoko-checkbox-icon .checked {
   display: block;
+  fill: var(--hover-color);
 }
 /* #endregion */
 
 /* #region MARK: Disabled Controls
 */
+.dsbld-wrap {
+  display: flex;
+}
+.full .dsbld-wrap > button {
+  width: 100%;
+}
 .plex-auth:disabled,
 .sync-user:disabled,
 .tmdb-ep-num:disabled {
@@ -253,6 +256,9 @@ label.shoko-checkbox input:disabled ~ .shoko-checkbox-text {
 }
 label.shoko-checkbox:hover input:disabled + .shoko-checkbox-icon {
   fill: var(--highlight-color);
+}
+label.shoko-checkbox:hover input:disabled + .shoko-checkbox-icon .checked {
+  fill: var(--hover-color);
 }
 /* #endregion */
 

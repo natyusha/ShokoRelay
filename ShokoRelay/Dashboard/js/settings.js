@@ -48,7 +48,8 @@
       if (["INPUT", "BUTTON", "SELECT", "TEXTAREA"].includes(elem.tagName)) elem.disabled = isDisabled;
 
       const msg = isDisabled ? (reqPlex && !isPlexLinked ? "Requires Plex Authentication" : "Requires Sync Users to be Selected") : "";
-      const parent = elem.closest("label, .w100, div") || elem.parentElement;
+      const parent = elem.closest("label, .w100, .dsbld-wrap") || elem.parentElement;
+
       if (parent) {
         if (msg) parent.title = msg;
         else {
