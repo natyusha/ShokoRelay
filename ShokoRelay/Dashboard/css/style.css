@@ -37,6 +37,13 @@
   font-family: "Sora";
   font-display: swap;
 }
+@font-face {
+  font-style: normal;
+  font-weight: 400;
+  src: url("../fonts/seguisym.subset.woff2") format("woff2");
+  font-family: "Segoe UI Symbol";
+  font-display: swap;
+}
 @keyframes spin {
   from {
     transform: rotate(0deg);
@@ -52,7 +59,7 @@ body {
   margin: 20px;
   background: var(--bg-color);
   color: var(--text-color);
-  font-family: "Sora", sans-serif;
+  font-family: "Sora", "Segoe UI Symbol", sans-serif;
 }
 section {
   margin: 12px 2px 0 2px;

@@ -4,6 +4,7 @@ using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Enums;
 using Shoko.Abstractions.Video.Services;
 using static ShokoRelay.Plex.PlexMapping;
+using IoFile = System.IO.File;
 
 namespace ShokoRelay.Controllers;
 
@@ -281,13 +282,11 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             if (primarySeries != null)
                 posterPath = PlexHelper.FindCollectionImagePathByGroup(primarySeries, gid, actualSuffix, MetadataService);
 
-            if (string.IsNullOrEmpty(posterPath) || !System.IO.File.Exists(posterPath))
+            if (string.IsNullOrEmpty(posterPath) || !IoFile.Exists(posterPath))
                 posterPath = PlexHelper.FindCollectionImagePath(null, name ?? string.Empty, gid, [actualSuffix], MetadataService, globalRoots);
         }
 
-        return string.IsNullOrWhiteSpace(posterPath) || !System.IO.File.Exists(posterPath)
-            ? NotFound()
-            : PhysicalFile(posterPath, ImageHelper.GetMimeType(Path.GetExtension(posterPath)) ?? "application/octet-stream");
+        return string.IsNullOrWhiteSpace(posterPath) || !IoFile.Exists(posterPath) ? NotFound() : PhysicalFile(posterPath, ImageHelper.GetMimeType(Path.GetExtension(posterPath)) ?? "application/octet-stream");
     }
 
     #endregion

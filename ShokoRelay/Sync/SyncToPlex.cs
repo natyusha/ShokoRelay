@@ -1,3 +1,4 @@
+using System.Globalization;
 using NLog;
 using Shoko.Abstractions.User.Services;
 
@@ -151,7 +152,7 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
                             {
                                 using var rateReq = _plexClient.CreateRequest(
                                     HttpMethod.Get,
-                                    $"/:/rate?identifier=com.plexapp.plugins.library&key={rKey}&rating={sw.UserData.UserRating.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)}",
+                                    $"/:/rate?identifier=com.plexapp.plugins.library&key={rKey}&rating={sw.UserData.UserRating.Value.ToString(CultureInfo.InvariantCulture)}",
                                     target.ServerUrl,
                                     uToken
                                 );

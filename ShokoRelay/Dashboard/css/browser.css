@@ -45,15 +45,15 @@
 */
 .refresh-btn,
 .theme-btn {
-  vertical-align: -1px;
   transition: all 0.3s ease-in-out;
   cursor: pointer;
   color: var(--highlight-color);
-  font-weight: bold;
+  font-weight: 700;
   font-size: 1.4em;
   line-height: 0;
 }
 .theme-btn {
+  vertical-align: -1px;
   margin-left: 8px;
 }
 .theme-btn.exists {
@@ -75,7 +75,7 @@
 .vfs-sep {
   margin: 0 10px;
   color: var(--highlight-color);
-  font-weight: bold;
+  font-weight: 700;
   font-size: 0.9em;
 }
 .vfs-title {

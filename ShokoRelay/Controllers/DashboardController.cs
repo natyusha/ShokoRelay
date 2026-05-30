@@ -1,9 +1,15 @@
+using System.Collections;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using System.Net;
 using System.Reflection;
+using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.StaticFiles;
 using Shoko.Abstractions.Plugin;
 using Shoko.Abstractions.Web.Services;
+using IoFile = System.IO.File;
 
 namespace ShokoRelay.Controllers;
 
@@ -16,7 +22,7 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
 {
     #region Fields & Constructor
 
-    private static readonly Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider s_contentTypeProvider = new();
+    private static readonly FileExtensionContentTypeProvider s_contentTypeProvider = new();
     private readonly IWebThemeService _webThemeService = webThemeService;
 
     #endregion
@@ -44,7 +50,7 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
         string requested = Path.GetFullPath(Path.Combine(dashboardDir, safePath));
         string dashboardRoot = Path.GetFullPath(dashboardDir);
 
-        if (!requested.StartsWith(dashboardRoot, StringComparison.OrdinalIgnoreCase) || !System.IO.File.Exists(requested))
+        if (!requested.StartsWith(dashboardRoot, StringComparison.OrdinalIgnoreCase) || !IoFile.Exists(requested))
             return NotFound();
 
         string contentType = GetContentType(requested);
@@ -52,14 +58,14 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
         if (ext != ".cshtml")
             return PhysicalFile(requested, contentType);
 
-        var html = System.IO.File.ReadAllText(requested);
+        var html = IoFile.ReadAllText(requested);
         html = ProcessConstants(html); // Process C# Constants into HTML
         if (html.IndexOf("<base", StringComparison.OrdinalIgnoreCase) < 0)
         {
             var reqPath = Request.Path.Value ?? "";
             int dashIdx = reqPath.IndexOf("/dashboard", StringComparison.OrdinalIgnoreCase);
             var baseHref = reqPath[..(dashIdx + 10)].TrimEnd('/') + "/";
-            var baseTag = $"\n    <base href=\"{System.Net.WebUtility.HtmlEncode(baseHref)}\">";
+            var baseTag = $"\n    <base href=\"{WebUtility.HtmlEncode(baseHref)}\">";
             html = html.Replace("<head>", "<head>" + baseTag, StringComparison.OrdinalIgnoreCase);
         }
         return Content(html, "text/html");
@@ -80,7 +86,7 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
         try
         {
             var path = Path.Combine(ConfigDirectory, ShokoRelayConstants.FileVfsOverrides);
-            string overrides = System.IO.File.Exists(path) ? System.IO.File.ReadAllText(path) : string.Empty;
+            string overrides = IoFile.Exists(path) ? IoFile.ReadAllText(path) : string.Empty;
             return Ok(
                 new
                 {
@@ -139,7 +145,7 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
 
         if (string.Equals(themeId, "shoko-gray", StringComparison.OrdinalIgnoreCase))
         {
-            var shokoGrayBuilder = new System.Text.StringBuilder();
+            var shokoGrayBuilder = new StringBuilder();
             shokoGrayBuilder.AppendLine("/* Shoko Gray Theme Variables */");
             shokoGrayBuilder.AppendLine(":root {");
             shokoGrayBuilder.AppendLine("  --bg-color: #282e38;");
@@ -174,12 +180,12 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
         {
             string cssPath = Path.Combine(applicationPaths.ThemesPath, $"{themeId}.css");
 
-            if (!System.IO.File.Exists(cssPath))
+            if (!IoFile.Exists(cssPath))
                 return Content(string.Empty, "text/css");
 
-            string rawCss = System.IO.File.ReadAllText(cssPath);
+            string rawCss = IoFile.ReadAllText(cssPath);
 
-            var mappingBuilder = new System.Text.StringBuilder();
+            var mappingBuilder = new StringBuilder();
             mappingBuilder.AppendLine().AppendLine("/* Shoko Relay Theme Variable Mapping */").AppendLine(":root {");
             mappingBuilder.AppendLine("  --bg-color: var(--panel-background-alt, #0f0f0f);");
             mappingBuilder.AppendLine("  --panel-color: var(--panel-background, #1c1c1c);");
@@ -238,7 +244,7 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
             return BadRequest(new { status = "error", message = "fileName is required" });
         string logsDir = Path.Combine(ConfigProvider.PluginDirectory, "logs");
         string path = Path.Combine(logsDir, fileName);
-        return !System.IO.File.Exists(path) ? NotFound(new { status = "error", message = "log not found" }) : PhysicalFile(path, "text/plain");
+        return !IoFile.Exists(path) ? NotFound(new { status = "error", message = "log not found" }) : PhysicalFile(path, "text/plain");
     }
 
     #endregion
@@ -259,7 +265,7 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
         {
             string value = field.GetValue(null)?.ToString() ?? "";
             string pattern = $@"\{{\{{\s?{field.Name}\s?\}}}}"; // Account for prettier adding a space
-            html = System.Text.RegularExpressions.Regex.Replace(html, pattern, value);
+            html = Regex.Replace(html, pattern, value);
         }
         return html;
     }
@@ -323,7 +329,7 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
                 props.Add(new ConfigPropertySchema(path, "number", display?.Name, display?.Description, defaultValue, null, isAdvanced, needsRebuild));
                 continue;
             }
-            if (typeof(System.Collections.IDictionary).IsAssignableFrom(propType))
+            if (typeof(IDictionary).IsAssignableFrom(propType))
             {
                 props.Add(new ConfigPropertySchema(path, "json", display?.Name, display?.Description, defaultValue, null, isAdvanced, needsRebuild));
                 continue;

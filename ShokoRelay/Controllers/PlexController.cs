@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Shoko.Abstractions.User.Enums;
 using Shoko.Abstractions.User.Services;
@@ -396,7 +397,7 @@ public class PlexController(
         try
         {
             // Case sensitive to prevent a type conflict between "guid" (string) and "Guid" (array).
-            return System.Text.Json.JsonSerializer.Deserialize<PlexWebhookPayload>(payloadJson, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = false });
+            return JsonSerializer.Deserialize<PlexWebhookPayload>(payloadJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = false });
         }
         catch (Exception ex)
         {

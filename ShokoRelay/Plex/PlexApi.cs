@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -125,8 +127,8 @@ public class PlexMetadataItem
         if (string.IsNullOrWhiteSpace(Guid))
             return null;
 
-        byte[] bytes = System.Text.Encoding.UTF8.GetBytes(Guid);
-        byte[] hashBytes = System.Security.Cryptography.SHA1.HashData(bytes);
+        byte[] bytes = Encoding.UTF8.GetBytes(Guid);
+        byte[] hashBytes = SHA1.HashData(bytes);
         string hash = Convert.ToHexString(hashBytes).ToLowerInvariant();
 
         return Path.Combine("Collections", hash[..1], hash[1..] + ".bundle");

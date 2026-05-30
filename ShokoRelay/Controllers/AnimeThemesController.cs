@@ -1,7 +1,9 @@
+using System.Text;
 using Microsoft.AspNetCore.Mvc;
 using Shoko.Abstractions.Metadata.Containers;
 using ShokoRelay.AnimeThemes;
 using ShokoRelay.Vfs;
+using IoFile = System.IO.File;
 
 namespace ShokoRelay.Controllers;
 
@@ -45,7 +47,7 @@ public class AnimeThemesController(
                         try
                         {
                             var cacheLines = result.CacheEntries.Select(ce => $"{ce.VfsPath.Replace('\\', '/')}|{ce.VideoId}|{ce.Bitmask}");
-                            System.IO.File.WriteAllLines(Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileAtWebmCache), cacheLines);
+                            IoFile.WriteAllLines(Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileAtWebmCache), cacheLines);
                         }
                         catch (Exception ex)
                         {
@@ -182,7 +184,7 @@ public class AnimeThemesController(
         string resolved = PlexLibrary.MapPlexPathToShokoPath(path);
         string themePath = Path.Combine(Path.GetFullPath(resolved), "Theme.mp3");
 
-        if (!System.IO.File.Exists(themePath))
+        if (!IoFile.Exists(themePath))
             return NotFound();
 
         try
@@ -207,13 +209,13 @@ public class AnimeThemesController(
     public IActionResult AnimeThemesWebmTree()
     {
         string cachePath = Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileAtWebmCache);
-        if (!System.IO.File.Exists(cachePath))
+        if (!IoFile.Exists(cachePath))
             return Ok(new { items = Array.Empty<object>() });
 
         string[] lines;
         try
         {
-            lines = [.. System.IO.File.ReadAllLines(cachePath).Where(l => !string.IsNullOrWhiteSpace(l))];
+            lines = [.. IoFile.ReadAllLines(cachePath).Where(l => !string.IsNullOrWhiteSpace(l))];
         }
         catch
         {
@@ -291,7 +293,7 @@ public class AnimeThemesController(
         if (string.IsNullOrWhiteSpace(path))
             return BadRequest();
         string fullPath = Path.GetFullPath(PlexLibrary.MapPlexPathToShokoPath(path));
-        return !System.IO.File.Exists(fullPath) ? NotFound() : File(new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read), "video/webm", enableRangeProcessing: true);
+        return !IoFile.Exists(fullPath) ? NotFound() : File(new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read), "video/webm", enableRangeProcessing: true);
     }
 
     /// <summary>Returns the list of videoIds marked as favourites.</summary>
@@ -300,11 +302,11 @@ public class AnimeThemesController(
     public IActionResult GetAnimeThemesFavourites()
     {
         string path = Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileAtFavsCache);
-        if (!System.IO.File.Exists(path))
+        if (!IoFile.Exists(path))
             return Ok(new RelayResponse<List<int>>(Data: []));
         try
         {
-            var favs = System.IO.File.ReadAllLines(path).Select(l => l.Trim()).Where(l => !l.StartsWith("#") && int.TryParse(l, out _)).Select(int.Parse).ToList();
+            var favs = IoFile.ReadAllLines(path).Select(l => l.Trim()).Where(l => !l.StartsWith("#") && int.TryParse(l, out _)).Select(int.Parse).ToList();
             return Ok(new RelayResponse<List<int>>(Data: favs));
         }
         catch
@@ -324,8 +326,8 @@ public class AnimeThemesController(
 
         string path = Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileAtFavsCache);
         var ids = new HashSet<int>();
-        if (System.IO.File.Exists(path))
-            foreach (var l in System.IO.File.ReadAllLines(path))
+        if (IoFile.Exists(path))
+            foreach (var l in IoFile.ReadAllLines(path))
                 if (int.TryParse(l.Trim(), out int id))
                     ids.Add(id);
 
@@ -334,7 +336,7 @@ public class AnimeThemesController(
 
         try
         {
-            System.IO.File.WriteAllLines(path, ids.Select(i => i.ToString()));
+            IoFile.WriteAllLines(path, ids.Select(i => i.ToString()));
             return Ok(new RelayResponse<object>(Data: new { videoId, isFavourite = ids.Contains(videoId) }));
         }
         catch (Exception ex)
@@ -365,7 +367,7 @@ public class AnimeThemesController(
         int p = 0;
         while (p + 10 <= r)
         {
-            string id = System.Text.Encoding.ASCII.GetString(d, p, 4);
+            string id = Encoding.ASCII.GetString(d, p, 4);
             if (id[0] == '\0')
                 break;
             int sz = (d[p + 4] << 24) | (d[p + 5] << 16) | (d[p + 6] << 8) | d[p + 7];
@@ -375,10 +377,10 @@ public class AnimeThemesController(
             {
                 string val = d[p + 10] switch
                 {
-                    1 => System.Text.Encoding.Unicode.GetString(d, p + 11, sz - 1),
-                    2 => System.Text.Encoding.BigEndianUnicode.GetString(d, p + 11, sz - 1),
-                    3 => System.Text.Encoding.UTF8.GetString(d, p + 11, sz - 1),
-                    _ => System.Text.Encoding.Latin1.GetString(d, p + 11, sz - 1),
+                    1 => Encoding.Unicode.GetString(d, p + 11, sz - 1),
+                    2 => Encoding.BigEndianUnicode.GetString(d, p + 11, sz - 1),
+                    3 => Encoding.UTF8.GetString(d, p + 11, sz - 1),
+                    _ => Encoding.Latin1.GetString(d, p + 11, sz - 1),
                 };
                 tags[id.Replace("TIT2", "Title").Replace("TIT3", "Slug").Replace("TPE1", "Artist").Replace("TALB", "Album")] = val.TrimEnd('\0').Replace("\uFEFF", "");
             }

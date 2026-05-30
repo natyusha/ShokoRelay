@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using System.Text;
 using System.Text.RegularExpressions;
 using ShokoRelay.Vfs;
 
@@ -192,7 +193,7 @@ internal static class AnimeThemesHelper
     /// <returns>A formatted CSV string.</returns>
     internal static string SerializeMapping(List<AnimeThemesMappingEntry> entries)
     {
-        var sb = new System.Text.StringBuilder();
+        var sb = new StringBuilder();
         sb.AppendLine("## Shoko Relay AniDB AnimeThemes Xrefs ##\n");
         sb.AppendLine("# filepath, videoId, anidbId, nc, slug, version, songTitle, artistName, lyrics, subbed, uncen, nsfw, spoiler, source, resolution, episodes, overlap");
         foreach (var e in entries)

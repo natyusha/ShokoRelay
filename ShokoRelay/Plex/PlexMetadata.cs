@@ -1,3 +1,5 @@
+using System.Collections;
+using System.Globalization;
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Enums;
@@ -443,7 +445,7 @@ public class PlexMetadata(IMetadataService metadataService)
                     {
                         try
                         {
-                            return new System.Globalization.RegionInfo(c.Trim().ToUpperInvariant()).EnglishName;
+                            return new RegionInfo(c.Trim().ToUpperInvariant()).EnglishName;
                         }
                         catch
                         {
@@ -472,7 +474,7 @@ public class PlexMetadata(IMetadataService metadataService)
     /// <param name="series">The Shoko series metadata.</param>
     /// <returns>An array of objects containing network tags, or null if none found.</returns>
     private object[]? BuildNetworkArray(ISeries series) =>
-        ((series as IShokoSeries)?.TmdbShows?.FirstOrDefault() ?? (series as ITmdbShow)) is { } src && src.GetType().GetProperty("TmdbNetworks")?.GetValue(src) is System.Collections.IEnumerable list
+        ((series as IShokoSeries)?.TmdbShows?.FirstOrDefault() ?? (series as ITmdbShow)) is { } src && src.GetType().GetProperty("TmdbNetworks")?.GetValue(src) is IEnumerable list
             ? CreateTagArray(list.Cast<object>().Select(n => (n as ITmdbNetwork)?.Name ?? n.GetType().GetProperty("Name")?.GetValue(n) as string).OfType<string>())
             : null;
 

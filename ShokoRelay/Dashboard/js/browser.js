@@ -272,7 +272,7 @@
       const hasTheme = (g.rootFiles || []).some((f) => f.name === "Theme.mp3");
       const theme = document.createElement("span");
       theme.className = `theme-btn ${hasTheme ? "exists" : "missing"}`;
-      theme.textContent = "♫";
+      theme.textContent = "♬";
       theme.title = hasTheme ? "Theme.mp3 Exists" : "Theme.mp3 Missing (Click to Generate)";
 
       if (!hasTheme) {

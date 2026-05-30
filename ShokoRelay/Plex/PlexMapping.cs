@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Enums;
 using Shoko.Abstractions.Metadata.Tmdb;
@@ -167,8 +168,8 @@ public static class PlexMapping
 
     #region TMDB Order & Cache
 
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<(int EpId, string? OrderingId), bool> s_tmdbAllOrderingsContainsCache = new();
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<(int EpId, string? OrderingId), (int? Season, int Episode)> s_orderingCoordsCache = new();
+    private static readonly ConcurrentDictionary<(int EpId, string? OrderingId), bool> s_tmdbAllOrderingsContainsCache = new();
+    private static readonly ConcurrentDictionary<(int EpId, string? OrderingId), (int? Season, int Episode)> s_orderingCoordsCache = new();
 
     /// <summary>Filter a list of TMDB episode entries to the preferred ordering using a single-pass weighted sort.</summary>
     /// <param name="entries">The collection of TMDB episodes to filter.</param>

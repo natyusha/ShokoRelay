@@ -14,7 +14,7 @@ public static class TagHelper
     private static readonly Regex s_wordRegex = new(@"[\'\w\d-]+\b", RegexOptions.Compiled);
 
     // csharpier-ignore-start
-    /// <summary><c>TagBlacklistAniDBHelpers</c>: https://github.com/ShokoAnime/ShokoServer/blob/d7c7f6ecdd883c714b15dbef385e19428c8d29cf/Shoko.Server/Utilities/TagFilter.cs#L37C44-L37C68</summary>
+    /// <summary><c>TagBlacklistAniDBHelpers</c>: https://github.com/ShokoAnime/ShokoServer/blob/master/Shoko.Server/Utilities/TagFilter.cs#L37</summary>
     private static readonly FrozenSet<string> s_tagBlacklistAniDBHelpers = new[] {
         "asia", "awards", "body and host", "breasts", "cast missing", "cast", "complete manga adaptation", "content indicators", "delayed 16-9 broadcast", "description missing",
         "description needs improvement", "development hell", "dialogue driven", "dynamic", "earth", "elements", "ending", "ensemble cast", "family life", "fast-paced", "fetishes", "maintenance tags",

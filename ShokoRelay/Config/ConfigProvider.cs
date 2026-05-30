@@ -1,3 +1,4 @@
+using System.Collections;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Reflection;
@@ -403,7 +404,7 @@ public class ConfigProvider
         {
             if (p.PropertyType == typeof(string) && string.IsNullOrWhiteSpace(p.GetValue(obj) as string) && p.GetCustomAttribute<DefaultValueAttribute>() is { } d)
                 p.SetValue(obj, d.Value);
-            else if (p.PropertyType.IsClass && p.PropertyType != typeof(string) && !typeof(System.Collections.IDictionary).IsAssignableFrom(p.PropertyType))
+            else if (p.PropertyType.IsClass && p.PropertyType != typeof(string) && !typeof(IDictionary).IsAssignableFrom(p.PropertyType))
                 ApplyDefaultValues(p.GetValue(obj)!);
         }
     }
@@ -438,7 +439,7 @@ public class ConfigProvider
                 }
             }
             // Recurse into nested config classes (AutomationConfig, AdvancedConfig, etc.)
-            else if (prop.PropertyType.IsClass && prop.PropertyType != typeof(string) && !typeof(System.Collections.IEnumerable).IsAssignableFrom(prop.PropertyType))
+            else if (prop.PropertyType.IsClass && prop.PropertyType != typeof(string) && !typeof(IEnumerable).IsAssignableFrom(prop.PropertyType))
             {
                 var subObj = prop.GetValue(obj);
                 if (subObj != null)

@@ -8,6 +8,7 @@ using ShokoRelay.AnimeThemes;
 using ShokoRelay.Services;
 using ShokoRelay.Sync;
 using ShokoRelay.Vfs;
+using IoFile = System.IO.File;
 
 namespace ShokoRelay.Controllers;
 
@@ -61,7 +62,7 @@ public class ShokoController(
                 var result = filterIds.Count > 0 ? _vfsBuilder.Build(filterIds, clean) : _vfsBuilder.Build((int?)null, clean);
 
                 // Restore AnimeThemes links after the VFS build (filtered or global) if a mapping file exists
-                if (System.IO.File.Exists(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileAtMapping)))
+                if (IoFile.Exists(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileAtMapping)))
                     await _atMapping.ApplyMappingAsync(filterIds.Count > 0 ? filterIds : null, CancellationToken.None).ConfigureAwait(false);
 
                 if (PlexLibrary.IsEnabled && Settings.Automation.ScanOnVfsRefresh && filterIds.Count > 0)
@@ -82,7 +83,7 @@ public class ShokoController(
         {
             Logger.Info("Shoko: Updating VFS overrides file...");
             string path = Path.Combine(ConfigDirectory, ShokoRelayConstants.FileVfsOverrides);
-            System.IO.File.WriteAllText(path, content ?? string.Empty);
+            IoFile.WriteAllText(path, content ?? string.Empty);
             OverrideHelper.Reload(MetadataService); // Pass the service to trigger TMDB discovery
             return Ok(new RelayResponse<object>());
         }
@@ -98,7 +99,7 @@ public class ShokoController(
     public IActionResult GetVfsTree()
     {
         var path = Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileVfsBlueprintCache);
-        if (!System.IO.File.Exists(path))
+        if (!IoFile.Exists(path))
             return Ok(new { roots = Array.Empty<object>() });
 
         // Normalize Managed Folder paths to remove trailing slashes for consistent comparison with blueprint keys. Filter out folders marked as Source since the VFS only builds in none or destination folders.
@@ -111,7 +112,7 @@ public class ShokoController(
                 .ToList()
             ?? [];
 
-        var rawJson = System.IO.File.ReadAllText(path);
+        var rawJson = IoFile.ReadAllText(path);
         var data = JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, JObject>>>(rawJson);
         if (data == null)
             return Ok(new { roots = Array.Empty<object>() });

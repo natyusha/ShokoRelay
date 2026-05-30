@@ -18,8 +18,8 @@
 @font-face {
   font-style: normal;
   font-weight: 200;
-  src: url("../fonts/iosevka-extralight.subset.woff2") format("woff2");
-  font-family: "Iosevka Extralight";
+  src: url("../fonts/iosevka-nn-extralight.subset.woff2") format("woff2");
+  font-family: "Iosevka NN Extralight";
   font-display: swap;
 }
 #brand-header {
@@ -51,7 +51,7 @@
   overflow: hidden;
   font-size: 6rem;
   line-height: 1.1;
-  font-family: "Iosevka Extralight";
+  font-family: "Iosevka NN Extralight";
   letter-spacing: -0.06em;
   user-select: none;
   text-overflow: ellipsis;
@@ -108,7 +108,7 @@ label > small::before {
 .vfs-rebuild label small::after {
   margin-left: 4px;
   content: "⟳";
-  font-weight: bold;
+  font-weight: 700;
 }
 /* #endregion */
 
