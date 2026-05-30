@@ -80,9 +80,6 @@ namespace ShokoRelay.Plex
 
         #region Subtypes & Extras
 
-        /// <summary>Optional subtype lists (for reference / validation).</summary>
-        public static readonly string[] CollectionSubtypes = ["movie", "show", "artist", "album"];
-
         /// <summary>Subfolder names recognized by Plex for show and season-level extras.</summary>
         public static readonly string[] LocalExtraDirs = ["Behind The Scenes", "Deleted Scenes", "Featurettes", "Interviews", "Scenes", "Shorts", "Trailers", "Other"];
 

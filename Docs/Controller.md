@@ -244,8 +244,8 @@ GET /vfs/tree                                                  -> GetVfsTree
 ### Shoko: Automation
 
 ```
-GET  /shoko/purge-missing?dryRun={true|false}                 -> PurgeMissingFiles           (for preview/testing)
-POST /shoko/purge-missing?dryRun={true|false}                 -> PurgeMissingFiles
+GET  /shoko/purge-missing?dryRun={true|false}                  -> PurgeMissingFiles           (for preview/testing)
+POST /shoko/purge-missing?dryRun={true|false}                  -> PurgeMissingFiles
 
 POST /shoko/import                                             -> RunShokoImport
 GET  /shoko/import/start                                       -> StartShokoImportNow

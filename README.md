@@ -131,7 +131,7 @@ com.plexapp.agents.shokorelay
   - Click `Add Webhook` and enter: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/plex/webhook`
   - Click `Save Changes` to complete the process
 - The webhook respects the `Include Ratings`, `Include Progress` and `Sync Users` settings in the `Sync Watched States Menu`
-  - `Sync Users` defaults to "None" and must be configured before the webook will function
+  - `Sync Users` defaults to "None" and must be configured before the webhook will function
   - For clarity "All" users means both the admin and the configured extra Plex users
 - Managed users must be added to `Extra Plex Users` on the dashboard if you wish them to be included
 - _Requires Plex authentication **and** a Plex Pass subscription_

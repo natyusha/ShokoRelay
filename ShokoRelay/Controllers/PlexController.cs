@@ -374,6 +374,11 @@ public class PlexController(
 
         if (isProgress)
         {
+            var epUserData = _userDataService.GetEpisodeUserData(shokoEpisode, user);
+            bool alreadyWatched = epUserData?.LastPlayedAt != null;
+            if (alreadyWatched)
+                return Ok(new { status = "ignored", reason = "already_watched" });
+
             if (evt.Metadata.ViewOffset.HasValue && evt.Metadata.ViewOffset.Value > 0)
             {
                 foreach (var video in shokoEpisode.VideoList ?? [])

@@ -315,12 +315,6 @@ internal static class AnimeThemesHelper
     /// <returns>A formatted string tag.</returns>
     internal static string FormatSlugTag(string? suffix) => string.IsNullOrWhiteSpace(suffix) ? "" : $" ({(s_slugFormatting.TryGetValue(suffix.Trim(), out var f) ? f : suffix)})";
 
-    /// <summary>Ensures a filename has the specified extension.</summary>
-    /// <param name="fileName">The filename.</param>
-    /// <param name="ext">The extension including dot.</param>
-    /// <returns>The filename with extension.</returns>
-    internal static string EnsureExtension(string fileName, string ext) => string.IsNullOrWhiteSpace(Path.GetExtension(fileName)) ? fileName + ext : fileName;
-
     /// <summary>Resolves the absolute source path for a theme file.</summary>
     /// <param name="relativeFilePath">Relative path from the theme root.</param>
     /// <param name="importRoot">The Shoko import root.</param>
