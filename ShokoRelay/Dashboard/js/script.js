@@ -96,6 +96,12 @@
     t.className = `toast ${type || "info"}`;
     t.tabIndex = 0;
     t.innerHTML = `<span class="toast-message">${message}</span>`;
+    if (timeout > 0) {
+      const bar = document.createElement("div");
+      bar.className = "toast-progress-bar";
+      bar.style.animationDuration = `${timeout}ms`;
+      t.appendChild(bar);
+    }
     container.appendChild(t);
     requestAnimationFrame(() => t.classList.add("visible"));
     const dismiss = () => {

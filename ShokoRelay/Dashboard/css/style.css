@@ -297,6 +297,7 @@ code {
   z-index: 2000;
 }
 .toast {
+  position: relative;
   transform: translateX(-18px) translateZ(0);
   opacity: 0;
   transition:
@@ -310,6 +311,7 @@ code {
   padding: 10px 14px;
   min-width: 220px;
   max-width: 420px;
+  overflow: hidden;
   color: var(--text-color);
   font-weight: 500;
   font-size: 0.95em;
@@ -348,7 +350,25 @@ code {
   white-space: nowrap;
 }
 .np-line.artist {
-  opacity: 0.8;
+  color: color-mix(in srgb, currentColor 80%, transparent);
+}
+.toast-progress-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  transform-origin: left;
+  animation: toastProgress linear 1 forwards;
+  background: var(--border-color);
+  width: 100%;
+  height: 4px;
+}
+@keyframes toastProgress {
+  0% {
+    transform: scaleX(0);
+  }
+  100% {
+    transform: scaleX(1);
+  }
 }
 /* #endregion */
 
