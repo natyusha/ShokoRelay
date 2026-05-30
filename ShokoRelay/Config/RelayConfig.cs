@@ -170,12 +170,6 @@ public class RelayConfig
     [DefaultValue("SHOKO, EN, X-JAT")]
     public string DescriptionLanguage { get; set; } = "SHOKO, EN, X-JAT";
 
-    /// <summary>Priority list of languages for episode descriptions.</summary>
-    [Display(Name = "Episode Description Language", Description = "Priority, comma separated")]
-    [Browsable(false)]
-    [DefaultValue("SHOKO")]
-    public string EpisodeDescriptionLanguage { get; set; } = "SHOKO";
-
     /// <summary>Whether to append prefixes like OVA to the end of titles.</summary>
     [Display(Name = "Move Common Series Title Prefixes", Description = "Enable to append 'Gekijouban', 'OVA', etc. to the end of the series title, after an em dash '—'")]
     [DefaultValue(true)]

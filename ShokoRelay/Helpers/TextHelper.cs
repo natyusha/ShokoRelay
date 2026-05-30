@@ -238,12 +238,6 @@ public static class TextHelper
         ['|'] = '｜',
     }.ToFrozenDictionary();
 
-    /// <summary>Remove characters that are invalid in Windows filenames by replacing them with visually similar unicode characters.</summary>
-    /// <param name="value">The string to clean.</param>
-    /// <returns>A filename-safe string.</returns>
-    public static string StripInvalidWindowsChars(string value) =>
-        string.IsNullOrWhiteSpace(value) ? "" : s_condenseSpacesRegex.Replace(new string([.. value.Where(c => !ReplacementCharMap.ContainsKey(c))]).Trim(), " ");
-
     /// <summary>Determine if a filename contains a Plex-style split tag (e.g. "pt1").</summary>
     /// <param name="fileName">The filename to check.</param>
     /// <returns>True if a split tag is found.</returns>

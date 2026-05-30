@@ -233,26 +233,6 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
     /// <returns>Plex-compatible empty MediaContainer result.</returns>
     protected IActionResult EmptyMatch() => Ok(new { MediaContainer = new { size = 0, Metadata = Array.Empty<object>() } });
 
-    /// <summary>Return a no-op success response used when an operation is requested but no Plex library targets are configured.</summary>
-    /// <param name="seriesList">List of series that would have been processed.</param>
-    /// <returns>Success status with counts indicating items were skipped.</returns>
-    protected IActionResult NoPlexTargetsResponse(IEnumerable<IShokoSeries?> seriesList)
-    {
-        int processedNone = seriesList.Count(s => s != null);
-        return Ok(
-            new RelayResponse<object>(
-                Data: new
-                {
-                    processed = processedNone,
-                    created = 0,
-                    skipped = processedNone,
-                    errors = 0,
-                    deletedEmptyCollections = 0,
-                }
-            )
-        );
-    }
-
     #endregion
 
     #region Shared Logic Helpers

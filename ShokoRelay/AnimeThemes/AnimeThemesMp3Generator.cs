@@ -49,13 +49,6 @@ public record ThemeMp3OperationResult(
 /// <param name="Errors">Count of encountered errors.</param>
 public record ThemeMp3BatchResult(string Root, IReadOnlyList<ThemeMp3OperationResult> Items, int Processed, int Skipped, int Errors);
 
-/// <summary>Result of an in-memory theme conversion for preview.</summary>
-/// <param name="Stream">The audio data stream.</param>
-/// <param name="FileName">Suggested filename for the response.</param>
-/// <param name="ContentType">MIME type (audio/mpeg).</param>
-/// <param name="Title">The song title metadata.</param>
-public record ThemePreviewResult(Stream Stream, string FileName, string ContentType, string? Title);
-
 /// <summary>Internal record representing a selected theme's metadata and audio link.</summary>
 internal sealed record ThemeSelection(string AudioUrl, string SlugRaw, string SlugDisplay, string SongTitle, string Artist, string AnimeTitle, string AnimeSlug);
 
@@ -252,7 +245,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
     /// <returns>An operation result object.</returns>
     public async Task<ThemeMp3OperationResult> ProcessSingleAsync(AnimeThemesMp3Query query, CancellationToken ct)
     {
-        var (error, data) = PrepareContext(query, false);
+        var (error, data) = PrepareContext(query);
         if (error != null)
             return error;
         var (folder, themePath, videoFile, series) = data!.Value;
@@ -313,46 +306,14 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         }
     }
 
-    /// <summary>Returns an in‑memory MP3 stream rather than writing a file.</summary>
-    /// <param name="query">Query parameters.</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>A tuple containing a preview result or an error result.</returns>
-    public async Task<(ThemePreviewResult? Preview, ThemeMp3OperationResult? Error)> PreviewAsync(AnimeThemesMp3Query query, CancellationToken ct)
-    {
-        var (error, data) = PrepareContext(query, true);
-        if (error != null)
-            return (null, error);
-        var (folder, _, _, series) = data!.Value;
-        string? temp = null;
-        try
-        {
-            s_logger.Info("AnimeThemes MP3: Previewing theme for series '{0}'", series.PreferredTitle?.Value);
-            var sel = await FetchThemeAsync(series.AnidbAnimeID, query.Slug, query.Offset, ct);
-            if (sel == null)
-                return (null, new(folder, "error", "Entry not found."));
-            temp = await DownloadAudioAsync(sel.AudioUrl, ct);
-            return (new(await _ffmpegService.ConvertToMp3StreamAsync(temp, ct), "Theme.mp3", "audio/mpeg", $"{sel.SlugDisplay}: {sel.SongTitle}"), null);
-        }
-        catch (Exception ex)
-        {
-            s_logger.Error(ex, "AnimeThemes MP3: Failed to preview for {0}", folder);
-            return (null, new(folder, "error", ex.Message));
-        }
-        finally
-        {
-            CleanupTempFile(temp);
-        }
-    }
-
     #endregion
 
     #region Internal Helpers
 
     /// <summary>Validates the directory and resolves the Shoko series for the request.</summary>
     /// <param name="q">The query parameters of the request.</param>
-    /// <param name="preview">True if the request is only for a preview/in-memory stream; otherwise false.</param>
     /// <returns>A tuple containing either an error operation result, or resolved context metadata (folder path, target file, and series reference).</returns>
-    private (ThemeMp3OperationResult? Error, (string Folder, string ThemePath, IVideoFile VideoFile, IShokoSeries Series)? Data) PrepareContext(AnimeThemesMp3Query q, bool preview)
+    private (ThemeMp3OperationResult? Error, (string Folder, string ThemePath, IVideoFile VideoFile, IShokoSeries Series)? Data) PrepareContext(AnimeThemesMp3Query q)
     {
         if (string.IsNullOrWhiteSpace(q.Path))
             return (new("", "error", "Path is required."), null);
@@ -363,7 +324,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
             return (new(folder, "error", "Folder not found."), null);
 
         string themePath = Path.Combine(folder, "Theme.mp3");
-        if (!preview && !q.Force && File.Exists(themePath))
+        if (!q.Force && File.Exists(themePath))
             return (new(folder, "skipped", "Theme.mp3 already exists."), null);
 
         string? vid = Directory.EnumerateFiles(folder).FirstOrDefault(f => AnimeThemesHelper.VideoFileExtensions.Contains(Path.GetExtension(f)));

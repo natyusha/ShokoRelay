@@ -85,21 +85,6 @@ public sealed class FfmpegService
         await RunProcessAsync(_ffmpegPath, args, null, null, ct, workingDir).ConfigureAwait(false);
     }
 
-    /// <summary>Convert a media file to MP3 audio and return it in a MemoryStream.</summary>
-    /// <param name="inputPath">Source file path.</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>A stream containing the MP3-encoded audio.</returns>
-    public async Task<MemoryStream> ConvertToMp3StreamAsync(string inputPath, CancellationToken ct)
-    {
-        EnsureFfmpegConfigured();
-        var ms = new MemoryStream();
-        var args = new List<string> { "-loglevel", "error", "-i", inputPath, "-vn", "-acodec", "libmp3lame", "-b:a", "320k", "-f", "mp3", "pipe:1" };
-
-        await RunProcessAsync(_ffmpegPath, args, null, ms, ct);
-        ms.Position = 0;
-        return ms;
-    }
-
     #endregion
 
     #region Configuration Logic

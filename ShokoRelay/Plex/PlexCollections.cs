@@ -14,11 +14,6 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
     /// <summary>Whether Plex integration is enabled.</summary>
     public bool IsEnabled => _plexClient.IsEnabled;
 
-    /// <summary>Represents a specific collection target within a Plex library section.</summary>
-    /// <param name="Target">The library target.</param>
-    /// <param name="CollectionId">The numeric collection ID.</param>
-    public sealed record PlexLibraryCollectionTarget(PlexLibraryTarget Target, int CollectionId);
-
     #endregion
 
     #region Collection Discovery
@@ -40,23 +35,6 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
             await UpdateCollectionTitleSortAsync(collectionId.Value, collectionName, target, cancellationToken).ConfigureAwait(false);
 
         return collectionId;
-    }
-
-    /// <summary>Retrieves or creates a collection with the specified name across all targets.</summary>
-    /// <param name="collectionName">The collection name.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A list of target/ID pairs.</returns>
-    public async Task<List<PlexLibraryCollectionTarget>> GetOrCreateCollectionIdsAsync(string collectionName, CancellationToken cancellationToken = default)
-    {
-        var results = new List<PlexLibraryCollectionTarget>();
-        if (!IsEnabled || string.IsNullOrWhiteSpace(collectionName))
-            return results;
-
-        foreach (var target in _plexClient.GetConfiguredTargets())
-            if (await GetOrCreateCollectionIdAsync(collectionName, target, cancellationToken).ConfigureAwait(false) is { } id)
-                results.Add(new PlexLibraryCollectionTarget(target, id));
-
-        return results;
     }
 
     #endregion

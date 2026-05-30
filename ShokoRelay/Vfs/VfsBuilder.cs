@@ -58,7 +58,6 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
     #region Fields
 
     private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
-    internal static readonly Lock GlobalBuildLock = new();
     private readonly IMetadataService _metadataService = metadataService;
     private readonly VfsAssetLinker _assetLinker = assetLinker;
 
@@ -85,16 +84,6 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
     /// <param name="pruneSeries">Whether to remove per-series folders specifically.</param>
     /// <returns>A result object containing statistics and details for the log report.</returns>
     public VfsBuildResult Build(IReadOnlyCollection<int> seriesIds, bool cleanRoot = true, bool pruneSeries = false) => BuildInternal(seriesIds, cleanRoot, pruneSeries, false);
-
-    /// <summary>Clean VFS for a series without building.</summary>
-    /// <param name="seriesId">Optional single series ID to clean.</param>
-    /// <returns>A result object containing statistics and details for the log report.</returns>
-    public VfsBuildResult Clean(int? seriesId = null) => BuildInternal(seriesId.HasValue ? [seriesId.Value] : null, true, false, true);
-
-    /// <summary>Clean VFS for multiple series without building.</summary>
-    /// <param name="seriesIds">Collection of series IDs to clean.</param>
-    /// <returns>A result object containing statistics and details for the log report.</returns>
-    public VfsBuildResult Clean(IReadOnlyCollection<int> seriesIds) => BuildInternal(seriesIds, true, false, true);
 
     #endregion
 

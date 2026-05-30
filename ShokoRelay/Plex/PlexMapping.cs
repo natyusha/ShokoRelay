@@ -100,9 +100,8 @@ public static class PlexMapping
 
     /// <summary>Determine Plex coordinates for episodes sharing a file.</summary>
     /// <param name="episodes">Episode list.</param>
-    /// <param name="fileIndexWithinEpisode">Optional file index.</param>
     /// <returns>Resolved coordinates.</returns>
-    public static PlexCoords GetPlexCoordinatesForFile(IEnumerable<IEpisode> episodes, int? fileIndexWithinEpisode = null)
+    public static PlexCoords GetPlexCoordinatesForFile(IEnumerable<IEpisode> episodes)
     {
         var eps = (episodes ?? []).ToList();
         if (!eps.Any())
@@ -112,6 +111,7 @@ public static class PlexMapping
                 Episode = 1,
                 EndEpisode = null,
             };
+
         if (EnforceTmdbNumbering && eps.Select(ep => ep.Type).Distinct().Count() == 1)
         {
             var tmdbEntriesRaw = eps.OfType<IShokoEpisode>().Where(se => se.TmdbEpisodes != null && se.TmdbEpisodes.Any()).SelectMany(se => se.TmdbEpisodes).ToList();
@@ -119,35 +119,22 @@ public static class PlexMapping
             var tmdbEntries = string.IsNullOrWhiteSpace(showPrefId)
                 ? [.. tmdbEntriesRaw.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber)]
                 : SelectPreferredTmdbOrdering(tmdbEntriesRaw, showPrefId);
+
             if (tmdbEntries.Any())
             {
                 var first = tmdbEntries.First();
                 var (season, episode) = GetOrderingCoords(first, showPrefId);
                 if (season.HasValue)
                 {
-                    if (fileIndexWithinEpisode.HasValue && fileIndexWithinEpisode.Value < tmdbEntries.Count)
+                    var last = tmdbEntries.Last();
+                    var (lastSeason, lastEpisode) = GetOrderingCoords(last, showPrefId);
+                    int? endEpisode = (tmdbEntries.Count > 1 && lastSeason == season) ? lastEpisode : null;
+                    return new PlexCoords
                     {
-                        var tmdbEp = tmdbEntries[fileIndexWithinEpisode.Value];
-                        var (epSeason, epEpisode) = GetOrderingCoords(tmdbEp, showPrefId);
-                        return new PlexCoords
-                        {
-                            Season = epSeason ?? season.Value,
-                            Episode = epEpisode,
-                            EndEpisode = null,
-                        };
-                    }
-                    else if (!fileIndexWithinEpisode.HasValue || tmdbEntries.Count == 1)
-                    {
-                        var last = tmdbEntries.Last();
-                        var (lastSeason, lastEpisode) = GetOrderingCoords(last, showPrefId);
-                        int? endEpisode = (tmdbEntries.Count > 1 && lastSeason == season) ? lastEpisode : null;
-                        return new PlexCoords
-                        {
-                            Season = season.Value,
-                            Episode = episode,
-                            EndEpisode = endEpisode,
-                        };
-                    }
+                        Season = season.Value,
+                        Episode = episode,
+                        EndEpisode = endEpisode,
+                    };
                 }
             }
         }
