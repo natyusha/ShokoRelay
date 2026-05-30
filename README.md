@@ -43,6 +43,7 @@ Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File Sy
     - Once clicked it will change to a `Login` link which will redirect you to `app.plex.tv/auth`
     - From there you can login to Plex as normal using your credentials and then close the tab
     - This will enable: Auto Scanning, Scrobbling (via sync or webhook) and enhanced collection/ratings support
+  - Configure the `Sync Users` under the `Quick Actions > Sync Menu` (Sync Watched States Menu) to enable webhooks and syncing
 - There are additional options at the bottom under "Provider Settings" which also contains a "Help" button in the top right.
 
 > [!TIP]
@@ -144,9 +145,8 @@ com.plexapp.agents.shokorelay
 - `Import Int.` An input which will schedule Shoko to import new or unrecognized files every `N` hours
   - Make sure to set `AniDB > Update Options > Files With Missing Info` to "Never" if you use this
 - `Sync Int.` An input which will schedule watched state syncing from Plex to Shoko every `N` hours
-  - This includes ratings/votes if `Include Ratings` is enabled in the `Sync Watched States Menu`
-  - This includes playback progress if `Include Progress` is enabled in the `Sync Watched States Menu`
-    - This will not sync progress from Shoko to Plex
+  - This includes ratings (votes) and progress if `Include Ratings` or `Include Progress` are enabled respectively in the `Quick Actions > Sync Menu` (Sync Watched States Menu)
+    - Currently progress will only sync from Plex to Shoko and not the other way around
   - To speed up the process the scheduled watched sync only considers things watched during the scheduled interval +1 hour
     - A full sync may need to be run if Shoko or Plex downtime exceeds the considered time period
   - _Requires Plex authentication_
