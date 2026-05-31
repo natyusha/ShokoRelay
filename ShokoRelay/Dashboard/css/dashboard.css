@@ -59,6 +59,98 @@
 }
 /* #endregion */
 
+/* #region MARK: Layout
+*/
+#dashboard {
+  margin: 0 auto;
+  max-width: 900px;
+}
+.two-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(442px, 1fr));
+  gap: 8px;
+}
+.w46 {
+  max-width: 46px;
+}
+.w100 {
+  max-width: 100px;
+}
+.divider {
+  margin: 13px 0 13px 0;
+}
+/* #endregion */
+
+/* #region MARK: Dashboard Modals
+*/
+.modal textarea {
+  margin: 0;
+  border-radius: 0;
+  width: 100%;
+  height: 470px;
+  font-size: 1.1em;
+  font-family: monospace;
+}
+.modal.overrides {
+  width: 870px;
+}
+.modal.overrides .modal-body {
+  padding: 0;
+}
+.modal.confirmation {
+  width: 600px;
+}
+#sync-direction-arrow {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  line-height: 1;
+}
+.direction-toggle {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  cursor: pointer;
+  margin-bottom: 16px;
+  box-shadow: 0 0 4px 2px var(--glow);
+  border: 1px solid var(--border-color);
+  background: var(--inset-color);
+  padding: 10px 6px;
+  height: auto;
+  color: var(--text-color);
+  user-select: none;
+}
+.direction-toggle:hover {
+  background: color-mix(in srgb, var(--inset-color), white 5%);
+}
+.direction-toggle .dir-label {
+  margin-top: 0;
+  min-width: 100px;
+  font-size: 1em;
+}
+.dir-label {
+  margin-top: 9px;
+  color: var(--text-color);
+  font-size: 1.1em;
+  text-align: center;
+}
+.dir-icon {
+  display: inline-block;
+  position: absolute;
+  visibility: visible;
+  transition:
+    opacity 0.4s ease-out,
+    visibility 0.4s steps(2, end);
+  fill: var(--highlight-color);
+  width: 28px;
+  height: 28px;
+}
+.dir-icon.hidden {
+  visibility: hidden;
+  opacity: 0;
+}
+/* #endregion */
+
 /* #region MARK: Icons
 */
 svg {
@@ -338,5 +430,21 @@ button.float-link {
 }
 .details-anim > summary:hover {
   color: var(--hover-color);
+}
+/* #endregion */
+
+/* #region MARK: Responsive Layout
+*/
+@media (max-width: 925px) {
+  .two-cols {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  #header-logo {
+    margin-right: 0;
+  }
+  #header-title {
+    margin-left: 0;
+  }
 }
 /* #endregion */
