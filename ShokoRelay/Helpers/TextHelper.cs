@@ -1,4 +1,3 @@
-using System.Collections.Frozen;
 using System.Text.RegularExpressions;
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Containers;
@@ -27,11 +26,8 @@ public static class TextHelper
     private static readonly Regex s_bbCodeSolitaryRegex = new(@"\[\/?i\]", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex s_condenseLinesRegex = new(@"(\r?\n\s*){2,}", RegexOptions.Compiled);
     private static readonly Regex s_condenseSpacesRegex = new(@"\s{2,}", RegexOptions.Compiled);
-    private static readonly Regex s_plexSplitTagRegex = new(@"(?ix)(?:^|[\s._-])(cd|disc|disk|dvd|part|pt)[\s._-]*([1-8])(?!\d)", RegexOptions.Compiled);
     private static readonly Regex s_numbersRegex = new(@"\d+", RegexOptions.Compiled);
     private static readonly Regex s_unicodeEscapeRegex = new(@"\\u([0-9a-fA-F]{4})", RegexOptions.Compiled);
-    private static readonly Regex s_localExtraDirRegex = new($@"^({string.Join("|", PlexConstants.LocalExtraDirs)})(\s+[sS](\d+))?$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-    private static readonly Regex s_localExtraFileRegex = new($@"-(?:behindthescenes|deleted|featurette|interview|scene|short|trailer|other)\d*$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     #endregion
 
@@ -218,45 +214,17 @@ public static class TextHelper
 
     #endregion
 
-    #region VFS/Plex Utils
+    #region Plex Utils
 
     /// <summary>Normalizes directory separators to forward slashes and trims trailing slashes for Plex-compatible path comparison.</summary>
     /// <param name="path">The filesystem path to normalize.</param>
     /// <returns>A normalized path string.</returns>
     public static string NormalizePathForPlex(string? path) => string.IsNullOrWhiteSpace(path) ? string.Empty : path.Replace('\\', '/').TrimEnd('/');
 
-    /// <summary>Maps invalid Windows filename characters to visually similar Unicode replacements.</summary>
-    public static readonly FrozenDictionary<char, char> ReplacementCharMap = new Dictionary<char, char>
-    {
-        ['\\'] = '⧵',
-        ['/'] = '⁄',
-        [':'] = '꞉',
-        ['*'] = '＊',
-        ['?'] = '？',
-        ['<'] = '＜',
-        ['>'] = '＞',
-        ['|'] = '｜',
-    }.ToFrozenDictionary();
-
-    /// <summary>Determine if a filename contains a Plex-style split tag (e.g. "pt1").</summary>
-    /// <param name="fileName">The filename to check.</param>
-    /// <returns>True if a split tag is found.</returns>
-    public static bool HasPlexSplitTag(string fileName) => !string.IsNullOrWhiteSpace(fileName) && s_plexSplitTagRegex.IsMatch(Path.GetFileNameWithoutExtension(fileName).Replace('[', ' ').Replace(']', ' '));
-
     /// <summary>Extracts the first sequence of digits from a string (Series ID lookup).</summary>
     /// <param name="text">The string to parse.</param>
     /// <returns>The extracted integer, or null.</returns>
     public static int? ExtractSeriesId(string? text) => (text != null && s_numbersRegex.Match(text) is { Success: true } m && int.TryParse(m.Value, out var id)) ? id : null;
-
-    /// <summary>Identifies local extra directories with optional season suffixes.</summary>
-    /// <param name="name">The directory name to evaluate.</param>
-    /// <returns>A Match object containing the extra type and optional season number.</returns>
-    public static Match MatchLocalExtraDir(string name) => s_localExtraDirRegex.Match(name);
-
-    /// <summary>Identifies local extra files based on Plex naming suffixes (e.g., "-trailer").</summary>
-    /// <param name="fileNameWithoutExtension">The filename without its extension to evaluate.</param>
-    /// <returns>A Match object indicating success or failure.</returns>
-    public static Match MatchLocalExtraFile(string fileNameWithoutExtension) => s_localExtraFileRegex.Match(fileNameWithoutExtension);
 
     /// <summary>Checks if a Plex string value (which mimics a boolean, e.g. "1") represents true.</summary>
     /// <param name="value">The Plex string value to check.</param>

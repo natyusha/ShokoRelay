@@ -242,13 +242,13 @@ internal static class VfsShared
         var segments = path.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries);
 
         foreach (var seg in segments)
-            if (names.Contains(seg) || (Settings.Advanced.PlexLocalExtras && TextHelper.MatchLocalExtraDir(seg).Success))
+            if (names.Contains(seg) || (Settings.Advanced.PlexLocalExtras && VfsHelper.MatchLocalExtraDir(seg).Success))
                 return true;
 
         var fileName = Path.GetFileName(path);
         var baseName = Path.GetFileNameWithoutExtension(path);
 
-        return names.Contains(fileName) || (Settings.Advanced.PlexLocalExtras && (TextHelper.MatchLocalExtraDir(fileName).Success || TextHelper.MatchLocalExtraFile(baseName).Success));
+        return names.Contains(fileName) || (Settings.Advanced.PlexLocalExtras && (VfsHelper.MatchLocalExtraDir(fileName).Success || VfsHelper.MatchLocalExtraFile(baseName).Success));
     }
 
     #endregion

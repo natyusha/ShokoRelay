@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Video;
+using ShokoRelay.Vfs;
 using static ShokoRelay.Plex.PlexMapping;
 
 namespace ShokoRelay.Helpers;
@@ -172,7 +173,7 @@ public static class MapHelper
             int fIdx = fileList?.FindIndex(x => x.ID == video.ID) ?? 0,
                 fCount = fileList?.Count ?? 1;
             string fileName = Path.GetFileName(video.Files?.FirstOrDefault()?.Path ?? "");
-            bool allowPt = fCount > 1 && TextHelper.HasPlexSplitTag(fileName) && deduped.Select(d => d.Episode.Type).Distinct().Count() <= 1;
+            bool allowPt = fCount > 1 && VfsHelper.HasPlexSplitTag(fileName) && deduped.Select(d => d.Episode.Type).Distinct().Count() <= 1;
 
             // Versioning: Only calculate vIdx if there are multiple files within this specific variation status group
             var vKey = (coords.Season, coords.Episode, video.IsVariation);

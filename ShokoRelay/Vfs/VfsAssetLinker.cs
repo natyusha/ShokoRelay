@@ -109,7 +109,7 @@ public class VfsAssetLinker(IVideoService videoService)
             // Show and Season-Level Extras (Subdirectory pattern matching)
             foreach (var subDir in Directory.EnumerateDirectories(srcDir!))
             {
-                var match = TextHelper.MatchLocalExtraDir(Path.GetFileName(subDir));
+                var match = VfsHelper.MatchLocalExtraDir(Path.GetFileName(subDir));
                 if (!match.Success)
                     continue;
 
