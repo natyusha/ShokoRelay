@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using NLog;
 using Shoko.Abstractions.Core.Services;
 using Shoko.Abstractions.Plugin;
+using Shoko.Abstractions.Plugin.Models;
 using Shoko.Abstractions.Video;
 using ShokoRelay.AnimeThemes;
 using ShokoRelay.Services;
@@ -90,6 +91,16 @@ public class Plugin : IPlugin
 
     /// <summary>Plugin thumbnail resource.</summary>
     public string? EmbeddedThumbnailResourceName => "ShokoRelay.Assets.shoko-relay-logo.png";
+
+    /// <inheritdoc/>
+    public IReadOnlyList<PluginPage> GetPages() =>
+    [
+        new()
+        {
+            Name = "Dashboard",
+            Url = "/api/plugin/ShokoRelay/dashboard",
+        }
+    ];
 }
 
 #endregion
