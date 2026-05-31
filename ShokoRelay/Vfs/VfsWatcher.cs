@@ -25,16 +25,6 @@ public class VfsWatcher(
     #region Fields & Constructor
 
     private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
-    private readonly IVideoService _videoService = videoService;
-    private readonly IVideoReleaseService _releaseService = releaseService;
-    private readonly VfsBuilder _builder = builder;
-    private readonly IMetadataService _metadataService = metadataService;
-    private readonly PlexMetadata _plexMetadata = plexMetadata;
-    private readonly PlexClient _plexLibrary = plexLibrary;
-    private readonly PlexCollections _plexCollections = plexCollections;
-    private readonly AnimeThemesMapping _atMapping = atMapping;
-    private readonly ICriticRatingService _criticRatingService = criticRatingService;
-    private readonly IImageSyncService _imageSyncService = imageSyncService;
 
     private readonly ConcurrentDictionary<int, byte> _pending = new();
     private readonly ConcurrentDictionary<int, CancellationTokenSource> _pendingMetadataFixups = new();
@@ -50,9 +40,9 @@ public class VfsWatcher(
     /// <summary>Subscribe to Shoko video-file events and begin watching for changes.</summary>
     public void Start()
     {
-        _videoService.VideoFileRelocated += OnVideoFileRelocated;
-        _videoService.VideoFileDeleted += OnVideoFileDeleted;
-        _releaseService.ReleaseSaved += OnVideoReleaseSaved;
+        videoService.VideoFileRelocated += OnVideoFileRelocated;
+        videoService.VideoFileDeleted += OnVideoFileDeleted;
+        releaseService.ReleaseSaved += OnVideoReleaseSaved;
 
         s_logger.Info("VFS: VfsWatcher -> Started (listening for relocation, matching and deletion events)");
     }
@@ -62,9 +52,9 @@ public class VfsWatcher(
     {
         try
         {
-            _videoService.VideoFileRelocated -= OnVideoFileRelocated;
-            _videoService.VideoFileDeleted -= OnVideoFileDeleted;
-            _releaseService.ReleaseSaved -= OnVideoReleaseSaved;
+            videoService.VideoFileRelocated -= OnVideoFileRelocated;
+            videoService.VideoFileDeleted -= OnVideoFileDeleted;
+            releaseService.ReleaseSaved -= OnVideoReleaseSaved;
 
             foreach (var kvp in _pendingMetadataFixups)
                 kvp.Value.Cancel();
@@ -147,40 +137,39 @@ public class VfsWatcher(
             if (_processing)
                 return;
             _processing = true;
-            Task.Run(ProcessQueue);
+            Task.Run(ProcessQueueAsync);
         }
     }
 
     /// <summary>Asynchronously processes queued series, re-generating VFS structures and scheduling Plex notifications.</summary>
     /// <returns>A task representing the queue processing operation.</returns>
-    private async Task ProcessQueue()
+    private async Task ProcessQueueAsync()
     {
-        try
+        while (true)
         {
-            while (true)
+            List<int> seriesIds;
+            lock (_gate)
             {
-                List<int> seriesIds;
-                lock (_gate)
+                if (_pending.IsEmpty)
                 {
-                    if (_pending.IsEmpty)
-                    {
-                        _processing = false;
-                        break;
-                    }
-                    seriesIds = [.. _pending.Keys];
-                    foreach (var id in seriesIds)
-                        _pending.TryRemove(id, out _);
+                    _processing = false;
+                    return;
                 }
+                seriesIds = [.. _pending.Keys];
+                _pending.Clear();
+            }
 
+            try
+            {
                 await VfsShared.VfsLock.WaitAsync().ConfigureAwait(false); // Wait for any active dashboard VFS operations to complete before processing the automated queue
                 try
                 {
                     var sw = Stopwatch.StartNew();
-                    var result = _builder.Build(seriesIds, cleanRoot: false, pruneSeries: true);
+                    var result = builder.Build(seriesIds, cleanRoot: false, pruneSeries: true);
 
                     // Restore AnimeThemes links for the affected series if a mapping file exists
                     if (File.Exists(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileAtMapping)))
-                        await _atMapping.ApplyMappingAsync(seriesIds, CancellationToken.None).ConfigureAwait(false);
+                        await atMapping.ApplyMappingAsync(seriesIds, CancellationToken.None).ConfigureAwait(false);
 
                     sw.Stop();
                     s_logger.Info(
@@ -197,27 +186,17 @@ public class VfsWatcher(
                     foreach (var seriesId in seriesIds)
                         TriggerPlexUpdates(seriesId);
                 }
-                catch (Exception ex)
-                {
-                    s_logger.Warn(ex, "VFS: Batch refresh failed");
-                }
                 finally
                 {
                     VfsShared.VfsLock.Release();
                 }
-
-                await Task.Delay(400).ConfigureAwait(false);
             }
-        }
-        finally
-        {
-            lock (_gate)
+            catch (Exception ex)
             {
-                if (_pending.IsEmpty)
-                    _processing = false;
-                else
-                    _ = Task.Run(ProcessQueue);
+                s_logger.Warn(ex, "VFS: Batch refresh failed");
             }
+
+            await Task.Delay(400).ConfigureAwait(false);
         }
     }
 
@@ -229,10 +208,10 @@ public class VfsWatcher(
     /// <param name="seriesId">The Shoko Series ID to update.</param>
     private void TriggerPlexUpdates(int seriesId)
     {
-        if (!_plexLibrary.IsEnabled)
+        if (!plexLibrary.IsEnabled)
             return;
 
-        var series = _metadataService.GetShokoSeriesByID(seriesId);
+        var series = metadataService.GetShokoSeriesByID(seriesId);
         if (series == null)
             return;
 
@@ -249,10 +228,7 @@ public class VfsWatcher(
     private void ScheduleDebouncedAction(int seriesId, int delaySeconds, ConcurrentDictionary<int, CancellationTokenSource> tracker, Func<CancellationToken, Task> action)
     {
         if (tracker.TryRemove(seriesId, out var oldCts))
-        {
             oldCts.Cancel();
-            oldCts.Dispose();
-        }
 
         var cts = new CancellationTokenSource();
         tracker[seriesId] = cts;
@@ -262,7 +238,7 @@ public class VfsWatcher(
             try
             {
                 await Task.Delay(TimeSpan.FromSeconds(delaySeconds), cts.Token).ConfigureAwait(false);
-                await VfsShared.VfsLock.WaitAsync(cts.Token).ConfigureAwait(false); // Acquire the lock to ensure a Plex update doesn't start while a VFS build is actively writing to the directory.
+                await VfsShared.VfsLock.WaitAsync(cts.Token).ConfigureAwait(false); // Acquire lock to prevent Plex update during VFS build.
                 try
                 {
                     // If the series is currently sitting in the build queue, skip the individual update to avoid redundant API calls.
@@ -292,7 +268,7 @@ public class VfsWatcher(
     /// <param name="series">The Shoko series metadata.</param>
     private void ScheduleLibraryScan(IShokoSeries series)
     {
-        if (!_plexLibrary.ScanOnVfsRefresh)
+        if (!plexLibrary.ScanOnVfsRefresh)
             return;
 
         ScheduleDebouncedAction(
@@ -301,10 +277,10 @@ public class VfsWatcher(
             _pendingLibraryScans,
             async token =>
             {
-                foreach (var path in VfsShared.ResolveSeriesVfsPaths(series, _metadataService))
+                foreach (var path in VfsShared.ResolveSeriesVfsPaths(series, metadataService))
                 {
                     if (Directory.Exists(path) && Directory.EnumerateFileSystemEntries(path).Any())
-                        await _plexLibrary.RefreshSectionPathAsync(path, token).ConfigureAwait(false);
+                        await plexLibrary.RefreshSectionPathAsync(path, token).ConfigureAwait(false);
                     else
                         s_logger.Debug("VFS: Library scan for '{0}' skipped -> path '{1}' not ready or empty", series.PreferredTitle?.Value, path);
                 }
@@ -329,35 +305,35 @@ public class VfsWatcher(
         try
         {
             // Regenerate the VFS to account for cases where the episode/season numbering was updated in Shoko after the initial file event was processed (a metadata refresh can't do this on its own)
-            var vfsResult = _builder.Build(series.ID, cleanRoot: false, pruneSeries: true);
+            var vfsResult = builder.Build(series.ID, cleanRoot: false, pruneSeries: true);
             if (vfsResult.CreatedLinks > 0)
                 s_logger.Info("VFS: Re-generated links for '{0}' during fixup phase", series.PreferredTitle?.Value);
 
             // Restore AnimeThemes links for this specific series if a mapping file exists to prevent the pruned folder from losing them
             if (File.Exists(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileAtMapping)))
-                await _atMapping.ApplyMappingAsync([series.ID], token).ConfigureAwait(false);
+                await atMapping.ApplyMappingAsync([series.ID], token).ConfigureAwait(false);
 
             int bufferSeconds = Settings.Advanced.PlexScanDelay;
             if (bufferSeconds > 0)
                 await Task.Delay(TimeSpan.FromSeconds(bufferSeconds), token).ConfigureAwait(false);
 
             // Fallback in case the files were not scanned into Plex by the initial scan
-            if (_plexLibrary.ScanOnVfsRefresh)
+            if (plexLibrary.ScanOnVfsRefresh)
             {
-                foreach (var path in VfsShared.ResolveSeriesVfsPaths(series, _metadataService))
-                    await _plexLibrary.RefreshSectionPathAsync(path, token).ConfigureAwait(false);
+                foreach (var path in VfsShared.ResolveSeriesVfsPaths(series, metadataService))
+                    await plexLibrary.RefreshSectionPathAsync(path, token).ConfigureAwait(false);
             }
 
-            var targets = _plexLibrary.GetConfiguredTargets();
+            var targets = plexLibrary.GetConfiguredTargets();
             bool foundInAnyTarget = false;
             foreach (var target in targets)
             {
-                var ratingKey = await _plexLibrary.FindRatingKeyForShokoSeriesInSectionAsync(series.ID, target, token).ConfigureAwait(false);
+                var ratingKey = await plexLibrary.FindRatingKeyForShokoSeriesInSectionAsync(series.ID, target, token).ConfigureAwait(false);
                 if (ratingKey.HasValue)
                 {
                     foundInAnyTarget = true;
                     s_logger.Info("VFS: Triggering debounced metadata fixup for '{0}' (RatingKey: {1}) on {2}", series.PreferredTitle?.Value, ratingKey.Value, target.ServerName);
-                    await _plexLibrary.RefreshMetadataAsync(ratingKey.Value, target, token).ConfigureAwait(false);
+                    await plexLibrary.RefreshMetadataAsync(ratingKey.Value, target, token).ConfigureAwait(false);
                 }
             }
 
@@ -365,12 +341,12 @@ public class VfsWatcher(
                 s_logger.Debug("VFS: Debounced fixup for '{0}' skipped; rating key not found in Plex yet", series.PreferredTitle?.Value);
 
             s_logger.Info("VFS: Triggering debounced critic rating application for '{0}' (ID: {1})", series.PreferredTitle?.Value, series.ID);
-            await _criticRatingService.ApplyRatingsAsync([series.ID], token).ConfigureAwait(false);
+            await criticRatingService.ApplyRatingsAsync([series.ID], token).ConfigureAwait(false);
 
             if (Settings.Advanced.EnableImageSync)
             {
                 s_logger.Info("VFS: Triggering debounced image sync for '{0}' (ID: {1})", series.PreferredTitle?.Value, series.ID);
-                await _imageSyncService.SyncImagesAsync([series.ID], token).ConfigureAwait(false);
+                await imageSyncService.SyncImagesAsync([series.ID], token).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException) { }
@@ -393,29 +369,29 @@ public class VfsWatcher(
     {
         try
         {
-            var collectionName = _plexMetadata.GetCollectionName(series);
+            var collectionName = plexMetadata.GetCollectionName(series);
             if (string.IsNullOrWhiteSpace(collectionName))
                 return;
 
-            var targets = _plexLibrary.GetConfiguredTargets();
+            var targets = plexLibrary.GetConfiguredTargets();
             foreach (var target in targets)
             {
-                var ratingKey = await _plexLibrary.FindRatingKeyForShokoSeriesInSectionAsync(series.ID, target, token).ConfigureAwait(false);
+                var ratingKey = await plexLibrary.FindRatingKeyForShokoSeriesInSectionAsync(series.ID, target, token).ConfigureAwait(false);
                 if (!ratingKey.HasValue)
                     continue;
 
-                if (await _plexCollections.AssignCollectionToItemByMetadataAsync(ratingKey.Value, collectionName, target, token).ConfigureAwait(false))
+                if (await plexCollections.AssignCollectionToItemByMetadataAsync(ratingKey.Value, collectionName, target, token).ConfigureAwait(false))
                 {
-                    var collectionId = await _plexCollections.GetOrCreateCollectionIdAsync(collectionName, target, token).ConfigureAwait(false);
+                    var collectionId = await plexCollections.GetOrCreateCollectionIdAsync(collectionName, target, token).ConfigureAwait(false);
                     if (!collectionId.HasValue)
                         continue;
 
                     foreach (var config in PlexConstants.CollectionImageConfigs)
                     {
                         var fallback = config.DefaultFallback && Settings.CollectionImages;
-                        var url = PlexHelper.GetCollectionImageUrl(series, collectionName, collectionId.Value, config.Suffix, config.Suffixes, _metadataService, fallback);
+                        var url = PlexHelper.GetCollectionImageUrl(series, collectionName, collectionId.Value, config.Suffix, config.Suffixes, metadataService, fallback);
                         if (!string.IsNullOrEmpty(url))
-                            await _plexCollections.UploadCollectionImageByUrlAsync(collectionId.Value, url, config.Prefix, target, token).ConfigureAwait(false);
+                            await plexCollections.UploadCollectionImageByUrlAsync(collectionId.Value, url, config.Prefix, target, token).ConfigureAwait(false);
                     }
                 }
             }
