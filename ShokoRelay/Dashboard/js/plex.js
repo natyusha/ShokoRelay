@@ -121,7 +121,10 @@
     // Resolve the Plex Web App link dynamically from discovered targets
     const plexWebUrl = plex.DiscoveredLibraries?.[0]?.ServerUrl || plex.DiscoveredServers?.[0]?.PreferredUri || "";
     const webLink = el("plex-web-link");
-    if (webLink) webLink.onclick = () => plexWebUrl && window.open(plexWebUrl, "_blank", "noopener,noreferrer");
+    if (webLink) {
+      webLink.onclick = () => plexWebUrl && window.open(plexWebUrl, "_blank", "noopener,noreferrer");
+      webLink.title = plexWebUrl ? `Open Plex Web @ ${plexWebUrl}` : "Open Plex Web App";
+    }
   }
 
   /**

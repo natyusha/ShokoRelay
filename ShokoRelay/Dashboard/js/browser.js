@@ -46,15 +46,29 @@
   }
 
   /**
-   * Filters the series within the current active root based on user input.
+   * Filters the series within the current active root based on user input. Raw integers will match Shoko Series IDs and titles. Supports prefix-based searching:
+   * - "a{id}" (e.g., a1234) to restrict results to AniDB IDs starting with the query.
+   * - "m{id}" (e.g., m1234) to restrict results to Shoko Series IDs starting with the query.
+   * - Appending a trailing space (e.g., "a1234 ") forces an exact ID match.
    * @returns {Object[]} A filtered array of series objects.
    */
   function getFilteredItems() {
     const root = displayRoots.find((r) => r.name === activeTabName);
     if (!root) return [];
-    const ft = (uiFilter?.value || "").toLowerCase().trim();
+    const rawFt = (uiFilter?.value || "").toLowerCase();
+    const ft = rawFt.trim();
     if (!ft) return root.series;
-    return root.series.filter((s) => s.title.toLowerCase().includes(ft) || String(s.id).includes(ft) || String(s.anidbId).includes(ft));
+    if (/^a\d+\s*$/.test(rawFt.trimStart())) {
+      const aid = ft.substring(1);
+      const exact = rawFt.endsWith(" ");
+      return root.series.filter((s) => (exact ? String(s.anidbId) === aid : String(s.anidbId).startsWith(aid)));
+    }
+    if (/^m\d+\s*$/.test(rawFt.trimStart())) {
+      const sid = ft.substring(1);
+      const exact = rawFt.endsWith(" ");
+      return root.series.filter((s) => (exact ? String(s.id) === sid : String(s.id).startsWith(sid)));
+    }
+    return root.series.filter((s) => s.title.toLowerCase().includes(ft) || String(s.id).includes(ft));
   }
 
   /**

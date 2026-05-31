@@ -198,8 +198,8 @@ Applying a hyphenated suffix to the image that matches Plex's naming conventions
 ### Shoko Actions
 
 - `Run Import` A button which will make shoko rescan all managed folders for new or unrecognized files
-- `Sync Menu` A button which opens a modal allowing for watched state syncing from Plex to Shoko or Shoko to Plex
-  - This includes any users configured under `Extra Plex Users` in the "Plex Authentication" section unless `Sync Users` excludes them
+- `Sync Menu` A button which opens a modal (Sync Watched States Menu) allowing for watched state syncing from Plex to Shoko or Shoko to Plex
+  - This includes any users configured under `Extra Plex Users` in the "Plex Authentication" section unless the `Sync Users` setting excludes them
   - _Requires Plex authentication_
 - `Purge Missing` A button which will remove files that are no longer present from Shoko
   - Unlike the "Remove Missing Files" action in Shoko's WebUI this will remove all traces of the files from the Shoko DB
@@ -306,7 +306,7 @@ Crossover episodes are files which are linked to multiple episodes spanning sepa
 
 ### VFS Browser
 
-In order to help visualise the VFS and all of the files it contains there is a "VFS Browser" page included with the plugin. It can be navigated to by clicking the folder icon in the top right of the "Shoko: VFS" section of the dashboard (or by a dedicated url: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/dashboard/browser`). Unlike opening the VFS in a normal file browser, this will list the series title and the AniDB/Shoko IDs which correspond to each folder. Each ID will link directly to its source and there is also an included link to the `/metadata/` endpoint for series and seasons. VFS regeneration can be called on any series by clicking the "Refresh VFS Folder" `⟳` icon next to its name in the tree view (this avoids having to look up AniDB/Shoko IDs to use the filter on the dashboard). Similar to the refresh button, there is a "Theme.mp3" `♫` button which tracks if a given VFS entry has a local AnimeThemes `.mp3` attached to it or not. Clicking the button will attempt to generate a theme for any series missing one.
+In order to help visualise the VFS and all of the files it contains there is a "VFS Browser" page included with the plugin. It can be navigated to by clicking the folder icon in the top right of the "Shoko: VFS" section of the dashboard (or by a dedicated url: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/dashboard/browser`). Unlike opening the VFS in a normal file browser, this will list the series title and the AniDB/Shoko IDs which correspond to each folder. Each ID will link directly to its source and there is also an included link to the `/metadata/` endpoint for series and seasons. VFS regeneration can be called on any series by clicking the "Refresh VFS Folder" `⟳` icon next to its name in the tree view (this avoids having to look up AniDB/Shoko IDs to use the filter on the dashboard). Similar to the refresh button, there is a "Theme.mp3" `♬` button which tracks if a given VFS entry has a local AnimeThemes `.mp3` attached to it or not. Clicking the button will attempt to generate a theme for any series missing one.
 
 ### Automatic Title Modification
 
