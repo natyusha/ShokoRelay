@@ -8,14 +8,10 @@ namespace ShokoRelay.AnimeThemes;
 /// <summary>Provides operations for building and applying mappings between anime theme files and AniDB/video identifiers.</summary>
 public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadataService, IVideoService videoService, ConfigProvider configProvider)
 {
-    #region Fields & Constructor
+    #region Setup
 
     private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
-    private readonly IMetadataService _metadataService = metadataService;
-    private readonly IVideoService _videoService = videoService;
-    private readonly HttpClient _httpClient = httpClient;
     private readonly AnimeThemesApi _apiClient = new(httpClient);
-    private readonly string _configDirectory = configProvider.ConfigDirectory;
 
     #endregion
 
@@ -34,11 +30,11 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
     {
         try
         {
-            var content = await _httpClient.GetStringAsync(rawUrl, ct).ConfigureAwait(false);
+            var content = await httpClient.GetStringAsync(rawUrl, ct).ConfigureAwait(false);
             if (string.IsNullOrWhiteSpace(content))
                 return (0, "Downloaded content empty");
 
-            await File.WriteAllTextAsync(Path.Combine(_configDirectory, ShokoRelayConstants.FileAtMapping), content, ct).ConfigureAwait(false);
+            await File.WriteAllTextAsync(Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FileAtMapping), content, ct).ConfigureAwait(false);
             int count = AnimeThemesHelper.ParseMappingContent(content).Count;
             return (count, $"AnimeThemes mapping import - {DateTime.Now:yyyy-MM-dd HH:mm:ss}\nUrl: {rawUrl}\nEntries: {count}");
         }
@@ -60,7 +56,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
         try
         {
             string themeFolder = VfsShared.ResolveAnimeThemesFolderName();
-            var roots = _videoService
+            var roots = videoService
                 .GetAllVideoFiles()
                 .Select(v => v.ManagedFolder?.Path)
                 .Where(p => !string.IsNullOrWhiteSpace(p))
@@ -72,7 +68,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                 throw new DirectoryNotFoundException("AnimeThemes root folder not found");
 
             var sw = Stopwatch.StartNew();
-            string mapPath = Path.Combine(_configDirectory, ShokoRelayConstants.FileAtMapping);
+            string mapPath = Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FileAtMapping);
             var entries = new List<AnimeThemesMappingEntry>();
             var existing = new Dictionary<string, AnimeThemesMappingEntry>(StringComparer.OrdinalIgnoreCase);
 
@@ -214,7 +210,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
         {
             TaskHelper.StartTask(ShokoRelayConstants.TaskAtVfsBuild);
             s_logger.Info("AnimeThemes VFS: Starting task...");
-            string mapPath = Path.Combine(_configDirectory, ShokoRelayConstants.FileAtMapping);
+            string mapPath = Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FileAtMapping);
             if (!File.Exists(mapPath))
                 throw new FileNotFoundException("Mapping file not found");
 
@@ -223,9 +219,9 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
             string themeRootName = VfsShared.ResolveAnimeThemesFolderName();
             string vfsRoot = VfsShared.ResolveRootFolderName();
 
-            var folderGroups = (seriesFilter?.Any() == true ? seriesFilter.Distinct().Select(_metadataService.GetShokoSeriesByID) : _metadataService.GetAllShokoSeries())
+            var folderGroups = (seriesFilter?.Any() == true ? seriesFilter.Distinct().Select(metadataService.GetShokoSeriesByID) : metadataService.GetAllShokoSeries())
                 .Where(s => s?.AnidbAnimeID > 0)
-                .GroupBy(s => OverrideHelper.GetPrimary(s!.ID, _metadataService))
+                .GroupBy(s => OverrideHelper.GetPrimary(s!.ID, metadataService))
                 .ToList();
 
             Parallel.ForEach(
@@ -235,9 +231,9 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                 {
                     ct.ThrowIfCancellationRequested();
                     int primaryId = folderGroup.Key;
-                    var overrideOrder = OverrideHelper.GetGroup(primaryId, _metadataService).ToList();
+                    var overrideOrder = OverrideHelper.GetGroup(primaryId, metadataService).ToList();
 
-                    var roots = folderGroup.SelectMany(s => PlexHelper.ResolveImportRoots(s!, _metadataService)).Distinct(VfsShared.PathComparer).ToList();
+                    var roots = folderGroup.SelectMany(s => PlexHelper.ResolveImportRoots(s!, metadataService)).Distinct(VfsShared.PathComparer).ToList();
                     if (!roots.Any())
                     {
                         Interlocked.Increment(ref state.Skipped);
@@ -254,7 +250,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                         var plannedFilenames = new HashSet<string>(VfsShared.PathComparer);
 
                         var potentialLinks = overrideOrder
-                            .Select(_metadataService.GetShokoSeriesByID)
+                            .Select(metadataService.GetShokoSeriesByID)
                             .OfType<IShokoSeries>()
                             .SelectMany(series =>
                             {

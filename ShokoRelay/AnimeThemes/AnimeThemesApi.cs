@@ -5,25 +5,17 @@ using NLog;
 namespace ShokoRelay.AnimeThemes;
 
 /// <summary>HTTP client for AnimeThemes API interactions with rate limiting and JSON deserialization.</summary>
-public class AnimeThemesApi
+public class AnimeThemesApi(HttpClient? httpClient = null)
 {
-    #region Fields & Constructor
+    #region Setup & State
 
     private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
     private static readonly TimeSpan s_rateLimitDelay = TimeSpan.FromSeconds(0.7);
 
-    private readonly HttpClient _http;
-    private readonly JsonSerializerOptions _jsonOptions;
+    private readonly HttpClient _http = httpClient ?? new HttpClient();
+    private readonly JsonSerializerOptions _jsonOptions = new() { PropertyNameCaseInsensitive = true, WriteIndented = true };
     private readonly SemaphoreSlim _rateLock = new(1, 1);
     private DateTimeOffset _lastRequest = DateTimeOffset.MinValue;
-
-    /// <summary>Constructs a new AnimeThemesApi with an optional external HttpClient.</summary>
-    /// <param name="httpClient">Optional HttpClient to use. If null, a new one is created.</param>
-    public AnimeThemesApi(HttpClient? httpClient = null)
-    {
-        _http = httpClient ?? new HttpClient();
-        _jsonOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true, WriteIndented = true };
-    }
 
     #endregion
 
@@ -223,7 +215,7 @@ public class AnimeThemesApi
     /// <param name="Anime">List of anime entries with resource mappings.</param>
     public sealed record AnimeResourceResponse(List<AnimeResourceEntry>? Anime);
 
-    /// <summary>Entry containing resource links and seasonal metadata for an anime.</summary>
+    /// <summary>Entry containing resource links and seasonal seasonal metadata for an anime.</summary>
     /// <param name="Resources">External resource items.</param>
     /// <param name="Season">Airing season.</param>
     /// <param name="Year">Airing year.</param>

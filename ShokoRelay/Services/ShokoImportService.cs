@@ -24,11 +24,9 @@ public interface IShokoImportService
 /// <summary>Default implementation of <see cref="IShokoImportService"/>.</summary>
 public class ShokoImportService(IVideoService videoService, IVideoReleaseService releaseService) : IShokoImportService
 {
-    #region Fields & Constructor
+    #region Setup
 
     private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
-    private readonly IVideoService _videoService = videoService ?? throw new ArgumentNullException(nameof(videoService));
-    private readonly IVideoReleaseService _releaseService = releaseService ?? throw new ArgumentNullException(nameof(releaseService));
 
     #endregion
 
@@ -41,7 +39,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
         List<string> folders = [];
         try
         {
-            var mf = _videoService.GetAllManagedFolders();
+            var mf = videoService.GetAllManagedFolders();
             if (mf != null)
                 folders = [.. mf.Select(f => f.Name ?? f.Path ?? string.Empty).Where(s => !string.IsNullOrEmpty(s))];
         }
@@ -52,7 +50,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
 
         try
         {
-            await _videoService.ScheduleScanForManagedFolders(onlyDropSources: false).ConfigureAwait(false);
+            await videoService.ScheduleScanForManagedFolders(onlyDropSources: false).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -79,7 +77,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
 
         try
         {
-            var all = _videoService.GetAllVideoFiles() ?? [];
+            var all = videoService.GetAllVideoFiles() ?? [];
             // A file is considered "missing" if it doesn't exist on disk OR if its path is now blocked by Relay ignore rules.
             var missing = all.Where(f => !File.Exists(f.Path) || VfsShared.IsPathIgnored(f.Path)).Select(f => f.Path).ToHashSet();
 
@@ -89,10 +87,10 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
                 var toDelete = all.Where(f => missing.Contains(f.Path)).ToList();
 
                 // Remove the file records from Shoko
-                await _videoService.DeleteVideoFiles(toDelete, removeFiles: false, removeFolders: false).ConfigureAwait(false);
+                await videoService.DeleteVideoFiles(toDelete, removeFiles: false, removeFolders: false).ConfigureAwait(false);
 
                 // Purge unused releases from DB and remove from AniDB MyList
-                await _releaseService.PurgeUnusedReleases(providerNames: null, removeFromMylist: true).ConfigureAwait(false);
+                await releaseService.PurgeUnusedReleases(providerNames: null, removeFromMylist: true).ConfigureAwait(false);
 
                 s_logger.Info("ShokoImportService: Database and MyList cleanup complete");
             }

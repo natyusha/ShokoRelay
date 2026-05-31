@@ -57,18 +57,14 @@ internal sealed record ThemeSelection(string AudioUrl, string SlugRaw, string Sl
 /// <summary>Provides functionality for fetching, converting and previewing anime theme audio from the AnimeThemes API.</summary>
 public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService metadataService, IVideoService videoService, ConfigProvider configProvider, FfmpegService ffmpegService, PlexClient plexClient)
 {
-    #region Fields & Constructor
+    #region Setup & Cache
 
     private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
-    private readonly HttpClient _http = httpClient;
-    private readonly FfmpegService _ffmpegService = ffmpegService;
-    private readonly PlexClient _plexClient = plexClient;
-    private readonly ConfigProvider _configProvider = configProvider;
     private readonly AnimeThemesApi _apiClient = new(httpClient);
     private HashSet<string>? _themeMp3Cache;
     private readonly Lock _cacheLock = new();
 
-    private string ThemeCacheFilePath => Path.Combine(_configProvider.ConfigDirectory, ShokoRelayConstants.FileAtMp3Cache);
+    private string ThemeCacheFilePath => Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FileAtMp3Cache);
 
     #endregion
 
@@ -279,17 +275,17 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
             }
 
             temp = await DownloadAudioAsync(sel.AudioUrl, ct);
-            var dur = await _ffmpegService.ProbeDurationAsync(temp, ct);
+            var dur = await ffmpegService.ProbeDurationAsync(temp, ct);
             string title = dur.TotalSeconds < 100 && !string.IsNullOrEmpty(sel.SongTitle) ? sel.SongTitle + " (TV Size)" : sel.SongTitle;
 
             s_logger.Debug("AnimeThemes MP3: Converting audio for '{0}' ({1})", series.PreferredTitle?.Value, sel.SlugDisplay);
-            await _ffmpegService.ConvertToMp3FileAsync(temp, "Theme.mp3", title, sel.SlugDisplay, sel.Artist, sel.AnimeTitle, ct, folder).ConfigureAwait(false);
+            await ffmpegService.ConvertToMp3FileAsync(temp, "Theme.mp3", title, sel.SlugDisplay, sel.Artist, sel.AnimeTitle, ct, folder).ConfigureAwait(false);
 
             int primaryId = OverrideHelper.GetPrimary(series.ID, metadataService);
             string? vfsLink = TryLinkIntoVfs(videoFile, primaryId, themePath);
 
             // After a successful VFS link is created, trigger a Plex metadata refresh to ensure the new Theme.mp3 is picked up by the server.
-            if (!string.IsNullOrEmpty(vfsLink) && _plexClient.IsEnabled)
+            if (!string.IsNullOrEmpty(vfsLink) && plexClient.IsEnabled)
                 TriggerPlexRefresh(series.ID);
 
             s_logger.Info("AnimeThemes MP3: Successfully generated '{0}' ({1})", series.PreferredTitle?.Value, sel.SlugDisplay);
@@ -417,7 +413,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
     private async Task<string> DownloadAudioAsync(string url, CancellationToken ct)
     {
         s_logger.Debug("AnimeThemes MP3: Downloading audio from {0}", url);
-        using var resp = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+        using var resp = await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
         resp.EnsureSuccessStatusCode();
         string temp = Path.Combine(Path.GetTempPath(), $"at-{Guid.NewGuid():N}{Path.GetExtension(url)}");
         using (var i = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false))
@@ -471,14 +467,14 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
                 if (bufferSeconds > 0)
                     await Task.Delay(TimeSpan.FromSeconds(bufferSeconds)).ConfigureAwait(false);
 
-                var targets = _plexClient.GetConfiguredTargets();
+                var targets = plexClient.GetConfiguredTargets();
                 foreach (var target in targets)
                 {
-                    var ratingKey = await _plexClient.FindRatingKeyForShokoSeriesInSectionAsync(seriesId, target).ConfigureAwait(false);
+                    var ratingKey = await plexClient.FindRatingKeyForShokoSeriesInSectionAsync(seriesId, target).ConfigureAwait(false);
                     if (ratingKey.HasValue)
                     {
                         s_logger.Debug("AnimeThemes MP3: Refreshing Plex metadata for ratingKey {0} on {1}", ratingKey.Value, target.ServerName);
-                        await _plexClient.RefreshMetadataAsync(ratingKey.Value, target).ConfigureAwait(false);
+                        await plexClient.RefreshMetadataAsync(ratingKey.Value, target).ConfigureAwait(false);
                     }
                 }
             }

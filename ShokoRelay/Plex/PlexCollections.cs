@@ -5,14 +5,12 @@ namespace ShokoRelay.Plex;
 /// <summary>Provides utilities for working with Plex collections.</summary>
 public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
 {
-    #region Fields and Data Types
+    #region Setup & State
 
     private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
-    private readonly HttpClient _httpClient = httpClient;
-    private readonly PlexClient _plexClient = plexClient;
 
     /// <summary>Whether Plex integration is enabled.</summary>
-    public bool IsEnabled => _plexClient.IsEnabled;
+    public bool IsEnabled => plexClient.IsEnabled;
 
     #endregion
 
@@ -66,8 +64,8 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
         if (!IsEnabled || ratingKey <= 0 || string.IsNullOrWhiteSpace(collectionName) || target == null)
             return false;
 
-        using var checkReq = _plexClient.CreateRequest(HttpMethod.Get, $"/library/metadata/{ratingKey}?X-Plex-Container-Size=1", target.ServerUrl);
-        using var checkResp = await _httpClient.SendAsync(checkReq, cancellationToken).ConfigureAwait(false);
+        using var checkReq = plexClient.CreateRequest(HttpMethod.Get, $"/library/metadata/{ratingKey}?X-Plex-Container-Size=1", target.ServerUrl);
+        using var checkResp = await httpClient.SendAsync(checkReq, cancellationToken).ConfigureAwait(false);
         return (
                 checkResp.IsSuccessStatusCode
                 && (await PlexApi.ReadContainerAsync(checkResp, cancellationToken).ConfigureAwait(false))
@@ -111,10 +109,10 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
         if (!IsEnabled)
             return 0;
 
-        foreach (var target in _plexClient.GetConfiguredTargets())
+        foreach (var target in plexClient.GetConfiguredTargets())
         {
-            using var request = _plexClient.CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/collections?X-Plex-Container-Size=500", target.ServerUrl);
-            using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            using var request = plexClient.CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/collections?X-Plex-Container-Size=500", target.ServerUrl);
+            using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
                 continue;
 
@@ -164,8 +162,8 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
     /// <returns>The numeric rating key of the collection, or null if not found.</returns>
     private async Task<int?> FindCollectionIdAsync(string title, PlexLibraryTarget target, CancellationToken ct)
     {
-        using var req = _plexClient.CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/collections?title={Uri.EscapeDataString(title)}&X-Plex-Container-Size=10", target.ServerUrl);
-        using var resp = await _httpClient.SendAsync(req, ct).ConfigureAwait(false);
+        using var req = plexClient.CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/collections?title={Uri.EscapeDataString(title)}&X-Plex-Container-Size=10", target.ServerUrl);
+        using var resp = await httpClient.SendAsync(req, ct).ConfigureAwait(false);
         var meta = (await PlexApi.ReadContainerAsync(resp, ct).ConfigureAwait(false))?.Metadata?.FirstOrDefault();
         return int.TryParse(meta?.RatingKey, out int id) ? id : null;
     }
@@ -178,8 +176,8 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
     private async Task<int?> CreateCollectionAsync(string title, PlexLibraryTarget target, CancellationToken ct)
     {
         string path = $"/library/collections?title={Uri.EscapeDataString(title)}&titleSort={Uri.EscapeDataString(title)}&sectionId={target.SectionId}&type={(int)target.LibraryType}";
-        using var req = _plexClient.CreateRequest(HttpMethod.Post, path, target.ServerUrl);
-        using var resp = await _httpClient.SendAsync(req, ct).ConfigureAwait(false);
+        using var req = plexClient.CreateRequest(HttpMethod.Post, path, target.ServerUrl);
+        using var resp = await httpClient.SendAsync(req, ct).ConfigureAwait(false);
         if (!resp.IsSuccessStatusCode)
         {
             var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
@@ -211,8 +209,8 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
     {
         try
         {
-            using var request = _plexClient.CreateRequest(method, path, target.ServerUrl);
-            using var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
+            using var request = plexClient.CreateRequest(method, path, target.ServerUrl);
+            using var response = await httpClient.SendAsync(request, ct).ConfigureAwait(false);
             if (response.IsSuccessStatusCode)
                 return true;
 

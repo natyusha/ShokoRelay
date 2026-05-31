@@ -55,7 +55,7 @@ public record VfsBuildResult(
 /// <param name="videoService">Shoko video and import folder service.</param>
 public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLinker, IVideoService videoService)
 {
-    #region Fields & State
+    #region Setup & State
 
     private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
 

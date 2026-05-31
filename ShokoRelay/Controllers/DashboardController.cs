@@ -20,10 +20,9 @@ namespace ShokoRelay.Controllers;
 public class DashboardController(ConfigProvider configProvider, IMetadataService metadataService, PlexClient plexLibrary, IWebThemeService webThemeService, IApplicationPaths applicationPaths)
     : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
 {
-    #region Fields & Constructor
+    #region Setup
 
     private static readonly FileExtensionContentTypeProvider s_contentTypeProvider = new();
-    private readonly IWebThemeService _webThemeService = webThemeService;
 
     #endregion
 
@@ -81,7 +80,7 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
     public IActionResult GetConfig()
     {
         var payload = ConfigProvider.GetDashboardConfig();
-        var themes = _webThemeService.GetThemes(forceRefresh: false).Select(t => new { id = t.ID, name = t.Name }).ToList();
+        var themes = webThemeService.GetThemes(forceRefresh: false).Select(t => new { id = t.ID, name = t.Name }).ToList();
 
         try
         {

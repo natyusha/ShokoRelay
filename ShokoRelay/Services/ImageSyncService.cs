@@ -32,7 +32,7 @@ public sealed record ImageSyncResult(int Processed, int Uploaded, int Skipped, i
 /// <summary>Default implementation of <see cref="IImageSyncService"/>.</summary>
 public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMetadataService metadataService, IImageManager imageManager, ConfigProvider configProvider) : IImageSyncService
 {
-    #region Fields
+    #region Setup
 
     private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
 

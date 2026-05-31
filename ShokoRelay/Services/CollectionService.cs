@@ -44,7 +44,7 @@ public sealed record BuildCollectionsResult(
 /// <summary>Default implementation of <see cref="ICollectionService"/>.</summary>
 public class CollectionService(PlexClient plexClient, PlexCollections plexCollections, IMetadataService metadataService, PlexMetadata mapper, IVideoService videoService) : ICollectionService
 {
-    #region Fields & Constructor
+    #region Setup
 
     private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
 

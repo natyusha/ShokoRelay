@@ -7,15 +7,9 @@ namespace ShokoRelay.Sync;
 /// <summary>Synchronizes watched-state (and optional votes) from Shoko -> Plex.</summary>
 public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService, IUserDataService userDataService, IUserService userService, ConfigProvider configProvider, PlexAuth plexAuth)
 {
-    #region Fields & Constructor
+    #region Setup
 
     private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
-    private readonly PlexClient _plexClient = plexClient;
-    private readonly IMetadataService _metadataService = metadataService;
-    private readonly IUserDataService _userDataService = userDataService;
-    private readonly IUserService _userService = userService;
-    private readonly ConfigProvider _configProvider = configProvider;
-    private readonly PlexAuth _plexAuth = plexAuth;
 
     #endregion
 
@@ -38,7 +32,7 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
         CancellationToken cancellationToken = default
     )
     {
-        OverrideHelper.Reload(_metadataService);
+        OverrideHelper.Reload(metadataService);
         var result = new PlexWatchedSyncResult();
         var auto = Settings.Automation;
         var userType = userTypeOverride ?? auto.ShokoSyncWatchedUserType;
@@ -49,18 +43,18 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
         var logPrefix = (result = result with { DryRun = dryRun }).DryRun ? "[DRYRUN] " : "";
         bool actualVotes = includeVotes ?? auto.ShokoSyncWatchedIncludeRatings;
 
-        if (!_plexClient.IsEnabled || _userService.GetUsers().FirstOrDefault() is not { } shokoUser)
+        if (!plexClient.IsEnabled || userService.GetUsers().FirstOrDefault() is not { } shokoUser)
             return result;
-        var targets = _plexClient.GetConfiguredTargets();
+        var targets = plexClient.GetConfiguredTargets();
         if (targets.Count == 0)
             return result;
 
-        var shokoWatchedRaw = _userDataService.GetEpisodeUserDataForUser(shokoUser).Where(e => e.IsWatched).ToList();
+        var shokoWatchedRaw = userDataService.GetEpisodeUserDataForUser(shokoUser).Where(e => e.IsWatched).ToList();
         if (sinceHours > 0)
             shokoWatchedRaw = [.. shokoWatchedRaw.Where(e => (e.LastPlayedAt ?? DateTime.MinValue) >= DateTime.UtcNow.AddHours(-sinceHours.Value))];
 
         var shokoWatched = shokoWatchedRaw
-            .Select(sw => new { UserData = sw, Episode = _metadataService.GetShokoEpisodeByID(sw.EpisodeID) })
+            .Select(sw => new { UserData = sw, Episode = metadataService.GetShokoEpisodeByID(sw.EpisodeID) })
             .Where(x => x.Episode != null)
             .Select(x => new
             {
@@ -71,7 +65,7 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
             .ToList();
 
         result = result with { Processed = shokoWatched.Count };
-        var extraEntries = _configProvider.GetExtraPlexUserEntries();
+        var extraEntries = configProvider.GetExtraPlexUserEntries();
         result = result with { PerUser = SyncHelper.CreatePerUserBuckets(extraEntries.Select(e => e.Name)) };
 
         var matchedGlobal = new HashSet<int>();
@@ -86,7 +80,7 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
             // Fetch user item buckets and automatically handle managed token resolution and user filtering.
             // Pass sinceHours: null here to return ALL unwatched items in Plex. The Shoko list is already filtered by sinceHours.
             var (userBuckets, newResult) = await SyncHelper
-                .FetchUserBucketsAsync(_plexAuth, _plexClient, _configProvider, target, userType, extraEntries, true, null, null, result, cancellationToken)
+                .FetchUserBucketsAsync(plexAuth, plexClient, configProvider, target, userType, extraEntries, true, null, null, result, cancellationToken)
                 .ConfigureAwait(false);
             result = newResult;
 
@@ -117,8 +111,8 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
                     {
                         if (!dryRun)
                         {
-                            using var req = _plexClient.CreateRequest(HttpMethod.Get, $"/:/scrobble?identifier=com.plexapp.plugins.library&key={rKey}", target.ServerUrl, uToken);
-                            using var resp = await _plexClient.HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+                            using var req = plexClient.CreateRequest(HttpMethod.Get, $"/:/scrobble?identifier=com.plexapp.plugins.library&key={rKey}", target.ServerUrl, uToken);
+                            using var resp = await plexClient.HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
                             if (!resp.IsSuccessStatusCode)
                                 continue;
                         }
@@ -150,13 +144,13 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
                             result = SyncHelper.IncVotesFound(result);
                             if (!dryRun)
                             {
-                                using var rateReq = _plexClient.CreateRequest(
+                                using var rateReq = plexClient.CreateRequest(
                                     HttpMethod.Get,
                                     $"/:/rate?identifier=com.plexapp.plugins.library&key={rKey}&rating={sw.UserData.UserRating.Value.ToString(CultureInfo.InvariantCulture)}",
                                     target.ServerUrl,
                                     uToken
                                 );
-                                await _plexClient.HttpClient.SendAsync(rateReq, cancellationToken).ConfigureAwait(false);
+                                await plexClient.HttpClient.SendAsync(rateReq, cancellationToken).ConfigureAwait(false);
                             }
                             result = SyncHelper.IncVotesUpdated(result);
                         }

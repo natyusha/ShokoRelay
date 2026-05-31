@@ -5,7 +5,7 @@ namespace ShokoRelay.Helpers;
 /// <summary>Provides a centralized way to track long-running manual tasks for UI feedback.</summary>
 public static class TaskHelper
 {
-    #region Fields
+    #region Setup
 
     /// <summary>Currently running tasks and their start times.</summary>
     public static readonly ConcurrentDictionary<string, DateTime> ActiveTasks = new();

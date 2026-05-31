@@ -19,13 +19,6 @@ public class AnimeThemesController(
     AnimeThemesMapping animeThemesMapping
 ) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
 {
-    #region Fields
-
-    private readonly AnimeThemesMp3Generator _animeThemesMp3Generator = animeThemesMp3Generator;
-    private readonly AnimeThemesMapping _animeThemesMapping = animeThemesMapping;
-
-    #endregion
-
     #region VFS Mapping / Build
 
     /// <summary>Applies the anime‑themes mapping file to the directory structure.</summary>
@@ -41,7 +34,7 @@ public class AnimeThemesController(
                 (sb, r) => LogHelper.BuildAtVfsBuildReport(sb, r, filterIds ?? []),
                 async () =>
                 {
-                    var result = await _animeThemesMapping.ApplyMappingAsync(filterIds, CancellationToken.None).ConfigureAwait(false);
+                    var result = await animeThemesMapping.ApplyMappingAsync(filterIds, CancellationToken.None).ConfigureAwait(false);
                     if (filterIds == null || filterIds.Count == 0)
                     {
                         try
@@ -67,7 +60,7 @@ public class AnimeThemesController(
     {
         if (!string.IsNullOrWhiteSpace(testPath))
         {
-            var (entry, error, gen) = await _animeThemesMapping.TestMappingEntryAsync(testPath, CancellationToken.None).ConfigureAwait(false);
+            var (entry, error, gen) = await animeThemesMapping.TestMappingEntryAsync(testPath, CancellationToken.None).ConfigureAwait(false);
             return error != null
                 ? Ok(new RelayResponse<object>(Status: "error", Message: error, Data: new { testPath }))
                 : Ok(
@@ -87,7 +80,7 @@ public class AnimeThemesController(
                 ShokoRelayConstants.TaskAtMapBuild,
                 ShokoRelayConstants.LogAtMap,
                 LogHelper.BuildAtVfsMapReport,
-                () => _animeThemesMapping.BuildMappingFileAsync(CancellationToken.None),
+                () => animeThemesMapping.BuildMappingFileAsync(CancellationToken.None),
                 VfsShared.VfsLock
             )
             .ConfigureAwait(false);
@@ -101,7 +94,7 @@ public class AnimeThemesController(
     {
         Logger.Info("AnimeThemes: Fetching curated mapping file from GitHub...");
         const string RawUrl = AnimeThemesHelper.AtRawMapUrl + ShokoRelayConstants.FileAtMapping;
-        var (count, _) = await _animeThemesMapping.ImportMappingFromUrlAsync(RawUrl, cancellationToken).ConfigureAwait(false);
+        var (count, _) = await animeThemesMapping.ImportMappingFromUrlAsync(RawUrl, cancellationToken).ConfigureAwait(false);
         Logger.Info("AnimeThemes: Import successful. {0} entries updated.", count);
         return Ok(new RelayResponse<object>(Data: new { count }));
     }
@@ -130,9 +123,9 @@ public class AnimeThemesController(
                     LogHelper.BuildAtMp3Report,
                     async () =>
                     {
-                        var batch = await _animeThemesMp3Generator.ProcessBatchAsync(query, CancellationToken.None).ConfigureAwait(false);
+                        var batch = await animeThemesMp3Generator.ProcessBatchAsync(query, CancellationToken.None).ConfigureAwait(false);
                         foreach (var item in batch.Items.Where(i => i.Status == "ok" && !string.IsNullOrWhiteSpace(i.Folder)))
-                            _animeThemesMp3Generator.AddToThemeMp3Cache(item.Folder);
+                            animeThemesMp3Generator.AddToThemeMp3Cache(item.Folder);
                         return batch;
                     },
                     VfsShared.VfsLock
@@ -146,9 +139,9 @@ public class AnimeThemesController(
 
         try
         {
-            var result = await _animeThemesMp3Generator.ProcessSingleAsync(query, CancellationToken.None).ConfigureAwait(false);
+            var result = await animeThemesMp3Generator.ProcessSingleAsync(query, CancellationToken.None).ConfigureAwait(false);
             if (result.Status == "ok" && !string.IsNullOrWhiteSpace(result.Folder))
-                _animeThemesMp3Generator.AddToThemeMp3Cache(result.Folder);
+                animeThemesMp3Generator.AddToThemeMp3Cache(result.Folder);
             return result.Status == "error" ? BadRequest(new RelayResponse<object>(Status: "error", Message: result.Message, Data: result)) : Ok(new RelayResponse<ThemeMp3OperationResult>(Data: result));
         }
         finally
@@ -164,8 +157,8 @@ public class AnimeThemesController(
     public IActionResult AnimeThemesMp3Random([FromQuery] bool refresh = false)
     {
         if (refresh)
-            _animeThemesMp3Generator.RefreshThemeMp3Cache();
-        var folders = _animeThemesMp3Generator.GetCachedThemeMp3Folders();
+            animeThemesMp3Generator.RefreshThemeMp3Cache();
+        var folders = animeThemesMp3Generator.GetCachedThemeMp3Folders();
         return folders.Count == 0
             ? NotFound(new RelayResponse<object>(Status: "error", Message: "No themes found"))
             : Ok(new RelayResponse<object>(Data: new { path = folders[Random.Shared.Next(folders.Count)] }));

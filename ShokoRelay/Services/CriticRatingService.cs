@@ -38,10 +38,9 @@ public sealed record ApplyRatingsResult(int ProcessedShows, int UpdatedShows, in
 /// <summary>Default implementation of <see cref="ICriticRatingService"/>.</summary>
 public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, IMetadataService metadataService) : ICriticRatingService
 {
-    #region Fields & Constructor
+    #region Setup
 
     private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
-    private readonly HttpClient _httpClient = httpClient;
 
     #endregion
 
@@ -162,7 +161,7 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
         try
         {
             using var req = plexClient.CreateRequest(HttpMethod.Put, path, target.ServerUrl);
-            using var resp = await _httpClient.SendAsync(req, ct);
+            using var resp = await httpClient.SendAsync(req, ct);
             return resp.IsSuccessStatusCode;
         }
         catch

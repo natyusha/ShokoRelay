@@ -22,7 +22,7 @@ public class VfsWatcher(
     IImageSyncService imageSyncService
 )
 {
-    #region Fields & Constructor
+    #region Setup
 
     private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
 

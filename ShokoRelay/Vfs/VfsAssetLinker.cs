@@ -9,7 +9,7 @@ namespace ShokoRelay.Vfs;
 /// <param name="videoService">Shoko video service used to verify if files are managed by the database.</param>
 public class VfsAssetLinker(IVideoService videoService)
 {
-    #region Fields
+    #region Setup
 
     private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
     private static readonly HashSet<string> s_seriesMetadataExtensions = [.. PlexConstants.LocalMediaAssets.Artwork, .. PlexConstants.LocalMediaAssets.SeriesMetadata];

@@ -6,7 +6,7 @@ namespace ShokoRelay.Helpers;
 /// <summary>Parses an optional <see cref="ShokoRelayConstants.FileVfsOverrides"/> file to group multiple Shoko series IDs together.</summary>
 public static class OverrideHelper
 {
-    #region Fields & Constants
+    #region Setup & Constants
 
     private static IReadOnlyDictionary<int, List<int>> s_groups = new Dictionary<int, List<int>>();
     private static bool s_isInitialized;

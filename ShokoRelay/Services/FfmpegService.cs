@@ -6,33 +6,21 @@ using NLog;
 namespace ShokoRelay.Services;
 
 /// <summary>Wrapper around FFmpeg/FFprobe CLI tools used by the AnimeThemes subsystem.</summary>
-public sealed class FfmpegService
+/// <param name="pluginDirectory">The root directory for the plugin.</param>
+/// <param name="applicationPath">The parent directory of the Shoko Server executable.</param>
+/// <param name="dataPath">The Shoko Server data directory.</param>
+public sealed class FfmpegService(string pluginDirectory, string applicationPath, string dataPath)
 {
-    #region Fields & Constructor
+    #region Setup & State
 
     private readonly Logger _logger = LogManager.GetCurrentClassLogger();
     private readonly Lock _ffmpegLock = new();
     private bool _ffmpegConfigured;
     private string _ffmpegPath = "ffmpeg";
     private string _ffprobePath = "ffprobe";
-    private readonly string _pluginDirectory = string.Empty;
-    private string _workingDirectory = string.Empty;
-    private readonly List<string> _utilitiesDirectories = [];
-
-    /// <summary>Construct the service, supplying the path to the plugin directory and Shoko roots which will be searched for binaries.</summary>
-    /// <param name="pluginDirectory">The root directory for the plugin.</param>
-    /// <param name="applicationPath">The parent directory of the Shoko Server executable.</param>
-    /// <param name="dataPath">The Shoko Server data directory.</param>
-    public FfmpegService(string pluginDirectory, string applicationPath, string dataPath)
-    {
-        _pluginDirectory = pluginDirectory;
-        _workingDirectory = _pluginDirectory;
-        // Search for Utilities in both the binary location and the data location to support various Linux/Docker environments
-        if (!string.IsNullOrWhiteSpace(applicationPath))
-            _utilitiesDirectories.Add(Path.Combine(applicationPath, "Utilities", "FFmpeg"));
-        if (!string.IsNullOrWhiteSpace(dataPath))
-            _utilitiesDirectories.Add(Path.Combine(dataPath, "Utilities", "FFmpeg"));
-    }
+    private readonly string _pluginDirectory = pluginDirectory;
+    private string _workingDirectory = pluginDirectory;
+    private readonly List<string> _utilitiesDirectories = GetUtilitiesDirectories(applicationPath, dataPath);
 
     #endregion
 
@@ -88,6 +76,20 @@ public sealed class FfmpegService
     #endregion
 
     #region Configuration Logic
+
+    /// <summary>Resolves the list of possible FFmpeg utility directories based on Shoko Server installation paths.</summary>
+    /// <param name="appPath">The parent directory of the Shoko Server executable.</param>
+    /// <param name="dataPath">The Shoko Server data directory.</param>
+    /// <returns>A list of verified absolute directory paths.</returns>
+    private static List<string> GetUtilitiesDirectories(string appPath, string dataPath)
+    {
+        var list = new List<string>();
+        if (!string.IsNullOrWhiteSpace(appPath))
+            list.Add(Path.Combine(appPath, "Utilities", "FFmpeg"));
+        if (!string.IsNullOrWhiteSpace(dataPath))
+            list.Add(Path.Combine(dataPath, "Utilities", "FFmpeg"));
+        return list;
+    }
 
     /// <summary>Ensures that the paths to the FFmpeg and FFprobe binaries are resolved and verified. Searches the Shoko utilities folders, configured paths, the plugin directory, and the system PATH.</summary>
     private void EnsureFfmpegConfigured()

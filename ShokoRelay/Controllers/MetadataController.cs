@@ -15,12 +15,6 @@ namespace ShokoRelay.Controllers;
 public class MetadataController(IMetadataService metadataService, PlexMetadata mapper, ConfigProvider configProvider, PlexClient plexLibrary, IVideoService videoService)
     : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
 {
-    #region Fields & Constructor
-
-    private readonly PlexMetadata _mapper = mapper;
-
-    #endregion
-
     #region Provider Descriptor
 
     /// <summary>Announces the media provider capabilities to Plex.</summary>
@@ -128,7 +122,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     [HttpGet("metadata/{ratingKey}")]
     public IActionResult GetMetadata(string ratingKey, [FromQuery] int includeChildren = 0)
     {
-        var ctx = _mapper.GetSeriesContext(ratingKey);
+        var ctx = mapper.GetSeriesContext(ratingKey);
         if (ctx == null)
             return NotFound();
 
@@ -140,24 +134,24 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
                 return NotFound();
             object? tmdbOverride = m.TmdbEpisode;
             var coords = m.Coords;
-            return WrapInContainer(_mapper.MapEpisode(episode, coords, ctx.Series, ctx.Titles, partIdx, tmdbOverride));
+            return WrapInContainer(mapper.MapEpisode(episode, coords, ctx.Series, ctx.Titles, partIdx, tmdbOverride));
         }
         if (ratingKey.Contains(PlexConstants.SeasonPrefix))
         {
             if (!int.TryParse(ratingKey.Split(PlexConstants.SeasonPrefix)[1], out int sNum))
                 return NotFound();
-            var seasonMeta = _mapper.MapSeason(ctx.Series, sNum, ctx.Titles.DisplayTitle);
+            var seasonMeta = mapper.MapSeason(ctx.Series, sNum, ctx.Titles.DisplayTitle);
             if (includeChildren == 1)
             {
-                var episodes = _mapper.BuildEpisodeList(ctx, sNum);
+                var episodes = mapper.BuildEpisodeList(ctx, sNum);
                 ((IDictionary<string, object?>)seasonMeta)["Children"] = new { size = episodes.Count, Metadata = episodes };
             }
             return WrapInContainer(seasonMeta);
         }
-        var showMeta = _mapper.MapSeries(ctx.Series, ctx.Titles);
+        var showMeta = mapper.MapSeries(ctx.Series, ctx.Titles);
         if (includeChildren == 1)
         {
-            var seasons = ctx.FileData.Seasons.Select(s => _mapper.MapSeason(ctx.Series, s, ctx.Titles.DisplayTitle)).ToList();
+            var seasons = ctx.FileData.Seasons.Select(s => mapper.MapSeason(ctx.Series, s, ctx.Titles.DisplayTitle)).ToList();
             ((IDictionary<string, object?>)showMeta)["Children"] = new { size = seasons.Count, Metadata = seasons };
         }
         return WrapInContainer(showMeta);
@@ -170,12 +164,12 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     [HttpGet("metadata/{ratingKey}/children")]
     public IActionResult GetChildren(string ratingKey)
     {
-        var ctx = _mapper.GetSeriesContext(ratingKey);
+        var ctx = mapper.GetSeriesContext(ratingKey);
         if (ctx == null)
             return NotFound();
         if (ratingKey.Contains(PlexConstants.SeasonPrefix))
-            return !int.TryParse(ratingKey.Split(PlexConstants.SeasonPrefix)[1], out int sNum) ? NotFound() : WrapInPagedContainer(_mapper.BuildEpisodeList(ctx, sNum));
-        var seasons = ctx.FileData.Seasons.Select(s => _mapper.MapSeason(ctx.Series, s, ctx.Titles.DisplayTitle)).ToList();
+            return !int.TryParse(ratingKey.Split(PlexConstants.SeasonPrefix)[1], out int sNum) ? NotFound() : WrapInPagedContainer(mapper.BuildEpisodeList(ctx, sNum));
+        var seasons = ctx.FileData.Seasons.Select(s => mapper.MapSeason(ctx.Series, s, ctx.Titles.DisplayTitle)).ToList();
         return WrapInPagedContainer(seasons);
     }
 
@@ -186,14 +180,14 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     [HttpGet("metadata/{ratingKey}/grandchildren")]
     public IActionResult GetGrandchildren(string ratingKey)
     {
-        var ctx = _mapper.GetSeriesContext(ratingKey);
+        var ctx = mapper.GetSeriesContext(ratingKey);
         if (ctx == null)
             return NotFound();
         var allEpisodes = ctx
             .FileData.Mappings.OrderBy(m => m.Coords.Season)
             .ThenBy(m => m.Coords.Episode)
             .ThenBy(m => m.PartIndex ?? 0)
-            .Select(m => _mapper.MapEpisode(m.PrimaryEpisode, m.Coords, ctx.Series, ctx.Titles, m.PartIndex, m.TmdbEpisode))
+            .Select(m => mapper.MapEpisode(m.PrimaryEpisode, m.Coords, ctx.Series, ctx.Titles, m.PartIndex, m.TmdbEpisode))
             .ToList();
         return WrapInPagedContainer(allEpisodes);
     }
@@ -205,7 +199,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     [HttpGet("metadata/{ratingKey}/images")]
     public IActionResult GetMetadataImages(string ratingKey)
     {
-        var ctx = _mapper.GetSeriesContext(ratingKey);
+        var ctx = mapper.GetSeriesContext(ratingKey);
         if (ctx == null)
             return NotFound();
         object[] images;
@@ -213,16 +207,16 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
         if (isEpKey)
         {
             var (episode, partIdx, m) = TryResolveEpisodeContext(ctx, ratingKey);
-            images = (episode != null && m != null) ? ExtractImages(_mapper.MapEpisode(episode, m.Coords, ctx.Series, ctx.Titles, partIdx, m.TmdbEpisode)) : [];
+            images = (episode != null && m != null) ? ExtractImages(mapper.MapEpisode(episode, m.Coords, ctx.Series, ctx.Titles, partIdx, m.TmdbEpisode)) : [];
         }
         else if (ratingKey.Contains(PlexConstants.SeasonPrefix))
         {
             if (!int.TryParse(ratingKey.Split(PlexConstants.SeasonPrefix)[1], out int sNum))
                 return NotFound();
-            images = ExtractImages(_mapper.MapSeason(ctx.Series, sNum, ctx.Titles.DisplayTitle));
+            images = ExtractImages(mapper.MapSeason(ctx.Series, sNum, ctx.Titles.DisplayTitle));
         }
         else
-            images = ExtractImages(_mapper.MapSeries(ctx.Series, ctx.Titles));
+            images = ExtractImages(mapper.MapSeries(ctx.Series, ctx.Titles));
         return Ok(
             new
             {
@@ -257,7 +251,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
         if (group == null)
             return NotFound();
         var primarySeries = group.MainSeries ?? group.Series?.FirstOrDefault();
-        return primarySeries == null ? NotFound() : WrapInContainer(_mapper.MapCollection(group, primarySeries));
+        return primarySeries == null ? NotFound() : WrapInContainer(mapper.MapCollection(group, primarySeries));
     }
 
     /// <summary>Serves the local image for a user-defined, automatically generated, or smart collection by matching its ID or name.</summary>

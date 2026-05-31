@@ -5,7 +5,7 @@ namespace ShokoRelay.Plex;
 /// <summary>HTTP client wrapper that communicates with one or more Plex servers.</summary>
 public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
 {
-    #region Fields & Properties
+    #region Setup & Properties
 
     private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
 

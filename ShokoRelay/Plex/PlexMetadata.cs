@@ -11,12 +11,6 @@ namespace ShokoRelay.Plex;
 /// <summary>Converts Shoko series/episode/season metadata into Plex-compatible property dictionaries.</summary>
 public class PlexMetadata(IMetadataService metadataService)
 {
-    #region Fields & Constructor
-
-    private readonly IMetadataService _metadataService = metadataService;
-
-    #endregion
-
     #region Series Context
 
     /// <summary>Aggregates relevant information about a Shoko series for controller responses.</summary>
@@ -38,35 +32,35 @@ public class PlexMetadata(IMetadataService metadataService)
             // AniDB Episode Alias (ae{ID} or ae{ID}p{Part})
             var epIdPart = ratingKey[(PlexConstants.AniDbPrefix.Length + PlexConstants.EpisodePrefix.Length)..].Split(PlexConstants.PartPrefix)[0];
             if (int.TryParse(epIdPart, out var aid))
-                seriesId = _metadataService.GetShokoEpisodeByAnidbID(aid)?.Series?.ID ?? 0;
+                seriesId = metadataService.GetShokoEpisodeByAnidbID(aid)?.Series?.ID ?? 0;
         }
         else if (ratingKey.StartsWith(PlexConstants.EpisodePrefix))
         {
             // Shoko Episode ID (e{ID} or e{ID}p{Part})
             var epIdPart = ratingKey[PlexConstants.EpisodePrefix.Length..].Split(PlexConstants.PartPrefix)[0];
             if (int.TryParse(epIdPart, out var epId))
-                seriesId = _metadataService.GetShokoEpisodeByID(epId)?.Series?.ID ?? 0;
+                seriesId = metadataService.GetShokoEpisodeByID(epId)?.Series?.ID ?? 0;
         }
         else
         {
             // Isolate the show component (supports {ID}, a{AniDB}, {ID}s{Season}, or a{AniDB}s{Season})
             var seriesPart = ratingKey.Split(PlexConstants.SeasonPrefix)[0];
             if (seriesPart.StartsWith(PlexConstants.AniDbPrefix) && int.TryParse(seriesPart[PlexConstants.AniDbPrefix.Length..], out var anidb))
-                seriesId = _metadataService.GetShokoSeriesByAnidbID(anidb)?.ID ?? 0;
+                seriesId = metadataService.GetShokoSeriesByAnidbID(anidb)?.ID ?? 0;
             else
                 int.TryParse(seriesPart, out seriesId);
         }
 
-        var series = _metadataService.GetShokoSeriesByID(seriesId);
+        var series = metadataService.GetShokoSeriesByID(seriesId);
         if (series == null)
             return null;
 
-        int primaryId = OverrideHelper.GetPrimary(series.ID, _metadataService);
-        var primarySeries = _metadataService.GetShokoSeriesByID(primaryId) ?? series;
+        int primaryId = OverrideHelper.GetPrimary(series.ID, metadataService);
+        var primarySeries = metadataService.GetShokoSeriesByID(primaryId) ?? series;
 
-        var group = OverrideHelper.GetGroup(primaryId, _metadataService);
-        var extras = group.Skip(1).Select(id => _metadataService.GetShokoSeriesByID(id)).OfType<ISeries>().ToList();
-        var fileData = extras.Count > 0 ? MapHelper.GetSeriesFileDataMerged(primarySeries, extras, _metadataService) : MapHelper.GetSeriesFileData(primarySeries, _metadataService);
+        var group = OverrideHelper.GetGroup(primaryId, metadataService);
+        var extras = group.Skip(1).Select(id => metadataService.GetShokoSeriesByID(id)).OfType<ISeries>().ToList();
+        var fileData = extras.Count > 0 ? MapHelper.GetSeriesFileDataMerged(primarySeries, extras, metadataService) : MapHelper.GetSeriesFileData(primarySeries, metadataService);
 
         return new SeriesContext(primarySeries, TextHelper.ResolveFullSeriesTitles(primarySeries), ContentRatingHelper.GetContentRatingAndAdult(primarySeries).Rating ?? "", fileData);
     }
@@ -151,8 +145,8 @@ public class PlexMetadata(IMetadataService metadataService)
         string? seasonSummary = null;
 
         // When using VFS overrides find a Shoko series in the group which contains the TMDB metadata for the requisite season number.
-        var groupIds = OverrideHelper.GetGroup(ps.ID, _metadataService);
-        var sourceSeries = groupIds.Select(id => _metadataService.GetShokoSeriesByID(id)).OfType<IShokoSeries>().FirstOrDefault(s => s.TmdbSeasons?.Any(ts => ts.SeasonNumber == seasonNum) == true) ?? ps;
+        var groupIds = OverrideHelper.GetGroup(ps.ID, metadataService);
+        var sourceSeries = groupIds.Select(id => metadataService.GetShokoSeriesByID(id)).OfType<IShokoSeries>().FirstOrDefault(s => s.TmdbSeasons?.Any(ts => ts.SeasonNumber == seasonNum) == true) ?? ps;
 
         bool ignoreTmdb = !string.IsNullOrEmpty(MapHelper.GetPreferredTmdbOrderingId(ps));
         var tmdbSeason = ignoreTmdb ? null : sourceSeries.TmdbSeasons?.FirstOrDefault(ts => ts.SeasonNumber == seasonNum);
@@ -236,7 +230,7 @@ public class PlexMetadata(IMetadataService metadataService)
         string? parentThumb = null;
         if (Settings.TmdbSeasonPosters && mapped.Season >= 0 && string.IsNullOrEmpty(MapHelper.GetPreferredTmdbOrderingId(series)))
         {
-            var s = _metadataService.GetShokoSeriesByID(OverrideHelper.GetPrimary(series.ID, _metadataService));
+            var s = metadataService.GetShokoSeriesByID(OverrideHelper.GetPrimary(series.ID, metadataService));
             var seasonObj = s?.TmdbSeasons?.FirstOrDefault(ts => ts.SeasonNumber == mapped.Season);
             parentThumb = seasonObj?.PrimaryImage is not null ? ImageHelper.GetImageUrl(seasonObj.PrimaryImage, cacheBuster: cb) : null;
         }
@@ -380,8 +374,8 @@ public class PlexMetadata(IMetadataService metadataService)
     /// <returns>The group's preferred title, or null if no collection applies.</returns>
     public string? GetCollectionName(ISeries series) =>
         series is IShokoSeries { TopLevelGroupID: > 0 } ss
-        && _metadataService.GetShokoGroupByID(ss.TopLevelGroupID) is { } group
-        && group.Series.Select(s => OverrideHelper.GetPrimary(s.ID, _metadataService)).Distinct().Count() > 1
+        && metadataService.GetShokoGroupByID(ss.TopLevelGroupID) is { } group
+        && group.Series.Select(s => OverrideHelper.GetPrimary(s.ID, metadataService)).Distinct().Count() > 1
         && group is IWithTitles { PreferredTitle.Value: { } title }
             ? title
             : null;
@@ -461,7 +455,7 @@ public class PlexMetadata(IMetadataService metadataService)
     /// <returns>An array of objects containing guid and tag (title), or null if no local matches found.</returns>
     private object[]? BuildSimilarArray(ISeries series) =>
         series is IShokoSeries { AnidbAnime.Similar: { Count: > 0 } list }
-            ? list.Select(s => _metadataService.GetShokoSeriesByAnidbID(s.SimilarID))
+            ? list.Select(s => metadataService.GetShokoSeriesByAnidbID(s.SimilarID))
                 .OfType<IShokoSeries>()
                 .Select(ls => (object)new { guid = ls.GetPlexGuid(), tag = ls.PreferredTitle?.Value ?? ls.DefaultTitle?.Value })
                 .ToArray()

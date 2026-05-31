@@ -8,15 +8,9 @@ namespace ShokoRelay.Sync;
 /// <summary>Synchronizes watched-state from Plex into Shoko.</summary>
 public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService, IUserDataService userDataService, IUserService userService, ConfigProvider configProvider, PlexAuth plexAuth)
 {
-    #region Fields & Constructor
+    #region Setup
 
     private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
-    private readonly PlexClient _plexClient = plexClient;
-    private readonly IMetadataService _metadataService = metadataService;
-    private readonly IUserDataService _userDataService = userDataService;
-    private readonly IUserService _userService = userService;
-    private readonly ConfigProvider _configProvider = configProvider;
-    private readonly PlexAuth _plexAuth = plexAuth;
 
     #endregion
 
@@ -41,7 +35,7 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
         CancellationToken cancellationToken = default
     )
     {
-        OverrideHelper.Reload(_metadataService);
+        OverrideHelper.Reload(metadataService);
         var result = new PlexWatchedSyncResult();
         var auto = Settings.Automation;
         var userType = userTypeOverride ?? auto.ShokoSyncWatchedUserType;
@@ -53,13 +47,13 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
         bool actualVotes = includeVotes ?? auto.ShokoSyncWatchedIncludeRatings;
         bool actualProgress = includeProgress ?? auto.ShokoSyncWatchedIncludeProgress;
 
-        if (!_plexClient.IsEnabled || _userService.GetUsers().FirstOrDefault() is not { } defaultUser)
+        if (!plexClient.IsEnabled || userService.GetUsers().FirstOrDefault() is not { } defaultUser)
             return result;
 
-        var extraEntries = _configProvider.GetExtraPlexUserEntries();
+        var extraEntries = configProvider.GetExtraPlexUserEntries();
         result = result with { PerUser = SyncHelper.CreatePerUserBuckets(extraEntries.Select(e => e.Name)) };
         var appliedIds = new HashSet<int>();
-        var targets = _plexClient.GetConfiguredTargets();
+        var targets = plexClient.GetConfiguredTargets();
 
         // Session-level cache to prevent redundant database lookups and GUID parsing when the same episode exists in multiple libraries or is watched by multiple users.
         var episodeCache = new Dictionary<string, IShokoEpisode?>(StringComparer.OrdinalIgnoreCase);
@@ -74,14 +68,14 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
 
             // Fetch user item buckets and automatically handle managed token resolution and user filtering.
             var (userBuckets, newResult) = await SyncHelper
-                .FetchUserBucketsAsync(_plexAuth, _plexClient, _configProvider, target, userType, extraEntries, false, null, sinceHours, result, cancellationToken)
+                .FetchUserBucketsAsync(plexAuth, plexClient, configProvider, target, userType, extraEntries, false, null, sinceHours, result, cancellationToken)
                 .ConfigureAwait(false);
             result = newResult;
 
             if (actualProgress)
             {
                 var (progressBuckets, prResult) = await SyncHelper
-                    .FetchUserBucketsAsync(_plexAuth, _plexClient, _configProvider, target, userType, extraEntries, true, true, sinceHours, result, cancellationToken)
+                    .FetchUserBucketsAsync(plexAuth, plexClient, configProvider, target, userType, extraEntries, true, true, sinceHours, result, cancellationToken)
                     .ConfigureAwait(false);
                 result = prResult;
 
@@ -114,7 +108,7 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                     if (!episodeCache.TryGetValue(item.Guid, out var ep))
                     {
                         var epId = PlexHelper.ExtractShokoEpisodeIdFromGuid(item.Guid);
-                        ep = epId.HasValue ? _metadataService.GetShokoEpisodeByID(epId.Value) : null;
+                        ep = epId.HasValue ? metadataService.GetShokoEpisodeByID(epId.Value) : null;
                         episodeCache[item.Guid] = ep;
                     }
 
@@ -124,7 +118,7 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                         continue;
                     }
 
-                    var epUserData = _userDataService.GetEpisodeUserData(ep, defaultUser);
+                    var epUserData = userDataService.GetEpisodeUserData(ep, defaultUser);
                     bool alreadyWatched = epUserData?.LastPlayedAt != null;
 
                     bool isWatchedInPlex = item.ViewCount > 0;
@@ -136,7 +130,7 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                     if (!isWatchedInPlex && hasProgressInPlex && !alreadyWatched && (ep.VideoList?.Count > 0))
                     {
                         wouldUpdateProgress = true;
-                        var existingData = _userDataService.GetVideoUserData(ep.VideoList.First(), defaultUser);
+                        var existingData = userDataService.GetVideoUserData(ep.VideoList.First(), defaultUser);
                         if (existingData != null)
                         {
                             var diff = Math.Abs(existingData.ProgressPosition.TotalMilliseconds - item.ViewOffset!.Value);
@@ -150,7 +144,7 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                     if (wouldMark)
                     {
                         if (!dryRun)
-                            await _userDataService.SetEpisodeWatchedStatus(ep, defaultUser, true, watchedAt, videoReason: VideoUserDataSaveReason.UserInteraction).ConfigureAwait(false);
+                            await userDataService.SetEpisodeWatchedStatus(ep, defaultUser, true, watchedAt, videoReason: VideoUserDataSaveReason.UserInteraction).ConfigureAwait(false);
                         appliedIds.Add(ep.ID);
                         result = SyncHelper.IncMarkedWatched(result, result.PerUser, uName);
                         s_logger.Info("WatchedSyncService: {0}Plex -> Shoko: {1} marked {2} S{3}E{4}", logPrefix, uName, ep.Series?.PreferredTitle?.Value, ep.SeasonNumber, ep.EpisodeNumber);
@@ -161,11 +155,11 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                         {
                             foreach (var video in ep.VideoList!)
                             {
-                                var videoData = _userDataService.GetVideoUserData(video, defaultUser);
+                                var videoData = userDataService.GetVideoUserData(video, defaultUser);
                                 var update = videoData != null ? new VideoUserDataUpdate(videoData) : new VideoUserDataUpdate();
                                 update.ProgressPosition = TimeSpan.FromMilliseconds(item.ViewOffset!.Value);
                                 update.LastUpdatedAt = DateTime.UtcNow;
-                                await _userDataService.SaveVideoUserData(video, defaultUser, update).ConfigureAwait(false);
+                                await userDataService.SaveVideoUserData(video, defaultUser, update).ConfigureAwait(false);
                             }
                         }
                         appliedIds.Add(ep.ID);
@@ -209,7 +203,7 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                         if (epUserData?.UserRating == null || Math.Abs(epUserData.UserRating.Value - item.UserRating.Value) > 0.05)
                         {
                             if (!dryRun)
-                                await _userDataService.RateEpisode(ep, defaultUser, item.UserRating.Value).ConfigureAwait(false);
+                                await userDataService.RateEpisode(ep, defaultUser, item.UserRating.Value).ConfigureAwait(false);
                             result = SyncHelper.IncVotesUpdated(result);
                         }
                         else

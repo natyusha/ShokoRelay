@@ -93,14 +93,7 @@ public class Plugin : IPlugin
     public string? EmbeddedThumbnailResourceName => "ShokoRelay.Assets.shoko-relay-logo.png";
 
     /// <inheritdoc/>
-    public IReadOnlyList<PluginPage> GetPages() =>
-    [
-        new()
-        {
-            Name = "Dashboard",
-            Url = "/api/plugin/ShokoRelay/dashboard",
-        }
-    ];
+    public IReadOnlyList<PluginPage> GetPages() => [new() { Name = "Dashboard", Url = "/api/plugin/ShokoRelay/dashboard" }];
 }
 
 #endregion

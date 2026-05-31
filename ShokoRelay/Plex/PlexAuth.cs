@@ -59,7 +59,7 @@ public sealed record PlexHomeUser(
 /// <summary>Handles authentication with Plex.tv, utilizing modern v2 JSON endpoints and legacy XML for user switching.</summary>
 public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
 {
-    #region Fields & Constructor
+    #region Setup
 
     private const string BaseUrl = "https://plex.tv";
     private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
@@ -69,8 +69,6 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
         PropertyNameCaseInsensitive = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
-    private readonly HttpClient _httpClient = httpClient;
-    private readonly PlexAuthConfig _config = config;
 
     #endregion
 
@@ -83,7 +81,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
     public async Task<PlexPinResponse> CreatePinAsync(bool strong = true, CancellationToken cancellationToken = default)
     {
         using var request = CreateRequest(HttpMethod.Post, new Uri($"{BaseUrl}/api/v2/pins{(strong ? "?strong=true" : "")}"));
-        using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
         return await ReadJsonAsync<PlexPinResponse>(response, cancellationToken).ConfigureAwait(false) ?? throw new InvalidOperationException("Plex pin response was empty.");
     }
 
@@ -95,7 +93,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
     public string BuildAuthUrl(string pinCode, string productName, string? forwardUrl = null) =>
         pinCode.Length <= 4
             ? $"https://plex.tv/link/?pin={Uri.EscapeDataString(pinCode)}"
-            : $"https://app.plex.tv/auth#?clientID={Uri.EscapeDataString(_config.ClientIdentifier)}&code={Uri.EscapeDataString(pinCode)}&context%5Bdevice%5D%5Bproduct%5D={Uri.EscapeDataString(productName)}{(string.IsNullOrWhiteSpace(forwardUrl) ? "" : $"&forwardUrl={Uri.EscapeDataString(forwardUrl)}")}";
+            : $"https://app.plex.tv/auth#?clientID={Uri.EscapeDataString(config.ClientIdentifier)}&code={Uri.EscapeDataString(pinCode)}&context%5Bdevice%5D%5Bproduct%5D={Uri.EscapeDataString(productName)}{(string.IsNullOrWhiteSpace(forwardUrl) ? "" : $"&forwardUrl={Uri.EscapeDataString(forwardUrl)}")}";
 
     /// <summary>Retrieve the status for a specific Plex PIN from the v2 API.</summary>
     /// <param name="pinId">The PIN identifier.</param>
@@ -104,7 +102,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
     public async Task<PlexPinResponse> GetPinAsync(string pinId, CancellationToken cancellationToken = default)
     {
         using var request = CreateRequest(HttpMethod.Get, new Uri($"{BaseUrl}/api/v2/pins/{Uri.EscapeDataString(pinId)}"));
-        using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
         return await ReadJsonAsync<PlexPinResponse>(response, cancellationToken).ConfigureAwait(false) ?? throw new InvalidOperationException("Plex pin response was empty.");
     }
 
@@ -120,7 +118,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
     public async Task<(bool TokenValid, List<PlexServerInfo> Servers, List<PlexDevice> Devices)> GetPlexServerListAsync(string token, string cid, CancellationToken ct = default)
     {
         using var request = CreateRequest(HttpMethod.Get, new Uri("https://clients.plex.tv/api/v2/resources"), token, cid);
-        using var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
+        using var response = await httpClient.SendAsync(request, ct).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
             return (response.StatusCode is not HttpStatusCode.Unauthorized and not HttpStatusCode.Forbidden, [], []);
 
@@ -169,7 +167,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
     public async Task<List<PlexLibraryInfo>> GetPlexLibrariesAsync(string token, string cid, string url, CancellationToken ct = default)
     {
         using var req = CreateRequest(HttpMethod.Get, new Uri($"{url.TrimEnd('/')}/library/sections"), token, cid);
-        using var resp = await _httpClient.SendAsync(req, ct).ConfigureAwait(false);
+        using var resp = await httpClient.SendAsync(req, ct).ConfigureAwait(false);
         var wrapper = await ReadJsonAsync<LibrarySectionsResponse>(resp, ct).ConfigureAwait(false);
         return wrapper
                 ?.MediaContainer?.Directory?.Select(d => new PlexLibraryInfo(
@@ -270,7 +268,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
     public async Task<List<PlexHomeUser>> GetHomeUsersAsync(string adminToken, CancellationToken ct = default)
     {
         using var req = CreateRequest(HttpMethod.Get, new Uri($"{BaseUrl}/api/v2/home/users"), adminToken);
-        using var resp = await _httpClient.SendAsync(req, ct).ConfigureAwait(false);
+        using var resp = await httpClient.SendAsync(req, ct).ConfigureAwait(false);
         var result = await ReadJsonAsync<PlexHomeResponse>(resp, ct).ConfigureAwait(false);
         return result?.Users ?? [];
     }
@@ -288,7 +286,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
         {
             var uriText = $"{BaseUrl}/api/home/users/{userId}/switch" + (string.IsNullOrWhiteSpace(pin) ? "" : $"?pin={Uri.EscapeDataString(pin)}");
             using var req = CreateRequest(HttpMethod.Post, new Uri(uriText), adminToken);
-            using var resp = await _httpClient.SendAsync(req, ct).ConfigureAwait(false);
+            using var resp = await httpClient.SendAsync(req, ct).ConfigureAwait(false);
             if (!resp.IsSuccessStatusCode)
                 return null;
             var content = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
@@ -313,7 +311,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
     public async Task<PlexAccountInfo?> GetAccountInfoAsync(string token, CancellationToken ct = default)
     {
         using var req = CreateRequest(HttpMethod.Get, new Uri($"{BaseUrl}/api/v2/user"), token);
-        using var resp = await _httpClient.SendAsync(req, ct).ConfigureAwait(false);
+        using var resp = await httpClient.SendAsync(req, ct).ConfigureAwait(false);
         if (!resp.IsSuccessStatusCode)
             return null;
         var content = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
@@ -334,7 +332,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
         try
         {
             using var req = CreateRequest(HttpMethod.Delete, new Uri($"{BaseUrl}/api/v2/user/authentication"), token, cid);
-            await _httpClient.SendAsync(req, ct).ConfigureAwait(false);
+            await httpClient.SendAsync(req, ct).ConfigureAwait(false);
         }
         catch
         {
@@ -349,7 +347,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
     private HttpRequestMessage CreateRequest(HttpMethod method, Uri url, string? token = null, string? cid = null)
     {
         var req = new HttpRequestMessage(method, url);
-        req.Headers.TryAddWithoutValidation("X-Plex-Client-Identifier", cid ?? _config.ClientIdentifier);
+        req.Headers.TryAddWithoutValidation("X-Plex-Client-Identifier", cid ?? config.ClientIdentifier);
         req.Headers.TryAddWithoutValidation("X-Plex-Device-Name", "Shoko Server"); // Title (Line 1)
         req.Headers.TryAddWithoutValidation("X-Plex-Version", ShokoRelayConstants.Version); // Label (Line 2)
         req.Headers.TryAddWithoutValidation("X-Plex-Product", ShokoRelayConstants.Name); // Label (Line 3)

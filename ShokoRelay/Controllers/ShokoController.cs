@@ -30,18 +30,6 @@ public class ShokoController(
     IImageManager imageManager
 ) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
 {
-    #region Fields
-
-    private readonly VfsBuilder _vfsBuilder = vfsBuilder;
-    private readonly IShokoImportService _shokoImportService = shokoImportService;
-    private readonly SyncToShoko _watchedSyncService = watchedSyncService;
-    private readonly SyncToPlex _syncToPlexService = syncToPlexService;
-    private readonly SourceLinkService _sourceLinkService = sourceLinkService;
-    private readonly AnimeThemesMapping _atMapping = atMapping;
-    private readonly IVideoService _videoService = videoService;
-
-    #endregion
-
     #region Virtual File System
 
     /// <summary>Builds the VFS symlink tree for configured import folders.</summary>
@@ -59,11 +47,11 @@ public class ShokoController(
             LogHelper.BuildVfsReport,
             async () =>
             {
-                var result = filterIds.Count > 0 ? _vfsBuilder.Build(filterIds, clean) : _vfsBuilder.Build((int?)null, clean);
+                var result = filterIds.Count > 0 ? vfsBuilder.Build(filterIds, clean) : vfsBuilder.Build((int?)null, clean);
 
                 // Restore AnimeThemes links after the VFS build (filtered or global) if a mapping file exists
                 if (IoFile.Exists(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileAtMapping)))
-                    await _atMapping.ApplyMappingAsync(filterIds.Count > 0 ? filterIds : null, CancellationToken.None).ConfigureAwait(false);
+                    await atMapping.ApplyMappingAsync(filterIds.Count > 0 ? filterIds : null, CancellationToken.None).ConfigureAwait(false);
 
                 if (PlexLibrary.IsEnabled && Settings.Automation.ScanOnVfsRefresh && filterIds.Count > 0)
                     _ = SchedulePlexRefreshForSeriesAsync(ResolveSeriesList(null, filterIds).Where(s => s != null).Cast<IShokoSeries>());
@@ -104,7 +92,7 @@ public class ShokoController(
 
         // Normalize Managed Folder paths to remove trailing slashes for consistent comparison with blueprint keys. Filter out folders marked as Source since the VFS only builds in none or destination folders.
         var managedFolders =
-            _videoService
+            videoService
                 .GetAllManagedFolders()
                 ?.Where(f => !f.DropFolderType.HasFlag(DropFolderType.Source))
                 .Select(f => new { Path = f.Path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), f.Name })
@@ -150,7 +138,7 @@ public class ShokoController(
             (sb, r) => LogHelper.BuildPurgeMissingReport(sb, r.DryRun, r.Removed),
             async () =>
             {
-                var removed = await _shokoImportService.PurgeMissingFilesAsync(dryRun).ConfigureAwait(false);
+                var removed = await shokoImportService.PurgeMissingFilesAsync(dryRun).ConfigureAwait(false);
                 return new
                 {
                     DryRun = dryRun,
@@ -167,7 +155,7 @@ public class ShokoController(
     public async Task<IActionResult> RunShokoImport()
     {
         Logger.Info("Shoko: Import scan triggered manually");
-        var scanned = await _shokoImportService.TriggerImportAsync().ConfigureAwait(false);
+        var scanned = await shokoImportService.TriggerImportAsync().ConfigureAwait(false);
         return Ok(new RelayResponse<object>(Data: new { scanned, scannedCount = scanned?.Count ?? 0 }));
     }
 
@@ -176,7 +164,7 @@ public class ShokoController(
     [HttpGet("shoko/import/start")]
     public async Task<IActionResult> StartShokoImportNow()
     {
-        var scanned = await _shokoImportService.TriggerImportAsync().ConfigureAwait(false);
+        var scanned = await shokoImportService.TriggerImportAsync().ConfigureAwait(false);
         MarkImportRunNow();
         var freqHours = Settings.Automation.ShokoImportFrequencyHours;
         return Ok(
@@ -233,8 +221,8 @@ public class ShokoController(
             async () =>
             {
                 var result = import
-                    ? await _syncToPlexService.SyncWatchedAsync(dryRun, sinceHours, includeRatings, userType, libraryName, cancellationToken: CancellationToken.None).ConfigureAwait(false)
-                    : await _watchedSyncService.SyncWatchedAsync(dryRun, sinceHours, includeRatings, includeProgress, userType, libraryName, cancellationToken: CancellationToken.None).ConfigureAwait(false);
+                    ? await syncToPlexService.SyncWatchedAsync(dryRun, sinceHours, includeRatings, userType, libraryName, cancellationToken: CancellationToken.None).ConfigureAwait(false)
+                    : await watchedSyncService.SyncWatchedAsync(dryRun, sinceHours, includeRatings, includeProgress, userType, libraryName, cancellationToken: CancellationToken.None).ConfigureAwait(false);
                 return result with { Direction = direction };
             },
             SyncHelper.SyncLock
@@ -249,7 +237,7 @@ public class ShokoController(
         int freqHours = Settings.Automation.ShokoSyncWatchedFrequencyHours;
         try
         {
-            var result = await _watchedSyncService.SyncWatchedAsync(false, freqHours, cancellationToken: CancellationToken.None).ConfigureAwait(false);
+            var result = await watchedSyncService.SyncWatchedAsync(false, freqHours, cancellationToken: CancellationToken.None).ConfigureAwait(false);
             MarkSyncRunNow();
             return Ok(
                 new RelayResponse<object>(
@@ -291,7 +279,7 @@ public class ShokoController(
                         Logger.Info("Shoko: Starting manual purge of library symlinks...");
                     else
                         Logger.Info("Shoko: Starting source link processing using map {0}", mapFile);
-                    return await _sourceLinkService.ProcessLinksAsync(mapFile ?? string.Empty, purgeLinks).ConfigureAwait(false);
+                    return await sourceLinkService.ProcessLinksAsync(mapFile ?? string.Empty, purgeLinks).ConfigureAwait(false);
                 },
                 VfsShared.VfsLock
             );

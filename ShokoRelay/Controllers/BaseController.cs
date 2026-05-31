@@ -13,7 +13,7 @@ namespace ShokoRelay.Controllers;
 [Route(ShokoRelayConstants.BasePath)]
 public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IMetadataService metadataService, PlexClient plexLibrary) : ControllerBase
 {
-    #region Fields & Properties
+    #region Setup
 
     /// <summary>Shared logger instance for ShokoRelay controllers.</summary>
     protected static readonly Logger Logger = LogManager.GetCurrentClassLogger();
