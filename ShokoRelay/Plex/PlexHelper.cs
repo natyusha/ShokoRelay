@@ -146,15 +146,11 @@ public static class PlexHelper
     public static HashSet<string> ResolveImportRoots(IShokoSeries series, IMetadataService metadataService)
     {
         var roots = new HashSet<string>(VfsShared.PathComparer);
-        var seriesList = new List<IShokoSeries> { series };
-        if (EnforceTmdbNumbering)
-            seriesList.AddRange(OverrideHelper.GetGroup(OverrideHelper.GetPrimary(series.ID, metadataService), metadataService).Skip(1).Select(metadataService.GetShokoSeriesByID).OfType<IShokoSeries>());
-        foreach (var s in seriesList)
-        foreach (var mapping in MapHelper.GetSeriesFileData(s, metadataService).Mappings)
+        foreach (var video in MapHelper.GetActiveVideos(series, metadataService))
         {
-            var location = mapping.Video.Files.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l.Path)) ?? mapping.Video.Files.FirstOrDefault();
-            if (location != null && VfsShared.ResolveImportRootPath(location) is string importRoot)
-                roots.Add(importRoot);
+            foreach (var file in video.Files ?? [])
+                if (file != null && VfsShared.ResolveImportRootPath(file) is string importRoot)
+                    roots.Add(importRoot);
         }
         return roots;
     }

@@ -156,32 +156,38 @@ internal static class VfsShared
     /// <param name="logger">Logger instance.</param>
     /// <param name="targetOverride">Optional specific target string.</param>
     /// <param name="useRelativeTarget">Whether to resolve the target path relatively.</param>
+    /// <param name="skipExistenceCheck">If true, bypasses the filesystem check and writes the link directly.</param>
     /// <returns>True if the link exists and is correct, or was successfully created.</returns>
-    public static bool TryCreateLink(string source, string dest, Logger logger, string? targetOverride = null, bool useRelativeTarget = true)
+    public static bool TryCreateLink(string source, string dest, Logger logger, string? targetOverride = null, bool useRelativeTarget = true, bool skipExistenceCheck = false)
     {
         string linkDir = Path.GetDirectoryName(dest) ?? string.Empty;
         string relativeTarget = targetOverride ?? source;
         if (targetOverride == null && useRelativeTarget && !string.IsNullOrWhiteSpace(linkDir))
             relativeTarget = Path.GetRelativePath(linkDir, source);
-        try
+
+        if (!skipExistenceCheck)
         {
-            if (File.Exists(dest))
+            try
             {
-                var attr = File.GetAttributes(dest);
-                if (attr.HasFlag(FileAttributes.ReparsePoint))
+                if (File.Exists(dest))
                 {
-                    var fi = new FileInfo(dest);
-                    if (string.Equals(fi.LinkTarget, relativeTarget, StringComparison.Ordinal))
-                        return true;
+                    var attr = File.GetAttributes(dest);
+                    if (attr.HasFlag(FileAttributes.ReparsePoint))
+                    {
+                        var fi = new FileInfo(dest);
+                        if (string.Equals(fi.LinkTarget, relativeTarget, StringComparison.Ordinal))
+                            return true;
+                    }
+                    File.Delete(dest);
                 }
-                File.Delete(dest);
+            }
+            catch (Exception ex)
+            {
+                logger.Warn(ex, "VFS: Unable to remove existing link at -> {Dest}", dest);
+                return false;
             }
         }
-        catch (Exception ex)
-        {
-            logger.Warn(ex, "VFS: Unable to remove existing link at -> {Dest}", dest);
-            return false;
-        }
+
         return TryCreateSymlink(dest, relativeTarget, logger);
     }
 

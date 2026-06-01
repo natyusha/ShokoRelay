@@ -84,14 +84,46 @@ public static class MapHelper
     /// <returns>True if hidden.</returns>
     public static bool IsHidden(IEpisode e) => e is IShokoEpisode shokoEp && shokoEp.IsHidden;
 
+    /// <summary>Resolves all unique active physical video files associated with a series, accounting for consolidated override groups and filtering out hidden entries.</summary>
+    /// <param name="series">The primary series to resolve videos for.</param>
+    /// <param name="metadataService">The metadata service used for override group and primary ID resolution.</param>
+    /// <returns>An enumerable collection of active <see cref="IVideo"/> files.</returns>
+    public static IEnumerable<IVideo> GetActiveVideos(ISeries series, IMetadataService metadataService)
+    {
+        var seriesList = new List<ISeries> { series };
+        if (EnforceTmdbNumbering)
+        {
+            int primaryId = OverrideHelper.GetPrimary(series.ID, metadataService);
+            seriesList = [.. OverrideHelper.GetGroup(primaryId, metadataService).Select(metadataService.GetShokoSeriesByID).OfType<ISeries>()];
+        }
+
+        var seenVideoIds = new HashSet<int>();
+        foreach (var s in seriesList)
+        {
+            foreach (var ep in s.Episodes)
+            {
+                if (IsHidden(ep) || ep.VideoList == null)
+                    continue;
+
+                foreach (var v in ep.VideoList)
+                    if (seenVideoIds.Add(v.ID))
+                        yield return v;
+            }
+        }
+    }
+
     #endregion
 
     #region Mapping Logic
 
+    /// <summary>Builds a comprehensive list of file-to-episode mappings for a series, resolving Plex coordinates and handling file versioning.</summary>
+    /// <param name="series">The Shoko series metadata containing episodes and video files.</param>
+    /// <param name="metadataService">The metadata service used for override and primary series resolution.</param>
+    /// <returns>A list of resolved and mapped <see cref="FileMapping"/> records.</returns>
     private static List<FileMapping> BuildFileMappings(ISeries series, IMetadataService metadataService)
     {
         var result = new List<FileMapping>();
-        var seriesEpisodes = series.Episodes.Select(e => (Episode: e, Videos: e.VideoList.ToList())).Where(x => x.Videos.Count > 0 && !IsHidden(x.Episode)).ToList();
+        var seriesEpisodes = series.Episodes.Where(e => e.VideoList.Count > 0 && !IsHidden(e)).Select(e => (Episode: e, Videos: e.VideoList)).ToList();
         if (seriesEpisodes.Count == 0)
             return result;
 
@@ -188,6 +220,10 @@ public static class MapHelper
         return [.. result.GroupBy(m => (m.Video.ID, m.Coords, m.PartIndex, m.IsVariation)).Select(g => g.First())];
     }
 
+    /// <summary>Deduplicates a collection of episode-coordinate pairs sharing a single video file, prioritizing primary cross-referenced entries.</summary>
+    /// <param name="eps">The raw list of episode-coordinate pairs associated with the video file.</param>
+    /// <param name="video">The video file metadata used to evaluate cross-reference priorities.</param>
+    /// <returns>A prioritized list of unique episode-coordinate pairs.</returns>
     private static List<(IEpisode Episode, PlexCoords Coords)> DeduplicateByCoords(List<(IEpisode Episode, PlexCoords Coords)> eps, IVideo video)
     {
         var deduped = new List<(IEpisode Episode, PlexCoords Coords)>();
@@ -222,6 +258,11 @@ public static class MapHelper
         return deduped;
     }
 
+    /// <summary>Applies fallback rules for "Other" (Featurette) season coordinates, remapping them to Standard or Specials folders if those are empty.</summary>
+    /// <param name="coords">The original Plex coordinate set calculated for the episode.</param>
+    /// <param name="s1">True if the series contains standard episodes (Season 1).</param>
+    /// <param name="s0">True if the series contains special episodes (Season 0).</param>
+    /// <returns>The remapped Plex coordinates after fallback evaluation.</returns>
     private static PlexCoords ApplyFeaturettesFallback(PlexCoords coords, bool s1, bool s0)
     {
         if (!s1)

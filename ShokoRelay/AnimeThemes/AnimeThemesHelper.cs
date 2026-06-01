@@ -43,7 +43,12 @@ public sealed record AnimeThemesMappingEntry(
     int Resolution,
     string Episodes,
     string Overlap
-);
+)
+{
+    /// <summary>Constructs a mapping entry from a relative filepath and resolved video metadata.</summary>
+    internal AnimeThemesMappingEntry(string filePath, AnimeThemesVideoLookup l)
+        : this(filePath, l.VideoId, l.AniDbId, l.NC, l.Slug, l.Version, l.ArtistName, l.SongTitle, l.Lyrics, l.Subbed, l.Uncen, l.NSFW, l.Spoiler, l.Source, l.Resolution, l.Episodes, l.Overlap) { }
+}
 
 /// <summary>Result returned by a mapping file build operation.</summary>
 /// <param name="MapPath">Absolute path to the generated mapping CSV.</param>
@@ -89,7 +94,17 @@ internal sealed record AnimeThemesVideoLookup(
     int Resolution,
     string Episodes,
     string Overlap
-);
+)
+{
+    /// <summary>Constructs a lookup entry from an existing mapping entry.</summary>
+    internal AnimeThemesVideoLookup(AnimeThemesMappingEntry e)
+        : this(e.VideoId, 0, e.AniDbId, e.NC, e.Slug, e.Version, e.ArtistName, e.SongTitle, e.Lyrics, e.Subbed, e.Uncen, e.NSFW, e.Spoiler, e.Source, e.Resolution, e.Episodes, e.Overlap) { }
+}
+
+/// <summary>Represents a mapped theme item resolved for VFS linking.</summary>
+/// <param name="FinalName">The expected final filename inside the VFS.</param>
+/// <param name="RelativePath">The source file relative path inside the !AnimeThemes folder.</param>
+public sealed record ThemeMapItem(string FinalName, string RelativePath);
 
 #endregion
 

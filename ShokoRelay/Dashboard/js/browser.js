@@ -215,10 +215,10 @@
       const sLi = document.createElement("li");
       const sUl = document.createElement("ul");
 
-      const seasonMatch = s.name.match(/^Season\s*(\d+)$/i);
-      const isSpecials = /^Specials$/i.test(s.name.trim());
-      const seasonId = seasonMatch ? seasonMatch[1] : isSpecials ? "0" : null;
-      const seasonLink = seasonId ? `<a href="${base}/metadata/${g.id}s${seasonId}?includeChildren=1" class="vfs-link small" target="_blank" rel="noopener noreferrer">[m${g.id}s${seasonId}]</a>` : "";
+      const seasonLink =
+        s.seasonId !== null && s.seasonId !== undefined
+          ? `<a href="${base}/metadata/${g.id}s${s.seasonId}?includeChildren=1" class="vfs-link small" target="_blank" rel="noopener noreferrer">[m${g.id}s${s.seasonId}]</a>`
+          : "";
 
       const sDet = window._sr.createLazyDetails(
         `${s.name} ${seasonLink}`,

@@ -59,7 +59,8 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
             allSeries = [.. allSeries.Where(s => s != null && allowedSet.Contains(s.ID))];
         }
 
-        s_logger.Info("ImageSyncService: Starting image synchronization (local collection/series artwork + Plex episode thumbnails)...");
+        var syncDetails = Settings.TmdbThumbnails ? "" : " + Plex episode thumbnails";
+        s_logger.Info("ImageSyncService: Starting image synchronization (local collection/series artwork{0})...", syncDetails);
 
         var cache = LoadCache();
         var processedInRun = new HashSet<int>();

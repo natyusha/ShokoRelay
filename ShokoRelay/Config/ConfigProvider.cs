@@ -16,7 +16,7 @@ namespace ShokoRelay.Config;
 /// </summary>
 public class ConfigProvider
 {
-    #region Fields & Constructor
+    #region Setup & State
 
     private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
     private static readonly JsonSerializerOptions s_options = new() { AllowTrailingCommas = true, WriteIndented = true };

@@ -101,7 +101,7 @@ public class Plugin : IPlugin
 /// <summary>Hosted service managing the VFS watcher and automation schedules.</summary>
 public class ShokoRelay : BackgroundService
 {
-    #region Fields & Constructor
+    #region Setup & State
 
     private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
     private static ConfigProvider? s_configProvider;

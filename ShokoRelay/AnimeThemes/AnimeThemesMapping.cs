@@ -8,7 +8,7 @@ namespace ShokoRelay.AnimeThemes;
 /// <summary>Provides operations for building and applying mappings between anime theme files and AniDB/video identifiers.</summary>
 public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadataService, IVideoService videoService, ConfigProvider configProvider)
 {
-    #region Setup
+    #region Setup & State
 
     private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
     private readonly AnimeThemesApi _apiClient = new(httpClient);
@@ -21,6 +21,32 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
     /// <param name="entry">The entry to serialize.</param>
     /// <returns>A comma-separated string.</returns>
     public static string SerializeMappingEntry(AnimeThemesMappingEntry entry) => AnimeThemesHelper.SerializeEntry(entry);
+
+    /// <summary>Loads and groups the AnimeThemes mapping entries, resolving their expected VFS filenames.</summary>
+    /// <param name="configDirectory">The plugin configuration directory path.</param>
+    /// <returns>A dictionary mapping AniDB ID to their expected VFS theme items.</returns>
+    public static Dictionary<int, List<ThemeMapItem>> LoadThemeMappings(string configDirectory)
+    {
+        var mappings = new Dictionary<int, List<ThemeMapItem>>();
+        string mapPath = Path.Combine(configDirectory, ShokoRelayConstants.FileAtMapping);
+        if (!File.Exists(mapPath))
+            return mappings;
+
+        try
+        {
+            var entries = AnimeThemesHelper.ParseMappingContent(File.ReadAllText(mapPath));
+            foreach (var entry in entries)
+            {
+                if (!mappings.TryGetValue(entry.AniDbId, out var list))
+                    mappings[entry.AniDbId] = list = [];
+
+                list.Add(new ThemeMapItem(AnimeThemesHelper.BuildNewFileName(new AnimeThemesVideoLookup(entry), ".webm"), entry.FilePath));
+            }
+        }
+        catch { }
+
+        return mappings;
+    }
 
     /// <summary>Download the mapping file from a direct raw URL and save it.</summary>
     /// <param name="rawUrl">Raw URL to download from.</param>
@@ -120,27 +146,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                                 return;
                             }
                             lock (entries)
-                                entries.Add(
-                                    new AnimeThemesMappingEntry(
-                                        item.Rel,
-                                        lookup.VideoId,
-                                        lookup.AniDbId,
-                                        lookup.NC,
-                                        lookup.Slug,
-                                        lookup.Version,
-                                        lookup.ArtistName,
-                                        lookup.SongTitle,
-                                        lookup.Lyrics,
-                                        lookup.Subbed,
-                                        lookup.Uncen,
-                                        lookup.NSFW,
-                                        lookup.Spoiler,
-                                        lookup.Source,
-                                        lookup.Resolution,
-                                        lookup.Episodes,
-                                        lookup.Overlap
-                                    )
-                                );
+                                entries.Add(new AnimeThemesMappingEntry(item.Rel, lookup));
                         }
                         catch (Exception ex)
                         {
@@ -174,25 +180,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
         var (lookup, idMissing) = await FetchMetadataAsync(webmFileName, ct).ConfigureAwait(false);
         if (lookup == null)
             return (null, idMissing ? "AniDB ID missing" : "Missing metadata", webmFileName);
-        var entry = new AnimeThemesMappingEntry(
-            "/test/" + webmFileName,
-            lookup.VideoId,
-            lookup.AniDbId,
-            lookup.NC,
-            lookup.Slug,
-            lookup.Version,
-            lookup.ArtistName,
-            lookup.SongTitle,
-            lookup.Lyrics,
-            lookup.Subbed,
-            lookup.Uncen,
-            lookup.NSFW,
-            lookup.Spoiler,
-            lookup.Source,
-            lookup.Resolution,
-            lookup.Episodes,
-            lookup.Overlap
-        );
+        var entry = new AnimeThemesMappingEntry("/test/" + webmFileName, lookup);
         return (entry, null, AnimeThemesHelper.BuildNewFileName(lookup, Path.GetExtension(webmFileName)));
     }
 
@@ -263,25 +251,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                                         string? src = AnimeThemesHelper.ResolveThemeSourcePath(relPath, root, themeRootName);
                                         if (src == null)
                                             return null;
-                                        var lookup = new AnimeThemesVideoLookup(
-                                            entry.VideoId,
-                                            0,
-                                            entry.AniDbId,
-                                            entry.NC,
-                                            entry.Slug,
-                                            entry.Version,
-                                            entry.ArtistName,
-                                            entry.SongTitle,
-                                            entry.Lyrics,
-                                            entry.Subbed,
-                                            entry.Uncen,
-                                            entry.NSFW,
-                                            entry.Spoiler,
-                                            entry.Source,
-                                            entry.Resolution,
-                                            entry.Episodes,
-                                            entry.Overlap
-                                        );
+                                        var lookup = new AnimeThemesVideoLookup(entry);
                                         return new
                                         {
                                             Entry = entry,
