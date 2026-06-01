@@ -28,6 +28,9 @@
     if (!input) return;
     const debouncedRender = window._sr.debounce(renderFn, 250);
 
+    // Set the initial visibility of the clear button on page load (handles browser form autofill/recovery)
+    if (clearBtn) clearBtn.hidden = !input.value;
+
     input.oninput = () => {
       if (clearBtn) clearBtn.hidden = !input.value;
       debouncedRender();
