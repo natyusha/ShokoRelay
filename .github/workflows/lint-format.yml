@@ -1,0 +1,85 @@
+name: Lint & Format
+
+on:
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Enforce Code Style
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore .NET Tools
+        run: dotnet tool restore
+
+      - name: Check C# Formatting (CSharpier)
+        id: csharpier
+        shell: bash
+        run: |
+          set -e
+
+          # Run the check and capture the raw output safely
+          output=$(dotnet tool run dotnet-csharpier --check . 2>&1 || true)
+          echo "$output" > csharpier-output.txt
+          echo "$output"
+
+          # Initialize variables for the step summary markdown
+          current_file=""
+          current_line="1"
+          summary_file="csharpier-summary.md"
+
+          echo "## Formatting issues detected" > "$summary_file"
+          echo "" >> "$summary_file"
+          echo "| File | Line |" >> "$summary_file"
+          echo "|:-----|:----:|" >> "$summary_file"
+
+          # Parse the output to emit GitHub workflow annotations and populate the summary
+          while IFS= read -r line; do
+            if [[ "$line" =~ ^Error\ (.+)\ -\ Was\ not\ formatted\.$ ]]; then
+              current_file="${BASH_REMATCH[1]}"
+              current_line="1"
+            elif [[ "$line" =~ Expected:\ Around\ Line\ ([0-9]+) ]]; then
+              current_line="${BASH_REMATCH[1]}"
+              echo "::error file=$current_file,line=$current_line::File is not formatted correctly. Run 'dotnet csharpier .' locally to fix."
+              echo "| $current_file | $current_line |" >> "$summary_file"
+            fi
+          done < csharpier-output.txt
+
+          # If errors were found, append help text, write to step summary, and fail cleanly
+          if grep -q '^Error ' csharpier-output.txt; then
+            echo "" >> "$summary_file"
+            echo "Please run \`dotnet tool run dotnet-csharpier .\` locally on your machine to fix these formatting issues automatically." >> "$summary_file"
+            cat "$summary_file" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Check C# Style & Naming
+        run: dotnet format --verify-no-changes --severity info --verbosity normal
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Check Dashboard Layout (Prettier)
+        run: |
+          npm install --save-dev prettier
+          npx prettier --check "ShokoRelay/Dashboard/**/*.js" "ShokoRelay/Dashboard/**/*.css"
+          npx prettier --check "ShokoRelay/Dashboard/**/*.cshtml" --parser html
+
+      - name: Check CSS Property Order (Stylelint Concentric)
+        run: |
+          npm install --save-dev stylelint stylelint-config-concentric
+          echo '{ "extends": ["stylelint-config-concentric"] }' > .stylelintrc.json
+          npx stylelint "ShokoRelay/Dashboard/**/*.css"
