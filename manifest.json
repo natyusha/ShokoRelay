@@ -15,6 +15,34 @@
   "image_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-logo.png",
   "releases": [
     {
+      "version": "0.13.1",
+      "tag": "v0.13.1",
+      "source_revision": "bbd2028164dafcfd8d87098faa94527e15cc5a92",
+      "released_at": "2026-06-01T10:44:47Z",
+      "channel": "Dev",
+      "release_notes": null,
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.1/ShokoRelay-v0.13.1-dev_linux-arm64.zip",
+          "checksum": "219d69123ec3e9ca13c46945e58c438a2db8003c451c127c26659cb1157365aa"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.1/ShokoRelay-v0.13.1-dev_linux-x64.zip",
+          "checksum": "046c5c8a50774fcf8ac558b9277167621744119c689034e403645d8a3241fc0b"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.1/ShokoRelay-v0.13.1-dev_win-x64.zip",
+          "checksum": "158cd55d188da18f455f8384c0e3eb027735f4d1c8757624b1fcec4c7a3518f2"
+        }
+      ]
+    },
+    {
       "version": "0.13.0",
       "tag": "v0.13.0",
       "source_revision": "b0162e88a7bcf28b949453260bac0596371ac708",
