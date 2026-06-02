@@ -313,16 +313,16 @@
     playerTree.appendChild(rootUl);
   }
 
-  /** Expands folders in the tree view and scrolls the currently playing theme into center view. */
+  /** Locates the currently playing theme and scrolls it into center view while expanding its parent folder. */
   function locateCurrentInTree() {
     if (!currentWebmPath) return;
 
     const item = webmTreeData.find((i) => i.path === currentWebmPath);
     if (!item) return;
-    const getSummaryTitle = (summary) => (summary ? summary.dataset.tooltipText || "" : "");
+    const getSummaryTitle = (summary) => (summary ? summary.dataset.tooltipText || summary.getAttribute("title") || "" : "");
     const topDetails = [...playerTree.querySelectorAll(".tree > li > details")];
 
-    //  Find and expand the Group folder (if it exists as a parent)
+    // Find and expand the Group folder (if it exists as a parent)
     const groupDet = topDetails.find((d) => getSummaryTitle(d.querySelector("summary")) === item.group);
     if (groupDet) {
       groupDet.open = true;
