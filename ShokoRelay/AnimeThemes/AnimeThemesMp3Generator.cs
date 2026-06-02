@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using NLog;
 using Shoko.Abstractions.Video;
 using Shoko.Abstractions.Video.Services;
@@ -209,25 +210,18 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
 
         s_logger.Info("AnimeThemes MP3: Starting batch generation for root -> {0}", root);
         var (results, p, s, e) = (new List<ThemeMp3OperationResult>(), 0, 0, 0);
-        var folders = Directory.EnumerateDirectories(root).Prepend(root).Where(f => query.Force || !File.Exists(Path.Combine(f, "Theme.mp3"))).ToList();
-        var excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { VfsShared.ResolveRootFolderName(), VfsShared.ResolveCollectionImagesFolderName(), VfsShared.ResolveAnimeThemesFolderName() };
+
+        // Scan recursively for all directories, skipping ignored/VFS folders
+        var folders = Directory.EnumerateDirectories(root, "*", SearchOption.AllDirectories).Prepend(root).Where(f => !VfsShared.IsPathIgnored(f)).ToList();
+
+        var processedSeries = new ConcurrentDictionary<int, byte>();
 
         await Parallel.ForEachAsync(
             folders,
             DefaultParallelOptions(ct),
             async (folder, token) =>
             {
-                if (excluded.Contains(Path.GetFileName(folder)))
-                {
-                    lock (results)
-                    {
-                        s++;
-                        results.Add(new(folder, "skipped", "Excluded system folder."));
-                    }
-                    return;
-                }
-
-                var res = await ProcessSingleAsync(query with { Path = folder, Batch = true }, token).ConfigureAwait(false);
+                var res = await ProcessSingleAsync(query with { Path = folder, Batch = true }, processedSeries, token).ConfigureAwait(false);
                 lock (results)
                 {
                     results.Add(res);
@@ -247,11 +241,12 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
 
     /// <summary>Handles a single folder request, downloading and converting the selected theme to an MP3.</summary>
     /// <param name="query">Query parameters.</param>
+    /// <param name="batchProcessedSeries">Active batch-processed series tracker dictionary.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>An operation result object.</returns>
-    public async Task<ThemeMp3OperationResult> ProcessSingleAsync(AnimeThemesMp3Query query, CancellationToken ct)
+    public async Task<ThemeMp3OperationResult> ProcessSingleAsync(AnimeThemesMp3Query query, ConcurrentDictionary<int, byte>? batchProcessedSeries, CancellationToken ct)
     {
-        var (error, data) = PrepareContext(query);
+        var (error, data) = PrepareContext(query, batchProcessedSeries);
         if (error != null)
             return error;
         var (folder, themePath, videoFile, series) = data!.Value;
@@ -318,8 +313,12 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
 
     /// <summary>Validates the directory and resolves the Shoko series for the request.</summary>
     /// <param name="q">The query parameters of the request.</param>
+    /// <param name="batchProcessedSeries">Active batch-processed series tracker dictionary.</param>
     /// <returns>A tuple containing either an error operation result, or resolved context metadata (folder path, target file, and series reference).</returns>
-    private (ThemeMp3OperationResult? Error, (string Folder, string ThemePath, IVideoFile VideoFile, IShokoSeries Series)? Data) PrepareContext(AnimeThemesMp3Query q)
+    private (ThemeMp3OperationResult? Error, (string Folder, string ThemePath, IVideoFile VideoFile, IShokoSeries Series)? Data) PrepareContext(
+        AnimeThemesMp3Query q,
+        ConcurrentDictionary<int, byte>? batchProcessedSeries
+    )
     {
         if (string.IsNullOrWhiteSpace(q.Path))
             return (new("", "error", "Path is required."), null);
@@ -335,11 +334,9 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         if (isVfsPath)
             return (new(folder, "error", $"Cannot generate Theme.mp3 inside the VFS directory '{vfsRoot}'. Target your physical import folder instead."), null);
 
-        string themePath = Path.Combine(folder, "Theme.mp3");
-        if (!q.Force && File.Exists(themePath))
-            return (new(folder, "skipped", "Theme.mp3 already exists."), null);
+        // Lazily scan subfolders recursively to find the first video file while ignoring VFS and AnimeThemes system directories
+        string? vid = Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories).FirstOrDefault(f => AnimeThemesHelper.VideoFileExtensions.Contains(Path.GetExtension(f)) && !VfsShared.IsPathIgnored(f));
 
-        string? vid = Directory.EnumerateFiles(folder).FirstOrDefault(f => AnimeThemesHelper.VideoFileExtensions.Contains(Path.GetExtension(f)));
         if (vid == null)
         {
             s_logger.Debug("AnimeThemes MP3: No recognized video files in folder -> {0}", folder);
@@ -354,6 +351,14 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
             s_logger.Warn("AnimeThemes MP3: Series lookup failed for video {0} in {1}", vid, folder);
             return (new(folder, "error", vf == null ? "Video not recognized." : "Series lookup failed."), null);
         }
+
+        // Prevent duplicate processing of the same series during a batch run
+        if (batchProcessedSeries != null && !batchProcessedSeries.TryAdd(s.ID, 0))
+            return (new(folder, "skipped", "Theme already processed for this series in another directory."), null);
+
+        string themePath = Path.Combine(folder, "Theme.mp3");
+        if (!q.Force && File.Exists(themePath))
+            return (new(folder, "skipped", "Theme.mp3 already exists."), null);
 
         s_logger.Debug("AnimeThemes MP3: Folder {0} maps to series '{1}' (AniDB: {2})", folder, s.PreferredTitle?.Value, s.AnidbAnimeID);
         return (null, (folder, themePath, vf!, s));
