@@ -189,6 +189,16 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
             return new ThemeMp3BatchResult(root, [new(root, "error", "Batch root not found.")], 0, 0, 1);
         }
 
+        string vfsRoot = VfsShared.ResolveRootFolderName();
+        bool isVfsPath = root.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries).Contains(vfsRoot, StringComparer.OrdinalIgnoreCase);
+
+        if (isVfsPath)
+        {
+            string msg = $"Cannot execute batch generation inside the VFS directory '{vfsRoot}'. Target your physical import root instead.";
+            s_logger.Warn("AnimeThemes MP3: {0}", msg);
+            return new ThemeMp3BatchResult(root, [new(root, "error", msg)], 0, 0, 1);
+        }
+
         // Season Filter Validation: If provided, the format must be valid or the entire batch operation aborts.
         if (!string.IsNullOrWhiteSpace(query.Season) && GetSeasonRange(query.Season) == null)
         {
@@ -318,6 +328,12 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         s_logger.Debug("AnimeThemes MP3: Preparing context for folder -> {0}", folder);
         if (!Directory.Exists(folder))
             return (new(folder, "error", "Folder not found."), null);
+
+        string vfsRoot = VfsShared.ResolveRootFolderName();
+        bool isVfsPath = folder.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries).Contains(vfsRoot, StringComparer.OrdinalIgnoreCase);
+
+        if (isVfsPath)
+            return (new(folder, "error", $"Cannot generate Theme.mp3 inside the VFS directory '{vfsRoot}'. Target your physical import folder instead."), null);
 
         string themePath = Path.Combine(folder, "Theme.mp3");
         if (!q.Force && File.Exists(themePath))
