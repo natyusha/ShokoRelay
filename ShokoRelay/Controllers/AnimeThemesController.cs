@@ -139,7 +139,7 @@ public class AnimeThemesController(
 
         try
         {
-            var result = await animeThemesMp3Generator.ProcessSingleAsync(query, CancellationToken.None).ConfigureAwait(false);
+            var result = await animeThemesMp3Generator.ProcessSingleAsync(query, null, CancellationToken.None).ConfigureAwait(false);
             if (result.Status == "ok" && !string.IsNullOrWhiteSpace(result.Folder))
                 animeThemesMp3Generator.AddToThemeMp3Cache(result.Folder);
             return result.Status == "error" ? BadRequest(new RelayResponse<object>(Status: "error", Message: result.Message, Data: result)) : Ok(new RelayResponse<ThemeMp3OperationResult>(Data: result));
