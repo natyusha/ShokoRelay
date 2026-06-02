@@ -30,8 +30,8 @@ Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File Sy
 
 #### Setup
 
-- Once the Server has loaded navigate to Shoko Relay's dashboard at the following URL:
-  - `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/dashboard`
+- Once the Server has loaded navigate to `Settings` in Shoko's WebUI and click the "Dashboard" button under `Plugins > Shoko Relay`
+  - Shoko Relay's dashboard is also available at the following URL: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/dashboard`
 - **Mandatory:**
   - Click the `Generate VFS` button in the "Shoko: VFS" section to initialize your collection
     - First time generation may take several minutes to complete with a large library

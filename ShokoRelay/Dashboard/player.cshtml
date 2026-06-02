@@ -54,6 +54,10 @@
           </div>
           <div class="ui-bottom-row">
             <div class="ui-left">
+              <button id="video-toggle" class="ui-btn" title="Toggle Video" type="button">
+                <svg class="icon-svg v-on"><use href="img/icons.svg#video"></use></svg>
+                <svg class="icon-svg v-off"><use href="img/icons.svg#video-off"></use></svg>
+              </button>
               <span id="time-display">0:00 / 0:00</span>
             </div>
             <div class="ui-right">
@@ -91,7 +95,7 @@
     <!-- #endregion -->
 
     <!--#region MARK: Help Modal
-    -->
+  -->
     <div id="player-help-modal" class="modal-overlay" aria-hidden="true" role="dialog" aria-modal="true">
       <div class="modal help" role="document">
         <header>Player Help</header>
@@ -108,6 +112,7 @@
                 <li><kbd>;</kbd><small>Prev Playback Mode</small></li>
                 <li><kbd>↓</kbd><small>Volume Down</small></li>
                 <li><kbd>M</kbd><small>Toggle Mute</small></li>
+                <li><kbd>V</kbd><small>Toggle Video</small></li>
                 <li><kbd>G</kbd><small>Locate in Tree</small></li>
                 <li><kbd>?</kbd><small>Toggle Help</small></li>
               </ul>
@@ -120,6 +125,7 @@
                 <li><kbd>'</kbd><small>Next Playback Mode</small></li>
                 <li><kbd>↑</kbd><small>Volume Up</small></li>
                 <li><kbd>F</kbd><small>Toggle Fullscreen</small></li>
+                <li><kbd>R</kbd><small>Restart Theme</small></li>
                 <li><kbd>H</kbd><small>Toggle Favourite</small></li>
                 <li><kbd>Q</kbd><small>Close Session</small></li>
               </ul>

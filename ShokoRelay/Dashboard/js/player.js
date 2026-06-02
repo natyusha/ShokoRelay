@@ -13,6 +13,7 @@
   const playerMuteBtn = el("volume-icon");
   const playerContainer = el("video").parentElement;
   const playerVideo = el("video");
+  const playerVideoBtn = el("video-toggle");
 
   // DOM Elements - Navigation & Search
   const playerTree = el("tree");
@@ -71,6 +72,17 @@
     clearTimeout(idleTimer);
     if (!e.target.closest(".ui-btn, #player-progress-track")) idleTimer = setTimeout(() => playerContainer.classList.add("idle"), 2000);
   };
+
+  /** Toggles the visibility of the video element to save system resources in audio-only mode. */
+  function toggleVideo() {
+    if (!playerVideo) return;
+    const currentState = playerVideoBtn.getAttribute("data-state") || "on";
+    const newState = currentState === "on" ? "off" : "on";
+    playerVideoBtn.setAttribute("data-state", newState);
+    playerVideoBtn.title = newState === "on" ? "Turn Video Off" : "Turn Video On";
+    playerContainer.classList.toggle("video-off", newState === "off");
+    localStorage.setItem("player-video-state", newState);
+  }
 
   /**
    * Converts a numeric time in seconds to a human-readable M:SS format.
@@ -614,33 +626,50 @@
     playerLocateBtn.onclick = locateCurrentInTree;
     helpOpenBtn.onclick = toggleHelpModal;
 
+    if (playerVideoBtn) {
+      const savedVideoState = localStorage.getItem("player-video-state") || "on";
+      playerVideoBtn.setAttribute("data-state", savedVideoState);
+      playerVideoBtn.title = savedVideoState === "on" ? "Turn Video Off" : "Turn Video On";
+      playerContainer.classList.toggle("video-off", savedVideoState === "off");
+      playerVideoBtn.onclick = (e) => {
+        e.stopPropagation();
+        toggleVideo();
+      };
+    }
+
     window.addEventListener("keydown", (e) => {
       if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA") return;
-      const handledKeys = [" ", "k", "K", "'", ";", ",", ".", "?", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowUp", "b", "B", "f", "F", "q", "Q", "g", "G", "h", "H", "j", "J", "l", "L", "m", "M", "n", "N"];
+      // prettier-ignore
+      const handledKeys = [
+        " ", "k", "K", "ArrowLeft", "ArrowRight", "j", "J", "l", "L", ",", ".", "b", "B", "n", "N", ";", "'",
+        "ArrowDown", "ArrowUp", "m", "M", "f", "F", "v", "V", "r", "R", "g", "G", "h", "H", "?", "q", "Q"
+      ];
       if (!handledKeys.includes(e.key)) return;
       e.preventDefault();
       const isShuffle = playerModeBtn?.getAttribute("data-mode") === "shuffle";
       // prettier-ignore
       switch (e.key) {
         case " ": case "k": case "K": if (playerVideo.src) { if (playerVideo.ended) { playerVideo.currentTime = 0; playerVideo.play(); } else { playerVideo.paused ? playerVideo.play() : playerVideo.pause(); } } else playMove(isShuffle, 1); break;
-        case "n": case "N": playMove(isShuffle, 1); break;
-        case "b": case "B": playMove(isShuffle, -1); break;
-        case "'": updateMode(1); break;
-        case ";": updateMode(-1); break;
-        case ".": if (playerVideo.src) { playerVideo.pause(); playerVideo.currentTime = Math.min(playerVideo.duration, playerVideo.currentTime + 1 / 24); } break;
-        case ",": if (playerVideo.src) { playerVideo.pause(); playerVideo.currentTime = Math.max(0, playerVideo.currentTime - 1 / 24); } break;
-        case "ArrowRight": if (playerVideo.src) { playerVideo.currentTime += 5; syncProgressUI(); } break;
         case "ArrowLeft": if (playerVideo.src) { playerVideo.currentTime -= 5; syncProgressUI(); } break;
-        case "l": case "L": if (playerVideo.src) { playerVideo.currentTime += 10; syncProgressUI(); } break;
+        case "ArrowRight": if (playerVideo.src) { playerVideo.currentTime += 5; syncProgressUI(); } break;
         case "j": case "J": if (playerVideo.src) { playerVideo.currentTime -= 10; syncProgressUI(); } break;
-        case "m": case "M": if (playerVideo.src) playerVideo.muted = !playerVideo.muted; break;
-        case "ArrowUp": playerVideo.volume = Math.min(1, playerVideo.volume + 0.1); break;
+        case "l": case "L": if (playerVideo.src) { playerVideo.currentTime += 10; syncProgressUI(); } break;
+        case ",": if (playerVideo.src) { playerVideo.pause(); playerVideo.currentTime = Math.max(0, playerVideo.currentTime - 1 / 24); } break;
+        case ".": if (playerVideo.src) { playerVideo.pause(); playerVideo.currentTime = Math.min(playerVideo.duration, playerVideo.currentTime + 1 / 24); } break;
+        case "b": case "B": playMove(isShuffle, -1); break;
+        case "n": case "N": playMove(isShuffle, 1); break;
+        case ";": updateMode(-1); break;
+        case "'": updateMode(1); break;
         case "ArrowDown": playerVideo.volume = Math.max(0, playerVideo.volume - 0.1); break;
+        case "ArrowUp": playerVideo.volume = Math.min(1, playerVideo.volume + 0.1); break;
+        case "m": case "M": if (playerVideo.src) playerVideo.muted = !playerVideo.muted; break;
         case "f": case "F": toggleFullscreen(); break;
-        case "q": case "Q": playerCloseBtn?.click(); break;
+        case "v": case "V": toggleVideo(); break;
+        case "r": case "R": if (playerVideo.src) { playerVideo.currentTime = 0; playerVideo.play().catch(() => {}); } break;
         case "g": case "G": locateCurrentInTree(); break;
         case "h": case "H": const hItem = webmTreeData.find((i) => i.path === currentWebmPath); if (hItem) toggleFavourite(hItem.videoId); break;
         case "?": toggleHelpModal(); break;
+        case "q": case "Q": playerCloseBtn?.click(); break;
       }
     });
 

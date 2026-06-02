@@ -13,6 +13,9 @@
   height: 100%;
   object-fit: contain;
 }
+#player .video-container.video-off video {
+  visibility: hidden;
+}
 #controls {
   bottom: -56px;
 }
@@ -194,11 +197,14 @@
 #volume-text {
   flex-shrink: 0;
 }
+#video-toggle[data-state="off"] .v-on,
+#video-toggle .v-off,
 #fullscreen[data-state="fullscreen"] .fs-enter,
 #fullscreen .fs-exit,
 #volume-icon .icon-svg {
   display: none;
 }
+#video-toggle[data-state="off"] .v-off,
 #fullscreen[data-state="fullscreen"] .fs-exit,
 .video-container[data-volume-level="high"] .v-high,
 .video-container[data-volume-level="med"] .v-med,

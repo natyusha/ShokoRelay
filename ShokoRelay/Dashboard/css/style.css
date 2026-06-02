@@ -52,9 +52,6 @@
     transform: rotate(360deg);
   }
 }
-html {
-  scrollbar-gutter: stable;
-}
 body {
   margin: 11px;
   background: var(--bg-color);
