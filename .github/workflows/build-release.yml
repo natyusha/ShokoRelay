@@ -3,7 +3,7 @@ run-name: "${{ github.event_name == 'workflow_dispatch' && format('Manual Build:
 
 on:
   release:
-    types: [published]
+    types: [published, edited]
   workflow_dispatch:
     inputs:
       tag_name:
@@ -16,6 +16,7 @@ permissions:
 jobs:
   publish:
     name: Build & attach ${{ matrix.rid }}
+    if: github.event.action != 'edited'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -120,8 +121,11 @@ jobs:
   update-manifest:
     name: Update plugin manifest
     needs: [publish]
-    # Only run the manifest generator if the build was triggered by a release or a tag dispatch
-    if: startsWith(github.event.inputs.tag_name, 'v') || github.event_name == 'release'
+    # Run if triggered by release (published/edited) or tag dispatch. Allow execution if publish was skipped (e.g. on edited event).
+    if: |
+      always() &&
+      (needs.publish.result == 'success' || needs.publish.result == 'skipped') &&
+      (startsWith(github.event.inputs.tag_name, 'v') || github.event_name == 'release')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -136,10 +140,18 @@ jobs:
           VERSION="${TAG#v}"
           SOURCE_REVISION=$(git rev-list -n 1 "$TAG")
 
-          # Fetch release metadata from API to ensure accuracy regardless of trigger type
-          RELEASE_DATA=$(gh release view "$TAG" --repo "${{ github.repository }}" --json publishedAt,isPrerelease)
+          # Extract Shoko.Abstractions version dynamically from csproj
+          ABSTRACTION_VERSION=$(grep -oP 'PackageReference Include="Shoko\.Abstractions" Version="\K[^"]+' ShokoRelay/ShokoRelay.csproj | head -1)
+          if [ -z "$ABSTRACTION_VERSION" ]; then
+            echo "Error: Missing Shoko.Abstractions version in ShokoRelay.csproj"
+            exit 1
+          fi
+
+          # Fetch release metadata from API (including the body for release_notes)
+          RELEASE_DATA=$(gh release view "$TAG" --repo "${{ github.repository }}" --json publishedAt,isPrerelease,body)
           RELEASED_AT=$(echo "$RELEASE_DATA" | jq -r .publishedAt)
           IS_PRERELEASE=$(echo "$RELEASE_DATA" | jq -r .isPrerelease)
+          RELEASE_NOTES=$(echo "$RELEASE_DATA" | jq -r .body)
           CHANNEL=$([[ "$IS_PRERELEASE" == "true" ]] && echo "Dev" || echo "Stable")
 
           # Download all release assets
@@ -154,7 +166,7 @@ jobs:
             URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${ZIP}"
             ARCHIVE_ENTRY=$(jq -n \
               --arg runtime "$RID" \
-              --arg abstraction "6.0.0" \
+              --arg abstraction "$ABSTRACTION_VERSION" \
               --arg url "$URL" \
               --arg checksum "$CHECKSUM" \
               '{runtime: $runtime, abstraction: $abstraction, url: $url, checksum: $checksum}')
@@ -167,12 +179,19 @@ jobs:
             --arg source_revision "$SOURCE_REVISION" \
             --arg released_at "$RELEASED_AT" \
             --arg channel "$CHANNEL" \
+            --arg release_notes "$RELEASE_NOTES" \
             --argjson archives "$ARCHIVES_JSON" \
-            '{version: $version, tag: $tag, source_revision: $source_revision, released_at: $released_at, channel: $channel, release_notes: null, archives: $archives}')
+            '{version: $version, tag: $tag, source_revision: $source_revision, released_at: $released_at, channel: $channel, release_notes: $release_notes, archives: $archives}')
 
           jq --argjson release "$RELEASE_ENTRY" '
             .releases |= [ $release ] + (. | map(select(.version != $release.version)))
           ' manifest.json > manifest.json.tmp && mv manifest.json.tmp manifest.json
+
+          # Exit cleanly without committing if the manifest hasn't actually changed
+          if git diff --quiet manifest.json; then
+            echo "manifest.json unchanged, skipping commit"
+            exit 0
+          fi
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
