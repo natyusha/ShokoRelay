@@ -62,6 +62,27 @@ public class AnimeThemesApi(HttpClient? httpClient = null)
         return await GetJsonAsync<ThemeWithAudioResponse>(url, ct);
     }
 
+    /// <summary>Fetch a paginated list of anime matching specific filters for bulk WebM downloads.</summary>
+    /// <param name="year">Optional broadcast year filter.</param>
+    /// <param name="season">Optional broadcast season filter.</param>
+    /// <param name="name">Optional anime name filter.</param>
+    /// <param name="page">The current pagination page.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A <see cref="PagedAnimeResponse"/> containing a page of anime results.</returns>
+    public async Task<PagedAnimeResponse?> FetchAnimePageAsync(int? year, string? season, string? name, int page, CancellationToken ct)
+    {
+        var query = new List<string> { $"page[number]={page}", "include=animethemes.song" };
+        if (year.HasValue)
+            query.Add($"filter[anime][year]={year.Value}");
+        if (!string.IsNullOrWhiteSpace(season))
+            query.Add($"filter[anime][season]={Uri.EscapeDataString(season)}");
+        if (!string.IsNullOrWhiteSpace(name))
+            query.Add($"q={Uri.EscapeDataString(name)}");
+
+        string url = $"{AnimeThemesHelper.AtApiBase}/anime?{string.Join("&", query)}";
+        return await GetJsonAsync<PagedAnimeResponse>(url, ct);
+    }
+
     #endregion
 
     #region Internal Logic
@@ -108,6 +129,23 @@ public class AnimeThemesApi(HttpClient? httpClient = null)
     #endregion
 
     #region Data Models
+
+    /// <summary>Response wrapper for a paged anime list request.</summary>
+    /// <param name="Anime">List of anime entries.</param>
+    /// <param name="Links">Pagination links.</param>
+    public sealed record PagedAnimeResponse(List<AnimeThemeAnime>? Anime, PagedLinks? Links);
+
+    /// <summary>Pagination links for AnimeThemes API.</summary>
+    /// <param name="Next">URL to the next page of results.</param>
+    public sealed record PagedLinks(string? Next);
+
+    /// <summary>Anime entity containing themes.</summary>
+    /// <param name="Id">Anime identifier.</param>
+    /// <param name="Name">Anime title.</param>
+    /// <param name="Season">Airing season.</param>
+    /// <param name="Year">Airing year.</param>
+    /// <param name="Animethemes">Associated themes.</param>
+    public sealed record AnimeThemeAnime(int Id, string? Name, string? Season, int? Year, List<AnimeTheme>? Animethemes);
 
     /// <summary>Response wrapper for a video metadata request.</summary>
     /// <param name="Video">The video metadata entry.</param>
@@ -193,8 +231,10 @@ public class AnimeThemesApi(HttpClient? httpClient = null)
 
     /// <summary>Entry representing a video and its audio link within a theme.</summary>
     /// <param name="Id">Video identifier.</param>
+    /// <param name="Basename">The original physical filename of the video.</param>
+    /// <param name="Link">The direct video resource URL.</param>
     /// <param name="Audio">Associated audio link.</param>
-    public sealed record ThemeVideoEntry(int Id, AudioLink? Audio);
+    public sealed record ThemeVideoEntry(int Id, string? Basename, string? Link, AudioLink? Audio);
 
     /// <summary>Response wrapper for an anime theme list request.</summary>
     /// <param name="Anime">List of anime entries.</param>
@@ -215,7 +255,7 @@ public class AnimeThemesApi(HttpClient? httpClient = null)
     /// <param name="Anime">List of anime entries with resource mappings.</param>
     public sealed record AnimeResourceResponse(List<AnimeResourceEntry>? Anime);
 
-    /// <summary>Entry containing resource links and seasonal seasonal metadata for an anime.</summary>
+    /// <summary>Entry containing resource links and seasonal metadata for an anime.</summary>
     /// <param name="Resources">External resource items.</param>
     /// <param name="Season">Airing season.</param>
     /// <param name="Year">Airing year.</param>

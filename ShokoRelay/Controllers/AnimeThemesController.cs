@@ -16,7 +16,8 @@ public class AnimeThemesController(
     IMetadataService metadataService,
     PlexClient plexLibrary,
     AnimeThemesMp3Generator animeThemesMp3Generator,
-    AnimeThemesMapping animeThemesMapping
+    AnimeThemesMapping animeThemesMapping,
+    AnimeThemesWebmDownloader webmDownloader
 ) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
 {
     #region VFS Mapping / Build
@@ -194,7 +195,7 @@ public class AnimeThemesController(
 
     #endregion
 
-    #region Player / Favourites
+    #region WebM Player
 
     /// <summary>Returns the hierarchical tree of WebM files for the standalone player.</summary>
     /// <returns>A JSON object containing the hierarchical theme list.</returns>
@@ -336,6 +337,27 @@ public class AnimeThemesController(
         {
             return StatusCode(500, new RelayResponse<object>(Status: "error", Message: ex.Message));
         }
+    }
+
+    /// <summary>Downloads AnimeThemes WebM files directly based on filters.</summary>
+    /// <remarks>Please use the official AnimeThemes archive torrent first before using this endpoint to fill out missing entries.</remarks>
+    /// <param name="query">Filter parameters for downloading.</param>
+    /// <returns>A task representing the result of the download operation.</returns>
+    [HttpPost("animethemes/webm/download")]
+    public async Task<IActionResult> DownloadAnimeThemesWebm([FromQuery] AnimeThemesWebmQuery query)
+    {
+        bool hasYear = query.Year.HasValue;
+        bool hasSeason = !string.IsNullOrWhiteSpace(query.Season);
+
+        return hasYear != hasSeason ? BadRequest(new RelayResponse<object>(Status: "error", Message: "Year and Season must both be provided together when filtering by date."))
+            : string.IsNullOrWhiteSpace(query.Name) && !hasYear ? BadRequest(new RelayResponse<object>(Status: "error", Message: "At least one filter (Name or Year + Season) is required."))
+            : await ExecuteTrackedTaskAsync(
+                    ShokoRelayConstants.TaskAtWebmDownload,
+                    ShokoRelayConstants.LogAtWebmDownload,
+                    LogHelper.BuildWebmDownloadReport,
+                    () => webmDownloader.DownloadAsync(query, CancellationToken.None)
+                )
+                .ConfigureAwait(false);
     }
 
     #endregion

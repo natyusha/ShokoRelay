@@ -297,6 +297,20 @@ public static class LogHelper
         BuildReport(sb, "AnimeThemes: MP3 Batch Report", stats, "Item Details:", items);
     }
 
+    /// <summary>Build the report content for AnimeThemes WebM downloads.</summary>
+    /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
+    /// <param name="result">Download result data.</param>
+    public static void BuildWebmDownloadReport(StringBuilder sb, WebmDownloadResult result)
+    {
+        var stats = new Dictionary<string, object>
+        {
+            ["Downloaded"] = result.Downloaded,
+            ["Skipped"] = result.Skipped,
+            ["Errors"] = result.Errors,
+        };
+        BuildReport(sb, "AnimeThemes: WebM Download Report", stats, "Messages:", result.Messages);
+    }
+
     /// <summary>Build the report content for source link processing.</summary>
     /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
     /// <param name="count">Number of operations completed.</param>

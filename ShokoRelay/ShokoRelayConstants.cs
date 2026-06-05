@@ -113,6 +113,9 @@ public static class ShokoRelayConstants
     /// <summary>Task name for generating and applying series Theme.mp3 files.</summary>
     public const string TaskAtMp3Build = "at-mp3-build";
 
+    /// <summary>Task name for downloading WebM files directly.</summary>
+    public const string TaskAtWebmDownload = "at-webm-download";
+
     /// <summary>Task name for processing manual source folder symlinks.</summary>
     public const string TaskMapSymlinks = "shoko-map-symlinks";
 
@@ -152,6 +155,9 @@ public static class ShokoRelayConstants
 
     /// <summary>Log filename for AnimeThemes MP3 generation reports.</summary>
     public const string LogAtMp3 = "at-mp3-report.log";
+
+    /// <summary>Log filename for AnimeThemes WebM download reports.</summary>
+    public const string LogAtWebmDownload = "at-webm-download-report.log";
 
     /// <summary>Log filename for manual source link processing reports.</summary>
     public const string LogMapSymlinks = "map-symlinks-report.log";
