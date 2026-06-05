@@ -1,6 +1,7 @@
 using System.Text;
 using Microsoft.AspNetCore.Mvc;
 using Shoko.Abstractions.Metadata.Containers;
+using Shoko.Abstractions.Video.Services;
 using ShokoRelay.AnimeThemes;
 using ShokoRelay.Vfs;
 using IoFile = System.IO.File;
@@ -17,7 +18,8 @@ public class AnimeThemesController(
     PlexClient plexLibrary,
     AnimeThemesMp3Generator animeThemesMp3Generator,
     AnimeThemesMapping animeThemesMapping,
-    AnimeThemesWebmDownloader webmDownloader
+    AnimeThemesWebmDownloader webmDownloader,
+    IVideoService videoService
 ) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
 {
     #region Setup
@@ -193,84 +195,154 @@ public class AnimeThemesController(
 
     #endregion
 
-    #region WebM Player / Grab
+    #region WebM & Player
 
     /// <summary>Returns the hierarchical tree of WebM files for the standalone player.</summary>
     /// <returns>A JSON object containing the hierarchical theme list.</returns>
     [HttpGet("animethemes/webm/tree")]
     public IActionResult AnimeThemesWebmTree()
     {
-        string cachePath = Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileAtWebmCache);
-        if (!IoFile.Exists(cachePath))
-            return Ok(new { items = Array.Empty<object>() });
-
-        string[] lines;
-        try
-        {
-            lines = [.. IoFile.ReadAllLines(cachePath).Where(l => !string.IsNullOrWhiteSpace(l))];
-        }
-        catch
-        {
-            return Ok(new { items = Array.Empty<object>() });
-        }
-
         var items = new List<object>();
         var seriesTitleCache = new Dictionary<int, (string GroupTitle, string SeriesTitle, int AniDbId)>();
 
-        foreach (var line in lines)
+        // Load VFS WebM Cache (Existing Anime)
+        string cachePath = Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileAtWebmCache);
+        if (IoFile.Exists(cachePath))
         {
-            var pipeParts = line.Split('|');
-            string pathRaw = pipeParts[0];
-            int videoId = (pipeParts.Length > 1 && int.TryParse(pipeParts[1], out var vid)) ? vid : 0;
-            int flags = (pipeParts.Length > 2 && int.TryParse(pipeParts[2], out var f)) ? f : 0;
-
-            var segments = pathRaw.Replace('\\', '/').Trim().Split('/', StringSplitOptions.RemoveEmptyEntries);
-            int? seriesId = null;
-            for (int i = 0; i < segments.Length; i++)
-                if (int.TryParse(segments[i], out int sid))
-                {
-                    seriesId = sid;
-                    break;
-                }
-
-            if (!seriesId.HasValue)
-                continue;
-
-            if (!seriesTitleCache.TryGetValue(seriesId.Value, out var info))
+            try
             {
-                var series = MetadataService.GetShokoSeriesByID(seriesId.Value);
-                if (series != null)
+                var lines = IoFile.ReadAllLines(cachePath).Where(l => !string.IsNullOrWhiteSpace(l));
+                foreach (var line in lines)
                 {
-                    var (displayTitle, _, _) = TextHelper.ResolveFullSeriesTitles(series);
-                    var group = MetadataService.GetShokoGroupByID(series.TopLevelGroupID);
-                    info = (group is IWithTitles titled && !string.IsNullOrWhiteSpace(titled.PreferredTitle?.Value) ? titled.PreferredTitle.Value : displayTitle, displayTitle, series.AnidbAnimeID);
-                }
-                else
-                    info = ($"Series {seriesId.Value}", $"Series {seriesId.Value}", 0);
-                seriesTitleCache[seriesId.Value] = info;
-            }
+                    var pipeParts = line.Split('|');
+                    string pathRaw = pipeParts[0];
+                    int videoId = (pipeParts.Length > 1 && int.TryParse(pipeParts[1], out var vid)) ? vid : 0;
+                    int flags = (pipeParts.Length > 2 && int.TryParse(pipeParts[2], out var f)) ? f : 0;
 
-            items.Add(
-                new
-                {
-                    group = info.GroupTitle,
-                    series = info.SeriesTitle,
-                    seriesId = seriesId.Value,
-                    anidbId = info.AniDbId,
-                    file = Path.GetFileNameWithoutExtension(segments[^1]),
-                    path = pathRaw.Replace('\\', '/').Trim(),
-                    videoId,
-                    nc = (flags & 1) != 0,
-                    lyrics = (flags & 2) != 0,
-                    subs = (flags & 4) != 0,
-                    uncen = (flags & 8) != 0,
-                    nsfw = (flags & 16) != 0,
-                    spoiler = (flags & 32) != 0,
-                    trans = (flags & 64) != 0,
-                    over = (flags & 128) != 0,
+                    var segments = pathRaw.Replace('\\', '/').Trim().Split('/', StringSplitOptions.RemoveEmptyEntries);
+                    int? seriesId = null;
+                    for (int i = 0; i < segments.Length; i++)
+                        if (int.TryParse(segments[i], out int sid))
+                        {
+                            seriesId = sid;
+                            break;
+                        }
+
+                    if (!seriesId.HasValue)
+                        continue;
+
+                    if (!seriesTitleCache.TryGetValue(seriesId.Value, out var info))
+                    {
+                        var series = MetadataService.GetShokoSeriesByID(seriesId.Value);
+                        if (series != null)
+                        {
+                            var (displayTitle, _, _) = TextHelper.ResolveFullSeriesTitles(series);
+                            var group = MetadataService.GetShokoGroupByID(series.TopLevelGroupID);
+                            info = (group is IWithTitles titled && !string.IsNullOrWhiteSpace(titled.PreferredTitle?.Value) ? titled.PreferredTitle.Value : displayTitle, displayTitle, series.AnidbAnimeID);
+                        }
+                        else
+                            info = ($"Series {seriesId.Value}", $"Series {seriesId.Value}", 0);
+                        seriesTitleCache[seriesId.Value] = info;
+                    }
+
+                    items.Add(
+                        new
+                        {
+                            group = info.GroupTitle,
+                            series = info.SeriesTitle,
+                            seriesId = seriesId.Value,
+                            anidbId = info.AniDbId,
+                            file = Path.GetFileNameWithoutExtension(segments[^1]),
+                            path = pathRaw.Replace('\\', '/').Trim(),
+                            videoId,
+                            nc = (flags & 1) != 0,
+                            lyrics = (flags & 2) != 0,
+                            subs = (flags & 4) != 0,
+                            uncen = (flags & 8) != 0,
+                            nsfw = (flags & 16) != 0,
+                            spoiler = (flags & 32) != 0,
+                            trans = (flags & 64) != 0,
+                            over = (flags & 128) != 0,
+                        }
+                    );
                 }
-            );
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "AnimeThemes: Failed to parse webm cache");
+            }
         }
+
+        // Load Mapping CSV (Missing Anime)
+        string mapPath = Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileAtMapping);
+        if (IoFile.Exists(mapPath))
+        {
+            try
+            {
+                var managedFolders = videoService.GetAllManagedFolders()?.Where(f => !f.DropFolderType.HasFlag(Shoko.Abstractions.Video.Enums.DropFolderType.Source)).Select(f => f.Path).ToList() ?? [];
+                string themeRootName = VfsShared.ResolveAnimeThemesFolderName();
+                var entries = AnimeThemesHelper.ParseMappingContent(IoFile.ReadAllText(mapPath));
+
+                // Pre-calculate a fast lookup hashset for series that physically exist in the local collection
+                var localSeriesWithFiles = new HashSet<int>(MetadataService.GetAllShokoSeries()?.Where(s => s.Episodes.Any(e => e.VideoList?.Count > 0)).Select(s => s.AnidbAnimeID) ?? []);
+
+                foreach (var entry in entries)
+                {
+                    // Check if anime is NOT in Shoko, or if it is but has no physical files
+                    if (localSeriesWithFiles.Contains(entry.AniDbId))
+                        continue;
+
+                    // Locate the physical file inside the managed !AnimeThemes folders
+                    string? absolutePath = null;
+                    foreach (var mf in managedFolders)
+                    {
+                        if (string.IsNullOrWhiteSpace(mf))
+                            continue;
+                        string candidate = Path.Combine(mf, themeRootName, entry.FilePath.TrimStart('/', '\\').Replace('/', Path.DirectorySeparatorChar));
+                        if (IoFile.Exists(candidate))
+                        {
+                            absolutePath = candidate;
+                            break;
+                        }
+                    }
+
+                    if (absolutePath == null)
+                        continue;
+
+                    // Parse series name gracefully directly from the file basename
+                    string fileName = Path.GetFileNameWithoutExtension(entry.FilePath);
+                    int dashIndex = fileName.LastIndexOf('-');
+                    string extractedName = dashIndex > 0 ? fileName[..dashIndex] : fileName;
+                    string pseudoTitle = $"{extractedName} (AniDB: {entry.AniDbId})";
+
+                    items.Add(
+                        new
+                        {
+                            group = "Missing Anime from Collection",
+                            series = pseudoTitle,
+                            seriesId = 0, // A 0 value automatically hides the [m] link inside the player UI
+                            anidbId = entry.AniDbId,
+                            file = Path.GetFileNameWithoutExtension(absolutePath),
+                            path = absolutePath.Replace('\\', '/').Trim(),
+                            videoId = entry.VideoId,
+                            nc = entry.NC,
+                            lyrics = entry.Lyrics,
+                            subs = entry.Subbed,
+                            uncen = entry.Uncen,
+                            nsfw = entry.NSFW,
+                            spoiler = entry.Spoiler,
+                            trans = entry.Overlap == "Transition",
+                            over = entry.Overlap == "Over",
+                        }
+                    );
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "AnimeThemes: Failed to append missing themes to tree");
+            }
+        }
+
         return Ok(new { items });
     }
 

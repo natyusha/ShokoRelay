@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using NLog;
 using Shoko.Abstractions.Video.Services;
@@ -125,7 +126,10 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                     toProcess.Add((file, rel));
             }
 
-            var messages = new List<string>();
+            s_logger.Info("AnimeThemes: Found {0} total files ({1} cached, {2} pending mapping resolution)...", files.Count, existing.Count, toProcess.Count);
+
+            var errorsList = new ConcurrentBag<string>();
+            var newMappingsList = new ConcurrentBag<string>();
             int errors = 0;
             await Parallel
                 .ForEachAsync(
@@ -138,23 +142,24 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                             var (lookup, idMissing) = await FetchMetadataAsync(Path.GetFileName(item.File), token).ConfigureAwait(false);
                             if (lookup == null)
                             {
-                                lock (messages)
-                                {
-                                    errors++;
-                                    messages.Add(idMissing ? $"AniDB ID missing for {item.Rel}" : $"Missing metadata for {item.Rel}");
-                                }
+                                string errMsg = idMissing ? $"AniDB ID missing for {item.Rel}" : $"Missing metadata for {item.Rel}";
+                                errorsList.Add(errMsg);
+                                s_logger.Warn("AnimeThemes: Failed to map '{0}' -> {1}", item.Rel, idMissing ? "AniDB ID missing" : "Metadata missing");
+                                Interlocked.Increment(ref errors);
                                 return;
                             }
                             lock (entries)
                                 entries.Add(new AnimeThemesMappingEntry(item.Rel, lookup));
+                            string mapMsg = $"Mapped: {item.Rel} -> VideoID: {lookup.VideoId}, AniDB ID: {lookup.AniDbId}";
+                            newMappingsList.Add(mapMsg);
+                            s_logger.Info("AnimeThemes: Mapped '{0}' -> VideoID: {1}, AniDB ID: {2}", item.Rel, lookup.VideoId, lookup.AniDbId);
                         }
                         catch (Exception ex)
                         {
-                            lock (messages)
-                            {
-                                errors++;
-                                messages.Add($"{item.Rel}: {ex.Message}");
-                            }
+                            string errMsg = $"{item.Rel}: {ex.Message}";
+                            errorsList.Add(errMsg);
+                            s_logger.Warn(ex, "AnimeThemes: Exception mapping '{0}' -> {1}", item.Rel, ex.Message);
+                            Interlocked.Increment(ref errors);
                         }
                     }
                 )
@@ -163,7 +168,8 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
             var finalEntries = entries.GroupBy(e => e.FilePath).Select(g => g.First()).ToList();
             await File.WriteAllTextAsync(mapPath, AnimeThemesHelper.SerializeMapping(finalEntries), ct).ConfigureAwait(false);
             s_logger.Info("AnimeThemes: Finished mapping task -> {0} entries written.", finalEntries.Count);
-            return new AnimeThemesMappingBuildResult(mapPath, finalEntries.Count, entries.Count - toProcess.Count, errors, messages);
+            List<string> finalMessages = [.. errorsList.OrderBy(m => m), .. newMappingsList.OrderBy(m => m)];
+            return new AnimeThemesMappingBuildResult(mapPath, finalEntries.Count, entries.Count - toProcess.Count, errors, finalMessages);
         }
         finally
         {

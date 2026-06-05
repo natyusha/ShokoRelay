@@ -684,6 +684,10 @@
             return item;
           })
           .sort((a, b) => {
+            const m = "Missing Anime from Collection";
+            if (a.group === m && b.group !== m) return -1;
+            if (b.group === m && a.group !== m) return 1;
+
             const groupComp = a.group.localeCompare(b.group);
             if (groupComp !== 0) return groupComp;
             const seriesComp = a.series.localeCompare(b.series);
