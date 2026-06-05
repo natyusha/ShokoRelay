@@ -176,6 +176,9 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.vfs-title.tree-italic {
+  font-style: italic;
+}
 #tree summary::marker,
 #tree summary::-webkit-details-marker,
 #tree summary .tree-icon.collapse,

@@ -312,13 +312,12 @@ public class AnimeThemesController(
                     // Parse series name gracefully directly from the file basename
                     string fileName = Path.GetFileNameWithoutExtension(entry.FilePath);
                     int dashIndex = fileName.LastIndexOf('-');
-                    string extractedName = dashIndex > 0 ? fileName[..dashIndex] : fileName;
-                    string pseudoTitle = $"{extractedName} (AniDB: {entry.AniDbId})";
+                    string pseudoTitle = dashIndex > 0 ? fileName[..dashIndex] : fileName;
 
                     items.Add(
                         new
                         {
-                            group = "Missing Anime from Collection",
+                            group = "Missing from Collection",
                             series = pseudoTitle,
                             seriesId = 0, // A 0 value automatically hides the [m] link inside the player UI
                             anidbId = entry.AniDbId,

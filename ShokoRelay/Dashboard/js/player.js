@@ -251,9 +251,10 @@
      * @param {string} name - The display name for the folder.
      * @param {HTMLElement[]} children - The array of child list-item elements.
      * @param {boolean} isOpen - If true, forces children to render immediately.
+     * @param {boolean} [isItalic=false] - Whether to italicize the title text.
      * @returns {HTMLLIElement} The completed folder list item node.
      */
-    const makeNode = (name, children, isOpen) => {
+    const makeNode = (name, children, isOpen, isItalic = false) => {
       const li = document.createElement("li");
       const ul = document.createElement("ul");
       const det = window._sr.createLazyDetails(
@@ -264,6 +265,10 @@
         },
         isOpen,
       );
+      if (isItalic) {
+        const t = det.querySelector(".vfs-title");
+        if (t) t.classList.add("tree-italic");
+      }
       li.appendChild(det);
       return li;
     };
@@ -271,45 +276,50 @@
     const rootUl = document.createElement("ul");
     rootUl.className = "tree";
 
-    [...groups.keys()]
-      .sort((a, b) => a.localeCompare(b))
-      .forEach((gName) => {
-        const sMap = groups.get(gName),
-          sKeys = [...sMap.keys()].sort((a, b) => a.localeCompare(b)),
-          ft = (uiFilter?.value || "").trim();
-        const sNodes = sKeys.map((sName) => {
-          const files = sMap.get(sName).map((f) => {
-            const li = document.createElement("li"),
-              leaf = document.createElement("div"),
-              name = decodeUnicode(f.file);
-            leaf.className = `leaf ${f.path === currentWebmPath ? "active" : ""}`;
-            leaf.dataset.path = f.path;
+    const missingLabel = "Missing from Collection";
+    const sortedGroupNames = [...groups.keys()].sort((a, b) => {
+      if (a === missingLabel && b !== missingLabel) return -1;
+      if (b === missingLabel && a !== missingLabel) return 1;
+      return a.localeCompare(b);
+    });
 
-            const heart = document.createElement("span");
-            heart.className = `fav-icon ${favourites.has(f.videoId) ? "favourited" : ""}`;
-            heart.textContent = "❤";
-            heart.onclick = (e) => {
-              e.stopPropagation();
-              toggleFavourite(f.videoId, heart);
-            };
+    sortedGroupNames.forEach((gName) => {
+      const sMap = groups.get(gName),
+        sKeys = [...sMap.keys()].sort((a, b) => a.localeCompare(b)),
+        ft = (uiFilter?.value || "").trim();
+      const sNodes = sKeys.map((sName) => {
+        const files = sMap.get(sName).map((f) => {
+          const li = document.createElement("li"),
+            leaf = document.createElement("div"),
+            name = decodeUnicode(f.file);
+          leaf.className = `leaf ${f.path === currentWebmPath ? "active" : ""}`;
+          leaf.dataset.path = f.path;
 
-            const text = document.createElement("span");
-            text.textContent = name;
-            text.title = name;
-            text.dataset.tooltipOverflowOnly = "true";
+          const heart = document.createElement("span");
+          heart.className = `fav-icon ${favourites.has(f.videoId) ? "favourited" : ""}`;
+          heart.textContent = "❤";
+          heart.onclick = (e) => {
+            e.stopPropagation();
+            toggleFavourite(f.videoId, heart);
+          };
 
-            leaf.onclick = () => {
-              resetNavigationHistory();
-              playFile(f.path);
-            };
-            leaf.append(heart, text);
-            li.appendChild(leaf);
-            return li;
-          });
-          return makeNode(sName, files, !!ft);
+          const text = document.createElement("span");
+          text.textContent = name;
+          text.title = name;
+          text.dataset.tooltipOverflowOnly = "true";
+
+          leaf.onclick = () => {
+            resetNavigationHistory();
+            playFile(f.path);
+          };
+          leaf.append(heart, text);
+          li.appendChild(leaf);
+          return li;
         });
-        rootUl.appendChild(sKeys.length === 1 ? sNodes[0] : makeNode(gName, sNodes, !!ft));
+        return makeNode(sName, files, !!ft);
       });
+      rootUl.appendChild(sKeys.length === 1 && gName !== missingLabel ? sNodes[0] : makeNode(gName, sNodes, !!ft, gName === missingLabel));
+    });
     playerTree.appendChild(rootUl);
   }
 
@@ -684,7 +694,7 @@
             return item;
           })
           .sort((a, b) => {
-            const m = "Missing Anime from Collection";
+            const m = "Missing from Collection";
             if (a.group === m && b.group !== m) return -1;
             if (b.group === m && a.group !== m) return 1;
 
