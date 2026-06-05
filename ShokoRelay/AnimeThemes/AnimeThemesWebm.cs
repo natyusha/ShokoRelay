@@ -96,28 +96,60 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
 
                         if (!query.Force && existingFiles.Contains(video.Basename))
                         {
+                            s_logger.Info("AnimeThemes WebM: Skipping Downloaded Theme -> {0}...", video.Basename);
                             skipped++;
                             continue;
                         }
 
                         string targetPath = Path.Combine(baseThemePath, yearFolder, seasonFolder, video.Basename);
                         Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
-                        s_logger.Info("AnimeThemes WebM: Downloading {0}...", video.Basename);
+                        s_logger.Info("AnimeThemes WebM: Downloading -> {0}...", video.Basename);
 
-                        using var videoResp = await httpClient.GetAsync(video.Link, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
-                        videoResp.EnsureSuccessStatusCode();
+                        try
+                        {
+                            using var videoResp = await httpClient.GetAsync(video.Link, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+                            videoResp.EnsureSuccessStatusCode();
 
-                        using var fs = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
-                        await videoResp.Content.CopyToAsync(fs, ct).ConfigureAwait(false);
+                            using var fs = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
+                            await videoResp.Content.CopyToAsync(fs, ct).ConfigureAwait(false);
 
-                        existingFiles.Add(video.Basename); // Add to cache to avoid downloading it again if it appears in another anime
-                        downloaded++;
+                            existingFiles.Add(video.Basename); // Add to cache so we don't download it again if it appears in another anime
+                            downloaded++;
+                        }
+                        catch (HttpRequestException ex) when (ex.StatusCode is System.Net.HttpStatusCode.ServiceUnavailable or System.Net.HttpStatusCode.TooManyRequests)
+                        {
+                            s_logger.Warn("AnimeThemes WebM: Rate limited (503/429) on theme ID -> {0}. Waiting 90 seconds before retrying...", theme.Id);
+                            await Task.Delay(TimeSpan.FromSeconds(90), ct).ConfigureAwait(false);
+
+                            try
+                            {
+                                using var retryResp = await httpClient.GetAsync(video.Link, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+                                retryResp.EnsureSuccessStatusCode();
+
+                                using var fs = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
+                                await retryResp.Content.CopyToAsync(fs, ct).ConfigureAwait(false);
+
+                                existingFiles.Add(video.Basename);
+                                downloaded++;
+                            }
+                            catch (Exception retryEx)
+                            {
+                                s_logger.Warn(retryEx, "AnimeThemes WebM: Failed to download theme ID -> {0}", theme.Id);
+                                throw new InvalidOperationException($"Task aborted. Rate limit retry failed for theme ID {theme.Id}: {retryEx.Message}");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            errors++;
+                            messages.Add($"Failed to download theme ID {theme.Id}: {ex.Message}");
+                            s_logger.Warn(ex, "AnimeThemes WebM: Failed to download theme ID -> {0}", theme.Id);
+                        }
                     }
                     catch (Exception ex)
                     {
                         errors++;
-                        messages.Add($"Failed to download theme ID {theme.Id}: {ex.Message}");
-                        s_logger.Warn(ex, "AnimeThemes WebM: Failed to download theme ID {0}", theme.Id);
+                        messages.Add($"Failed to process theme ID {theme.Id}: {ex.Message}");
+                        s_logger.Warn(ex, "AnimeThemes WebM: Failed to process theme ID -> {0}", theme.Id);
                     }
                 }
             }

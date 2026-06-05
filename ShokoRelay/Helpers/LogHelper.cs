@@ -83,7 +83,7 @@ public static class LogHelper
 
     #region Report Builders
 
-    /// <summary>Build the report content for Plex library discovery.</summary>
+    /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskPlexAuthRefresh"/>.</summary>
     /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
     /// <param name="r">List of discovered Plex libraries.</param>
     public static void BuildDiscoveryReport(StringBuilder sb, List<PlexAvailableLibrary> r)
@@ -98,7 +98,7 @@ public static class LogHelper
         }
     }
 
-    /// <summary>Build the report content for <see cref="ShokoRelayConstants.LogPlexCollections"/>.</summary>
+    /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskPlexCollectionsBuild"/>.</summary>
     /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
     /// <param name="r">Build result data.</param>
     public static void BuildCollectionsReport(StringBuilder sb, BuildCollectionsResult r)
@@ -121,7 +121,7 @@ public static class LogHelper
         BuildReport(sb, "Collection Build Report", stats, "Assignments & Errors:", items);
     }
 
-    /// <summary>Build the report content for <see cref="ShokoRelayConstants.LogPlexRatings"/>.</summary>
+    /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskPlexRatingsApply"/>.</summary>
     /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
     /// <param name="result">Rating result data.</param>
     public static void BuildRatingsReport(StringBuilder sb, ApplyRatingsResult result)
@@ -141,7 +141,7 @@ public static class LogHelper
         BuildReport(sb, "Audience Rating Report", stats, "Updates & Errors:", items);
     }
 
-    /// <summary>Build the report content for Plex-generated episode image synchronization.</summary>
+    /// <summary>Build the report content for for <see cref="ShokoRelayConstants.TaskPlexImagesSync"/>.</summary>
     /// <param name="sb">Target builder.</param>
     /// <param name="r">Image sync result data.</param>
     public static void BuildImageSyncReport(StringBuilder sb, ImageSyncResult r)
@@ -156,7 +156,7 @@ public static class LogHelper
         BuildReport(sb, "Plex Image Sync Report", stats, "Errors:", r.ErrorsList);
     }
 
-    /// <summary>Build the report content for <see cref="ShokoRelayConstants.LogVfs"/>.</summary>
+    /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskVfsBuild"/>.</summary>
     /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
     /// <param name="r">Build result data.</param>
     public static void BuildVfsReport(StringBuilder sb, VfsBuildResult r)
@@ -192,7 +192,7 @@ public static class LogHelper
         BuildReport(sb, "VFS Generation Report", stats, "Report Details:", items);
     }
 
-    /// <summary>Build the report content for <see cref="ShokoRelayConstants.LogPurgeMissing"/>.</summary>
+    /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskShokoPurgeMissing"/>.</summary>
     /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
     /// <param name="dryRun">Dry run flag.</param>
     /// <param name="removed">List of removed paths.</param>
@@ -202,7 +202,7 @@ public static class LogHelper
         BuildReport(sb, "Purge Missing Files Report", stats, "Removed Paths:", removed);
     }
 
-    /// <summary>Build the report content for <see cref="ShokoRelayConstants.LogShokoSyncWatched"/>.</summary>
+    /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskShokoSyncWatched"/>.</summary>
     /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
     /// <param name="result">Sync result data.</param>
     /// <param name="dir">Sync direction string.</param>
@@ -237,7 +237,7 @@ public static class LogHelper
         BuildReport(sb, "Sync Watched Report", stats, "Change Details:", items);
     }
 
-    /// <summary>Build the report content for <see cref="ShokoRelayConstants.LogAtVfs"/>.</summary>
+    /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskAtVfsBuild"/>.</summary>
     /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
     /// <param name="result">Build result data.</param>
     /// <param name="filter">Optional comma-separated list of Shoko or AniDB series IDs to filter the operation.</param>
@@ -258,7 +258,7 @@ public static class LogHelper
         BuildReport(sb, "AnimeThemes: VFS Build Report", stats, "Planned Links & Errors:", items);
     }
 
-    /// <summary>Build the report content for <see cref="ShokoRelayConstants.LogAtMap"/>.</summary>
+    /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskAtMapBuild"/>.</summary>
     /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
     /// <param name="result">Map result data.</param>
     public static void BuildAtVfsMapReport(StringBuilder sb, AnimeThemesMappingBuildResult result)
@@ -267,7 +267,7 @@ public static class LogHelper
         BuildReport(sb, "AnimeThemes: Mapping Build Report", stats, "Messages:", result.Messages);
     }
 
-    /// <summary>Build the report content for <see cref="ShokoRelayConstants.LogAtMp3"/>.</summary>
+    /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskAtMp3Build"/>.</summary>
     /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
     /// <param name="result">Batch result data.</param>
     public static void BuildAtMp3Report(StringBuilder sb, ThemeMp3BatchResult result)
@@ -297,7 +297,7 @@ public static class LogHelper
         BuildReport(sb, "AnimeThemes: MP3 Batch Report", stats, "Item Details:", items);
     }
 
-    /// <summary>Build the report content for AnimeThemes WebM downloads.</summary>
+    /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskAtWebmDownload"/>.</summary>
     /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
     /// <param name="result">Download result data.</param>
     public static void BuildWebmDownloadReport(StringBuilder sb, WebmDownloadResult result)
@@ -311,7 +311,7 @@ public static class LogHelper
         BuildReport(sb, "AnimeThemes: WebM Download Report", stats, "Messages:", result.Messages);
     }
 
-    /// <summary>Build the report content for source link processing.</summary>
+    /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskMapSymlinks"/>.</summary>
     /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
     /// <param name="count">Number of operations completed.</param>
     public static void BuildSourceLinkReport(StringBuilder sb, int count)

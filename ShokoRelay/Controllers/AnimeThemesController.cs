@@ -20,6 +20,12 @@ public class AnimeThemesController(
     AnimeThemesWebmDownloader webmDownloader
 ) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
 {
+    #region Setup
+
+    private static readonly SemaphoreSlim s_webmDownloadLock = new(1, 1);
+
+    #endregion
+
     #region VFS Mapping / Build
 
     /// <summary>Applies the anime‑themes mapping file to the directory structure.</summary>
@@ -31,7 +37,6 @@ public class AnimeThemesController(
             ? Task.FromResult(guard)
             : ExecuteTrackedTaskAsync(
                 ShokoRelayConstants.TaskAtVfsBuild,
-                ShokoRelayConstants.LogAtVfs,
                 (sb, r) => LogHelper.BuildAtVfsBuildReport(sb, r, filterIds ?? []),
                 async () =>
                 {
@@ -77,13 +82,7 @@ public class AnimeThemesController(
                 );
         }
 
-        return await ExecuteTrackedTaskAsync(
-                ShokoRelayConstants.TaskAtMapBuild,
-                ShokoRelayConstants.LogAtMap,
-                LogHelper.BuildAtVfsMapReport,
-                () => animeThemesMapping.BuildMappingFileAsync(CancellationToken.None),
-                VfsShared.VfsLock
-            )
+        return await ExecuteTrackedTaskAsync(ShokoRelayConstants.TaskAtMapBuild, LogHelper.BuildAtVfsMapReport, () => animeThemesMapping.BuildMappingFileAsync(CancellationToken.None), VfsShared.VfsLock)
             .ConfigureAwait(false);
     }
 
@@ -120,7 +119,6 @@ public class AnimeThemesController(
         {
             return await ExecuteTrackedTaskAsync(
                     ShokoRelayConstants.TaskAtMp3Build,
-                    ShokoRelayConstants.LogAtMp3,
                     LogHelper.BuildAtMp3Report,
                     async () =>
                     {
@@ -136,7 +134,7 @@ public class AnimeThemesController(
 
         // Single generation does not require a persistent log file, but still uses the VfsLock for safety.
         if (!await VfsShared.VfsLock.WaitAsync(0).ConfigureAwait(false))
-            return Conflict(new RelayResponse<object>(Status: "busy", Message: "A conflicting VFS operation is already in progress."));
+            return Conflict(new RelayResponse<object>(Status: "busy", Message: "A conflicting operation is already in progress. Please wait for it to complete."));
 
         try
         {
@@ -195,7 +193,7 @@ public class AnimeThemesController(
 
     #endregion
 
-    #region WebM Player
+    #region WebM Player / Grab
 
     /// <summary>Returns the hierarchical tree of WebM files for the standalone player.</summary>
     /// <returns>A JSON object containing the hierarchical theme list.</returns>
@@ -340,7 +338,6 @@ public class AnimeThemesController(
     }
 
     /// <summary>Downloads AnimeThemes WebM files directly based on filters.</summary>
-    /// <remarks>Please use the official AnimeThemes archive torrent first before using this endpoint to fill out missing entries.</remarks>
     /// <param name="query">Filter parameters for downloading.</param>
     /// <returns>A task representing the result of the download operation.</returns>
     [HttpPost("animethemes/webm/download")]
@@ -351,12 +348,7 @@ public class AnimeThemesController(
 
         return hasYear != hasSeason ? BadRequest(new RelayResponse<object>(Status: "error", Message: "Year and Season must both be provided together when filtering by date."))
             : string.IsNullOrWhiteSpace(query.Name) && !hasYear ? BadRequest(new RelayResponse<object>(Status: "error", Message: "At least one filter (Name or Year + Season) is required."))
-            : await ExecuteTrackedTaskAsync(
-                    ShokoRelayConstants.TaskAtWebmDownload,
-                    ShokoRelayConstants.LogAtWebmDownload,
-                    LogHelper.BuildWebmDownloadReport,
-                    () => webmDownloader.DownloadAsync(query, CancellationToken.None)
-                )
+            : await ExecuteTrackedTaskAsync(ShokoRelayConstants.TaskAtWebmDownload, LogHelper.BuildWebmDownloadReport, () => webmDownloader.DownloadAsync(query, CancellationToken.None), s_webmDownloadLock)
                 .ConfigureAwait(false);
     }
 

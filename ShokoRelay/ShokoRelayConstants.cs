@@ -120,47 +120,4 @@ public static class ShokoRelayConstants
     public const string TaskMapSymlinks = "shoko-map-symlinks";
 
     #endregion
-
-    #region Log Filenames
-
-    /// <summary>Log filename for Plex library discovery reports.</summary>
-    public const string LogPlexDiscovery = "plex-discovery-report.log";
-
-    /// <summary>Log filename for Plex collection build reports.</summary>
-    public const string LogPlexCollections = "plex-collections-report.log";
-
-    /// <summary>Log filename for Plex rating application reports.</summary>
-    public const string LogPlexRatings = "plex-ratings-report.log";
-
-    /// <summary>Log filename for Plex episode image synchronization reports.</summary>
-    public const string LogPlexImages = "plex-images-report.log";
-
-    /// <summary>Log filename for full Plex automation reports.</summary>
-    public const string LogPlexAutomation = "plex-automation-report.log";
-
-    /// <summary>Log filename for VFS generation reports.</summary>
-    public const string LogVfs = "vfs-report.log";
-
-    /// <summary>Log filename for missing file removal reports.</summary>
-    public const string LogPurgeMissing = "purge-missing-report.log";
-
-    /// <summary>Log filename for watched state synchronization reports.</summary>
-    public const string LogShokoSyncWatched = "sync-watched-report.log";
-
-    /// <summary>Log filename for AnimeThemes VFS application reports.</summary>
-    public const string LogAtVfs = "at-vfs-report.log";
-
-    /// <summary>Log filename for AnimeThemes mapping generation reports.</summary>
-    public const string LogAtMap = "at-map-report.log";
-
-    /// <summary>Log filename for AnimeThemes MP3 generation reports.</summary>
-    public const string LogAtMp3 = "at-mp3-report.log";
-
-    /// <summary>Log filename for AnimeThemes WebM download reports.</summary>
-    public const string LogAtWebmDownload = "at-webm-download-report.log";
-
-    /// <summary>Log filename for manual source link processing reports.</summary>
-    public const string LogMapSymlinks = "map-symlinks-report.log";
-
-    #endregion
 }

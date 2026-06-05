@@ -50,21 +50,20 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
     /// <summary>Executes a background task with full lifecycle tracking, logging, and standardized response formatting. Supports optional concurrency locking.</summary>
     /// <typeparam name="T">The type of the result data.</typeparam>
     /// <param name="taskName">Unique identifier for UI tracking.</param>
-    /// <param name="logName">Filename for the generated report.</param>
     /// <param name="reportBuilder">Logic to generate the text report.</param>
     /// <param name="action">The asynchronous operation to perform.</param>
     /// <param name="semaphore">Optional semaphore to prevent concurrent execution of related tasks.</param>
     /// <returns>A task representing the IActionResult containing the standardized RelayResponse.</returns>
-    protected async Task<IActionResult> ExecuteTrackedTaskAsync<T>(string taskName, string logName, Action<StringBuilder, T> reportBuilder, Func<Task<T>> action, SemaphoreSlim? semaphore = null)
+    protected async Task<IActionResult> ExecuteTrackedTaskAsync<T>(string taskName, Action<StringBuilder, T> reportBuilder, Func<Task<T>> action, SemaphoreSlim? semaphore = null)
     {
         if (semaphore != null && !await semaphore.WaitAsync(0).ConfigureAwait(false))
-            return Conflict(new RelayResponse<object>(Status: "busy", Message: "A conflicting VFS operation is already in progress. Please wait for it to complete."));
+            return Conflict(new RelayResponse<object>(Status: "busy", Message: "A conflicting operation is already in progress. Please wait for it to complete."));
 
         TaskHelper.StartTask(taskName);
         try
         {
             T result = await action().ConfigureAwait(false);
-            IActionResult actionResult = LogAndReturn(logName, result, reportBuilder);
+            IActionResult actionResult = LogAndReturn($"{taskName}-report.log", result, reportBuilder);
             TaskHelper.CompleteTask(taskName, (actionResult as OkObjectResult)?.Value!);
             return actionResult;
         }

@@ -134,7 +134,6 @@ public class PlexController(
             ? Task.FromResult<IActionResult>(Unauthorized(new RelayResponse<object>(Status: "error", Message: "Plex token is missing.")))
             : ExecuteTrackedTaskAsync(
                 ShokoRelayConstants.TaskPlexAuthRefresh,
-                ShokoRelayConstants.LogPlexDiscovery,
                 LogHelper.BuildDiscoveryReport,
                 async () =>
                 {
@@ -211,7 +210,6 @@ public class PlexController(
             ? Task.FromResult(guard)
             : ExecuteTrackedTaskAsync(
                 ShokoRelayConstants.TaskPlexCollectionsBuild,
-                ShokoRelayConstants.LogPlexCollections,
                 LogHelper.BuildCollectionsReport,
                 () => collectionService.BuildCollectionsAsync(seriesList, assignment, clean, CancellationToken.None),
                 SyncHelper.SyncLock
@@ -226,7 +224,6 @@ public class PlexController(
             ? Task.FromResult(guard)
             : ExecuteTrackedTaskAsync(
                 ShokoRelayConstants.TaskPlexRatingsApply,
-                ShokoRelayConstants.LogPlexRatings,
                 LogHelper.BuildRatingsReport,
                 () => criticRatingService.ApplyRatingsAsync(seriesList.Select(s => s?.ID ?? 0).OfType<int>(), CancellationToken.None),
                 SyncHelper.SyncLock
@@ -240,7 +237,6 @@ public class PlexController(
             ? Task.FromResult<IActionResult>(BadRequest(new RelayResponse<object>(Status: "error", Message: "Plex server configuration is missing or no library selected.")))
             : ExecuteTrackedTaskAsync(
                 ShokoRelayConstants.TaskPlexImagesSync,
-                ShokoRelayConstants.LogPlexImages,
                 LogHelper.BuildImageSyncReport,
                 () => imageSyncService.SyncImagesAsync(cancellationToken: CancellationToken.None),
                 SyncHelper.SyncLock
@@ -254,7 +250,6 @@ public class PlexController(
             ? Task.FromResult<IActionResult>(BadRequest(new RelayResponse<object>(Status: "error", Message: "Plex configuration missing.")))
             : ExecuteTrackedTaskAsync(
                 ShokoRelayConstants.TaskPlexAutomationRun,
-                ShokoRelayConstants.LogPlexAutomation,
                 (sb, r) =>
                 {
                     sb.AppendLine($"Plex Automation Run Report - {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
@@ -264,13 +259,13 @@ public class PlexController(
                     sb.AppendLine();
                     sb.AppendLine("Tasks Executed:");
                     sb.AppendLine($"  - Collection Generation    : {r.CollectionsElapsed.TotalSeconds:F2}s");
-                    sb.AppendLine($"    Log File URL             : {ApiBase}/logs/{ShokoRelayConstants.LogPlexCollections}");
+                    sb.AppendLine($"    Log File URL             : {ApiBase}/logs/{ShokoRelayConstants.TaskPlexCollectionsBuild}-report.log");
                     sb.AppendLine($"  - Critic Rating Application: {r.RatingsElapsed.TotalSeconds:F2}s");
-                    sb.AppendLine($"    Log File URL             : {ApiBase}/logs/{ShokoRelayConstants.LogPlexRatings}");
+                    sb.AppendLine($"    Log File URL             : {ApiBase}/logs/{ShokoRelayConstants.TaskPlexRatingsApply}-report.log");
                     if (r.ImageSyncElapsed.HasValue)
                     {
                         sb.AppendLine($"  - Plex Image Sync          : {r.ImageSyncElapsed.Value.TotalSeconds:F2}s");
-                        sb.AppendLine($"    Log File URL             : {ApiBase}/logs/{ShokoRelayConstants.LogPlexImages}");
+                        sb.AppendLine($"    Log File URL             : {ApiBase}/logs/{ShokoRelayConstants.TaskPlexImagesSync}-report.log");
                     }
                 },
                 async () =>

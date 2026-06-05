@@ -43,7 +43,6 @@ public class ShokoController(
         : !run ? Task.FromResult<IActionResult>(Ok(new RelayResponse<object>(Status: "skipped", Message: "Set run=true to build the VFS")))
         : ExecuteTrackedTaskAsync(
             ShokoRelayConstants.TaskVfsBuild,
-            ShokoRelayConstants.LogVfs,
             LogHelper.BuildVfsReport,
             async () =>
             {
@@ -134,7 +133,6 @@ public class ShokoController(
     public Task<IActionResult> PurgeMissingFiles([FromQuery] bool dryRun = true) =>
         ExecuteTrackedTaskAsync(
             ShokoRelayConstants.TaskShokoPurgeMissing,
-            ShokoRelayConstants.LogPurgeMissing,
             (sb, r) => LogHelper.BuildPurgeMissingReport(sb, r.DryRun, r.Removed),
             async () =>
             {
@@ -216,7 +214,6 @@ public class ShokoController(
 
         return ExecuteTrackedTaskAsync(
             ShokoRelayConstants.TaskShokoSyncWatched,
-            ShokoRelayConstants.LogShokoSyncWatched,
             (sb, r) => LogHelper.BuildSyncWatchedReport(sb, r, r.Direction, r.DryRun, includeRatings),
             async () =>
             {
@@ -271,7 +268,6 @@ public class ShokoController(
             ? Task.FromResult<IActionResult>(BadRequest(new RelayResponse<object>(Status: "error", Message: "mapFile parameter is required when not purging.")))
             : ExecuteTrackedTaskAsync(
                 ShokoRelayConstants.TaskMapSymlinks,
-                ShokoRelayConstants.LogMapSymlinks,
                 LogHelper.BuildSourceLinkReport,
                 async () =>
                 {
