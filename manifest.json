@@ -15,6 +15,34 @@
   "image_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-logo.png",
   "releases": [
     {
+      "version": "0.13.2",
+      "tag": "v0.13.2",
+      "source_revision": "2bb1a435c21ff970340802c3633c278b33399d75",
+      "released_at": "2026-06-06T16:59:15Z",
+      "channel": "Dev",
+      "release_notes": "**Changes:**\r\n- Allow Batch Theme MP3 generation for deeply nested directories\r\n- Add validation checks to single and batch MP3 generation pipelines to detect and reject VFS root folder segments\r\n- Integrate Audio Only toggle button and V hotkey to hide video layout and stop active rendering for the player page\r\n- Implement R hotkey to restart the currently active theme from the beginning on the player page\r\n- Parse mapped AnimeThemes that do not correspond to an anime in the local Shoko collection and append them to the video player tree\r\n- Group unmapped anime using physical base name extraction and append them to a unified \"Missing from Collection\" branch\r\n- Add sorting logic to `player.js` to force the Missing Anime directory to the top of the browser list\r\n- Added `AnimeThemesWebmDownloader` and exposed it as an HTTP POST endpoint for fetching and organizing .webm files into Year/Season directories\r\n- Fixed the \"jump to\" action sometime failing on the player page\r\n- Enhanced build workflow to inject release notes into the manifest\r\n- Bumped Shoko Abstractions to v6.0.0-alpha.44\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.13.1...v0.13.2",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0-alpha.44",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.2/ShokoRelay-v0.13.2-dev_linux-arm64.zip",
+          "checksum": "45d00c2bbbd6cd7d2cae208b2afb606b453f10894507df3ed943709abaf278a8"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0-alpha.44",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.2/ShokoRelay-v0.13.2-dev_linux-x64.zip",
+          "checksum": "ecb25841a8342431ec1496fc48e3be91a6d2c3e10fdd8c5a3d53498ebd79d415"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0-alpha.44",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.2/ShokoRelay-v0.13.2-dev_win-x64.zip",
+          "checksum": "5e5d34378953a38c946cc4a058e23725cd4c14a5b3f3cd5fe90935f871dd35cb"
+        }
+      ]
+    },
+    {
       "version": "0.13.1",
       "tag": "v0.13.1",
       "source_revision": "bbd2028164dafcfd8d87098faa94527e15cc5a92",
