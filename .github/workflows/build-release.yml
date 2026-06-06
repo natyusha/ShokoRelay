@@ -3,7 +3,7 @@ run-name: "${{ github.event_name == 'workflow_dispatch' && format('Manual Build:
 
 on:
   release:
-    types: [published, edited]
+    types: [published]
   workflow_dispatch:
     inputs:
       tag_name:
@@ -16,7 +16,6 @@ permissions:
 jobs:
   publish:
     name: Build & attach ${{ matrix.rid }}
-    if: github.event.action != 'edited'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -121,11 +120,8 @@ jobs:
   update-manifest:
     name: Update plugin manifest
     needs: [publish]
-    # Run if triggered by release (published/edited) or tag dispatch. Allow execution if publish was skipped (e.g. on edited event).
-    if: |
-      always() &&
-      (needs.publish.result == 'success' || needs.publish.result == 'skipped') &&
-      (startsWith(github.event.inputs.tag_name, 'v') || github.event_name == 'release')
+    # Run if triggered by release (published) or tag dispatch.
+    if: startsWith(github.event.inputs.tag_name, 'v') || github.event_name == 'release'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
