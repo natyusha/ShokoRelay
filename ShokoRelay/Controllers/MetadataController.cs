@@ -111,9 +111,10 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     /// <summary>Returns detailed Plex-formatted metadata for a specific ratingKey.</summary>
     /// <remarks>
     /// **Supported RatingKey Formats:**
-    /// - '123' (Shoko Series ID) / 'a890' (AniDB Series ID)
+    /// - '123' (Shoko Series ID) / 'a123' (AniDB Series ID)
     /// - '123s4' (Shoko Series Season 4) / 'a123s4' (AniDB Series Season 4)
     /// - 'e567' (Shoko Episode ID) / 'ae567' (AniDB Episode ID)
+    /// - 'e567p2' (Shoko Episode Part 2) / 'ae567p2' (AniDB Episode Part 2)
     /// - _AniDB IDs resolve to Shoko IDs and must be known to Shoko_
     /// </remarks>
     /// <param name="ratingKey">Custom Plex-style rating key.</param>
@@ -126,15 +127,10 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
         if (ctx == null)
             return NotFound();
 
-        bool isEpKey = ratingKey.StartsWith(PlexConstants.EpisodePrefix) || ratingKey.StartsWith(PlexConstants.AniDbPrefix + PlexConstants.EpisodePrefix, StringComparison.OrdinalIgnoreCase);
-        if (isEpKey)
+        if (PlexHelper.IsEpisodeKey(ratingKey))
         {
             var (episode, partIdx, m) = TryResolveEpisodeContext(ctx, ratingKey);
-            if (episode == null || m == null)
-                return NotFound();
-            object? tmdbOverride = m.TmdbEpisode;
-            var coords = m.Coords;
-            return WrapInContainer(mapper.MapEpisode(episode, coords, ctx.Series, ctx.Titles, partIdx, tmdbOverride));
+            return episode == null || m == null ? NotFound() : WrapInContainer(mapper.MapEpisode(episode, m.Coords, ctx.Series, ctx.Titles, partIdx, m.TmdbEpisode));
         }
         if (ratingKey.Contains(PlexConstants.SeasonPrefix))
         {
@@ -203,8 +199,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
         if (ctx == null)
             return NotFound();
         object[] images;
-        bool isEpKey = ratingKey.StartsWith(PlexConstants.EpisodePrefix) || ratingKey.StartsWith(PlexConstants.AniDbPrefix + PlexConstants.EpisodePrefix, StringComparison.OrdinalIgnoreCase);
-        if (isEpKey)
+        if (PlexHelper.IsEpisodeKey(ratingKey))
         {
             var (episode, partIdx, m) = TryResolveEpisodeContext(ctx, ratingKey);
             images = (episode != null && m != null) ? ExtractImages(mapper.MapEpisode(episode, m.Coords, ctx.Series, ctx.Titles, partIdx, m.TmdbEpisode)) : [];
@@ -294,11 +289,11 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     private (IShokoEpisode? Episode, int? PartIndex, MapHelper.FileMapping? Mapping) TryResolveEpisodeContext(PlexMetadata.SeriesContext ctx, string ratingKey)
     {
         int? partIdx = null;
-        bool isAniDbEp = ratingKey.StartsWith(PlexConstants.AniDbPrefix + PlexConstants.EpisodePrefix, StringComparison.OrdinalIgnoreCase);
-        if (!isAniDbEp && !ratingKey.StartsWith(PlexConstants.EpisodePrefix))
+        if (!PlexHelper.IsEpisodeKey(ratingKey))
             return (null, null, null);
 
-        var idPart = isAniDbEp ? ratingKey[(PlexConstants.AniDbPrefix.Length + PlexConstants.EpisodePrefix.Length)..] : ratingKey[PlexConstants.EpisodePrefix.Length..];
+        bool isAniDbEp = ratingKey.StartsWith(PlexConstants.AniDbPrefix, StringComparison.OrdinalIgnoreCase);
+        var idPart = ratingKey[(isAniDbEp ? PlexConstants.AniDbPrefix.Length + PlexConstants.EpisodePrefix.Length : PlexConstants.EpisodePrefix.Length)..];
         var parts = idPart.Split(PlexConstants.PartPrefix);
         if (!int.TryParse(parts[0], out int id))
             return (null, null, null);

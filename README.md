@@ -17,11 +17,13 @@ Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File Sy
 > [!TIP]
 > Installation can be completed via Shoko's WebUI (Recommended) or Manually. Both Methods will be detailed below.
 
-- **WebUI** _currently unavailable in public builds_
-  - Open the Shoko WebUI and navigate to: `Settings > Plugins > Repositories`
-  - Add the manifest URL: `https://raw.githubusercontent.com/natyusha/ShokoRelay/master/manifest.json`
-  - Go to `Settings > Plugins > Browse` and find "Shoko Relay"
-  - Click `Install` on the appropriate version
+- **WebUI**
+  - Open Shoko's WebUI and navigate to: `Settings > Plugin Management > Repositories`
+  - Click `Add Repository` and configure the following:
+    - Name: `Shoko Relay`
+    - Manifest URL: `https://raw.githubusercontent.com/natyusha/ShokoRelay/master/manifest.json`
+  - Go to `Settings > Plugin Management > Browse` and find "Shoko Relay"
+  - Click `Install`
 - **Manual**
   - Navigate to Shoko Server's `plugins` directory and create a new subfolder called `ShokoRelay`
   - Extract [the latest pre-release](https://github.com/natyusha/ShokoRelay/releases) into the `plugins/ShokoRelay` directory

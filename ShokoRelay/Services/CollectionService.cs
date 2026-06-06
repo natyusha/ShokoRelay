@@ -245,19 +245,14 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                 try
                 {
                     var files = Directory.EnumerateFiles(imagesPath).Select(f => new FileInfo(f)).OrderBy(f => f.CreationTimeUtc).ToList();
-
                     if (files.Count > 1)
-                    {
                         for (int i = 0; i < files.Count - 1; i++)
-                        {
                             try
                             {
                                 files[i].Delete();
                                 deletedCount++;
                             }
                             catch { }
-                        }
-                    }
                 }
                 catch (Exception ex)
                 {

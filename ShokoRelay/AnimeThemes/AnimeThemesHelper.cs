@@ -128,7 +128,7 @@ internal static class AnimeThemesHelper
     internal static readonly Regex OverrideThemeFileRegex = new(@"^P\d+\s❯", RegexOptions.Compiled);
 
     /// <summary>Regex for inserting spaces into PascalCase strings accounting for numbers.</summary>
-    internal static readonly Regex PascalCaseRegex = new(@"((?<=[a-z])\d+|(?<=\d)[a-zA-Z]+|(?<=[a-z])[A-Z])", RegexOptions.Compiled);
+    internal static readonly Regex PascalCaseRegex = new(@"(?<=[a-z])(?=[A-Z])|(?<=[a-z])(?=\d)|(?<=\d)(?=[A-Za-z])", RegexOptions.Compiled);
 
     private static readonly Dictionary<string, string> s_slugFormatting = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -321,8 +321,7 @@ internal static class AnimeThemesHelper
     {
         string rawFileName = Path.GetFileNameWithoutExtension(filePath);
         int dashIndex = rawFileName.IndexOf('-');
-        string extractedName = dashIndex > 0 ? rawFileName[..dashIndex] : rawFileName;
-        return PascalCaseRegex.Replace(extractedName, " $1");
+        return PascalCaseRegex.Replace(dashIndex > 0 ? rawFileName[..dashIndex] : rawFileName, " ");
     }
 
     /// <summary>Parses a theme slug into base and suffix components.</summary>

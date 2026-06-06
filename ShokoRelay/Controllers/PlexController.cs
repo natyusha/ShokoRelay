@@ -175,26 +175,17 @@ public class PlexController(
     [HttpGet("plex/library/refresh")]
     public async Task<IActionResult> RefreshPlexSeries([FromQuery] string filter)
     {
-        var validation = ValidateFilterOrBadRequest(filter, out var ids);
-        if (validation != null)
+        if (ValidateFilterOrBadRequest(filter, out var ids) is { } validation)
             return validation;
-
         if (!PlexLibrary.IsEnabled)
             return BadRequest(new RelayResponse<object>(Status: "error", Message: "Plex is not configured."));
 
         int triggeredCount = 0;
         foreach (var id in ids)
-        {
-            var series = MetadataService.GetShokoSeriesByID(id);
-            if (series == null)
-                continue;
-
-            foreach (var path in VfsShared.ResolveSeriesVfsPaths(series, MetadataService))
-            {
-                if (await PlexLibrary.RefreshSectionPathAsync(path).ConfigureAwait(false))
-                    triggeredCount++;
-            }
-        }
+            if (MetadataService.GetShokoSeriesByID(id) is { } series)
+                foreach (var path in VfsShared.ResolveSeriesVfsPaths(series, MetadataService))
+                    if (await PlexLibrary.RefreshSectionPathAsync(path).ConfigureAwait(false))
+                        triggeredCount++;
 
         return Ok(new RelayResponse<object>(Data: new { triggered = triggeredCount }));
     }

@@ -9,7 +9,7 @@ namespace ShokoRelay.Plex;
 /// <summary>Miscellaneous utility routines used by Plex-facing code.</summary>
 public static class PlexHelper
 {
-    #region GUID Parsing
+    #region ID Parsing/Extraction
 
     /// <summary>Regex which extracts the ID from a Show GUID.</summary>
     private static readonly Regex s_showIdRegex = new(@"/show/(\d+)", RegexOptions.Compiled);
@@ -34,6 +34,38 @@ public static class PlexHelper
         var match = regex.Match(guid);
         return match.Success && int.TryParse(match.Groups[1].Value, out var id) ? id : null;
     }
+
+    /// <summary>Extracts the corresponding Shoko Series ID from any valid Plex Rating Key.</summary>
+    /// <param name="ratingKey">Plex rating key representing a show, season or episode.</param>
+    /// <param name="metadataService">The metadata service used to look up episodes/series.</param>
+    /// <returns>The resolved Shoko Series ID, or 0 if not found.</returns>
+    public static int ExtractShokoSeriesIdFromRatingKey(string ratingKey, IMetadataService metadataService)
+    {
+        if (string.IsNullOrWhiteSpace(ratingKey))
+            return 0;
+        if (IsEpisodeKey(ratingKey))
+        {
+            // Shoko Episode ID (e{ID} or e{ID}p{Part}) // AniDB Episode Alias (ae{ID} or ae{ID}p{Part})
+            bool isAniDb = ratingKey.StartsWith(PlexConstants.AniDbPrefix, StringComparison.OrdinalIgnoreCase);
+            var epIdPart = ratingKey[(isAniDb ? PlexConstants.AniDbPrefix.Length + PlexConstants.EpisodePrefix.Length : PlexConstants.EpisodePrefix.Length)..].Split(PlexConstants.PartPrefix)[0];
+            return int.TryParse(epIdPart, out var id) ? (isAniDb ? metadataService.GetShokoEpisodeByAnidbID(id) : metadataService.GetShokoEpisodeByID(id))?.Series?.ID ?? 0 : 0;
+        }
+        // Isolate the show component (supports {ID}, a{AniDB}, {ID}s{Season}, or a{AniDB}s{Season})
+        var seriesPart = ratingKey.Split(PlexConstants.SeasonPrefix)[0];
+        return seriesPart.StartsWith(PlexConstants.AniDbPrefix, StringComparison.OrdinalIgnoreCase)
+            ? int.TryParse(seriesPart[PlexConstants.AniDbPrefix.Length..], out var anidb)
+                ? metadataService.GetShokoSeriesByAnidbID(anidb)?.ID ?? 0
+                : 0
+            : int.TryParse(seriesPart, out var sid)
+                ? sid
+                : 0;
+    }
+
+    /// <summary>Determines if a rating key represents an episode.</summary>
+    /// <param name="ratingKey">The rating key to check.</param>
+    /// <returns>True if the key represents an episode.</returns>
+    public static bool IsEpisodeKey(string ratingKey) =>
+        ratingKey.StartsWith(PlexConstants.EpisodePrefix) || ratingKey.StartsWith(PlexConstants.AniDbPrefix + PlexConstants.EpisodePrefix, StringComparison.OrdinalIgnoreCase);
 
     #endregion
 

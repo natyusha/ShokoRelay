@@ -25,42 +25,13 @@ public class PlexMetadata(IMetadataService metadataService)
     /// <returns>A SeriesContext containing resolved series data and mappings, or null if not found.</returns>
     public SeriesContext? GetSeriesContext(string ratingKey)
     {
-        int seriesId = 0;
-
-        if (ratingKey.StartsWith(PlexConstants.AniDbPrefix + PlexConstants.EpisodePrefix, StringComparison.OrdinalIgnoreCase))
-        {
-            // AniDB Episode Alias (ae{ID} or ae{ID}p{Part})
-            var epIdPart = ratingKey[(PlexConstants.AniDbPrefix.Length + PlexConstants.EpisodePrefix.Length)..].Split(PlexConstants.PartPrefix)[0];
-            if (int.TryParse(epIdPart, out var aid))
-                seriesId = metadataService.GetShokoEpisodeByAnidbID(aid)?.Series?.ID ?? 0;
-        }
-        else if (ratingKey.StartsWith(PlexConstants.EpisodePrefix))
-        {
-            // Shoko Episode ID (e{ID} or e{ID}p{Part})
-            var epIdPart = ratingKey[PlexConstants.EpisodePrefix.Length..].Split(PlexConstants.PartPrefix)[0];
-            if (int.TryParse(epIdPart, out var epId))
-                seriesId = metadataService.GetShokoEpisodeByID(epId)?.Series?.ID ?? 0;
-        }
-        else
-        {
-            // Isolate the show component (supports {ID}, a{AniDB}, {ID}s{Season}, or a{AniDB}s{Season})
-            var seriesPart = ratingKey.Split(PlexConstants.SeasonPrefix)[0];
-            if (seriesPart.StartsWith(PlexConstants.AniDbPrefix) && int.TryParse(seriesPart[PlexConstants.AniDbPrefix.Length..], out var anidb))
-                seriesId = metadataService.GetShokoSeriesByAnidbID(anidb)?.ID ?? 0;
-            else
-                int.TryParse(seriesPart, out seriesId);
-        }
-
-        var series = metadataService.GetShokoSeriesByID(seriesId);
-        if (series == null)
+        int seriesId = PlexHelper.ExtractShokoSeriesIdFromRatingKey(ratingKey, metadataService);
+        if (metadataService.GetShokoSeriesByID(seriesId) is not { } series)
             return null;
 
         int primaryId = OverrideHelper.GetPrimary(series.ID, metadataService);
         var primarySeries = metadataService.GetShokoSeriesByID(primaryId) ?? series;
-
-        var group = OverrideHelper.GetGroup(primaryId, metadataService);
-        var extras = group.Skip(1).Select(id => metadataService.GetShokoSeriesByID(id)).OfType<ISeries>().ToList();
-        var fileData = extras.Count > 0 ? MapHelper.GetSeriesFileDataMerged(primarySeries, extras, metadataService) : MapHelper.GetSeriesFileData(primarySeries, metadataService);
+        var fileData = MapHelper.GetConsolidatedSeriesFileData(primarySeries, metadataService);
 
         return new SeriesContext(primarySeries, TextHelper.ResolveFullSeriesTitles(primarySeries), ContentRatingHelper.GetContentRatingAndAdult(primarySeries).Rating ?? "", fileData);
     }
@@ -382,7 +353,7 @@ public class PlexMetadata(IMetadataService metadataService)
 
     #endregion
 
-    #region Key / Array Builders
+    #region Key & Array Builders
 
     /// <summary>Generates a cache-busting string based on the last update timestamp of the provided entity.</summary>
     /// <param name="entity">The Shoko metadata entity.</param>

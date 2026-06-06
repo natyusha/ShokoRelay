@@ -48,6 +48,19 @@ public static class MapHelper
         return new SeriesFileData(mappings, [.. mappings.Select(m => m.Coords.Season).Distinct().OrderBy(s => s)]);
     }
 
+    /// <summary>Generate consolidated SeriesFileData for the given series, automatically handling TMDB enforcement and VFS override groupings.</summary>
+    /// <param name="series">The Shoko series metadata.</param>
+    /// <param name="metadataService">Metadata service used for override resolution.</param>
+    /// <returns>A SeriesFileData object.</returns>
+    public static SeriesFileData GetConsolidatedSeriesFileData(ISeries series, IMetadataService metadataService)
+    {
+        if (!EnforceTmdbNumbering)
+            return GetSeriesFileData(series, metadataService);
+        int pId = OverrideHelper.GetPrimary(series.ID, metadataService);
+        var group = OverrideHelper.GetGroup(pId, metadataService).Select(metadataService.GetShokoSeriesByID).OfType<IShokoSeries>().ToList();
+        return group.Count <= 1 ? GetSeriesFileData(group.FirstOrDefault() ?? series, metadataService) : GetSeriesFileDataMerged(group[0], group.Skip(1).Cast<ISeries>(), metadataService);
+    }
+
     /// <summary>Returns the TMDB ordering ID that should be used for episode numbering.</summary>
     /// <param name="series">The Shoko series metadata.</param>
     /// <returns>Ordering ID or null.</returns>

@@ -125,11 +125,7 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
     /// <summary>Builds and returns a JSON schema representation of the configuration properties.</summary>
     /// <returns>A schema list for dynamic form rendering.</returns>
     [HttpGet("config/schema")]
-    public IActionResult GetConfigSchema()
-    {
-        var props = BuildConfigSchema(typeof(RelayConfig), "");
-        return Ok(new { properties = props });
-    }
+    public IActionResult GetConfigSchema() => Ok(new { properties = BuildConfigSchema(typeof(RelayConfig), "") });
 
     /// <summary>Generates and serves a dynamically mapped CSS file combining the selected Shoko WebUI theme with custom Relay variables.</summary>
     /// <returns>A dynamic CSS stylesheet content result.</returns>

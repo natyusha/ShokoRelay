@@ -94,7 +94,7 @@ namespace ShokoRelay.Plex
             { SeasonParody, ("Scenes", "sceneOrSample") },
             { SeasonOther, ("Featurettes", "featurette") },
             { SeasonUnknown, ("Other", "other") },
-        };
+        }.ToFrozenDictionary();
 
         #endregion
 

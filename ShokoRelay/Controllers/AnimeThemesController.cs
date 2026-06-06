@@ -28,7 +28,7 @@ public class AnimeThemesController(
 
     #endregion
 
-    #region VFS Mapping / Build
+    #region VFS Mapping & Build
 
     /// <summary>Applies the anime‑themes mapping file to the directory structure.</summary>
     /// <param name="filter">Optional comma-separated list of Shoko or AniDB series IDs to filter the operation.</param>
