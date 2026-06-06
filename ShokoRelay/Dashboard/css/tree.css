@@ -176,8 +176,25 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.vfs-title.tree-italic {
+.tree-italic {
+  padding-right: 0.15em;
   font-style: italic;
+}
+.vfs-link {
+  flex-shrink: 0;
+}
+.vfs-link.small {
+  font-size: 0.75em;
+  white-space: nowrap;
+}
+a.vfs-link {
+  margin-left: 4px;
+  color: color-mix(in srgb, var(--highlight-color) 80%, transparent);
+  text-decoration: none;
+}
+a.vfs-link:hover {
+  color: var(--highlight-color);
+  text-decoration: dotted underline;
 }
 #tree summary::marker,
 #tree summary::-webkit-details-marker,

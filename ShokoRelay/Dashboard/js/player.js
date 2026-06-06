@@ -49,6 +49,7 @@
   let progressRaf;
 
   const PATH_KEY = "player-current-path";
+  const MISSING_LABEL = "Missing from Collection";
 
   /** @type {Set<string>} Track played paths during shuffle to ensure a full cycle before repeats. */
   const shuffleHistory = new Set();
@@ -238,6 +239,7 @@
       return;
     }
 
+    const esc = (str) => (str || "").replace(/"/g, "&quot;");
     const groups = new Map();
     items.forEach((i) => {
       if (!groups.has(i.group)) groups.set(i.group, new Map());
@@ -252,23 +254,25 @@
      * @param {HTMLElement[]} children - The array of child list-item elements.
      * @param {boolean} isOpen - If true, forces children to render immediately.
      * @param {boolean} [isItalic=false] - Whether to italicize the title text.
+     * @param {string} [extraHtml=""] - Additional HTML to append to the folder title.
      * @returns {HTMLLIElement} The completed folder list item node.
      */
-    const makeNode = (name, children, isOpen, isItalic = false) => {
+    const makeNode = (name, children, isOpen, isItalic = false, extraHtml = "") => {
       const li = document.createElement("li");
       const ul = document.createElement("ul");
       const det = window._sr.createLazyDetails(
-        name,
+        "",
         ul,
         (container) => {
           children.forEach((c) => container.appendChild(c));
         },
         isOpen,
       );
-      if (isItalic) {
-        const t = det.querySelector(".vfs-title");
-        if (t) t.classList.add("tree-italic");
-      }
+      const sum = det.querySelector("summary");
+      const titleHtml = `<span class="vfs-title${isItalic ? " tree-italic" : ""}" title="${esc(name)}" data-tooltip-overflow-only="true">${esc(name)}</span>${extraHtml}`;
+      sum.insertAdjacentHTML("beforeend", titleHtml);
+      sum.title = name;
+
       li.appendChild(det);
       return li;
     };
@@ -276,10 +280,9 @@
     const rootUl = document.createElement("ul");
     rootUl.className = "tree";
 
-    const missingLabel = "Missing from Collection";
     const sortedGroupNames = [...groups.keys()].sort((a, b) => {
-      if (a === missingLabel && b !== missingLabel) return -1;
-      if (b === missingLabel && a !== missingLabel) return 1;
+      if (a === MISSING_LABEL && b !== MISSING_LABEL) return -1;
+      if (b === MISSING_LABEL && a !== MISSING_LABEL) return 1;
       return a.localeCompare(b);
     });
 
@@ -316,9 +319,17 @@
           li.appendChild(leaf);
           return li;
         });
-        return makeNode(sName, files, !!ft);
+
+        const firstFile = sMap.get(sName)[0];
+        const shokoBase = location.origin + base.split(/\/api\//i)[0];
+        let extraHtml = "";
+        if (firstFile.seriesId)
+          extraHtml += `<a href="${shokoBase}/webui/collection/series/${firstFile.seriesId}/overview" class="vfs-link small" target="_blank" rel="noopener noreferrer">[${firstFile.seriesId}]</a>`;
+        if (firstFile.anidbId) extraHtml += `<a href="https://anidb.net/a${firstFile.anidbId}" class="vfs-link small" target="_blank" rel="noopener noreferrer">[a${firstFile.anidbId}]</a>`;
+
+        return makeNode(sName, files, !!ft, gName === MISSING_LABEL, extraHtml);
       });
-      rootUl.appendChild(sKeys.length === 1 && gName !== missingLabel ? sNodes[0] : makeNode(gName, sNodes, !!ft, gName === missingLabel));
+      rootUl.appendChild(sKeys.length === 1 && gName !== MISSING_LABEL ? sNodes[0] : makeNode(gName, sNodes, !!ft, gName === MISSING_LABEL));
     });
     playerTree.appendChild(rootUl);
   }
@@ -383,13 +394,18 @@
 
     if (playerAnime) {
       playerAnime.textContent = playerAnime.title = item ? item.series : "Select a theme to begin...";
+      const isMissing = item?.group === MISSING_LABEL;
+      playerAnime.classList.toggle("tree-italic", isMissing);
+
       if (item?.seriesId) {
         const shokoBase = location.origin + base.split("/api/")[0];
         playerAnime.href = `${shokoBase}/webui/collection/series/${item.seriesId}/overview`;
         playerAnime.style.pointerEvents = "auto";
+        playerAnime.style.color = "";
       } else {
         playerAnime.href = "#";
         playerAnime.style.pointerEvents = "none";
+        playerAnime.style.color = "var(--text-color)";
       }
     }
 
@@ -694,9 +710,8 @@
             return item;
           })
           .sort((a, b) => {
-            const m = "Missing from Collection";
-            if (a.group === m && b.group !== m) return -1;
-            if (b.group === m && a.group !== m) return 1;
+            if (a.group === MISSING_LABEL && b.group !== MISSING_LABEL) return -1;
+            if (b.group === MISSING_LABEL && a.group !== MISSING_LABEL) return 1;
 
             const groupComp = a.group.localeCompare(b.group);
             if (groupComp !== 0) return groupComp;

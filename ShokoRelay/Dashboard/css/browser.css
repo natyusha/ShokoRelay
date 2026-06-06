@@ -67,8 +67,7 @@
   color: var(--hover-color);
 }
 .vfs-id-link,
-.vfs-sep,
-.vfs-link {
+.vfs-sep {
   flex-shrink: 0;
 }
 .vfs-id-link {
@@ -82,19 +81,6 @@
   color: var(--highlight-color);
   font-weight: 700;
   font-size: 0.9em;
-}
-.vfs-link.small {
-  font-size: 0.75em;
-  white-space: nowrap;
-}
-a.vfs-link {
-  margin-left: 4px;
-  color: color-mix(in srgb, var(--highlight-color) 80%, transparent);
-  text-decoration: none;
-}
-a.vfs-link:hover {
-  color: var(--highlight-color);
-  text-decoration: dotted underline;
 }
 #tree .leaf span:first-child {
   flex-shrink: 0;
