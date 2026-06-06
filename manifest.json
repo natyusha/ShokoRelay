@@ -20,7 +20,7 @@
       "source_revision": "2bb1a435c21ff970340802c3633c278b33399d75",
       "released_at": "2026-06-06T16:59:15Z",
       "channel": "Dev",
-      "release_notes": "**Changes:**\r\n- Allow Batch Theme MP3 generation for deeply nested directories\r\n- Add validation checks to single and batch MP3 generation pipelines to detect and reject VFS root folder segments\r\n- Integrate Audio Only toggle button and V hotkey to hide video layout and stop active rendering for the player page\r\n- Implement R hotkey to restart the currently active theme from the beginning on the player page\r\n- Parse mapped AnimeThemes that do not correspond to an anime in the local Shoko collection and append them to the video player tree\r\n- Group unmapped anime using physical base name extraction and append them to a unified \"Missing from Collection\" branch\r\n- Add sorting logic to `player.js` to force the Missing Anime directory to the top of the browser list\r\n- Added `AnimeThemesWebmDownloader` and exposed it as an HTTP POST endpoint for fetching and organizing .webm files into Year/Season directories\r\n- Fixed the \"jump to\" action sometime failing on the player page\r\n- Enhanced build workflow to inject release notes into the manifest\r\n- Bumped Shoko Abstractions to v6.0.0-alpha.44\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.13.1...v0.13.2",
+      "release_notes": "**Notes:**\r\n- Force refreshing the player with `Ctrl-F5` is recommended\r\n- The WebUI installation method is now live\r\n\r\n**Changes:**\r\n- Allow batch Theme MP3 generation for deeply nested directories and track if a theme has already been generated for a given AniDB ID\r\n- Added validation checks to single and batch MP3 generation pipelines to detect and reject VFS root folder segments\r\n- Implemented an Audio Only toggle button and `V` hotkey to hide the video layout and stop active rendering (player page)\r\n- Implemented the `R` hotkey to restart the currently active theme from the beginning (player page)\r\n- Parse mapped AnimeThemes that do not correspond to an anime in the local Shoko collection and add them to the video player tree\r\n- Group unmapped anime using physical base name extraction and append them to a unified \"Missing from Collection\" branch\r\n- Add sorting logic to `player.js` to force the \"Missing from Collection\" branch to the top of the browser list\r\n- Added `AnimeThemesWebmDownloader` and exposed it as an HTTP POST endpoint for fetching and organizing .webm files into Year/Season directories\r\n- Fixed the \"jump to\" action sometime failing on the player page\r\n- Enhanced the build workflow to inject release notes into the manifest\r\n- Updated the readme/controller.md to account for the new changes\r\n- Bumped Shoko Abstractions to v6.0.0-alpha.44\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.13.1...v0.13.2",
       "archives": [
         {
           "runtime": "linux-arm64",
@@ -48,23 +48,23 @@
       "source_revision": "bbd2028164dafcfd8d87098faa94527e15cc5a92",
       "released_at": "2026-06-01T10:44:47Z",
       "channel": "Dev",
-      "release_notes": null,
+      "release_notes": "**Notes:**\r\n- Force refreshing the vfs browser with `Ctrl-F5` is recommended\r\n\r\n**Changes:**\r\n- Map active AnimeThemes files directly into the VFS Browser's blueprint database during generation allowing them to be seen\r\n- Natural sort the season folders in the vfs browser and place them after non season folders in the tree\r\n- Prune redundant, multi-line record instantiation blocks inside AnimeThemesMapping and its helper LoadThemeMappings\r\n- Update browser.js index mapping to support metadata link resolving for all extra season folders\r\n- Dynamically append the resolved Plex URL to the Plex Web App button's tooltip on hover\r\n- Implement prefix-based \"m{ShokoID}\" and \"a{AniDBID}\" search filtering to target series IDs directly\r\n- Restrict numeric AniDB ID filtering in the VFS Browser to only match when prefixed with \"a\"\r\n- Force single column dashboard layout at 925px media width and set header logo and title margins to 0\r\n- This ensures that the header text doesn't overflow at 700px window width (for the WebUI iframe)\r\n- Parse CSharpier output in the lint workflow to emit native GitHub inline error annotations\r\n- Generate a rich Markdown report and append it directly to the GITHUB_STEP_SUMMARY\r\n- Utilize dotnet tool restore to download CSharpier based on the committed .config/dotnet-tools.json manifest\r\n- Refactor MapHelper/VfsBuilder/VfsWatcher with some general performance/style/stability tweaks\r\n- Remove redundant backing fields across the project\r\n- Directly reference modern primary constructor parameters across all refactored service methods\r\n- Evaluate input.value on initial search interaction setup to determine the clear button's visibility on the player/browser pages\r\n- Bump Shoko Abstractions to v6.0.0-alpha.38\r\n\r\n**Pull Requests:**\r\n* feat: add plugin page by @revam in https://github.com/natyusha/ShokoRelay/pull/8\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.13.0...v0.13.1",
       "archives": [
         {
           "runtime": "linux-arm64",
-          "abstraction": "6.0.0",
+          "abstraction": "6.0.0-alpha.38",
           "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.1/ShokoRelay-v0.13.1-dev_linux-arm64.zip",
           "checksum": "219d69123ec3e9ca13c46945e58c438a2db8003c451c127c26659cb1157365aa"
         },
         {
           "runtime": "linux-x64",
-          "abstraction": "6.0.0",
+          "abstraction": "6.0.0-alpha.38",
           "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.1/ShokoRelay-v0.13.1-dev_linux-x64.zip",
           "checksum": "046c5c8a50774fcf8ac558b9277167621744119c689034e403645d8a3241fc0b"
         },
         {
           "runtime": "win-x64",
-          "abstraction": "6.0.0",
+          "abstraction": "6.0.0-alpha.38",
           "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.1/ShokoRelay-v0.13.1-dev_win-x64.zip",
           "checksum": "158cd55d188da18f455f8384c0e3eb027735f4d1c8757624b1fcec4c7a3518f2"
         }
@@ -76,389 +76,25 @@
       "source_revision": "b0162e88a7bcf28b949453260bac0596371ac708",
       "released_at": "2026-05-30T20:51:00Z",
       "channel": "Dev",
-      "release_notes": null,
+      "release_notes": "This is one of the larger releases in a while feature wise but now I can say that all of the extended additions that were planned are complete.\r\n\r\n**Notes:**\r\n- Force refreshing the dashboard/browser/player with `Ctrl-F5` is recommended\r\n- The \"Collection Posters Root Path\" setting no longer exists and was replaced with the \"Collection Images Root Path\" (there is no migration)\r\n\r\n**Changes:**\r\n- Upgraded VFS series pruning logic to resolve directories directly via active managed folders, ensuring empty or deleted series folders and their metadata are recursively cleaned up.\r\n- Simplified Shoko VFS import ignore rules by evaluating the full absolute path of scanned files.\r\n- Added a dynamic Plex Web App link to the authentication panel, automatically resolving the best connection URI from the discovered servers.\r\n- Optimized path mapping translation speed and memory allocations in the Plex client by introducing thread-safe caching and eliminating redundant LINQ allocations.\r\n- Optimized smart collection artwork scans and Shoko import scans to eliminate database-heavy loops by resolving global roots once and utilizing thread-safe caching for ignored folder names.\r\n- Expanded collection generation to support mapping, syncing, and automatic local disk pruning for collection posters, backdrops, clear logos, and square art.\r\n- Refactored watched-state syncing to Plex to support multiple Plex RatingKeys per Shoko ID, ensuring all matching virtual segments of split or grouped episodes are correctly scrobbled.\r\n- Implemented bi-directional watched state syncing and webhook playback progress tracking (Plex to Shoko) to populate the \"Continue Watching\" section in Shoko's WebUI.\r\n- Introduced an \"Include Progress\" toggle to the configuration settings and sync menu modal to control progress synchronization, complete with automatic checks to prevent progress updates from overwriting fully-watched states.\r\n- Cleaned up the codebase by migrating inline namespace declarations to modern file-scoped usings, and removing several unused, unreferenced, or redundant helper methods, constants, and config parameters.\r\n- Polished the dashboard, browser, and player layouts with CSS flexbox styling, robust tooltip positioning for disabled states, optimized web font subsets, and a visual progress bar for timed toast notifications.\r\n- Bumped Shoko.Abstractions to v6.0.0-alpha.32.\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.12.7...v0.13.0",
       "archives": [
         {
           "runtime": "linux-arm64",
-          "abstraction": "6.0.0",
+          "abstraction": "6.0.0-alpha.32",
           "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.0/ShokoRelay-v0.13.0-dev_linux-arm64.zip",
           "checksum": "bf2b61c88adaef47cb49a845d5f53f1db6db10d671d7da254fadf4b08b26fa36"
         },
         {
           "runtime": "linux-x64",
-          "abstraction": "6.0.0",
+          "abstraction": "6.0.0-alpha.32",
           "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.0/ShokoRelay-v0.13.0-dev_linux-x64.zip",
           "checksum": "2f1334a43323fa0efa8bd4a49e52ae21a9ba065b5c81130e557c995357faec67"
         },
         {
           "runtime": "win-x64",
-          "abstraction": "6.0.0",
+          "abstraction": "6.0.0-alpha.32",
           "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.0/ShokoRelay-v0.13.0-dev_win-x64.zip",
           "checksum": "3766040f886d096c380207b7dad48fd9bd3ae2d44014c75fec05aba97efefe9e"
-        }
-      ]
-    },
-    {
-      "version": "0.12.7",
-      "tag": "v0.12.7",
-      "source_revision": "21b6999ab73b6a7e13f737ea8e341f96a138caf1",
-      "released_at": "2026-05-28T17:44:55Z",
-      "channel": "Dev",
-      "release_notes": null,
-      "archives": [
-        {
-          "runtime": "linux-arm64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.12.7/ShokoRelay-v0.12.7-dev_linux-arm64.zip",
-          "checksum": "a5dbfdbe8800304a4a39638d8593ccdd0ad668631af07a717cefc3e9c8bb50a4"
-        },
-        {
-          "runtime": "linux-x64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.12.7/ShokoRelay-v0.12.7-dev_linux-x64.zip",
-          "checksum": "09016d22f77127878f989d542fbe996ed43d80e4addf5161e9cbc50368f6905c"
-        },
-        {
-          "runtime": "win-x64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.12.7/ShokoRelay-v0.12.7-dev_win-x64.zip",
-          "checksum": "f07d1583fcbc8d04a98330f29fe6fd977d5a909eec6f2bcc1b0c338d17263f58"
-        }
-      ]
-    },
-    {
-      "version": "0.12.6",
-      "tag": "v0.12.6",
-      "source_revision": "4d8ce46386f728bce03fe0593fb32bfe79fcd532",
-      "released_at": "2026-05-27T11:42:15Z",
-      "channel": "Dev",
-      "release_notes": null,
-      "archives": [
-        {
-          "runtime": "linux-arm64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.12.6/ShokoRelay-v0.12.6-dev_linux-arm64.zip",
-          "checksum": "b4962bfa0c7eb92bd93becc28c436a44f6f26ff6b46ee51e60dc6f9e0faec4bd"
-        },
-        {
-          "runtime": "linux-x64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.12.6/ShokoRelay-v0.12.6-dev_linux-x64.zip",
-          "checksum": "a64979ab3ba845b7284ac5a702bbb32a4dfc7766e0c076969a3c588325f388e0"
-        },
-        {
-          "runtime": "win-x64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.12.6/ShokoRelay-v0.12.6-dev_win-x64.zip",
-          "checksum": "e79d57fb7169339352ec845952a1c0ef88d3110ffb1774cb0cde9fae4e636678"
-        }
-      ]
-    },
-    {
-      "version": "0.12.5",
-      "tag": "v0.12.5",
-      "source_revision": "01417b2d71a71265150eb3f1c6964ed23dea2921",
-      "released_at": "2026-05-26T13:45:51Z",
-      "channel": "Dev",
-      "release_notes": null,
-      "archives": [
-        {
-          "runtime": "linux-arm64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.12.5/ShokoRelay-v0.12.5-dev_linux-arm64.zip",
-          "checksum": "0d9c1d4f271357118911bf9e7b1eb4d37bf8d60cfa3d380a5b684147f8bf2b4c"
-        },
-        {
-          "runtime": "linux-x64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.12.5/ShokoRelay-v0.12.5-dev_linux-x64.zip",
-          "checksum": "1e2c07d8d1af68c9b398d7ab45f44e6ceb6af59c16fffe17ff974036b2715270"
-        },
-        {
-          "runtime": "win-x64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.12.5/ShokoRelay-v0.12.5-dev_win-x64.zip",
-          "checksum": "5c8930a0b2928b8d413808a06e738a7390818d59135126fc79b47a49d80f295d"
-        }
-      ]
-    },
-    {
-      "version": "0.12.4",
-      "tag": "v0.12.4",
-      "source_revision": "0cee01089154a4ca13b62ddbe93ea9e5175eacd3",
-      "released_at": "2026-05-24T21:16:12Z",
-      "channel": "Dev",
-      "release_notes": null,
-      "archives": [
-        {
-          "runtime": "linux-arm64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.12.4/ShokoRelay-v0.12.4-dev_linux-arm64.zip",
-          "checksum": "e75cbb68fe29587bb4004094d15f7c6c7409fd35f128ba8abaf2b9bbdbc532de"
-        },
-        {
-          "runtime": "linux-x64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.12.4/ShokoRelay-v0.12.4-dev_linux-x64.zip",
-          "checksum": "81e2250dbc9fd76a930dd1ac2d5939445cc8d43f05bfcfcb032610f353a21a91"
-        },
-        {
-          "runtime": "win-x64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.12.4/ShokoRelay-v0.12.4-dev_win-x64.zip",
-          "checksum": "5a8516e3d7c7629e64e89b997e6a62c84c4ddd19d8d3f3ed3cc26f409b8d5c18"
-        }
-      ]
-    },
-    {
-      "version": "0.12.3",
-      "tag": "v0.12.3",
-      "source_revision": "46bde12e05214214153cd05fd091a6b51ed0df22",
-      "released_at": "2026-05-24T02:31:30Z",
-      "channel": "Dev",
-      "release_notes": null,
-      "archives": [
-        {
-          "runtime": "linux-arm64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.12.3/ShokoRelay-v0.12.3-dev_linux-arm64.zip",
-          "checksum": "28fac1018f97c90dcc20c03c227bd71ce0b6471012eb65eeae9b5ede36343edc"
-        },
-        {
-          "runtime": "linux-x64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.12.3/ShokoRelay-v0.12.3-dev_linux-x64.zip",
-          "checksum": "80c247c1262654a69ce8b57044206aa30306146ec256fda1902ae0b2c791cb0e"
-        },
-        {
-          "runtime": "win-x64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.12.3/ShokoRelay-v0.12.3-dev_win-x64.zip",
-          "checksum": "e2f589fbfabd300fbc9cf5954bcbdd2dad6c60712c7632707f8e977ba596e61e"
-        }
-      ]
-    },
-    {
-      "version": "0.12.2",
-      "tag": "v0.12.2",
-      "source_revision": "3416d9c94b5f05e7b8f609efdf98114d3e31f9de",
-      "released_at": "2026-05-22T14:33:11Z",
-      "channel": "Dev",
-      "release_notes": null,
-      "archives": [
-        {
-          "runtime": "linux-arm64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.12.2/ShokoRelay-v0.12.2-dev_linux-arm64.zip",
-          "checksum": "01305ef25061f66a796b6d6178b3a561654adfb8656903b38979e5710e48e522"
-        },
-        {
-          "runtime": "linux-x64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.12.2/ShokoRelay-v0.12.2-dev_linux-x64.zip",
-          "checksum": "7dd06de0fd9ca7970f0089db5637868efb9c9ea4e808d4b4f0157c230a25be07"
-        },
-        {
-          "runtime": "win-x64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.12.2/ShokoRelay-v0.12.2-dev_win-x64.zip",
-          "checksum": "2f2c3e2fc29bbaffbeafcf1d3636712a7e2a941c5373500aa71b54fdc99a9e8c"
-        }
-      ]
-    },
-    {
-      "version": "0.12.1",
-      "tag": "v0.12.1",
-      "source_revision": "7bc5a0f46ee4dd3f2ccbdcb01d2ebc2fece0f885",
-      "released_at": "2026-05-21T09:21:12Z",
-      "channel": "Dev",
-      "release_notes": null,
-      "archives": [
-        {
-          "runtime": "linux-arm64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.12.1/ShokoRelay-v0.12.1-dev_linux-arm64.zip",
-          "checksum": "50e879ebdcda036e78c619a8f351158b3bfbfdfc773ff4713be5390b85b956a4"
-        },
-        {
-          "runtime": "linux-x64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.12.1/ShokoRelay-v0.12.1-dev_linux-x64.zip",
-          "checksum": "1b954d20fd0dab61c3d31be5d09c903d972fc521af69258140ab3b3407f3b7f7"
-        },
-        {
-          "runtime": "win-x64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.12.1/ShokoRelay-v0.12.1-dev_win-x64.zip",
-          "checksum": "1e7ea9239aa697fbb117ff7ba4b6eb635ad28d3a46b956ead69fc90df0dba022"
-        }
-      ]
-    },
-    {
-      "version": "0.12.0",
-      "tag": "v0.12.0",
-      "source_revision": "d1a37450f60abe9752568a8ca105475514143b3b",
-      "released_at": "2026-05-21T00:51:56Z",
-      "channel": "Dev",
-      "release_notes": null,
-      "archives": [
-        {
-          "runtime": "linux-arm64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.12.0/ShokoRelay-v0.12.0-dev_linux-arm64.zip",
-          "checksum": "f2dcf5acdb5e488f0d5d309bd9b6a2b40bb971a4be82e7dbecd24b92768ecb3b"
-        },
-        {
-          "runtime": "linux-x64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.12.0/ShokoRelay-v0.12.0-dev_linux-x64.zip",
-          "checksum": "e5012fcc6299d6d4193caaab7119e60f12845929c6d4dc86ec81406c26be9cf8"
-        },
-        {
-          "runtime": "win-x64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.12.0/ShokoRelay-v0.12.0-dev_win-x64.zip",
-          "checksum": "1e179221caac2e35521b707a501015b927c0e549ab05a4cdeeea8cfdb9b74097"
-        }
-      ]
-    },
-    {
-      "version": "0.11.5",
-      "tag": "v0.11.5",
-      "source_revision": "688a4cd35ae7f85c661abcabc7788710ac89de05",
-      "released_at": "2026-05-17T21:45:54Z",
-      "channel": "Dev",
-      "release_notes": null,
-      "archives": [
-        {
-          "runtime": "linux-arm64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.11.5/ShokoRelay-v0.11.5-dev_linux-arm64.zip",
-          "checksum": "ddc68dd1293ddb18bf26dd0547eae8b130c1c333acf29de2336b254d003f8960"
-        },
-        {
-          "runtime": "linux-x64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.11.5/ShokoRelay-v0.11.5-dev_linux-x64.zip",
-          "checksum": "a4094bda5372e577d693694c361c9cfd627d7de88f8d70b9a41c2b8fcda0cde1"
-        },
-        {
-          "runtime": "win-x64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.11.5/ShokoRelay-v0.11.5-dev_win-x64.zip",
-          "checksum": "fe1bad9efaafa189c387a5a2053f91232b15561777ae34dd717be985fff6450a"
-        }
-      ]
-    },
-    {
-      "version": "0.11.4",
-      "tag": "v0.11.4",
-      "source_revision": "4f4c56ffe015df5854175d81aefa4a78af13ef57",
-      "released_at": "2026-05-15T19:35:28Z",
-      "channel": "Dev",
-      "release_notes": null,
-      "archives": [
-        {
-          "runtime": "linux-arm64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.11.4/ShokoRelay-v0.11.4-dev_linux-arm64.zip",
-          "checksum": "39ac23e4764d6e65c191f689cd8ca059dcc43692ce956a41f086c43b2941349a"
-        },
-        {
-          "runtime": "linux-x64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.11.4/ShokoRelay-v0.11.4-dev_linux-x64.zip",
-          "checksum": "aed4d9d6da8aeffe807f7e2921e77937c5945a0c59b33999bdc4a62494c06978"
-        },
-        {
-          "runtime": "win-x64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.11.4/ShokoRelay-v0.11.4-dev_win-x64.zip",
-          "checksum": "954f3d8418d40de65901adeef706514ca3e13db37f15e0626db0defb376a6e20"
-        }
-      ]
-    },
-    {
-      "version": "0.11.3",
-      "tag": "v0.11.3",
-      "source_revision": "7c897e4e5846715450534e799cb4fd593061c515",
-      "released_at": "2026-05-15T07:29:56Z",
-      "channel": "Dev",
-      "release_notes": null,
-      "archives": [
-        {
-          "runtime": "linux-arm64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.11.3/ShokoRelay-v0.11.3-dev_linux-arm64.zip",
-          "checksum": "eec9564455c43511634fc948a6c1489da3e3f6a96d065532acc256ac50caf0b6"
-        },
-        {
-          "runtime": "linux-x64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.11.3/ShokoRelay-v0.11.3-dev_linux-x64.zip",
-          "checksum": "868c51a9687c38b3c463746d0bee3481d17a5fbb3171c614bfe2e672025efbf9"
-        },
-        {
-          "runtime": "win-x64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.11.3/ShokoRelay-v0.11.3-dev_win-x64.zip",
-          "checksum": "893f741733d16a78f81999bf4e8b36c16e331b84b2027b15c634711d4b69bb0f"
-        }
-      ]
-    },
-    {
-      "version": "0.11.2",
-      "tag": "v0.11.2",
-      "source_revision": "0fd5be6520c4c0c556e824cca77f98a30237bdaa",
-      "released_at": "2026-05-14T17:09:48Z",
-      "channel": "Dev",
-      "release_notes": null,
-      "archives": [
-        {
-          "runtime": "linux-arm64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.11.2/ShokoRelay-v0.11.2-dev_linux-arm64.zip",
-          "checksum": "49015d754ee99d2fa9d375cadaaf4562d2edcd87b10e4adc9c70638e65669ff3"
-        },
-        {
-          "runtime": "linux-x64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.11.2/ShokoRelay-v0.11.2-dev_linux-x64.zip",
-          "checksum": "8596375afb86fdba8b34480f77dc8803cbd1457165889058c14a0146ef4326b1"
-        },
-        {
-          "runtime": "win-x64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.11.2/ShokoRelay-v0.11.2-dev_win-x64.zip",
-          "checksum": "a3ea4aac463179573d197830c97ae3a528e38173b2d09b0be530bcdae28de481"
-        }
-      ]
-    },
-    {
-      "version": "0.11.1",
-      "tag": "v0.11.1",
-      "source_revision": "f065ff35ce3920335e8c0c3d5ebc8aea14f87c65",
-      "released_at": "2026-05-11T16:13:28Z",
-      "channel": "Dev",
-      "release_notes": null,
-      "archives": [
-        {
-          "runtime": "linux-arm64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.11.1/ShokoRelay-v0.11.1-dev_linux-arm64.zip",
-          "checksum": "695e684c113f5b5439ce3ddb0274b48b317ef20b3659ad531087506e81a1e444"
-        },
-        {
-          "runtime": "linux-x64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.11.1/ShokoRelay-v0.11.1-dev_linux-x64.zip",
-          "checksum": "e7849c333c7f5ad9a06be380adce39f9b73f9a68001f8db8af73d366cb0b4117"
-        },
-        {
-          "runtime": "win-x64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.11.1/ShokoRelay-v0.11.1-dev_win-x64.zip",
-          "checksum": "54b487462a988544c91d51223530083de5da35f8d6adaacf320334f47c4ee1c9"
         }
       ]
     }
