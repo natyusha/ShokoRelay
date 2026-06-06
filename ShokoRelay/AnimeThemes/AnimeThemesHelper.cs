@@ -127,6 +127,9 @@ internal static class AnimeThemesHelper
     /// <summary>Regex for themes from secondary series in an override group which start with a <c>P# ❯</c> prefix.</summary>
     internal static readonly Regex OverrideThemeFileRegex = new(@"^P\d+\s❯", RegexOptions.Compiled);
 
+    /// <summary>Regex for inserting spaces into PascalCase strings accounting for numbers.</summary>
+    internal static readonly Regex PascalCaseRegex = new(@"((?<=[a-z])\d+|(?<=\d)[a-zA-Z]+|(?<=[a-z])[A-Z])", RegexOptions.Compiled);
+
     private static readonly Dictionary<string, string> s_slugFormatting = new(StringComparer.OrdinalIgnoreCase)
     {
         { "Animax", "Animax" },
@@ -309,6 +312,17 @@ internal static class AnimeThemesHelper
 
         string attrStr = (Settings.Advanced.AnimeThemesAppendTags && attr.Count > 0) ? $" [{string.Join(", ", attr)}]" : "";
         return VfsHelper.CleanEpisodeTitleForFilename($"{overridePrefix}{nc}{slug}{ver}{title}{slugTag}{artistStr}{attrStr}{extension}");
+    }
+
+    /// <summary>Extracts and formats the anime title from an AnimeThemes filename by inserting spaces into the PascalCase base name.</summary>
+    /// <param name="filePath">The original file path or name.</param>
+    /// <returns>A spaced title string.</returns>
+    internal static string GetTitleFromAnimeThemesFile(string filePath)
+    {
+        string rawFileName = Path.GetFileNameWithoutExtension(filePath);
+        int dashIndex = rawFileName.IndexOf('-');
+        string extractedName = dashIndex > 0 ? rawFileName[..dashIndex] : rawFileName;
+        return PascalCaseRegex.Replace(extractedName, " $1");
     }
 
     /// <summary>Parses a theme slug into base and suffix components.</summary>

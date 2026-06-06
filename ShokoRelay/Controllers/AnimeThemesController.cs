@@ -310,18 +310,18 @@ public class AnimeThemesController(
                         continue;
 
                     // Parse series name gracefully directly from the file basename
-                    string fileName = Path.GetFileNameWithoutExtension(entry.FilePath);
-                    int dashIndex = fileName.LastIndexOf('-');
-                    string pseudoTitle = dashIndex > 0 ? fileName[..dashIndex] : fileName;
+                    string spacedName = AnimeThemesHelper.GetTitleFromAnimeThemesFile(entry.FilePath);
+                    string pseudoTitle = $"{spacedName}";
+                    var lookup = new AnimeThemesVideoLookup(entry);
 
                     items.Add(
                         new
                         {
                             group = "Missing from Collection",
                             series = pseudoTitle,
-                            seriesId = 0, // A 0 value automatically hides the [m] link inside the player UI
+                            seriesId = 0,
                             anidbId = entry.AniDbId,
-                            file = Path.GetFileNameWithoutExtension(absolutePath),
+                            file = AnimeThemesHelper.BuildNewFileName(lookup, ""),
                             path = absolutePath.Replace('\\', '/').Trim(),
                             videoId = entry.VideoId,
                             nc = entry.NC,
