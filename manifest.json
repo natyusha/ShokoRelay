@@ -24,19 +24,19 @@
       "archives": [
         {
           "runtime": "linux-arm64",
-          "abstraction": "6.0.0-alpha.46",
+          "abstraction": "6.0.0",
           "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.3/ShokoRelay-v0.13.3-dev_linux-arm64.zip",
           "checksum": "6693e39fa03f489047e990d58f97ac3dc3bc0572aae29b7de6115cbbc0308af6"
         },
         {
           "runtime": "linux-x64",
-          "abstraction": "6.0.0-alpha.46",
+          "abstraction": "6.0.0",
           "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.3/ShokoRelay-v0.13.3-dev_linux-x64.zip",
           "checksum": "e894f47424fdfa92c954ad9b132d878f7056f2d1452cc213d8a4df2b5a1837c5"
         },
         {
           "runtime": "win-x64",
-          "abstraction": "6.0.0-alpha.46",
+          "abstraction": "6.0.0",
           "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.3/ShokoRelay-v0.13.3-dev_win-x64.zip",
           "checksum": "8ee99eb9bbbd3778700416a08d6a428943887120f3d58bc33b1600b3f082db3b"
         }
@@ -52,19 +52,19 @@
       "archives": [
         {
           "runtime": "linux-arm64",
-          "abstraction": "6.0.0-alpha.44",
+          "abstraction": "6.0.0",
           "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.2/ShokoRelay-v0.13.2-dev_linux-arm64.zip",
           "checksum": "45d00c2bbbd6cd7d2cae208b2afb606b453f10894507df3ed943709abaf278a8"
         },
         {
           "runtime": "linux-x64",
-          "abstraction": "6.0.0-alpha.44",
+          "abstraction": "6.0.0",
           "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.2/ShokoRelay-v0.13.2-dev_linux-x64.zip",
           "checksum": "ecb25841a8342431ec1496fc48e3be91a6d2c3e10fdd8c5a3d53498ebd79d415"
         },
         {
           "runtime": "win-x64",
-          "abstraction": "6.0.0-alpha.44",
+          "abstraction": "6.0.0",
           "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.2/ShokoRelay-v0.13.2-dev_win-x64.zip",
           "checksum": "5e5d34378953a38c946cc4a058e23725cd4c14a5b3f3cd5fe90935f871dd35cb"
         }
@@ -80,19 +80,19 @@
       "archives": [
         {
           "runtime": "linux-arm64",
-          "abstraction": "6.0.0-alpha.38",
+          "abstraction": "6.0.0",
           "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.1/ShokoRelay-v0.13.1-dev_linux-arm64.zip",
           "checksum": "219d69123ec3e9ca13c46945e58c438a2db8003c451c127c26659cb1157365aa"
         },
         {
           "runtime": "linux-x64",
-          "abstraction": "6.0.0-alpha.38",
+          "abstraction": "6.0.0",
           "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.1/ShokoRelay-v0.13.1-dev_linux-x64.zip",
           "checksum": "046c5c8a50774fcf8ac558b9277167621744119c689034e403645d8a3241fc0b"
         },
         {
           "runtime": "win-x64",
-          "abstraction": "6.0.0-alpha.38",
+          "abstraction": "6.0.0",
           "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.1/ShokoRelay-v0.13.1-dev_win-x64.zip",
           "checksum": "158cd55d188da18f455f8384c0e3eb027735f4d1c8757624b1fcec4c7a3518f2"
         }
@@ -108,19 +108,19 @@
       "archives": [
         {
           "runtime": "linux-arm64",
-          "abstraction": "6.0.0-alpha.32",
+          "abstraction": "6.0.0",
           "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.0/ShokoRelay-v0.13.0-dev_linux-arm64.zip",
           "checksum": "bf2b61c88adaef47cb49a845d5f53f1db6db10d671d7da254fadf4b08b26fa36"
         },
         {
           "runtime": "linux-x64",
-          "abstraction": "6.0.0-alpha.32",
+          "abstraction": "6.0.0",
           "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.0/ShokoRelay-v0.13.0-dev_linux-x64.zip",
           "checksum": "2f1334a43323fa0efa8bd4a49e52ae21a9ba065b5c81130e557c995357faec67"
         },
         {
           "runtime": "win-x64",
-          "abstraction": "6.0.0-alpha.32",
+          "abstraction": "6.0.0",
           "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.0/ShokoRelay-v0.13.0-dev_win-x64.zip",
           "checksum": "3766040f886d096c380207b7dad48fd9bd3ae2d44014c75fec05aba97efefe9e"
         }

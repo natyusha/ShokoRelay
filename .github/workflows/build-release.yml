@@ -142,6 +142,7 @@ jobs:
             echo "Error: Missing Shoko.Abstractions version in ShokoRelay.csproj"
             exit 1
           fi
+          ABSTRACTION_VERSION=$(echo "$ABSTRACTION_VERSION" | cut -d'-' -f1) # Strip the pre-release suffix for manifest compatibility (Remove if pre-release versions are supported in the future)
 
           # Fetch release metadata from API (including the body for release_notes)
           RELEASE_DATA=$(gh release view "$TAG" --repo "${{ github.repository }}" --json publishedAt,isPrerelease,body)
