@@ -627,7 +627,7 @@
         localStorage.removeItem(PATH_KEY);
         currentWebmPath = "";
 
-        if (playerTitle) playerTitle.textContent = playerTitle.title = "Video Player";
+        if (playerTitle) playerTitle.textContent = playerTitle.title = "AnimeThemes Player";
         if (playerAnime) {
           playerAnime.textContent = playerAnime.title = "Select a theme to begin...";
           playerAnime.href = "#";

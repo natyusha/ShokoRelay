@@ -28,46 +28,38 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
 
     #region Pages & Assets
 
-    /// <summary>Serves the embedded dashboard UI and its static assets from the plugin folder.</summary>
-    /// <param name="path">The relative sub-path within the dashboard directory.</param>
-    /// <returns>The requested file or HTML content.</returns>
+    /// <summary>Serves the main settings dashboard page.</summary>
+    /// <returns>The settings dashboard HTML content.</returns>
+    [HttpGet("dashboard")]
+    public IActionResult GetDashboardPage() => ServePage("dashboard.cshtml");
+
+    /// <summary>Serves the standalone VFS browser page.</summary>
+    /// <returns>The VFS browser HTML content.</returns>
+    [HttpGet("browser")]
+    public IActionResult GetBrowserPage() => ServePage("browser.cshtml");
+
+    /// <summary>Serves the standalone AnimeThemes video player page.</summary>
+    /// <returns>The video player HTML content.</returns>
+    [HttpGet("player")]
+    public IActionResult GetPlayerPage() => ServePage("player.cshtml");
+
+    /// <summary>Serves the static assets (JS, CSS, fonts, images) from the dashboard folder.</summary>
+    /// <param name="path">The relative asset path.</param>
+    /// <returns>The physical asset file.</returns>
     [HttpGet("dashboard/{*path}")]
-    public IActionResult GetControllerPage([FromRoute] string? path = null)
+    public IActionResult GetAssetFile([FromRoute] string? path = null)
     {
+        if (string.IsNullOrWhiteSpace(path) || "player".Equals(path, StringComparison.OrdinalIgnoreCase) || "browser".Equals(path, StringComparison.OrdinalIgnoreCase))
+            return NotFound();
+
         string dashboardDir = Path.Combine(ConfigProvider.PluginDirectory, "dashboard");
-        bool isPlayer = "player".Equals(path, StringComparison.OrdinalIgnoreCase);
-        bool isBrowser = "browser".Equals(path, StringComparison.OrdinalIgnoreCase);
-        string fileName =
-            (string.IsNullOrWhiteSpace(path) || isPlayer || isBrowser)
-                ? (
-                    isPlayer ? "player.cshtml"
-                    : isBrowser ? "browser.cshtml"
-                    : "dashboard.cshtml"
-                )
-                : path;
-        string safePath = fileName.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
+        string safePath = path.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
         string requested = Path.GetFullPath(Path.Combine(dashboardDir, safePath));
         string dashboardRoot = Path.GetFullPath(dashboardDir);
 
-        if (!requested.StartsWith(dashboardRoot, StringComparison.OrdinalIgnoreCase) || !IoFile.Exists(requested))
-            return NotFound();
-
-        string contentType = GetContentType(requested);
-        string ext = Path.GetExtension(requested).ToLowerInvariant();
-        if (ext != ".cshtml")
-            return PhysicalFile(requested, contentType);
-
-        var html = IoFile.ReadAllText(requested);
-        html = ProcessConstants(html); // Process C# Constants into HTML
-        if (html.IndexOf("<base", StringComparison.OrdinalIgnoreCase) < 0)
-        {
-            var reqPath = Request.Path.Value ?? "";
-            int dashIdx = reqPath.IndexOf("/dashboard", StringComparison.OrdinalIgnoreCase);
-            var baseHref = reqPath[..(dashIdx + 10)].TrimEnd('/') + "/";
-            var baseTag = $"\n    <base href=\"{WebUtility.HtmlEncode(baseHref)}\">";
-            html = html.Replace("<head>", "<head>" + baseTag, StringComparison.OrdinalIgnoreCase);
-        }
-        return Content(html, "text/html");
+        return !requested.StartsWith(dashboardRoot, StringComparison.OrdinalIgnoreCase) || !IoFile.Exists(requested) || requested.EndsWith(".cshtml", StringComparison.OrdinalIgnoreCase)
+            ? NotFound()
+            : PhysicalFile(requested, GetContentType(requested));
     }
 
     #endregion
@@ -246,6 +238,33 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
 
     #region Private Helpers
 
+    /// <summary>Serves a razor template page from the dashboard directory, processing constants and injecting the base path.</summary>
+    /// <param name="fileName">The filename of the razor template to serve.</param>
+    /// <returns>An HTML content result or NotFound if the template does not exist.</returns>
+    private IActionResult ServePage(string fileName)
+    {
+        string dashboardDir = Path.Combine(ConfigProvider.PluginDirectory, "dashboard");
+        string requested = Path.GetFullPath(Path.Combine(dashboardDir, fileName));
+        string dashboardRoot = Path.GetFullPath(dashboardDir);
+
+        if (!requested.StartsWith(dashboardRoot, StringComparison.OrdinalIgnoreCase) || !IoFile.Exists(requested))
+            return NotFound();
+
+        var html = IoFile.ReadAllText(requested);
+        html = ProcessConstants(html); // Process C# Constants into HTML
+
+        if (html.IndexOf("<base", StringComparison.OrdinalIgnoreCase) < 0)
+        {
+            var baseHref = $"{Request.PathBase}{ShokoRelayConstants.BasePath}/dashboard/";
+            var baseTag = $"\n    <base href=\"{WebUtility.HtmlEncode(baseHref)}\">";
+            html = html.Replace("<head>", "<head>" + baseTag, StringComparison.OrdinalIgnoreCase);
+        }
+        return Content(html, "text/html");
+    }
+
+    /// <summary>Resolves the MIME content type for a given file path, prioritizing .cshtml templates.</summary>
+    /// <param name="filePath">The physical path of the file to inspect.</param>
+    /// <returns>A MIME type string mapping to the file's extension.</returns>
     private string GetContentType(string filePath) =>
         filePath.EndsWith(".cshtml") ? "text/html"
         : s_contentTypeProvider.TryGetContentType(filePath, out var contentType) ? contentType
@@ -276,6 +295,11 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
     /// <param name="Rebuild">Whether the setting requires a VFS rebuild.</param>
     private sealed record ConfigPropertySchema(string Path, string Type, string? Display, string? Description, object? DefaultValue, object? EnumValues, bool Advanced, bool Rebuild);
 
+    /// <summary>Recursively builds a list of property metadata descriptors from a type to expose as a JSON schema.</summary>
+    /// <param name="type">The type to reflect over and parse.</param>
+    /// <param name="prefix">The dotted JSON prefix path used to represent nested properties.</param>
+    /// <param name="isAdvancedBranch">True if the properties should inherit advanced setting visibility.</param>
+    /// <returns>A list of schema descriptors representing the type's configuration properties.</returns>
     private static List<ConfigPropertySchema> BuildConfigSchema(Type type, string prefix, bool isAdvancedBranch = false)
     {
         var props = new List<ConfigPropertySchema>();

@@ -3,7 +3,7 @@
  * @description Core shared layout utilities for the Shoko Relay client interface.
  */
 (() => {
-  const base = location.pathname.split(/\/dashboard/i)[0];
+  const base = location.pathname.split(/\/(?:dashboard|player|browser)/i)[0];
   const configUrl = base + "/config";
   const el = (id) => document.getElementById(id);
 

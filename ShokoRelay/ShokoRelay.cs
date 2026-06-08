@@ -94,7 +94,12 @@ public class Plugin : IPlugin
     public string? EmbeddedThumbnailResourceName => "ShokoRelay.Assets.shoko-relay-logo.png";
 
     /// <inheritdoc/>
-    public IReadOnlyList<PluginPage> GetPages() => [new() { Name = "Dashboard", Url = "/api/plugin/ShokoRelay/dashboard" }];
+    public IReadOnlyList<PluginPage> GetPages() =>
+        [
+            new() { Name = "Dashboard", Url = "/api/plugin/ShokoRelay/dashboard" },
+            new() { Name = "VFS Browser", Url = "/api/plugin/ShokoRelay/browser" },
+            new() { Name = "AnimeThemes Player", Url = "/api/plugin/ShokoRelay/player" },
+        ];
 }
 
 #endregion

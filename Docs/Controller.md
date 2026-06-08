@@ -38,7 +38,8 @@ GET  /logs/{fileName}                                          -> GetLog
 
 - `GetControllerPage` Serves the plugin's frontend components and static assets from the `dashboard` folder.
   - `/dashboard` (no path): Serves the main settings dashboard (`dashboard.cshtml`).
-  - `/dashboard/player`: Serves the stand-alone AnimeThemes video player (`player.cshtml`).
+  - `/player`: Serves the stand-alone AnimeThemes video player (`player.cshtml`).
+  - `/browser`: Serves the stand-alone VFS browser (`browser.cshtml`).
   - `/dashboard/{assetPath}`: Serves static assets (JS, CSS, fonts, images).
   - The controller uses `FileExtensionContentTypeProvider` for MIME mapping and automatically injects a `<base>` tag.
 - `GetConfig` returns the current configuration payload (JSON) used by the dashboard page.
