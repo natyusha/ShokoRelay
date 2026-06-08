@@ -352,7 +352,7 @@ public class ConfigProvider
             return false;
         var norm = settings.Advanced.PathMappings.ToDictionary(
             k => NormalizeShokoKey(k.Key),
-            v => (TextHelper.NormalizePathForPlex(v.Value.Trim()) is var p && !p.StartsWith("/") && !p.Contains(":") && !p.StartsWith("//")) ? "/" + p : p
+            v => (TextHelper.NormalizePathForPlex(v.Value.Trim()) is var p && !p.StartsWith('/') && !p.Contains(':') && !p.StartsWith("//", StringComparison.Ordinal)) ? "/" + p : p
         );
         if (JsonSerializer.Serialize(settings.Advanced.PathMappings) == JsonSerializer.Serialize(norm))
             return false;

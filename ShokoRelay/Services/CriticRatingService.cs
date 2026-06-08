@@ -62,6 +62,7 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
             if (!plexClient.IsEnabled)
                 return new ApplyRatingsResult(0, 0, 0, 0, 0, errorsList, appliedChanges);
 
+            var allowedSet = allowedSeriesIds != null ? new HashSet<int>(allowedSeriesIds) : null;
             foreach (var target in plexClient.GetConfiguredTargets())
             {
                 // Process Shows
@@ -71,7 +72,7 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
                     if (string.IsNullOrWhiteSpace(item.Guid))
                         continue;
                     var shokoId = PlexHelper.ExtractShokoSeriesIdFromGuid(item.Guid);
-                    if (!shokoId.HasValue || (allowedSeriesIds != null && !allowedSeriesIds.Contains(shokoId.Value)))
+                    if (!shokoId.HasValue || (allowedSet != null && !allowedSet.Contains(shokoId.Value)))
                         continue;
 
                     pS++;
@@ -114,7 +115,7 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
                         continue;
 
                     var episode = metadataService.GetShokoEpisodeByID(epId.Value);
-                    if (episode == null || (allowedSeriesIds != null && !allowedSeriesIds.Contains(episode.SeriesID)))
+                    if (episode == null || (allowedSet != null && !allowedSet.Contains(episode.SeriesID)))
                         continue;
 
                     pE++;

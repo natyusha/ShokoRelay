@@ -268,11 +268,12 @@ public class PlexMetadata(IMetadataService metadataService)
         var items = new List<(PlexCoords Coords, int? Part, object Meta)>();
         var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         string? prefId = MapHelper.GetPreferredTmdbOrderingId(ctx.Series);
+        bool enforceTmdb = EnforceTmdbNumbering;
 
         foreach (var m in ctx.FileData.GetForSeason(seasonNum))
         {
             // TMDB Episode Groups: One Shoko episode maps to multiple TMDB entries.
-            if (EnforceTmdbNumbering && m.Episodes.Count == 1 && m.PrimaryEpisode is IShokoEpisode { TmdbEpisodes.Count: > 1 } se)
+            if (enforceTmdb && m.Episodes.Count == 1 && m.PrimaryEpisode is IShokoEpisode { TmdbEpisodes.Count: > 1 } se)
             {
                 var tmdbEpisodes = SelectPreferredTmdbOrdering(se.TmdbEpisodes, prefId);
                 for (int i = 0; i < tmdbEpisodes.Count; i++)

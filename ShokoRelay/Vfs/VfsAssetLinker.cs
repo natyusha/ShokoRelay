@@ -116,12 +116,7 @@ public class VfsAssetLinker(IVideoService videoService)
         bool skipExistenceCheck = false
     )
     {
-        var sourceDirs = fileData
-            .Mappings.SelectMany(m => m.Video.Files)
-            .Select(f => Path.GetDirectoryName(f.Path))
-            .Where(d => !string.IsNullOrEmpty(d) && Directory.Exists(d))
-            .Distinct(VfsShared.PathComparer)
-            .ToList();
+        var sourceDirs = fileData.Mappings.SelectMany(m => m.Video.Files).Select(f => Path.GetDirectoryName(f.Path)).Where(d => !string.IsNullOrEmpty(d) && Directory.Exists(d)).Distinct(VfsShared.PathComparer);
         foreach (var srcDir in sourceDirs)
         {
             // Show and Season-Level Extras (Subdirectory pattern matching)
@@ -162,7 +157,7 @@ public class VfsAssetLinker(IVideoService videoService)
                         vfsSeasonDir = Path.Combine(vfsSeriesPath, seasonFolder);
                     string destName = Path.GetFileNameWithoutExtension(VfsHelper.BuildStandardFileName(m, epPad, "", m.Video.ID)) + name[parentBase.Length..] + Path.GetExtension(file);
                     if (VfsShared.TryCreateLink(file, Path.Combine(vfsSeasonDir, destName), s_logger, skipExistenceCheck: skipExistenceCheck))
-                        onLink?.Invoke(seasonFolder, destName, file);
+                        vfsSeasonDir = Path.Combine(vfsSeriesPath, seasonFolder);
                 }
             }
         }

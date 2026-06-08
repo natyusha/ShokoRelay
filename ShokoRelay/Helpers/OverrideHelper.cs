@@ -43,6 +43,8 @@ public static class OverrideHelper
         }
     }
 
+    /// <summary>Loads manual and automatic VFS series override groups from disk and metadata relationships.</summary>
+    /// <param name="metadataService">Optional metadata service used to discover and resolve automatic TMDB series merges.</param>
     private static void LoadInternal(IMetadataService? metadataService)
     {
         // Use a local dictionary to build the groups, then perform an atomic swap to prevent race conditions where other threads see a cleared or partially-loaded static dictionary.
@@ -58,7 +60,7 @@ public static class OverrideHelper
                 foreach (var raw in File.ReadAllLines(path))
                 {
                     var line = raw.Trim();
-                    if (line.Length == 0 || line.StartsWith("#"))
+                    if (line.Length == 0 || line[0] == '#')
                         continue;
                     var parts = TextHelper
                         .SplitCsvLine(line)
@@ -81,12 +83,7 @@ public static class OverrideHelper
             var tmdbGroups =
                 metadataService
                     .GetAllShokoSeries()
-                    ?.Select(s => new
-                    {
-                        s.AnidbAnimeID,
-                        s.AirDate,
-                        TmdbId = s.TmdbShows?.FirstOrDefault()?.ID,
-                    })
+                    ?.Select(s => (s.AnidbAnimeID, s.AirDate, TmdbId: s.TmdbShows?.FirstOrDefault()?.ID))
                     .Where(x => x.TmdbId.HasValue)
                     .GroupBy(x => x.TmdbId!.Value)
                     .Where(g => g.Count() > 1)

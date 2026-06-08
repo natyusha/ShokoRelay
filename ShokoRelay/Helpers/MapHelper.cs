@@ -201,7 +201,7 @@ public static class MapHelper
 
         // Pass 2: Calculate versioning counts using pre-resolved coordinates and variation status
         var coordCounts = videoCoords
-            .Select(kvp => new { kvp.Value.Coords, allVideos.First(v => v.ID == kvp.Key).IsVariation })
+            .Select(kvp => (kvp.Value.Coords, allVideos.First(v => v.ID == kvp.Key).IsVariation))
             .GroupBy(x => (x.Coords.Season, x.Coords.Episode, x.IsVariation))
             .ToDictionary(g => g.Key, g => g.Count());
 

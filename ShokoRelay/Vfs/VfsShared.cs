@@ -244,17 +244,19 @@ internal static class VfsShared
         if (string.IsNullOrEmpty(path))
             return false;
 
-        var names = ignoredNames ?? GetIgnoredFolderNames(Settings);
+        var settings = Settings;
+        var plexLocalExtras = settings.Advanced.PlexLocalExtras;
+        var names = ignoredNames ?? GetIgnoredFolderNames(settings);
         var segments = path.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries);
 
         foreach (var seg in segments)
-            if (names.Contains(seg) || (Settings.Advanced.PlexLocalExtras && VfsHelper.MatchLocalExtraDir(seg).Success))
+            if (names.Contains(seg) || (plexLocalExtras && VfsHelper.MatchLocalExtraDir(seg).Success))
                 return true;
 
         var fileName = Path.GetFileName(path);
         var baseName = Path.GetFileNameWithoutExtension(path);
 
-        return names.Contains(fileName) || (Settings.Advanced.PlexLocalExtras && (VfsHelper.MatchLocalExtraDir(fileName).Success || VfsHelper.MatchLocalExtraFile(baseName).Success));
+        return names.Contains(fileName) || (plexLocalExtras && (VfsHelper.MatchLocalExtraDir(fileName).Success || VfsHelper.MatchLocalExtraFile(baseName).Success));
     }
 
     #endregion

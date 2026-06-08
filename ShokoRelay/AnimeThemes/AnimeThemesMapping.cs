@@ -360,7 +360,12 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
 
     #region Internal Mapping Chk
 
-    private static bool IsAllowed(AnimeThemesMappingEntry e, OverlapLevel level) => level == OverlapLevel.All || e.Overlap == "None" || (level == OverlapLevel.TransitionOnly && e.Overlap == "Transition");
+    /// <summary>Determines if a theme mapping's overlap level is allowed based on the configured overlap restriction.</summary>
+    /// <param name="e">The theme mapping entry to evaluate.</param>
+    /// <param name="level">The maximum allowed level of overlap.</param>
+    /// <returns>True if the theme's overlap satisfies the filter; otherwise, false.</returns>
+    private static bool IsAllowed(AnimeThemesMappingEntry e, OverlapLevel level) =>
+        level == OverlapLevel.All || e.Overlap.Equals("None", StringComparison.Ordinal) || (level == OverlapLevel.TransitionOnly && e.Overlap.Equals("Transition", StringComparison.Ordinal));
 
     #endregion
 

@@ -53,9 +53,10 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
         var targets = plexClient.GetConfiguredTargets();
         var allSeries = metadataService.GetAllShokoSeries() ?? [];
 
+        HashSet<int>? allowedSet = null;
         if (allowedSeriesIds != null)
         {
-            var allowedSet = new HashSet<int>(allowedSeriesIds);
+            allowedSet = [.. allowedSeriesIds];
             allSeries = [.. allSeries.Where(s => s != null && allowedSet.Contains(s.ID))];
         }
 
@@ -86,7 +87,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                             continue;
 
                         var episode = metadataService.GetShokoEpisodeByID(shokoEpisodeId.Value);
-                        if (episode == null || (allowedSeriesIds != null && !allowedSeriesIds.Contains(episode.SeriesID)))
+                        if (episode == null || (allowedSet != null && !allowedSet.Contains(episode.SeriesID)))
                             continue;
 
                         // Check if a local physical episode thumbnail exists on disk alongside the video file

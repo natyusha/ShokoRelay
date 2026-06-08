@@ -45,7 +45,7 @@ public class SourceLinkService(IVideoService videoService)
             for (int i = 0; i < lines.Length; i++)
             {
                 string line = lines[i].Trim();
-                if (string.IsNullOrWhiteSpace(line) || line.StartsWith("#"))
+                if (string.IsNullOrWhiteSpace(line) || line[0] == '#')
                     continue;
 
                 var pipeParts = line.Split('|');
@@ -138,6 +138,7 @@ public class SourceLinkService(IVideoService videoService)
 
             var candidates = Directory.EnumerateFileSystemEntries(srcDir, srcBase + "*").ToList();
             bool mainLinked = false;
+            var cmp = VfsShared.PathComparer == StringComparer.OrdinalIgnoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
             foreach (var entry in candidates)
             {
@@ -145,13 +146,10 @@ public class SourceLinkService(IVideoService videoService)
                 bool isDir = Directory.Exists(entry);
 
                 // Logic: Filter for the primary video, any file starting with the base name, or the designated attachments folder
-                if (!name.Equals(Path.GetFileName(fullSrc)) && !(!isDir && name.StartsWith(srcBase)) && !(isDir && name.Equals(srcBase + "_attachments", StringComparison.OrdinalIgnoreCase)))
+                if (!name.Equals(Path.GetFileName(fullSrc), cmp) && !(!isDir && name.StartsWith(srcBase, cmp)) && !(isDir && name.Equals(srcBase + "_attachments", StringComparison.OrdinalIgnoreCase)))
                     continue;
 
-                string suffix = name[srcBase.Length..];
-                if (isDir)
-                    suffix = "_attach";
-
+                string suffix = isDir ? "_attach" : name[srcBase.Length..];
                 string targetPath = Path.Combine(destDir, finalDestBase + suffix);
 
                 if (isDir)
@@ -162,7 +160,7 @@ public class SourceLinkService(IVideoService videoService)
                     foreach (var subFile in Directory.EnumerateFiles(entry))
                         VfsShared.TryCreateLink(subFile, Path.Combine(targetPath, Path.GetFileName(subFile)), s_logger);
                 }
-                else if (VfsShared.TryCreateLink(entry, targetPath, s_logger) && name.Equals(Path.GetFileName(fullSrc)))
+                else if (VfsShared.TryCreateLink(entry, targetPath, s_logger) && name.Equals(Path.GetFileName(fullSrc), cmp))
                     mainLinked = true;
             }
             return mainLinked;

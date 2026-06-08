@@ -298,6 +298,8 @@ public static class SyncHelper
             if (string.IsNullOrWhiteSpace(userToken))
                 return ([], null, null);
             string? serverAccessToken = null;
+            var targetServerUrl = target.ServerUrl;
+            var targetServerUrlNorm = string.IsNullOrWhiteSpace(targetServerUrl) ? null : targetServerUrl.TrimEnd('/');
             try
             {
                 var clientIdentifier = configProvider.GetPlexClientIdentifier();
@@ -309,12 +311,12 @@ public static class SyncHelper
                         continue;
                     foreach (var c in dev.Connections)
                     {
-                        if (string.IsNullOrWhiteSpace(c?.Uri) || string.IsNullOrWhiteSpace(target.ServerUrl))
+                        if (string.IsNullOrWhiteSpace(c?.Uri) || targetServerUrlNorm == null)
                             continue;
                         try
                         {
                             var connUri = new Uri(c.Uri.TrimEnd('/'));
-                            var tgtUri = new Uri(target.ServerUrl.TrimEnd('/'));
+                            var tgtUri = new Uri(targetServerUrlNorm);
                             if (string.Equals(connUri.Host, tgtUri.Host, StringComparison.OrdinalIgnoreCase) && connUri.Port == tgtUri.Port)
                             {
                                 serverAccessToken = dev.AccessToken;
@@ -323,7 +325,7 @@ public static class SyncHelper
                         }
                         catch
                         {
-                            if (c.Uri.TrimEnd('/').Equals(target.ServerUrl.TrimEnd('/'), StringComparison.OrdinalIgnoreCase))
+                            if (c.Uri.TrimEnd('/').Equals(targetServerUrlNorm, StringComparison.OrdinalIgnoreCase))
                             {
                                 serverAccessToken = dev.AccessToken;
                                 break;
