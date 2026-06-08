@@ -128,7 +128,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
             .Where(d => d.Owned && d.Provides?.Contains("server", StringComparison.OrdinalIgnoreCase) == true) // Filter out any servers where d.Owned is false to completely ignore shared servers
             .Select(d =>
             {
-                var validConnections = d.HttpsRequired ? d.Connections?.Where(c => c.Uri?.StartsWith("https") == true) : d.Connections;
+                var validConnections = d.HttpsRequired ? d.Connections?.Where(c => c.Uri?.StartsWith("https", StringComparison.Ordinal) == true) : d.Connections;
 
                 var pref = validConnections
                     ?.OrderByDescending(c =>
@@ -140,11 +140,9 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
                             score += 1;
 
                         // Only prefer HTTPS if it's a valid .plex.direct URI OR if the server requires HTTPS.
-                        if (c.Uri?.StartsWith("https") == true)
-                        {
-                            if (c.Uri.Contains(".plex.direct") || d.HttpsRequired)
+                        if (c.Uri?.StartsWith("https", StringComparison.Ordinal) == true)
+                            if (c.Uri.Contains(".plex.direct", StringComparison.OrdinalIgnoreCase) || d.HttpsRequired)
                                 score += 10;
-                        }
 
                         return score;
                     })

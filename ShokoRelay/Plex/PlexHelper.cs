@@ -36,6 +36,14 @@ public static class PlexHelper
     }
 
     /// <summary>Extracts the corresponding Shoko Series ID from any valid Plex Rating Key.</summary>
+    /// <remarks>
+    /// **Supported RatingKey Formats:**
+    /// - '123' (Shoko Series ID) / 'a123' (AniDB Series ID)
+    /// - '123s4' (Shoko Series Season 4) / 'a123s4' (AniDB Series Season 4)
+    /// - 'e567' (Shoko Episode ID) / 'ae567' (AniDB Episode ID)
+    /// - 'e567p2' (Shoko Episode Part 2) / 'ae567p2' (AniDB Episode Part 2)
+    /// - _AniDB IDs resolve to Shoko IDs and must be known to Shoko_
+    /// </remarks>
     /// <param name="ratingKey">Plex rating key representing a show, season or episode.</param>
     /// <param name="metadataService">The metadata service used to look up episodes/series.</param>
     /// <returns>The resolved Shoko Series ID, or 0 if not found.</returns>
@@ -65,7 +73,8 @@ public static class PlexHelper
     /// <param name="ratingKey">The rating key to check.</param>
     /// <returns>True if the key represents an episode.</returns>
     public static bool IsEpisodeKey(string ratingKey) =>
-        ratingKey.StartsWith(PlexConstants.EpisodePrefix) || ratingKey.StartsWith(PlexConstants.AniDbPrefix + PlexConstants.EpisodePrefix, StringComparison.OrdinalIgnoreCase);
+        ratingKey.StartsWith(PlexConstants.EpisodePrefix, StringComparison.OrdinalIgnoreCase)
+        || ratingKey.StartsWith(PlexConstants.AniDbPrefix + PlexConstants.EpisodePrefix, StringComparison.OrdinalIgnoreCase);
 
     #endregion
 
