@@ -15,6 +15,34 @@
   "image_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-logo.png",
   "releases": [
     {
+      "version": "0.13.3",
+      "tag": "v0.13.3",
+      "source_revision": "c92dcf2546e448c376e2d72a74b2ed357ae17220",
+      "released_at": "2026-06-08T16:19:54Z",
+      "channel": "Dev",
+      "release_notes": "**Changes:**\r\n- Moved Video Player and VFS Browser to top-level routes (/player and /browser)\r\n- Split GetControllerPage into GetDashboardPage, GetPlayerPage, and GetBrowserPage actions\r\n- Moved static asset delivery to a dedicated GetAssetFile catch-all action under the dashboard path\r\n- Updated the pathname split regular expression in script.js to support the new player and browser routes\r\n- Introduced a ServePage helper method that dynamically constructs safe base tags\r\n- Updated Dashboard UI links and readme/controller.md documentation to match the new routes\r\n- Changed the \"Video Player\" page name to \"AnimeThemes Player\"\r\n- Remove the edited event type from the build-release trigger to prevent workflow spam\r\n- Bumped Shoko.Abstractions to 6.0.0-alpha.46\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.13.2...v0.13.3",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0-alpha.46",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.3/ShokoRelay-v0.13.3-dev_linux-arm64.zip",
+          "checksum": "6693e39fa03f489047e990d58f97ac3dc3bc0572aae29b7de6115cbbc0308af6"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0-alpha.46",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.3/ShokoRelay-v0.13.3-dev_linux-x64.zip",
+          "checksum": "e894f47424fdfa92c954ad9b132d878f7056f2d1452cc213d8a4df2b5a1837c5"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0-alpha.46",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.3/ShokoRelay-v0.13.3-dev_win-x64.zip",
+          "checksum": "8ee99eb9bbbd3778700416a08d6a428943887120f3d58bc33b1600b3f082db3b"
+        }
+      ]
+    },
+    {
       "version": "0.13.2",
       "tag": "v0.13.2",
       "source_revision": "2bb1a435c21ff970340802c3633c278b33399d75",
