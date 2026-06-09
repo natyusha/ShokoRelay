@@ -15,6 +15,34 @@
   "image_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-logo.png",
   "releases": [
     {
+      "version": "0.13.4",
+      "tag": "v0.13.4",
+      "source_revision": "989cc77d7b0865eb1f405d7fc60e2f1c2dda3477",
+      "released_at": "2026-06-09T16:46:50Z",
+      "channel": "Dev",
+      "release_notes": "**Changes:**\r\n- Migrate VFS Blueprint reading in ShokoController from Newtonsoft.Json to System.Text.Json to drastically reduce memory allocation for large libraries\r\n- Implement atomic File.Move writes in VfsBuilder to prevent file corruption and JSON truncation during concurrent operations\r\n- Wrap the VFS Tree endpoint logic in a try/catch to safely return empty arrays instead of throwing 500 errors on invalid cache files\r\n- Serialize the VFS Browser tree response directly with System.Text.Json using a ContentResult avoiding the backend Newtonsoft implementation completely\r\n- Revert inclusion of pre-release abstraction tags in the manifest (the backend isn't configured to parse said tags)\r\n- Introduce a secondary filename-based lookup dictionary for AnimeThemes mappings\r\n- Reuse curated metadata and remap file paths if the user's folder structure does not match the curated map perfectly \r\n- Bump Shoko Abstractions to v6.0.0-alpha.47\r\n- Various performance optimizations/tweaks\r\n \r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.13.3...v0.13.4",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.4/ShokoRelay-v0.13.4-dev_linux-arm64.zip",
+          "checksum": "a3f2a7c41cff8796c69d42925ff8de1c175c36ab98ddd559f20741f91017327e"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.4/ShokoRelay-v0.13.4-dev_linux-x64.zip",
+          "checksum": "d5b128e9b48a7953ece139b6e4717b60dff0af2709e301d49ad42efc712d7d86"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.4/ShokoRelay-v0.13.4-dev_win-x64.zip",
+          "checksum": "237ecd8a7be6ec4af6375302585a547df548a10670a01b2b118bb6737214233e"
+        }
+      ]
+    },
+    {
       "version": "0.13.3",
       "tag": "v0.13.3",
       "source_revision": "c92dcf2546e448c376e2d72a74b2ed357ae17220",
