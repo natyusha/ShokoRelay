@@ -358,7 +358,8 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         try
         {
             string tmpPath = blueprintPath + ".tmp";
-            File.WriteAllText(tmpPath, JsonSerializer.Serialize(blueprint));
+            using (var fs = new FileStream(tmpPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                JsonSerializer.Serialize(fs, blueprint);
             File.Move(tmpPath, blueprintPath, overwrite: true);
         }
         catch { }

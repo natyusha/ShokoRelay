@@ -369,7 +369,7 @@ HEAD /animethemes/webm/stream?path={path}                      -> AnimeThemesWeb
 GET  /animethemes/webm/favourites                              -> GetAnimeThemesFavourites
 POST /animethemes/webm/favourites                              -> UpdateAnimeThemesFavourite
 POST /animethemes/webm/download                                -> DownloadAnimeThemesWebm
-     [?name={string}&year={int}&season={string}&force={true|false}]
+     [?name={string}&year={int}&season={string}&force={true|false}&destination={path}]
 ```
 
 - `AnimeThemesWebmTree` returns the hierarchical tree including bitmask flags and `videoId`.
@@ -379,7 +379,8 @@ POST /animethemes/webm/download                                -> DownloadAnimeT
 - `DownloadAnimeThemesWebm` fetches WebM files from the AnimeThemes API and organizes them by Year/Season inside the configured `!AnimeThemes` folder.
   - At least one filter (`name` or `year` + `season`) is required to prevent accidentally downloading the entire database.
   - `force`: (default false) set to true to overwrite existing `.webm` files.
-  - Files from before the year 200 will sort by Decade/Season
+  - `destination`: (optional) absolute path to a specific managed folder to force downloads into.
+  - Files from before the year 2000 will sort by Decade/Season
 
 ---
 

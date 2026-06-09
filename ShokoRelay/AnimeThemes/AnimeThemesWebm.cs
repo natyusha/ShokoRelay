@@ -1,4 +1,5 @@
 using NLog;
+using Shoko.Abstractions.Video.Enums;
 using Shoko.Abstractions.Video.Services;
 using ShokoRelay.Vfs;
 
@@ -11,7 +12,8 @@ namespace ShokoRelay.AnimeThemes;
 /// <param name="Year">Optional filter for a specific broadcast year.</param>
 /// <param name="Season">Optional filter for a specific broadcast season.</param>
 /// <param name="Force">Whether to overwrite existing .webm files.</param>
-public record AnimeThemesWebmQuery(string? Name, int? Year, string? Season, bool Force = false);
+/// <param name="Destination">Optional absolute path to a specific managed folder to download into.</param>
+public record AnimeThemesWebmQuery(string? Name, int? Year, string? Season, bool Force = false, string? Destination = null);
 
 /// <summary>Aggregated results of a WebM download operation.</summary>
 /// <param name="Downloaded">Count of successful downloads.</param>
@@ -46,8 +48,15 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
             errors = 0;
 
         string themeRootName = VfsShared.ResolveAnimeThemesFolderName();
-        var managedFolders = videoService.GetAllManagedFolders()?.Where(f => !f.DropFolderType.HasFlag(Shoko.Abstractions.Video.Enums.DropFolderType.Source)).Select(f => f.Path).ToList() ?? [];
-        string? targetRoot = managedFolders.FirstOrDefault(p => Directory.Exists(Path.Combine(p!, themeRootName))) ?? managedFolders.FirstOrDefault();
+        var managedFolders = videoService.GetAllManagedFolders()?.Where(f => !f.DropFolderType.HasFlag(DropFolderType.Source)).Select(f => f.Path).Where(p => !string.IsNullOrWhiteSpace(p)).ToList() ?? [];
+        string? targetRoot = null;
+        if (!string.IsNullOrWhiteSpace(query.Destination))
+        {
+            string normDest = VfsShared.NormalizeSeparators(query.Destination);
+            targetRoot = managedFolders.FirstOrDefault(p => string.Equals(p, normDest, StringComparison.OrdinalIgnoreCase)) ?? (Directory.Exists(normDest) ? normDest : null);
+        }
+
+        targetRoot ??= managedFolders.FirstOrDefault(p => Directory.Exists(Path.Combine(p!, themeRootName))) ?? managedFolders.FirstOrDefault();
 
         if (string.IsNullOrWhiteSpace(targetRoot))
         {

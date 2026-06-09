@@ -1,6 +1,7 @@
 using System.Text;
 using Microsoft.AspNetCore.Mvc;
 using Shoko.Abstractions.Metadata.Containers;
+using Shoko.Abstractions.Video.Enums;
 using Shoko.Abstractions.Video.Services;
 using ShokoRelay.AnimeThemes;
 using ShokoRelay.Vfs;
@@ -279,7 +280,7 @@ public class AnimeThemesController(
         {
             try
             {
-                var managedFolders = videoService.GetAllManagedFolders()?.Where(f => !f.DropFolderType.HasFlag(Shoko.Abstractions.Video.Enums.DropFolderType.Source)).Select(f => f.Path).ToList() ?? [];
+                var managedFolders = videoService.GetAllManagedFolders()?.Where(f => !f.DropFolderType.HasFlag(DropFolderType.Source)).Select(f => f.Path).ToList() ?? [];
                 string themeRootName = VfsShared.ResolveAnimeThemesFolderName();
                 var entries = AnimeThemesHelper.ParseMappingContent(IoFile.ReadAllText(mapPath));
 
