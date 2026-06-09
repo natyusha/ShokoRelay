@@ -54,7 +54,7 @@ public static class TagHelper
             return [];
         var userBlacklist = Settings.TagBlacklist.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         var sourceSetting = Settings.TagSources;
-        var shokoNames = shokoTags.Select(t => t.Name).Where(n => !string.IsNullOrWhiteSpace(n)).Cast<string>();
+        var shokoNames = shokoTags.Select(t => t.Name).Where(n => !string.IsNullOrWhiteSpace(n));
 
         if (sourceSetting == TagSources.UserOnly)
             return [.. FilterAndFormat(shokoNames, userBlacklist)];
@@ -62,7 +62,7 @@ public static class TagHelper
         IEnumerable<string> anidbNames = [];
         int minWeight = (int)Settings.MinimumTagWeight;
         if ((sourceSetting == TagSources.Combined || sourceSetting == TagSources.AniDB) && shokoSeries?.AnidbAnime?.Tags is IReadOnlyList<IAnidbTagForAnime> anidbTags)
-            anidbNames = anidbTags.Where(t => !string.IsNullOrWhiteSpace(t.Name) && (minWeight <= 0 || t.Weight >= minWeight)).Select(t => t.Name);
+            anidbNames = anidbTags.Select(t => (t.Name, t.Weight)).Where(x => !string.IsNullOrWhiteSpace(x.Name) && (minWeight <= 0 || x.Weight >= minWeight)).Select(x => x.Name);
 
         IEnumerable<string> tmdbNames = [];
         if ((sourceSetting == TagSources.Combined || sourceSetting == TagSources.TMDB) && shokoSeries?.TmdbShows?.FirstOrDefault() is { } tmdb)
@@ -71,6 +71,10 @@ public static class TagHelper
         return [.. FilterAndFormat(anidbNames.Concat(tmdbNames).Concat(shokoNames), userBlacklist)];
     }
 
+    /// <summary>Filters the raw tag strings against the user blacklist, deduplicates, and normalizes them into title case.</summary>
+    /// <param name="tags">The raw collection of tag name strings to process.</param>
+    /// <param name="userBlacklist">The array of blacklisted tag names to filter out.</param>
+    /// <returns>An enumerable collection of formatted anonymous objects containing the sanitized tags.</returns>
     private static IEnumerable<object> FilterAndFormat(IEnumerable<string> tags, string[] userBlacklist) =>
         tags.Where(tagName => !string.IsNullOrWhiteSpace(tagName) && !s_tagBlacklistAniDBHelpers.Contains(tagName) && !userBlacklist.Contains(tagName, StringComparer.OrdinalIgnoreCase))
             .Distinct(StringComparer.OrdinalIgnoreCase)

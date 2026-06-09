@@ -232,7 +232,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
                 // Fallback: If preferred URI failed, try other endpoints
                 if (!ok && devices.FirstOrDefault(d => string.Equals(d.ClientIdentifier, srv.Id, StringComparison.OrdinalIgnoreCase)) is { } dev && dev.Connections != null)
                 {
-                    var conns = srv.HttpsRequired ? dev.Connections.Where(c => c.Uri?.StartsWith("https") == true) : dev.Connections;
+                    var conns = srv.HttpsRequired ? dev.Connections.Where(c => c.Uri?.StartsWith("https", StringComparison.Ordinal) == true) : dev.Connections;
                     foreach (var conn in conns)
                     {
                         if (string.IsNullOrEmpty(conn.Uri) || string.Equals(conn.Uri, srv.PreferredUri, StringComparison.OrdinalIgnoreCase))
@@ -342,6 +342,12 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
 
     #region Internal Helpers
 
+    /// <summary>Creates an HTTP request message pre-configured with the required Plex application headers and optional authentication.</summary>
+    /// <param name="method">The HTTP method to use for the request.</param>
+    /// <param name="url">The fully qualified destination URI.</param>
+    /// <param name="token">An optional Plex authentication token to embed in headers.</param>
+    /// <param name="cid">An optional Plex client identifier override.</param>
+    /// <returns>A pre-configured HttpRequestMessage instance.</returns>
     private HttpRequestMessage CreateRequest(HttpMethod method, Uri url, string? token = null, string? cid = null)
     {
         var req = new HttpRequestMessage(method, url);
@@ -357,6 +363,11 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
         return req;
     }
 
+    /// <summary>Reads and deserializes a JSON HTTP response body into a strongly-typed object with error logging.</summary>
+    /// <typeparam name="T">The target type to deserialize the response content into.</typeparam>
+    /// <param name="resp">The HTTP response message to read from.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A task representing the async operation containing the deserialized object, or default on failure.</returns>
     private static async Task<T?> ReadJsonAsync<T>(HttpResponseMessage resp, CancellationToken ct)
     {
         if (!resp.IsSuccessStatusCode)
