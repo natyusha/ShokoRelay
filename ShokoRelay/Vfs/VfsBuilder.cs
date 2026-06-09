@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using NLog;
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Video.Enums;
@@ -46,6 +47,35 @@ public record VfsBuildResult(
     List<SeriesProcessDetails> SeriesDetails,
     List<RootCleanupDetails> CleanupDetails,
     TimeSpan TotalElapsed
+);
+
+/// <summary>Represents a file entity inside the VFS Blueprint.</summary>
+/// <param name="Name">The formatted filename.</param>
+/// <param name="Source">The absolute path to the source file.</param>
+public record VfsBlueprintFile([property: JsonPropertyName("name")] string Name, [property: JsonPropertyName("source")] string Source);
+
+/// <summary>Represents a season folder entity inside the VFS Blueprint.</summary>
+/// <param name="Name">The formatted folder name.</param>
+/// <param name="SeasonId">The numeric season ID identifier.</param>
+/// <param name="Files">The collection of files within the season.</param>
+public record VfsBlueprintSeason(
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("seasonId")] int? SeasonId,
+    [property: JsonPropertyName("files")] IEnumerable<VfsBlueprintFile> Files
+);
+
+/// <summary>Represents a full series entity inside the VFS Blueprint.</summary>
+/// <param name="Id">The Shoko Series ID.</param>
+/// <param name="AnidbId">The AniDB Series ID.</param>
+/// <param name="Title">The formatted display title of the series.</param>
+/// <param name="RootFiles">Files located in the root of the series folder.</param>
+/// <param name="Seasons">The collection of season folders.</param>
+public record VfsBlueprintSeries(
+    [property: JsonPropertyName("id")] int Id,
+    [property: JsonPropertyName("anidbId")] int AnidbId,
+    [property: JsonPropertyName("title")] string Title,
+    [property: JsonPropertyName("rootFiles")] IEnumerable<VfsBlueprintFile> RootFiles,
+    [property: JsonPropertyName("seasons")] IEnumerable<VfsBlueprintSeason> Seasons
 );
 
 #endregion
@@ -145,7 +175,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         var errorsBag = new ConcurrentBag<string>();
 
         // Blueprint Cache: Maps RootPath -> Dictionary<SeriesId, SeriesData>
-        var blueprint = new ConcurrentDictionary<string, ConcurrentDictionary<int, object>>(VfsShared.PathComparer);
+        var blueprint = new ConcurrentDictionary<string, ConcurrentDictionary<int, VfsBlueprintSeries>>(VfsShared.PathComparer);
         string blueprintPath = Path.Combine(ConfigDirectory, ShokoRelayConstants.FileVfsBlueprintCache);
         bool isFiltered = seriesIds?.Count > 0;
 
@@ -153,7 +183,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         {
             try
             {
-                var existing = JsonSerializer.Deserialize<Dictionary<string, Dictionary<int, object>>>(File.ReadAllText(blueprintPath));
+                var existing = JsonSerializer.Deserialize<Dictionary<string, Dictionary<int, VfsBlueprintSeries>>>(File.ReadAllText(blueprintPath));
                 if (existing != null)
                     foreach (var rKvp in existing)
                     {
@@ -276,21 +306,15 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                                 .GetOrAdd(root, _ => new())
                                 .TryAdd(
                                     folderId,
-                                    new
-                                    {
-                                        id = folderId,
-                                        anidbId = series.AnidbAnimeID,
-                                        title = TextHelper.ResolveFullSeriesTitles(series).DisplayTitle,
-                                        rootFiles = rootFiles.OrderBy(f => f.Key).Select(f => new { name = f.Key, source = f.Value }),
-                                        seasons = seasons
+                                    new VfsBlueprintSeries(
+                                        folderId,
+                                        series.AnidbAnimeID,
+                                        TextHelper.ResolveFullSeriesTitles(series).DisplayTitle,
+                                        rootFiles.OrderBy(f => f.Key).Select(f => new VfsBlueprintFile(f.Key, f.Value)),
+                                        seasons
                                             .OrderBy(kvp => GetSeasonSortKey(kvp.Key))
-                                            .Select(kvp => new
-                                            {
-                                                name = kvp.Key,
-                                                seasonId = GetSeasonId(kvp.Key),
-                                                files = kvp.Value.OrderBy(f => f.Key).Select(f => new { name = f.Key, source = f.Value }),
-                                            }),
-                                    }
+                                            .Select(kvp => new VfsBlueprintSeason(kvp.Key, GetSeasonId(kvp.Key), kvp.Value.OrderBy(f => f.Key).Select(f => new VfsBlueprintFile(f.Key, f.Value))))
+                                    )
                                 );
                     }
 
@@ -333,7 +357,9 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         // Atomically save the Blueprint to disk for the VFS Browser.
         try
         {
-            File.WriteAllText(blueprintPath, JsonSerializer.Serialize(blueprint));
+            string tmpPath = blueprintPath + ".tmp";
+            File.WriteAllText(tmpPath, JsonSerializer.Serialize(blueprint));
+            File.Move(tmpPath, blueprintPath, overwrite: true);
         }
         catch { }
         return new VfsBuildResult(

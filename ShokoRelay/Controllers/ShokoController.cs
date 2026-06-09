@@ -1,6 +1,5 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using Shoko.Abstractions.Metadata.Enums;
 using Shoko.Abstractions.Video.Enums;
 using Shoko.Abstractions.Video.Services;
@@ -83,41 +82,56 @@ public class ShokoController(
     /// <summary>Returns a hierarchical representation of the VFS structure grouped by import root friendly names.</summary>
     /// <returns>A JSON object containing the folder and file hierarchy.</returns>
     [HttpGet("vfs/tree")]
-    public IActionResult GetVfsTree()
+    public async Task<IActionResult> GetVfsTree()
     {
+        IActionResult EmptyTree() =>
+            Content( /*lang=json,strict*/
+                "{\"roots\":[]}",
+                "application/json"
+            );
+
         var path = Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileVfsBlueprintCache);
         if (!IoFile.Exists(path))
-            return Ok(new { roots = Array.Empty<object>() });
+            return EmptyTree();
 
-        // Normalize Managed Folder paths to remove trailing slashes for consistent comparison with blueprint keys. Filter out folders marked as Source since the VFS only builds in none or destination folders.
-        var managedFolders =
-            videoService
-                .GetAllManagedFolders()
-                ?.Where(f => !f.DropFolderType.HasFlag(DropFolderType.Source))
-                .Select(f => new { Path = f.Path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), f.Name })
-                .OrderByDescending(f => f.Path.Length)
-                .ToList()
-            ?? [];
+        try
+        {
+            // Normalize Managed Folder paths to remove trailing slashes for consistent comparison with blueprint keys. Filter out folders marked as Source since the VFS only builds in none or destination folders.
+            var managedFolders =
+                videoService
+                    .GetAllManagedFolders()
+                    ?.Where(f => !f.DropFolderType.HasFlag(DropFolderType.Source))
+                    .Select(f => new { Path = f.Path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), f.Name })
+                    .OrderByDescending(f => f.Path.Length)
+                    .ToList()
+                ?? [];
 
-        var rawJson = IoFile.ReadAllText(path);
-        var data = JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, JObject>>>(rawJson);
-        if (data == null)
-            return Ok(new { roots = Array.Empty<object>() });
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            var data = await JsonSerializer.DeserializeAsync<Dictionary<string, Dictionary<string, VfsBlueprintSeries>>>(stream);
+            if (data == null)
+                return EmptyTree();
 
-        // Map blueprint entries to their friendly Shoko names and group them to prevent redundant tabs for sub-directories.
-        var roots = data.Select(root =>
-            {
-                var parentDir = Path.GetDirectoryName(root.Key)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) ?? string.Empty;
-                var match = managedFolders.FirstOrDefault(f => string.Equals(parentDir, f.Path, StringComparison.OrdinalIgnoreCase));
-                var fallback = Path.GetFileName(parentDir);
-                return new { Name = match?.Name ?? (string.IsNullOrEmpty(fallback) ? "Unknown" : fallback), Series = root.Value.Values };
-            })
-            .GroupBy(x => x.Name)
-            .Select(g => new { name = g.Key, series = g.SelectMany(x => x.Series).OrderBy(s => s["title"]?.ToString() ?? "").ToList() })
-            .OrderBy(r => r.name)
-            .ToList();
+            // Map blueprint entries to their friendly Shoko names and group them to prevent redundant tabs for sub-directories.
+            var roots = data.Select(root =>
+                {
+                    var parentDir = Path.GetDirectoryName(root.Key)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) ?? string.Empty;
+                    var match = managedFolders.FirstOrDefault(f => string.Equals(parentDir, f.Path, StringComparison.OrdinalIgnoreCase));
+                    var fallback = Path.GetFileName(parentDir);
+                    return new { Name = match?.Name ?? (string.IsNullOrEmpty(fallback) ? "Unknown" : fallback), Series = root.Value.Values };
+                })
+                .GroupBy(x => x.Name)
+                .Select(g => new { name = g.Key, series = g.SelectMany(x => x.Series).OrderBy(s => s.Title ?? "").ToList() })
+                .OrderBy(r => r.name)
+                .ToList();
 
-        return Ok(new { roots });
+            // Bypass MVC's default Newtonsoft.Json formatter and return explicit System.Text.Json to preserve attribute-based casing
+            return Content(JsonSerializer.Serialize(new { roots }), "application/json");
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "ShokoController: Failed to parse VFS blueprint cache");
+            return EmptyTree();
+        }
     }
 
     #endregion
