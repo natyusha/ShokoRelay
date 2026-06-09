@@ -98,13 +98,17 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
             string mapPath = Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FileAtMapping);
             var entries = new List<AnimeThemesMappingEntry>();
             var existing = new Dictionary<string, AnimeThemesMappingEntry>(StringComparer.OrdinalIgnoreCase);
+            var existingByFilename = new Dictionary<string, AnimeThemesMappingEntry>(StringComparer.OrdinalIgnoreCase);
 
             if (File.Exists(mapPath))
             {
                 try
                 {
                     foreach (var e in AnimeThemesHelper.ParseMappingContent(await File.ReadAllTextAsync(mapPath, ct).ConfigureAwait(false)))
+                    {
                         existing.TryAdd(e.FilePath, e);
+                        existingByFilename.TryAdd(Path.GetFileName(e.FilePath), e);
+                    }
                 }
                 catch { }
             }
@@ -122,6 +126,8 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                 string rel = root != null ? "/" + Path.GetRelativePath(root, file).Replace('\\', '/') : file;
                 if (existing.TryGetValue(rel, out var old))
                     entries.Add(old);
+                else if (existingByFilename.TryGetValue(Path.GetFileName(file), out var oldByName))
+                    entries.Add(oldByName with { FilePath = rel });
                 else
                     toProcess.Add((file, rel));
             }
