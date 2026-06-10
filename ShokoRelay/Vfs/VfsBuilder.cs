@@ -496,11 +496,11 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                 continue;
             }
 
-            // Check if any segment of the source path is in the ignored folders set
+            // Check if the source path is ignored under exclusion or extra rules
             if (VfsShared.IsPathIgnored(src, ignoredFolders))
             {
                 skipped++;
-                skippedDetails.Add($"[Excluded Folder] {series.PreferredTitle?.Value} S{mapping.Coords.Season}E{mapping.Coords.Episode} - {mapping.FileName}");
+                skippedDetails.Add($"[Excluded Path] {series.PreferredTitle?.Value} S{mapping.Coords.Season}E{mapping.Coords.Episode} - {mapping.FileName}");
                 continue;
             }
 
