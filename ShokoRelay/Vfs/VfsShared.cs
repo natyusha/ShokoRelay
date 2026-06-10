@@ -29,6 +29,11 @@ internal static class VfsShared
 
     #region Path Resolution
 
+    /// <summary>Determines if a managed folder is strictly configured as a source folder (without destination privileges).</summary>
+    /// <param name="folder">The managed folder to evaluate.</param>
+    /// <returns>True if the folder is source-only; otherwise, false.</returns>
+    public static bool IsSourceOnly(IManagedFolder? folder) => folder != null && folder.DropFolderType.HasFlag(DropFolderType.Source) && !folder.DropFolderType.HasFlag(DropFolderType.Destination);
+
     /// <summary>Determines the root import path for a video file.</summary>
     public static string? ResolveImportRootPath(IVideoFile location)
     {
@@ -81,7 +86,7 @@ internal static class VfsShared
         foreach (var mapping in fileData.Mappings)
         {
             var location = mapping.Video.Files.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l.Path)) ?? mapping.Video.Files.FirstOrDefault();
-            if (location == null || location.ManagedFolder == null || location.ManagedFolder.DropFolderType.HasFlag(DropFolderType.Source))
+            if (location == null || IsSourceOnly(location.ManagedFolder))
                 continue;
 
             string? importRoot = ResolveImportRootPath(location);

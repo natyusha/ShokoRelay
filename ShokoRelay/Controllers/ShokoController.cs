@@ -1,7 +1,6 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Shoko.Abstractions.Metadata.Enums;
-using Shoko.Abstractions.Video.Enums;
 using Shoko.Abstractions.Video.Services;
 using ShokoRelay.AnimeThemes;
 using ShokoRelay.Services;
@@ -96,11 +95,11 @@ public class ShokoController(
 
         try
         {
-            // Normalize Managed Folder paths to remove trailing slashes for consistent comparison with blueprint keys. Filter out folders marked as Source since the VFS only builds in none or destination folders.
+            // Normalize Managed Folder paths to remove trailing slashes for consistent comparison with blueprint keys. Filter out folders marked strictly as Source (without Destination).
             var managedFolders =
                 videoService
                     .GetAllManagedFolders()
-                    ?.Where(f => !f.DropFolderType.HasFlag(DropFolderType.Source))
+                    ?.Where(f => !VfsShared.IsSourceOnly(f))
                     .Select(f => new { Path = f.Path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), f.Name })
                     .OrderByDescending(f => f.Path.Length)
                     .ToList()

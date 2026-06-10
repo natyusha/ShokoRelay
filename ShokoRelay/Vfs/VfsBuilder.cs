@@ -4,7 +4,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using NLog;
 using Shoko.Abstractions.Metadata;
-using Shoko.Abstractions.Video.Enums;
 using Shoko.Abstractions.Video.Services;
 using ShokoRelay.AnimeThemes;
 
@@ -423,8 +422,8 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         {
             var loc = mapping.Video?.Files?.FirstOrDefault(l => File.Exists(l.Path)) ?? mapping.Video?.Files?.FirstOrDefault();
 
-            // Logical Skip: File is in a protected Source folder
-            if (loc?.ManagedFolder == null || loc.ManagedFolder.DropFolderType.HasFlag(DropFolderType.Source))
+            // Logical Skip: File is in a strictly protected Source folder (without Destination)
+            if (loc == null || VfsShared.IsSourceOnly(loc.ManagedFolder))
             {
                 skipped++;
                 skippedDetails.Add($"[Source Folder] {series.PreferredTitle?.Value} S{mapping.Coords.Season}E{mapping.Coords.Episode} - {mapping.FileName}");
