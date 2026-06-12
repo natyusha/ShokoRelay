@@ -141,6 +141,10 @@ public class ConfigProvider
     /// <returns>The current <see cref="RelayConfig"/> instance.</returns>
     public RelayConfig GetSettings()
     {
+        var current = _settings;
+        if (current != null)
+            return current;
+
         lock (_settingsLock)
             return _settings ??= GetSettingsFromFile();
     }

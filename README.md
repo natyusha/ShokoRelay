@@ -123,8 +123,8 @@ com.plexapp.agents.shokorelay
 #### Force Partial Scans
 
 - When `Force Partial Scans` is enabled Plex's HTTP API will be used to scan folders modified by the VFS watcher
-- On certain setups this is much more reliable than Plex's default "Scan my library automatically" implementation
-- _Requires Plex authentication_
+- On certain setups this is much more reliable than Plex's default "Scan my library automatically" or "Run a partial scan when changes are detected" implementation
+- _Requires Plex authentication **and** should not be used if Plex's auto scanning is enabled_
 
 #### Auto Scrobble
 

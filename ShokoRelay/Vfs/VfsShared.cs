@@ -131,6 +131,9 @@ internal static class VfsShared
     /// <returns>A HashSet of folder names.</returns>
     public static HashSet<string> GetIgnoredFolderNames(RelayConfig settings)
     {
+        if (ReferenceEquals(s_lastSettingsForIgnore, settings) && s_lastIgnoredNames != null)
+            return s_lastIgnoredNames;
+
         lock (s_ignoreLock)
         {
             if (ReferenceEquals(s_lastSettingsForIgnore, settings) && s_lastIgnoredNames != null)
