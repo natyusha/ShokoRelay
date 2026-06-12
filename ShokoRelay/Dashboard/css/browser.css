@@ -1,25 +1,14 @@
 /* #region MARK: Header & Tabs
 */
-#controls {
-  top: 8px;
-}
-#header {
-  font-size: 1.3em;
-}
 #vfs-count {
   color: color-mix(in srgb, currentColor 60%, transparent);
   font-size: 0.9em;
 }
-#title {
-  padding-top: 6px;
-  font-weight: 500;
-}
 .tabs-container {
   display: flex;
   gap: 8px;
-  margin-right: 8px;
-  padding: 2px 0 6px 0;
-  overflow-x: auto;
+  margin: 10px 10px 0 0;
+  height: 40px;
 }
 .tab-btn {
   border-radius: 0.25em;
@@ -96,5 +85,33 @@
   font-family: monospace;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* #endregion */
+
+/* #region MARK: Layout Adjustments
+*/
+@media (max-width: 800px) {
+  #header {
+    display: grid;
+    grid-template-rows: 50% 50%;
+    grid-template-columns: 1fr auto;
+  }
+  #header-right {
+    display: contents;
+  }
+  .filter-wrap {
+    grid-column: 1 / -1;
+    margin-left: 10px;
+    width: auto;
+  }
+  .filter-wrap::before {
+    position: absolute;
+    top: -5px;
+    right: -10px;
+    left: -10px;
+    background-color: var(--border-color);
+    height: 1px;
+    content: "";
+  }
 }
 /* #endregion */

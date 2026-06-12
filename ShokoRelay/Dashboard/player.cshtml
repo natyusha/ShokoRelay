@@ -18,26 +18,6 @@
     -->
     <div id="player" role="main">
       <div class="video-container">
-        <div id="controls">
-          <button id="next" class="img-btn" title="Play" type="button" data-state="idle">
-            <svg class="icon-svg play"><use href="img/icons.svg#play"></use></svg>
-            <svg class="icon-svg next"><use href="img/icons.svg#skip-next"></use></svg>
-          </button>
-          <button id="mode" class="img-btn" title="Playback Mode" data-mode="off" type="button">
-            <svg class="icon-svg mode loop"><use href="img/icons.svg#sync"></use></svg>
-            <svg class="icon-svg mode shuffle"><use href="img/icons.svg#shuffle-variant"></use></svg>
-            <svg class="icon-svg mode next"><use href="img/icons.svg#shuffle-disabled"></use></svg>
-            <svg class="icon-svg mode off"><use href="img/icons.svg#sync-off"></use></svg>
-          </button>
-          <span class="filter-wrap">
-            <svg class="filter-icon magnify"><use href="img/icons.svg#magnify"></use></svg>
-            <input id="filter" type="text" placeholder=" " />
-            <label for="filter" class="filter-placeholder">Type <kbd>/</kbd> to filter</label>
-            <button id="filter-clear" title="Clear" type="button" hidden>
-              <svg class="filter-icon clear"><use href="img/icons.svg#close"></use></svg>
-            </button>
-          </span>
-        </div>
         <video id="video" autoplay></video>
         <div id="video-ui" class="video-ui-overlay">
           <div class="ui-top-row">
@@ -77,16 +57,36 @@
       </div>
       <div id="details">
         <div id="header">
-          <div id="now-playing">
-            <div class="np-wrap">
+          <div id="header-left">
+            <div class="header-wrap">
               <span id="now-playing-fav" class="fav-icon" title="Favourite">❤</span>
               <span id="title" data-tooltip-overflow-only="true">AnimeThemes: VFS Video Player</span>
             </div>
-            <div class="np-wrap">
+            <div class="header-wrap">
               <span id="locate-current" class="loc-icon" title="Jump">⏷</span>
               <a id="anime" href="#" data-tooltip-overflow-only="true">Select a theme to begin...</a>
               <a id="anidb" href="#"></a>
             </div>
+          </div>
+          <div id="header-right">
+            <button id="next" class="img-btn" title="Play" type="button" data-state="idle">
+              <svg class="icon-svg play"><use href="img/icons.svg#play"></use></svg>
+              <svg class="icon-svg next"><use href="img/icons.svg#skip-next"></use></svg>
+            </button>
+            <button id="mode" class="img-btn" title="Playback Mode" data-mode="off" type="button">
+              <svg class="icon-svg mode loop"><use href="img/icons.svg#sync"></use></svg>
+              <svg class="icon-svg mode shuffle"><use href="img/icons.svg#shuffle-variant"></use></svg>
+              <svg class="icon-svg mode next"><use href="img/icons.svg#shuffle-disabled"></use></svg>
+              <svg class="icon-svg mode off"><use href="img/icons.svg#sync-off"></use></svg>
+            </button>
+            <span class="filter-wrap">
+              <svg class="filter-icon magnify"><use href="img/icons.svg#magnify"></use></svg>
+              <input id="filter" type="text" placeholder=" " />
+              <label for="filter" class="filter-placeholder">Type <kbd>/</kbd> to filter</label>
+              <button id="filter-clear" title="Clear" type="button" hidden>
+                <svg class="filter-icon clear"><use href="img/icons.svg#close"></use></svg>
+              </button>
+            </span>
           </div>
         </div>
         <div id="tree"></div>

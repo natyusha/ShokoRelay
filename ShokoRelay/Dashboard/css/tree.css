@@ -20,16 +20,43 @@ body {
   overflow: hidden;
 }
 #header {
-  flex-shrink: 0;
-  border-bottom: 1px solid var(--border-color);
-  padding: 0 6px;
-  height: 61px;
-}
-#controls {
   display: flex;
-  position: absolute;
-  right: 8px;
-  z-index: 3;
+  flex-shrink: 0;
+  justify-content: space-between;
+  border-block: 1px solid var(--border-color);
+  width: 100%;
+  height: 60px;
+}
+#header-left,
+#header-right {
+  display: flex;
+  height: 100%;
+}
+#header-left {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  cursor: default;
+  min-width: 0;
+  font-size: 1.3em;
+}
+#header-right {
+  flex-shrink: 0;
+}
+.header-wrap {
+  display: flex;
+  gap: 4px;
+  margin: 6px 10px -10px 6px;
+}
+#title,
+#anime,
+#anidb,
+#vfs-count {
+  display: inline-block;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* #endregion */
 
@@ -52,7 +79,8 @@ body {
   display: flex;
   position: relative;
   align-items: center;
-  width: 295px;
+  margin: 4px 10px 0 0;
+  width: 260px;
 }
 .filter-icon {
   transition: all 0.3s ease-in-out;
@@ -62,7 +90,7 @@ body {
 }
 .magnify {
   position: absolute;
-  top: 10px;
+  top: 14px;
   left: 6px;
   pointer-events: none;
 }
@@ -72,13 +100,17 @@ body {
 }
 .filter-placeholder {
   position: absolute;
-  bottom: 0.85em;
-  left: 2.25em;
+  right: 0.2em;
+  bottom: 1.1em;
+  left: 2.2em;
   transition: all 0.2s ease-in-out;
+  overflow: hidden;
   pointer-events: none;
   color: color-mix(in srgb, var(--text-color) 40%, transparent);
   font-size: 1em;
   user-select: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 #filter:focus ~ .filter-placeholder,
 #filter:not(:placeholder-shown) ~ .filter-placeholder {
@@ -88,7 +120,7 @@ body {
 #filter-clear {
   display: flex;
   position: absolute;
-  top: -1px;
+  top: 3px;
   right: 3px;
   justify-content: center;
   align-items: center;
@@ -264,5 +296,27 @@ a.vfs-link:hover {
 }
 ul.tree {
   margin-top: 8px;
+}
+/* #endregion */
+
+/* #region MARK: Layout Adjustments
+*/
+@media (max-width: 800px) {
+  #header {
+    flex-direction: column;
+    height: 120px;
+  }
+  #header-left,
+  #header-right {
+    height: 50%;
+  }
+  #header-right {
+    border-top: 1px solid var(--border-color);
+    padding-left: 2px;
+  }
+  .filter-wrap {
+    flex: 1;
+    width: 100%;
+  }
 }
 /* #endregion */

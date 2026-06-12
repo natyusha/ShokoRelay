@@ -16,10 +16,7 @@
 #player .video-container.video-off video {
   visibility: hidden;
 }
-#controls {
-  bottom: -56px;
-}
-#controls .img-btn svg {
+#header-right .img-btn svg {
   margin: 6px 8px 0 0;
   width: 1.7em;
   height: 1.7em;
@@ -52,23 +49,9 @@
   flex-direction: column;
   min-height: 0;
 }
-#now-playing {
-  cursor: default;
-  margin-top: 0.35em;
-  max-width: calc(100vw - 395px);
-  font-size: 1.3em;
-}
-.np-wrap {
-  display: flex;
-  gap: 4px;
-  margin-bottom: -5px;
-}
 #now-playing-fav,
 #locate-current {
   pointer-events: none;
-}
-#title {
-  font-weight: 500;
 }
 #anime,
 #anidb {
@@ -78,14 +61,6 @@
   color: color-mix(in srgb, var(--highlight-color) 80%, transparent);
   font-size: 0.9em;
   text-decoration: none;
-}
-#title,
-#anime,
-#anidb {
-  display: inline-block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 #anidb {
   margin-top: 5px;
@@ -275,27 +250,35 @@
     width: 100%;
   }
   #details {
+    border-left: 1px solid var(--border-color);
     width: 390px;
     max-width: 390px;
-    max-height: calc(100vh - 52px);
+  }
+  #header {
+    flex-direction: column;
+    height: 120px;
+  }
+  #header-left,
+  #header-right {
+    height: 50%;
+  }
+  #header-right {
+    border-top: 1px solid var(--border-color);
+    padding-left: 2px;
   }
   .now-playing {
     max-width: 100%;
   }
-  #tree {
-    border-bottom: 1px solid var(--border-color);
-  }
-  #controls {
-    right: -384px;
-    bottom: 0px;
+  .filter-wrap {
+    width: 100%;
   }
 }
-@container (max-width: 230px) {
+@container (max-width: 260px) {
   #volume-text {
     display: none;
   }
 }
-@container (max-width: 160px) {
+@container (max-width: 200px) {
   #time-display {
     display: none;
   }
