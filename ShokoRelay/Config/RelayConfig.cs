@@ -359,7 +359,7 @@ public class AdvancedConfig
     public string ShokoServerUrl { get; set; } = "";
 
     /// <summary>Directory mappings between Shoko and the working device.</summary>
-    [Display(Name = "Theme.mp3 Path Mappings", Description = "Mappings for working base paths to Shoko base paths. Enter one mapping per line")]
+    [Display(Name = "Path Mappings", Description = "Mappings for working base paths to Shoko base paths. Enter one mapping per line")]
     public Dictionary<string, string> PathMappings { get; set; } = [];
 
     /// <summary>Folders to ignore when generating the VFS.</summary>
