@@ -15,6 +15,34 @@
   "image_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-logo.png",
   "releases": [
     {
+      "version": "0.13.5",
+      "tag": "v0.13.5",
+      "source_revision": "ee4d50de5979534ef97fbf7e3becb2bba0e271fa",
+      "released_at": "2026-06-13T06:46:05Z",
+      "channel": "Dev",
+      "release_notes": "**Changes:**\r\n- Add an optional Destination property to AnimeThemesWebmQuery\r\n- Update AnimeThemesWebmDownloader to respect the destination override if it is a valid managed folder or absolute path\r\n- Implement lock-free fast paths inside ConfigProvider.GetSettings and VfsShared.GetIgnoredFolderNames\r\n- Change the filter box from using absolute to flex positioning across the browser/player\r\n- In the player's landscape layout move the filter box from the bottom of the tree to the top below the title\r\n- Rename \"Theme.mp3 Path Mappings\" to \"Path Mappings\" in RelayConfig and settings help modal\r\n- Add a global max-width media query to tree.css to stack the header elements on narrow screens\r\n- Add a max-width media query to browser.css to ensure the tabs stay in the first header row\r\n- General layout tweaks for better header/dashboard rendering below 800px width\r\n- Bump Shoko.Abstractions to v6.0.0-alpha.53\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.13.4...v0.13.5",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.5/ShokoRelay-v0.13.5-dev_linux-arm64.zip",
+          "checksum": "2de227c9d9c1cc823d47c90026a454004dd3c5262355f4ceed7aa5c697d4c764"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.5/ShokoRelay-v0.13.5-dev_linux-x64.zip",
+          "checksum": "da2f53ef12c899449fd5127e8d1657228ebd9d82c540845279d964f31386edd1"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.5/ShokoRelay-v0.13.5-dev_win-x64.zip",
+          "checksum": "83e286bfc04c20c028ffac1e32aca5bad0264179ff17551a066464087c866951"
+        }
+      ]
+    },
+    {
       "version": "0.13.4",
       "tag": "v0.13.4",
       "source_revision": "989cc77d7b0865eb1f405d7fc60e2f1c2dda3477",
