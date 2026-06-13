@@ -140,6 +140,9 @@ textarea {
   font-size: 0.9em;
   font-family: "Sora", sans-serif;
 }
+.clear label {
+  white-space: nowrap;
+}
 .clear input {
   margin-bottom: 0;
 }

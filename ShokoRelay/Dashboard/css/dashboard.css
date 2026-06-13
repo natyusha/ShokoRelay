@@ -321,6 +321,8 @@ label.shoko-checkbox input[type="checkbox"]:checked + .shoko-checkbox-icon .chec
 */
 .dsbld-wrap {
   display: flex;
+  min-width: 50px;
+  font-size: clamp(0.75em, 3vw, 1em);
 }
 .full .dsbld-wrap > button {
   width: 100%;

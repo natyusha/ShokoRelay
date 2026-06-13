@@ -149,21 +149,25 @@
             </label>
           </div>
           <div class="full clear">
-            <div>
-              <label for="shoko-utc-offset" title="Schedule Start Time">UTC Offset</label>
-              <input id="shoko-utc-offset" type="number" min="-12" max="14" step="1" placeholder="-12...+14" />
+            <div class="full">
+              <div>
+                <label for="shoko-utc-offset" title="Schedule Start Time">UTC Offset</label>
+                <input id="shoko-utc-offset" type="number" min="-12" max="14" step="1" placeholder="-12...+14" />
+              </div>
+              <div>
+                <label for="plex-auto-frequency" title="Plex Automation Interval">Plex Int.</label>
+                <input id="plex-auto-frequency" class="plex-auth" type="number" min="0" step="1" placeholder="hours" />
+              </div>
             </div>
-            <div>
-              <label for="plex-auto-frequency" title="Plex Automation Interval">Plex Int.</label>
-              <input id="plex-auto-frequency" class="plex-auth" type="number" min="0" step="1" placeholder="hours" />
-            </div>
-            <div>
-              <label for="shoko-import-frequency" title="Automatic Import Interval">Import Int.</label>
-              <input id="shoko-import-frequency" type="number" min="0" step="1" placeholder="hours" />
-            </div>
-            <div>
-              <label for="shoko-sync-frequency" title="Automatic Watched State Sync Interval">Sync Int.</label>
-              <input id="shoko-sync-frequency" class="plex-auth sync-user" type="number" min="0" step="1" placeholder="hours" />
+            <div class="full">
+              <div>
+                <label for="shoko-import-frequency" title="Automatic Import Interval">Import Int.</label>
+                <input id="shoko-import-frequency" type="number" min="0" step="1" placeholder="hours" />
+              </div>
+              <div>
+                <label for="shoko-sync-frequency" title="Automatic Watched State Sync Interval">Sync Int.</label>
+                <input id="shoko-sync-frequency" class="plex-auth sync-user" type="number" min="0" step="1" placeholder="hours" />
+              </div>
             </div>
           </div>
         </section>
