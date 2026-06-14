@@ -23,6 +23,8 @@ Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File Sy
 > ],
 > ```
 
+Installation can be completed via Shoko's WebUI (Recommended) or Manually. Both Methods will be detailed below:
+
 - **WebUI** (Recommended)
   - Open Shoko's WebUI and navigate to: `Settings > Plugin Management > Repositories`
   - Click `Add Repository` and configure the following:
@@ -30,7 +32,7 @@ Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File Sy
     - Manifest URL: `https://raw.githubusercontent.com/natyusha/ShokoRelay/master/manifest.json`
   - Go to `Settings > Plugin Management > Browse` and find "Shoko Relay"
   - Click `Install`
-- **Manual** (Advanced)
+- **Manual**
   - Navigate to Shoko Server's `plugins` directory and create a new subfolder called `ShokoRelay`
   - Extract [the latest pre-release](https://github.com/natyusha/ShokoRelay/releases) into the `plugins/ShokoRelay` directory
   - It may be necessary to create the `plugins` (all lowercase) folder in Shoko's root first
@@ -151,14 +153,16 @@ com.plexapp.agents.shokorelay
 - `Plex Int.` An input which will schedule [Generate Collections](#collection-generation), [Apply Critic Ratings](#critic-rating-application), and [Sync Plex Images](#plex-image-sync) every `N` hours
   - These tasks will run on individual series automatically when new episodes are added regardless of the configured interval
   - An interval of 24-hours or above is recommended as Shoko rarely updates this information for old series
-- `Import Int.` An input which will schedule Shoko to import new or unrecognized files every `N` hours
-  - Make sure to set `AniDB > Update Options > Files With Missing Info` to "Never" if you use this
+  - _Requires Plex authentication_
 - `Sync Int.` An input which will schedule watched state syncing from Plex to Shoko every `N` hours
   - This includes ratings (votes) and progress if `Include Ratings` or `Include Progress` are enabled respectively in the `Quick Actions > Sync Menu` (Sync Watched States Menu)
     - Currently progress will only sync from Plex to Shoko and not the other way around
   - To speed up the process the scheduled watched sync only considers things watched during the scheduled interval +1 hour
     - A full sync may need to be run if Shoko or Plex downtime exceeds the considered time period
   - _Requires Plex authentication_
+- `Import Int.` An input which will schedule Shoko to import new or unrecognized files every `N` hours
+  - Make sure to set `AniDB > Update Options > Files With Missing Info` to "Never" if you use this
+- The scheduled tasks above can be disabled by setting their configured interval to `0`.
 
 **Run Plex Automation Now**
 
