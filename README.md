@@ -14,17 +14,23 @@ Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File Sy
 
 ## Installation
 
-> [!TIP]
-> Installation can be completed via Shoko's WebUI (Recommended) or Manually. Both Methods will be detailed below.
+> [!WARNING]
+> The VFS is created inside each of Shoko's managed folders under a subfolder named `!ShokoRelayVFS` (configurable under `Advanced Settings > VFS Root Path`). To stop Shoko Server from scanning the generated links and spawning duplicate file entries, it is highly recommended to add a manual exclusion as a safety net. This covers cases where Shoko Relay isn't loaded, or plugins have otherwise failed. To achieve this, navigate to Shoko's installation directory and add the following regex entry (or one matching your configured VFS folder name) to Shoko's `settings-server.json` under `Exclude`:
+>
+> ```json
+> "Exclude": [
+>   "[\\\\\\/]!ShokoRelayVFS[\\\\\\/]"
+> ],
+> ```
 
-- **WebUI**
+- **WebUI** (Recommended)
   - Open Shoko's WebUI and navigate to: `Settings > Plugin Management > Repositories`
   - Click `Add Repository` and configure the following:
     - Name: `Shoko Relay`
     - Manifest URL: `https://raw.githubusercontent.com/natyusha/ShokoRelay/master/manifest.json`
   - Go to `Settings > Plugin Management > Browse` and find "Shoko Relay"
   - Click `Install`
-- **Manual**
+- **Manual** (Advanced)
   - Navigate to Shoko Server's `plugins` directory and create a new subfolder called `ShokoRelay`
   - Extract [the latest pre-release](https://github.com/natyusha/ShokoRelay/releases) into the `plugins/ShokoRelay` directory
   - It may be necessary to create the `plugins` (all lowercase) folder in Shoko's root first
@@ -247,7 +253,7 @@ There is a mini media player included on the dashboard which will play downloade
 
 ### AnimeThemes Player
 
-Shoko Relay includes a browser based video player designed specifically for local AnimeThemes playback. It can be accessed via the `Open Video Player` icon (clap board) within the "AnimeThemes: VFS" section of the dashboard or as an embed in Shoko's WebUI under `Settings > Plugins > Shoko Relay > AnimeThemes Player`. There is an included tree view which allows you to browse your themes by Group/Series as they would appear in Plex. Support for Loop, Shuffle, and Sequential playback is also available via a 4 stage toggle button. A search box is included which will filter the tree view based on series, group, or filename level queries. The filter supports tag-based filtering syntax using `+` (inclusion) and `-` (exclusion) operators.
+Shoko Relay includes a browser based video player designed specifically for local AnimeThemes playback. It can be accessed via the `Open Video Player` icon (clap board) within the "AnimeThemes: VFS" section of the dashboard, as an embed in Shoko's WebUI under `Settings > Plugins > Shoko Relay > AnimeThemes Player`, or by a dedicated URL: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/player`. There is an included tree view which allows you to browse your themes by Group/Series as they would appear in Plex. Support for Loop, Shuffle, and Sequential playback is also available via a 4 stage toggle button. A search box is included which will filter the tree view based on series, group, or filename level queries. The filter supports tag-based filtering syntax using `+` (inclusion) and `-` (exclusion) operators.
 
 > [!TIP]
 > There is a help button in the top right of the video player which will show a full list of keybinds and filters.
@@ -309,7 +315,7 @@ Crossover episodes are files which are linked to multiple episodes spanning sepa
 
 ### VFS Browser
 
-In order to help visualise the VFS and all of the files it contains there is a "VFS Browser" page included with the plugin. It can be navigated to by clicking the folder icon in the top right of the "Shoko: VFS" section of the dashboard or as an embed in Shoko's WebUI under `Settings > Plugins > Shoko Relay > VFS Browser`. Unlike opening the VFS in a normal file browser, this will list the series title and the AniDB/Shoko IDs which correspond to each folder. Each ID will link directly to its source and there is also an included link to the `/metadata/` endpoint for series and seasons. VFS regeneration can be called on any series by clicking the "Refresh VFS Folder" `⟳` icon next to its name in the tree view (this avoids having to look up AniDB/Shoko IDs to use the filter on the dashboard). Similar to the refresh button, there is a "Theme.mp3" `♬` button which tracks if a given VFS entry has a local AnimeThemes `.mp3` attached to it or not. Clicking the button will attempt to generate a theme for any series missing one.
+In order to help visualise the VFS and all of the files it contains there is a "VFS Browser" page included with the plugin. It can be navigated to by clicking the folder icon in the top right of the "Shoko: VFS" section of the dashboard, as an embed in Shoko's WebUI under `Settings > Plugins > Shoko Relay > VFS Browser`, or by a dedicated URL: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/browser`. Unlike opening the VFS in a normal file browser, this will list the series title and the AniDB/Shoko IDs which correspond to each folder. Each ID will link directly to its source and there is also an included link to the `/metadata/` endpoint for series and seasons. VFS regeneration can be called on any series by clicking the "Refresh VFS Folder" `⟳` icon next to its name in the tree view (this avoids having to look up AniDB/Shoko IDs to use the filter on the dashboard). Similar to the refresh button, there is a "Theme.mp3" `♬` button which tracks if a given VFS entry has a local AnimeThemes `.mp3` attached to it or not. Clicking the button will attempt to generate a theme for any series missing one.
 
 ### Automatic Title Modification
 
