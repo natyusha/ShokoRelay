@@ -153,7 +153,9 @@ public static class LogHelper
             ["Skipped Episodes"] = r.Skipped,
             ["Errors"] = r.Errors,
         };
-        BuildReport(sb, "Plex Image Sync Report", stats, "Errors:", r.ErrorsList);
+        var items = r.UploadedDetails.Select(u => $"UPLOADED: {u}").ToList();
+        items.AddRange(r.ErrorsList.Select(e => $"ERROR: {e}"));
+        BuildReport(sb, "Plex Image Sync Report", stats, "Details:", items);
     }
 
     /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskVfsBuild"/>.</summary>
@@ -308,16 +310,18 @@ public static class LogHelper
             ["Skipped"] = result.Skipped,
             ["Errors"] = result.Errors,
         };
-        BuildReport(sb, "AnimeThemes: WebM Download Report", stats, "Messages:", result.Messages);
+        var items = result.Downloads.Select(d => $"DOWNLOADED: {d}").ToList();
+        items.AddRange(result.Messages.Select(m => $"MESSAGE: {m}"));
+        BuildReport(sb, "AnimeThemes: WebM Download Report", stats, "Details:", items);
     }
 
     /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskMapSymlinks"/>.</summary>
     /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
-    /// <param name="count">Number of operations completed.</param>
-    public static void BuildSourceLinkReport(StringBuilder sb, int count)
+    /// <param name="r">Map result data.</param>
+    public static void BuildSourceLinkReport(StringBuilder sb, SourceLinkResult r)
     {
-        AppendHeader(sb, "Source Link Report");
-        sb.AppendLine($"  Operations Completed     : {count}");
+        var stats = new Dictionary<string, object> { ["Mode"] = r.IsPurge ? "Purge" : "Map", ["Operations Completed"] = r.Count };
+        BuildReport(sb, "Source Link Report", stats, r.IsPurge ? null : "Links Created:", r.Details);
     }
 
     #endregion

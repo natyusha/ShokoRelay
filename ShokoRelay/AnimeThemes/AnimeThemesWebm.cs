@@ -18,8 +18,9 @@ public record AnimeThemesWebmQuery(string? Name, int? Year, string? Season, bool
 /// <param name="Downloaded">Count of successful downloads.</param>
 /// <param name="Skipped">Count of skipped files.</param>
 /// <param name="Errors">Count of encountered errors.</param>
+/// <param name="Downloads">List of filenames successfully downloaded.</param>
 /// <param name="Messages">List of operation messages.</param>
-public record WebmDownloadResult(int Downloaded, int Skipped, int Errors, List<string> Messages);
+public record WebmDownloadResult(int Downloaded, int Skipped, int Errors, List<string> Downloads, List<string> Messages);
 
 #endregion
 
@@ -42,6 +43,7 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
     public async Task<WebmDownloadResult> DownloadAsync(AnimeThemesWebmQuery query, CancellationToken ct)
     {
         var messages = new List<string>();
+        var downloads = new List<string>();
         int downloaded = 0,
             skipped = 0,
             errors = 0;
@@ -60,7 +62,7 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
         if (string.IsNullOrWhiteSpace(targetRoot))
         {
             messages.Add("No suitable destination managed folder found.");
-            return new WebmDownloadResult(0, 0, 1, messages);
+            return new WebmDownloadResult(0, 0, 1, downloads, messages);
         }
 
         string baseThemePath = Path.Combine(targetRoot, themeRootName);
@@ -121,6 +123,7 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
                             using var fs = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
                             await videoResp.Content.CopyToAsync(fs, ct).ConfigureAwait(false);
 
+                            downloads.Add(video.Basename);
                             existingFiles.Add(video.Basename); // Add to cache so we don't download it again if it appears in another anime
                             downloaded++;
                         }
@@ -137,6 +140,7 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
                                 using var fs = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
                                 await retryResp.Content.CopyToAsync(fs, ct).ConfigureAwait(false);
 
+                                downloads.Add(video.Basename);
                                 existingFiles.Add(video.Basename);
                                 downloaded++;
                             }
@@ -167,7 +171,7 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
         }
 
         s_logger.Info("AnimeThemes WebM: Download operation finished -> {0} downloaded, {1} skipped, {2} errors", downloaded, skipped, errors);
-        return new WebmDownloadResult(downloaded, skipped, errors, messages);
+        return new WebmDownloadResult(downloaded, skipped, errors, downloads, messages);
     }
 
     #endregion

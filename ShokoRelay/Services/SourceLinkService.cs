@@ -4,6 +4,16 @@ using ShokoRelay.Vfs;
 
 namespace ShokoRelay.Services;
 
+#region Data Models
+
+/// <summary>Result returned by the source link processing operation.</summary>
+/// <param name="Count">Number of links created or purged.</param>
+/// <param name="IsPurge">True if the operation was a purge rather than a map.</param>
+/// <param name="Details">List of specific paths that were mapped.</param>
+public record SourceLinkResult(int Count, bool IsPurge, List<string> Details);
+
+#endregion
+
 /// <summary>Automates the creation of relative symlinks from source folders to library locations based on a mapping file provided via API.</summary>
 /// <param name="videoService">Shoko video service for import root discovery.</param>
 public class SourceLinkService(IVideoService videoService)
@@ -13,11 +23,12 @@ public class SourceLinkService(IVideoService videoService)
     /// <summary>Scans all import roots for the specified mapping file and processes pending entries, or purges existing links.</summary>
     /// <param name="mapFile">The relative path to the mapping file.</param>
     /// <param name="purgeLinks">If true, removes all symlinks and generated _attach folders in the import roots.</param>
-    /// <returns>The number of links created or removed.</returns>
-    public async Task<int> ProcessLinksAsync(string mapFile, bool purgeLinks = false)
+    /// <returns>A result object detailing the operation's outcome.</returns>
+    public async Task<SourceLinkResult> ProcessLinksAsync(string mapFile, bool purgeLinks = false)
     {
         var roots = (videoService.GetAllManagedFolders() ?? []).Select(mf => mf.Path).Where(p => !string.IsNullOrWhiteSpace(p) && Directory.Exists(p)).Distinct().ToList();
         int count = 0;
+        var details = new List<string>();
 
         if (purgeLinks)
         {
@@ -25,11 +36,11 @@ public class SourceLinkService(IVideoService videoService)
             var protectedFolders = VfsShared.GetIgnoredFolderNames(Settings);
             foreach (var root in roots)
                 count += PurgeDirectoryLinks(root!, protectedFolders);
-            return count;
+            return new SourceLinkResult(count, true, details);
         }
 
         if (string.IsNullOrWhiteSpace(mapFile))
-            return 0;
+            return new SourceLinkResult(0, false, details);
         string normMapFile = mapFile.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
 
         foreach (var root in roots)
@@ -60,12 +71,13 @@ public class SourceLinkService(IVideoService videoService)
                     lines[i] = "#" + lines[i];
                     modified = true;
                     count++;
+                    details.Add($"{srcInfo.Path} -> {destInfo.Path}");
                 }
             }
             if (modified)
                 await File.WriteAllLinesAsync(txtPath, lines);
         }
-        return count;
+        return new SourceLinkResult(count, false, details);
     }
 
     /// <summary>Recursively removes symlinks and _attach folders from a directory, skipping protected system folders.</summary>

@@ -24,8 +24,9 @@ public interface IImageSyncService
 /// <param name="Uploaded">Total number of images successfully uploaded to Shoko.</param>
 /// <param name="Skipped">Total number of images skipped because they already had primary artwork.</param>
 /// <param name="Errors">Count of errors encountered during connection or upload.</param>
+/// <param name="UploadedDetails">List of specific images that were uploaded.</param>
 /// <param name="ErrorsList">List of specific error messages.</param>
-public sealed record ImageSyncResult(int Processed, int Uploaded, int Skipped, int Errors, List<string> ErrorsList);
+public sealed record ImageSyncResult(int Processed, int Uploaded, int Skipped, int Errors, List<string> UploadedDetails, List<string> ErrorsList);
 
 #endregion
 
@@ -50,6 +51,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
     {
         var (processed, uploaded, skipped, errors) = (0, 0, 0, 0);
         var errorsList = new List<string>();
+        var uploadedDetails = new List<string>();
         var targets = plexClient.GetConfiguredTargets();
         var allSeries = metadataService.GetAllShokoSeries() ?? [];
 
@@ -122,6 +124,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                                 UploadAndPreferLocalImage(localEpisodeThumb, episode, ImageEntityType.Backdrop, userSubmitted: false);
 
                                 uploaded++;
+                                uploadedDetails.Add($"[Local Episode Thumb] {episode.Series?.PreferredTitle?.Value} S{episode.SeasonNumber}E{episode.EpisodeNumber}");
                                 cache[cacheKeyLocal] = writeTime;
                                 updatedCache = true;
                                 s_logger.Info("ImageSyncService: Successfully uploaded and preferred local thumbnail for episode {0} (ID: {1})", episode.EpisodeNumber, episode.ID);
@@ -202,6 +205,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                             {
                                 imageManager.SetPreferredImageForEntity(episode, ImageEntityType.Backdrop, existingImage);
                                 uploaded++;
+                                uploadedDetails.Add($"[Existing Plex Thumb] {episode.Series?.PreferredTitle?.Value} S{episode.SeasonNumber}E{episode.EpisodeNumber}");
                                 cache[cacheKey] = item.Thumb;
                                 updatedCache = true;
                                 s_logger.Info("ImageSyncService: Linked existing duplicate thumbnail for episode {0} (ID: {1})", episode.EpisodeNumber, episode.ID);
@@ -215,6 +219,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                             imageManager.SetPreferredImageForEntity(episode, ImageEntityType.Backdrop, uploadedImage);
 
                             uploaded++;
+                            uploadedDetails.Add($"[Plex Thumb] {episode.Series?.PreferredTitle?.Value} S{episode.SeasonNumber}E{episode.EpisodeNumber}");
                             cache[cacheKey] = item.Thumb;
                             updatedCache = true;
                             s_logger.Info("ImageSyncService: Successfully uploaded and preferred thumbnail for episode {0} (ID: {1})", episode.EpisodeNumber, episode.ID);
@@ -278,6 +283,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                 UploadAndPreferLocalImage(groupPosterFile, group, ImageEntityType.Primary, userSubmitted: true);
 
                 uploaded++;
+                uploadedDetails.Add($"[Collection Poster] {group.PreferredTitle?.Value}");
                 cache[cacheKey] = writeTime;
                 updatedCache = true;
                 s_logger.Info("ImageSyncService: Successfully uploaded and preferred collection poster for group {0} (ID: {1})", group.PreferredTitle?.Value, group.ID);
@@ -321,6 +327,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                 if (uploadedOk)
                 {
                     uploaded++;
+                    uploadedDetails.Add($"[Local {config.Label}] {series.PreferredTitle?.Value}");
                     updatedCache = true;
                 }
                 else if (skippedOk)
@@ -334,7 +341,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
             SaveCache(cache);
 
         s_logger.Info("ImageSyncService: Finished synchronization -> uploaded {0} new images to Shoko", uploaded);
-        return new ImageSyncResult(processed, uploaded, skipped, errors, errorsList);
+        return new ImageSyncResult(processed, uploaded, skipped, errors, uploadedDetails, errorsList);
     }
 
     #endregion
