@@ -8,14 +8,14 @@
 
 <!-- prettier-ignore-end -->
 
-This is a plugin for Shoko Server that acts as a [Custom Metadata Provider](https://forums.plex.tv/t/announcement-custom-metadata-providers/934384) for Plex. It is a successor to the [ShokoRelay.bundle](https://github.com/natyusha/ShokoRelay.bundle) legacy agent/scanner and mirrors all of its functionality (including the automation scripts). Scanning is much faster and there are many new features included as well. Just like the old bundle this is intended to work with series of all types within a single "TV Shows" library. All you need to get started is a populated [Shoko Server](https://shokoanime.com/downloads/shoko-server) (using a daily build) and [Plex Media Server](https://www.plex.tv/media-server-downloads/).
+This is a plugin for [Shoko](https://shokoanime.com/) that acts as a [Custom Metadata Provider](https://forums.plex.tv/t/announcement-custom-metadata-providers/934384) for Plex. It is a successor to the [ShokoRelay.bundle](https://github.com/natyusha/ShokoRelay.bundle) legacy agent/scanner and mirrors all of its functionality (including the automation scripts). Scanning is much faster and there are many new features included as well. Just like the old bundle this is intended to work with series of all types within a single "TV Shows" library. All you need to get started is a populated [Shoko Server](https://shokoanime.com/downloads/shoko-server) (using a daily build) and [Plex Media Server](https://www.plex.tv/media-server-downloads/).
 
 Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File System) to ensure that varied folder structures are supported. This means that your anime can be organised with whatever file or folder structure you want. There is one caveat though. A folder cannot contain more than one AniDB series at a time if you want it to correctly support [local media assets](https://support.plex.tv/articles/200220717-local-media-assets-tv-shows/) (like posters or theme songs). The VFS will be automatically updated when a file move or rename is detected by Shoko.
 
 ## Installation
 
 > [!WARNING]
-> The VFS is created inside each of Shoko's managed folders under a subfolder named `!ShokoRelayVFS` (configurable under `Advanced Settings > VFS Root Path`). To stop Shoko Server from scanning the generated links and spawning duplicate file entries, it is highly recommended to add a manual exclusion as a safety net. This covers cases where Shoko Relay isn't loaded, or plugins have otherwise failed. To achieve this, navigate to Shoko's installation directory and add the following regex entry (or one matching your configured VFS folder name) to Shoko's `settings-server.json` under `Exclude`:
+> The VFS is created inside each of Shoko's managed folders under a subfolder named `!ShokoRelayVFS` (configurable under `Advanced Settings > VFS Root Path`). To stop Shoko Server from scanning the generated links and spawning duplicate file entries, it is highly recommended to add a manual exclusion as a safety net. This covers cases where Shoko Relay isn't loaded, or plugins have otherwise failed. To achieve this, navigate to Shoko's installation directory and add the following regex entry (or one matching your configured VFS folder name) to `settings-server.json` under `Exclude`:
 >
 > ```json
 > "Exclude": [
@@ -427,6 +427,7 @@ Most manual actions performed via the dashboard (as well as some direct API requ
 - When a task completes, a toast notification appears on the dashboard with a `[view log]` link.
 - These files are overwritten each time the corresponding task is run.
 - To save a specific report, you must download or copy the text before running that task again.
+- Links to the currently generated logs can be viewed at the bottom of the dashboard in the "Task Logs" section
 
 ### Plugin API
 

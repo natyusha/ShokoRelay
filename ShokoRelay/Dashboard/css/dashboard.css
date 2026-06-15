@@ -81,6 +81,22 @@
 }
 /* #endregion */
 
+/* #region MARK: Task Logs
+*/
+.log-item {
+  margin: 0.75rem 0;
+}
+.log-link {
+  padding-right: 6px;
+  font-weight: 500;
+  font-size: 1.1em;
+}
+.placeholder {
+  padding: 0.5rem 0;
+  color: color-mix(in srgb, currentColor 60%, transparent);
+}
+/* #endregion */
+
 /* #region MARK: Dashboard Modals
 */
 .modal textarea {
@@ -432,6 +448,9 @@ button.float-link {
 }
 .details-anim > summary:hover {
   color: var(--hover-color);
+}
+.details-anim h2 {
+  margin-bottom: 0;
 }
 /* #endregion */
 

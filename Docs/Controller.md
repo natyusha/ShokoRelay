@@ -33,7 +33,8 @@ GET  /tasks/active                                             -> GetActiveTasks
 GET  /tasks/completed                                          -> GetCompletedTasks
 POST /tasks/clear/{taskName}                                   -> ClearTaskResult
 
-GET  /logs/{fileName}                                          -> GetLog
+GET /logs/list                                                 -> GetLogsList
+GET /logs/{fileName}                                           -> GetLog
 ```
 
 - `GetControllerPage` Serves the plugin's frontend components and static assets from the `dashboard` folder.
@@ -55,6 +56,7 @@ GET  /logs/{fileName}                                          -> GetLog
 - `GetActiveTasks` returns a list of unique task identifiers currently running on the server.
 - `GetCompletedTasks` returns a dictionary of results for tasks that finished while the dashboard was disconnected or before a refresh.
 - `ClearTaskResult` acknowledges and removes a stored result from the server's memory.
+- `GetLogsList` returns a JSON list of all currently generated task logs that exist on disk.
 - `GetLog` serves report files created under the plugin's `logs` directory.
   - This endpoint serves the file as `text/plain` without a download name, allowing it to be viewed directly in a browser tab.
 

@@ -77,7 +77,7 @@ public class AnimeThemesApi(HttpClient? httpClient = null)
         if (!string.IsNullOrWhiteSpace(season))
             query.Add($"filter[anime][season]={Uri.EscapeDataString(season)}");
         if (!string.IsNullOrWhiteSpace(name))
-            query.Add($"q={Uri.EscapeDataString(name)}");
+            query.Add($"filter[anime][name]={Uri.EscapeDataString(name)}");
 
         string url = $"{AnimeThemesHelper.AtApiBase}/anime?{string.Join("&", query)}";
         return await GetJsonAsync<PagedAnimeResponse>(url, ct);

@@ -236,5 +236,9 @@
     };
 
   loadConfig();
+
+  const logsDetails = document.querySelector("#logs-list")?.closest(".details-anim");
+  const logsContent = logsDetails?.querySelector(".details-content");
+  if (logsDetails && logsContent) initDetailsAnimation(logsDetails, logsContent);
   // #endregion
 })();

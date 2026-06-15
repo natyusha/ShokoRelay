@@ -221,6 +221,26 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
 
     #region Logs
 
+    /// <summary>Returns a JSON list of all currently generated task logs that exist on disk.</summary>
+    /// <returns>A list of log file metadata objects.</returns>
+    [HttpGet("logs/list")]
+    public IActionResult GetLogsList()
+    {
+        string logsDir = Path.Combine(ConfigProvider.PluginDirectory, "logs");
+        if (!Directory.Exists(logsDir))
+            return Ok(new { logs = Array.Empty<object>() });
+
+        var files = Directory
+            .EnumerateFiles(logsDir, "*-report.log")
+            .Select(Path.GetFileName)
+            .OfType<string>()
+            .OrderBy(f => f)
+            .Select(file => new { name = file, friendlyName = TagHelper.TitleCase(file.Replace("-report.log", "", StringComparison.Ordinal).Replace("-", " ", StringComparison.Ordinal)) })
+            .ToList();
+
+        return Ok(files);
+    }
+
     /// <summary>Serves report files from the plugin's logs directory.</summary>
     /// <param name="fileName">The log filename.</param>
     /// <returns>The log content as text/plain.</returns>

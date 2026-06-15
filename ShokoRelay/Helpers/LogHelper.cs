@@ -290,7 +290,7 @@ public static class LogHelper
             .Select(i =>
             {
                 string line = $"[{i.Status}] {i.Folder}";
-                return (i.Status == "ok" && !string.IsNullOrWhiteSpace(i.Slug)) ? $"{line} | {i.Slug}" : line;
+                return i.Status == "ok" ? (!string.IsNullOrWhiteSpace(i.Slug) ? $"{line} | {i.Slug}" : line) : (!string.IsNullOrWhiteSpace(i.Message) ? $"{line} | {i.Message}" : line);
             })
             .ToList();
 

@@ -57,6 +57,7 @@
     const completeRes = await fetchJson(base + "/tasks/completed");
     const completeData = getData(completeRes);
     if (completeRes.ok && completeData) {
+      let hasNewLogs = false;
       for (const [taskName, result] of Object.entries(completeData)) {
         const btn = el(taskName);
         if (btn?.classList.contains("clicking")) continue;
@@ -65,7 +66,47 @@
 
         toastOperation({ ok: isOk, data: result }, taskName.replace(/-/g, " "), { hideOnSucceed: fInput?.value?.trim() ? TOAST_MS : 0 });
         await fetch(base + `/tasks/clear/${taskName}`, { method: "POST" });
+        hasNewLogs = true;
       }
+      if (hasNewLogs) loadLogs();
+    }
+  }
+
+  /**
+   * Fetches the list of generated task logs from the server and renders them as clickable links.
+   * @returns {Promise<void>}
+   */
+  async function loadLogs() {
+    const logsList = el("logs-list");
+    if (!logsList) return;
+
+    const res = await fetchJson(base + "/logs/list");
+    if (res.ok) {
+      const files = getData(res) || [];
+      if (files.length > 0) {
+        logsList.innerHTML = "";
+        files.forEach((f) => {
+          const li = document.createElement("li");
+          li.className = "log-item";
+
+          const link = document.createElement("a");
+          link.href = `${base}/logs/${f.name}`;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          link.textContent = f.friendlyName;
+          link.className = "log-link";
+
+          const small = document.createElement("small");
+          small.textContent = ` (${f.name})`;
+
+          li.append(link, small);
+          logsList.appendChild(li);
+        });
+      } else {
+        logsList.innerHTML = '<li class="placeholder">No log reports generated yet. Click any "Generate" or automation button on the dashboard to start a task.</li>';
+      }
+    } else {
+      logsList.innerHTML = '<li class="placeholder">Failed to load task logs list from server.</li>';
     }
   }
 
@@ -87,6 +128,7 @@
       btn.classList.remove("clicking");
       if (taskId && !MANAGED_TASK_IDS.includes(taskId)) setTimeout(() => setButtonLoading(btn, false), TOAST_MS);
       else syncActiveTasks();
+      loadLogs();
     }
   }
 
@@ -179,4 +221,5 @@
   // Lifecycle Execution
   setInterval(syncActiveTasks, 3000);
   syncActiveTasks();
+  loadLogs();
 })();
