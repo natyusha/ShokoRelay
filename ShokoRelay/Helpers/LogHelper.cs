@@ -141,8 +141,8 @@ public static class LogHelper
         BuildReport(sb, "Audience Rating Report", stats, "Updates & Errors:", items);
     }
 
-    /// <summary>Build the report content for for <see cref="ShokoRelayConstants.TaskPlexImagesSync"/>.</summary>
-    /// <param name="sb">Target builder.</param>
+    /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskPlexImagesSync"/>.</summary>
+    /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
     /// <param name="r">Image sync result data.</param>
     public static void BuildImageSyncReport(StringBuilder sb, ImageSyncResult r)
     {
@@ -153,8 +153,8 @@ public static class LogHelper
             ["Skipped Episodes"] = r.Skipped,
             ["Errors"] = r.Errors,
         };
-        var items = r.UploadedDetails.Select(u => $"UPLOADED: {u}").ToList();
-        items.AddRange(r.ErrorsList.Select(e => $"ERROR: {e}"));
+        var items = r.UploadedDetails.OrderBy(u => u).Select(u => $"UPLOADED: {u}").ToList();
+        items.AddRange(r.ErrorsList.OrderBy(e => e).Select(e => $"ERROR: {e}"));
         BuildReport(sb, "Plex Image Sync Report", stats, "Details:", items);
     }
 
@@ -178,18 +178,18 @@ public static class LogHelper
         if (r.CleanupDetails.Any())
         {
             items.Add("Cleanup Details:");
-            items.AddRange(r.CleanupDetails.Select(c => $"[{c.ElapsedMs, 5}ms] {c.Path}"));
+            items.AddRange(r.CleanupDetails.OrderBy(c => c.Path).Select(c => $"[{c.ElapsedMs, 5}ms] {c.Path}"));
             items.Add("");
         }
         items.Add("Processed Series Details:");
-        items.AddRange(r.SeriesDetails.OrderByDescending(x => x.ElapsedMs).Select(d => $"[{d.ElapsedMs, 5}ms] {d.Name} ({d.CreatedLinks} links)"));
+        items.AddRange(r.SeriesDetails.OrderByDescending(x => x.ElapsedMs).ThenBy(x => x.Name).Select(d => $"[{d.ElapsedMs, 5}ms] {d.Name} ({d.CreatedLinks} links)"));
         if (r.SkippedDetails.Any())
         {
             items.Add("");
             items.Add("Skipped Items:");
-            items.AddRange(r.SkippedDetails.Select(s => $"SKIPPED: {s}"));
+            items.AddRange(r.SkippedDetails.OrderBy(s => s).Select(s => $"SKIPPED: {s}"));
         }
-        items.AddRange(r.Errors.Select(e => $"ERROR: {e}"));
+        items.AddRange(r.Errors.OrderBy(e => e).Select(e => $"ERROR: {e}"));
 
         BuildReport(sb, "VFS Generation Report", stats, "Report Details:", items);
     }
@@ -201,7 +201,7 @@ public static class LogHelper
     public static void BuildPurgeMissingReport(StringBuilder sb, bool dryRun, IReadOnlyList<string>? removed)
     {
         var stats = new Dictionary<string, object> { ["Mode"] = dryRun ? "Dry Run" : "Live", ["Files Found"] = removed?.Count ?? 0 };
-        BuildReport(sb, "Purge Missing Files Report", stats, "Removed Paths:", removed);
+        BuildReport(sb, "Purge Missing Files Report", stats, "Removed Paths:", removed?.OrderBy(p => p));
     }
 
     /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskShokoSyncWatched"/>.</summary>
@@ -224,15 +224,18 @@ public static class LogHelper
         };
 
         var items = new List<string>();
-        foreach (var kv in result.PerUserChanges)
+        foreach (var kv in result.PerUserChanges.OrderBy(kv => kv.Key))
         {
             items.Add($"User: {kv.Key}");
             items.AddRange(
-                kv.Value.Select(c =>
-                {
-                    string action = c.Reason == "progress_updated" ? "Updated Progress" : (c.WouldMark && string.IsNullOrEmpty(c.Reason) ? "Marked" : "Already Watched");
-                    return $"- {c.SeriesTitle} (S{c.SeasonNumber:D2}E{c.EpisodeNumber:D2}) -> {action}";
-                })
+                kv.Value.OrderBy(c => c.SeriesTitle)
+                    .ThenBy(c => c.SeasonNumber)
+                    .ThenBy(c => c.EpisodeNumber)
+                    .Select(c =>
+                    {
+                        string action = c.Reason == "progress_updated" ? "Updated Progress" : (c.WouldMark && string.IsNullOrEmpty(c.Reason) ? "Marked" : "Already Watched");
+                        return $"- {c.SeriesTitle} (S{c.SeasonNumber:D2}E{c.EpisodeNumber:D2}) -> {action}";
+                    })
             );
         }
 
@@ -254,8 +257,8 @@ public static class LogHelper
         if (filter.Count > 0)
             stats["Filter"] = string.Join(", ", filter);
 
-        var items = result.CacheEntries.Select(ce => $"{ce.VfsPath} (VideoID: {ce.VideoId})").ToList();
-        items.AddRange(result.Errors.Select(e => $"ERROR: {e}"));
+        var items = result.CacheEntries.OrderBy(ce => ce.VfsPath).Select(ce => $"{ce.VfsPath} (VideoID: {ce.VideoId})").ToList();
+        items.AddRange(result.Errors.OrderBy(e => e).Select(e => $"ERROR: {e}"));
 
         BuildReport(sb, "AnimeThemes: VFS Build Report", stats, "Planned Links & Errors:", items);
     }
@@ -310,8 +313,8 @@ public static class LogHelper
             ["Skipped"] = result.Skipped,
             ["Errors"] = result.Errors,
         };
-        var items = result.Downloads.Select(d => $"DOWNLOADED: {d}").ToList();
-        items.AddRange(result.Messages.Select(m => $"MESSAGE: {m}"));
+        var items = result.Downloads.OrderBy(d => d).Select(d => $"DOWNLOADED: {d}").ToList();
+        items.AddRange(result.Messages.OrderBy(m => m).Select(m => $"MESSAGE: {m}"));
         BuildReport(sb, "AnimeThemes: WebM Download Report", stats, "Details:", items);
     }
 
@@ -321,7 +324,7 @@ public static class LogHelper
     public static void BuildSourceLinkReport(StringBuilder sb, SourceLinkResult r)
     {
         var stats = new Dictionary<string, object> { ["Mode"] = r.IsPurge ? "Purge" : "Map", ["Operations Completed"] = r.Count };
-        BuildReport(sb, "Source Link Report", stats, r.IsPurge ? null : "Links Created:", r.Details);
+        BuildReport(sb, "Source Link Report", stats, r.IsPurge ? null : "Links Created:", r.Details.OrderBy(d => d));
     }
 
     #endregion
