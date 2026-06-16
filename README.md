@@ -407,19 +407,19 @@ Most manual actions performed via the dashboard (as well as some direct API requ
 
 | Dashboard Action                      | Log Filename                        |
 | :------------------------------------ | :---------------------------------- |
+| **AnimeThemes:** Generate VFS         | `at-vfs-build-report.log`           |
+| **AnimeThemes:** Build Mapping        | `at-map-build-report.log`           |
+| **AnimeThemes:** Generate MP3 (Batch) | `at-mp3-build-report.log`           |
+| **AnimeThemes:** Download WebMs       | `at-webm-download-report.log`       |
 | **Plex:** Auth Refresh                | `plex-auth-refresh-report.log`      |
 | **Plex:** Generate Collections        | `plex-collections-build-report.log` |
 | **Plex:** Apply Critic Ratings        | `plex-ratings-apply-report.log`     |
 | **Plex:** Sync Plex Images            | `plex-images-sync-report.log`       |
 | **Plex:** Run Full Automation         | `plex-automation-run-report.log`    |
-| **Shoko:** Generate VFS               | `vfs-build-report.log`              |
+| **Shoko:** Generate VFS               | `shoko-vfs-build-report.log`        |
 | **Shoko:** Purge Missing              | `shoko-purge-missing-report.log`    |
 | **Shoko:** Sync Watched States        | `shoko-sync-watched-report.log`     |
 | **Shoko:** Map Source Symlinks        | `shoko-map-symlinks-report.log`     |
-| **AnimeThemes:** Generate VFS         | `at-vfs-build-report.log`           |
-| **AnimeThemes:** Build Mapping        | `at-map-build-report.log`           |
-| **AnimeThemes:** Generate MP3 (Batch) | `at-mp3-build-report.log`           |
-| **AnimeThemes:** Download WebMs       | `at-webm-download-report.log`       |
 
 #### How Logs Work
 

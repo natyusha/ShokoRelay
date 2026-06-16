@@ -36,14 +36,14 @@ public static class ShokoRelayConstants
     /// <summary>Directory name for configuration files.</summary>
     public const string FolderConfigSubfolder = "config";
 
+    /// <summary>Default folder name for the AnimeThemes local repository.</summary>
+    public const string FolderAnimeThemesDefault = "!AnimeThemes";
+
     /// <summary>Default folder name for local collection posters.</summary>
     public const string FolderCollectionImagesDefault = "!CollectionImages";
 
     /// <summary>Default folder name for the virtual filesystem root.</summary>
     public const string FolderVfsDefault = "!ShokoRelayVFS";
-
-    /// <summary>Default folder name for the AnimeThemes local repository.</summary>
-    public const string FolderAnimeThemesDefault = "!AnimeThemes";
 
     #endregion
 
@@ -52,20 +52,8 @@ public static class ShokoRelayConstants
     /// <summary>Filename for user preferences.</summary>
     public const string FilePreferences = "preferences.json";
 
-    /// <summary>Filename for the Plex token.</summary>
-    public const string FilePlexToken = "plex.token";
-
-    /// <summary>Filename for the VFS series overrides CSV.</summary>
-    public const string FileVfsOverrides = "anidb_vfs_overrides.csv";
-
     /// <summary>Filename for the AnimeThemes cross-reference mapping CSV.</summary>
     public const string FileAtMapping = "anidb_animethemes_xrefs.csv";
-
-    /// <summary>Filename for the VFS structure blueprint cache.</summary>
-    public const string FileVfsBlueprintCache = "vfs_blueprint.cache";
-
-    /// <summary>Filename for the Plex-generated episode image sync cache.</summary>
-    public const string FilePlexImagesCache = "images_shokorelay.cache";
 
     /// <summary>Filename for the Theme.mp3 folder cache.</summary>
     public const string FileAtMp3Cache = "mp3_animethemes.cache";
@@ -76,9 +64,33 @@ public static class ShokoRelayConstants
     /// <summary>Filename for the AnimeThemes favourites list.</summary>
     public const string FileAtFavsCache = "favs_animethemes.cache";
 
+    /// <summary>Filename for the Plex token.</summary>
+    public const string FilePlexToken = "plex.token";
+
+    /// <summary>Filename for the Plex-generated episode image sync cache.</summary>
+    public const string FilePlexImagesCache = "images_shokorelay.cache";
+
+    /// <summary>Filename for the VFS series overrides CSV.</summary>
+    public const string FileVfsOverrides = "anidb_vfs_overrides.csv";
+
+    /// <summary>Filename for the VFS structure blueprint cache.</summary>
+    public const string FileVfsBlueprintCache = "vfs_blueprint.cache";
+
     #endregion
 
     #region Task Names
+
+    /// <summary>Task name for applying AnimeThemes mappings to the VFS.</summary>
+    public const string TaskAtVfsBuild = "at-vfs-build";
+
+    /// <summary>Task name for scanning files and building the AnimeThemes mapping CSV.</summary>
+    public const string TaskAtMapBuild = "at-map-build";
+
+    /// <summary>Task name for generating and applying series Theme.mp3 files.</summary>
+    public const string TaskAtMp3Build = "at-mp3-build";
+
+    /// <summary>Task name for downloading WebM files directly.</summary>
+    public const string TaskAtWebmDownload = "at-webm-download";
 
     /// <summary>Task name for refreshing Plex library discovery.</summary>
     public const string TaskPlexAuthRefresh = "plex-auth-refresh";
@@ -103,18 +115,6 @@ public static class ShokoRelayConstants
 
     /// <summary>Task name for synchronizing watched state between Plex and Shoko.</summary>
     public const string TaskShokoSyncWatched = "shoko-sync-watched";
-
-    /// <summary>Task name for applying AnimeThemes mappings to the VFS.</summary>
-    public const string TaskAtVfsBuild = "at-vfs-build";
-
-    /// <summary>Task name for scanning files and building the AnimeThemes mapping CSV.</summary>
-    public const string TaskAtMapBuild = "at-map-build";
-
-    /// <summary>Task name for generating and applying series Theme.mp3 files.</summary>
-    public const string TaskAtMp3Build = "at-mp3-build";
-
-    /// <summary>Task name for downloading WebM files directly.</summary>
-    public const string TaskAtWebmDownload = "at-webm-download";
 
     /// <summary>Task name for processing manual source folder symlinks.</summary>
     public const string TaskMapSymlinks = "shoko-map-symlinks";

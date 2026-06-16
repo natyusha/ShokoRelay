@@ -65,19 +65,19 @@ GET /logs/{fileName}                                           -> GetLog
 All automation endpoints utilize the `LogAndReturn` helper (via `ExecuteTrackedTaskAsync`) to provide a direct `logUrl` in the response. Reports include:
 
 ```
+/animethemes/vfs/build                                         -> at-vfs-build-report.log
+/animethemes/vfs/map                                           -> at-map-build-report.log
+/animethemes/mp3?batch=true                                    -> at-mp3-build-report.log
+/animethemes/webm/download                                     -> at-webm-download-report.log
 /plex/auth/refresh                                             -> plex-auth-refresh-report.log
 /plex/collections/build                                        -> plex-collections-build-report.log
 /plex/ratings/apply                                            -> plex-ratings-apply-report.log
 /plex/images/sync                                              -> plex-images-sync-report.log
 /plex/automation/run                                           -> plex-automation-run-report.log
-/vfs                                                           -> vfs-build-report.log
+/vfs                                                           -> shoko-vfs-build-report.log
 /shoko/purge-missing                                           -> shoko-purge-missing-report.log
 /sync-watched                                                  -> shoko-sync-watched-report.log
 /map-symlinks                                                  -> shoko-map-symlinks-report.log
-/animethemes/vfs/build                                         -> at-vfs-build-report.log
-/animethemes/vfs/map                                           -> at-map-build-report.log
-/animethemes/mp3?batch=true                                    -> at-mp3-build-report.log
-/animethemes/webm/download                                     -> at-webm-download-report.log
 ```
 
 ---
