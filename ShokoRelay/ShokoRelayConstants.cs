@@ -96,7 +96,7 @@ public static class ShokoRelayConstants
     public const string TaskPlexAutomationRun = "plex-automation-run";
 
     /// <summary>Task name for building the standard Shoko VFS.</summary>
-    public const string TaskVfsBuild = "vfs-build";
+    public const string TaskVfsBuild = "shoko-vfs-build";
 
     /// <summary>Task name for identifying and removing missing files from the database.</summary>
     public const string TaskShokoPurgeMissing = "shoko-purge-missing";
