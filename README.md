@@ -427,7 +427,7 @@ Most manual actions performed via the dashboard (as well as some direct API requ
 - When a task completes, a toast notification appears on the dashboard with a `[view log]` link.
 - These files are overwritten each time the corresponding task is run.
 - To save a specific report, you must download or copy the text before running that task again.
-- Links to the currently generated logs can be viewed at the bottom of the dashboard in the "Task Logs" section
+- Links to the currently generated logs are available at the bottom of the dashboard in the "Task Logs" section
 
 ### Plugin API
 
