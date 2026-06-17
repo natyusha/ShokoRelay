@@ -12,7 +12,7 @@ public static class ShokoRelayConstants
     public const string Description = "A custom Plex metadata provider and automation toolset for integrating Plex and AnimeThemes with Shoko Server.";
 
     /// <summary>Current version string.</summary>
-    public const string Version = "0.13.6";
+    public const string Version = "0.13.7";
 
     /// <summary>Internal API version.</summary>
     public const string ApiVersion = "1";

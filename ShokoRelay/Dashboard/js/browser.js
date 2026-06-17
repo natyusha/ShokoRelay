@@ -157,9 +157,11 @@
     const res = await fetchJson(base + "/vfs/tree");
     if (res.ok) {
       const roots = getData(res)?.roots || [];
-      if (roots.length > 0) {
+      if (roots.length > 1) {
         const allRoot = buildAllTab(roots);
         displayRoots = [allRoot, ...roots];
+      } else if (roots.length === 1) {
+        displayRoots = roots;
       } else {
         displayRoots = [];
         if (vfsTree) vfsTree.innerHTML = '<div class="placeholder">No VFS directories found. Click the "Generate" button under the "Shoko: VFS" section on the dashboard to build your virtual folders.</div>';
