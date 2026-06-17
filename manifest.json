@@ -15,6 +15,34 @@
   "image_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-logo.png",
   "releases": [
     {
+      "version": "0.13.6",
+      "tag": "v0.13.6",
+      "source_revision": "5d31622edd07b876847dcf6298162f1e4a045066",
+      "released_at": "2026-06-17T19:27:16Z",
+      "channel": "Dev",
+      "release_notes": "**Changes:**\r\n- Remove numerical prefixes from plugin page names in ShokoRelay.cs since Shoko Server no longer sorts them alphabetically\r\n- Include manual folder exclusions in the readme like previous versions did as a recommended safety net\r\n- Add a list of downloaded filenames to WebmDownloadResult and log them in at-webm-download-report.log\r\n- Add a list of mapped file paths to SourceLinkResult and log them in shoko-map-symlinks-report.log\r\n- Track the specific images (thumbs, posters, backdrops, logos) uploaded to Shoko in ImageSyncResult and list them in plex-images-sync-report.log\r\n- Swap out the general query parameter 'q' for the explicit 'filter[anime][name]' parameter in FetchAnimePageAsync\r\n- Update BuildAtMp3Report in LogHelper to append error and skip reason messages to the generated log\r\n- Add GetLogsList endpoint to DashboardController to serialize file listings\r\n- Add Task Logs section to the bottom of the dashboard for viewing the list of logs\r\n- Document the logs section and listing endpoints in the Readme/Controller.md\r\n- Add `forceScan: true` to ScheduleScanForManagedFolders inside ShokoImportService to bypass the per file scan limit\r\n- Bump Shoko.Abstractions to v6.0.0-alpha.55\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.13.5...v0.13.6",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.6/ShokoRelay-v0.13.6-dev_linux-arm64.zip",
+          "checksum": "90f3e5149b655c393b741640879ae20ab88ac7559889d43f913efdc376ebfd3a"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.6/ShokoRelay-v0.13.6-dev_linux-x64.zip",
+          "checksum": "aef0b0d1c7e0795ec8593a4cd26ba135261b7324b2353d24d6a1a09d83e097fa"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.6/ShokoRelay-v0.13.6-dev_win-x64.zip",
+          "checksum": "8fda7e6a8a113098590e37df4812e7799749700c0f38dc9f554b4e3fd5d10ec4"
+        }
+      ]
+    },
+    {
       "version": "0.13.5",
       "tag": "v0.13.5",
       "source_revision": "ee4d50de5979534ef97fbf7e3becb2bba0e271fa",
