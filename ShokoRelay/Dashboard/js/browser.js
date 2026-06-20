@@ -297,7 +297,8 @@
       };
 
       const hasTheme = (g.rootFiles || []).some((f) => f.name === "Theme.mp3");
-      const firstFile = g.rootFiles && g.rootFiles.length > 0 ? g.rootFiles[0] : g.seasons && g.seasons.length > 0 && g.seasons[0].files && g.seasons[0].files.length > 0 ? g.seasons[0].files[0] : null;
+      const validSeasons = (g.seasons || []).filter((s) => s.name.toLowerCase().startsWith("season") || s.name.toLowerCase() === "specials");
+      const firstFile = g.rootFiles && g.rootFiles.length > 0 ? g.rootFiles[0] : validSeasons.length > 0 && validSeasons[0].files && validSeasons[0].files.length > 0 ? validSeasons[0].files[0] : null;
       let slug = "";
       let upgrade = "";
 
