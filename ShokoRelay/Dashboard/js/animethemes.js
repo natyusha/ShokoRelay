@@ -99,12 +99,32 @@
   initToggle("at-mp3-force", false);
   initToggle("at-mp3-batch", false);
 
-  let atAudio = null,
-    nowPlayingToast = null,
-    atCurrentFolder = null;
+  let atAudio = null;
+  let nowPlayingToast = null;
+  let atCurrentFolder = null;
 
-  const atTrack = el("at-progress-track"),
-    atFill = el("at-progress-fill");
+  const atTrack = el("at-progress-track");
+  const atFill = el("at-progress-fill");
+
+  /**
+   * Initializes real-time input sanitization event listeners for the Slug and Offset fields.
+   * @returns {void}
+   */
+  function initAtSanitizers() {
+    const slugInput = el("at-slug");
+    if (slugInput) {
+      slugInput.oninput = () => {
+        slugInput.value = slugInput.value.replace(/[^a-zA-Z0-9-]/g, "").toUpperCase();
+      };
+    }
+
+    const offsetInput = el("at-offset");
+    if (offsetInput) {
+      offsetInput.oninput = () => {
+        offsetInput.value = offsetInput.value.replace(/[^0-9]/g, "");
+      };
+    }
+  }
 
   /** Dismiss the currently active 'Now Playing' toast notification if it exists. */
   function dismissNowPlaying() {
@@ -261,5 +281,9 @@
       };
     }
   };
+  // #endregion
+
+  // #region Initialization
+  initAtSanitizers(); // Initialize sanitizers immediately on script load
   // #endregion
 })();

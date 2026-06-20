@@ -352,8 +352,8 @@
           </div>
           <div class="full">
             <div class="at-path-col"><label>Path</label><input id="at-path" type="text" placeholder="Shoko or mapping relative anime path" /></div>
-            <div class="w46"><label title="Preferred Theme">Slug</label><input id="at-slug" type="text" placeholder="OP2" /></div>
-            <div class="w46"><label title="Index Override">Off.</label><input id="at-offset" type="number" value="" placeholder="0" /></div>
+            <div class="w46"><label title="Preferred Theme">Slug</label><input id="at-slug" type="text" placeholder="OP2" maxlength="15" /></div>
+            <div class="w46"><label title="Index Override">Off.</label><input id="at-offset" type="number" min="0" step="1" value="" placeholder="0" /></div>
           </div>
           <div class="full">
             <button id="{{ TaskAtMp3Build }}" data-relay-action="atMp3Build">Generate</button>
