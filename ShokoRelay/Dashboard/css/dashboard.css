@@ -86,7 +86,7 @@
 .log-item {
   margin: 0.75rem 0;
 }
-.log-link {
+#logs-list .log-link {
   padding-right: 6px;
   font-weight: 500;
   font-size: 1.1em;

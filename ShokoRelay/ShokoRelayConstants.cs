@@ -89,6 +89,9 @@ public static class ShokoRelayConstants
     /// <summary>Task name for generating and applying series Theme.mp3 files.</summary>
     public const string TaskAtMp3Build = "at-mp3-build";
 
+    /// <summary>Task name for auditing existing Theme.mp3 files for available OP upgrades.</summary>
+    public const string TaskAtMp3Audit = "at-mp3-audit";
+
     /// <summary>Task name for downloading WebM files directly.</summary>
     public const string TaskAtWebmDownload = "at-webm-download";
 

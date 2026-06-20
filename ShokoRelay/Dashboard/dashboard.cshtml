@@ -22,6 +22,7 @@
         atVfsBuild: "{{TaskAtVfsBuild}}",
         atMapBuild: "{{TaskAtMapBuild}}",
         atMp3Build: "{{TaskAtMp3Build}}",
+        atMp3Audit: "{{TaskAtMp3Audit}}",
       };
     </script>
   </head>
@@ -356,6 +357,9 @@
           </div>
           <div class="full">
             <button id="{{ TaskAtMp3Build }}" data-relay-action="atMp3Build">Generate</button>
+            <button id="{{ TaskAtMp3Audit }}" class="w46-button" title="Audit Theme.mp3 Files" data-relay-endpoint="/animethemes/mp3/audit" data-relay-label="AnimeThemes MP3 Audit" data-relay-persist="true">
+              <svg class="icon-svg"><use href="img/icons.svg#tag-check-outline"></use></svg>
+            </button>
             <button id="at-mp3-force" class="w46-button toggle" title="Force Overwrite Toggle" aria-pressed="false" type="button" aria-label="Force Overwrite Toggle">
               <svg class="icon-svg"><use href="img/icons.svg#chevron-triple-down"></use></svg>
             </button>

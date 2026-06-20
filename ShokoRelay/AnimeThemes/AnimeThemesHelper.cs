@@ -130,6 +130,9 @@ internal static class AnimeThemesHelper
     /// <summary>Regex for inserting spaces into PascalCase strings accounting for numbers.</summary>
     internal static readonly Regex PascalCaseRegex = new(@"(?<=[a-z])(?=[A-Z])|(?<=[a-z])(?=\d)|(?<=\d)(?=[A-Za-z])", RegexOptions.Compiled);
 
+    /// <summary>Regex for identifying default Opening 1 themes (including their alternate names and suffixes).</summary>
+    internal static readonly Regex Op1Regex = new(@"^(?:OP|Opening)\s*(?:1\b|-|\(|$)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
     private static readonly Dictionary<string, string> s_slugFormatting = new(StringComparer.OrdinalIgnoreCase)
     {
         { "Animax", "Animax" },
@@ -161,6 +164,51 @@ internal static class AnimeThemesHelper
     #endregion
 
     #region CSV Logic
+
+    /// <summary>Reads specific ID3v2 tags from an MP3 file without external dependencies.</summary>
+    /// <param name="filePath">Absolute path to the MP3 file.</param>
+    /// <returns>A dictionary of tag names and values.</returns>
+    internal static Dictionary<string, string> ReadId3v2Tags(string filePath)
+    {
+        var tags = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        Span<byte> h = stackalloc byte[10];
+        if (fs.Read(h) < 10 || h[0] != 'I' || h[1] != 'D' || h[2] != '3')
+            return tags;
+
+        int tagSize = (h[6] << 21) | (h[7] << 14) | (h[8] << 7) | h[9];
+        int maxRead = Math.Min(tagSize, 65536);
+        byte[] d = new byte[maxRead];
+        int r = fs.Read(d, 0, maxRead);
+        int p = 0;
+        while (p + 10 <= r)
+        {
+            string id = Encoding.ASCII.GetString(d, p, 4);
+            if (id[0] == '\0')
+                break;
+            int sz = (d[p + 4] << 24) | (d[p + 5] << 16) | (d[p + 6] << 8) | d[p + 7];
+            if (sz <= 0 || p + 10 + sz > r)
+                break;
+            if (id.StartsWith('T') && id != "TXXX" && sz > 1)
+            {
+                string val = d[p + 10] switch
+                {
+                    1 => Encoding.Unicode.GetString(d, p + 11, sz - 1),
+                    2 => Encoding.BigEndianUnicode.GetString(d, p + 11, sz - 1),
+                    3 => Encoding.UTF8.GetString(d, p + 11, sz - 1),
+                    _ => Encoding.Latin1.GetString(d, p + 11, sz - 1),
+                };
+                tags[
+                    id.Replace("TIT2", "Title", StringComparison.Ordinal)
+                        .Replace("TIT3", "Slug", StringComparison.Ordinal)
+                        .Replace("TPE1", "Artist", StringComparison.Ordinal)
+                        .Replace("TALB", "Album", StringComparison.Ordinal)
+                ] = val.TrimEnd('\0').Replace("\uFEFF", "", StringComparison.Ordinal);
+            }
+            p += 10 + sz;
+        }
+        return tags;
+    }
 
     /// <summary>Parses a CSV string into a list of mapping entries.</summary>
     /// <param name="content">The raw CSV content string.</param>
@@ -234,6 +282,26 @@ internal static class AnimeThemesHelper
     #endregion
 
     #region Naming & Path Logic
+
+    /// <summary>Standardizes a raw or display theme slug into the canonical 'OP#' or 'ED#' format.</summary>
+    /// <param name="slug">The slug string to parse.</param>
+    /// <returns>The standardized slug (e.g. OP1, ED2), or the original slug if unparseable.</returns>
+    internal static string StandardizeSlug(string? slug)
+    {
+        if (string.IsNullOrWhiteSpace(slug))
+            return "";
+        string s = slug.Trim();
+        var match = Regex.Match(s, @"^(Opening|Ending|OP|ED)\s*(\d*)", RegexOptions.IgnoreCase);
+        if (match.Success)
+        {
+            string type = match.Groups[1].Value.StartsWith("O", StringComparison.OrdinalIgnoreCase) ? "OP" : "ED";
+            string num = match.Groups[2].Value;
+            if (string.IsNullOrEmpty(num) && (s.StartsWith("OP", StringComparison.OrdinalIgnoreCase) || s.StartsWith("ED", StringComparison.OrdinalIgnoreCase)))
+                num = "1";
+            return type + num;
+        }
+        return s;
+    }
 
     /// <summary>Calculates the start and end dates for the current anime season, including a one-month early buffer.</summary>
     /// <param name="date">The current date context.</param>

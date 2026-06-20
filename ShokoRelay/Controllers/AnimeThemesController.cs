@@ -1,4 +1,3 @@
-using System.Text;
 using Microsoft.AspNetCore.Mvc;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Video.Services;
@@ -126,7 +125,7 @@ public class AnimeThemesController(
                     {
                         var batch = await animeThemesMp3Generator.ProcessBatchAsync(query, CancellationToken.None).ConfigureAwait(false);
                         foreach (var item in batch.Items.Where(i => i.Status == "ok" && !string.IsNullOrWhiteSpace(i.Folder)))
-                            animeThemesMp3Generator.AddToThemeMp3Cache(item.Folder);
+                            animeThemesMp3Generator.AddToThemeMp3Cache(item.Folder, AnimeThemesHelper.StandardizeSlug(item.Slug));
                         return batch;
                     },
                     VfsShared.VfsLock
@@ -142,7 +141,7 @@ public class AnimeThemesController(
         {
             var result = await animeThemesMp3Generator.ProcessSingleAsync(query, null, CancellationToken.None).ConfigureAwait(false);
             if (result.Status == "ok" && !string.IsNullOrWhiteSpace(result.Folder))
-                animeThemesMp3Generator.AddToThemeMp3Cache(result.Folder);
+                animeThemesMp3Generator.AddToThemeMp3Cache(result.Folder, AnimeThemesHelper.StandardizeSlug(result.Slug));
             return result.Status == "error" ? BadRequest(new RelayResponse<object>(Status: "error", Message: result.Message, Data: result)) : Ok(new RelayResponse<ThemeMp3OperationResult>(Data: result));
         }
         finally
@@ -159,11 +158,23 @@ public class AnimeThemesController(
     {
         if (refresh)
             animeThemesMp3Generator.RefreshThemeMp3Cache();
-        var folders = animeThemesMp3Generator.GetCachedThemeMp3Folders();
+        var folders = animeThemesMp3Generator.GetCachedThemeMp3s().Keys.ToList();
         return folders.Count == 0
             ? NotFound(new RelayResponse<object>(Status: "error", Message: "No themes found"))
             : Ok(new RelayResponse<object>(Data: new { path = folders[Random.Shared.Next(folders.Count)] }));
     }
+
+    /// <summary>Returns the dictionary of cached Theme.mp3 folder paths mapped to their respective theme slugs.</summary>
+    /// <returns>A dictionary of paths and slugs.</returns>
+    [HttpGet("animethemes/mp3/cache")]
+    public IActionResult GetAnimeThemesMp3Cache() => Ok(new RelayResponse<IReadOnlyDictionary<string, string>>(Data: animeThemesMp3Generator.GetCachedThemeMp3s()));
+
+    /// <summary>Audits existing non-OP Theme.mp3 files to check if an OP upgrade is now available on AnimeThemes.</summary>
+    /// <returns>A task representing the result of the audit.</returns>
+    [HttpGet("animethemes/mp3/audit")]
+    public async Task<IActionResult> AuditAnimeThemesMp3() =>
+        await ExecuteTrackedTaskAsync(ShokoRelayConstants.TaskAtMp3Audit, LogHelper.BuildAtMp3AuditReport, () => animeThemesMp3Generator.AuditAsync(CancellationToken.None), VfsShared.VfsLock)
+            .ConfigureAwait(false);
 
     /// <summary>Streams an existing Theme.mp3 with ID3 tags embedded in response headers.</summary>
     /// <param name="path">The folder path containing the Theme.mp3.</param>
@@ -183,7 +194,7 @@ public class AnimeThemesController(
 
         try
         {
-            var tags = ReadId3v2Tags(themePath);
+            var tags = AnimeThemesHelper.ReadId3v2Tags(themePath);
             foreach (var tag in tags)
                 Response.Headers[$"X-Theme-{tag.Key}"] = tag.Value;
             Response.Headers["Access-Control-Expose-Headers"] = "X-Theme-Title, X-Theme-Slug, X-Theme-Artist, X-Theme-Album";
@@ -421,50 +432,6 @@ public class AnimeThemesController(
             ? BadRequest(new RelayResponse<object>(Status: "error", Message: "At least one filter (Name or Season) is required."))
             : await ExecuteTrackedTaskAsync(ShokoRelayConstants.TaskAtWebmDownload, LogHelper.BuildWebmDownloadReport, () => webmDownloader.DownloadAsync(query, CancellationToken.None), s_webmDownloadLock)
                 .ConfigureAwait(false);
-    }
-
-    #endregion
-
-    #region Private Helpers
-
-    /// <summary>Reads specific ID3v2 tags from an MP3 file without external dependencies.</summary>
-    /// <param name="filePath">Absolute path to the MP3 file.</param>
-    /// <returns>A dictionary of tag names and values.</returns>
-    private static Dictionary<string, string> ReadId3v2Tags(string filePath)
-    {
-        var tags = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-        Span<byte> h = stackalloc byte[10];
-        if (fs.Read(h) < 10 || h[0] != 'I' || h[1] != 'D' || h[2] != '3')
-            return tags;
-
-        int tagSize = (h[6] << 21) | (h[7] << 14) | (h[8] << 7) | h[9];
-        int maxRead = Math.Min(tagSize, 65536);
-        byte[] d = new byte[maxRead];
-        int r = fs.Read(d, 0, maxRead);
-        int p = 0;
-        while (p + 10 <= r)
-        {
-            string id = Encoding.ASCII.GetString(d, p, 4);
-            if (id[0] == '\0')
-                break;
-            int sz = (d[p + 4] << 24) | (d[p + 5] << 16) | (d[p + 6] << 8) | d[p + 7];
-            if (sz <= 0 || p + 10 + sz > r)
-                break;
-            if (id.StartsWith('T') && id != "TXXX" && sz > 1)
-            {
-                string val = d[p + 10] switch
-                {
-                    1 => Encoding.Unicode.GetString(d, p + 11, sz - 1),
-                    2 => Encoding.BigEndianUnicode.GetString(d, p + 11, sz - 1),
-                    3 => Encoding.UTF8.GetString(d, p + 11, sz - 1),
-                    _ => Encoding.Latin1.GetString(d, p + 11, sz - 1),
-                };
-                tags[id.Replace("TIT2", "Title").Replace("TIT3", "Slug").Replace("TPE1", "Artist").Replace("TALB", "Album")] = val.TrimEnd('\0').Replace("\uFEFF", "");
-            }
-            p += 10 + sz;
-        }
-        return tags;
     }
 
     #endregion

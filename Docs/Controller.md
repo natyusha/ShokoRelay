@@ -68,6 +68,7 @@ All automation endpoints utilize the `LogAndReturn` helper (via `ExecuteTrackedT
 /animethemes/vfs/build                                         -> at-vfs-build-report.log
 /animethemes/vfs/map                                           -> at-map-build-report.log
 /animethemes/mp3?batch=true                                    -> at-mp3-build-report.log
+/animethemes/mp3/audit                                         -> at-mp3-audit-report.log
 /animethemes/webm/download                                     -> at-webm-download-report.log
 /plex/auth/refresh                                             -> plex-auth-refresh-report.log
 /plex/collections/build                                        -> plex-collections-build-report.log
@@ -392,6 +393,8 @@ POST /animethemes/webm/download                                -> DownloadAnimeT
 ```
 GET  /animethemes/mp3                                          -> AnimeThemesMp3
      [?path={path}&slug={slug}&offset={int}&batch={true|false}&force={true|false}&seasonal={true|false}]
+GET  /animethemes/mp3/cache                                    -> GetAnimeThemesMp3Cache
+GET  /animethemes/mp3/audit                                    -> AuditAnimeThemesMp3
 GET  /animethemes/mp3/stream?path={path}                       -> AnimeThemesMp3Stream
 HEAD /animethemes/mp3/stream?path={path}                       -> AnimeThemesMp3Stream
 GET  /animethemes/mp3/random?refresh={true|false}              -> AnimeThemesMp3Random
@@ -404,6 +407,8 @@ GET  /animethemes/mp3/random?refresh={true|false}              -> AnimeThemesMp3
   - `batch`: (default false) set to true to recursively process subfolders.
   - `force`: (default false) set to true to overwrite existing `Theme.mp3` files.
   - `seasonal`: (default false) if `batch=true`, filter processing to the current anime season (with a one-month early buffer).
+- `GetAnimeThemesMp3Cache` returns the dictionary of cached `Theme.mp3` folder paths mapped to their respective theme slugs.
+- `AuditAnimeThemesMp3` audits existing non-OP `Theme.mp3` files to check if an OP is available on AnimeThemes. It also repairs missing local cache slugs via ID3 tags.
 - `AnimeThemesMp3Stream` embeds ID3v2 tags in response headers.
   - Headers: `X-Theme-Title`, `X-Theme-Slug`, `X-Theme-Artist`, `X-Theme-Album`.
 - `AnimeThemesMp3Random` uses a startup cache persisted in `mp3_animethemes.cache`.

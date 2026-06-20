@@ -302,6 +302,44 @@ public static class LogHelper
         BuildReport(sb, "AnimeThemes: MP3 Batch Report", stats, "Item Details:", items);
     }
 
+    /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskAtMp3Audit"/>.</summary>
+    /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
+    /// <param name="result">Audit result data.</param>
+    public static void BuildAtMp3AuditReport(StringBuilder sb, ThemeMp3AuditResult result)
+    {
+        var stats = new Dictionary<string, object>
+        {
+            ["Non-OP Themes Checked"] = result.Processed,
+            ["Missing Slugs Fixed"] = result.MissingSlugsFixed,
+            ["OP Upgrades Found"] = result.UpgradesFound,
+            ["Overridden Openings"] = result.Overridden.Count,
+        };
+
+        var items = new List<string>();
+
+        if (result.Upgrades.Count > 0)
+        {
+            items.Add("Openings Available:");
+            items.AddRange(result.Upgrades.OrderBy(u => u).Select(u => $"  {u}"));
+            items.Add("");
+        }
+
+        if (result.Overridden.Count > 0)
+        {
+            items.Add("Overridden Openings:");
+            items.AddRange(result.Overridden.OrderBy(o => o).Select(o => $"  {o}"));
+            items.Add("");
+        }
+
+        if (result.ErrorsList.Count > 0)
+        {
+            items.Add("Errors:");
+            items.AddRange(result.ErrorsList.OrderBy(e => e).Select(e => $"ERROR: {e}"));
+        }
+
+        BuildReport(sb, "AnimeThemes: MP3 Audit Report", stats, "Details:", items);
+    }
+
     /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskAtWebmDownload"/>.</summary>
     /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
     /// <param name="result">Download result data.</param>

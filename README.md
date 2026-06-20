@@ -243,6 +243,8 @@ There is also support for generating `Theme.mp3` files as local metadata. This w
 
 - This is available under the "AnimeThemes: MP3" section of the dashboard
 - Input the path (relative to Shoko or a mapping) to a folder containing an anime series and then click `Generate`
+- The `Audit Theme.mp3 Files` button will check for the availability of an opening for any theme file that isn't tagged as "Opening 1"
+  - This is for cases where the ED was downloaded before the OP existed on AnimeThemes
 - The `Force Overwrite Toggle` will overwrite any `Theme.mp3` files found in the configured path (or during a batch)
 - The `Recursive Batch Toggle` will enable batch operations on every subfolder of the configured path
 - By default this will grab the first available OP with a fallback to the first ED
@@ -410,6 +412,7 @@ Most manual actions performed via the dashboard (as well as some direct API requ
 | **AnimeThemes:** Generate VFS         | `at-vfs-build-report.log`           |
 | **AnimeThemes:** Build Mapping        | `at-map-build-report.log`           |
 | **AnimeThemes:** Generate MP3 (Batch) | `at-mp3-build-report.log`           |
+| **AnimeThemes:** Audit MP3s           | `at-mp3-audit-report.log`           |
 | **AnimeThemes:** Download WebMs       | `at-webm-download-report.log`       |
 | **Plex:** Auth Refresh                | `plex-auth-refresh-report.log`      |
 | **Plex:** Generate Collections        | `plex-collections-build-report.log` |

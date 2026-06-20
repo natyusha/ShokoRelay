@@ -48,6 +48,12 @@
 .theme-btn.exists {
   cursor: default;
 }
+.theme-btn.op-avail {
+  color: var(--warning-color);
+}
+.theme-btn.user-over {
+  color: var(--ok-color);
+}
 .theme-btn.missing {
   color: color-mix(in srgb, var(--highlight-color) 60%, transparent);
 }

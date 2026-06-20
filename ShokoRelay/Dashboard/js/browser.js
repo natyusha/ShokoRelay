@@ -147,16 +147,29 @@
   }
 
   /**
-   * Fetches the latest VFS blueprint from the server and renders the tabs and tree view.
+   * Fetches the latest VFS blueprint and MP3 cache from the server and renders the tabs and tree view.
    * @param {boolean} [showLoading=true] - If true, displays the loading spinner before fetching.
    * @returns {Promise<void>}
    */
   async function loadVfsTree(showLoading = true) {
     if (showLoading) showLoadingSpinner();
 
-    const res = await fetchJson(base + "/vfs/tree");
-    if (res.ok) {
-      const roots = getData(res)?.roots || [];
+    const [treeRes, mp3Res] = await Promise.all([fetchJson(base + "/vfs/tree"), fetchJson(base + "/animethemes/mp3/cache")]);
+
+    window._sr.mp3Cache = {};
+    if (mp3Res.ok) {
+      const data = getData(mp3Res) || {};
+      for (const [k, v] of Object.entries(data)) {
+        const parts = (v || "").split("|");
+        window._sr.mp3Cache[k.replace(/\\/g, "/").toLowerCase()] = {
+          slug: parts[0] || "",
+          upgrade: parts[1] || "",
+        };
+      }
+    }
+
+    if (treeRes.ok) {
+      const roots = getData(treeRes)?.roots || [];
       if (roots.length > 1) {
         const allRoot = buildAllTab(roots);
         displayRoots = [allRoot, ...roots];
@@ -284,17 +297,41 @@
       };
 
       const hasTheme = (g.rootFiles || []).some((f) => f.name === "Theme.mp3");
+      const firstFile = g.rootFiles && g.rootFiles.length > 0 ? g.rootFiles[0] : g.seasons && g.seasons.length > 0 && g.seasons[0].files && g.seasons[0].files.length > 0 ? g.seasons[0].files[0] : null;
+      let slug = "";
+      let upgrade = "";
+
+      if (hasTheme && firstFile && firstFile.source && window._sr.mp3Cache) {
+        const sourcePath = firstFile.source.replace(/\\/g, "/");
+        const dir = sourcePath.substring(0, sourcePath.lastIndexOf("/"));
+        const entry = window._sr.mp3Cache[dir.toLowerCase()];
+        if (entry) {
+          slug = entry.slug;
+          upgrade = entry.upgrade;
+        }
+      }
+
+      const isOp = slug && slug.toUpperCase().startsWith("OP");
+      const isOp1 = slug && slug.toUpperCase() === "OP1";
+      const isOverridden = isOp && !isOp1;
+      const isOpAvail = hasTheme && upgrade !== "";
       const theme = document.createElement("span");
-      theme.className = `theme-btn ${hasTheme ? "exists" : "missing"}`;
-      theme.textContent = "♬";
-      theme.title = hasTheme ? "Theme.mp3 Exists" : "Theme.mp3 Missing (Click to Generate)";
+
+      if (hasTheme) {
+        const btnClass = isOpAvail ? " op-avail" : isOverridden ? " user-over" : "";
+        theme.className = `theme-btn exists${btnClass}`;
+        theme.textContent = "♬";
+        theme.title = `Theme.mp3 Exists${slug ? ` (${slug})` : ""}${isOpAvail ? " (Opening Available)" : ""}`;
+      } else {
+        theme.className = "theme-btn missing";
+        theme.textContent = "♬";
+        theme.title = "Theme.mp3 Missing (Click to Generate)";
+      }
 
       if (!hasTheme) {
         theme.onclick = async (e) => {
           e.preventDefault();
           e.stopPropagation();
-
-          const firstFile = g.rootFiles && g.rootFiles.length > 0 ? g.rootFiles[0] : g.seasons && g.seasons.length > 0 && g.seasons[0].files && g.seasons[0].files.length > 0 ? g.seasons[0].files[0] : null;
 
           if (!firstFile || !firstFile.source) {
             showToast("VFS: No physical source files found to resolve paths", "error", TOAST_MS);
