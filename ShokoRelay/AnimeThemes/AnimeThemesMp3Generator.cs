@@ -503,7 +503,15 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         if (entry?.Animethemes == null || entry.Animethemes.Count == 0)
             return null;
 
-        int idx = (string.IsNullOrEmpty(slugArg) && entry.Animethemes.Count > 1 && string.Equals(entry.Animethemes[1].Slug, "OP1", StringComparison.OrdinalIgnoreCase)) ? 1 : 0;
+        int idx = 0;
+        if (string.IsNullOrEmpty(slugArg))
+        {
+            int op1 = entry.Animethemes.FindIndex(t => t.Slug != null && (t.Slug.Equals("OP1", StringComparison.OrdinalIgnoreCase) || t.Slug.Equals("OP", StringComparison.OrdinalIgnoreCase)));
+            int anyOp = entry.Animethemes.FindIndex(t => t.Slug != null && t.Slug.StartsWith("OP", StringComparison.OrdinalIgnoreCase));
+            int anyEd = entry.Animethemes.FindIndex(t => t.Slug != null && t.Slug.StartsWith("ED", StringComparison.OrdinalIgnoreCase));
+            idx = op1 >= 0 ? op1 : (anyOp >= 0 ? anyOp : (anyEd >= 0 ? anyEd : 0));
+        }
+
         var themeDetail = await _apiClient.FetchAnimeThemeWithArtistsAsync(entry.Animethemes[idx].Id, ct);
         var audio = themeDetail?.Animetheme?.Animethemeentries?.FirstOrDefault()?.Videos?.FirstOrDefault()?.Audio?.Link;
 
