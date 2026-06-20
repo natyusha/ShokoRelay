@@ -379,7 +379,8 @@ POST /animethemes/webm/download                                -> DownloadAnimeT
 - `GetAnimeThemesFavourites` returns a list of `videoId` favourites from `favs_animethemes.cache`.
 - `UpdateAnimeThemesFavourite` toggles a `videoId` in the favourites list using a raw integer body.
 - `DownloadAnimeThemesWebm` fetches WebM files from the AnimeThemes API and organizes them by Year/Season inside the configured `!AnimeThemes` folder.
-  - At least one filter (`name` or `year` + `season`) is required to prevent accidentally downloading the entire database.
+  - At least one filter (`name` or `season`) is required to prevent accidentally downloading the entire database.
+  - If a `season` is provided without a `year`, it automatically defaults to the current year.
   - `force`: (default false) set to true to overwrite existing `.webm` files.
   - `destination`: (optional) absolute path to a specific managed folder to force downloads into.
   - Files from before the year 2000 will sort by Decade/Season
@@ -390,7 +391,7 @@ POST /animethemes/webm/download                                -> DownloadAnimeT
 
 ```
 GET  /animethemes/mp3                                          -> AnimeThemesMp3
-     [?path={path}&slug={slug}&offset={int}&batch={true|false}&force={true|false}&season={season}]
+     [?path={path}&slug={slug}&offset={int}&batch={true|false}&force={true|false}&seasonal={true|false}]
 GET  /animethemes/mp3/stream?path={path}                       -> AnimeThemesMp3Stream
 HEAD /animethemes/mp3/stream?path={path}                       -> AnimeThemesMp3Stream
 GET  /animethemes/mp3/random?refresh={true|false}              -> AnimeThemesMp3Random
@@ -402,9 +403,7 @@ GET  /animethemes/mp3/random?refresh={true|false}              -> AnimeThemesMp3
   - `offset`: (default 0) selection index when multiple themes match.
   - `batch`: (default false) set to true to recursively process subfolders.
   - `force`: (default false) set to true to overwrite existing `Theme.mp3` files.
-  - `season`: (optional) filter by anime season using the format "Season Year" (e.g., `Spring 2025`). This only works if `batch=true`.
-    - Seasons: `Winter`, `Spring`, `Summer`, `Fall`.
-    - Validates against the series air date with a one-month early buffer.
+  - `seasonal`: (default false) if `batch=true`, filter processing to the current anime season (with a one-month early buffer).
 - `AnimeThemesMp3Stream` embeds ID3v2 tags in response headers.
   - Headers: `X-Theme-Title`, `X-Theme-Slug`, `X-Theme-Artist`, `X-Theme-Album`.
 - `AnimeThemesMp3Random` uses a startup cache persisted in `mp3_animethemes.cache`.

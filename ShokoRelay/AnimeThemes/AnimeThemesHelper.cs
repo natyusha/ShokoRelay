@@ -235,6 +235,21 @@ internal static class AnimeThemesHelper
 
     #region Naming & Path Logic
 
+    /// <summary>Calculates the start and end dates for the current anime season, including a one-month early buffer.</summary>
+    /// <param name="date">The current date context.</param>
+    /// <returns>A tuple containing the start and end dates of the season.</returns>
+    internal static (DateTime Start, DateTime End) GetCurrentSeasonRange(DateTime date)
+    {
+        int year = date.Year;
+        return date.Month switch
+        {
+            >= 1 and <= 3 => (new DateTime(year - 1, 12, 1), new DateTime(year, 3, 31)),
+            >= 4 and <= 6 => (new DateTime(year, 3, 1), new DateTime(year, 6, 30)),
+            >= 7 and <= 9 => (new DateTime(year, 6, 1), new DateTime(year, 9, 30)),
+            _ => (new DateTime(year, 9, 1), new DateTime(year, 12, 31)),
+        };
+    }
+
     /// <summary>Calculates a bitmask for metadata flags used in the webm cache.</summary>
     /// <param name="e">The mapping entry.</param>
     /// <returns>An integer bitmask.</returns>

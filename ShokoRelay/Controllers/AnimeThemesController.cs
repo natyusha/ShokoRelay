@@ -414,11 +414,11 @@ public class AnimeThemesController(
     [HttpPost("animethemes/webm/download")]
     public async Task<IActionResult> DownloadAnimeThemesWebm([FromQuery] AnimeThemesWebmQuery query)
     {
-        bool hasYear = query.Year.HasValue;
-        bool hasSeason = !string.IsNullOrWhiteSpace(query.Season);
+        if (!string.IsNullOrWhiteSpace(query.Season) && !query.Year.HasValue)
+            query = query with { Year = DateTime.Now.Year };
 
-        return hasYear != hasSeason ? BadRequest(new RelayResponse<object>(Status: "error", Message: "Year and Season must both be provided together when filtering by date."))
-            : string.IsNullOrWhiteSpace(query.Name) && !hasYear ? BadRequest(new RelayResponse<object>(Status: "error", Message: "At least one filter (Name or Year + Season) is required."))
+        return string.IsNullOrWhiteSpace(query.Name) && string.IsNullOrWhiteSpace(query.Season)
+            ? BadRequest(new RelayResponse<object>(Status: "error", Message: "At least one filter (Name or Season) is required."))
             : await ExecuteTrackedTaskAsync(ShokoRelayConstants.TaskAtWebmDownload, LogHelper.BuildWebmDownloadReport, () => webmDownloader.DownloadAsync(query, CancellationToken.None), s_webmDownloadLock)
                 .ConfigureAwait(false);
     }
