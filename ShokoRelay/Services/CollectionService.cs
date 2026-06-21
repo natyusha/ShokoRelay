@@ -162,6 +162,14 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
 
                         if (cid > 0)
                         {
+                            if (posted.Add((cid, "metadata")))
+                            {
+                                var desc = TextHelper.GetDescriptionByLanguage(series!, Settings.DescriptionLanguage);
+                                var tmdbDesc = series!.TmdbShows?.FirstOrDefault()?.PreferredDescription?.Value;
+                                var summary = TextHelper.SanitizeSummaryWithFallback(desc, tmdbDesc, Settings.SummaryMode);
+                                await plexCollections.UpdateCollectionMetadataAsync(cid, collectionName, summary, target, cancellationToken).ConfigureAwait(false);
+                            }
+
                             foreach (var (prefix, suffix, suffixes, label, defaultFallback) in PlexConstants.CollectionImageConfigs)
                             {
                                 if (posted.Add((cid, prefix)))

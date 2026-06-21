@@ -386,6 +386,11 @@ public class VfsWatcher(
                     if (!collectionId.HasValue)
                         continue;
 
+                    var desc = TextHelper.GetDescriptionByLanguage(series, Settings.DescriptionLanguage);
+                    var tmdbDesc = series.TmdbShows?.FirstOrDefault()?.PreferredDescription?.Value;
+                    var summary = TextHelper.SanitizeSummaryWithFallback(desc, tmdbDesc, Settings.SummaryMode);
+                    await plexCollections.UpdateCollectionMetadataAsync(collectionId.Value, collectionName, summary, target, token).ConfigureAwait(false);
+
                     foreach (var config in PlexConstants.CollectionImageConfigs)
                     {
                         var fallback = config.DefaultFallback && Settings.CollectionImages;

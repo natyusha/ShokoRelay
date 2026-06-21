@@ -23,16 +23,9 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
     /// <returns>The collection ID or null.</returns>
     public async Task<int?> GetOrCreateCollectionIdAsync(string collectionName, PlexLibraryTarget target, CancellationToken cancellationToken = default)
     {
-        if (!IsEnabled || string.IsNullOrWhiteSpace(collectionName) || target == null)
-            return null;
-
-        var collectionId =
-            await FindCollectionIdAsync(collectionName, target, cancellationToken).ConfigureAwait(false) ?? await CreateCollectionAsync(collectionName, target, cancellationToken).ConfigureAwait(false);
-
-        if (collectionId.HasValue)
-            await UpdateCollectionTitleSortAsync(collectionId.Value, collectionName, target, cancellationToken).ConfigureAwait(false);
-
-        return collectionId;
+        return !IsEnabled || string.IsNullOrWhiteSpace(collectionName) || target == null
+            ? null
+            : await FindCollectionIdAsync(collectionName, target, cancellationToken).ConfigureAwait(false) ?? await CreateCollectionAsync(collectionName, target, cancellationToken).ConfigureAwait(false);
     }
 
     #endregion
@@ -136,14 +129,21 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
 
     #region Metadata Updates
 
-    /// <summary>Updates the sort title of a collection.</summary>
+    /// <summary>Updates the sort title and summary of a collection.</summary>
     /// <param name="collectionId">Collection ID.</param>
     /// <param name="title">New sort title.</param>
+    /// <param name="summary">New summary.</param>
     /// <param name="target">Target library.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>True on success.</returns>
-    public Task<bool> UpdateCollectionTitleSortAsync(int collectionId, string title, PlexLibraryTarget target, CancellationToken cancellationToken = default) =>
-        ExecuteActionAsync(HttpMethod.Put, $"/library/metadata/{collectionId}?titleSort={Uri.EscapeDataString(title)}&titleSort.locked=1", target, $"Update sort title for {collectionId}", cancellationToken);
+    public Task<bool> UpdateCollectionMetadataAsync(int collectionId, string title, string summary, PlexLibraryTarget target, CancellationToken cancellationToken = default) =>
+        ExecuteActionAsync(
+            HttpMethod.Put,
+            $"/library/metadata/{collectionId}?titleSort={Uri.EscapeDataString(title)}&titleSort.locked=1&summary={Uri.EscapeDataString(summary)}&summary.locked=1",
+            target,
+            $"Update metadata for {collectionId}",
+            cancellationToken
+        );
 
     #endregion
 

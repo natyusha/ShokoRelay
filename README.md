@@ -175,7 +175,8 @@ The button in the top right of the Automation Controls panel will run all three 
 - Currently Plex's Provider Framework does not allow collections to be automatically assigned
   - They have to be injected manually via Plex's HTTP API instead
 - Click the `Generate Collections` button in the "Quick Actions" section of the dashboard to start this process
-- If `Advanced Settings > Plex Metadata Path` is configured this action will also clean up old collection images
+- If `Advanced Settings > Plex Data Path` is configured this action will also clean up old collection images
+- The primary series description will be used as the collection's summary
 - _Requires Plex authentication_
 
 As a bonus this supports using the primary series images as the collection images (if configured under "Provider Settings"). Custom local posters can also be used by placing them in the configured `Collection Images Root Path` (default `!CollectionImages`) folder. These files are simply named after the Shoko group name (or ID) that you wish them to apply to. If the name of a file matches that of a smart collection the images will be applied to it too. Empty collections (excluding smart collections) will also be removed automatically during collection generation.

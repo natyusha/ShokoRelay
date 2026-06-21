@@ -427,7 +427,7 @@ public class AdvancedConfig
     public string CollectionImagesRootPath { get; set; } = ShokoRelayConstants.FolderCollectionImagesDefault;
 
     /// <summary>Path to Plex's Metadata directory.</summary>
-    [Display(Name = "Plex Data Path", Description = "An optional folder for Plex's Metadata directory *must be accessible by Shoko")]
+    [Display(Name = "Plex Data Path", Description = "An optional setting for Plex's Metadata directory *must be accessible by Shoko")]
     [DefaultValue("")]
     public string PlexMetadataPath { get; set; } = "";
 

@@ -322,8 +322,13 @@ public class PlexMetadata(IMetadataService metadataService)
     /// <param name="group">The Shoko group.</param>
     /// <param name="primarySeries">The series providing the artwork.</param>
     /// <returns>A dictionary of Plex metadata properties.</returns>
-    public Dictionary<string, object?> MapCollection(IShokoGroup group, ISeries primarySeries) =>
-        new()
+    public Dictionary<string, object?> MapCollection(IShokoGroup group, ISeries primarySeries)
+    {
+        var desc = TextHelper.GetDescriptionByLanguage(primarySeries, Settings.DescriptionLanguage);
+        var tmdbDesc = (primarySeries as IShokoSeries)?.TmdbShows?.FirstOrDefault()?.PreferredDescription?.Value;
+        var summary = TextHelper.SanitizeSummaryWithFallback(desc, tmdbDesc, Settings.SummaryMode);
+
+        return new()
         {
             // csharpier-ignore-start
             ["ratingKey"]             = group.GetPlexRatingKey(),
@@ -335,10 +340,11 @@ public class PlexMetadata(IMetadataService metadataService)
             ["thumb"]                 = (primarySeries as IWithImages)?.GetAvailableImages(ImageEntityType.Primary).FirstOrDefault() is { } poster ? ImageHelper.GetImageUrl(poster, GetCacheBuster(primarySeries)) : null,
             ["art"]                   = (primarySeries as IWithImages)?.GetAvailableImages(ImageEntityType.Backdrop).FirstOrDefault() is { } backdrop ? ImageHelper.GetImageUrl(backdrop, GetCacheBuster(primarySeries)) : null,
             ["titleSort"]             = group is IWithTitles t && !string.IsNullOrWhiteSpace(t.PreferredTitle?.Value) ? t.PreferredTitle.Value : $"Group {group.ID}",
-            //["summary"]             = There is no summary source for groups
+            ["summary"]               = summary,
             //["Image"]               = Likely an image array will be used here
             // csharpier-ignore-end
         };
+    }
 
     /// <summary>Returns the collection name for a series based on its top-level Shoko group.</summary>
     /// <remarks>Count how many distinct Primary IDs exist in this group. This ensures that VFS Overrides are respected if they merge the entirety of a Shoko Group into a single series in Plex.</remarks>
