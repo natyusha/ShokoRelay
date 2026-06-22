@@ -194,6 +194,23 @@ public static class LogHelper
         BuildReport(sb, "VFS Generation Report", stats, "Report Details:", items);
     }
 
+    /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskVfsAudit"/>.</summary>
+    /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
+    /// <param name="result">Audit result data.</param>
+    public static void BuildVfsAuditReport(StringBuilder sb, VfsAuditResult result)
+    {
+        var stats = new Dictionary<string, object>
+        {
+            ["Series Checked"] = result.SeriesChecked,
+            ["Broken Links Removed"] = result.BrokenLinksRemoved,
+            ["Orphaned Folders Removed"] = result.OrphanedFoldersRemoved,
+            ["Errors"] = result.Errors.Count,
+        };
+        var items = result.RemovedItems.OrderBy(i => i).ToList();
+        items.AddRange(result.Errors.OrderBy(e => e).Select(e => $"ERROR: {e}"));
+        BuildReport(sb, "VFS Audit Report", stats, "Details:", items);
+    }
+
     /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskShokoPurgeMissing"/>.</summary>
     /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
     /// <param name="dryRun">Dry run flag.</param>

@@ -48,6 +48,14 @@ public record VfsBuildResult(
     TimeSpan TotalElapsed
 );
 
+/// <summary>Result returned by <see cref="VfsBuilder.Audit"/>.</summary>
+/// <param name="SeriesChecked">Number of valid series folders checked.</param>
+/// <param name="BrokenLinksRemoved">Number of broken symlinks deleted.</param>
+/// <param name="OrphanedFoldersRemoved">Number of orphaned series or empty subfolders deleted.</param>
+/// <param name="RemovedItems">List of deleted paths.</param>
+/// <param name="Errors">Encountered errors.</param>
+public record VfsAuditResult(int SeriesChecked, int BrokenLinksRemoved, int OrphanedFoldersRemoved, List<string> RemovedItems, List<string> Errors);
+
 /// <summary>Represents a file entity inside the VFS Blueprint.</summary>
 /// <param name="Name">The formatted filename.</param>
 /// <param name="Source">The absolute path to the source file.</param>
@@ -116,6 +124,101 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
     /// <param name="pruneSeries">Whether to remove per-series folders specifically.</param>
     /// <returns>A result object containing statistics and details for the log report.</returns>
     public VfsBuildResult Build(IReadOnlyCollection<int> seriesIds, bool cleanRoot = true, bool pruneSeries = false) => BuildInternal(seriesIds, cleanRoot, pruneSeries, false);
+
+    /// <summary>Audits the VFS to find and remove orphaned series folders and broken symlinks.</summary>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A result object containing audit statistics.</returns>
+    public VfsAuditResult Audit(CancellationToken ct = default)
+    {
+        var removed = new List<string>();
+        var errors = new List<string>();
+        int brokenLinks = 0,
+            orphanedFolders = 0,
+            seriesChecked = 0;
+
+        string rootName = VfsShared.ResolveRootFolderName();
+        var allRoots = videoService.GetAllManagedFolders()?.Where(f => !VfsShared.IsSourceOnly(f)).Select(f => f.Path).Where(p => !string.IsNullOrWhiteSpace(p)).Distinct().ToList() ?? [];
+
+        var validFolderIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var allSeries = metadataService.GetAllShokoSeries();
+        if (allSeries != null)
+        {
+            foreach (var s in allSeries)
+            {
+                int folderId = EnforceTmdbNumbering ? OverrideHelper.GetPrimary(s.ID, metadataService) : s.ID;
+                validFolderIds.Add(folderId.ToString());
+            }
+        }
+
+        foreach (var root in allRoots)
+        {
+            ct.ThrowIfCancellationRequested();
+            string vfsRoot = Path.Combine(root, rootName);
+            if (!Directory.Exists(vfsRoot))
+                continue;
+
+            foreach (var seriesFolder in Directory.GetDirectories(vfsRoot))
+            {
+                ct.ThrowIfCancellationRequested();
+                string folderName = Path.GetFileName(seriesFolder);
+
+                // Ignore special files/folders like .ignore
+                if (folderName.StartsWith('.'))
+                    continue;
+
+                if (!validFolderIds.Contains(folderName))
+                {
+                    try
+                    {
+                        Directory.Delete(seriesFolder, true);
+                        orphanedFolders++;
+                        removed.Add($"[Orphaned Series] {seriesFolder}");
+                    }
+                    catch (Exception ex)
+                    {
+                        errors.Add($"Failed to delete orphaned folder {seriesFolder}: {ex.Message}");
+                    }
+                    continue;
+                }
+
+                seriesChecked++;
+
+                foreach (var file in Directory.EnumerateFiles(seriesFolder, "*", SearchOption.AllDirectories))
+                {
+                    try
+                    {
+                        var info = new FileInfo(file);
+                        if (info.Attributes.HasFlag(FileAttributes.ReparsePoint) && !info.Exists)
+                        {
+                            File.Delete(file);
+                            brokenLinks++;
+                            removed.Add($"[Broken Link] {file}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        errors.Add($"Failed to process file {file}: {ex.Message}");
+                    }
+                }
+
+                foreach (var subDir in Directory.GetDirectories(seriesFolder))
+                {
+                    try
+                    {
+                        if (!Directory.EnumerateFileSystemEntries(subDir).Any())
+                        {
+                            Directory.Delete(subDir, false);
+                            orphanedFolders++;
+                            removed.Add($"[Empty Folder] {subDir}");
+                        }
+                    }
+                    catch { }
+                }
+            }
+        }
+
+        return new VfsAuditResult(seriesChecked, brokenLinks, orphanedFolders, removed, errors);
+    }
 
     #endregion
 

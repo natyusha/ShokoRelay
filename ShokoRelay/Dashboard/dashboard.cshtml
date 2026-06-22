@@ -20,6 +20,7 @@
         shokoPurgeMissing: "{{TaskShokoPurgeMissing}}",
         shokoSyncWatched: "{{TaskShokoSyncWatched}}",
         atVfsBuild: "{{TaskAtVfsBuild}}",
+        atWebmDownload: "{{TaskAtWebmDownload}}",
         atMapBuild: "{{TaskAtMapBuild}}",
         atMp3Build: "{{TaskAtMp3Build}}",
         atMp3Audit: "{{TaskAtMp3Audit}}",
@@ -181,7 +182,7 @@
         <section>
           <div class="full">
             <h2>
-              <svg class="icon-svg"><use href="img/icons.svg#database-refresh-outline"></use></svg>
+              <svg class="icon-svg"><use href="img/icons.svg#database-outline"></use></svg>
               Shoko: VFS
             </h2>
             <a href="../browser" class="img-btn" title="Open VFS Browser" aria-label="Open VFS Browser">
@@ -196,6 +197,9 @@
           </div>
           <div class="full">
             <button id="{{ TaskVfsBuild }}" data-relay-endpoint="/vfs" data-relay-label="VFS Generation" data-relay-params="getVfsParams" data-relay-persist-if-empty="#vfs-filter">Generate</button>
+            <button id="{{ TaskVfsAudit }}" class="w46-button" title="Audit VFS" data-relay-endpoint="/vfs/audit" data-relay-label="VFS Audit" data-relay-persist="true">
+              <svg class="icon-svg"><use href="img/icons.svg#database-check-outline"></use></svg>
+            </button>
             <button id="vfs-overrides" class="w46-button tmdb-ep-num" title="VFS Overrides Editor">
               <svg class="icon-svg"><use href="img/icons.svg#database-edit-outline"></use></svg>
             </button>
@@ -319,11 +323,23 @@
             >
               Generate
             </button>
-            <button id="at-map-import" class="w46-button" title="Import Curated Mapping File" data-relay-endpoint="/animethemes/vfs/import" data-relay-method="POST" data-relay-label="AnimeThemes Import">
+            <button
+              id="{{ TaskAtWebmDownload }}"
+              class="w46-button"
+              title="Download Current Season"
+              data-relay-endpoint="/animethemes/webm/download"
+              data-relay-method="POST"
+              data-relay-params="getWebmSeasonParams"
+              data-relay-label="WebM Download"
+              data-relay-persist="true"
+            >
               <svg class="icon-svg"><use href="img/icons.svg#download"></use></svg>
             </button>
+            <button id="at-map-import" class="w46-button" title="Import Curated Mapping File" data-relay-endpoint="/animethemes/vfs/import" data-relay-method="POST" data-relay-label="AnimeThemes Import">
+              <svg class="icon-svg"><use href="img/icons.svg#database-import-outline"></use></svg>
+            </button>
             <button id="{{ TaskAtMapBuild }}" class="w46-button" title="Build Mapping File" data-relay-endpoint="/animethemes/vfs/map" data-relay-label="AnimeThemes Mapping" data-relay-persist="true">
-              <svg class="icon-svg"><use href="img/icons.svg#sitemap"></use></svg>
+              <svg class="icon-svg"><use href="img/icons.svg#database-sync-outline"></use></svg>
             </button>
           </div>
         </section>
@@ -533,7 +549,7 @@
     <!-- #endregion -->
 
     <!--#region MARK: Settings Help Modal
-    -->
+  -->
     <div id="settings-help-modal" class="modal-overlay" aria-hidden="true" role="dialog" aria-modal="true">
       <div class="modal help" role="document">
         <header>Settings Help</header>

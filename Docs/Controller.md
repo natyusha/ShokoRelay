@@ -221,6 +221,7 @@ Endpoints are managed by `ShokoController`
 
 ```
 GET  /vfs?run={true|false}&clean={true|false}&filter={csv}     -> BuildVfs
+GET /vfs/audit                                                 -> AuditVfs
 
 POST /vfs/overrides                                            -> SaveVfsOverrides
 
@@ -231,6 +232,7 @@ GET /vfs/tree                                                  -> GetVfsTree
   - `run`: (default false) set to true to execute the VFS construction.
   - `clean`: (default true) clear the existing root before building.
   - `filter`: (optional) comma separated Shoko or AniDB (prefixed with an 'a') series IDs.
+- `AuditVfs` scans physical VFS directories against the database to find and remove orphaned folders and broken symlinks.
 - `SaveVfsOverrides` accepts raw text for `anidb_vfs_overrides.csv`.
 - `GetVfsTree` returns a hierarchical representation of the VFS structure by reading `vfs_blueprint.cache`.
 

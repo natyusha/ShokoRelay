@@ -58,6 +58,12 @@ public class ShokoController(
             VfsShared.VfsLock
         );
 
+    /// <summary>Audits the VFS to remove orphaned series folders and broken symlinks.</summary>
+    /// <returns>A task representing the result of the audit operation.</returns>
+    [HttpGet("vfs/audit")]
+    public async Task<IActionResult> AuditVfs() =>
+        await ExecuteTrackedTaskAsync(ShokoRelayConstants.TaskVfsAudit, LogHelper.BuildVfsAuditReport, () => Task.Run(() => vfsBuilder.Audit(CancellationToken.None)), VfsShared.VfsLock).ConfigureAwait(false);
+
     /// <summary>Updates the local VFS overrides CSV file.</summary>
     /// <param name="content">Raw CSV text.</param>
     /// <returns>Success or error response.</returns>

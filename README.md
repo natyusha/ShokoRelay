@@ -227,7 +227,7 @@ Applying a hyphenated suffix to the image that matches Plex's naming conventions
 This plugin includes full [AnimeThemes](https://animethemes.moe/) integration. It will look for '.webm' theme files in a folder called `!AnimeThemes` (or the configured `AnimeThemes Root Path`) which is located in the root of your anime library (this works for any "destination" type folder managed by Shoko). These files must have the same name as they do on the AnimeThemes website and then a mapping must be generated for them, in what is essentially a 3 step process. Simply navigate to the "AnimeThemes: VFS" section of the dashboard page to get started.
 
 1. Download anime theme videos and place them in the `!AnimeThemes` folder
-   - There is a torrent available with over 19000+ themes
+   - There is a torrent available with over 19000+ themes and a button on the dashboard for downloading themes from the current season
    - An endpoint (`/animethemes/webm/download`) is also available to help download things not available in the current torrent
 2. Generate a mapping for the videos by clicking the `Build Mapping File` button:
    - If you have the torrent click the `Import Curated Mapping File` button to download the [current torrent mapping](https://gist.github.com/natyusha/bb33a3b3bc95bc7a3869633e23d522bb)
@@ -422,6 +422,7 @@ Most manual actions performed via the dashboard (as well as some direct API requ
 | **Plex:** Sync Plex Images            | `plex-images-sync-report.log`       |
 | **Plex:** Run Full Automation         | `plex-automation-run-report.log`    |
 | **Shoko:** Generate VFS               | `shoko-vfs-build-report.log`        |
+| **Shoko:** Audit VFS                  | `shoko-vfs-audit-report.log`        |
 | **Shoko:** Purge Missing              | `shoko-purge-missing-report.log`    |
 | **Shoko:** Sync Watched States        | `shoko-sync-watched-report.log`     |
 | **Shoko:** Map Source Symlinks        | `shoko-map-symlinks-report.log`     |

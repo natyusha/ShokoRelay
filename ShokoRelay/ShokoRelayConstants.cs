@@ -12,7 +12,7 @@ public static class ShokoRelayConstants
     public const string Description = "A custom Plex metadata provider and automation toolset for integrating Plex and AnimeThemes with Shoko Server.";
 
     /// <summary>Current version string.</summary>
-    public const string Version = "0.13.7";
+    public const string Version = "0.13.8";
 
     /// <summary>Internal API version.</summary>
     public const string ApiVersion = "1";
@@ -112,6 +112,9 @@ public static class ShokoRelayConstants
 
     /// <summary>Task name for building the standard Shoko VFS.</summary>
     public const string TaskVfsBuild = "shoko-vfs-build";
+
+    /// <summary>Task name for auditing the VFS for broken symlinks and orphaned folders.</summary>
+    public const string TaskVfsAudit = "shoko-vfs-audit";
 
     /// <summary>Task name for identifying and removing missing files from the database.</summary>
     public const string TaskShokoPurgeMissing = "shoko-purge-missing";
