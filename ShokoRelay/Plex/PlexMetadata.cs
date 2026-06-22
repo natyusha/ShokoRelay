@@ -52,7 +52,6 @@ public class PlexMetadata(IMetadataService metadataService)
         var tmdbDescription = (series as IShokoSeries)?.TmdbShows?.FirstOrDefault()?.PreferredDescription?.Value;
         var studios = CastHelper.GetStudioTags(series);
         var (rating, isAdult) = ContentRatingHelper.GetContentRatingAndAdult(series);
-        var plexTheme = Settings.PlexThemeMusic && series is IShokoSeries ss && ss.TmdbShows?.FirstOrDefault()?.TvdbShowID is int tvdb && tvdb > 0 ? $"https://tvthemes.plexapp.com/{tvdb}.mp3" : null;
         return new Dictionary<string, object?>
         {
             // csharpier-ignore-start
@@ -73,7 +72,7 @@ public class PlexMetadata(IMetadataService metadataService)
             ["duration"]              = series.Episodes.Any() ? (int)series.Episodes.Sum(e => e.Runtime.TotalMilliseconds) : (int?)null,
             //["tagline"]             = TMDB has this but it is not exposed
             ["studio"]                = studios.FirstOrDefault()?.Tag,
-            ["theme"]                 = plexTheme,
+            ["theme"]                 = Settings.PlexThemeMusic && series is IShokoSeries ss && ss.TmdbShows?.FirstOrDefault()?.TvdbShowID is int tvdb && tvdb > 0 ? $"https://tvthemes.plexapp.com/{tvdb}.mp3" : null,
 
             ["Image"]                 = ImageHelper.GenerateImageArray(images, titles.DisplayTitle, Settings.AddEveryImage, cb),
             //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
@@ -113,6 +112,7 @@ public class PlexMetadata(IMetadataService metadataService)
         var cb = GetCacheBuster(ps);
         var images = ps;
         var seasonTitle = GetSeasonFolder(seasonNum);
+        var seasonDate = ctx.FileData.Mappings.Where(m => m.Coords.Season == seasonNum).SelectMany(m => m.Episodes).Where(e => e.AirDate.HasValue).Select(e => e.AirDate).OrderBy(d => d).FirstOrDefault();
         string? seasonSummary = null;
 
         // When using VFS overrides find a Shoko series in the group which contains the TMDB metadata for the requisite season number.
@@ -132,11 +132,16 @@ public class PlexMetadata(IMetadataService metadataService)
         int totalSeasons = ctx.FileData.Seasons.Count(s => s >= 0);
         List<string>? posters =
             (Settings.TmdbSeasonPosters && totalSeasons > 1 && tmdbSeason != null)
-                ? [.. tmdbSeason.GetAvailableImages(ImageEntityType.Primary).OrderByDescending(i => i.IsPreferred).Select(i => ImageHelper.GetImageUrl(i, cacheBuster: cb))]
+                ? [.. tmdbSeason.GetAvailableImages(ImageEntityType.Primary).OrderByDescending(i => i.IsPreferred).Select(i => ImageHelper.GetImageUrl(i, cacheBuster: cb, forceRemote: true))]
                 : null;
 
-        string? thumb = (posters?.Count > 0) ? posters[0] : (images.GetAvailableImages(ImageEntityType.Primary).FirstOrDefault() is { } p ? ImageHelper.GetImageUrl(p, cacheBuster: cb) : null);
-        var seasonDate = ctx.FileData.Mappings.Where(m => m.Coords.Season == seasonNum).SelectMany(m => m.Episodes).Where(e => e.AirDate.HasValue).Select(e => e.AirDate).OrderBy(d => d).FirstOrDefault();
+        string? thumb = null;
+        if (Settings.TmdbSeasonPosters && totalSeasons > 1 && tmdbSeason != null)
+        {
+            var seasonPoster = tmdbSeason.GetAvailableImages(ImageEntityType.Primary).OrderByDescending(i => i.IsPreferred).FirstOrDefault();
+            if (seasonPoster != null)
+                thumb = ImageHelper.GetImageUrl(seasonPoster, cacheBuster: cb);
+        }
         return new Dictionary<string, object?>
         {
             // csharpier-ignore-start
@@ -146,7 +151,7 @@ public class PlexMetadata(IMetadataService metadataService)
             ["type"]                  = "season",
             ["title"]                 = seasonTitle,
             ["originallyAvailableAt"] = seasonDate?.ToString("yyyy-MM-dd", null),
-            ["thumb"]                 = thumb,
+            ["thumb"]                 = thumb ??= (images.GetAvailableImages(ImageEntityType.Primary).FirstOrDefault() is { } p ? ImageHelper.GetImageUrl(p, cacheBuster: cb) : null),
             ["contentRating"]         = ctx.ContentRating,
             //['originalTitle']       = No source for original season titles
             ["titleSort"]             = seasonTitle,

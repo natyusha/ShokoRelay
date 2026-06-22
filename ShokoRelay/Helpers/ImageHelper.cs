@@ -33,9 +33,17 @@ public static class ImageHelper
     /// <summary>Construct a full URL for the given image, including an optional cache-buster.</summary>
     /// <param name="image">Image metadata object.</param>
     /// <param name="cacheBuster">Optional token to defeat Plex caching.</param>
+    /// <param name="forceRemote">If true, forces the returned URL to point to the remote TMDB CDN, bypassing the local Shoko Server API.</param>
     /// <returns>A full URL string.</returns>
-    public static string GetImageUrl(IImage image, string? cacheBuster = null)
+    public static string GetImageUrl(IImage image, string? cacheBuster = null, bool forceRemote = false)
     {
+        if (forceRemote && image.Source == DataSource.TMDB && !string.IsNullOrEmpty(image.ResourceID))
+        {
+            string path = image.ResourceID.Replace('\\', '/');
+            if (!path.StartsWith('/'))
+                path = "/" + path;
+            return $"https://image.tmdb.org/t/p/original{path}";
+        }
         var url = $"{ServerBaseUrl}/api/v3/Image/{image.ID}";
         return string.IsNullOrEmpty(cacheBuster) ? url : $"{url}?t={cacheBuster}";
     }
@@ -84,7 +92,7 @@ public static class ImageHelper
                 {
                     Alt = title,
                     Type = kind,
-                    Url = GetImageUrl(i, cacheBuster),
+                    Url = GetImageUrl(i, cacheBuster, forceRemote: addEveryImage),
                 });
 
         return
@@ -97,6 +105,10 @@ public static class ImageHelper
     }
 
     /// <summary>Create a set of cover poster images specifically for a season entry.</summary>
+    /// <remarks>
+    /// Season posters are hardcoded by the caller to always use direct CDN routing when TMDB season posters are present.
+    /// This forces 'addEveryImage' to true to bypass local metadata limitations until Shoko's WebUI supports selecting the preferred poster.
+    /// </remarks>
     /// <param name="seriesImages">Fallback series images.</param>
     /// <param name="alt">Alt text for entries.</param>
     /// <param name="addEveryImage">Whether to include all images.</param>
