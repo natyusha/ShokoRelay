@@ -15,6 +15,34 @@
   "image_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-logo.png",
   "releases": [
     {
+      "version": "0.13.7",
+      "tag": "v0.13.7",
+      "source_revision": "7ae079ae23f42f1aa176e6d4723572fe7c0c54b0",
+      "released_at": "2026-06-22T01:14:23Z",
+      "channel": "Dev",
+      "release_notes": "**Changes:**\r\n- Update loadVfsTree in browser.js to only append the virtual \"All\" tab if there are multiple physical roots detected\r\n- Upgrade the Theme.mp3 cache to store pipe-delimited metadata containing path, slug, and upgrade status\r\n- Add AuditAsync to AnimeThemesMp3Generator to check for available openings on non-OP themes and repair missing local slugs via ID3 tags\r\n- Integrate the MP3 Audit action button and task polling on the dashboard and document the new endpoints in README/Controller.md\r\n- Fix a VFS Browser regression where the \"Refresh VFS Folder\" button was not working by restricting the representative file search inside browser.js to only check standard Season and Specials folders\r\n- Replace fragile index-based default checks in FetchThemeAsync with a prioritization search to make default Theme.mp3 selection more robust\r\n- Extract primary series (from a Shoko group) descriptions using language and sanitization settings and apply them to Plex collections\r\n- Add oninput event listeners to at-slug and at-offset on the dashboard to filter out invalid characters\r\n- Add GetCurrentSeasonRange to AnimeThemesHelper to centralize date calculations with a one-month early buffer\r\n- Replace the explicit string-based Season filter with a boolean Seasonal flag for MP3 generation\r\n- Update WebM download validation to default to the current year if a season is provided without a year\r\n- Bump Shoko.Abstractions to v6.0.0-alpha.58\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.13.6...v0.13.7",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.7/ShokoRelay-v0.13.7-dev_linux-arm64.zip",
+          "checksum": "c14bbe401fc033a4324a90e65457085c4a799c43103bd11d761254b836231680"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.7/ShokoRelay-v0.13.7-dev_linux-x64.zip",
+          "checksum": "a6b9b52b373963a307eedd04d68849587136ea6f127c25b7e4a2cd4a43e776e3"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.7/ShokoRelay-v0.13.7-dev_win-x64.zip",
+          "checksum": "471518d328097cd883ad8518b48cc22e5dcc3aa17b2b89de034ce883dafd6db3"
+        }
+      ]
+    },
+    {
       "version": "0.13.6",
       "tag": "v0.13.6",
       "source_revision": "5d31622edd07b876847dcf6298162f1e4a045066",
