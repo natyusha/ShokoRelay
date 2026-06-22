@@ -15,6 +15,34 @@
   "image_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-logo.png",
   "releases": [
     {
+      "version": "0.13.8",
+      "tag": "v0.13.8",
+      "source_revision": "9d8d72a4267576077e4cbaf35995e12536c9c2d4",
+      "released_at": "2026-06-22T09:30:21Z",
+      "channel": "Dev",
+      "release_notes": "**Changes:**\r\n- Add getWebmSeasonParams to animethemes.js to dynamically calculate the current anime season string based on the client date\r\n- Update dashboard.cshtml to include the new \"Download Current Season\" button which points to the WebM download endpoint\r\n- Add TaskAtWebmDownload to the dashboard tasks dictionary for loading spinner state tracking\r\n- Add Audit method to VfsBuilder to scan and remove orphaned series folders, broken symlinks, and empty subdirectories\r\n- Add a new \"Audit VFS\" button to the dashboard using the database-check-outline icon\r\n- Update LogHelper to generate a detailed shoko-vfs-audit-report.log listing removed items\r\n- Add an optional forceRemote boolean parameter to ImageHelper.GetImageUrl defaulting to false to preserve local Shoko API routing by default\r\n- Update ImageHelper.GenerateImageArray to dynamically pass forceRemote based on the AddEveryImage configuration state\r\n- Hardcode forceRemote to true for TMDB season posters in PlexMetadata to support the temporary addEveryImage override workaround\r\n- Resolve Plex transcode failures for alternate images caused by Plex Cloud Proxy attempting to access local private IPs\r\n- Change several dashboard icons to be more \"database\" themed\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.13.7...v0.13.8",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.8/ShokoRelay-v0.13.8-dev_linux-arm64.zip",
+          "checksum": "35d69e9e080f556b9e344409ab62b0e93a1ae8cde56a94ed9c77000c44efd20f"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.8/ShokoRelay-v0.13.8-dev_linux-x64.zip",
+          "checksum": "66a9c4e809e9311e36430579d6570d43c5e4b94ab824d5876db0efd51d3b96fd"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.13.8/ShokoRelay-v0.13.8-dev_win-x64.zip",
+          "checksum": "a035b4a7fd4149afafcfcb877478535c8b99cf09456fa2d50d83338d958ce9f5"
+        }
+      ]
+    },
+    {
       "version": "0.13.7",
       "tag": "v0.13.7",
       "source_revision": "7ae079ae23f42f1aa176e6d4723572fe7c0c54b0",
