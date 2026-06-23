@@ -169,7 +169,8 @@
 
 /* #region MARK: Icons
 */
-svg {
+svg,
+.svg-stack {
   width: 1.282em;
   height: 1.282em;
 }
@@ -192,10 +193,22 @@ h2 .plex-svg {
   width: 2.125rem;
   font-size: 1.25rem;
 }
+.svg-stack {
+  display: inline-block;
+  position: relative;
+}
 .at-svg {
   fill: var(--at-color);
   margin-bottom: -4px;
   width: 1.6em;
+}
+.at-svg-o {
+  position: absolute;
+  bottom: -0.3em;
+  z-index: 2;
+  filter: drop-shadow(-1px -1px 0px var(--panel-color)) drop-shadow(1px -1px 0px var(--panel-color)) drop-shadow(1px 1px 0px var(--panel-color)) drop-shadow(-1px 1px 0px var(--panel-color));
+  fill: var(--at-color);
+  width: 0.8em;
 }
 label > small::before {
   content: "❯";

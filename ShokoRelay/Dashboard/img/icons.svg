@@ -38,6 +38,11 @@
     <polygon points="103.75 32.48 141.25 54.13 160 43.3 85 0 85 86.6 103.75 75.78 103.75 32.48"></polygon>
   </symbol>
 
+  <symbol id="archive" viewBox="0 0 24 24">
+    <title>AnimeThemes: MP3</title>
+    <path d="M3,3H21V7H3V3M4,8H20V21H4V8M9.5,11A0.5,0.5 0 0,0 9,11.5V13H15V11.5A0.5,0.5 0 0,0 14.5,11H9.5Z" />
+  </symbol>
+
   <symbol id="cog-outline" viewBox="0 0 24 24">
     <title>Provider Settings</title>
     <path

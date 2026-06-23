@@ -197,7 +197,7 @@
           </div>
           <div class="full">
             <button id="{{ TaskVfsBuild }}" data-relay-endpoint="/vfs" data-relay-label="VFS Generation" data-relay-params="getVfsParams" data-relay-persist-if-empty="#vfs-filter">Generate</button>
-            <button id="{{ TaskVfsAudit }}" class="w46-button" title="Audit VFS" data-relay-endpoint="/vfs/audit" data-relay-label="VFS Audit" data-relay-persist="true">
+            <button id="{{ TaskVfsAudit }}" class="w46-button" title="VFS Audit" data-relay-endpoint="/vfs/audit" data-relay-label="VFS Audit" data-relay-persist="true">
               <svg class="icon-svg"><use href="img/icons.svg#database-check-outline"></use></svg>
             </button>
             <button id="vfs-overrides" class="w46-button tmdb-ep-num" title="VFS Overrides Editor">
@@ -300,7 +300,10 @@
         <section>
           <div class="full">
             <h2>
-              <svg class="at-svg"><use href="img/icons.svg#animethemes"></use></svg>
+              <div class="svg-stack">
+                <svg class="icon-svg"><use href="img/icons.svg#database-outline"></use></svg>
+                <svg class="at-svg-o"><use href="img/icons.svg#animethemes"></use></svg>
+              </div>
               AnimeThemes: VFS
             </h2>
             <a href="../player" class="img-btn" title="Open AnimeThemes Player" aria-label="Open AnimeThemes Player">
@@ -349,7 +352,10 @@
           </div>
           <div class="full">
             <h2>
-              <svg class="at-svg"><use href="img/icons.svg#animethemes"></use></svg>
+              <div class="svg-stack">
+                <svg class="icon-svg"><use href="img/icons.svg#archive"></use></svg>
+                <svg class="at-svg-o"><use href="img/icons.svg#animethemes"></use></svg>
+              </div>
               AnimeThemes: MP3
             </h2>
             <button id="at-play" class="img-btn" title="Play" type="button" aria-label="Play" hidden>
