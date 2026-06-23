@@ -74,7 +74,10 @@
     if (!e.target.closest(".ui-btn, #player-progress-track")) idleTimer = setTimeout(() => playerContainer.classList.add("idle"), 2000);
   };
 
-  /** Toggles the visibility of the video element to save system resources in audio-only mode. */
+  /**
+   * Toggles the visibility of the video element to save system resources in audio-only mode.
+   * @returns {void}
+   */
   function toggleVideo() {
     if (!playerVideo) return;
     const currentState = playerVideoBtn.getAttribute("data-state") || "on";
@@ -97,7 +100,10 @@
     return `${m}:${s < 10 ? "0" : ""}${s}`;
   };
 
-  /** Updates the visual progress bar fill width. */
+  /**
+   * Updates the visual progress bar fill width.
+   * @returns {void}
+   */
   const syncProgressUI = () => {
     if (playerFill && playerVideo.duration) {
       const percent = (playerVideo.currentTime / playerVideo.duration) * 100;
@@ -105,7 +111,10 @@
     }
   };
 
-  /** Synchronizes the volume percentage text and updates icon switching level. */
+  /**
+   * Synchronizes the volume percentage text and updates icon switching level.
+   * @returns {void}
+   */
   const syncVolumeUI = () => {
     if (!playerVideo) return;
     const vol = playerVideo.volume;

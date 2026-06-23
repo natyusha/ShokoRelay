@@ -385,7 +385,6 @@ public class ConfigProvider
             s.Advanced.FolderExclusions = nex;
             c = true;
         }
-
         return c;
     }
 

@@ -57,11 +57,20 @@ public class VfsWatcher(
             releaseService.ReleaseSaved -= OnVideoReleaseSaved;
 
             foreach (var kvp in _pendingMetadataFixups)
+            {
                 kvp.Value.Cancel();
+                kvp.Value.Dispose();
+            }
             foreach (var kvp in _pendingLibraryScans)
+            {
                 kvp.Value.Cancel();
+                kvp.Value.Dispose();
+            }
             foreach (var kvp in _pendingCollectionUpdates)
+            {
                 kvp.Value.Cancel();
+                kvp.Value.Dispose();
+            }
         }
         catch { }
 
@@ -95,12 +104,9 @@ public class VfsWatcher(
     /// <param name="e">Event parameters containing release associations.</param>
     private void OnVideoReleaseSaved(object? sender, VideoReleaseSavedEventArgs e)
     {
-        // Trigger build when a video is successfully linked to a series (manual or automatic)
         if (e.Video?.Series == null || e.Video.Series.Count == 0)
             return;
-
-        string fileName = e.Video.EarliestKnownName ?? "Unknown File";
-        s_logger.Info("VFS: Release saved for video '{0}'", Path.GetFileName(fileName));
+        s_logger.Info("VFS: Release saved for video '{0}'", Path.GetFileName(e.Video.EarliestKnownName ?? "Unknown File"));
 
         foreach (var series in e.Video.Series)
         {
@@ -121,7 +127,6 @@ public class VfsWatcher(
 
         foreach (var series in seriesList)
             _pending[series.ID] = 1;
-
         KickProcessLoop();
     }
 
@@ -210,7 +215,6 @@ public class VfsWatcher(
     {
         if (!plexLibrary.IsEnabled)
             return;
-
         var series = metadataService.GetShokoSeriesByID(seriesId);
         if (series == null)
             return;
@@ -228,7 +232,10 @@ public class VfsWatcher(
     private void ScheduleDebouncedAction(int seriesId, int delaySeconds, ConcurrentDictionary<int, CancellationTokenSource> tracker, Func<CancellationToken, Task> action)
     {
         if (tracker.TryRemove(seriesId, out var oldCts))
+        {
             oldCts.Cancel();
+            oldCts.Dispose();
+        }
 
         var cts = new CancellationTokenSource();
         tracker[seriesId] = cts;
@@ -258,8 +265,8 @@ public class VfsWatcher(
             }
             finally
             {
-                tracker.TryRemove(new KeyValuePair<int, CancellationTokenSource>(seriesId, cts));
-                cts.Dispose();
+                if (tracker.TryRemove(new KeyValuePair<int, CancellationTokenSource>(seriesId, cts)))
+                    cts.Dispose();
             }
         });
     }
@@ -304,7 +311,7 @@ public class VfsWatcher(
     {
         try
         {
-            // Regenerate the VFS to account for cases where the episode/season numbering was updated in Shoko after the initial file event was processed (a metadata refresh can't do this on its own)
+            // Regenerate the VFS to account for cases where the episode/season numbering was updated in Shoko after the initial file event was processed
             var vfsResult = builder.Build(series.ID, cleanRoot: false, pruneSeries: true);
             if (vfsResult.CreatedLinks > 0)
                 s_logger.Info("VFS: Re-generated links for '{0}' during fixup phase", series.PreferredTitle?.Value);

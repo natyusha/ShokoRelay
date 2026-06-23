@@ -58,7 +58,7 @@ public class ShokoController(
             VfsShared.VfsLock
         );
 
-    /// <summary>Audits the VFS to remove orphaned series folders and broken symlinks.</summary>
+    /// <summary>Audits the VFS to find and remove orphaned series folders and broken symlinks.</summary>
     /// <returns>A task representing the result of the audit operation.</returns>
     [HttpGet("vfs/audit")]
     public async Task<IActionResult> AuditVfs() =>
@@ -73,8 +73,7 @@ public class ShokoController(
         try
         {
             Logger.Info("Shoko: Updating VFS overrides file...");
-            string path = Path.Combine(ConfigDirectory, ShokoRelayConstants.FileVfsOverrides);
-            IoFile.WriteAllText(path, content ?? string.Empty);
+            IoFile.WriteAllText(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileVfsOverrides), content ?? string.Empty);
             OverrideHelper.Reload(MetadataService); // Pass the service to trigger TMDB discovery
             return Ok(new RelayResponse<object>());
         }
@@ -221,29 +220,21 @@ public class ShokoController(
         [FromQuery] bool import = false,
         [FromQuery] SyncUserType? users = null,
         [FromQuery] string? libraryName = null
-    )
-    {
-        if (!PlexLibrary.IsEnabled)
-            return Task.FromResult<IActionResult>(BadRequest(new RelayResponse<object>(Status: "error", Message: "Plex configuration missing.")));
-
-        bool includeRatings = ratings ?? Settings.Automation.ShokoSyncWatchedIncludeRatings;
-        bool includeProgress = progress ?? Settings.Automation.ShokoSyncWatchedIncludeProgress;
-        SyncUserType userType = users ?? Settings.Automation.ShokoSyncWatchedUserType;
-        string direction = import ? "Plex<-Shoko" : "Plex->Shoko";
-
-        return ExecuteTrackedTaskAsync(
-            ShokoRelayConstants.TaskShokoSyncWatched,
-            (sb, r) => LogHelper.BuildSyncWatchedReport(sb, r, r.Direction, r.DryRun, includeRatings),
-            async () =>
-            {
-                var result = import
-                    ? await syncToPlexService.SyncWatchedAsync(dryRun, sinceHours, includeRatings, userType, libraryName, cancellationToken: CancellationToken.None).ConfigureAwait(false)
-                    : await watchedSyncService.SyncWatchedAsync(dryRun, sinceHours, includeRatings, includeProgress, userType, libraryName, cancellationToken: CancellationToken.None).ConfigureAwait(false);
-                return result with { Direction = direction };
-            },
-            SyncHelper.SyncLock
-        );
-    }
+    ) =>
+        !PlexLibrary.IsEnabled
+            ? Task.FromResult<IActionResult>(BadRequest(new RelayResponse<object>(Status: "error", Message: "Plex configuration missing.")))
+            : ExecuteTrackedTaskAsync(
+                ShokoRelayConstants.TaskShokoSyncWatched,
+                (sb, r) => LogHelper.BuildSyncWatchedReport(sb, r, r.Direction, r.DryRun, ratings ?? Settings.Automation.ShokoSyncWatchedIncludeRatings),
+                async () =>
+                {
+                    var result = import
+                        ? await syncToPlexService.SyncWatchedAsync(dryRun, sinceHours, ratings, users, libraryName, cancellationToken: CancellationToken.None).ConfigureAwait(false)
+                        : await watchedSyncService.SyncWatchedAsync(dryRun, sinceHours, ratings, progress, users, libraryName, cancellationToken: CancellationToken.None).ConfigureAwait(false);
+                    return result with { Direction = import ? "Plex<-Shoko" : "Plex->Shoko" };
+                },
+                SyncHelper.SyncLock
+            );
 
     /// <summary>Triggers immediate sync and resets schedule.</summary>
     /// <returns>Trigger result.</returns>
@@ -283,7 +274,7 @@ public class ShokoController(
     /// <returns>A task representing the result of the link processing.</returns>
     [HttpPost("map-symlinks")]
     public Task<IActionResult> ProcessSourceLinks([FromQuery] string? mapFile = null, [FromQuery] bool purgeLinks = false) =>
-        (!purgeLinks && string.IsNullOrWhiteSpace(mapFile))
+        !purgeLinks && string.IsNullOrWhiteSpace(mapFile)
             ? Task.FromResult<IActionResult>(BadRequest(new RelayResponse<object>(Status: "error", Message: "mapFile parameter is required when not purging.")))
             : ExecuteTrackedTaskAsync(
                 ShokoRelayConstants.TaskMapSymlinks,
@@ -309,10 +300,8 @@ public class ShokoController(
     public async Task<IActionResult> PurgeLocalImages()
     {
         Logger.Info("Shoko: Starting a manual purge of all user and locally-generated images...");
-        var images = imageManager.GetAllImages().Where(img => img.Source is DataSource.LocallyGenerated or DataSource.User).ToList();
-
         int purgedCount = 0;
-        foreach (var img in images)
+        foreach (var img in imageManager.GetAllImages().Where(img => img.Source is DataSource.LocallyGenerated or DataSource.User).ToList())
             if (await imageManager.PurgeImage(img).ConfigureAwait(false))
                 purgedCount++;
 

@@ -3,7 +3,6 @@ using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Net;
 using System.Reflection;
-using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.StaticFiles;
@@ -55,9 +54,8 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
         string dashboardDir = Path.Combine(ConfigProvider.PluginDirectory, "dashboard");
         string safePath = path.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
         string requested = Path.GetFullPath(Path.Combine(dashboardDir, safePath));
-        string dashboardRoot = Path.GetFullPath(dashboardDir);
 
-        return !requested.StartsWith(dashboardRoot, StringComparison.OrdinalIgnoreCase) || !IoFile.Exists(requested) || requested.EndsWith(".cshtml", StringComparison.OrdinalIgnoreCase)
+        return !requested.StartsWith(Path.GetFullPath(dashboardDir), StringComparison.OrdinalIgnoreCase) || !IoFile.Exists(requested) || requested.EndsWith(".cshtml", StringComparison.OrdinalIgnoreCase)
             ? NotFound()
             : PhysicalFile(requested, GetContentType(requested));
     }
@@ -73,31 +71,15 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
     {
         var payload = ConfigProvider.GetDashboardConfig();
         var themes = webThemeService.GetThemes(forceRefresh: false).Select(t => new { id = t.ID, name = t.Name }).ToList();
-
-        try
-        {
-            var path = Path.Combine(ConfigDirectory, ShokoRelayConstants.FileVfsOverrides);
-            string overrides = IoFile.Exists(path) ? IoFile.ReadAllText(path) : string.Empty;
-            return Ok(
-                new
-                {
-                    payload,
-                    overrides,
-                    themes,
-                }
-            );
-        }
-        catch
-        {
-            return Ok(
-                new
-                {
-                    payload,
-                    overrides = string.Empty,
-                    themes,
-                }
-            );
-        }
+        var path = Path.Combine(ConfigDirectory, ShokoRelayConstants.FileVfsOverrides);
+        return Ok(
+            new
+            {
+                payload,
+                overrides = IoFile.Exists(path) ? IoFile.ReadAllText(path) : string.Empty,
+                themes,
+            }
+        );
     }
 
     /// <summary>Accepts a new configuration object and persists it to disk.</summary>
@@ -108,7 +90,6 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
     {
         if (config == null)
             return BadRequest(new { status = "error", message = "Config payload is required." });
-
         Logger.Info("Dashboard: Saving updated provider settings...");
         ConfigProvider.SaveSettings(config);
         return Ok(new { status = "ok" });
@@ -124,70 +105,69 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
     [HttpGet("theme.css")]
     public IActionResult GetDynamicThemeCss()
     {
-        var settings = ConfigProvider.GetSettings();
-        string themeId = settings.Advanced.SelectedTheme;
-
+        string themeId = ConfigProvider.GetSettings().Advanced.SelectedTheme;
         if (string.IsNullOrWhiteSpace(themeId) || themeId.Equals("default", StringComparison.OrdinalIgnoreCase))
             return Content(string.Empty, "text/css");
 
         if (string.Equals(themeId, "shoko-gray", StringComparison.OrdinalIgnoreCase))
-        {
-            var shokoGrayBuilder = new StringBuilder();
-            shokoGrayBuilder.AppendLine("/* Shoko Gray Theme Variables */");
-            shokoGrayBuilder.AppendLine(":root {");
-            shokoGrayBuilder.AppendLine("  --bg-color: #282e38;");
-            shokoGrayBuilder.AppendLine("  --panel-color: #2c333e;");
-            shokoGrayBuilder.AppendLine("  --border-color: #21242b;");
-            shokoGrayBuilder.AppendLine("  --inset-color: #1e2027;");
-            shokoGrayBuilder.AppendLine("  --text-color: #cfd8e3;");
-            shokoGrayBuilder.AppendLine("  --highlight-color: #44a3ff;");
-            shokoGrayBuilder.AppendLine("  --button-color: #44a3ff;");
-            shokoGrayBuilder.AppendLine("  --hover-color: #64b3ff;");
-            shokoGrayBuilder.AppendLine("  --danger-color: #ff6c6c;");
-            shokoGrayBuilder.AppendLine("  --warning-color: #f9c851;");
-            shokoGrayBuilder.AppendLine("  --ok-color: #10c469;");
-            shokoGrayBuilder.AppendLine("  --logo-outline: #000;");
-            shokoGrayBuilder.AppendLine("  --logo-skin: #fdf5e8;");
-            shokoGrayBuilder.AppendLine("  --logo-face-shadow: #fe514d;");
-            shokoGrayBuilder.AppendLine("  --logo-eye-ref1: #e3e4d6;");
-            shokoGrayBuilder.AppendLine("  --logo-eye-ref2: #e8c8bb;");
-            shokoGrayBuilder.AppendLine("  --logo-eye-ref3: #ffc2b2;");
-            shokoGrayBuilder.AppendLine("  --logo-eye-gradient1: #ae303b;");
-            shokoGrayBuilder.AppendLine("  --logo-eye-gradient2: #ec4050;");
-            shokoGrayBuilder.AppendLine("  --logo-eye-gradient3: #fd877d;");
-            shokoGrayBuilder.AppendLine("  --logo-hair-gradient1: #c33144;");
-            shokoGrayBuilder.AppendLine("  --logo-hair-gradient2: #6b8cdb;");
-            shokoGrayBuilder.AppendLine("  --logo-hair-gradient3: #79f0f8;");
-            shokoGrayBuilder.AppendLine("}");
-
-            return Content(shokoGrayBuilder.ToString(), "text/css");
-        }
+            return Content(
+                """
+                /* Shoko Gray Theme Variables */
+                :root {
+                  --bg-color: #282e38;
+                  --panel-color: #2c333e;
+                  --border-color: #21242b;
+                  --inset-color: #1e2027;
+                  --text-color: #cfd8e3;
+                  --highlight-color: #44a3ff;
+                  --button-color: #44a3ff;
+                  --hover-color: #64b3ff;
+                  --danger-color: #ff6c6c;
+                  --warning-color: #f9c851;
+                  --ok-color: #10c469;
+                  --logo-outline: #000;
+                  --logo-skin: #fdf5e8;
+                  --logo-face-shadow: #fe514d;
+                  --logo-eye-ref1: #e3e4d6;
+                  --logo-eye-ref2: #e8c8bb;
+                  --logo-eye-ref3: #ffc2b2;
+                  --logo-eye-gradient1: #ae303b;
+                  --logo-eye-gradient2: #ec4050;
+                  --logo-eye-gradient3: #fd877d;
+                  --logo-hair-gradient1: #c33144;
+                  --logo-hair-gradient2: #6b8cdb;
+                  --logo-hair-gradient3: #79f0f8;
+                }
+                """,
+                "text/css"
+            );
 
         try
         {
             string cssPath = Path.Combine(applicationPaths.ThemesPath, $"{themeId}.css");
+            return !IoFile.Exists(cssPath)
+                ? Content(string.Empty, "text/css")
+                : Content(
+                    IoFile.ReadAllText(cssPath)
+                        + """
 
-            if (!IoFile.Exists(cssPath))
-                return Content(string.Empty, "text/css");
-
-            string rawCss = IoFile.ReadAllText(cssPath);
-
-            var mappingBuilder = new StringBuilder();
-            mappingBuilder.AppendLine().AppendLine("/* Shoko Relay Theme Variable Mapping */").AppendLine(":root {");
-            mappingBuilder.AppendLine("  --bg-color: var(--panel-background-alt, #0f0f0f);");
-            mappingBuilder.AppendLine("  --panel-color: var(--panel-background, #1c1c1c);");
-            mappingBuilder.AppendLine("  --border-color: var(--panel-border, #0f0f0f);");
-            mappingBuilder.AppendLine("  --inset-color: var(--panel-input, #151515);");
-            mappingBuilder.AppendLine("  --text-color: var(--panel-text, #ddd);");
-            mappingBuilder.AppendLine("  --highlight-color: var(--panel-icon-action, #94aad1);");
-            mappingBuilder.AppendLine("  --button-color: var(--button-primary, #a497b0);");
-            mappingBuilder.AppendLine("  --hover-color: var(--button-primary-hover, #ea005e);");
-            mappingBuilder.AppendLine("  --danger-color: var(--panel-icon-danger, #cc0000);");
-            mappingBuilder.AppendLine("  --warning-color: var(--panel-icon-warning, #f9c851);");
-            mappingBuilder.AppendLine("  --ok-color: var(--panel-text-important, #00ab3f);");
-            mappingBuilder.AppendLine("}");
-
-            return Content(rawCss + mappingBuilder.ToString(), "text/css");
+                        /* Shoko Relay Theme Variable Mapping */
+                        :root {
+                          --bg-color: var(--panel-background-alt, #0f0f0f);
+                          --panel-color: var(--panel-background, #1c1c1c);
+                          --border-color: var(--panel-border, #0f0f0f);
+                          --inset-color: var(--panel-input, #151515);
+                          --text-color: var(--panel-text, #ddd);
+                          --highlight-color: var(--panel-icon-action, #94aad1);
+                          --button-color: var(--button-primary, #a497b0);
+                          --hover-color: var(--button-primary-hover, #ea005e);
+                          --danger-color: var(--panel-icon-danger, #cc0000);
+                          --warning-color: var(--panel-icon-warning, #f9c851);
+                          --ok-color: var(--panel-text-important, #00ab3f);
+                        }
+                        """,
+                    "text/css"
+                );
         }
         catch (Exception ex)
         {
@@ -227,18 +207,17 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
     public IActionResult GetLogsList()
     {
         string logsDir = Path.Combine(ConfigProvider.PluginDirectory, "logs");
-        if (!Directory.Exists(logsDir))
-            return Ok(new { logs = Array.Empty<object>() });
-
-        var files = Directory
-            .EnumerateFiles(logsDir, "*-report.log")
-            .Select(Path.GetFileName)
-            .OfType<string>()
-            .OrderBy(f => f)
-            .Select(file => new { name = file, friendlyName = TagHelper.TitleCase(file.Replace("-report.log", "", StringComparison.Ordinal).Replace("-", " ", StringComparison.Ordinal)) })
-            .ToList();
-
-        return Ok(files);
+        return !Directory.Exists(logsDir)
+            ? Ok(new { logs = Array.Empty<object>() })
+            : Ok(
+                Directory
+                    .EnumerateFiles(logsDir, "*-report.log")
+                    .Select(Path.GetFileName)
+                    .OfType<string>()
+                    .OrderBy(f => f)
+                    .Select(file => new { name = file, friendlyName = TagHelper.TitleCase(file.Replace("-report.log", "", StringComparison.Ordinal).Replace("-", " ", StringComparison.Ordinal)) })
+                    .ToList()
+            );
     }
 
     /// <summary>Serves report files from the plugin's logs directory.</summary>
@@ -249,9 +228,8 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
     {
         if (string.IsNullOrWhiteSpace(fileName))
             return BadRequest(new { status = "error", message = "fileName is required" });
-        string logsDir = Path.Combine(ConfigProvider.PluginDirectory, "logs");
-        string path = Path.Combine(logsDir, fileName);
-        return !IoFile.Exists(path) ? NotFound(new { status = "error", message = "log not found" }) : PhysicalFile(path, "text/plain");
+        var path = Path.Combine(ConfigProvider.PluginDirectory, "logs", fileName);
+        return IoFile.Exists(path) ? PhysicalFile(path, "text/plain") : NotFound(new { status = "error", message = "log not found" });
     }
 
     #endregion
@@ -265,20 +243,13 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
     {
         string dashboardDir = Path.Combine(ConfigProvider.PluginDirectory, "dashboard");
         string requested = Path.GetFullPath(Path.Combine(dashboardDir, fileName));
-        string dashboardRoot = Path.GetFullPath(dashboardDir);
 
-        if (!requested.StartsWith(dashboardRoot, StringComparison.OrdinalIgnoreCase) || !IoFile.Exists(requested))
+        if (!requested.StartsWith(Path.GetFullPath(dashboardDir), StringComparison.OrdinalIgnoreCase) || !IoFile.Exists(requested))
             return NotFound();
 
-        var html = IoFile.ReadAllText(requested);
-        html = ProcessConstants(html); // Process C# Constants into HTML
-
+        var html = ProcessConstants(IoFile.ReadAllText(requested));
         if (html.IndexOf("<base", StringComparison.OrdinalIgnoreCase) < 0)
-        {
-            var baseHref = $"{Request.PathBase}{ShokoRelayConstants.BasePath}/dashboard/";
-            var baseTag = $"\n    <base href=\"{WebUtility.HtmlEncode(baseHref)}\">";
-            html = html.Replace("<head>", "<head>" + baseTag, StringComparison.OrdinalIgnoreCase);
-        }
+            html = html.Replace("<head>", $"<head>\n    <base href=\"{WebUtility.HtmlEncode($"{Request.PathBase}{ShokoRelayConstants.BasePath}/dashboard/")}\">", StringComparison.OrdinalIgnoreCase);
         return Content(html, "text/html");
     }
 
@@ -294,13 +265,8 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
     private static string ProcessConstants(string html)
     {
         var fields = typeof(ShokoRelayConstants).GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy).Where(f => f.IsLiteral && !f.IsInitOnly);
-
         foreach (var field in fields)
-        {
-            string value = field.GetValue(null)?.ToString() ?? "";
-            string pattern = $@"\{{\{{\s?{field.Name}\s?\}}}}"; // Account for prettier adding a space
-            html = Regex.Replace(html, pattern, value);
-        }
+            html = Regex.Replace(html, $@"\{{\{{\s?{field.Name}\s?\}}}}", field.GetValue(null)?.ToString() ?? "");
         return html;
     }
 
@@ -346,34 +312,20 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
                     {
                         int iv = Convert.ToInt32(v);
                         string memberName = Enum.GetName(propType, v) ?? iv.ToString();
-                        var field = propType.GetField(memberName);
-                        return new { name = field?.GetCustomAttribute<DisplayAttribute>()?.Name ?? memberName, value = iv };
+                        return new { name = propType.GetField(memberName)?.GetCustomAttribute<DisplayAttribute>()?.Name ?? memberName, value = iv };
                     })
                     .ToArray();
                 props.Add(new ConfigPropertySchema(path, "enum", display?.Name, display?.Description, defaultValue, values, isAdvanced, needsRebuild));
-                continue;
             }
-            if (propType == typeof(bool))
-            {
+            else if (propType == typeof(bool))
                 props.Add(new ConfigPropertySchema(path, "bool", display?.Name, display?.Description, defaultValue, null, isAdvanced, needsRebuild));
-                continue;
-            }
-            if (propType == typeof(string))
-            {
+            else if (propType == typeof(string))
                 props.Add(new ConfigPropertySchema(path, "string", display?.Name, display?.Description, defaultValue, null, isAdvanced, needsRebuild));
-                continue;
-            }
-            if (propType.IsPrimitive || propType == typeof(decimal))
-            {
+            else if (propType.IsPrimitive || propType == typeof(decimal))
                 props.Add(new ConfigPropertySchema(path, "number", display?.Name, display?.Description, defaultValue, null, isAdvanced, needsRebuild));
-                continue;
-            }
-            if (typeof(IDictionary).IsAssignableFrom(propType))
-            {
+            else if (typeof(IDictionary).IsAssignableFrom(propType))
                 props.Add(new ConfigPropertySchema(path, "json", display?.Name, display?.Description, defaultValue, null, isAdvanced, needsRebuild));
-                continue;
-            }
-            if (propType.IsClass && propType != typeof(string))
+            else if (propType.IsClass)
                 props.AddRange(BuildConfigSchema(propType, path, isAdvanced));
         }
         return props;

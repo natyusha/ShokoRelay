@@ -117,7 +117,7 @@
   const atFill = el("at-progress-fill");
 
   /**
-   * Initializes real-time input sanitization event listeners for the Slug and Offset fields.
+   * Initializes real-time input sanitization event listeners for the Slug, Offset, and Filter fields.
    * @returns {void}
    */
   function initAtSanitizers() {
@@ -132,6 +132,13 @@
     if (offsetInput) {
       offsetInput.oninput = () => {
         offsetInput.value = offsetInput.value.replace(/[^0-9]/g, "");
+      };
+    }
+
+    const mapFilter = el("at-filter-map");
+    if (mapFilter) {
+      mapFilter.oninput = () => {
+        mapFilter.value = mapFilter.value.replace(/[^aA0-9,\s]/g, "").toLowerCase();
       };
     }
   }

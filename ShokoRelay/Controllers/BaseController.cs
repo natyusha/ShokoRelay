@@ -88,7 +88,6 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
     protected IActionResult LogAndReturn<T>(string logName, T resultData, Action<StringBuilder, T> reportBuilder)
     {
         LogHelper.WriteReport(ConfigProvider.PluginDirectory, logName, resultData, reportBuilder);
-
         return Ok(new RelayResponse<T>(Data: resultData, LogUrl: $"{ApiBase}/logs/{logName}"));
     }
 
@@ -104,7 +103,6 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
     {
         errors = [];
         var ids = new HashSet<int>();
-
         if (string.IsNullOrWhiteSpace(filter))
             return [.. ids];
 
@@ -121,9 +119,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
                         errors.Add($"No Shoko Series found for AniDB ID: {aid}");
                 }
                 else
-                {
                     errors.Add($"Invalid AniDB ID format: {raw}");
-                }
                 continue;
             }
 
@@ -162,7 +158,6 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
     {
         seriesList = [];
         filterIds = [];
-
         if (!PlexLibrary.IsEnabled)
             return BadRequest(new RelayResponse<object>(Status: "error", Message: "Plex server configuration is missing or no library selected."));
 
@@ -240,12 +235,10 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
     /// <param name="seriesId">Optional single series ID.</param>
     /// <param name="filterIds">Optional collection of series IDs.</param>
     /// <returns>A list of Shoko series objects.</returns>
-    protected List<IShokoSeries?> ResolveSeriesList(int? seriesId, IReadOnlyCollection<int> filterIds)
-    {
-        return seriesId.HasValue ? [MetadataService.GetShokoSeriesByID(seriesId.Value)]
-            : filterIds.Count > 0 ? [.. filterIds.Distinct().Select(id => MetadataService.GetShokoSeriesByID(id))]
-            : [.. MetadataService.GetAllShokoSeries().Cast<IShokoSeries?>()];
-    }
+    protected List<IShokoSeries?> ResolveSeriesList(int? seriesId, IReadOnlyCollection<int> filterIds) =>
+        seriesId.HasValue ? [MetadataService.GetShokoSeriesByID(seriesId.Value)]
+        : filterIds.Count > 0 ? [.. filterIds.Distinct().Select(id => MetadataService.GetShokoSeriesByID(id))]
+        : [.. MetadataService.GetAllShokoSeries().Cast<IShokoSeries?>()];
 
     #endregion
 

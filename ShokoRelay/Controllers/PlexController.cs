@@ -110,8 +110,7 @@ public class PlexController(
 
             try
             {
-                string clientIdentifier = ConfigProvider.GetPlexClientIdentifier();
-                var discovery = await plexAuth.DiscoverShokoLibrariesAsync(pin.AuthToken, clientIdentifier, cancellationToken).ConfigureAwait(false);
+                var discovery = await plexAuth.DiscoverShokoLibrariesAsync(pin.AuthToken, ConfigProvider.GetPlexClientIdentifier(), cancellationToken).ConfigureAwait(false);
                 PersistDiscoveryResults(discovery);
             }
             catch (Exception ex)
@@ -157,17 +156,15 @@ public class PlexController(
             return Ok(new RelayResponse<object>());
 
         Logger.Info("Plex: Unlinking account and revoking token...");
-        string clientIdentifier = ConfigProvider.GetPlexClientIdentifier();
-        await plexAuth.RevokePlexTokenAsync(token, clientIdentifier, cancellationToken).ConfigureAwait(false);
-
+        await plexAuth.RevokePlexTokenAsync(token, ConfigProvider.GetPlexClientIdentifier(), cancellationToken).ConfigureAwait(false);
         ConfigProvider.DeleteTokenFile();
+
         return Ok(new RelayResponse<object>());
     }
 
     #endregion
 
     #region Automation
-
 
     /// <summary>Triggers a partial library scan in Plex for specific series.</summary>
     /// <param name="filter">Optional comma-separated list of Shoko or AniDB series IDs to filter the operation.</param>
@@ -216,7 +213,7 @@ public class PlexController(
             : ExecuteTrackedTaskAsync(
                 ShokoRelayConstants.TaskPlexRatingsApply,
                 LogHelper.BuildRatingsReport,
-                () => criticRatingService.ApplyRatingsAsync(seriesList.Select(s => s?.ID ?? 0).OfType<int>(), CancellationToken.None),
+                () => criticRatingService.ApplyRatingsAsync(seriesList.Where(s => s != null).Select(s => s!.ID), CancellationToken.None),
                 SyncHelper.SyncLock
             );
 
@@ -336,11 +333,10 @@ public class PlexController(
 
         if (isRate)
         {
-            double? ratingValue = evt.Metadata.UserRating;
-            if (ratingValue.HasValue)
+            if (evt.Metadata.UserRating.HasValue)
             {
-                await userDataService.RateEpisode(shokoEpisode, user, ratingValue.Value).ConfigureAwait(false);
-                Logger.Info("Plex: Rating applied -> user='{User}', series='{Series}', episode='{SeasonEp}', rating={Rating}", evt.Account?.Title, seriesName, seasonEp, ratingValue);
+                await userDataService.RateEpisode(shokoEpisode, user, evt.Metadata.UserRating.Value).ConfigureAwait(false);
+                Logger.Info("Plex: Rating applied -> user='{User}', series='{Series}', episode='{SeasonEp}', rating={Rating}", evt.Account?.Title, seriesName, seasonEp, evt.Metadata.UserRating.Value);
             }
             return Ok(new { status = "ok", rated = true });
         }
@@ -349,9 +345,7 @@ public class PlexController(
 
         if (isProgress)
         {
-            var epUserData = userDataService.GetEpisodeUserData(shokoEpisode, user);
-            bool alreadyWatched = epUserData?.LastPlayedAt != null;
-            if (alreadyWatched)
+            if (userDataService.GetEpisodeUserData(shokoEpisode, user)?.LastPlayedAt != null)
                 return Ok(new { status = "ignored", reason = "already_watched" });
 
             if (evt.Metadata.ViewOffset.HasValue && evt.Metadata.ViewOffset.Value > 0)
@@ -377,7 +371,6 @@ public class PlexController(
         }
 
         var saved = await userDataService.SetEpisodeWatchedStatus(shokoEpisode, user, true, watchedAt, videoReason: VideoUserDataSaveReason.PlaybackEnd).ConfigureAwait(false);
-
         if (saved != null)
             Logger.Info("Plex: Scrobble applied -> user='{User}', series='{Series}', episode='{SeasonEp}'", evt.Account?.Title, seriesName, seasonEp);
         return Ok(new { status = "ok", marked = saved != null });
@@ -399,8 +392,10 @@ public class PlexController(
             using var sr = new StreamReader(Request.Body);
             payloadJson = await sr.ReadToEndAsync().ConfigureAwait(false);
         }
+
         if (string.IsNullOrWhiteSpace(payloadJson))
             return null;
+
         try
         {
             // Case sensitive to prevent a type conflict between "guid" (string) and "Guid" (array).
@@ -431,11 +426,8 @@ public class PlexController(
             return (false, "sync_users_set_to_none");
 
         if (userType is SyncUserType.All or SyncUserType.Extra)
-        {
-            var extraEntries = ConfigProvider.GetExtraPlexUserEntries();
-            if (extraEntries.Any(e => string.Equals(e.Name, plexUser, StringComparison.OrdinalIgnoreCase)))
+            if (ConfigProvider.GetExtraPlexUserEntries().Any(e => string.Equals(e.Name, plexUser, StringComparison.OrdinalIgnoreCase)))
                 return (true, "allowed_extra_user");
-        }
 
         if (evt.Owner == true)
         {
@@ -446,6 +438,7 @@ public class PlexController(
                 await ConfigProvider.RefreshAdminUsername(plexAuth, ct).ConfigureAwait(false);
                 adminName = ConfigProvider.GetAdminUsername();
             }
+
             if (string.IsNullOrEmpty(adminName))
                 return !adminAllowed ? (false, "admin_excluded_identity_unknown") : (true, "allowed_owner_identity_assumed");
             if (string.Equals(plexUser, adminName, StringComparison.OrdinalIgnoreCase))

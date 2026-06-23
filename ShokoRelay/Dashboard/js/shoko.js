@@ -32,6 +32,19 @@
     "The first ID is the primary series and the others will be merged into it (for both VFS builds and metadata lookups).\n" +
     "Lines that are blank or start with a '#' are ignored. An example is shown below:\n\n" +
     "## Shoko Relay VFS Overrides\n\n# Fairy Tail\n6662,8132,9980,13295\n\n# Bleach\n2369,15449,17765,18220,19079";
+
+  /**
+   * Initializes real-time input sanitization event listeners for Shoko inputs.
+   * @returns {void}
+   */
+  function initShokoSanitizers() {
+    const vfsFilter = el("vfs-filter");
+    if (vfsFilter) {
+      vfsFilter.oninput = () => {
+        vfsFilter.value = vfsFilter.value.replace(/[^aA0-9,\s]/g, "").toLowerCase();
+      };
+    }
+  }
   // #endregion
 
   // #region Param Providers
@@ -176,5 +189,9 @@
       el("sync-cancel-button").onclick = close;
     };
   }
+  // #endregion
+
+  // #region Initialization
+  initShokoSanitizers(); // Initialize sanitizers immediately on script load
   // #endregion
 })();

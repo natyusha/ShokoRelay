@@ -215,7 +215,15 @@
       "shoko-sync-frequency": "ShokoSyncWatchedFrequencyHours",
       "plex-auto-frequency": "PlexAutomationFrequencyHours",
     };
-    for (const [id, path] of Object.entries(autoMap)) b(id, "Automation." + path, "number");
+    for (const [id, path] of Object.entries(autoMap)) {
+      b(id, "Automation." + path, "number");
+      const inputEl = el(id);
+      if (inputEl) {
+        inputEl.oninput = () => {
+          inputEl.value = inputEl.value.replace(id === "shoko-utc-offset" ? /[^-0-9]/g : /[^0-9]/g, "");
+        };
+      }
+    }
 
     b("sync-ratings", "Automation.ShokoSyncWatchedIncludeRatings", "check");
     b("sync-progress", "Automation.ShokoSyncWatchedIncludeProgress", "check");

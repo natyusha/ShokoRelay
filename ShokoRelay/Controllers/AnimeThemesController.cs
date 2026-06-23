@@ -94,8 +94,7 @@ public class AnimeThemesController(
     public async Task<IActionResult> ImportAnimeThemesMapping(CancellationToken cancellationToken = default)
     {
         Logger.Info("AnimeThemes: Fetching curated mapping file from GitHub...");
-        const string RawUrl = AnimeThemesHelper.AtRawMapUrl + ShokoRelayConstants.FileAtMapping;
-        var (count, _) = await animeThemesMapping.ImportMappingFromUrlAsync(RawUrl, cancellationToken).ConfigureAwait(false);
+        var (count, _) = await animeThemesMapping.ImportMappingFromUrlAsync(AnimeThemesHelper.AtRawMapUrl + ShokoRelayConstants.FileAtMapping, cancellationToken).ConfigureAwait(false);
         Logger.Info("AnimeThemes: Import successful. {0} entries updated.", count);
         return Ok(new RelayResponse<object>(Data: new { count }));
     }
@@ -117,7 +116,6 @@ public class AnimeThemesController(
             query = query with { Path = reverse };
 
         if (query.Batch)
-        {
             return await ExecuteTrackedTaskAsync(
                     ShokoRelayConstants.TaskAtMp3Build,
                     LogHelper.BuildAtMp3Report,
@@ -131,7 +129,6 @@ public class AnimeThemesController(
                     VfsShared.VfsLock
                 )
                 .ConfigureAwait(false);
-        }
 
         // Single generation does not require a persistent log file, but still uses the VfsLock for safety.
         if (!await VfsShared.VfsLock.WaitAsync(0).ConfigureAwait(false))
@@ -186,8 +183,7 @@ public class AnimeThemesController(
     {
         if (string.IsNullOrWhiteSpace(path))
             return BadRequest();
-        string resolved = PlexLibrary.MapPlexPathToShokoPath(path);
-        string themePath = Path.Combine(Path.GetFullPath(resolved), "Theme.mp3");
+        string themePath = Path.Combine(Path.GetFullPath(PlexLibrary.MapPlexPathToShokoPath(path)), "Theme.mp3");
 
         if (!IoFile.Exists(themePath))
             return NotFound();
@@ -244,8 +240,7 @@ public class AnimeThemesController(
 
                     if (!seriesTitleCache.TryGetValue(seriesId.Value, out var info))
                     {
-                        var series = MetadataService.GetShokoSeriesByID(seriesId.Value);
-                        if (series != null)
+                        if (MetadataService.GetShokoSeriesByID(seriesId.Value) is { } series)
                         {
                             var (displayTitle, _, _) = TextHelper.ResolveFullSeriesTitles(series);
                             var group = MetadataService.GetShokoGroupByID(series.TopLevelGroupID);
@@ -321,8 +316,7 @@ public class AnimeThemesController(
                         continue;
 
                     // Parse series name gracefully directly from the file basename
-                    string spacedName = AnimeThemesHelper.GetTitleFromAnimeThemesFile(entry.FilePath);
-                    string pseudoTitle = $"{spacedName}";
+                    string pseudoTitle = $"{AnimeThemesHelper.GetTitleFromAnimeThemesFile(entry.FilePath)}";
                     var lookup = new AnimeThemesVideoLookup(entry);
 
                     items.Add(
@@ -380,8 +374,7 @@ public class AnimeThemesController(
             return Ok(new RelayResponse<List<int>>(Data: []));
         try
         {
-            var favs = IoFile.ReadAllLines(path).Select(l => l.Trim()).Where(l => !l.StartsWith("#") && int.TryParse(l, out _)).Select(int.Parse).ToList();
-            return Ok(new RelayResponse<List<int>>(Data: favs));
+            return Ok(new RelayResponse<List<int>>(Data: [.. IoFile.ReadAllLines(path).Select(l => l.Trim()).Where(l => !l.StartsWith("#") && int.TryParse(l, out _)).Select(int.Parse)]));
         }
         catch
         {
