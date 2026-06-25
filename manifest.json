@@ -15,6 +15,34 @@
   "image_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-logo.png",
   "releases": [
     {
+      "version": "0.14.0",
+      "tag": "v0.14.0",
+      "source_revision": "2bebff5cfe653fb918cc130f9c2e49f09c4e5750",
+      "released_at": "2026-06-25T07:28:40Z",
+      "channel": "Dev",
+      "release_notes": "**Changes:**\r\n- Switch from Microsoft.AspNetCore.Mvc.Versioning.ApiExplorer v5.1.0 to Asp.Versioning.Mvc.ApiExplorer v10.0.0 to account for Shoko Server changes\r\n- Add Asp.Versioning using directives to all controllers to resolve [ApiVersion] attribute namespace changes\r\n- Update PurgeUnusedReleases call in ShokoImportService to reflect new signature in Shoko.Abstractions\r\n- Properly dispose CancellationTokenSource instances in VfsWatcher\r\n- Optimize dynamic CSS generation in DashboardController by replacing StringBuilder with raw string literals\r\n- Restrict automation interval, UTC offset, and series ID filter inputs to  acceptable values on the dashboard\r\n- Replace duplicate animethemes section icons with more appropriates ones and add a small animethemes logo badge to them\r\n- Bump Shoko.Abstractions to v6.0.0-alpha.61\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.13.8...v0.14.0",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.14.0/ShokoRelay-v0.14.0-dev_linux-arm64.zip",
+          "checksum": "dc3ae2da311c780a37fe045e5b6d2f7a8af3b66c398110a829ce014430e8ac7e"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.14.0/ShokoRelay-v0.14.0-dev_linux-x64.zip",
+          "checksum": "ebc0f12d4e4bd1c43ba56d107072a62a0e5b0adfbefdaa1b4f8818548e623360"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.14.0/ShokoRelay-v0.14.0-dev_win-x64.zip",
+          "checksum": "949762725763e0be41a5c191bcb097d6439d7050ed5dd286002fc44b4dd7a63d"
+        }
+      ]
+    },
+    {
       "version": "0.13.8",
       "tag": "v0.13.8",
       "source_revision": "9d8d72a4267576077e4cbaf35995e12536c9c2d4",
