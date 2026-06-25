@@ -91,7 +91,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
                 await videoService.DeleteVideoFiles(toDelete, removeFiles: false, removeFolders: false).ConfigureAwait(false);
 
                 // Purge unused releases from DB and remove from AniDB MyList
-                await releaseService.PurgeUnusedReleases(providerNames: null, removeFromMylist: true).ConfigureAwait(false);
+                await releaseService.PurgeUnusedReleases(providerNames: null).ConfigureAwait(false);
 
                 s_logger.Info("ShokoImportService: Database and MyList cleanup complete");
             }

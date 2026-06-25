@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
 using Shoko.Abstractions.Metadata.Enums;
 using Shoko.Abstractions.Video.Services;

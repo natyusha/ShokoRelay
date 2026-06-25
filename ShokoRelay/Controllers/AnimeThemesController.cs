@@ -1,3 +1,4 @@
+using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Video.Services;

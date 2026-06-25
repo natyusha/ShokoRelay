@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
 using Shoko.Abstractions.User.Enums;
 using Shoko.Abstractions.User.Services;
