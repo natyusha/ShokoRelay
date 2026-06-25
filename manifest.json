@@ -1,7 +1,7 @@
 {
   "id": "2b0f5a7e-3d2b-4f3d-9e6b-7f0a6b2d8c9a",
   "name": "Shoko Relay",
-  "overview": "A custom Plex metadata provider and automation toolset for integrating Plex and AnimeThemes with Shoko Server.",
+  "overview": "A custom metadata provider and automation toolset for integrating Plex and AnimeThemes with Shoko Server.",
   "authors": "natyusha",
   "repository_url": "https://github.com/natyusha/ShokoRelay",
   "homepage_url": null,

@@ -9,7 +9,7 @@ public static class ShokoRelayConstants
     public const string Name = "Shoko Relay";
 
     /// <summary>Description of the plugin.</summary>
-    public const string Description = "A custom Plex metadata provider and automation toolset for integrating Plex and AnimeThemes with Shoko Server.";
+    public const string Description = "A custom metadata provider and automation toolset for integrating Plex and AnimeThemes with Shoko Server.";
 
     /// <summary>Current version string.</summary>
     public const string Version = "0.14.0";
