@@ -99,7 +99,7 @@ Enable the following options in Shoko to ensure that Plex has at least one sourc
 - Under `additional providers` select `Plex Local Media` then click the `+` and `Save`
 
 > [!TIP]
-> You can override the provider's settings by appending them as a URL path parameter segment separated by semicolons (e.g. `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/options/SeriesTitleLanguage=EN;TmdbImageLanguage=EN`). If you create a new provider in Plex with the modified URL you will be able to use it as an additional agent.
+> You can override the provider's settings by appending them as a URL path parameter segment separated by semicolons (e.g. `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/options/SeriesTitleLanguage=EN;TmdbImageLanguage=EN`).
 
 #### Library
 
@@ -111,6 +111,8 @@ Enable the following options in Shoko to ensure that Plex has at least one sourc
 - Under `Add Folders` be sure to only enter the path to `!ShokoRelayVFS` (or the configured `VFS Root Path`) as the directory
   - If your Plex server's paths don't match Shoko's they can be mapped under `Advanced Settings > Path Mappings`
 - Under `Advanced` simply change the Scanner of the library to `Plex TV Series` and the Agent to `Shoko Relay`
+  - You can override Provider Settings on a per-library basis by configuring an additional Metadata Provider matching the format described in the Metadata Agent TIP above
+    - _Overrides only apply to live metadata requests. Background automations (e.g. Collection Generation or Critic Ratings) will always use the global dashboard configuration_
 - Additionally it is highly recommended to set the following Advanced settings:
   - [x] Use season titles
   - [x] Use local assets
