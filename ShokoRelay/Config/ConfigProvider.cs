@@ -149,6 +149,72 @@ public class ConfigProvider
             return _settings ??= GetSettingsFromFile();
     }
 
+    /// <summary>Return the current settings, applying any path or query overrides from the current HTTP request.</summary>
+    /// <returns>The effective <see cref="RelayConfig"/> instance.</returns>
+    public RelayConfig GetEffectiveSettings()
+    {
+        var settings = GetSettings();
+        var ctx = HttpContextAccessor?.HttpContext;
+        if (ctx == null || ctx.Request.Method != HttpMethods.Get)
+            return settings;
+
+        if (ctx.Items.TryGetValue("EffectiveRelayConfig", out var cached) && cached is RelayConfig cachedConfig)
+            return cachedConfig;
+
+        var overrides = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        // Extract from Path Segment (options/{overrides})
+        var overridePath = ctx.Request.RouteValues["overrides"]?.ToString();
+        if (!string.IsNullOrWhiteSpace(overridePath))
+        {
+            var pairs = overridePath.Split(';', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var pair in pairs)
+            {
+                var kv = pair.Split('=', 2);
+                if (kv.Length == 2)
+                    overrides[kv[0].Trim()] = kv[1].Trim();
+            }
+        }
+
+        // Extract from Query String (fallback for testing)
+        foreach (var q in ctx.Request.Query)
+            overrides[q.Key] = q.Value.ToString();
+
+        if (overrides.Count == 0)
+            return settings;
+
+        var overridableProps = typeof(RelayConfig)
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(p => p.CanWrite && p.PropertyType != typeof(AdvancedConfig) && p.PropertyType != typeof(AutomationConfig) && p.PropertyType != typeof(PlaybackConfig))
+            .ToList();
+
+        if (!overridableProps.Any(p => overrides.ContainsKey(p.Name)))
+            return settings;
+
+        var cloned = JsonSerializer.Deserialize<RelayConfig>(JsonSerializer.Serialize(settings, s_options), s_options)!;
+        foreach (var prop in overridableProps)
+        {
+            if (overrides.TryGetValue(prop.Name, out var val) && !string.IsNullOrWhiteSpace(val))
+            {
+                try
+                {
+                    if (prop.PropertyType == typeof(string))
+                        prop.SetValue(cloned, val);
+                    else if (prop.PropertyType == typeof(bool))
+                        prop.SetValue(cloned, string.Equals(val, "1") || string.Equals(val, "true", StringComparison.OrdinalIgnoreCase));
+                    else if (prop.PropertyType.IsEnum)
+                        prop.SetValue(cloned, Enum.Parse(prop.PropertyType, val, true));
+                }
+                catch
+                { /* Ignore invalid override values */
+                }
+            }
+        }
+
+        ctx.Items["EffectiveRelayConfig"] = cloned;
+        return cloned;
+    }
+
     /// <summary>Construct a sanitized payload of settings plus minimal Plex auth information for the dashboard.</summary>
     /// <returns>A sanitized configuration object for dashboard consumption.</returns>
     public object GetDashboardConfig()

@@ -113,7 +113,7 @@ public class ShokoRelay : BackgroundService
     private static ConfigProvider? s_configProvider;
 
     /// <summary>Access current plugin settings.</summary>
-    public static RelayConfig Settings => s_configProvider?.GetSettings() ?? new RelayConfig();
+    public static RelayConfig Settings => s_configProvider?.GetEffectiveSettings() ?? new RelayConfig();
 
     /// <summary>Access the Shoko server base URL.</summary>
     public static string ServerBaseUrl => s_configProvider?.ServerBaseUrl ?? "http://localhost:8111";

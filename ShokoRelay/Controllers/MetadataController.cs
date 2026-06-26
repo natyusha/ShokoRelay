@@ -13,6 +13,7 @@ namespace ShokoRelay.Controllers;
 [ApiController]
 [ApiVersion(ShokoRelayConstants.ApiVersion)]
 [Route(ShokoRelayConstants.BasePath)]
+[Route(ShokoRelayConstants.BasePath + "/options/{overrides}")]
 public class MetadataController(IMetadataService metadataService, PlexMetadata mapper, ConfigProvider configProvider, PlexClient plexLibrary, IVideoService videoService)
     : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
 {

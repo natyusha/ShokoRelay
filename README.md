@@ -98,6 +98,9 @@ Enable the following options in Shoko to ensure that Plex has at least one sourc
 - Optional: Under `additional providers` select `Plex NFO Series` then click the `+`
 - Under `additional providers` select `Plex Local Media` then click the `+` and `Save`
 
+> [!TIP]
+> You can override the provider's settings by appending them as a URL path parameter segment separated by semicolons (e.g. `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/options/SeriesTitleLanguage=EN;TmdbImageLanguage=EN`). If you create a new provider in Plex with the modified URL you will be able to use it as an additional agent.
+
 #### Library
 
 > [!TIP]

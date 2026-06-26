@@ -124,6 +124,9 @@ GET  /metadata/{ratingKey}/extras                              -> GetMetadataExt
 
 **Notes:**
 
+- Advanced Provider Overrides: Users can specify provider options directly via the base URL in Plex by appending an `options` segment.
+  - Example: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/options/SeriesTitleLanguage=EN;TmdbImageLanguage=EN`
+  - Any setting under `#region Provider Config` in `RelayConfig.cs` can be overridden per-request. Both semicolons and commas are supported as delimiters.
 - TMDB episode-numbering is honoured when enabled (uses `IShokoEpisode.TmdbEpisodes`).
 - Hidden episodes are excluded from all metadata results.
 - Supported `RatingKey` formats:
