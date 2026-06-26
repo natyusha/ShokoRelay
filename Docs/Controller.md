@@ -181,8 +181,9 @@ GET  /plex/automation/run                                      -> RunPlexAutomat
   - This will also scan Plex for smart collection names allowing their posters to be set.
 - `ApplyAudienceRatings` updates ratings for a comma-separated list of series IDs based on the configured source (TMDB/AniDB).
 - `SyncPlexImages` queries Plex for generated episode thumbnails and scans VFS/collection paths for all local images, uploading and marking them as preferred in Shoko.
-  - The generated episode thumbnails will not be uploaded if `TmdbThumbnails` is enabled or a local thumbnail is present
-- `RunPlexAutomationNow` triggers collection building and rating application back-to-back for all series.
+  - The generated episode thumbnails will not be uploaded if `TmdbThumbnails` is enabled or a local thumbnail is present.
+  - Tracks processed images via `images_shokorelay.cache` to avoid redundant uploads.
+- `RunPlexAutomationNow` triggers collection building, rating application, and image sync (if enabled) back-to-back for all series.
 
 **Notes:**
 
