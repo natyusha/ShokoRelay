@@ -181,6 +181,7 @@ kbd {
   box-shadow: 0 2px 0 1px var(--border-color);
   border: 1px solid var(--border-color);
   background: color-mix(in srgb, var(--inset-color), white 5%);
+  min-width: 30px;
   color: var(--highlight-color);
   font-family: monospace;
 }
@@ -481,11 +482,11 @@ code {
 .modal kbd,
 .modal code {
   margin-right: 10px;
-  min-width: 30px;
 }
 .modal code {
   border: 1px solid var(--border-color);
   background: var(--bg-color);
+  min-width: 40px;
   color: var(--text-color);
 }
 .modal em {

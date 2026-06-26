@@ -152,23 +152,28 @@ public class RelayConfig
 
     /// <summary>Priority list of languages for series titles.</summary>
     [Display(Name = "Series Title Language", Description = "Priority, comma separated")]
-    [DefaultValue("SHOKO, X-JAT, EN")]
-    public string SeriesTitleLanguage { get; set; } = "SHOKO, X-JAT, EN";
+    [DefaultValue("SHOKO")]
+    public string SeriesTitleLanguage { get; set; } = "SHOKO";
 
     /// <summary>Priority list of languages for alternate series titles.</summary>
     [Display(Name = "Series Alt Title Language", Description = "Priority, comma separated *this field is searchable in Plex")]
-    [DefaultValue("EN, X-JAT, SHOKO")]
-    public string SeriesAltTitleLanguage { get; set; } = "EN, X-JAT, SHOKO";
+    [DefaultValue("EN, X-MAIN, SHOKO")]
+    public string SeriesAltTitleLanguage { get; set; } = "EN, X-MAIN, SHOKO";
 
     /// <summary>Priority list of languages for episode titles.</summary>
     [Display(Name = "Episode Title Language", Description = "Priority, comma separated")]
-    [DefaultValue("SHOKO, EN, X-JAT")]
-    public string EpisodeTitleLanguage { get; set; } = "SHOKO, EN, X-JAT";
+    [DefaultValue("SHOKO")]
+    public string EpisodeTitleLanguage { get; set; } = "SHOKO";
 
     /// <summary>Priority list of languages for series and episode descriptions.</summary>
     [Display(Name = "Description Language", Description = "Priority, comma separated")]
-    [DefaultValue("SHOKO, EN, X-JAT")]
-    public string DescriptionLanguage { get; set; } = "SHOKO, EN, X-JAT";
+    [DefaultValue("SHOKO")]
+    public string DescriptionLanguage { get; set; } = "SHOKO";
+
+    /// <summary>Priority list of languages for TMDB images.</summary>
+    [Display(Name = "TMDB Image Language", Description = "Priority, comma separated ")]
+    [DefaultValue("SHOKO")]
+    public string TmdbImageLanguage { get; set; } = "SHOKO";
 
     /// <summary>Whether to append prefixes like OVA to the end of titles.</summary>
     [Display(Name = "Move Common Series Title Prefixes", Description = "Enable to append 'Gekijouban', 'OVA', etc. to the end of the series title, after an em dash '—'")]
