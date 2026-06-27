@@ -135,7 +135,7 @@ public static class LogHelper
             ["Errors"] = result.Errors,
         };
 
-        var items = result.AppliedChanges.OrderBy(x => x.Title).Select(c => $"[{c.Type}] {c.Title} ({c.RatingKey}): {c.OldRating?.ToString("F1") ?? "0.0"} -> {c.NewRating?.ToString("F1") ?? "0.0"}").ToList();
+        var items = result.AppliedChanges.OrderBy(x => x.Title).Select(c => $"[{c.Type}] {c.Title} ({c.RatingKey}): {c.OldRating?.ToString("F2") ?? "0.00"} -> {c.NewRating?.ToString("F2") ?? "0.00"}").ToList();
         items.AddRange(result.ErrorsList.Select(e => $"ERROR: {e}"));
 
         BuildReport(sb, "Audience Rating Report", stats, "Updates & Errors:", items);
