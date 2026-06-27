@@ -312,12 +312,20 @@ public class ShokoRelay : BackgroundService
                         var allSeries = _metadataService.GetAllShokoSeries()?.Cast<IShokoSeries?>().ToList();
                         if (allSeries?.Count > 0)
                         {
-                            if (_collectionService != null)
-                                await _collectionService.BuildCollectionsAsync(allSeries, cancellationToken: ct).ConfigureAwait(false);
-                            if (_criticRatingService != null)
-                                await _criticRatingService.ApplyRatingsAsync(null, ct).ConfigureAwait(false);
-                            if (settings.Advanced.EnableImageSync && _imageSyncService != null)
-                                await _imageSyncService.SyncImagesAsync(cancellationToken: ct).ConfigureAwait(false);
+                            await SyncHelper.SyncLock.WaitAsync(ct).ConfigureAwait(false);
+                            try
+                            {
+                                if (_collectionService != null)
+                                    await _collectionService.BuildCollectionsAsync(allSeries, cancellationToken: ct).ConfigureAwait(false);
+                                if (_criticRatingService != null)
+                                    await _criticRatingService.ApplyRatingsAsync(null, ct).ConfigureAwait(false);
+                                if (settings.Advanced.EnableImageSync && _imageSyncService != null)
+                                    await _imageSyncService.SyncImagesAsync(cancellationToken: ct).ConfigureAwait(false);
+                            }
+                            finally
+                            {
+                                SyncHelper.SyncLock.Release();
+                            }
                         }
                         s_lastPlexAutomationUtc = lastSched;
                     }
