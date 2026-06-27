@@ -60,8 +60,8 @@ public class PlexMetadata(IMetadataService metadataService)
             ["type"]                  = "show",
             ["title"]                 = titles.DisplayTitle,
             ["originallyAvailableAt"] = series.AirDate?.ToDateOnly().ToString("yyyy-MM-dd", null),
-            ["thumb"]                 = images.GetPreferredImage(ImageEntityType.Primary, Settings.TmdbImageLanguage) is { } p ? ImageHelper.GetImageUrl(p) : null,
-            ["art"]                   = images.GetPreferredImage(ImageEntityType.Backdrop, Settings.TmdbImageLanguage) is { } a ? ImageHelper.GetImageUrl(a) : null,
+            ["thumb"]                 = images.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage),
+            ["art"]                   = images.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage),
             ["contentRating"]         = rating,
             ["originalTitle"]         = titles.OriginalTitle,
             ["titleSort"]             = titles.SortTitle,
@@ -135,11 +135,8 @@ public class PlexMetadata(IMetadataService metadataService)
 
         string? thumb = null;
         if (Settings.TmdbSeasonPosters && totalSeasons > 1 && tmdbSeason != null)
-        {
-            var seasonPoster = tmdbSeason.GetPreferredImage(ImageEntityType.Primary, Settings.TmdbImageLanguage);
-            if (seasonPoster != null)
-                thumb = ImageHelper.GetImageUrl(seasonPoster);
-        }
+            thumb = tmdbSeason.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage);
+
         return new Dictionary<string, object?>
         {
             // csharpier-ignore-start
@@ -149,7 +146,7 @@ public class PlexMetadata(IMetadataService metadataService)
             ["type"]                  = "season",
             ["title"]                 = seasonTitle,
             ["originallyAvailableAt"] = seasonDate?.ToString("yyyy-MM-dd", null),
-            ["thumb"]                 = thumb ??= (images.GetPreferredImage(ImageEntityType.Primary, Settings.TmdbImageLanguage) is { } p ? ImageHelper.GetImageUrl(p) : null),
+            ["thumb"]                 = thumb ??= images.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage),
             ["contentRating"]         = ctx.ContentRating,
             //['originalTitle']       = No source for original season titles
             ["titleSort"]             = seasonTitle,
@@ -162,8 +159,8 @@ public class PlexMetadata(IMetadataService metadataService)
             ["parentGuid"]            = series.GetPlexGuid(),
             ["parentType"]            = "show",
             ["parentTitle"]           = seriesTitle,
-            ["parentThumb"]           = images.GetPreferredImage(ImageEntityType.Primary, Settings.TmdbImageLanguage) is { } sp ? ImageHelper.GetImageUrl(sp) : null,
-            ["parentArt"]             = images.GetPreferredImage(ImageEntityType.Backdrop, Settings.TmdbImageLanguage) is { } sa ? ImageHelper.GetImageUrl(sa) : null,
+            ["parentThumb"]           = images.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage),
+            ["parentArt"]             = images.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage),
             ["index"]                 = seasonNum,
 
             // Force addEveryImage to true if TMDB season posters are present, otherwise fallback to the configuration. (Remove this once Shoko's WebUI supports selecting the preferred poster)
@@ -204,8 +201,7 @@ public class PlexMetadata(IMetadataService metadataService)
         if (Settings.TmdbSeasonPosters && mapped.Season >= 0 && string.IsNullOrEmpty(MapHelper.GetPreferredTmdbOrderingId(series)))
         {
             var s = metadataService.GetShokoSeriesByID(OverrideHelper.GetPrimary(series.ID, metadataService));
-            var seasonObj = s?.TmdbSeasons?.FirstOrDefault(ts => ts.SeasonNumber == mapped.Season);
-            parentThumb = seasonObj?.GetPreferredImage(ImageEntityType.Primary, Settings.TmdbImageLanguage) is { } tp ? ImageHelper.GetImageUrl(tp) : null;
+            parentThumb = s?.TmdbSeasons?.FirstOrDefault(ts => ts.SeasonNumber == mapped.Season)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage);
         }
         return new Dictionary<string, object?>
         {
@@ -217,7 +213,7 @@ public class PlexMetadata(IMetadataService metadataService)
             ["subtype"]               = (mapped.Season < 0 && TryGetExtraSeason(mapped.Season, out var ex)) ? ex.Subtype : null,
             ["title"]                 = epTitle,
             ["originallyAvailableAt"] = ep.AirDate?.ToString("yyyy-MM-dd", null),
-            ["thumb"]                 = Settings.TmdbThumbnails && images.GetPreferredImage(ImageEntityType.Backdrop, Settings.TmdbImageLanguage) is { } t ? ImageHelper.GetImageUrl(t) : null,
+            ["thumb"]                 = Settings.TmdbThumbnails ? images.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage) : null,
             //["art"]                 = No source for episode level background images
             ["contentRating"]         = ContentRatingHelper.GetContentRatingAndAdult(series).Rating,
             //["originalTitle"]       = No source for original episode titles
@@ -232,8 +228,8 @@ public class PlexMetadata(IMetadataService metadataService)
             ["parentGuid"]            = series.GetPlexGuid(mapped.Season),
             ["parentType"]            = "season",
             ["parentTitle"]           = GetSeasonFolder(mapped.Season),
-            ["parentThumb"]           = parentThumb ?? (seriesImages.GetPreferredImage(ImageEntityType.Primary, Settings.TmdbImageLanguage) is { } p ? ImageHelper.GetImageUrl(p) : null),
-            ["parentArt"]             = seriesImages.GetPreferredImage(ImageEntityType.Backdrop, Settings.TmdbImageLanguage) is { } a ? ImageHelper.GetImageUrl(a) : null,
+            ["parentThumb"]           = parentThumb ?? seriesImages.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage),
+            ["parentArt"]             = seriesImages.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage),
             ["index"]                 = mapped.Episode,
 
             ["grandparentRatingKey"]  = series.GetPlexRatingKey(),
@@ -241,8 +237,8 @@ public class PlexMetadata(IMetadataService metadataService)
             ["grandparentGuid"]       = series.GetPlexGuid(),
             ["grandparentType"]       = "show",
             ["grandparentTitle"]      = titles.DisplayTitle,
-            ["grandparentThumb"]      = seriesImages.GetPreferredImage(ImageEntityType.Primary, Settings.TmdbImageLanguage) is { } gp ? ImageHelper.GetImageUrl(gp) : null,
-            ["grandparentArt"]        = seriesImages.GetPreferredImage(ImageEntityType.Backdrop, Settings.TmdbImageLanguage) is { } ga ? ImageHelper.GetImageUrl(ga) : null,
+            ["grandparentThumb"]      = seriesImages.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage),
+            ["grandparentArt"]        = seriesImages.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage),
             ["parentIndex"]           = mapped.Season,
 
             ["Image"]                 = Settings.TmdbThumbnails ? [.. ImageHelper.GenerateImageArray(images, epTitle, Settings.AddEveryImage, Settings.TmdbImageLanguage).Where(img => img.Type == "snapshot")] : Array.Empty<ImageInfo>(),
@@ -333,16 +329,16 @@ public class PlexMetadata(IMetadataService metadataService)
         return new()
         {
             // csharpier-ignore-start
-                ["ratingKey"]             = group.GetPlexRatingKey(),
-                ["guid"]                  = group.GetPlexGuid(),
-                ["key"]                   = $"/collection/{group.ID}",
-                ["type"]                  = "collection",
-                ["subtype"]               = "show",
-                ["title"]                 = group is IWithTitles titled && !string.IsNullOrWhiteSpace(titled.PreferredTitle?.Value) ? titled.PreferredTitle.Value : $"Group {group.ID}",
-                ["thumb"]                 = (primarySeries as IWithImages)?.GetPreferredImage(ImageEntityType.Primary, Settings.TmdbImageLanguage) is { } poster ? ImageHelper.GetImageUrl(poster) : null,
-                ["art"]                   = (primarySeries as IWithImages)?.GetPreferredImage(ImageEntityType.Backdrop, Settings.TmdbImageLanguage) is { } backdrop ? ImageHelper.GetImageUrl(backdrop) : null,
-                ["titleSort"]             = group is IWithTitles t && !string.IsNullOrWhiteSpace(t.PreferredTitle?.Value) ? t.PreferredTitle.Value : $"Group {group.ID}",
-                ["summary"]               = summary,
+            ["ratingKey"]             = group.GetPlexRatingKey(),
+            ["guid"]                  = group.GetPlexGuid(),
+            ["key"]                   = $"/collection/{group.ID}",
+            ["type"]                  = "collection",
+            ["subtype"]               = "show",
+            ["title"]                 = group is IWithTitles titled && !string.IsNullOrWhiteSpace(titled.PreferredTitle?.Value) ? titled.PreferredTitle.Value : $"Group {group.ID}",
+            ["thumb"]                 = (primarySeries as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage),
+            ["art"]                   = (primarySeries as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage),
+            ["titleSort"]             = group is IWithTitles t && !string.IsNullOrWhiteSpace(t.PreferredTitle?.Value) ? t.PreferredTitle.Value : $"Group {group.ID}",
+            ["summary"]               = summary,
             //["Image"]               = Likely an image array will be used here
             // csharpier-ignore-end
         };

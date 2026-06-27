@@ -73,13 +73,13 @@ public static class ImageHelper
     /// <returns>A collection of available images.</returns>
     public static IEnumerable<IImage> GetAvailableImages(this IWithImages entity, ImageEntityType type) => entity.GetImages(imageType: type).Where(i => i.IsEnabled && i.IsAvailable && i.IsDesired);
 
-    /// <summary>Gets the preferred image for the entity based on the language setting.</summary>
+    /// <summary>Gets the URL of the preferred image for the entity based on the language setting.</summary>
     /// <param name="entity">The Shoko metadata entity.</param>
     /// <param name="type">The specific image type to retrieve.</param>
     /// <param name="languageSetting">The prioritized language setting string.</param>
-    /// <returns>The preferred image matching the priority criteria, or null.</returns>
-    public static IImage? GetPreferredImage(this IWithImages entity, ImageEntityType type, string languageSetting) =>
-        FilterImagesByLanguage(entity.GetAvailableImages(type), languageSetting, false).FirstOrDefault();
+    /// <returns>The URL of the preferred image, or null if none exists.</returns>
+    public static string? GetPreferredImageUrl(this IWithImages entity, ImageEntityType type, string languageSetting) =>
+        FilterImagesByLanguage(entity.GetAvailableImages(type), languageSetting, false).FirstOrDefault() is { } img ? GetImageUrl(img) : null;
 
     /// <summary>Filters and orders images based on a prioritized list of language codes.</summary>
     /// <param name="images">The collection of images to filter.</param>

@@ -246,9 +246,9 @@ public static class PlexHelper
                     : suffix is "-art" or "-backdrop" or "-background" or "-fanart" ? ImageEntityType.Backdrop
                     : ImageEntityType.Primary;
 
-                var posterImage = (primarySeries as IWithImages)?.GetPreferredImage(imgType, Settings.TmdbImageLanguage);
-                if (posterImage != null)
-                    return ImageHelper.GetImageUrl(posterImage);
+                var posterUrl = (primarySeries as IWithImages)?.GetPreferredImageUrl(imgType, Settings.TmdbImageLanguage);
+                if (posterUrl != null)
+                    return posterUrl;
             }
         }
         return null;

@@ -76,7 +76,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             Logger.Info("Metadata: No Shoko series found for id {SeriesId}", seriesId.Value);
             return EmptyMatch();
         }
-        var poster = (series as IWithImages)?.GetPreferredImage(ImageEntityType.Primary, Settings.TmdbImageLanguage);
+        var posterUrl = (series as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage);
         return Ok(
             new
             {
@@ -92,7 +92,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
                             title = series.PreferredTitle?.Value,
                             year = series.AirDate?.Year,
                             score = 100,
-                            thumb = poster != null ? ImageHelper.GetImageUrl(poster) : null,
+                            thumb = posterUrl,
                         },
                     },
                 },
