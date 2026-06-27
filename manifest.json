@@ -15,6 +15,34 @@
   "image_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-logo.png",
   "releases": [
     {
+      "version": "0.14.1",
+      "tag": "v0.14.1",
+      "source_revision": "f3aa90f0f3ad1ae09f847b9a111695d03cdeb1f8",
+      "released_at": "2026-06-27T15:35:34Z",
+      "channel": "Dev",
+      "release_notes": "**Changes:**\r\n- Introduce a new TMDB Image Language setting to control priority for metadata image selection\r\n- Update dashboard help text to clarify the usage of X-MAIN and NONE language codes\r\n- Add an optional '/options/{overrides}' route segment to MetadataController to allow custom Provider Settings on a per-library basis in Plex\r\n- Implement GetEffectiveSettings in ConfigProvider to intercept HTTP requests and dynamically apply configuration overrides via reflection\r\n- Parse path segments using semicolons as the primary delimiter to ensure support for comma-separated language priority lists\r\n- Cache the cloned effective configuration within HttpContext.Items to ensure zero performance impact during active requests\r\n- Remove the ?t=cachebuster appendage from Shoko image URLs now that Shoko Server utilizes immutable UUIDs for images\r\n- Add SemaphoreSlim to ImageSyncService to prevent race conditions when updating the local cache file concurrently\r\n- Wrap scheduled Plex background tasks in ShokoRelay.cs with SyncLock to prevent them from executing concurrently with manually requested tasks\r\n-  Update Readme/Controller.md with the new changes\r\n- Bump Shoko.Abstractions to v6.0.0-alpha.64\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.14.0...v0.14.1",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.14.1/ShokoRelay-v0.14.1-dev_linux-arm64.zip",
+          "checksum": "b98c6c6b90e27e7b72f0dfc7af7a20c5b5d395da5cc5d9691dfbe242d0d39328"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.14.1/ShokoRelay-v0.14.1-dev_linux-x64.zip",
+          "checksum": "d2f8ddb744b0f2ef7a01022be23792b2fdf80108676e8d2ff235035d7698ed18"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.14.1/ShokoRelay-v0.14.1-dev_win-x64.zip",
+          "checksum": "9318cdc2a2f481a7a7cca4a6a9b4555c8ab22f5d3e18c4c43b3ab68cb156fc35"
+        }
+      ]
+    },
+    {
       "version": "0.14.0",
       "tag": "v0.14.0",
       "source_revision": "2bebff5cfe653fb918cc130f9c2e49f09c4e5750",
