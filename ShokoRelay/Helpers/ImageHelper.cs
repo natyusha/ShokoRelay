@@ -30,12 +30,11 @@ public static class ImageHelper
 {
     #region URL Generation
 
-    /// <summary>Construct a full URL for the given image, including an optional cache-buster.</summary>
+    /// <summary>Construct a full URL for the given image.</summary>
     /// <param name="image">Image metadata object.</param>
-    /// <param name="cacheBuster">Optional token to defeat Plex caching.</param>
     /// <param name="forceRemote">If true, forces the returned URL to point to the remote TMDB CDN, bypassing the local Shoko Server API.</param>
     /// <returns>A full URL string.</returns>
-    public static string GetImageUrl(IImage image, string? cacheBuster = null, bool forceRemote = false)
+    public static string GetImageUrl(IImage image, bool forceRemote = false)
     {
         if (forceRemote && image.Source == DataSource.TMDB && !string.IsNullOrEmpty(image.ResourceID))
         {
@@ -44,8 +43,7 @@ public static class ImageHelper
                 path = "/" + path;
             return $"https://image.tmdb.org/t/p/original{path}";
         }
-        var url = $"{ServerBaseUrl}/api/v3/Image/{image.ID}";
-        return string.IsNullOrEmpty(cacheBuster) ? url : $"{url}?t={cacheBuster}";
+        return $"{ServerBaseUrl}/api/v3/Image/{image.ID}";
     }
 
     #endregion
@@ -148,9 +146,8 @@ public static class ImageHelper
     /// <param name="title">Alt text for entries.</param>
     /// <param name="addEveryImage">Whether to include all images or only preferred ones.</param>
     /// <param name="imageLanguage">The prioritized language setting string.</param>
-    /// <param name="cacheBuster">Optional cache-buster token.</param>
     /// <returns>An array of ImageInfo objects.</returns>
-    public static ImageInfo[] GenerateImageArray(IWithImages images, string title, bool addEveryImage, string imageLanguage, string? cacheBuster = null)
+    public static ImageInfo[] GenerateImageArray(IWithImages images, string title, bool addEveryImage, string imageLanguage)
     {
         IEnumerable<ImageInfo> Project(ImageEntityType type, string kind) =>
             FilterImagesByLanguage(images.GetAvailableImages(type), imageLanguage, addEveryImage)
@@ -158,7 +155,7 @@ public static class ImageHelper
                 {
                     Alt = title,
                     Type = kind,
-                    Url = GetImageUrl(i, cacheBuster, forceRemote: addEveryImage),
+                    Url = GetImageUrl(i, forceRemote: addEveryImage),
                 });
 
         return
@@ -180,9 +177,8 @@ public static class ImageHelper
     /// <param name="addEveryImage">Whether to include all images.</param>
     /// <param name="imageLanguage">The prioritized language setting string.</param>
     /// <param name="seasonPosters">Optional pre-resolved URLs.</param>
-    /// <param name="cacheBuster">Optional cache-buster token.</param>
     /// <returns>An array of ImageInfo objects.</returns>
-    public static ImageInfo[] BuildCoverPosterArray(IWithImages seriesImages, string alt, bool addEveryImage, string imageLanguage, IEnumerable<string>? seasonPosters = null, string? cacheBuster = null)
+    public static ImageInfo[] BuildCoverPosterArray(IWithImages seriesImages, string alt, bool addEveryImage, string imageLanguage, IEnumerable<string>? seasonPosters = null)
     {
         return seasonPosters != null && seasonPosters.Any()
             ? addEveryImage
@@ -204,7 +200,7 @@ public static class ImageHelper
                         Url = seasonPosters.First(),
                     },
                 ]
-            : [.. GenerateImageArray(seriesImages, alt, addEveryImage, imageLanguage, cacheBuster).Where(i => i.Type == "coverPoster")];
+            : [.. GenerateImageArray(seriesImages, alt, addEveryImage, imageLanguage).Where(i => i.Type == "coverPoster")];
     }
 
     #endregion
