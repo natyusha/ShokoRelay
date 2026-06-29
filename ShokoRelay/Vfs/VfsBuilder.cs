@@ -114,16 +114,14 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
     /// <summary>Build or clean VFS for a single series ID.</summary>
     /// <param name="seriesId">Optional single series ID to process.</param>
     /// <param name="cleanRoot">Whether to delete existing VFS folders before building.</param>
-    /// <param name="pruneSeries">Whether to remove per-series folders specifically.</param>
     /// <returns>A result object containing statistics and details for the log report.</returns>
-    public VfsBuildResult Build(int? seriesId = null, bool cleanRoot = true, bool pruneSeries = false) => BuildInternal(seriesId.HasValue ? [seriesId.Value] : null, cleanRoot, pruneSeries, false);
+    public VfsBuildResult Build(int? seriesId = null, bool cleanRoot = true) => BuildInternal(seriesId.HasValue ? [seriesId.Value] : null, cleanRoot);
 
     /// <summary>Build or clean VFS for multiple series IDs.</summary>
     /// <param name="seriesIds">Collection of series IDs to process.</param>
     /// <param name="cleanRoot">Whether to delete existing VFS folders before building.</param>
-    /// <param name="pruneSeries">Whether to remove per-series folders specifically.</param>
     /// <returns>A result object containing statistics and details for the log report.</returns>
-    public VfsBuildResult Build(IReadOnlyCollection<int> seriesIds, bool cleanRoot = true, bool pruneSeries = false) => BuildInternal(seriesIds, cleanRoot, pruneSeries, false);
+    public VfsBuildResult Build(IReadOnlyCollection<int> seriesIds, bool cleanRoot = true) => BuildInternal(seriesIds, cleanRoot);
 
     /// <summary>Audits the VFS to find and remove orphaned series folders and broken symlinks.</summary>
     /// <param name="ct">Cancellation token.</param>
@@ -188,7 +186,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                     try
                     {
                         var info = new FileInfo(file);
-                        if (info.Attributes.HasFlag(FileAttributes.ReparsePoint) && !info.Exists)
+                        if (info.LinkTarget != null && !info.Exists)
                         {
                             File.Delete(file);
                             brokenLinks++;
@@ -227,10 +225,8 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
     /// <summary>Internal core logic for orchestrating a VFS build or clean run.</summary>
     /// <param name="seriesIds">Optional collection of series IDs to process.</param>
     /// <param name="cleanRoot">Whether to delete existing VFS folders before building.</param>
-    /// <param name="pruneSeries">Whether to remove per-series folders specifically.</param>
-    /// <param name="cleanOnly">If true, performs cleanup without creating new links.</param>
     /// <returns>A result object containing statistics and details for the log report.</returns>
-    private VfsBuildResult BuildInternal(IReadOnlyCollection<int>? seriesIds, bool cleanRoot, bool pruneSeries, bool cleanOnly)
+    private VfsBuildResult BuildInternal(IReadOnlyCollection<int>? seriesIds, bool cleanRoot)
     {
         // Generates an orderable pairwise key where non-seasons are sorted alphabetically and standard seasons numerically.
         static (bool IsSeason, int SeasonNumber, string Name) GetSeasonSortKey(string name) =>
@@ -270,16 +266,13 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         var cleanupDetails = new List<RootCleanupDetails>();
         var skippedDetailsBag = new ConcurrentBag<string>();
         var ignoredFolders = VfsShared.GetIgnoredFolderNames(Settings);
-
-        // Initialize build-session context
-        var session = new VfsBuildSession();
-        var cleanedSeries = new ConcurrentDictionary<string, byte>(VfsShared.PathComparer);
         var errorsBag = new ConcurrentBag<string>();
+        var session = new VfsBuildSession();
+        bool isFiltered = seriesIds?.Count > 0;
 
         // Blueprint Cache: Maps RootPath -> Dictionary<SeriesId, SeriesData>
         var blueprint = new ConcurrentDictionary<string, ConcurrentDictionary<int, VfsBlueprintSeries>>(VfsShared.PathComparer);
         string blueprintPath = Path.Combine(ConfigDirectory, ShokoRelayConstants.FileVfsBlueprintCache);
-        bool isFiltered = seriesIds?.Count > 0;
 
         if (isFiltered && File.Exists(blueprintPath))
         {
@@ -333,21 +326,19 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         }
 
         // Resolve series list to process
-        IEnumerable<IShokoSeries> seriesList = isFiltered
-            ?
-            [
-                .. seriesIds!
-                    .Distinct()
-                    .Select(metadataService.GetShokoSeriesByID)
-                    .OfType<IShokoSeries>()
-                    .Select(s =>
-                    {
-                        if (pruneSeries)
-                            PruneSeries(rootName, s, errorsBag);
-                        return s;
-                    }),
-            ]
-            : (metadataService.GetAllShokoSeries() ?? []);
+        IEnumerable<IShokoSeries> seriesList;
+        if (isFiltered)
+        {
+            var resolved = seriesIds!.Distinct().Select(id => new { Id = id, Series = metadataService.GetShokoSeriesByID(id) }).ToList();
+
+            // Prune series that were completely deleted from Shoko's database
+            foreach (var item in resolved.Where(x => x.Series == null))
+                PruneSeries(rootName, item.Id, errorsBag.Add);
+
+            seriesList = [.. resolved.Where(x => x.Series != null).Select(x => x.Series!).OfType<IShokoSeries>()];
+        }
+        else
+            seriesList = metadataService.GetAllShokoSeries() ?? [];
 
         int totalInScope = seriesList.Count();
         int consolidatedCount = 0;
@@ -383,9 +374,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                         series,
                         rootName,
                         cleanRoot,
-                        cleanedSeries,
                         isFiltered,
-                        cleanOnly,
                         ignoredFolders,
                         session,
                         (vfsRoot, season, fileName, source) =>
@@ -397,7 +386,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                         }
                     );
 
-                    if (!cleanOnly && (sCreated > 0 || seasons.Count > 0 || rootFiles.Count > 0))
+                    if (sCreated > 0 || seasons.Count > 0 || rootFiles.Count > 0)
                     {
                         // Group files by root physically used during build to support multi-root series (tabs).
                         var rootsInvolved = metadataService.GetShokoSeriesByID(folderId) is { } fs
@@ -480,24 +469,20 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         );
     }
 
-    /// <summary>Builds the VFS structure for a specific series, handling naming and de-duplication.</summary>
+    /// <summary>Builds the VFS structure for a specific series, synchronizing files with the expected layout.</summary>
     /// <param name="series">Shoko series metadata.</param>
     /// <param name="rootFolderName">Name of the VFS root folder.</param>
-    /// <param name="cleanRoot">Whether to perform cleanup.</param>
-    /// <param name="cleanedSeries">Thread-safe tracker for cleaned series folders.</param>
-    /// <param name="filtered">Whether this is a filtered build.</param>
-    /// <param name="cleanOnly">If true, skips link creation.</param>
+    /// <param name="cleanRoot">Whether to skip existence checks because the root was wiped.</param>
+    /// <param name="isFiltered">Whether this is a filtered incremental build.</param>
     /// <param name="ignoredFolders">List of folders in Shoko destinations to exclude from processing.</param>
     /// <param name="session">Active build session context containing caches.</param>
-    /// <param name="onLink">Callback to invoke when a link is created.</param>
+    /// <param name="onLink">Callback to invoke when a link is confirmed as expected.</param>
     /// <returns>A tuple of counts: Created, Skipped, SkippedDetails, Errors, Planned.</returns>
     private (int Created, int Skipped, List<string> SkippedDetails, List<string> Errors, int Planned) BuildSeries(
         IShokoSeries series,
         string rootFolderName,
         bool cleanRoot,
-        ConcurrentDictionary<string, byte> cleanedSeries,
-        bool filtered,
-        bool cleanOnly,
+        bool isFiltered,
         HashSet<string> ignoredFolders,
         VfsBuildSession session,
         Action<string, string, string, string?>? onLink = null
@@ -506,9 +491,13 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         var (created, skipped, planned, errors, skippedDetails) = (0, 0, 0, new List<string>(), new List<string>());
         var (displayTitle, _, _) = TextHelper.ResolveFullSeriesTitles(series);
         int folderId = EnforceTmdbNumbering ? OverrideHelper.GetPrimary(series.ID, metadataService) : series.ID;
+
         var fileData = GetSeriesFileDataCached(series, session);
         if (!fileData.Mappings.Any())
+        {
+            PruneSeries(rootFolderName, folderId, errors.Add);
             return (0, 0, skippedDetails, errors, 0);
+        }
 
         // Collect the base names of all source video files to prevent them from being linked as series-level metadata
         var videoBaseNames = fileData.Mappings.Select(m => Path.GetFileNameWithoutExtension(m.FileName)).Distinct().ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -517,9 +506,19 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         int epPad = Math.Max(2, fileData.Mappings.Where(m => m.Coords.Season >= 0).DefaultIfEmpty().Max(m => m?.Coords.EndEpisode ?? m?.Coords.Episode ?? 1).ToString().Length);
         var extraPad = fileData.Mappings.Where(m => m.Coords.Season < 0).GroupBy(m => m.Coords.Season).ToDictionary(g => g.Key, g => g.Count() > 9 ? 2 : 1);
 
-        // Track unique VFS series directories resolved for this build to perform Local Extra linking.
         var resolvedVfsSeriesPaths = new HashSet<string>(VfsShared.PathComparer);
-        bool skipCheck = cleanRoot && !filtered;
+        var expectedFiles = new HashSet<string>(VfsShared.PathComparer);
+        bool skipCheck = cleanRoot && !isFiltered;
+
+        // Callback wrapper to automatically track the expected physical destination of any correctly generated link to protect it from the cleanup phase
+        void LocalOnLink(string importRoot, string season, string fileName, string? source)
+        {
+            string path = string.IsNullOrEmpty(season)
+                ? Path.Combine(importRoot, rootFolderName, folderId.ToString(), fileName)
+                : Path.Combine(importRoot, rootFolderName, folderId.ToString(), season, fileName);
+            expectedFiles.Add(path);
+            onLink?.Invoke(importRoot, season, fileName, source);
+        }
 
         foreach (var mapping in fileData.Mappings.OrderBy(m => m.Coords.Season).ThenBy(m => m.Coords.Episode).ThenBy(m => m.PartIndex ?? 0))
         {
@@ -547,38 +546,6 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                 seriesPath = Path.Combine(rootPath, folderId.ToString());
             resolvedVfsSeriesPaths.Add(seriesPath);
 
-            // Inline, thread-safe series directory cleanup
-            if (cleanRoot && filtered && cleanedSeries.TryAdd(seriesPath, 0))
-            {
-                if (Directory.Exists(seriesPath))
-                {
-                    if (!VfsShared.IsSafeToDelete(seriesPath))
-                    {
-                        errors.Add($"Refusing to clean: {seriesPath}");
-                        s_logger.Warn("VFS: Unsafe cleanup path blocked -> {Path}", seriesPath);
-                    }
-                    else
-                    {
-                        try
-                        {
-                            Directory.Delete(seriesPath, true);
-                        }
-                        catch (IOException ioEx)
-                        {
-                            errors.Add($"Clean failed: Folder in use or locked by another process {seriesPath}");
-                            s_logger.Warn(ioEx, "VFS: Cleanup blocked due to in use path -> {Path}", seriesPath);
-                        }
-                        catch (Exception e)
-                        {
-                            errors.Add($"Clean failed {seriesPath}: {e.Message}");
-                            s_logger.Error(e, "VFS: Clean failed for path -> {Path}", seriesPath);
-                        }
-                    }
-                }
-            }
-
-            if (cleanOnly)
-                continue;
             if (session.CreatedDirs.TryAdd(rootPath, 0))
             {
                 Directory.CreateDirectory(rootPath);
@@ -640,29 +607,43 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                         mapping.IsVariation
                     )
             );
-            if (VfsShared.TryCreateLink(src, Path.Combine(seasonPath, fileName), s_logger, skipExistenceCheck: skipCheck))
+
+            var destFilePath = Path.Combine(seasonPath, fileName);
+
+            // Fast inline check for broken symlinks to prevent TryCreateLink from failing on the overwrite
+            var fi = new FileInfo(destFilePath);
+            if (fi.LinkTarget != null && !fi.Exists)
+            {
+                try
+                {
+                    File.Delete(destFilePath);
+                }
+                catch { }
+            }
+
+            if (VfsShared.TryCreateLink(src, destFilePath, s_logger, skipExistenceCheck: skipCheck))
             {
                 created++;
                 planned++;
 
                 // Resolve Primary IDs to allow local asset linking for crossover files that have been consolidated via VFS Overrides.
-                onLink?.Invoke(importRoot, seasonName, fileName, src);
+                LocalOnLink(importRoot, seasonName, fileName, src);
                 var distinctPrimarySeriesCount =
                     mapping.Video?.CrossReferences?.Where(cr => cr.ShokoEpisode != null).Select(cr => OverrideHelper.GetPrimary(cr.ShokoEpisode!.SeriesID, metadataService)).Distinct().Count() ?? 0;
                 if (distinctPrimarySeriesCount <= 1)
                 {
-                    assetLinker.LinkSeriesMetadata(Path.GetDirectoryName(src)!, seriesPath, videoBaseNames, session.MetadataFileCache, (name, s) => onLink?.Invoke(importRoot, "", name, s), skipCheck);
+                    assetLinker.LinkSeriesMetadata(Path.GetDirectoryName(src)!, seriesPath, videoBaseNames, session.MetadataFileCache, (name, s) => LocalOnLink(importRoot, "", name, s), skipCheck);
                     assetLinker.LinkEpisodeMetadata(
                         src,
                         Path.GetDirectoryName(src)!,
-                        Path.GetFileNameWithoutExtension(Path.Combine(seasonPath, fileName)),
+                        Path.GetFileNameWithoutExtension(destFilePath),
                         seasonPath,
                         session.SubtitleFileCache,
                         ref planned,
                         ref skipped,
                         errors,
                         ref created,
-                        (name, s) => onLink?.Invoke(importRoot, seasonName, name, s),
+                        (name, s) => LocalOnLink(importRoot, seasonName, name, s),
                         skipCheck
                     );
                 }
@@ -670,32 +651,65 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
             else
             {
                 skipped++;
-                errors.Add($"Link failed: {src} -> {Path.Combine(seasonPath, fileName)}");
+                errors.Add($"Link failed: {src} -> {destFilePath}");
             }
         }
 
         // Plex Local Extras: Run for every unique VFS series folder created across different roots for this series.
         if (Settings.Advanced.PlexLocalExtras)
             foreach (var seriesPath in resolvedVfsSeriesPaths)
-                assetLinker.LinkLocalExtras(
-                    fileData,
-                    seriesPath,
-                    videoBaseNames,
-                    epPad,
-                    (season, name, s) => onLink?.Invoke(Path.GetDirectoryName(Path.GetDirectoryName(seriesPath))!, season, name, s),
-                    skipCheck
-                );
+                assetLinker.LinkLocalExtras(fileData, seriesPath, videoBaseNames, epPad, (season, name, s) => LocalOnLink(Path.GetDirectoryName(Path.GetDirectoryName(seriesPath))!, season, name, s), skipCheck);
 
-        // Dynamically register physically present AnimeThemes mapping files inside the blueprint Shorts directory
+        // Dynamically register physically present AnimeThemes mapping files inside the blueprint Shorts directory to protect them from cleanup
+        var anidbIds = EnforceTmdbNumbering
+            ? OverrideHelper.GetGroup(folderId, metadataService).Select(metadataService.GetShokoSeriesByID).OfType<IShokoSeries>().Select(s => s.AnidbAnimeID).ToList()
+            : [series.AnidbAnimeID];
+
         foreach (var seriesPath in resolvedVfsSeriesPaths)
         {
             string root = Path.GetDirectoryName(Path.GetDirectoryName(seriesPath))!;
-            if (session.ThemeMappings.TryGetValue(series.AnidbAnimeID, out var themes))
+            string themeRootName = VfsShared.ResolveAnimeThemesFolderName();
+
+            foreach (var anidbId in anidbIds)
             {
-                string themeRootName = VfsShared.ResolveAnimeThemesFolderName();
-                foreach (var theme in themes)
-                    if (GetThemeSourcePath(theme.RelativePath, root, themeRootName, session) is string srcPath)
-                        onLink?.Invoke(root, "Shorts", theme.FinalName, srcPath);
+                if (session.ThemeMappings.TryGetValue(anidbId, out var themes))
+                {
+                    foreach (var theme in themes)
+                    {
+                        if (GetThemeSourcePath(theme.RelativePath, root, themeRootName, session) is string srcPath)
+                            LocalOnLink(root, "Shorts", theme.FinalName, srcPath);
+                    }
+                }
+            }
+        }
+
+        // Perform diff-based cleanup of unexpected files and empty directories left behind by renames or moves
+        foreach (var seriesPath in resolvedVfsSeriesPaths)
+        {
+            if (!Directory.Exists(seriesPath))
+                continue;
+
+            foreach (var file in Directory.EnumerateFiles(seriesPath, "*", SearchOption.AllDirectories))
+            {
+                if (!expectedFiles.Contains(file))
+                {
+                    try
+                    {
+                        File.Delete(file);
+                    }
+                    catch { }
+                }
+            }
+
+            var dirs = Directory.EnumerateDirectories(seriesPath, "*", SearchOption.AllDirectories).OrderByDescending(d => d.Length).ToList();
+            foreach (var d in dirs)
+            {
+                try
+                {
+                    if (!Directory.EnumerateFileSystemEntries(d).Any())
+                        Directory.Delete(d);
+                }
+                catch { }
             }
         }
 
@@ -746,27 +760,26 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
     private MapHelper.SeriesFileData GetSeriesFileDataCached(IShokoSeries series, VfsBuildSession session)
     {
         if (!EnforceTmdbNumbering)
-            return session.SeriesFileDataCache.GetOrAdd(series.ID, _ => MapHelper.GetSeriesFileData(series, metadataService)) ?? MapHelper.GetSeriesFileData(series, metadataService);
+            return session.SeriesFileDataCache.GetOrAdd(series.ID, _ => MapHelper.GetSeriesFileData(series, metadataService));
         int pId = OverrideHelper.GetPrimary(series.ID, metadataService);
         return session.SeriesFileDataCache.GetOrAdd(
-                pId,
-                _ =>
-                {
-                    var group = OverrideHelper.GetGroup(pId, metadataService).Select(metadataService.GetShokoSeriesByID).OfType<IShokoSeries>().ToList();
-                    return group.Count <= 1
-                        ? MapHelper.GetSeriesFileData(group.FirstOrDefault() ?? series, metadataService)
-                        : MapHelper.GetSeriesFileDataMerged(group[0], group.Skip(1).Cast<ISeries>(), metadataService);
-                }
-            ) ?? MapHelper.GetSeriesFileData(series, metadataService);
+            pId,
+            _ =>
+            {
+                var group = OverrideHelper.GetGroup(pId, metadataService).Select(metadataService.GetShokoSeriesByID).OfType<IShokoSeries>().ToList();
+                return group.Count <= 1
+                    ? MapHelper.GetSeriesFileData(group.FirstOrDefault() ?? series, metadataService)
+                    : MapHelper.GetSeriesFileDataMerged(group[0], group.Skip(1).Cast<ISeries>(), metadataService);
+            }
+        );
     }
 
     /// <summary>Recursively deletes the virtual directory for a series across all active VFS roots.</summary>
     /// <param name="rootFolderName">The name of the VFS root folder.</param>
-    /// <param name="series">The Shoko series metadata.</param>
-    /// <param name="errors">Collection of accumulated error messages.</param>
-    private void PruneSeries(string rootFolderName, IShokoSeries series, ConcurrentBag<string> errors)
+    /// <param name="folderId">The folder ID representation of the series to prune.</param>
+    /// <param name="onError">Callback to invoke if an exception occurs during pruning.</param>
+    private void PruneSeries(string rootFolderName, int folderId, Action<string> onError)
     {
-        int folderId = EnforceTmdbNumbering ? OverrideHelper.GetPrimary(series.ID, metadataService) : series.ID;
         List<string> roots = [.. (videoService.GetAllManagedFolders() ?? []).Select(f => f.Path).Where(p => !string.IsNullOrEmpty(p)).Distinct()];
 
         foreach (var root in roots)
@@ -782,7 +795,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
             }
             catch (Exception ex)
             {
-                errors.Add($"Prune failed {path}: {ex.Message}");
+                onError($"Prune failed {path}: {ex.Message}");
                 s_logger.Warn(ex, "VFS: Failed to prune series path {Path}", path);
             }
         }

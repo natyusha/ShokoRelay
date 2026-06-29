@@ -170,7 +170,7 @@ public class VfsWatcher(
                 try
                 {
                     var sw = Stopwatch.StartNew();
-                    var result = builder.Build(seriesIds, cleanRoot: false, pruneSeries: true);
+                    var result = builder.Build(seriesIds, cleanRoot: false);
 
                     // Restore AnimeThemes links for the affected series if a mapping file exists
                     if (File.Exists(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileAtMapping)))
@@ -312,7 +312,7 @@ public class VfsWatcher(
         try
         {
             // Regenerate the VFS to account for cases where the episode/season numbering was updated in Shoko after the initial file event was processed
-            var vfsResult = builder.Build(series.ID, cleanRoot: false, pruneSeries: true);
+            var vfsResult = builder.Build(series.ID, cleanRoot: false);
             if (vfsResult.CreatedLinks > 0)
                 s_logger.Info("VFS: Re-generated links for '{0}' during fixup phase", series.PreferredTitle?.Value);
 
