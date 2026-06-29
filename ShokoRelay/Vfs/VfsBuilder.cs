@@ -5,7 +5,6 @@ using System.Text.Json.Serialization;
 using NLog;
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Video.Services;
-using ShokoRelay.AnimeThemes;
 
 namespace ShokoRelay.Vfs;
 
@@ -103,8 +102,6 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         public ConcurrentDictionary<string, Lazy<string[]>> SubtitleFileCache { get; } = new(VfsShared.PathComparer);
         public ConcurrentDictionary<string, Lazy<string[]>> MetadataFileCache { get; } = new(VfsShared.PathComparer);
         public ConcurrentDictionary<string, byte> CreatedDirs { get; } = new(VfsShared.PathComparer);
-        public Dictionary<int, List<ThemeMapItem>> ThemeMappings { get; } = AnimeThemesMapping.LoadThemeMappings(ConfigDirectory);
-        public ConcurrentDictionary<string, Lazy<Dictionary<string, string>>> PhysicalThemeCaches { get; } = new(VfsShared.PathComparer);
     }
 
     #endregion
@@ -660,34 +657,14 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
             foreach (var seriesPath in resolvedVfsSeriesPaths)
                 assetLinker.LinkLocalExtras(fileData, seriesPath, videoBaseNames, epPad, (season, name, s) => LocalOnLink(Path.GetDirectoryName(Path.GetDirectoryName(seriesPath))!, season, name, s), skipCheck);
 
-        // Dynamically register physically present AnimeThemes mapping files inside the blueprint Shorts directory to protect them from cleanup
-        var anidbIds = EnforceTmdbNumbering
-            ? OverrideHelper.GetGroup(folderId, metadataService).Select(metadataService.GetShokoSeriesByID).OfType<IShokoSeries>().Select(s => s.AnidbAnimeID).ToList()
-            : [series.AnidbAnimeID];
-
-        foreach (var seriesPath in resolvedVfsSeriesPaths)
-        {
-            string root = Path.GetDirectoryName(Path.GetDirectoryName(seriesPath))!;
-            string themeRootName = VfsShared.ResolveAnimeThemesFolderName();
-
-            foreach (var anidbId in anidbIds)
-            {
-                if (session.ThemeMappings.TryGetValue(anidbId, out var themes))
-                {
-                    foreach (var theme in themes)
-                    {
-                        if (GetThemeSourcePath(theme.RelativePath, root, themeRootName, session) is string srcPath)
-                            LocalOnLink(root, "Shorts", theme.FinalName, srcPath);
-                    }
-                }
-            }
-        }
-
         // Perform diff-based cleanup of unexpected files and empty directories left behind by renames or moves
+        string themeRootName = VfsShared.ResolveAnimeThemesFolderName();
         foreach (var seriesPath in resolvedVfsSeriesPaths)
         {
             if (!Directory.Exists(seriesPath))
                 continue;
+
+            string importRoot = Path.GetDirectoryName(Path.GetDirectoryName(seriesPath))!;
 
             foreach (var file in Directory.EnumerateFiles(seriesPath, "*", SearchOption.AllDirectories))
             {
@@ -695,6 +672,16 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                 {
                     try
                     {
+                        var fi = new FileInfo(file);
+
+                        // Allow AnimeThemesMapping to manage its own files, but register them in the blueprint so they appear in the VFS browser
+                        if (fi.LinkTarget != null && fi.LinkTarget.Contains(themeRootName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            string seasonName = Path.GetFileName(Path.GetDirectoryName(file)!);
+                            onLink?.Invoke(importRoot, seasonName, Path.GetFileName(file), fi.LinkTarget);
+                            continue;
+                        }
+
                         File.Delete(file);
                     }
                     catch { }
@@ -719,39 +706,6 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
     #endregion
 
     #region Internal Helpers
-
-    /// <summary>Checks if a mapped theme file physically exists within the import root, using an in-memory cache to prevent disk thrashing.</summary>
-    /// <param name="relativePath">The relative path of the theme file inside the !AnimeThemes folder.</param>
-    /// <param name="importRoot">The physical import root directory.</param>
-    /// <param name="themeRootName">The name of the AnimeThemes directory.</param>
-    /// <param name="session">Active build session context containing caches.</param>
-    /// <returns>The absolute path of the theme file if it exists; otherwise, null.</returns>
-    private static string? GetThemeSourcePath(string relativePath, string importRoot, string themeRootName, VfsBuildSession session)
-    {
-        string themeRootPath = Path.Combine(importRoot, themeRootName);
-        var cache = session
-            .PhysicalThemeCaches.GetOrAdd(
-                themeRootPath,
-                root => new Lazy<Dictionary<string, string>>(() =>
-                {
-                    var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                    if (Directory.Exists(root))
-                    {
-                        try
-                        {
-                            foreach (string file in Directory.EnumerateFiles(root, "*.webm", SearchOption.AllDirectories))
-                                dict[Path.GetRelativePath(root, file).Replace('\\', '/').TrimStart('/')] = Path.GetFullPath(file);
-                        }
-                        catch { }
-                    }
-                    return dict;
-                })
-            )
-            .Value;
-
-        string normalizedRel = relativePath.Replace('\\', '/').TrimStart('/');
-        return cache.TryGetValue(normalizedRel, out string? absPath) ? absPath : null;
-    }
 
     /// <summary>Retrieves the files and episode mappings for a series, leveraging the build-session cache.</summary>
     /// <param name="series">The Shoko series metadata.</param>
