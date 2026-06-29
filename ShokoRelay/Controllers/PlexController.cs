@@ -188,6 +188,53 @@ public class PlexController(
         return Ok(new RelayResponse<object>(Data: new { triggered = triggeredCount }));
     }
 
+    /// <summary>Triggers a manual metadata refresh in Plex for a comma-separated list of series IDs.</summary>
+    /// <param name="filter">Optional comma-separated list of Shoko or AniDB series IDs to filter the operation.</param>
+    /// <returns>A task representing the result of the metadata refresh.</returns>
+    [HttpGet("plex/metadata/refresh")]
+    public async Task<IActionResult> RefreshPlexMetadata([FromQuery] string? filter = null)
+    {
+        if (ValidatePlexFilterRequest(filter, out var seriesList, out _) is { } guard)
+            return guard;
+
+        int refreshedCount = 0;
+        var errors = new List<string>();
+        var targets = PlexLibrary.GetConfiguredTargets();
+
+        foreach (var series in seriesList)
+        {
+            if (series == null)
+                continue;
+            foreach (var target in targets)
+            {
+                try
+                {
+                    var ratingKey = await PlexLibrary.FindRatingKeyForShokoSeriesInSectionAsync(series.ID, target, HttpContext.RequestAborted).ConfigureAwait(false);
+                    if (ratingKey.HasValue)
+                    {
+                        if (await PlexLibrary.RefreshMetadataAsync(ratingKey.Value, target, HttpContext.RequestAborted).ConfigureAwait(false))
+                        {
+                            refreshedCount++;
+                            Logger.Info("PlexController: Triggered manual metadata refresh for '{0}' (RatingKey: {1}) on {2}", series.PreferredTitle?.Value, ratingKey.Value, target.ServerName);
+                        }
+                        else
+                            errors.Add($"Failed to refresh metadata for '{series.PreferredTitle?.Value}' on {target.ServerName}");
+                    }
+                    else
+                        errors.Add($"Rating key not found in Plex for '{series.PreferredTitle?.Value}' on {target.ServerName}");
+                }
+                catch (Exception ex)
+                {
+                    errors.Add($"Error refreshing metadata for series {series.ID} on {target.ServerName}: {ex.Message}");
+                }
+            }
+        }
+
+        return errors.Count > 0 && refreshedCount == 0
+            ? BadRequest(new RelayResponse<object>(Status: "error", Message: "Failed to refresh metadata on any target.", Data: new { errors }))
+            : Ok(new RelayResponse<object>(Data: new { refreshedCount, errors }));
+    }
+
     /// <summary>Triggers the generation of Plex collections.</summary>
     /// <param name="filter">Optional comma-separated list of Shoko or AniDB IDs.</param>
     /// <param name="assignment">If false, skips assigning series to collections and only applies posters.</param>

@@ -27,14 +27,14 @@ GET  /config                                                   -> GetConfig
 POST /config                                                   -> SaveConfig
 GET  /config/schema                                            -> GetConfigSchema
 
-GET /theme.css                                                 -> GetDynamicThemeCss
+GET  /theme.css                                                -> GetDynamicThemeCss
 
 GET  /tasks/active                                             -> GetActiveTasks
 GET  /tasks/completed                                          -> GetCompletedTasks
 POST /tasks/clear/{taskName}                                   -> ClearTaskResult
 
-GET /logs/list                                                 -> GetLogsList
-GET /logs/{fileName}                                           -> GetLog
+GET  /logs/list                                                -> GetLogsList
+GET  /logs/{fileName}                                          -> GetLog
 ```
 
 - `GetControllerPage` Serves the plugin's frontend components and static assets from the `dashboard` folder.
@@ -168,6 +168,7 @@ POST /plex/auth/unlink                                         -> UnlinkPlex
 
 ```
 GET  /plex/library/refresh?filter={csv}                        -> RefreshPlexSeries
+GET  /plex/metadata/refresh?filter={csv}                       -> RefreshPlexMetadata
 
 GET  /plex/collections/build                                   -> BuildPlexCollections
      [?filter={csv}&assignment={true|false}&clean={true|false}]
@@ -180,6 +181,7 @@ GET  /plex/automation/run                                      -> RunPlexAutomat
 ```
 
 - `RefreshPlexSeries` triggers a partial library scan in Plex for a comma-separated list of series IDs.
+- `RefreshPlexMetadata` triggers a manual metadata refresh in Plex for a comma-separated list of series IDs (resolving their rating keys first).
 - `BuildPlexCollections` generates Plex collections for a comma-separated list of series IDs (or all series if omitted).
   - `assignment`: (default true) if false, skips assigning series to collections and only applies posters.
   - `clean`: (default true) if true and `PlexMetadataPath` is configured, prunes old cached custom posters from Plex's local metadata directory
@@ -227,11 +229,11 @@ Endpoints are managed by `ShokoController`
 
 ```
 GET  /vfs?run={true|false}&clean={true|false}&filter={csv}     -> BuildVfs
-GET /vfs/audit                                                 -> AuditVfs
+GET  /vfs/audit                                                -> AuditVfs
 
 POST /vfs/overrides                                            -> SaveVfsOverrides
 
-GET /vfs/tree                                                  -> GetVfsTree
+GET  /vfs/tree                                                 -> GetVfsTree
 ```
 
 - `BuildVfs` (all query parameters are optional)
@@ -257,7 +259,7 @@ GET /vfs/tree                                                  -> GetVfsTree
 ### Shoko: Automation
 
 ```
-GET  /shoko/purge-missing?dryRun={true|false}                  -> PurgeMissingFiles           (for preview/testing)
+GET  /shoko/purge-missing?dryRun={true|false}                  -> PurgeMissingFiles          (for preview/testing)
 POST /shoko/purge-missing?dryRun={true|false}                  -> PurgeMissingFiles
 
 POST /shoko/import                                             -> RunShokoImport
