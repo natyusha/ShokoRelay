@@ -15,6 +15,34 @@
   "image_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-logo.png",
   "releases": [
     {
+      "version": "0.15.0",
+      "tag": "v0.15.0",
+      "source_revision": "7d93dedbd821e86fa1d345bdf3d58a4d32d6eb0a",
+      "released_at": "2026-06-29T14:24:37Z",
+      "channel": "Dev",
+      "release_notes": "The version bump is due to some breaking server side changes that caused metadata refreshes to completely fail. The new method of VFS building should play much more nicely with Plex's autoscan as well.\r\n\r\n**Changes:**\r\n- Implement a new dual-pass caching strategy using FileInfo.Length and MD5 hashes to prevent unnecessary re-uploads of local artwork\r\n- Verify local files against Shoko's native ResourceID (MD5) to make the cache self-healing against manual image deletions\r\n- Upgrade the Plex thumbnail cache to store metadata as URL|MD5 to automatically detect and repair out-of-sync database states\r\n- Save volume level and mute status to localStorage whenever they are changed in the standalone player\r\n- Update GetAvailableImages to sort AniDB images in reverse order for series-level entities (accounts for Shoko now retaining removed AniDB images)\r\n- Eliminate the VFS Prune-and-Rebuild behavior to prevent Plex autoscan from registering false-positive file deletions during incremental rebuilds\r\n- Implement a diff-and-sync strategy that evaluates the expected file layout and intelligently deletes only the unexpected files or broken symlinks\r\n- Remove the pruneSeries flag entirely from VfsBuilder and VfsWatcher to rely purely on the diff-and-sync state tracking\r\n- Improve VfsBuilder robustness to gracefully identify and prune VFS folders when a series is completely deleted from the Shoko database\r\n- Remove naive AnimeThemes CSV parsing and file prediction from VfsBuilder to respect separation of concerns\r\n- Update the Diff-And-Sync cleanup phase to dynamically detect and preserve symlinks pointing to the AnimeThemes repository\r\n- Ensure dynamically preserved AnimeThemes files are still registered to the onLink callback for VFS Browser blueprint visibility\r\n- Add GET /plex/metadata/refresh endpoint to PlexController to manually trigger Plex metadata refreshes for specified series IDs\r\n- Save volume level and mute status to localStorage whenever they are changed in the standalone player\r\n- Bump Shoko.Abstractions to v6.0.0-alpha.65\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.14.1...v0.15.0",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.15.0/ShokoRelay-v0.15.0-dev_linux-arm64.zip",
+          "checksum": "d359f97979389d20d4c2be7983424e6f85ea02cf0c5ce0f264c5db739b12eb1b"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.15.0/ShokoRelay-v0.15.0-dev_linux-x64.zip",
+          "checksum": "894c1abdc739e21dfe211f78ec8bb7a024f4a6f0f98109338cf35cd848735f66"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.15.0/ShokoRelay-v0.15.0-dev_win-x64.zip",
+          "checksum": "22f93f597de57f63adb0a9bc01efbb71faec4a93f8a1e18e965ada85b9023aab"
+        }
+      ]
+    },
+    {
       "version": "0.14.1",
       "tag": "v0.14.1",
       "source_revision": "f3aa90f0f3ad1ae09f847b9a111695d03cdeb1f8",
