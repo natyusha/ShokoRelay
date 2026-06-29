@@ -130,6 +130,9 @@
       else level = "low";
     }
     if (playerContainer) playerContainer.dataset.volumeLevel = level;
+
+    localStorage.setItem("player-volume", vol);
+    localStorage.setItem("player-muted", playerVideo.muted);
   };
 
   /**
@@ -519,6 +522,11 @@
 
   // #region Initialization
   if (playerVideo) {
+    const savedVol = localStorage.getItem("player-volume");
+    const savedMuted = localStorage.getItem("player-muted");
+    if (savedVol !== null) playerVideo.volume = parseFloat(savedVol);
+    if (savedMuted !== null) playerVideo.muted = savedMuted === "true";
+
     ["play", "pause", "ended", "loadstart"].forEach((ev) => playerVideo.addEventListener(ev, syncPlaybackUI));
 
     const updateProgressLoop = () => {
