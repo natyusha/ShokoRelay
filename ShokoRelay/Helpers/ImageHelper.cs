@@ -1,4 +1,5 @@
 using Newtonsoft.Json;
+using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Enums;
 using Shoko.Abstractions.Metadata.Image;
@@ -71,7 +72,21 @@ public static class ImageHelper
     /// <param name="entity">The Shoko metadata entity.</param>
     /// <param name="type">The specific image type to retrieve.</param>
     /// <returns>A collection of available images.</returns>
-    public static IEnumerable<IImage> GetAvailableImages(this IWithImages entity, ImageEntityType type) => entity.GetImages(imageType: type).Where(i => i.IsEnabled && i.IsAvailable && i.IsDesired);
+    public static IEnumerable<IImage> GetAvailableImages(this IWithImages entity, ImageEntityType type)
+    {
+        var imgs = entity.GetImages(imageType: type).Where(i => i.IsEnabled && i.IsAvailable && i.IsDesired).ToList();
+        if (entity is ISeries)
+        {
+            var aniDbImages = imgs.Where(i => i.Source == DataSource.AniDB).Reverse().ToList();
+            int aniDbIdx = 0;
+            for (int i = 0; i < imgs.Count; i++)
+            {
+                if (imgs[i].Source == DataSource.AniDB)
+                    imgs[i] = aniDbImages[aniDbIdx++];
+            }
+        }
+        return imgs;
+    }
 
     /// <summary>Gets the URL of the preferred image for the entity based on the language setting.</summary>
     /// <param name="entity">The Shoko metadata entity.</param>
