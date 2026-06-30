@@ -258,6 +258,7 @@ There is also support for generating `Theme.mp3` files as local metadata. This w
 - If you want a specific OP/ED you can enter it under `Slug` i.e. `OP2`
 - Rarely a single AniDB entry will be mapped to multiple AnimeThemes entries. In cases like this the `Off.` or "Index Override" can be set to pick the next match
   - Generally this means entering a `1`
+- If you want to limit batch operations to the current season set `Cour` to `1`
 - _Theme.mp3 generation can be run per folder from the [VFS Browser](#vfs-browser) page (uses the default settings)_
 
 **Miniplayer**

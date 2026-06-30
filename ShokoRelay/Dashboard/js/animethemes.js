@@ -18,6 +18,7 @@
     });
     if (el("at-mp3-force")?.getAttribute("aria-pressed") === "true") ps.set("force", "true");
     if (el("at-mp3-batch")?.getAttribute("aria-pressed") === "true") ps.set("batch", "true");
+    if (el("at-seasonal")?.value === "1") ps.set("seasonal", "true");
     return ps;
   };
 
@@ -117,7 +118,7 @@
   const atFill = el("at-progress-fill");
 
   /**
-   * Initializes real-time input sanitization event listeners for the Slug, Offset, and Filter fields.
+   * Initializes real-time input sanitization event listeners for the Slug, Offset, Cour, and Filter fields.
    * @returns {void}
    */
   function initAtSanitizers() {
@@ -132,6 +133,13 @@
     if (offsetInput) {
       offsetInput.oninput = () => {
         offsetInput.value = offsetInput.value.replace(/[^0-9]/g, "");
+      };
+    }
+
+    const seasonalInput = el("at-seasonal");
+    if (seasonalInput) {
+      seasonalInput.oninput = () => {
+        seasonalInput.value = seasonalInput.value.replace(/[^01]/g, "").slice(0, 1);
       };
     }
 

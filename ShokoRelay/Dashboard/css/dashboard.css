@@ -70,6 +70,11 @@
   grid-template-columns: repeat(auto-fit, minmax(442px, 1fr));
   gap: 8px;
 }
+.two-cols-thin {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 8px;
+}
 .w46 {
   max-width: 46px;
 }
@@ -479,6 +484,12 @@ button.float-link {
   }
   #header-title {
     margin-left: 0;
+  }
+}
+@media (max-width: 675px) {
+  .two-cols-thin {
+    grid-template-columns: 1fr;
+    gap: 0;
   }
 }
 /* #endregion */

@@ -176,9 +176,9 @@
       </div>
       <!-- #endregion -->
 
-      <!-- #region MARK: Shoko
-      -->
-      <div class="two-cols">
+      <div class="two-cols-thin">
+        <!-- #region MARK: Shoko VFS
+        -->
         <section>
           <div class="full">
             <h2>
@@ -192,7 +192,7 @@
           <div class="full">
             <div>
               <label for="vfs-filter">Filter by SeriesID</label>
-              <input id="vfs-filter" type="text" placeholder="comma separated; prefix 'a' for AniDB IDs" />
+              <input id="vfs-filter" type="text" placeholder="comma separated; prefix 'a' for AniDB" />
             </div>
           </div>
           <div class="full">
@@ -210,8 +210,63 @@
         </section>
         <!-- #endregion -->
 
-        <!-- #region MARK: Quick Actions
+        <!-- #region MARK: AnimeThemes VFS
         -->
+        <section>
+          <div class="full">
+            <h2>
+              <div class="svg-stack">
+                <svg class="icon-svg"><use href="img/icons.svg#database-outline"></use></svg>
+                <svg class="at-svg-o"><use href="img/icons.svg#animethemes"></use></svg>
+              </div>
+              AnimeThemes: VFS
+            </h2>
+            <a href="../player" class="img-btn" title="Open AnimeThemes Player" aria-label="Open AnimeThemes Player">
+              <svg class="icon-svg"><use href="img/icons.svg#movie-open"></use></svg>
+            </a>
+          </div>
+          <div class="full">
+            <div>
+              <label for="at-filter-map">Filter by SeriesID</label>
+              <input id="at-filter-map" type="text" placeholder="comma separated; prefix 'a' for AniDB" />
+            </div>
+          </div>
+          <div class="full">
+            <button
+              id="{{ TaskAtVfsBuild }}"
+              data-relay-endpoint="/animethemes/vfs/build"
+              data-relay-label="AnimeThemes Generation"
+              data-relay-params="getAtMapParams"
+              data-relay-persist-if-empty="#at-filter-map"
+            >
+              Generate
+            </button>
+            <button
+              id="{{ TaskAtWebmDownload }}"
+              class="w46-button"
+              title="Download Current Season"
+              data-relay-endpoint="/animethemes/webm/download"
+              data-relay-method="POST"
+              data-relay-params="getWebmSeasonParams"
+              data-relay-label="WebM Download"
+              data-relay-persist="true"
+            >
+              <svg class="icon-svg"><use href="img/icons.svg#download"></use></svg>
+            </button>
+            <button id="at-map-import" class="w46-button" title="Import Curated Mapping File" data-relay-endpoint="/animethemes/vfs/import" data-relay-method="POST" data-relay-label="AnimeThemes Import">
+              <svg class="icon-svg"><use href="img/icons.svg#database-import-outline"></use></svg>
+            </button>
+            <button id="{{ TaskAtMapBuild }}" class="w46-button" title="Build Mapping File" data-relay-endpoint="/animethemes/vfs/map" data-relay-label="AnimeThemes Mapping" data-relay-persist="true">
+              <svg class="icon-svg"><use href="img/icons.svg#database-sync-outline"></use></svg>
+            </button>
+          </div>
+        </section>
+        <!-- #endregion -->
+      </div>
+
+      <div class="two-cols">
+        <!-- #region MARK: Quick Actions
+      -->
         <section>
           <div class="full">
             <h2>
@@ -291,61 +346,10 @@
             </div>
           </div>
         </section>
-      </div>
-      <!-- #endregion -->
+        <!-- #endregion -->
 
-      <!-- #region MARK: AnimeThemes
-      -->
-      <div class="two-cols">
-        <section>
-          <div class="full">
-            <h2>
-              <div class="svg-stack">
-                <svg class="icon-svg"><use href="img/icons.svg#database-outline"></use></svg>
-                <svg class="at-svg-o"><use href="img/icons.svg#animethemes"></use></svg>
-              </div>
-              AnimeThemes: VFS
-            </h2>
-            <a href="../player" class="img-btn" title="Open AnimeThemes Player" aria-label="Open AnimeThemes Player">
-              <svg class="icon-svg"><use href="img/icons.svg#movie-open"></use></svg>
-            </a>
-          </div>
-          <div class="full">
-            <div>
-              <label for="at-filter-map">Filter by SeriesID</label>
-              <input id="at-filter-map" type="text" placeholder="comma separated; prefix 'a' for AniDB IDs" />
-            </div>
-          </div>
-          <div class="full">
-            <button
-              id="{{ TaskAtVfsBuild }}"
-              data-relay-endpoint="/animethemes/vfs/build"
-              data-relay-label="AnimeThemes Generation"
-              data-relay-params="getAtMapParams"
-              data-relay-persist-if-empty="#at-filter-map"
-            >
-              Generate
-            </button>
-            <button
-              id="{{ TaskAtWebmDownload }}"
-              class="w46-button"
-              title="Download Current Season"
-              data-relay-endpoint="/animethemes/webm/download"
-              data-relay-method="POST"
-              data-relay-params="getWebmSeasonParams"
-              data-relay-label="WebM Download"
-              data-relay-persist="true"
-            >
-              <svg class="icon-svg"><use href="img/icons.svg#download"></use></svg>
-            </button>
-            <button id="at-map-import" class="w46-button" title="Import Curated Mapping File" data-relay-endpoint="/animethemes/vfs/import" data-relay-method="POST" data-relay-label="AnimeThemes Import">
-              <svg class="icon-svg"><use href="img/icons.svg#database-import-outline"></use></svg>
-            </button>
-            <button id="{{ TaskAtMapBuild }}" class="w46-button" title="Build Mapping File" data-relay-endpoint="/animethemes/vfs/map" data-relay-label="AnimeThemes Mapping" data-relay-persist="true">
-              <svg class="icon-svg"><use href="img/icons.svg#database-sync-outline"></use></svg>
-            </button>
-          </div>
-        </section>
+        <!-- #region MARK: AnimeThemes MP3
+        -->
         <section id="at-mp3-section">
           <div id="at-progress-track" class="at-progress-track">
             <div id="at-progress-fill" class="at-progress-fill"></div>
@@ -376,6 +380,7 @@
             <div class="at-path-col"><label>Path</label><input id="at-path" type="text" placeholder="Shoko or mapping relative anime path" /></div>
             <div class="w46"><label title="Preferred Theme">Slug</label><input id="at-slug" type="text" placeholder="OP2" maxlength="15" /></div>
             <div class="w46"><label title="Index Override">Off.</label><input id="at-offset" type="number" min="0" step="1" value="" placeholder="0" /></div>
+            <div class="w46"><label title="Seasonal Only">Cour</label><input id="at-seasonal" type="number" min="0" step="1" value="" placeholder="0" /></div>
           </div>
           <div class="full">
             <button id="{{ TaskAtMp3Build }}" data-relay-action="atMp3Build">Generate</button>
@@ -390,8 +395,8 @@
             </button>
           </div>
         </section>
+        <!-- #endregion -->
       </div>
-      <!-- #endregion -->
 
       <!-- #region MARK: Provider Settings
       -->
@@ -555,7 +560,7 @@
     <!-- #endregion -->
 
     <!--#region MARK: Settings Help Modal
-  -->
+    -->
     <div id="settings-help-modal" class="modal-overlay" aria-hidden="true" role="dialog" aria-modal="true">
       <div class="modal help" role="document">
         <header>Settings Help</header>
