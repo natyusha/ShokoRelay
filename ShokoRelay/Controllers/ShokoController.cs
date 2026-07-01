@@ -2,6 +2,7 @@ using System.Text.Json;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
 using Shoko.Abstractions.Metadata.Enums;
+using Shoko.Abstractions.Metadata.Image.Options;
 using Shoko.Abstractions.Video.Services;
 using ShokoRelay.AnimeThemes;
 using ShokoRelay.Services;
@@ -316,7 +317,10 @@ public class ShokoController(
     public async Task<IActionResult> PurgeEpisodeImages()
     {
         Logger.Info("Shoko: Starting a manual purge of all default (non-LocallyGenerated) episode backdrops...");
-        var xrefs = imageManager.GetAllImageCrossReferences(imageType: ImageEntityType.Backdrop, entityType: DataEntityType.Episode).Where(x => x.ImageSource != DataSource.LocallyGenerated).ToList();
+        var xrefs = imageManager
+            .GetAllImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = ImageEntityType.Backdrop })
+            .Where(x => x.EntityType == DataEntityType.Episode && x.ImageSource != DataSource.LocallyGenerated)
+            .ToList();
 
         var distinctImageIds = xrefs.Select(x => x.ImageID).Distinct().ToList();
         int purgedCount = 0;

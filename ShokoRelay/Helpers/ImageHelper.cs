@@ -3,6 +3,7 @@ using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Enums;
 using Shoko.Abstractions.Metadata.Image;
+using Shoko.Abstractions.Metadata.Image.Options;
 
 namespace ShokoRelay.Helpers;
 
@@ -74,7 +75,17 @@ public static class ImageHelper
     /// <returns>A collection of available images.</returns>
     public static IEnumerable<IImage> GetAvailableImages(this IWithImages entity, ImageEntityType type)
     {
-        var imgs = entity.GetImages(imageType: type).Where(i => i.IsEnabled && i.IsAvailable && i.IsDesired).ToList();
+        var imgs = entity
+            .GetImages(
+                new ImageFilteringOptions
+                {
+                    ImageType = type,
+                    IsEnabled = true,
+                    IsAvailable = true,
+                    IsDesired = true,
+                }
+            )
+            .ToList();
         if (entity is ISeries)
         {
             var aniDbImages = imgs.Where(i => i.Source == DataSource.AniDB).Reverse().ToList();

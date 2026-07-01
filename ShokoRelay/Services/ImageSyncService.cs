@@ -4,6 +4,7 @@ using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Enums;
 using Shoko.Abstractions.Metadata.Image;
 using Shoko.Abstractions.Metadata.Image.CrossReferences;
+using Shoko.Abstractions.Metadata.Image.Options;
 using ShokoRelay.Vfs;
 
 namespace ShokoRelay.Services;
@@ -597,7 +598,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
     {
         try
         {
-            var existingXrefs = imageManager.GetImageCrossReferencesForEntity(entity, imageType: imageType);
+            var existingXrefs = entity.GetImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = imageType });
             foreach (var xref in existingXrefs)
                 if (predicate(xref))
                 {
