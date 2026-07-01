@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Enums;
 using Shoko.Abstractions.Metadata.Tmdb;
@@ -153,10 +152,7 @@ public static class PlexMapping
 
     #endregion
 
-    #region TMDB Order & Cache
-
-    private static readonly ConcurrentDictionary<(int EpId, string? OrderingId), bool> s_tmdbAllOrderingsContainsCache = new();
-    private static readonly ConcurrentDictionary<(int EpId, string? OrderingId), (int? Season, int Episode)> s_orderingCoordsCache = new();
+    #region TMDB Order
 
     /// <summary>Filter a list of TMDB episode entries to the preferred ordering using a single-pass weighted sort.</summary>
     /// <param name="entries">The collection of TMDB episodes to filter.</param>
@@ -170,11 +166,7 @@ public static class PlexMapping
         [
             .. list.OrderBy(te =>
                     string.Equals(te.OrderingID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase) ? 0
-                    : s_tmdbAllOrderingsContainsCache.GetOrAdd(
-                        (te.ID, showPreferredOrderingId),
-                        key => te.AllOrderings?.Any(o => string.Equals(o.OrderingID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase)) == true
-                    )
-                        ? 1
+                    : te.AllOrderings?.Any(o => string.Equals(o.OrderingID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase)) == true ? 1
                     : 2
                 )
                 .ThenBy(te => te.SeasonNumber ?? 0)
@@ -188,13 +180,8 @@ public static class PlexMapping
     public static (int? Season, int Episode) GetOrderingCoords(ITmdbEpisode ep, string? showPreferredOrderingId = null) =>
         ep == null ? (null, 0)
         : !string.IsNullOrWhiteSpace(showPreferredOrderingId)
-            ? s_orderingCoordsCache.GetOrAdd(
-                (ep.ID, showPreferredOrderingId),
-                _ =>
-                    ep.AllOrderings?.FirstOrDefault(o => string.Equals(o.OrderingID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase)) is { } byAll
-                        ? (byAll.SeasonNumber, byAll.EpisodeNumber)
-                        : (ep.SeasonNumber, ep.EpisodeNumber)
-            )
+            ? ep.AllOrderings?.FirstOrDefault(o => string.Equals(o.OrderingID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase)) is { } byAll ? (byAll.SeasonNumber, byAll.EpisodeNumber)
+                : (ep.SeasonNumber, ep.EpisodeNumber)
         : (ep.SeasonNumber, ep.EpisodeNumber);
 
     #endregion
