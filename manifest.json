@@ -15,6 +15,34 @@
   "image_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-logo.png",
   "releases": [
     {
+      "version": "0.16.0",
+      "tag": "v0.16.0",
+      "source_revision": "a07019b8cbb77d2bc85f010e840353c78a98ad38",
+      "released_at": "2026-07-01T10:02:08Z",
+      "channel": "Dev",
+      "release_notes": "Another round of Shoko Server image changes.\r\n\r\n**Changes:**\r\n- Add the new Shoko.Abstractions.Metadata.Image.Options to ImageHelper, ImageSyncService, and ShokoController\r\n- Refactor GetAvailableImages in ImageHelper to utilize the new ImageFilteringOptions class for querying entities\r\n- Refactor PurgeEntityImagesAsync in ImageSyncService to utilize ImageCrossReferenceFilteringOptions directly from the entity context rather than the IImageManager\r\n- Update PurgeEpisodeImages in ShokoController to pass the new ImageCrossReferenceFilteringOptions object to GetAllImageCrossReferences\r\n- Restructure dashboard.cshtml and dashboard.css to utilize a more compact two-column grid layout for VFS sections\r\n- Add a new \"Cour\" input field to the AnimeThemes MP3 section to filter batch operations to the current season\r\n- Update Shoko.Abstractions dependency to v6.0.0-alpha.66\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.15.0...v0.16.0",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.16.0/ShokoRelay-v0.16.0-dev_linux-arm64.zip",
+          "checksum": "9d61ca874d98703987543e0b4880ae17b9cba409e99c709205fbe15fabc7ef50"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.16.0/ShokoRelay-v0.16.0-dev_linux-x64.zip",
+          "checksum": "d50967244d7513ff2d07a117e1dd45899884d990f85dff4929ae8b9c05ec6e35"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.16.0/ShokoRelay-v0.16.0-dev_win-x64.zip",
+          "checksum": "ff1f413741d84421c86b7b651da8cab04ca31cf746ad1d32e1244e28f06e2d29"
+        }
+      ]
+    },
+    {
       "version": "0.15.0",
       "tag": "v0.15.0",
       "source_revision": "7d93dedbd821e86fa1d345bdf3d58a4d32d6eb0a",
