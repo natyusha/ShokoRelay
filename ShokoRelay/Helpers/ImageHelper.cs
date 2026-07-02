@@ -4,6 +4,7 @@ using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Enums;
 using Shoko.Abstractions.Metadata.Image;
 using Shoko.Abstractions.Metadata.Image.Options;
+using Shoko.Abstractions.Metadata.Tmdb;
 
 namespace ShokoRelay.Helpers;
 
@@ -75,27 +76,30 @@ public static class ImageHelper
     /// <returns>A collection of available images.</returns>
     public static IEnumerable<IImage> GetAvailableImages(this IWithImages entity, ImageEntityType type)
     {
-        var imgs = entity
-            .GetImages(
-                new ImageFilteringOptions
-                {
-                    ImageType = type,
-                    IsEnabled = true,
-                    IsAvailable = true,
-                    IsDesired = true,
-                }
-            )
-            .ToList();
+        var options = new ImageFilteringOptions
+        {
+            ImageType = type,
+            IsEnabled = true,
+            IsAvailable = true,
+            IsDesired = true,
+        };
+
+        // Strictly prevent inherited series-level images from being returned for TMDB seasons
+        if (entity is ITmdbSeason)
+            options.LinkedEntityImages = false;
+
+        var imgs = entity.GetImages(options).ToList();
+
         if (entity is ISeries)
         {
-            var aniDbImages = imgs.Where(i => i.Source == DataSource.AniDB).Reverse().ToList();
-            int aniDbIdx = 0;
-            for (int i = 0; i < imgs.Count; i++)
-            {
-                if (imgs[i].Source == DataSource.AniDB)
-                    imgs[i] = aniDbImages[aniDbIdx++];
-            }
+            // Push TMDB Season type posters to the end of the array to prioritize TMDB Series posters
+            imgs = [.. imgs.OrderBy(i => i.CrossReference?.EntityType == DataEntityType.Season ? 1 : 0)];
+
+            // Reverse AniDB images to prioritize the newest posters in their original positions
+            var aniDbRev = new Queue<IImage>(imgs.Where(i => i.Source == DataSource.AniDB).Reverse());
+            imgs = [.. imgs.Select(i => i.Source == DataSource.AniDB ? aniDbRev.Dequeue() : i)];
         }
+
         return imgs;
     }
 

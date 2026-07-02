@@ -126,15 +126,13 @@ public class PlexMetadata(IMetadataService metadataService)
             seasonSummary = TextHelper.SummarySanitizer(tmdbSeason.PreferredDescription?.Value, Settings.SummaryMode);
         }
 
-        // Only apply TMDB season posters if there is more than one season present in the consolidated VFS. This accounts for extra seasons brought in via overrides.
-        int totalSeasons = ctx.FileData.Seasons.Count(s => s >= 0);
         List<string>? posters =
-            (Settings.TmdbSeasonPosters && totalSeasons > 1 && tmdbSeason != null)
+            (Settings.TmdbSeasonPosters && tmdbSeason != null)
                 ? [.. ImageHelper.FilterImagesByLanguage(tmdbSeason.GetAvailableImages(ImageEntityType.Primary), Settings.TmdbImageLanguage, true).Select(i => ImageHelper.GetImageUrl(i, forceRemote: true))]
                 : null;
 
         string? thumb = null;
-        if (Settings.TmdbSeasonPosters && totalSeasons > 1 && tmdbSeason != null)
+        if (Settings.TmdbSeasonPosters && tmdbSeason != null)
             thumb = tmdbSeason.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage);
 
         return new Dictionary<string, object?>
