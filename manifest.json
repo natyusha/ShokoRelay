@@ -15,6 +15,34 @@
   "image_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-logo.png",
   "releases": [
     {
+      "version": "0.16.1",
+      "tag": "v0.16.1",
+      "source_revision": "9cf4f93bc10392b546d445820337316482b1678e",
+      "released_at": "2026-07-03T14:29:19Z",
+      "channel": "Dev",
+      "release_notes": "For those that use them both the AnimeThemes torrent and curated mapping file have been updated (01/07/2026).\r\n\r\n**Changes:**\r\n- Exclude LinkedEntityImages for ITmdbSeason entities in GetAvailableImages to exclusively return cross-references matching their specific SeasonNumber\r\n- Apply a stable sort to ISeries entities in GetAvailableImages to prioritize TMDB Series posters above TMDB Season posters\r\n- Remove the multi-season restriction from PlexMetadata's MapSeason method\r\n- Update ParseMappingContentWithComments to preserve user annotations and blank lines located above the CSV header, while strictly discarding any found below it\r\n- Update SerializeMapping to dynamically inject preserved annotations at the top of the file, unconditionally followed by the standard CSV header\r\n- Sort at-mapping entries chronologically by Year, then naturally by file path\r\n- Fix a bug causing a negative 'Reused' count in the at-map build report by capturing the existing cache size before the parallel processing loop begins\r\n- Delete s_tmdbAllOrderingsContainsCache and s_orderingCoordsCache from PlexMapping to avoid stale data ever being present\r\n- Refactor SelectPreferredTmdbOrdering in PlexMapping to project the AllOrderings evaluation into a tuple before sorting\r\n- Bump Shoko.Abstractions to v6.0.0-alpha.67\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.16.0...v0.16.1",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.16.1/ShokoRelay-v0.16.1-dev_linux-arm64.zip",
+          "checksum": "283762f8e2dfc2a799e1701088f99421f214a7c32ef067d230f19f80929b8cd7"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.16.1/ShokoRelay-v0.16.1-dev_linux-x64.zip",
+          "checksum": "45c8edf7d3b5e69b90a8af09b379eb83e7c08c9e5e4ff4479f864fb599dfd33c"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.16.1/ShokoRelay-v0.16.1-dev_win-x64.zip",
+          "checksum": "b88e330a2cc621d03b414ae1c6457f5557d009d92db058a6026daf47011052c2"
+        }
+      ]
+    },
+    {
       "version": "0.16.0",
       "tag": "v0.16.0",
       "source_revision": "a07019b8cbb77d2bc85f010e840353c78a98ad38",
