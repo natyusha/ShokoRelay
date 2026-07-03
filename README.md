@@ -236,7 +236,7 @@ This plugin includes full [AnimeThemes](https://animethemes.moe/) integration. I
    - An endpoint (`/animethemes/webm/download`) is also available to help download things not available in the current torrent
 2. Generate a mapping for the videos by clicking the `Build Mapping File` button:
    - If you have the torrent click the `Import Curated Mapping File` button to download the [current torrent mapping](https://gist.github.com/natyusha/bb33a3b3bc95bc7a3869633e23d522bb)
-     - This mapping requires the configured `!AnimeThemes` folder to be the same as the torrent's root folder
+     - This will overwrite any existing mappings if they exist
    - Mapping the torrent takes ~8 hours (due to rate limits) and generated mappings will be appended to it
 3. Apply the mapping to the VFS by clicking the `Generate` button
    - The themes will be placed in the "Shorts" folder of their respective series

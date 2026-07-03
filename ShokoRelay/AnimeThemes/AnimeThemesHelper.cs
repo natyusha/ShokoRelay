@@ -210,26 +210,41 @@ internal static class AnimeThemesHelper
         return tags;
     }
 
-    /// <summary>Parses a CSV string into a list of mapping entries.</summary>
+    /// <summary>Parses a CSV string into a tuple containing preserved comments and a list of mapping entries.</summary>
     /// <param name="content">The raw CSV content string.</param>
-    /// <returns>A list of parsed entries.</returns>
-    internal static List<AnimeThemesMappingEntry> ParseMappingContent(string content)
+    /// <returns>A tuple of comment lines and parsed entries.</returns>
+    internal static (List<string> Comments, List<AnimeThemesMappingEntry> Entries) ParseMappingContentWithComments(string content)
     {
+        var comments = new List<string>();
+        var entries = new List<AnimeThemesMappingEntry>();
         if (string.IsNullOrWhiteSpace(content))
-            return [];
-        var result = new List<AnimeThemesMappingEntry>();
+            return (comments, entries);
+
+        bool passedHeader = false;
         using var reader = new StringReader(content);
         string? line;
         while ((line = reader.ReadLine()) != null)
         {
-            line = line.Trim();
-            if (line.Length == 0 || line.StartsWith("#"))
+            string t = line.Trim();
+            if (t.StartsWith("# filepath", StringComparison.OrdinalIgnoreCase))
+            {
+                passedHeader = true;
                 continue;
-            var f = TextHelper.SplitCsvLine(line);
+            }
+            if (t.Length == 0 || t.StartsWith('#'))
+            {
+                if (!passedHeader)
+                    comments.Add(line);
+                continue;
+            }
+
+            passedHeader = true;
+
+            var f = TextHelper.SplitCsvLine(t);
             if (f.Length < 17 || !int.TryParse(f[1], out int vid) || !int.TryParse(f[2], out int aid) || !int.TryParse(f[5], out int ver))
                 continue;
 
-            result.Add(
+            entries.Add(
                 new AnimeThemesMappingEntry(
                     f[0],
                     vid,
@@ -251,17 +266,33 @@ internal static class AnimeThemesHelper
                 )
             );
         }
-        return result;
+        return (comments, entries);
     }
 
-    /// <summary>Serializes a list of mapping entries into a CSV string with standard header.</summary>
+    /// <summary>Serializes a list of mapping entries and optional comments into a CSV string with a standard header.</summary>
+    /// <param name="comments">Optional list of preserved comment lines.</param>
     /// <param name="entries">The list of entries to serialize.</param>
     /// <returns>A formatted CSV string.</returns>
-    internal static string SerializeMapping(List<AnimeThemesMappingEntry> entries)
+    internal static string SerializeMapping(List<string>? comments, List<AnimeThemesMappingEntry> entries)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("## Shoko Relay AniDB AnimeThemes Xrefs ##\n");
+        if (comments != null && comments.Count > 0)
+        {
+            int lastIndex = comments.Count - 1;
+            while (lastIndex >= 0 && string.IsNullOrWhiteSpace(comments[lastIndex]))
+                lastIndex--;
+
+            for (int i = 0; i <= lastIndex; i++)
+                sb.AppendLine(comments[i]);
+            sb.AppendLine();
+        }
+        else
+        {
+            sb.AppendLine("## Shoko Relay AniDB AnimeThemes Xrefs ##\n");
+        }
+
         sb.AppendLine("# filepath, videoId, anidbId, nc, slug, version, songTitle, artistName, lyrics, subbed, uncen, nsfw, spoiler, source, resolution, episodes, overlap");
+
         foreach (var e in entries)
             sb.AppendLine(SerializeEntry(e));
         return sb.ToString();
@@ -316,6 +347,23 @@ internal static class AnimeThemesHelper
             >= 7 and <= 9 => (new DateTime(year, 6, 1), new DateTime(year, 9, 30)),
             _ => (new DateTime(year, 9, 1), new DateTime(year, 12, 31)),
         };
+    }
+
+    /// <summary>Extracts the numeric year or decade from a file path for chronological sorting.</summary>
+    /// <param name="path">The relative file path.</param>
+    /// <returns>An integer representing the chronological year.</returns>
+    internal static int GetYearForSort(string path)
+    {
+        var parts = path.TrimStart('/', '\\').Split(['/', '\\']);
+        if (parts.Length > 0)
+        {
+            string y = parts[0];
+            if (y.EndsWith("s", StringComparison.OrdinalIgnoreCase) && int.TryParse(y[..^1], out int dec))
+                return 1900 + dec;
+            if (int.TryParse(y, out int year))
+                return year;
+        }
+        return 9999;
     }
 
     /// <summary>Calculates a bitmask for metadata flags used in the webm cache.</summary>

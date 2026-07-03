@@ -288,7 +288,7 @@ public class AnimeThemesController(
             {
                 var managedFolders = videoService.GetAllManagedFolders()?.Where(f => !VfsShared.IsSourceOnly(f)).Select(f => f.Path).ToList() ?? [];
                 string themeRootName = VfsShared.ResolveAnimeThemesFolderName();
-                var entries = AnimeThemesHelper.ParseMappingContent(IoFile.ReadAllText(mapPath));
+                var entries = AnimeThemesHelper.ParseMappingContentWithComments(IoFile.ReadAllText(mapPath)).Entries;
 
                 // Pre-calculate a fast lookup hashset for series that physically exist in the local collection
                 var localSeriesWithFiles = new HashSet<int>(MetadataService.GetAllShokoSeries()?.Where(s => s.Episodes.Any(e => e.VideoList?.Count > 0)).Select(s => s.AnidbAnimeID) ?? []);

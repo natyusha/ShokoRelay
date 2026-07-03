@@ -35,7 +35,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
 
         try
         {
-            var entries = AnimeThemesHelper.ParseMappingContent(File.ReadAllText(mapPath));
+            var entries = AnimeThemesHelper.ParseMappingContentWithComments(File.ReadAllText(mapPath)).Entries;
             foreach (var entry in entries)
             {
                 if (!mappings.TryGetValue(entry.AniDbId, out var list))
@@ -62,7 +62,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                 return (0, "Downloaded content empty");
 
             await File.WriteAllTextAsync(Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FileAtMapping), content, ct).ConfigureAwait(false);
-            int count = AnimeThemesHelper.ParseMappingContent(content).Count;
+            int count = AnimeThemesHelper.ParseMappingContentWithComments(content).Entries.Count;
             return (count, $"AnimeThemes mapping import - {DateTime.Now:yyyy-MM-dd HH:mm:ss}\nUrl: {rawUrl}\nEntries: {count}");
         }
         catch (Exception ex)
@@ -97,6 +97,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
             var sw = Stopwatch.StartNew();
             string mapPath = Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FileAtMapping);
             var entries = new List<AnimeThemesMappingEntry>();
+            var existingComments = new List<string>();
             var existing = new Dictionary<string, AnimeThemesMappingEntry>(StringComparer.OrdinalIgnoreCase);
             var existingByFilename = new Dictionary<string, AnimeThemesMappingEntry>(StringComparer.OrdinalIgnoreCase);
 
@@ -104,7 +105,8 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
             {
                 try
                 {
-                    foreach (var e in AnimeThemesHelper.ParseMappingContent(await File.ReadAllTextAsync(mapPath, ct).ConfigureAwait(false)))
+                    (existingComments, var parsedEntries) = AnimeThemesHelper.ParseMappingContentWithComments(await File.ReadAllTextAsync(mapPath, ct).ConfigureAwait(false));
+                    foreach (var e in parsedEntries)
                     {
                         existing.TryAdd(e.FilePath, e);
                         existingByFilename.TryAdd(Path.GetFileName(e.FilePath), e);
@@ -134,6 +136,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
 
             s_logger.Info("AnimeThemes: Found {0} total files ({1} cached, {2} pending mapping resolution)...", files.Count, existing.Count, toProcess.Count);
 
+            int reusedCount = entries.Count;
             var errorsList = new ConcurrentBag<string>();
             var newMappingsList = new ConcurrentBag<string>();
             int errors = 0;
@@ -171,11 +174,12 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                 )
                 .ConfigureAwait(false);
 
-            var finalEntries = entries.GroupBy(e => e.FilePath).Select(g => g.First()).ToList();
-            await File.WriteAllTextAsync(mapPath, AnimeThemesHelper.SerializeMapping(finalEntries), ct).ConfigureAwait(false);
+            var finalEntries = entries.GroupBy(e => e.FilePath).Select(g => g.First()).OrderBy(e => AnimeThemesHelper.GetYearForSort(e.FilePath)).ThenBy(e => e.FilePath).ToList();
+
+            await File.WriteAllTextAsync(mapPath, AnimeThemesHelper.SerializeMapping(existingComments, finalEntries), ct).ConfigureAwait(false);
             s_logger.Info("AnimeThemes: Finished mapping task -> {0} entries written.", finalEntries.Count);
             List<string> finalMessages = [.. errorsList.OrderBy(m => m), .. newMappingsList.OrderBy(m => m)];
-            return new AnimeThemesMappingBuildResult(mapPath, finalEntries.Count, entries.Count - toProcess.Count, errors, finalMessages);
+            return new AnimeThemesMappingBuildResult(mapPath, finalEntries.Count, reusedCount, errors, finalMessages);
         }
         finally
         {
@@ -214,7 +218,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
             if (!File.Exists(mapPath))
                 throw new FileNotFoundException("Mapping file not found");
 
-            var entries = AnimeThemesHelper.ParseMappingContent(await File.ReadAllTextAsync(mapPath, ct).ConfigureAwait(false));
+            var entries = AnimeThemesHelper.ParseMappingContentWithComments(await File.ReadAllTextAsync(mapPath, ct).ConfigureAwait(false)).Entries;
             var (sw, state) = (Stopwatch.StartNew(), new MappingState());
             string themeRootName = VfsShared.ResolveAnimeThemesFolderName();
             string vfsRoot = VfsShared.ResolveRootFolderName();
