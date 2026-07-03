@@ -158,20 +158,29 @@ public static class PlexMapping
     /// <param name="entries">The collection of TMDB episodes to filter.</param>
     /// <param name="showPreferredOrderingId">The preferred TMDB ordering identifier.</param>
     /// <returns>A reordered and filtered list of TMDB episodes.</returns>
-    public static List<ITmdbEpisode> SelectPreferredTmdbOrdering(IEnumerable<ITmdbEpisode>? entries, string? showPreferredOrderingId = null) =>
-        entries == null ? []
-        : entries.ToList() is var list && list.Count == 0 ? list
-        : string.IsNullOrWhiteSpace(showPreferredOrderingId) ? [.. list.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber)]
-        :
-        [
-            .. list.OrderBy(te =>
-                    string.Equals(te.OrderingID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase) ? 0
-                    : te.AllOrderings?.Any(o => string.Equals(o.OrderingID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase)) == true ? 1
-                    : 2
-                )
-                .ThenBy(te => te.SeasonNumber ?? 0)
-                .ThenBy(te => te.EpisodeNumber),
-        ];
+    public static List<ITmdbEpisode> SelectPreferredTmdbOrdering(IEnumerable<ITmdbEpisode>? entries, string? showPreferredOrderingId = null)
+    {
+        if (entries == null)
+            return [];
+        var list = entries.ToList();
+        return list.Count == 0 ? list
+            : string.IsNullOrWhiteSpace(showPreferredOrderingId) ? [.. list.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber)]
+            :
+            [
+                .. list.Select(te =>
+                        (
+                            Episode: te,
+                            Priority: string.Equals(te.OrderingID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase) ? 0
+                            : te.AllOrderings?.Any(o => string.Equals(o.OrderingID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase)) == true ? 1
+                            : 2
+                        )
+                    )
+                    .OrderBy(x => x.Priority)
+                    .ThenBy(x => x.Episode.SeasonNumber ?? 0)
+                    .ThenBy(x => x.Episode.EpisodeNumber)
+                    .Select(x => x.Episode),
+            ];
+    }
 
     /// <summary>Convert a TMDB episode into season/episode coordinates.</summary>
     /// <param name="ep">The TMDB episode to inspect.</param>
