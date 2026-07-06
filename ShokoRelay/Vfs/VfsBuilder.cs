@@ -145,6 +145,26 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
             }
         }
 
+        string blueprintPath = Path.Combine(ConfigDirectory, ShokoRelayConstants.FileVfsBlueprintCache);
+        var blueprint = new ConcurrentDictionary<string, ConcurrentDictionary<int, VfsBlueprintSeries>>(VfsShared.PathComparer);
+        bool blueprintUpdated = false;
+
+        if (File.Exists(blueprintPath))
+        {
+            try
+            {
+                var existing = JsonSerializer.Deserialize<Dictionary<string, Dictionary<int, VfsBlueprintSeries>>>(File.ReadAllText(blueprintPath));
+                if (existing != null)
+                    foreach (var rKvp in existing)
+                    {
+                        var rootDict = blueprint.GetOrAdd(rKvp.Key, _ => new());
+                        foreach (var sKvp in rKvp.Value)
+                            rootDict.TryAdd(sKvp.Key, sKvp.Value);
+                    }
+            }
+            catch { }
+        }
+
         foreach (var root in allRoots)
         {
             ct.ThrowIfCancellationRequested();
@@ -168,6 +188,13 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                         Directory.Delete(seriesFolder, true);
                         orphanedFolders++;
                         removed.Add($"[Orphaned Series] {seriesFolder}");
+
+                        if (int.TryParse(folderName, out int parsedFolderId))
+                        {
+                            foreach (var rootDict in blueprint.Values)
+                                if (rootDict.TryRemove(parsedFolderId, out _))
+                                    blueprintUpdated = true;
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -210,6 +237,18 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                     catch { }
                 }
             }
+        }
+
+        if (blueprintUpdated)
+        {
+            try
+            {
+                string tmpPath = blueprintPath + ".tmp";
+                using (var fs = new FileStream(tmpPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                    JsonSerializer.Serialize(fs, blueprint);
+                File.Move(tmpPath, blueprintPath, overwrite: true);
+            }
+            catch { }
         }
 
         return new VfsAuditResult(seriesChecked, brokenLinks, orphanedFolders, removed, errors);
@@ -330,7 +369,11 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
 
             // Prune series that were completely deleted from Shoko's database
             foreach (var item in resolved.Where(x => x.Series == null))
+            {
                 PruneSeries(rootName, item.Id, errorsBag.Add);
+                foreach (var rootDict in blueprint.Values)
+                    rootDict.TryRemove(item.Id, out _);
+            }
 
             seriesList = [.. resolved.Where(x => x.Series != null).Select(x => x.Series!).OfType<IShokoSeries>()];
         }
