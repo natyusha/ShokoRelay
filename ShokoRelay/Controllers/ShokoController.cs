@@ -96,8 +96,7 @@ public class ShokoController(
                 "application/json"
             );
 
-        var path = Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileVfsBlueprintCache);
-        if (!IoFile.Exists(path))
+        if (!IoFile.Exists(VfsShared.BlueprintFilePath))
             return EmptyTree();
 
         try
@@ -112,7 +111,7 @@ public class ShokoController(
                     .ToList()
                 ?? [];
 
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var stream = new FileStream(VfsShared.BlueprintFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             var data = await JsonSerializer.DeserializeAsync<Dictionary<string, Dictionary<string, VfsBlueprintSeries>>>(stream);
             if (data == null)
                 return EmptyTree();

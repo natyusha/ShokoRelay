@@ -72,6 +72,22 @@ public static class VfsHelper
 
     #region Naming Logic
 
+    /// <summary>Generates an orderable pairwise key where non-seasons are sorted alphabetically and standard seasons numerically.</summary>
+    public static (bool IsSeason, int SeasonNumber, string Name) GetSeasonSortKey(string name) =>
+        (name.StartsWith("Season ", StringComparison.OrdinalIgnoreCase) && int.TryParse(name[7..], out int num)) ? (true, num, string.Empty) : (false, 0, name);
+
+    /// <summary>Resolves the Plex-compatible season number for any given VFS folder name.</summary>
+    public static int? GetSeasonId(string name)
+    {
+        if (name.StartsWith("Season ", StringComparison.OrdinalIgnoreCase) && int.TryParse(name[7..], out int num))
+            return num;
+        if (string.Equals(name, "Specials", StringComparison.OrdinalIgnoreCase))
+            return PlexConstants.SeasonSpecials;
+
+        var match = PlexConstants.ExtraSeasons.FirstOrDefault(kvp => string.Equals(kvp.Value.Folder, name, StringComparison.OrdinalIgnoreCase));
+        return match.Value.Folder != null ? match.Key : null;
+    }
+
     /// <summary>Builds a standard episode filename based on coordinates, versioning, and variation status.</summary>
     /// <param name="mapping">The mapping containing coordinates and video data.</param>
     /// <param name="pad">The number of digits to pad the episode number with.</param>
@@ -161,6 +177,85 @@ public static class VfsHelper
     /// <param name="fileNameWithoutExtension">The filename without its extension to evaluate.</param>
     /// <returns>A Match object indicating success or failure.</returns>
     public static Match MatchLocalExtraFile(string fileNameWithoutExtension) => s_localExtraFileRegex.Match(fileNameWithoutExtension);
+
+    #endregion
+
+    #region File & Cleanup
+
+    /// <summary>Perform diff-based cleanup of unexpected files and empty directories left behind by renames or moves.</summary>
+    /// <param name="resolvedVfsSeriesPaths">The unique set of VFS paths involved in the build.</param>
+    /// <param name="expectedFiles">The tracked set of files that should exist.</param>
+    public static void CleanupOrphanedFilesAndFolders(HashSet<string> resolvedVfsSeriesPaths, HashSet<string> expectedFiles)
+    {
+        string themeRootName = VfsShared.ResolveAnimeThemesFolderName();
+        foreach (var seriesPath in resolvedVfsSeriesPaths)
+        {
+            if (!Directory.Exists(seriesPath))
+                continue;
+
+            foreach (var file in Directory.EnumerateFiles(seriesPath, "*", SearchOption.AllDirectories))
+            {
+                if (!expectedFiles.Contains(file))
+                {
+                    try
+                    {
+                        var fi = new FileInfo(file);
+
+                        // Allow AnimeThemesMapping to manage its own files
+                        if (fi.LinkTarget != null && fi.LinkTarget.Contains(themeRootName, StringComparison.OrdinalIgnoreCase))
+                            continue;
+
+                        File.Delete(file);
+                    }
+                    catch { }
+                }
+            }
+
+            var dirs = Directory.EnumerateDirectories(seriesPath, "*", SearchOption.AllDirectories).OrderByDescending(d => d.Length).ToList();
+            foreach (var d in dirs)
+            {
+                try
+                {
+                    if (!Directory.EnumerateFileSystemEntries(d).Any())
+                        Directory.Delete(d);
+                }
+                catch { }
+            }
+        }
+    }
+
+    /// <summary>Checks if a mapped theme file physically exists within the import root, using an in-memory cache to prevent disk thrashing.</summary>
+    /// <param name="relativePath">The relative path of the theme file inside the !AnimeThemes folder.</param>
+    /// <param name="importRoot">The physical import root directory.</param>
+    /// <param name="themeRootName">The name of the AnimeThemes directory.</param>
+    /// <param name="session">Active build session context containing caches.</param>
+    /// <returns>The absolute path of the theme file if it exists; otherwise, null.</returns>
+    public static string? GetThemeSourcePath(string relativePath, string importRoot, string themeRootName, VfsBuildSession session)
+    {
+        string themeRootPath = Path.Combine(importRoot, themeRootName);
+        var cache = session
+            .PhysicalThemeCaches.GetOrAdd(
+                themeRootPath,
+                root => new Lazy<Dictionary<string, string>>(() =>
+                {
+                    var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    if (Directory.Exists(root))
+                    {
+                        try
+                        {
+                            foreach (string file in Directory.EnumerateFiles(root, "*.webm", SearchOption.AllDirectories))
+                                dict[Path.GetRelativePath(root, file).Replace('\\', '/').TrimStart('/')] = Path.GetFullPath(file);
+                        }
+                        catch { }
+                    }
+                    return dict;
+                })
+            )
+            .Value;
+
+        string normalizedRel = relativePath.Replace('\\', '/').TrimStart('/');
+        return cache.TryGetValue(normalizedRel, out string? absPath) ? absPath : null;
+    }
 
     #endregion
 }

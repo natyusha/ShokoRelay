@@ -16,6 +16,9 @@ internal static class VfsShared
     /// <summary>OS-aware path comparer.</summary>
     public static StringComparer PathComparer => OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
+    /// <summary>The absolute path to the VFS blueprint cache file.</summary>
+    public static string BlueprintFilePath => Path.Combine(ConfigDirectory, ShokoRelayConstants.FileVfsBlueprintCache);
+
     /// <summary>The cached set of ignored folder names resolved during the last lookup.</summary>
     private static HashSet<string>? s_lastIgnoredNames;
 
@@ -265,6 +268,47 @@ internal static class VfsShared
         var baseName = Path.GetFileNameWithoutExtension(path);
 
         return names.Contains(fileName) || (plexLocalExtras && (VfsHelper.MatchLocalExtraDir(fileName).Success || VfsHelper.MatchLocalExtraFile(baseName).Success));
+    }
+
+    #endregion
+
+    #region Blueprint Cache
+
+    /// <summary>Loads the VFS blueprint cache from disk.</summary>
+    public static System.Collections.Concurrent.ConcurrentDictionary<string, System.Collections.Concurrent.ConcurrentDictionary<int, VfsBlueprintSeries>> LoadBlueprint()
+    {
+        var blueprint = new System.Collections.Concurrent.ConcurrentDictionary<string, System.Collections.Concurrent.ConcurrentDictionary<int, VfsBlueprintSeries>>(PathComparer);
+        if (File.Exists(BlueprintFilePath))
+        {
+            try
+            {
+                var existing = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, Dictionary<int, VfsBlueprintSeries>>>(File.ReadAllText(BlueprintFilePath));
+                if (existing != null)
+                {
+                    foreach (var rKvp in existing)
+                    {
+                        var rootDict = blueprint.GetOrAdd(rKvp.Key, _ => new());
+                        foreach (var sKvp in rKvp.Value)
+                            rootDict.TryAdd(sKvp.Key, sKvp.Value);
+                    }
+                }
+            }
+            catch { }
+        }
+        return blueprint;
+    }
+
+    /// <summary>Saves the VFS blueprint cache to disk atomically.</summary>
+    public static void SaveBlueprint(System.Collections.Concurrent.ConcurrentDictionary<string, System.Collections.Concurrent.ConcurrentDictionary<int, VfsBlueprintSeries>> blueprint)
+    {
+        try
+        {
+            string tmpPath = BlueprintFilePath + ".tmp";
+            using (var fs = new FileStream(tmpPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                System.Text.Json.JsonSerializer.Serialize(fs, blueprint);
+            File.Move(tmpPath, BlueprintFilePath, overwrite: true);
+        }
+        catch { }
     }
 
     #endregion
