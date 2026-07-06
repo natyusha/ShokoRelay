@@ -328,7 +328,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
 
                                 // Protection for Plex Local Extras: Only delete the file if it's a symlink pointing to the AnimeThemes repository.
                                 var info = new FileInfo(file);
-                                if (!info.Exists || info.LinkTarget == null || !info.LinkTarget.Contains(themeRootName))
+                                if (info.LinkTarget == null || !info.LinkTarget.Contains(themeRootName, StringComparison.OrdinalIgnoreCase))
                                     continue;
 
                                 if (isFilteredRun)
@@ -356,6 +356,50 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                     }
                 }
             );
+
+            // Handle WebM Cache Updates (Global vs Incremental)
+            try
+            {
+                string cachePath = Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FileAtWebmCache);
+                if (seriesFilter == null || seriesFilter.Count == 0)
+                {
+                    var cacheLines = state.CacheEntries.Select(ce => $"{ce.VfsPath.Replace('\\', '/')}|{ce.VideoId}|{ce.Bitmask}");
+                    await File.WriteAllLinesAsync(cachePath, cacheLines, ct).ConfigureAwait(false);
+                }
+                else
+                {
+                    var newCacheLines = new List<string>();
+                    var primaryIdsToPurge = new HashSet<string>(seriesFilter.Select(id => EnforceTmdbNumbering ? OverrideHelper.GetPrimary(id, metadataService).ToString() : id.ToString()));
+
+                    if (File.Exists(cachePath))
+                    {
+                        foreach (var line in await File.ReadAllLinesAsync(cachePath, ct).ConfigureAwait(false))
+                        {
+                            if (string.IsNullOrWhiteSpace(line))
+                                continue;
+
+                            var parts = line.Split('|', 2);
+                            if (parts.Length > 0)
+                            {
+                                var pathParts = parts[0].Split('/', StringSplitOptions.RemoveEmptyEntries);
+                                int rootIdx = Array.FindIndex(pathParts, p => string.Equals(p, vfsRoot, StringComparison.OrdinalIgnoreCase));
+
+                                // Safely drop lines belonging to the incrementally updated series to prevent ghosts
+                                if (rootIdx >= 0 && rootIdx + 1 < pathParts.Length && primaryIdsToPurge.Contains(pathParts[rootIdx + 1]))
+                                    continue;
+                            }
+                            newCacheLines.Add(line);
+                        }
+                    }
+
+                    newCacheLines.AddRange(state.CacheEntries.Select(ce => $"{ce.VfsPath.Replace('\\', '/')}|{ce.VideoId}|{ce.Bitmask}"));
+                    await File.WriteAllLinesAsync(cachePath, newCacheLines, ct).ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex)
+            {
+                s_logger.Warn(ex, "AnimeThemes VFS: Failed to save webm cache");
+            }
 
             s_logger.Info("AnimeThemes VFS: Task finished -> {0} links created in {1}ms.", state.Created, sw.ElapsedMilliseconds);
             return new AnimeThemesMappingApplyResult(state.Created, state.Skipped, state.Matched, state.Errors, state.CacheEntries, sw.Elapsed);

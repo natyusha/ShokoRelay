@@ -40,23 +40,7 @@ public class AnimeThemesController(
             : ExecuteTrackedTaskAsync(
                 ShokoRelayConstants.TaskAtVfsBuild,
                 (sb, r) => LogHelper.BuildAtVfsBuildReport(sb, r, filterIds ?? []),
-                async () =>
-                {
-                    var result = await animeThemesMapping.ApplyMappingAsync(filterIds, CancellationToken.None).ConfigureAwait(false);
-                    if (filterIds == null || filterIds.Count == 0)
-                    {
-                        try
-                        {
-                            var cacheLines = result.CacheEntries.Select(ce => $"{ce.VfsPath.Replace('\\', '/')}|{ce.VideoId}|{ce.Bitmask}");
-                            IoFile.WriteAllLines(Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileAtWebmCache), cacheLines);
-                        }
-                        catch (Exception ex)
-                        {
-                            Logger.Warn(ex, "AnimeThemes: Failed to save webm cache");
-                        }
-                    }
-                    return result;
-                },
+                () => animeThemesMapping.ApplyMappingAsync(filterIds, CancellationToken.None),
                 VfsShared.VfsLock
             );
 
