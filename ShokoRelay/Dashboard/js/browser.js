@@ -87,7 +87,7 @@
             anidbId: s.anidbId,
             title: s.title,
             rootFiles: [...(s.rootFiles || [])],
-            seasons: (s.seasons || []).map((se) => ({ name: se.name, files: [...se.files] })),
+            seasons: (s.seasons || []).map((se) => ({ name: se.name, seasonId: se.seasonId, files: [...se.files] })),
           });
         } else {
           const existing = seriesMap.get(s.id);
@@ -95,7 +95,7 @@
           (s.seasons || []).forEach((se) => {
             const existSeason = existing.seasons.find((ese) => ese.name === se.name);
             if (existSeason) existSeason.files.push(...se.files);
-            else existing.seasons.push({ name: se.name, files: [...se.files] });
+            else existing.seasons.push({ name: se.name, seasonId: se.seasonId, files: [...se.files] });
           });
         }
       });
