@@ -115,11 +115,23 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                 catch { }
             }
 
-            var files = roots
-                .SelectMany(root =>
-                    Directory.EnumerateFiles(root, "*.webm", SearchOption.AllDirectories).Where(f => !f.Split(Path.DirectorySeparatorChar).Any(p => p.Equals("misc", StringComparison.OrdinalIgnoreCase)))
-                )
-                .ToList();
+            var filesBag = new ConcurrentBag<string>();
+            var sepMiscSep = $"{Path.DirectorySeparatorChar}misc{Path.DirectorySeparatorChar}";
+
+            Parallel.ForEach(
+                roots,
+                DefaultParallelOptions(ct),
+                root =>
+                {
+                    foreach (var file in Directory.EnumerateFiles(root, "*.webm", SearchOption.AllDirectories))
+                    {
+                        if (!file.Contains(sepMiscSep, StringComparison.OrdinalIgnoreCase))
+                            filesBag.Add(file);
+                    }
+                }
+            );
+
+            var files = filesBag.ToList();
             var toProcess = new List<(string File, string Rel)>();
 
             foreach (string file in files)
@@ -298,8 +310,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                             {
                                 string finalName = AnimeThemesHelper.BuildNewFileName(item!.Lookup, (counter > 1 ? $" ({counter})" : "") + item.Extension, item.SeriesIndex);
                                 string destPath = VfsShared.NormalizeSeparators(Path.Combine(shortsDir, finalName));
-                                lock (plannedFilenames)
-                                    plannedFilenames.Add(finalName);
+                                plannedFilenames.Add(finalName);
 
                                 if (!isFilteredRun || folderGroup.Any(s => s!.ID == item.OriginalId))
                                 {
@@ -307,12 +318,10 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                                     if (VfsShared.TryCreateLink(item.SourcePath, destPath, s_logger, targetOverride: AnimeThemesHelper.BuildThemeRelativeTarget(item.RelativePath, themeRootName)))
                                     {
                                         Interlocked.Increment(ref state.Created);
-                                        lock (state.CacheEntries)
-                                            state.CacheEntries.Add(new WebmCacheEntry(destPath, item.Entry.VideoId, AnimeThemesHelper.CalculateBitmask(item.Entry)));
+                                        state.CacheEntries.Add(new WebmCacheEntry(destPath, item.Entry.VideoId, AnimeThemesHelper.CalculateBitmask(item.Entry)));
                                     }
                                     else
-                                        lock (state.Errors)
-                                            state.Errors.Add($"Link failed: {destPath}");
+                                        state.Errors.Add($"Link failed: {destPath}");
                                 }
                                 counter++;
                             }
@@ -411,7 +420,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
             }
 
             s_logger.Info("AnimeThemes VFS: Task finished -> {0} links created in {1}ms.", state.Created, sw.ElapsedMilliseconds);
-            return new AnimeThemesMappingApplyResult(state.Created, state.Skipped, state.Matched, state.Errors, state.CacheEntries, sw.Elapsed);
+            return new AnimeThemesMappingApplyResult(state.Created, state.Skipped, state.Matched, [.. state.Errors], [.. state.CacheEntries], sw.Elapsed);
         }
         finally
         {
@@ -497,8 +506,8 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
         public int Created,
             Skipped,
             Matched;
-        public List<string> Errors = [];
-        public List<WebmCacheEntry> CacheEntries = [];
+        public ConcurrentBag<string> Errors = [];
+        public ConcurrentBag<WebmCacheEntry> CacheEntries = [];
     }
 
     #endregion
