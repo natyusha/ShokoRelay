@@ -15,6 +15,34 @@
   "image_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-logo.png",
   "releases": [
     {
+      "version": "0.16.2",
+      "tag": "v0.16.2",
+      "source_revision": "82d94c894c8688ca21007561964059bdf0f2c69b",
+      "released_at": "2026-07-07T11:11:47Z",
+      "channel": "Dev",
+      "release_notes": "**Changes:**\r\n- Optimize VFS directory enumeration, string allocations, disk I/O, symlink resolution, and reduce memory allocations\r\n- Execute global root cleanup using Parallel.ForEach to concurrently delete VFS series folders\r\n- Refactor source path resolution in BuildSeries to identify valid video files in a single pass\r\n- Parallelize VFS Audit and Image Sync Service file operations\r\n- Track elapsed runtimes across Plex automations in both the server log and log files\r\n- Update VfsBuilder.Audit to log explicit starting and completed metrics to Shoko Server's main log\r\n- Disable browser caching on log file endpoints ensuring dashboard log links always return the current log\r\n- Add VFS Audit task mapping to the dashboard ensuring it is correctly synchronized with the dashboard buttons \r\n- Update buildAllTab in browser.js to explicitly preserve the seasonId property when deep-copying season objects\r\n- Fix ghost entries appearing in both the AnimeThemes Player and VFS Browser after a series was deleted from Shoko\r\n- Move VFS-specific data models and records into a new VfsModels.cs file to decouple data containers from execution logic\r\n- Relocate GetThemeSourcePath, CleanupOrphanedFilesAndFolders, and season name formatting helpers to VfsHelper.cs for better modularity\r\n- Centralize VFS Blueprint cache disk I/O logic in VfsShared.cs for cleaner integration across the codebase\r\n- Extract Global Root Cleanup and AnimeThemes Blueprint Registration out of the primary VFS generation loop into dedicated private helper methods\r\n- Bumped Shoko.Abstractions to v6.0.0-alpha.69\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.16.1...v0.16.2",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.16.2/ShokoRelay-v0.16.2-dev_linux-arm64.zip",
+          "checksum": "401c0ca27a07afdb64290953f234d9ae3b1a35a8ed2fa0b208f8056bcb7c0748"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.16.2/ShokoRelay-v0.16.2-dev_linux-x64.zip",
+          "checksum": "a110b16b3c06f13f288bbbe57e6934d726a97d08729f1e0e38e77d74a5b2b6bb"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.16.2/ShokoRelay-v0.16.2-dev_win-x64.zip",
+          "checksum": "bda456d4673f50916d69d24ee0b44e35bb5615c5c8300dc25b3364b4abf3eab6"
+        }
+      ]
+    },
+    {
       "version": "0.16.1",
       "tag": "v0.16.1",
       "source_revision": "9cf4f93bc10392b546d445820337316482b1678e",
