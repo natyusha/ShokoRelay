@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Security.Cryptography;
 using NLog;
 using Shoko.Abstractions.Metadata.Containers;
@@ -29,7 +30,8 @@ public interface IImageSyncService
 /// <param name="Errors">Count of errors encountered during connection or upload.</param>
 /// <param name="UploadedDetails">List of specific images that were uploaded.</param>
 /// <param name="ErrorsList">List of specific error messages.</param>
-public sealed record ImageSyncResult(int Processed, int Uploaded, int Skipped, int Errors, List<string> UploadedDetails, List<string> ErrorsList);
+/// <param name="TotalElapsed">The total time elapsed during the task.</param>
+public sealed record ImageSyncResult(int Processed, int Uploaded, int Skipped, int Errors, List<string> UploadedDetails, List<string> ErrorsList, TimeSpan TotalElapsed);
 
 #endregion
 
@@ -53,6 +55,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
     /// <returns>A summary result containing statistics on the synchronization run.</returns>
     public async Task<ImageSyncResult> SyncImagesAsync(IEnumerable<int>? allowedSeriesIds = null, CancellationToken cancellationToken = default)
     {
+        var sw = Stopwatch.StartNew();
         await _syncLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -393,11 +396,12 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                 )
                 .ConfigureAwait(false);
 
-            if (cacheModified > 0)
+            if (updatedCache)
                 SaveCache(cache);
 
-            s_logger.Info("ImageSyncService: Finished synchronization -> uploaded {0} new images to Shoko", u);
-            return new ImageSyncResult(p, u, s, e, [.. uploadedBag], [.. errsBag]);
+            sw.Stop();
+            s_logger.Info("ImageSyncService: Finished synchronization -> uploaded {0} new images to Shoko in {1}ms", uploaded, sw.ElapsedMilliseconds);
+            return new ImageSyncResult(processed, uploaded, skipped, errors, uploadedDetails, errorsList, sw.Elapsed);
         }
         finally
         {

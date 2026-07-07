@@ -105,6 +105,7 @@ public static class LogHelper
     {
         var stats = new Dictionary<string, object>
         {
+            ["Elapsed Time"] = $"{r.TotalElapsed.TotalSeconds:F2}s",
             ["Series Processed"] = r.Processed,
             ["Collections Assigned"] = r.Created,
             ["Posters Uploaded"] = r.Uploaded,
@@ -128,6 +129,7 @@ public static class LogHelper
     {
         var stats = new Dictionary<string, object>
         {
+            ["Elapsed Time"] = $"{result.TotalElapsed.TotalSeconds:F2}s",
             ["Series Processed"] = result.ProcessedShows,
             ["Series Updated"] = result.UpdatedShows,
             ["Episodes Processed"] = result.ProcessedEpisodes,
@@ -148,6 +150,7 @@ public static class LogHelper
     {
         var stats = new Dictionary<string, object>
         {
+            ["Elapsed Time"] = $"{r.TotalElapsed.TotalSeconds:F2}s",
             ["Processed Episodes"] = r.Processed,
             ["Uploaded Screenshots"] = r.Uploaded,
             ["Skipped Episodes"] = r.Skipped,

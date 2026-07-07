@@ -38,6 +38,9 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
     /// <returns>A result object containing audit statistics.</returns>
     public VfsAuditResult Audit(CancellationToken ct = default)
     {
+        s_logger.Info("VFS Audit: Starting task...");
+        var sw = Stopwatch.StartNew();
+
         var removed = new ConcurrentBag<string>();
         var errors = new ConcurrentBag<string>();
         int brokenLinks = 0,
@@ -141,6 +144,8 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         if (blueprintUpdated > 0)
             VfsShared.SaveBlueprint(blueprint);
 
+        sw.Stop();
+        s_logger.Info("VFS Audit: Task finished -> seriesChecked={0}, brokenLinksRemoved={1}, orphanedFoldersRemoved={2} in {3}ms.", seriesChecked, brokenLinks, orphanedFolders, sw.ElapsedMilliseconds);
         return new VfsAuditResult(seriesChecked, brokenLinks, orphanedFolders, [.. removed.OrderBy(x => x)], [.. errors.OrderBy(x => x)]);
     }
 

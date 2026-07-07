@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using NLog;
 using Shoko.Abstractions.Video.Services;
 
@@ -27,6 +28,7 @@ public interface ICollectionService
 /// <param name="DeletedEmptyCollections">Number of empty collections removed.</param>
 /// <param name="CreatedCollections">List of metadata objects for created collections.</param>
 /// <param name="ErrorsList">List of specific error messages.</param>
+/// <param name="TotalElapsed">The total time elapsed during the task.</param>
 public sealed record BuildCollectionsResult(
     int Processed,
     int Created,
@@ -36,7 +38,8 @@ public sealed record BuildCollectionsResult(
     int Errors,
     int DeletedEmptyCollections,
     List<object> CreatedCollections,
-    List<string> ErrorsList
+    List<string> ErrorsList,
+    TimeSpan TotalElapsed
 );
 
 #endregion
@@ -58,6 +61,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
         const string TaskName = ShokoRelayConstants.TaskPlexCollectionsBuild;
         TaskHelper.StartTask(TaskName);
         s_logger.Info("CollectionService: Starting task...");
+        var sw = Stopwatch.StartNew();
 
         try
         {
@@ -67,7 +71,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
             var targets = plexClient.GetConfiguredTargets();
 
             if (targets.Count == 0)
-                return new BuildCollectionsResult(0, 0, 0, 0, 0, 0, 0, createdList, errorsList);
+                return new BuildCollectionsResult(0, 0, 0, 0, 0, 0, 0, createdList, errorsList, sw.Elapsed);
 
             List<string> globalRoots = [.. (videoService.GetAllManagedFolders() ?? []).Select(f => f.Path).Where(p => !string.IsNullOrEmpty(p)).Distinct()];
 
@@ -213,8 +217,9 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
             if (applyAssignment)
                 deleted = await plexCollections.DeleteEmptyCollectionsAsync(cancellationToken).ConfigureAwait(false);
 
-            s_logger.Info("CollectionService: Task finished -> {0} collections assigned", created);
-            return new BuildCollectionsResult(uniqueSeries.Count, created, uploaded, 0, uniqueSeries.Count - created, errs, deleted, createdList, errorsList);
+            sw.Stop();
+            s_logger.Info("CollectionService: Task finished -> {0} collections assigned in {1}ms", created, sw.ElapsedMilliseconds);
+            return new BuildCollectionsResult(uniqueSeries.Count, created, uploaded, 0, uniqueSeries.Count - created, errs, deleted, createdList, errorsList, sw.Elapsed);
         }
         finally
         {

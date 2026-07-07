@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using NLog;
 
@@ -31,7 +32,17 @@ public sealed record RatingChange(string Title, string Type, string RatingKey, d
 /// <param name="Errors">Count of encountered errors.</param>
 /// <param name="ErrorsList">List of specific error messages.</param>
 /// <param name="AppliedChanges">List of detailed rating changes.</param>
-public sealed record ApplyRatingsResult(int ProcessedShows, int UpdatedShows, int ProcessedEpisodes, int UpdatedEpisodes, int Errors, List<string> ErrorsList, List<RatingChange> AppliedChanges);
+/// <param name="TotalElapsed">The total time elapsed during the task.</param>
+public sealed record ApplyRatingsResult(
+    int ProcessedShows,
+    int UpdatedShows,
+    int ProcessedEpisodes,
+    int UpdatedEpisodes,
+    int Errors,
+    List<string> ErrorsList,
+    List<RatingChange> AppliedChanges,
+    TimeSpan TotalElapsed
+);
 
 #endregion
 
@@ -52,6 +63,7 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
         const string TaskName = ShokoRelayConstants.TaskPlexRatingsApply;
         TaskHelper.StartTask(TaskName);
         s_logger.Info("CriticRatingService: Starting task...");
+        var sw = Stopwatch.StartNew();
 
         try
         {
@@ -60,7 +72,7 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
             var appliedChanges = new List<RatingChange>();
 
             if (!plexClient.IsEnabled)
-                return new ApplyRatingsResult(0, 0, 0, 0, 0, errorsList, appliedChanges);
+                return new ApplyRatingsResult(0, 0, 0, 0, 0, errorsList, appliedChanges, sw.Elapsed);
 
             var allowedSet = allowedSeriesIds != null ? new HashSet<int>(allowedSeriesIds) : null;
             foreach (var target in plexClient.GetConfiguredTargets())
@@ -139,8 +151,9 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
                     }
                 }
             }
-            s_logger.Info("CriticRatingService: Task finished -> Updated {0} shows and {1} episodes", uS, uE);
-            return new ApplyRatingsResult(pS, uS, pE, uE, errs, errorsList, appliedChanges);
+            sw.Stop();
+            s_logger.Info("CriticRatingService: Task finished -> Updated {0} shows and {1} episodes in {2}ms", uS, uE, sw.ElapsedMilliseconds);
+            return new ApplyRatingsResult(pS, uS, pE, uE, errs, errorsList, appliedChanges, sw.Elapsed);
         }
         finally
         {
