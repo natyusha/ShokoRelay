@@ -31,6 +31,9 @@ public static class VfsHelper
         ["other"] = "U",
     };
 
+    /// <summary>Hardware-accelerated search values for locating invalid characters rapidly.</summary>
+    private static readonly System.Buffers.SearchValues<char> s_invalidChars = System.Buffers.SearchValues.Create(Path.GetInvalidFileNameChars());
+
     /// <summary>Maps invalid Windows filename characters to visually similar Unicode replacements.</summary>
     public static readonly FrozenDictionary<char, char> ReplacementCharMap = new Dictionary<char, char>
     {
@@ -44,17 +47,38 @@ public static class VfsHelper
         ['|'] = '｜',
     }.ToFrozenDictionary();
 
+    /// <summary>Hardware-accelerated search values for locating characters that require visual replacements.</summary>
+    private static readonly System.Buffers.SearchValues<char> s_replacementChars = System.Buffers.SearchValues.Create([.. ReplacementCharMap.Keys]);
+
     #endregion
 
     #region Sanitization
 
-    /// <summary>Sanitizes a string for use as a filename.</summary>
+    /// <summary>Sanitizes a string for use as a filename using fast hardware-accelerated SIMD instructions where possible.</summary>
     /// <param name="name">The name to sanitize.</param>
     /// <returns>A sanitized filename string.</returns>
-    public static string SanitizeName(string name) =>
-        string.IsNullOrWhiteSpace(name) ? "Unknown"
-        : TextHelper.CondenseSpaces(new string([.. name.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? ' ' : c)])).Trim().TrimEnd('.') is var cleaned && cleaned.Length > 0 ? cleaned
-        : "Unknown";
+    public static string SanitizeName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return "Unknown";
+
+        string processed = name;
+        if (name.AsSpan().IndexOfAny(s_invalidChars) >= 0)
+        {
+            processed = string.Create(
+                name.Length,
+                name,
+                (chars, state) =>
+                {
+                    for (int i = 0; i < state.Length; i++)
+                        chars[i] = s_invalidChars.Contains(state[i]) ? ' ' : state[i];
+                }
+            );
+        }
+
+        var cleaned = TextHelper.CondenseSpaces(processed).Trim().TrimEnd('.');
+        return cleaned.Length > 0 ? cleaned : "Unknown";
+    }
 
     /// <summary>Cleans episode titles for filename use.</summary>
     public static string CleanEpisodeTitleForFilename(string? title)
@@ -65,7 +89,21 @@ public static class VfsHelper
         foreach (var (f, r) in s_styledReplacements)
             c = c.Replace(f, r, StringComparison.Ordinal);
         c = s_quotedTextRegex.Replace(c, "“$1”");
-        return s_whitespaceRegex.Replace(new string([.. c.Select(ch => ReplacementCharMap.TryGetValue(ch, out var m) ? m : ch)]), " ").Trim(' ');
+
+        if (c.AsSpan().IndexOfAny(s_replacementChars) >= 0)
+        {
+            c = string.Create(
+                c.Length,
+                c,
+                (chars, state) =>
+                {
+                    for (int i = 0; i < state.Length; i++)
+                        chars[i] = ReplacementCharMap.TryGetValue(state[i], out var m) ? m : state[i];
+                }
+            );
+        }
+
+        return s_whitespaceRegex.Replace(c, " ").Trim(' ');
     }
 
     #endregion
@@ -173,10 +211,15 @@ public static class VfsHelper
     /// <returns>A Match object containing the extra type and optional season number.</returns>
     public static Match MatchLocalExtraDir(string name) => s_localExtraDirRegex.Match(name);
 
-    /// <summary>Identifies local extra files based on Plex naming suffixes (e.g., "-trailer").</summary>
+    /// <summary>Identifies local extra directories directly from a string span.</summary>
+    /// <param name="name">The directory name to evaluate.</param>
+    /// <returns>True if it matches the pattern.</returns>
+    public static bool IsLocalExtraDir(ReadOnlySpan<char> name) => s_localExtraDirRegex.IsMatch(name);
+
+    /// <summary>Identifies local extra files directly from a string span based on Plex naming suffixes (e.g., "-trailer").</summary>
     /// <param name="fileNameWithoutExtension">The filename without its extension to evaluate.</param>
-    /// <returns>A Match object indicating success or failure.</returns>
-    public static Match MatchLocalExtraFile(string fileNameWithoutExtension) => s_localExtraFileRegex.Match(fileNameWithoutExtension);
+    /// <returns>True if it matches the pattern.</returns>
+    public static bool IsLocalExtraFile(ReadOnlySpan<char> fileNameWithoutExtension) => s_localExtraFileRegex.IsMatch(fileNameWithoutExtension);
 
     #endregion
 

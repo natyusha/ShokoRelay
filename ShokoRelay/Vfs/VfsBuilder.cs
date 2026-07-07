@@ -358,7 +358,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         // Collect the base names of all source video files to prevent them from being linked as series-level metadata
         var videoBaseNames = fileData.Mappings.Select(m => Path.GetFileNameWithoutExtension(m.FileName)).Distinct().ToHashSet(StringComparer.OrdinalIgnoreCase);
         var coordCounts = fileData.Mappings.GroupBy(m => (m.Coords.Season, m.Coords.Episode, m.IsVariation)).ToDictionary(g => g.Key, g => g.Count());
-        var versionCounters = fileData.Mappings.GroupBy(m => (m.Coords.Season, m.Coords.Episode, m.IsVariation)).Where(g => g.Count() > 1).ToDictionary(g => g.Key, _ => 1);
+        var versionCounters = coordCounts.Where(g => g.Value > 1).ToDictionary(g => g.Key, _ => 1);
         int epPad = Math.Max(2, fileData.Mappings.Where(m => m.Coords.Season >= 0).DefaultIfEmpty().Max(m => m?.Coords.EndEpisode ?? m?.Coords.Episode ?? 1).ToString().Length);
         var extraPad = fileData.Mappings.Where(m => m.Coords.Season < 0).GroupBy(m => m.Coords.Season).ToDictionary(g => g.Key, g => g.Count() > 9 ? 2 : 1);
 
@@ -466,17 +466,6 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
 
             var destFilePath = Path.Combine(seasonPath, fileName);
 
-            // Fast inline check for broken symlinks to prevent TryCreateLink from failing on the overwrite
-            var fi = new FileInfo(destFilePath);
-            if (fi.LinkTarget != null && !fi.Exists)
-            {
-                try
-                {
-                    File.Delete(destFilePath);
-                }
-                catch { }
-            }
-
             if (VfsShared.TryCreateLink(src, destFilePath, s_logger, skipExistenceCheck: skipCheck))
             {
                 created++;
@@ -511,10 +500,9 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
             }
         }
 
-        // Plex Local Extras: Run for every unique VFS series folder created across different roots for this series.
+        // Plex Local Extras: Evaluates source directories exactly once, broadcasting results across all unique VFS roots.
         if (Settings.Advanced.PlexLocalExtras)
-            foreach (var seriesPath in resolvedVfsSeriesPaths)
-                assetLinker.LinkLocalExtras(fileData, seriesPath, videoBaseNames, epPad, (season, name, s) => LocalOnLink(Path.GetDirectoryName(Path.GetDirectoryName(seriesPath))!, season, name, s), skipCheck);
+            assetLinker.LinkLocalExtras(fileData, resolvedVfsSeriesPaths, videoBaseNames, epPad, LocalOnLink, skipCheck);
 
         // Dynamically register physically present AnimeThemes mapping files inside the blueprint Shorts directory to protect them from cleanup
         var anidbIds = EnforceTmdbNumbering

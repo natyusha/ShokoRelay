@@ -158,8 +158,11 @@ public static class MapHelper
 
         bool s1 = seasonsSet.ContainsKey(PlexConstants.SeasonStandard),
             s0 = seasonsSet.ContainsKey(PlexConstants.SeasonSpecials);
-        var episodeFileLists = seriesEpisodes.ToDictionary(x => x.Episode.ID, x => x.Videos.OrderBy(v => Path.GetFileName(v.Files.FirstOrDefault()?.Path ?? "")).ToList());
-        var allVideos = seriesEpisodes.SelectMany(x => x.Videos).GroupBy(v => v.ID).Select(g => g.First()).OrderBy(v => Path.GetFileName(v.Files.FirstOrDefault()?.Path ?? "")).ToList();
+
+        var videoFileNameCache = seriesEpisodes.SelectMany(x => x.Videos).DistinctBy(v => v.ID).ToDictionary(v => v.ID, v => Path.GetFileName(v.Files.FirstOrDefault()?.Path ?? string.Empty));
+
+        var episodeFileLists = seriesEpisodes.ToDictionary(x => x.Episode.ID, x => x.Videos.OrderBy(v => videoFileNameCache[v.ID]).ToList());
+        var allVideos = seriesEpisodes.SelectMany(x => x.Videos).DistinctBy(v => v.ID).OrderBy(v => videoFileNameCache[v.ID]).ToList();
 
         // Pass 1: Resolve all coordinates and crossover statuses once
         var videoCoords = new Dictionary<int, (PlexCoords Coords, List<(IEpisode Episode, PlexCoords Coords)> Deduped)>();

@@ -180,16 +180,13 @@ internal static class VfsShared
         {
             try
             {
-                if (File.Exists(dest))
+                var fi = new FileInfo(dest);
+                if (fi.Exists || fi.LinkTarget != null) // Accurately captures both valid files and broken symlinks
                 {
-                    var attr = File.GetAttributes(dest);
-                    if (attr.HasFlag(FileAttributes.ReparsePoint))
-                    {
-                        var fi = new FileInfo(dest);
-                        if (string.Equals(fi.LinkTarget, relativeTarget, StringComparison.Ordinal))
-                            return true;
-                    }
-                    File.Delete(dest);
+                    if (fi.Attributes.HasFlag(FileAttributes.ReparsePoint) && string.Equals(fi.LinkTarget, relativeTarget, StringComparison.Ordinal))
+                        return true;
+
+                    fi.Delete();
                 }
             }
             catch (Exception ex)
@@ -258,6 +255,7 @@ internal static class VfsShared
         var settings = Settings;
         var plexLocalExtras = settings.Advanced.PlexLocalExtras;
         var names = ignoredNames ?? GetIgnoredFolderNames(settings);
+        var alternateLookup = names.GetAlternateLookup<ReadOnlySpan<char>>();
 
         for (int start = 0, end; start < path.Length; start = end + 1)
         {
@@ -266,13 +264,13 @@ internal static class VfsShared
                 end = path.Length;
             if (end > start)
             {
-                var seg = path[start..end];
-                if (names.Contains(seg) || (plexLocalExtras && VfsHelper.MatchLocalExtraDir(seg).Success))
+                var seg = path.AsSpan(start, end - start);
+                if (alternateLookup.Contains(seg) || (plexLocalExtras && VfsHelper.IsLocalExtraDir(seg)))
                     return true;
             }
         }
 
-        return plexLocalExtras && VfsHelper.MatchLocalExtraFile(Path.GetFileNameWithoutExtension(path)).Success;
+        return plexLocalExtras && VfsHelper.IsLocalExtraFile(Path.GetFileNameWithoutExtension(path.AsSpan()));
     }
 
     #endregion
