@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using NLog;
 using Shoko.Abstractions.Metadata.Containers;
@@ -340,53 +341,63 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                 (["clearlogo", "logo"], "l", ImageEntityType.Logo, "logo"),
             ];
 
-            foreach (var config in configs)
-            {
-                foreach (var series in allSeries)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    try
+            var errsBag = new ConcurrentBag<string>(errorsList);
+            var uploadedBag = new ConcurrentBag<string>(uploadedDetails);
+            int p = processed,
+                u = uploaded,
+                s = skipped,
+                e = errors;
+            int cacheModified = updatedCache ? 1 : 0;
+
+            await Parallel
+                .ForEachAsync(
+                    allSeries,
+                    DefaultParallelOptions(cancellationToken),
+                    async (series, token) =>
                     {
                         if (series == null)
-                            continue;
-
-                        var (handled, uploadedOk, skippedOk, errorOk, cacheUpdated) = await ProcessLocalSeriesImageAsync(series, config.Names, config.Prefix, config.Type, config.Label, cache, errorsList)
-                            .ConfigureAwait(false);
-
-                        if (cacheUpdated)
-                            updatedCache = true;
-
-                        if (!handled)
-                            continue;
-
-                        if (uploadedOk || skippedOk || errorOk)
-                            processed++;
-
-                        if (uploadedOk)
+                            return;
+                        foreach (var config in configs)
                         {
-                            uploaded++;
-                            uploadedDetails.Add($"[Local {config.Label}] {series.PreferredTitle?.Value}");
-                            updatedCache = true;
-                        }
-                        else if (skippedOk)
-                            skipped++;
-                        else if (errorOk)
-                            errors++;
-                    }
-                    catch (Exception ex)
-                    {
-                        errors++;
-                        errorsList.Add($"Failed to process local artwork '{config.Label}' for series {series?.ID}: {ex.Message}");
-                        s_logger.Warn(ex, "ImageSyncService: Failed to process local series artwork loop iteration");
-                    }
-                }
-            }
+                            try
+                            {
+                                var (handled, uploadedOk, skippedOk, errorOk, cacheUp) = await ProcessLocalSeriesImageAsync(series, config.Names, config.Prefix, config.Type, config.Label, cache, errsBag)
+                                    .ConfigureAwait(false);
 
-            if (updatedCache)
+                                if (cacheUp)
+                                    Interlocked.Exchange(ref cacheModified, 1);
+                                if (!handled)
+                                    continue;
+
+                                if (uploadedOk || skippedOk || errorOk)
+                                    Interlocked.Increment(ref p);
+
+                                if (uploadedOk)
+                                {
+                                    Interlocked.Increment(ref u);
+                                    uploadedBag.Add($"[Local {config.Label}] {series.PreferredTitle?.Value}");
+                                }
+                                else if (skippedOk)
+                                    Interlocked.Increment(ref s);
+                                else if (errorOk)
+                                    Interlocked.Increment(ref e);
+                            }
+                            catch (Exception ex)
+                            {
+                                Interlocked.Increment(ref e);
+                                errsBag.Add($"Failed to process local artwork '{config.Label}' for series {series.ID}: {ex.Message}");
+                                s_logger.Warn(ex, "ImageSyncService: Failed to process local series artwork loop iteration");
+                            }
+                        }
+                    }
+                )
+                .ConfigureAwait(false);
+
+            if (cacheModified > 0)
                 SaveCache(cache);
 
-            s_logger.Info("ImageSyncService: Finished synchronization -> uploaded {0} new images to Shoko", uploaded);
-            return new ImageSyncResult(processed, uploaded, skipped, errors, uploadedDetails, errorsList);
+            s_logger.Info("ImageSyncService: Finished synchronization -> uploaded {0} new images to Shoko", u);
+            return new ImageSyncResult(p, u, s, e, [.. uploadedBag], [.. errsBag]);
         }
         finally
         {
@@ -424,11 +435,11 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
         return (skip, newCacheVal);
     }
 
-    /// <summary>Loads the local image synchronization cache from disk into a case-insensitive dictionary.</summary>
+    /// <summary>Loads the local image synchronization cache from disk into a thread-safe concurrent dictionary.</summary>
     /// <returns>A dictionary containing cached image tracking mappings.</returns>
-    private Dictionary<string, string> LoadCache()
+    private ConcurrentDictionary<string, string> LoadCache()
     {
-        var cache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var cache = new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         if (File.Exists(CacheFilePath))
         {
             try
@@ -447,7 +458,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
 
     /// <summary>Persists the current image synchronization cache to disk.</summary>
     /// <param name="cache">The dictionary of cache keys to save.</param>
-    private void SaveCache(Dictionary<string, string> cache)
+    private void SaveCache(ConcurrentDictionary<string, string> cache)
     {
         try
         {
@@ -508,7 +519,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
     /// <param name="imageType">The Shoko target image entity type.</param>
     /// <param name="label">The diagnostic label for logging.</param>
     /// <param name="cache">The active session cache dictionary.</param>
-    /// <param name="errorsList">The collection of accumulated sync error messages.</param>
+    /// <param name="errorsBag">The thread-safe collection of accumulated sync error messages.</param>
     /// <returns>A tuple indicating handling completion status, upload success, skip state, error presence, and whether the cache was modified.</returns>
     private async Task<(bool Handled, bool Uploaded, bool Skipped, bool Error, bool CacheUpdated)> ProcessLocalSeriesImageAsync(
         IShokoSeries series,
@@ -516,8 +527,8 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
         string cachePrefix,
         ImageEntityType imageType,
         string label,
-        Dictionary<string, string> cache,
-        List<string> errorsList
+        ConcurrentDictionary<string, string> cache,
+        ConcurrentBag<string> errorsBag
     )
     {
         var cacheKey = cachePrefix + series.ID;
@@ -526,7 +537,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
         // Skip secondary series in VFS overrides to prevent duplicate folder scans and upload conflicts
         if (EnforceTmdbNumbering && OverrideHelper.GetPrimary(series.ID, metadataService) != series.ID)
         {
-            if (cache.Remove(cacheKey))
+            if (cache.TryRemove(cacheKey, out _))
             {
                 cacheUpdated = true;
                 await PurgeEntityImagesAsync(series, imageType, x => x.Source == DataSource.User && x.IsPreferred).ConfigureAwait(false);
@@ -586,7 +597,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
         }
         catch (Exception ex)
         {
-            errorsList.Add($"Failed to process series {label} for series {series.ID}: {ex.Message}");
+            errorsBag.Add($"Failed to process series {label} for series {series.ID}: {ex.Message}");
             s_logger.Warn(ex, "ImageSyncService: Failed to upload series {0} for series '{1}' (ID: {2})", label, series.PreferredTitle?.Value, series.ID);
             return (true, false, false, true, false);
         }
