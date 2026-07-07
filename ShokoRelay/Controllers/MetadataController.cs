@@ -134,9 +134,10 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             var (episode, partIdx, m) = TryResolveEpisodeContext(ctx, ratingKey);
             return episode == null || m == null ? NotFound() : WrapInContainer(mapper.MapEpisode(episode, m.Coords, ctx.Series, ctx.Titles, partIdx, m.TmdbEpisode));
         }
-        if (ratingKey.Contains(PlexConstants.SeasonPrefix))
+        int seasonIdx = ratingKey.IndexOf(PlexConstants.SeasonPrefix, StringComparison.OrdinalIgnoreCase);
+        if (seasonIdx >= 0)
         {
-            if (!int.TryParse(ratingKey.Split(PlexConstants.SeasonPrefix)[1], out int sNum))
+            if (!int.TryParse(ratingKey[(seasonIdx + PlexConstants.SeasonPrefix.Length)..], out int sNum))
                 return NotFound();
             var seasonMeta = mapper.MapSeason(ctx.Series, sNum, ctx.Titles.DisplayTitle);
             if (includeChildren == 1)
@@ -165,8 +166,11 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
         var ctx = mapper.GetSeriesContext(ratingKey);
         if (ctx == null)
             return NotFound();
-        if (ratingKey.Contains(PlexConstants.SeasonPrefix))
-            return !int.TryParse(ratingKey.Split(PlexConstants.SeasonPrefix)[1], out int sNum) ? NotFound() : WrapInPagedContainer(mapper.BuildEpisodeList(ctx, sNum));
+
+        int seasonIdx = ratingKey.IndexOf(PlexConstants.SeasonPrefix, StringComparison.OrdinalIgnoreCase);
+        if (seasonIdx >= 0)
+            return !int.TryParse(ratingKey[(seasonIdx + PlexConstants.SeasonPrefix.Length)..], out int sNum) ? NotFound() : WrapInPagedContainer(mapper.BuildEpisodeList(ctx, sNum));
+
         var seasons = ctx.FileData.Seasons.Select(s => mapper.MapSeason(ctx.Series, s, ctx.Titles.DisplayTitle)).ToList();
         return WrapInPagedContainer(seasons);
     }
@@ -206,14 +210,18 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             var (episode, partIdx, m) = TryResolveEpisodeContext(ctx, ratingKey);
             images = (episode != null && m != null) ? ExtractImages(mapper.MapEpisode(episode, m.Coords, ctx.Series, ctx.Titles, partIdx, m.TmdbEpisode)) : [];
         }
-        else if (ratingKey.Contains(PlexConstants.SeasonPrefix))
-        {
-            if (!int.TryParse(ratingKey.Split(PlexConstants.SeasonPrefix)[1], out int sNum))
-                return NotFound();
-            images = ExtractImages(mapper.MapSeason(ctx.Series, sNum, ctx.Titles.DisplayTitle));
-        }
         else
-            images = ExtractImages(mapper.MapSeries(ctx.Series, ctx.Titles));
+        {
+            int seasonIdx = ratingKey.IndexOf(PlexConstants.SeasonPrefix, StringComparison.OrdinalIgnoreCase);
+            if (seasonIdx >= 0)
+            {
+                if (!int.TryParse(ratingKey[(seasonIdx + PlexConstants.SeasonPrefix.Length)..], out int sNum))
+                    return NotFound();
+                images = ExtractImages(mapper.MapSeason(ctx.Series, sNum, ctx.Titles.DisplayTitle));
+            }
+            else
+                images = ExtractImages(mapper.MapSeries(ctx.Series, ctx.Titles));
+        }
         return Ok(
             new
             {
@@ -296,10 +304,13 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
 
         bool isAniDbEp = ratingKey.StartsWith(PlexConstants.AniDbPrefix, StringComparison.OrdinalIgnoreCase);
         var idPart = ratingKey[(isAniDbEp ? PlexConstants.AniDbPrefix.Length + PlexConstants.EpisodePrefix.Length : PlexConstants.EpisodePrefix.Length)..];
-        var parts = idPart.Split(PlexConstants.PartPrefix);
-        if (!int.TryParse(parts[0], out int id))
+
+        int partSplit = idPart.IndexOf(PlexConstants.PartPrefix, StringComparison.OrdinalIgnoreCase);
+        string idStr = partSplit >= 0 ? idPart[..partSplit] : idPart;
+
+        if (!int.TryParse(idStr, out int id))
             return (null, null, null);
-        if (parts.Length > 1 && int.TryParse(parts[1], out int p))
+        if (partSplit >= 0 && int.TryParse(idPart[(partSplit + PlexConstants.PartPrefix.Length)..], out int p))
             partIdx = p;
 
         var episode = isAniDbEp ? MetadataService.GetShokoEpisodeByAnidbID(id) : MetadataService.GetShokoEpisodeByID(id);

@@ -496,7 +496,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
             .Where(x => !string.IsNullOrEmpty(x.Dir) && Directory.Exists(x.Dir))
             .SelectMany(x =>
                 Directory
-                    .EnumerateFiles(x.Dir!)
+                    .EnumerateFiles(x.Dir!, $"{x.Base}.*")
                     .Where(f => string.Equals(Path.GetFileNameWithoutExtension(f), x.Base, StringComparison.OrdinalIgnoreCase) && PlexConstants.LocalMediaAssets.Artwork.Contains(Path.GetExtension(f)))
             )
             .FirstOrDefault();
@@ -534,21 +534,24 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
             return (false, false, false, false, cacheUpdated);
         }
 
-        var foundFile = VfsShared
-            .ResolveSeriesVfsPaths(series, metadataService)
-            .Where(Directory.Exists)
-            .SelectMany(vfsPath =>
-                allowedNames
-                    .Select(name =>
-                        Directory
-                            .EnumerateFiles(vfsPath)
-                            .FirstOrDefault(f =>
-                                string.Equals(Path.GetFileNameWithoutExtension(f), name, StringComparison.OrdinalIgnoreCase) && PlexConstants.LocalMediaAssets.Artwork.Contains(Path.GetExtension(f))
-                            )
-                    )
-                    .Where(f => f != null)
-            )
-            .FirstOrDefault();
+        string? foundFile = null;
+        foreach (var vfsPath in VfsShared.ResolveSeriesVfsPaths(series, metadataService))
+        {
+            if (!Directory.Exists(vfsPath))
+                continue;
+
+            // Enumerate files exactly once per path to avoid severe SMB/Network latency penalties
+            var localArtworks = Directory.EnumerateFiles(vfsPath).Where(f => PlexConstants.LocalMediaAssets.Artwork.Contains(Path.GetExtension(f))).ToList();
+
+            foreach (var name in allowedNames)
+            {
+                foundFile = localArtworks.FirstOrDefault(f => string.Equals(Path.GetFileNameWithoutExtension(f), name, StringComparison.OrdinalIgnoreCase));
+                if (foundFile != null)
+                    break;
+            }
+            if (foundFile != null)
+                break;
+        }
 
         if (string.IsNullOrEmpty(foundFile))
             return (true, false, false, false, false);

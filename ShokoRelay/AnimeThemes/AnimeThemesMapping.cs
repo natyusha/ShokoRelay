@@ -370,6 +370,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                 {
                     var newCacheLines = new List<string>();
                     var primaryIdsToPurge = new HashSet<string>(seriesFilter.Select(id => EnforceTmdbNumbering ? OverrideHelper.GetPrimary(id, metadataService).ToString() : id.ToString()));
+                    string searchToken = $"/{vfsRoot}/";
 
                     if (File.Exists(cachePath))
                     {
@@ -381,12 +382,20 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                             var parts = line.Split('|', 2);
                             if (parts.Length > 0)
                             {
-                                var pathParts = parts[0].Split('/', StringSplitOptions.RemoveEmptyEntries);
-                                int rootIdx = Array.FindIndex(pathParts, p => string.Equals(p, vfsRoot, StringComparison.OrdinalIgnoreCase));
-
-                                // Safely drop lines belonging to the incrementally updated series to prevent ghosts
-                                if (rootIdx >= 0 && rootIdx + 1 < pathParts.Length && primaryIdsToPurge.Contains(pathParts[rootIdx + 1]))
-                                    continue;
+                                // Fast string lookup to find the Series ID segment without allocating arrays via Split('/')
+                                int rootIdx = parts[0].IndexOf(searchToken, StringComparison.OrdinalIgnoreCase);
+                                if (rootIdx >= 0)
+                                {
+                                    int startIdx = rootIdx + searchToken.Length;
+                                    int endIdx = parts[0].IndexOf('/', startIdx);
+                                    if (endIdx > startIdx)
+                                    {
+                                        string seriesIdStr = parts[0][startIdx..endIdx];
+                                        // Safely drop lines belonging to the incrementally updated series to prevent ghosts
+                                        if (primaryIdsToPurge.Contains(seriesIdStr))
+                                            continue;
+                                    }
+                                }
                             }
                             newCacheLines.Add(line);
                         }
