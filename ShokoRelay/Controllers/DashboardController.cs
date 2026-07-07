@@ -221,7 +221,7 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
             );
     }
 
-    /// <summary>Serves report files from the plugin's logs directory.</summary>
+    /// <summary>Serves report files from the plugin's logs directory without allowing browser caching.</summary>
     /// <param name="fileName">The log filename.</param>
     /// <returns>The log content as text/plain.</returns>
     [HttpGet("logs/{fileName}")]
@@ -230,7 +230,14 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
         if (string.IsNullOrWhiteSpace(fileName))
             return BadRequest(new { status = "error", message = "fileName is required" });
         var path = Path.Combine(ConfigProvider.PluginDirectory, "logs", fileName);
-        return IoFile.Exists(path) ? PhysicalFile(path, "text/plain") : NotFound(new { status = "error", message = "log not found" });
+        if (!IoFile.Exists(path))
+            return NotFound(new { status = "error", message = "log not found" });
+
+        Response.Headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+        Response.Headers["Pragma"] = "no-cache";
+        Response.Headers["Expires"] = "0";
+
+        return PhysicalFile(path, "text/plain");
     }
 
     #endregion
