@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using NLog;
 using Shoko.Abstractions.Metadata;
+using Shoko.Abstractions.Video;
 using Shoko.Abstractions.Video.Services;
 
 namespace ShokoRelay.Vfs;
@@ -378,23 +379,31 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
 
         foreach (var mapping in fileData.Mappings.OrderBy(m => m.Coords.Season).ThenBy(m => m.Coords.Episode).ThenBy(m => m.PartIndex ?? 0))
         {
-            var loc = mapping.Video?.Files?.FirstOrDefault(l => File.Exists(l.Path)) ?? mapping.Video?.Files?.FirstOrDefault();
+            IVideoFile? loc = null;
+            string? importRoot = null;
+            string? src = null;
 
-            // Logical Skip: File is in a strictly protected Source folder (without Destination)
-            if (loc == null || VfsShared.IsSourceOnly(loc.ManagedFolder))
+            foreach (var file in mapping.Video?.Files ?? [])
             {
-                skipped++;
-                skippedDetails.Add($"[Source Folder] {series.PreferredTitle?.Value} S{mapping.Coords.Season}E{mapping.Coords.Episode} - {mapping.FileName}");
-                continue;
+                if (VfsShared.IsSourceOnly(file.ManagedFolder))
+                    continue;
+
+                importRoot = VfsShared.ResolveImportRootPath(file);
+                if (importRoot != null)
+                {
+                    src = VfsShared.ResolveSourcePath(file, importRoot);
+                    if (src != null)
+                    {
+                        loc = file;
+                        break;
+                    }
+                }
             }
 
-            string? importRoot = VfsShared.ResolveImportRootPath(loc);
-
-            // Error: Metadata exists but the Import Root cannot be resolved
-            if (importRoot == null)
+            if (loc == null || src == null || importRoot == null)
             {
                 skipped++;
-                errors.Add($"No import root for {series.PreferredTitle?.Value} S{mapping.Coords.Season}E{mapping.Coords.Episode}");
+                skippedDetails.Add($"[Missing/Source-Only] {series.PreferredTitle?.Value} S{mapping.Coords.Season}E{mapping.Coords.Episode} - {mapping.FileName}");
                 continue;
             }
 
@@ -413,14 +422,6 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
             }
             if (session.CreatedDirs.TryAdd(seriesPath, 0))
                 Directory.CreateDirectory(seriesPath);
-
-            string? src = VfsShared.ResolveSourcePath(loc, importRoot);
-            if (src == null)
-            {
-                skipped++;
-                errors.Add($"No accessible file for {series.PreferredTitle?.Value} S{mapping.Coords.Season}E{mapping.Coords.Episode}");
-                continue;
-            }
 
             // Check if the source path is ignored under exclusion or extra rules
             if (VfsShared.IsPathIgnored(src, ignoredFolders))
@@ -557,7 +558,24 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                 try
                 {
                     var cleanSw = Stopwatch.StartNew();
+                    var subDirs = Directory.GetDirectories(path);
+
+                    // Delete series folders in parallel to overcome single-threaded network/FUSE bottlenecks
+                    Parallel.ForEach(
+                        subDirs,
+                        DefaultParallelOptions(),
+                        dir =>
+                        {
+                            try
+                            {
+                                Directory.Delete(dir, true);
+                            }
+                            catch { }
+                        }
+                    );
+
                     Directory.Delete(path, true);
+
                     cleanupDetails.Add(new RootCleanupDetails(path, cleanSw.ElapsedMilliseconds));
                     s_logger.Info("VFS: Cleaned root folder -> '{0}' in {1}ms", path, cleanSw.ElapsedMilliseconds);
 
