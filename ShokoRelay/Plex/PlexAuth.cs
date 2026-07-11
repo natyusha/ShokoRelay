@@ -219,7 +219,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
                 }
                 catch (Exception ex)
                 {
-                    s_logger.Debug(ex, "Plex Discovery: Connection to {0} failed for {1}", uri, srv.Name);
+                    s_logger.Debug("Plex Discovery: Connection to {0} failed for {1} -> {2}", uri, srv.Name, ex.GetBaseException().Message);
                     return false;
                 }
             }
