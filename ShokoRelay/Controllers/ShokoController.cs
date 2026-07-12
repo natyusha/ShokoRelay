@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
@@ -336,14 +337,25 @@ public class ShokoController(
 
     #region Private Helpers
 
-    /// <summary>Schedules a background task to scan and subsequently refresh Plex metadata for a specific set of series.</summary>
+    private static readonly ConcurrentDictionary<int, CancellationTokenSource> s_manualPlexRefreshes = new();
+
+    /// <summary>Schedules a debounced background task to scan and subsequently refresh Plex metadata for a specific set of series.</summary>
     /// <param name="series">The collection of Shoko series metadata objects to refresh.</param>
     /// <returns>A background task representing the asynchronous refresh operation.</returns>
-    private Task SchedulePlexRefreshForSeriesAsync(IEnumerable<IShokoSeries> series) =>
-        Task.Run(async () =>
+    private Task SchedulePlexRefreshForSeriesAsync(IEnumerable<IShokoSeries> series)
+    {
+        foreach (var s in series)
         {
-            var sList = series.ToList();
-            foreach (var s in sList)
+            if (s_manualPlexRefreshes.TryRemove(s.ID, out var oldCts))
+            {
+                oldCts.Cancel();
+                oldCts.Dispose();
+            }
+
+            var cts = new CancellationTokenSource();
+            s_manualPlexRefreshes[s.ID] = cts;
+
+            _ = Task.Run(async () =>
             {
                 try
                 {
@@ -355,31 +367,37 @@ public class ShokoController(
                         if (location != null && VfsShared.ResolveImportRootPath(location) is string importRoot)
                             roots.Add(Path.Combine(importRoot, rootName, s.ID.ToString()));
                     }
+
                     foreach (var path in roots)
-                        await PlexLibrary.RefreshSectionPathAsync(path).ConfigureAwait(false);
-                }
-                catch { }
-            }
+                        await PlexLibrary.RefreshSectionPathAsync(path, cts.Token).ConfigureAwait(false);
 
-            int bufferSeconds = Settings.Advanced.PlexScanDelay;
-            if (bufferSeconds > 0)
-                await Task.Delay(TimeSpan.FromSeconds(bufferSeconds)).ConfigureAwait(false);
+                    int bufferSeconds = Settings.Advanced.PlexScanDelay;
+                    if (bufferSeconds > 0)
+                        await Task.Delay(TimeSpan.FromSeconds(bufferSeconds), cts.Token).ConfigureAwait(false);
 
-            var targets = PlexLibrary.GetConfiguredTargets();
-            foreach (var s in sList)
-            {
-                foreach (var target in targets)
-                {
-                    try
+                    var targets = PlexLibrary.GetConfiguredTargets();
+                    foreach (var target in targets)
                     {
-                        var ratingKey = await PlexLibrary.FindRatingKeyForShokoSeriesInSectionAsync(s.ID, target).ConfigureAwait(false);
-                        if (ratingKey.HasValue)
-                            await PlexLibrary.RefreshMetadataAsync(ratingKey.Value, target).ConfigureAwait(false);
+                        try
+                        {
+                            var ratingKey = await PlexLibrary.FindRatingKeyForShokoSeriesInSectionAsync(s.ID, target, cts.Token).ConfigureAwait(false);
+                            if (ratingKey.HasValue)
+                                await PlexLibrary.RefreshMetadataAsync(ratingKey.Value, target, cts.Token).ConfigureAwait(false);
+                        }
+                        catch { }
                     }
-                    catch { }
                 }
-            }
-        });
+                catch (OperationCanceledException) { }
+                catch { }
+                finally
+                {
+                    if (s_manualPlexRefreshes.TryRemove(new KeyValuePair<int, CancellationTokenSource>(s.ID, cts)))
+                        cts.Dispose();
+                }
+            });
+        }
+        return Task.CompletedTask;
+    }
 
     #endregion
 }
