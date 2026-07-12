@@ -336,10 +336,14 @@ public class ShokoController(
 
     #region Private Helpers
 
+    /// <summary>Schedules a background task to scan and subsequently refresh Plex metadata for a specific set of series.</summary>
+    /// <param name="series">The collection of Shoko series metadata objects to refresh.</param>
+    /// <returns>A background task representing the asynchronous refresh operation.</returns>
     private Task SchedulePlexRefreshForSeriesAsync(IEnumerable<IShokoSeries> series) =>
         Task.Run(async () =>
         {
-            foreach (var s in series)
+            var sList = series.ToList();
+            foreach (var s in sList)
             {
                 try
                 {
@@ -355,6 +359,25 @@ public class ShokoController(
                         await PlexLibrary.RefreshSectionPathAsync(path).ConfigureAwait(false);
                 }
                 catch { }
+            }
+
+            int bufferSeconds = Settings.Advanced.PlexScanDelay;
+            if (bufferSeconds > 0)
+                await Task.Delay(TimeSpan.FromSeconds(bufferSeconds)).ConfigureAwait(false);
+
+            var targets = PlexLibrary.GetConfiguredTargets();
+            foreach (var s in sList)
+            {
+                foreach (var target in targets)
+                {
+                    try
+                    {
+                        var ratingKey = await PlexLibrary.FindRatingKeyForShokoSeriesInSectionAsync(s.ID, target).ConfigureAwait(false);
+                        if (ratingKey.HasValue)
+                            await PlexLibrary.RefreshMetadataAsync(ratingKey.Value, target).ConfigureAwait(false);
+                    }
+                    catch { }
+                }
             }
         });
 

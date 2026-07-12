@@ -158,7 +158,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         try
         {
             string guid = $"{ShokoRelayConstants.AgentScheme}://show/{shokoSeriesId}";
-            using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?guid={Uri.EscapeDataString(guid)}", target.ServerUrl);
+            using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?guid={Uri.EscapeDataString(guid)}&X-Plex-Container-Start=0&X-Plex-Container-Size=1", target.ServerUrl);
             using var resp = await HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
             var item = (await PlexApi.ReadContainerAsync(resp, cancellationToken).ConfigureAwait(false))?.Metadata?.FirstOrDefault();
             return int.TryParse(item?.RatingKey, out int key) ? key : null;
