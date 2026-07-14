@@ -109,7 +109,6 @@ Enable the following options in Shoko to ensure that Plex has at least one sourc
 
 - The Shoko Relay agent requires a `TV Shows` type library to be created (or an existing one to be used)
 - Under `Add Folders` be sure to only enter the path to `!ShokoRelayVFS` (or the configured `VFS Root Path`) as the directory
-  - If your Plex server's paths don't match Shoko's they can be mapped under `Advanced Settings > Path Mappings`
 - Under `Advanced` simply change the Scanner of the library to `Plex TV Series` and the Agent to `Shoko Relay`
   - You can override Provider Settings on a per-library basis by configuring an additional Metadata Provider matching the format described in the Metadata Agent TIP above
     - _Overrides only apply to live metadata requests. Background automations (e.g. Collection Generation or Critic Ratings) will always use the global dashboard configuration_

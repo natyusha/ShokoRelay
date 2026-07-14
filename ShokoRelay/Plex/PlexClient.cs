@@ -38,7 +38,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
 
     #region Library & Section
 
-    /// <summary>Request Plex to refresh a specific filesystem path, optimized to matching sections with a safety fallback.</summary>
+    /// <summary>Request Plex to refresh a specific filesystem path, optimized to matching sections with an automatic path mapping fallback.</summary>
     /// <param name="path">The Shoko-side filesystem path.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>True if at least one refresh request was successful.</returns>
@@ -49,30 +49,73 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
 
         string mapped = MapShokoPathToPlexPath(path);
         string normMapped = TextHelper.NormalizePathForPlex(mapped);
-
-        // Use only the folder name (ShokoSeriesID) for cleaner logging
         string logFolderName = Path.GetFileName(normMapped);
 
         var allTargets = GetConfiguredTargets();
         var matchingTargets = allTargets.Where(target => target.Locations.Any(loc => normMapped.StartsWith(TextHelper.NormalizePathForPlex(loc), StringComparison.OrdinalIgnoreCase))).ToList();
 
-        var targetsToProcess = matchingTargets.Any() ? matchingTargets : allTargets;
-
         bool anyOk = false;
-        foreach (var target in targetsToProcess)
+
+        if (matchingTargets.Count > 0)
         {
-            using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/refresh?path={Uri.EscapeDataString(mapped)}", target.ServerUrl);
-            using var resp = await HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
-            if (resp.IsSuccessStatusCode)
+            foreach (var target in matchingTargets)
             {
-                anyOk = true;
-                s_logger.Debug("PlexClient: refresh triggered for folder -> '{0}' on {1}:{2} (Match: {3})", logFolderName, target.ServerUrl, target.SectionId, matchingTargets.Any());
+                using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/refresh?path={Uri.EscapeDataString(mapped)}", target.ServerUrl);
+                using var resp = await HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+                if (resp.IsSuccessStatusCode)
+                {
+                    anyOk = true;
+                    s_logger.Debug("PlexClient: refresh triggered for folder -> '{0}' on {1}:{2} (Match: True)", logFolderName, target.ServerUrl, target.SectionId);
+                }
+                else
+                    s_logger.Warn("PlexClient: refresh failed ({0}) for folder -> '{1}' in section {2}", resp.StatusCode, logFolderName, target.SectionId);
             }
-            else
+            return anyOk;
+        }
+
+        // If Path Mappings aren't configured, safely infer the correct Plex path by matching the VFS root name to Plex's configured library locations.
+        string vfsRootName = configProvider.GetSettings().Advanced.VfsRootPath;
+        if (string.IsNullOrWhiteSpace(vfsRootName))
+            vfsRootName = ShokoRelayConstants.FolderVfsDefault;
+
+        string searchStr = $"/{vfsRootName}/";
+        int vfsIdx = normMapped.IndexOf(searchStr, StringComparison.OrdinalIgnoreCase);
+
+        if (vfsIdx >= 0)
+        {
+            string relativeSuffix = normMapped[(vfsIdx + searchStr.Length)..];
+
+            foreach (var target in allTargets)
             {
-                s_logger.Warn("PlexClient: refresh failed ({0}) for folder -> '{1}' in section {2}", resp.StatusCode, logFolderName, target.SectionId);
+                foreach (var loc in target.Locations)
+                {
+                    string normLoc = TextHelper.NormalizePathForPlex(loc);
+                    if (normLoc.EndsWith($"/{vfsRootName}", StringComparison.OrdinalIgnoreCase) || string.Equals(normLoc, vfsRootName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Detect Plex's native directory separator and format the path to match the target OS
+                        char plexSep = loc.Contains('\\') ? '\\' : '/';
+                        string nativeSuffix = relativeSuffix.Replace('/', plexSep);
+                        string guessedPath = $"{loc.TrimEnd('\\', '/')}{plexSep}{nativeSuffix}";
+
+                        using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/refresh?path={Uri.EscapeDataString(guessedPath)}", target.ServerUrl);
+                        using var resp = await HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+
+                        if (resp.IsSuccessStatusCode)
+                        {
+                            anyOk = true;
+                            s_logger.Debug("PlexClient: auto-mapped fallback refresh triggered for -> '{0}' on {1}:{2}", nativeSuffix, target.ServerUrl, target.SectionId);
+                        }
+                    }
+                }
             }
         }
+
+        if (!anyOk)
+            s_logger.Warn(
+                "PlexClient: Path '{0}' does not match any known Plex library locations! If Plex and Shoko run on different filesystems, please configure Path Mappings in the Shoko Relay dashboard.",
+                normMapped
+            );
+
         return anyOk;
     }
 
