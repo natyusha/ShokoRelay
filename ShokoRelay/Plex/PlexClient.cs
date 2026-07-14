@@ -85,27 +85,61 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         {
             string relativeSuffix = normMapped[(vfsIdx + searchStr.Length)..];
 
+            // Extract Shoko's parent directory name preceding the VFS root
+            string shokoParentName = "";
+            int parentEndIdx = vfsIdx;
+            if (parentEndIdx > 0)
+            {
+                int parentStartIdx = normMapped.LastIndexOf('/', parentEndIdx - 1);
+                if (parentStartIdx >= 0)
+                    shokoParentName = normMapped.Substring(parentStartIdx + 1, parentEndIdx - parentStartIdx - 1);
+            }
+
+            var potentialFallbacks = new List<(PlexLibraryTarget Target, string GuessedPath, bool IsParentMatch)>();
+
             foreach (var target in allTargets)
             {
                 foreach (var loc in target.Locations)
                 {
                     string normLoc = TextHelper.NormalizePathForPlex(loc);
-                    if (normLoc.EndsWith($"/{vfsRootName}", StringComparison.OrdinalIgnoreCase) || string.Equals(normLoc, vfsRootName, StringComparison.OrdinalIgnoreCase))
+                    string locSuffix = $"/{vfsRootName}";
+
+                    if (normLoc.EndsWith(locSuffix, StringComparison.OrdinalIgnoreCase) || string.Equals(normLoc, vfsRootName, StringComparison.OrdinalIgnoreCase))
                     {
                         // Detect Plex's native directory separator and format the path to match the target OS
                         char plexSep = loc.Contains('\\') ? '\\' : '/';
                         string nativeSuffix = relativeSuffix.Replace('/', plexSep);
                         string guessedPath = $"{loc.TrimEnd('\\', '/')}{plexSep}{nativeSuffix}";
 
-                        using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/refresh?path={Uri.EscapeDataString(guessedPath)}", target.ServerUrl);
-                        using var resp = await HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
-
-                        if (resp.IsSuccessStatusCode)
+                        // Extract Plex's parent directory name preceding the VFS root
+                        string plexParentName = "";
+                        int plexEndIdx = normLoc.LastIndexOf(locSuffix, StringComparison.OrdinalIgnoreCase);
+                        if (plexEndIdx > 0)
                         {
-                            anyOk = true;
-                            s_logger.Debug("PlexClient: auto-mapped fallback refresh triggered for -> '{0}' on {1}:{2}", nativeSuffix, target.ServerUrl, target.SectionId);
+                            int plexStartIdx = normLoc.LastIndexOf('/', plexEndIdx - 1);
+                            if (plexStartIdx >= 0)
+                                plexParentName = normLoc.Substring(plexStartIdx + 1, plexEndIdx - plexStartIdx - 1);
                         }
+
+                        bool isParentMatch = !string.IsNullOrEmpty(shokoParentName) && string.Equals(shokoParentName, plexParentName, StringComparison.OrdinalIgnoreCase);
+                        potentialFallbacks.Add((target, guessedPath, isParentMatch));
                     }
+                }
+            }
+
+            // Filter to only parent-matching locations if any exist; otherwise fallback to broad scan
+            var exactMatches = potentialFallbacks.Where(f => f.IsParentMatch).ToList();
+            var targetsToScan = exactMatches.Count > 0 ? exactMatches : potentialFallbacks;
+
+            foreach (var (tgt, guessedPath, _) in targetsToScan)
+            {
+                using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{tgt.SectionId}/refresh?path={Uri.EscapeDataString(guessedPath)}", tgt.ServerUrl);
+                using var resp = await HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+
+                if (resp.IsSuccessStatusCode)
+                {
+                    anyOk = true;
+                    s_logger.Debug("PlexClient: auto-mapped fallback refresh triggered for -> '{0}' on {1}:{2}", Path.GetFileName(guessedPath), tgt.ServerUrl, tgt.SectionId);
                 }
             }
         }
