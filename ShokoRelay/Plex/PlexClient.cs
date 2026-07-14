@@ -49,7 +49,6 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
 
         string mapped = MapShokoPathToPlexPath(path);
         string normMapped = TextHelper.NormalizePathForPlex(mapped);
-        string logFolderName = Path.GetFileName(normMapped);
 
         var allTargets = GetConfiguredTargets();
         var matchingTargets = allTargets.Where(target => target.Locations.Any(loc => normMapped.StartsWith(TextHelper.NormalizePathForPlex(loc), StringComparison.OrdinalIgnoreCase))).ToList();
@@ -65,10 +64,10 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
                 if (resp.IsSuccessStatusCode)
                 {
                     anyOk = true;
-                    s_logger.Debug("PlexClient: refresh triggered for folder -> '{0}' on {1}:{2} (Match: True)", logFolderName, target.ServerUrl, target.SectionId);
+                    s_logger.Debug("PlexClient: refresh triggered for -> '{0}' on {1}:{2}", mapped, target.ServerUrl, target.SectionId);
                 }
                 else
-                    s_logger.Warn("PlexClient: refresh failed ({0}) for folder -> '{1}' in section {2}", resp.StatusCode, logFolderName, target.SectionId);
+                    s_logger.Warn("PlexClient: refresh failed ({0}) for folder -> '{1}' in section {2}", resp.StatusCode, mapped, target.SectionId);
             }
             return anyOk;
         }
@@ -80,10 +79,18 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
 
         string searchStr = $"/{vfsRootName}/";
         int vfsIdx = normMapped.IndexOf(searchStr, StringComparison.OrdinalIgnoreCase);
+        int tokenLength = vfsRootName.Length + 2;
+
+        // Fallback for custom relative paths that might start directly with the VFS root name
+        if (vfsIdx < 0 && normMapped.StartsWith(vfsRootName + "/", StringComparison.OrdinalIgnoreCase))
+        {
+            vfsIdx = 0;
+            tokenLength = vfsRootName.Length + 1;
+        }
 
         if (vfsIdx >= 0)
         {
-            string relativeSuffix = normMapped[(vfsIdx + searchStr.Length)..];
+            string relativeSuffix = normMapped[(vfsIdx + tokenLength)..];
 
             // Extract Shoko's parent directory name preceding the VFS root
             string shokoParentName = "";
@@ -92,7 +99,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
             {
                 int parentStartIdx = normMapped.LastIndexOf('/', parentEndIdx - 1);
                 if (parentStartIdx >= 0)
-                    shokoParentName = normMapped.Substring(parentStartIdx + 1, parentEndIdx - parentStartIdx - 1);
+                    shokoParentName = normMapped[(parentStartIdx + 1)..parentEndIdx];
             }
 
             var potentialFallbacks = new List<(PlexLibraryTarget Target, string GuessedPath, bool IsParentMatch)>();
@@ -118,7 +125,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
                         {
                             int plexStartIdx = normLoc.LastIndexOf('/', plexEndIdx - 1);
                             if (plexStartIdx >= 0)
-                                plexParentName = normLoc.Substring(plexStartIdx + 1, plexEndIdx - plexStartIdx - 1);
+                                plexParentName = normLoc[(plexStartIdx + 1)..plexEndIdx];
                         }
 
                         bool isParentMatch = !string.IsNullOrEmpty(shokoParentName) && string.Equals(shokoParentName, plexParentName, StringComparison.OrdinalIgnoreCase);
@@ -128,18 +135,27 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
             }
 
             // Filter to only parent-matching locations if any exist; otherwise fallback to broad scan
-            var exactMatches = potentialFallbacks.Where(f => f.IsParentMatch).ToList();
-            var targetsToScan = exactMatches.Count > 0 ? exactMatches : potentialFallbacks;
-
-            foreach (var (tgt, guessedPath, _) in targetsToScan)
+            bool hasParentMatch = false;
+            foreach (var (target, guessedPath, isParentMatch) in potentialFallbacks)
             {
+                if (isParentMatch)
+                {
+                    hasParentMatch = true;
+                    break;
+                }
+            }
+
+            foreach (var (tgt, guessedPath, isParentMatch) in potentialFallbacks)
+            {
+                if (hasParentMatch && !isParentMatch)
+                    continue;
+
                 using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{tgt.SectionId}/refresh?path={Uri.EscapeDataString(guessedPath)}", tgt.ServerUrl);
                 using var resp = await HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
-
                 if (resp.IsSuccessStatusCode)
                 {
                     anyOk = true;
-                    s_logger.Debug("PlexClient: auto-mapped fallback refresh triggered for -> '{0}' on {1}:{2}", Path.GetFileName(guessedPath), tgt.ServerUrl, tgt.SectionId);
+                    s_logger.Debug("PlexClient: auto-mapped fallback refresh triggered for -> '{0}' on {1}:{2}", guessedPath, tgt.ServerUrl, tgt.SectionId);
                 }
             }
         }
