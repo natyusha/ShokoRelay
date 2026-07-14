@@ -15,6 +15,34 @@
   "image_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-logo.png",
   "releases": [
     {
+      "version": "0.16.3",
+      "tag": "v0.16.3",
+      "source_revision": "45a3de74c193ce3341785a9b4f9256117ac9f416",
+      "released_at": "2026-07-14T04:31:26Z",
+      "channel": "Dev",
+      "release_notes": "**Changes:**\r\n\r\n- Update SchedulePlexRefreshForSeriesAsync in ShokoController to follow up folder scans with a delayed Plex metadata refresh to ensure series data updates successfully when triggering manual actions via the VFS browser\r\n- Append X-Plex-Container-Size and X-Plex-Container-Start pagination parameters to the GUID lookup query in PlexClient to satisfy new strict Plex API enforcement and eliminate log warnings\r\n- Implement a static ConcurrentDictionary tracker inside SchedulePlexRefreshForSeriesAsync to safely debounce rapid manual requests\r\n- Prevent massive stack traces from polluting the logs when a Plex discovery fallback connection fails due to SSL/TLS certificate mismatches\r\n- Add intelligent fallback logic to RefreshSectionPathAsync in PlexClient to automatically infer correct Plex paths when Path Mappings are missing\r\n- Format the dynamically guessed path using the target server's native path separator, ensuring cross-platform stability when Shoko and Plex run on different operating systems (e.g. Windows Host to Linux Docker)\r\n- Update readme.md and the dashboard settings help to account for the path mappings not being required\r\n- Bump Shoko.Abstractions to v6.0.0-alpha.73\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.16.2...v0.16.3",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.16.3/ShokoRelay-v0.16.3-dev_linux-arm64.zip",
+          "checksum": "7de10af444fc0d40120ffb86da521c325e4b9e9238c11f43d015505a970a93a9"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.16.3/ShokoRelay-v0.16.3-dev_linux-x64.zip",
+          "checksum": "d1ac53aee5693b4f8d48d146898e2498d1b1d3518990c483471810b5917215f1"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.16.3/ShokoRelay-v0.16.3-dev_win-x64.zip",
+          "checksum": "0ab48a54351fdb0e75703c611b602405bef188f5f55ad7998f91191c74227109"
+        }
+      ]
+    },
+    {
       "version": "0.16.2",
       "tag": "v0.16.2",
       "source_revision": "82d94c894c8688ca21007561964059bdf0f2c69b",
