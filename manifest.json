@@ -15,6 +15,34 @@
   "image_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-logo.png",
   "releases": [
     {
+      "version": "0.16.4",
+      "tag": "v0.16.4",
+      "source_revision": "bf1bbcebb07b7b1486ce8a1d90bd3a4ea104fe90",
+      "released_at": "2026-07-16T20:04:14Z",
+      "channel": "Dev",
+      "release_notes": "**Changes:**\r\n- Add EmptyPlexTrashThreshold to AdvancedConfig to allow user-defined safety nets for automatic trash deletion\r\n- Add grandparentTitle and parentIndex properties to PlexMetadataItem in PlexApi\r\n- Add EmptyTrashWithSafetyAsync to PlexClient for percentage-based trash evaluation\r\n- Integrate Plex trash evaluation into the Shoko PurgeMissingFiles endpoint and log reports\r\n- Inject PlexClient into the ShokoRelay constructor to make it available for the background automation loop\r\n- Append Plex trash execution to the scheduled Plex automation loop and manual trigger\r\n- Expand Purge Missing dashboard UI confirmation modal and Settings Help modal\r\n- Add trashOnly and threshold parameters to the /shoko/purge-missing endpoint in ShokoController\r\n- Update PurgeMissingResult to include a trashOnly flag and track individual library prefixes for trashed items\r\n- Skip Shoko database scans entirely when trashOnly is enabled\r\n- Several minor optimizations have also been made that can be seen in the full changelog\r\n- Update README/Controller.md documentation for the new trash features\r\n- Bump Soko.Abstractions to 6.0.0-alpha.74\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.16.3...v0.16.4",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.16.4/ShokoRelay-v0.16.4-dev_linux-arm64.zip",
+          "checksum": "147b24dddc37e1d254a8c6850eb35bfed2d422bfcb6203de21a8d77aff25c33d"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.16.4/ShokoRelay-v0.16.4-dev_linux-x64.zip",
+          "checksum": "955083d713da60f00b840b167f01121504cb2369ea9abfc299d029a992470907"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.16.4/ShokoRelay-v0.16.4-dev_win-x64.zip",
+          "checksum": "beb3dfe68e57007ad766e7ef39e11b74d6877cf6c776dee31203a71064c643a4"
+        }
+      ]
+    },
+    {
       "version": "0.16.3",
       "tag": "v0.16.3",
       "source_revision": "45a3de74c193ce3341785a9b4f9256117ac9f416",
