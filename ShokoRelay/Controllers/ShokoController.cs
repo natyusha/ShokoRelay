@@ -319,8 +319,7 @@ public class ShokoController(
         Logger.Info("Shoko: Starting a manual purge of all default (non-LocallyGenerated) episode backdrops...");
         var xrefs = imageManager
             .GetAllImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = ImageEntityType.Backdrop })
-            .Where(x => x.EntityType == DataEntityType.Episode && x.ImageSource != DataSource.LocallyGenerated)
-            .ToList();
+            .Where(x => x.EntityType == DataEntityType.Episode && x.ImageSource != DataSource.LocallyGenerated);
 
         var distinctImageIds = xrefs.Select(x => x.ImageID).Distinct().ToList();
         int purgedCount = 0;

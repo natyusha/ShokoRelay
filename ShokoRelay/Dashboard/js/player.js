@@ -483,7 +483,10 @@
     }
   }
 
-  /** Updates the data-state attribute of the play button. */
+  /**
+   * Updates the data-state attribute of the play button.
+   * @returns {void}
+   */
   function syncPlaybackUI() {
     if (playerNextBtn) {
       const isPlaying = playerVideo && !playerVideo.paused && !playerVideo.ended;
@@ -513,7 +516,10 @@
     }
   }
 
-  /** Standard toggle for browser fullscreen API. */
+  /**
+   * Standard toggle for browser fullscreen API.
+   * @returns {void}
+   */
   function toggleFullscreen() {
     if (!document.fullscreenElement) playerContainer.requestFullscreen().catch(() => {});
     else document.exitFullscreen();

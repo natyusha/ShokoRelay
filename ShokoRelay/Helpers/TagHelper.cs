@@ -62,7 +62,7 @@ public static class TagHelper
         IEnumerable<string> anidbNames = [];
         int minWeight = (int)Settings.MinimumTagWeight;
         if ((sourceSetting == TagSources.Combined || sourceSetting == TagSources.AniDB) && shokoSeries?.AnidbAnime?.Tags is IReadOnlyList<IAnidbTagForAnime> anidbTags)
-            anidbNames = anidbTags.Select(t => (t.Name, t.Weight)).Where(x => !string.IsNullOrWhiteSpace(x.Name) && (minWeight <= 0 || x.Weight >= minWeight)).Select(x => x.Name);
+            anidbNames = anidbTags.Where(t => !string.IsNullOrWhiteSpace(t.Name) && (minWeight <= 0 || t.Weight >= minWeight)).Select(t => t.Name);
 
         IEnumerable<string> tmdbNames = [];
         if ((sourceSetting == TagSources.Combined || sourceSetting == TagSources.TMDB) && shokoSeries?.TmdbShows?.FirstOrDefault() is { } tmdb)

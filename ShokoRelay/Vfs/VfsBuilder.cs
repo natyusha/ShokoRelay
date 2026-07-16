@@ -197,14 +197,14 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         IEnumerable<IShokoSeries> seriesList;
         if (isFiltered)
         {
-            var resolved = seriesIds!.Distinct().Select(id => new { Id = id, Series = metadataService.GetShokoSeriesByID(id) }).ToList();
+            var resolved = seriesIds!.Distinct().Select(id => (Id: id, Series: metadataService.GetShokoSeriesByID(id))).ToList();
 
             // Prune series that were completely deleted from Shoko's database
-            foreach (var item in resolved.Where(x => x.Series == null))
+            foreach (var (id, series) in resolved.Where(x => x.Series == null))
             {
-                PruneSeries(rootName, item.Id, errorsBag.Add);
+                PruneSeries(rootName, id, errorsBag.Add);
                 foreach (var rootDict in blueprint.Values)
-                    rootDict.TryRemove(item.Id, out _);
+                    rootDict.TryRemove(id, out _);
             }
 
             seriesList = [.. resolved.Where(x => x.Series != null).Select(x => x.Series!).OfType<IShokoSeries>()];

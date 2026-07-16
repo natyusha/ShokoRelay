@@ -49,11 +49,14 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
         if (targets.Count == 0)
             return result;
 
-        var shokoWatchedRaw = userDataService.GetEpisodeUserDataForUser(shokoUser).Where(e => e.IsWatched).ToList();
+        var shokoWatchedQuery = userDataService.GetEpisodeUserDataForUser(shokoUser).Where(e => e.IsWatched);
         if (sinceHours > 0)
-            shokoWatchedRaw = [.. shokoWatchedRaw.Where(e => (e.LastPlayedAt ?? DateTime.MinValue) >= DateTime.UtcNow.AddHours(-sinceHours.Value))];
+        {
+            var cutoff = DateTime.UtcNow.AddHours(-sinceHours.Value);
+            shokoWatchedQuery = shokoWatchedQuery.Where(e => (e.LastPlayedAt ?? DateTime.MinValue) >= cutoff);
+        }
 
-        var shokoWatched = shokoWatchedRaw
+        var shokoWatched = shokoWatchedQuery
             .Select(sw => (UserData: sw, Episode: metadataService.GetShokoEpisodeByID(sw.EpisodeID)))
             .Where(x => x.Episode != null)
             .Select(x => (x.UserData, x.Episode, Guid: x.Episode!.GetPlexGuid()))
