@@ -444,8 +444,8 @@ public class AdvancedConfig
     /// <summary>Percentage threshold for safely emptying Plex trash.</summary>
     [Display(Name = "Empty Plex Trash Threshold", Description = "The percent threshold (from 1-100) for emptying Plex's trash. Set to 0 to disable")]
     [Range(0, 100, ErrorMessage = "Empty Plex Trash Threshold must be between 0 and 100")]
-    [DefaultValue(0)]
-    public int EmptyPlexTrashThreshold { get; set; } = 0;
+    [DefaultValue(1)]
+    public int EmptyPlexTrashThreshold { get; set; } = 1;
 
     /// <summary>Plex RefreshMetadataAsync delay.</summary>
     [Display(Name = "Plex Fixup Delay", Description = "The delay (in minutes) after the VFS auto adds a file to regenerate it and force refresh series metadata")]
