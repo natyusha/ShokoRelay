@@ -79,13 +79,13 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
         {
             var all = videoService.GetAllVideoFiles() ?? [];
             var ignoredNames = VfsShared.GetIgnoredFolderNames(Settings);
-            // A file is considered "missing" if it doesn't exist on disk OR if its path is now blocked by Relay ignore rules.
-            var missing = all.Where(f => !File.Exists(f.Path) || VfsShared.IsPathIgnored(f.Path, ignoredNames)).Select(f => f.Path).ToHashSet();
 
-            if (!dryRun && missing.Count > 0)
+            // A file is considered "missing" if it doesn't exist on disk OR if its path is now blocked by Relay ignore rules.
+            var toDelete = all.Where(f => !File.Exists(f.Path) || VfsShared.IsPathIgnored(f.Path, ignoredNames)).ToList();
+
+            if (!dryRun && toDelete.Count > 0)
             {
-                s_logger.Info("ShokoImportService: Removing {0} missing files from database...", missing.Count);
-                var toDelete = all.Where(f => missing.Contains(f.Path)).ToList();
+                s_logger.Info("ShokoImportService: Removing {0} missing files from database...", toDelete.Count);
 
                 // Remove the file records from Shoko
                 await videoService.DeleteVideoFiles(toDelete, removeFiles: false, removeFolders: false).ConfigureAwait(false);
@@ -95,7 +95,8 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
 
                 s_logger.Info("ShokoImportService: Database and MyList cleanup complete");
             }
-            return [.. missing];
+
+            return [.. toDelete.Select(f => f.Path)];
         }
         finally
         {

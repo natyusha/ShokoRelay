@@ -259,10 +259,10 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                 {
                     var files = new DirectoryInfo(imagesPath).EnumerateFiles().OrderBy(f => f.CreationTimeUtc).ToList();
                     if (files.Count > 1)
-                        for (int i = 0; i < files.Count - 1; i++)
+                        foreach (var file in files.SkipLast(1))
                             try
                             {
-                                files[i].Delete();
+                                file.Delete();
                                 deletedCount++;
                             }
                             catch { }

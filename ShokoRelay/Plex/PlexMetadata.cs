@@ -110,7 +110,7 @@ public class PlexMetadata(IMetadataService metadataService)
         var ps = ctx.Series;
         var images = ps;
         var seasonTitle = GetSeasonFolder(seasonNum);
-        var seasonDate = ctx.FileData.Mappings.Where(m => m.Coords.Season == seasonNum).SelectMany(m => m.Episodes).Where(e => e.AirDate.HasValue).Select(e => e.AirDate).OrderBy(d => d).FirstOrDefault();
+        var seasonDate = ctx.FileData.Mappings.Where(m => m.Coords.Season == seasonNum).SelectMany(m => m.Episodes).Where(e => e.AirDate.HasValue).Min(e => e.AirDate);
         string? seasonSummary = null;
 
         // When using VFS overrides find a Shoko series in the group which contains the TMDB metadata for the requisite season number.

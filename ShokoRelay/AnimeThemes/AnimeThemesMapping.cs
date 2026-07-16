@@ -131,10 +131,9 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                 }
             );
 
-            var files = filesBag.ToList();
             var toProcess = new List<(string File, string Rel)>();
 
-            foreach (string file in files)
+            foreach (string file in filesBag)
             {
                 string? root = roots.FirstOrDefault(r => file.StartsWith(r + Path.DirectorySeparatorChar));
                 string rel = root != null ? "/" + Path.GetRelativePath(root, file).Replace('\\', '/') : file;
@@ -146,7 +145,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                     toProcess.Add((file, rel));
             }
 
-            s_logger.Info("AnimeThemes: Found {0} total files ({1} cached, {2} pending mapping resolution)...", files.Count, existing.Count, toProcess.Count);
+            s_logger.Info("AnimeThemes: Found {0} total files ({1} cached, {2} pending mapping resolution)...", filesBag.Count, existing.Count, toProcess.Count);
 
             int reusedCount = entries.Count;
             var errorsList = new ConcurrentBag<string>();
@@ -186,7 +185,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                 )
                 .ConfigureAwait(false);
 
-            var finalEntries = entries.GroupBy(e => e.FilePath).Select(g => g.First()).OrderBy(e => AnimeThemesHelper.GetYearForSort(e.FilePath)).ThenBy(e => e.FilePath).ToList();
+            var finalEntries = entries.DistinctBy(e => e.FilePath).OrderBy(e => AnimeThemesHelper.GetYearForSort(e.FilePath)).ThenBy(e => e.FilePath).ToList();
 
             await File.WriteAllTextAsync(mapPath, AnimeThemesHelper.SerializeMapping(existingComments, finalEntries), ct).ConfigureAwait(false);
             s_logger.Info("AnimeThemes: Finished mapping task -> {0} entries written.", finalEntries.Count);

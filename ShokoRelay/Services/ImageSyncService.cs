@@ -63,14 +63,12 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
             var errorsList = new List<string>();
             var uploadedDetails = new List<string>();
             var targets = plexClient.GetConfiguredTargets();
-            var allSeries = metadataService.GetAllShokoSeries() ?? [];
+            var allSeries =
+                allowedSeriesIds != null
+                    ? [.. allowedSeriesIds.Distinct().Select(metadataService.GetShokoSeriesByID).OfType<IShokoSeries>()]
+                    : metadataService.GetAllShokoSeries()?.Cast<IShokoSeries>().ToList() ?? [];
 
-            HashSet<int>? allowedSet = null;
-            if (allowedSeriesIds != null)
-            {
-                allowedSet = [.. allowedSeriesIds];
-                allSeries = [.. allSeries.Where(s => s != null && allowedSet.Contains(s.ID))];
-            }
+            HashSet<int>? allowedSet = allowedSeriesIds != null ? [.. allowedSeriesIds] : null;
 
             var syncDetails = Settings.TmdbThumbnails ? "" : " + Plex episode thumbnails";
             s_logger.Info("ImageSyncService: Starting image synchronization (local collection/series artwork{0})...", syncDetails);

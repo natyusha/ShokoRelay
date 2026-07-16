@@ -44,7 +44,7 @@ public class VfsAssetLinker(IVideoService videoService)
             string baseName = Path.GetFileNameWithoutExtension(name);
             if (videoBaseNames.Contains(baseName))
                 continue;
-            string destName = string.Equals(baseName, "Specials", StringComparison.OrdinalIgnoreCase) ? "Season-Specials-Poster" + Path.GetExtension(name) : name;
+            string destName = baseName.Equals("Specials", StringComparison.OrdinalIgnoreCase) ? "Season-Specials-Poster" + Path.GetExtension(name) : name;
             if (VfsShared.TryCreateLink(file, Path.Combine(destDir, destName), s_logger, skipExistenceCheck: skipExistenceCheck))
                 onLink?.Invoke(destName, file);
         }

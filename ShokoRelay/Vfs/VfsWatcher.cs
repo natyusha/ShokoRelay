@@ -121,8 +121,8 @@ public class VfsWatcher(
     /// <param name="e">The video file event arguments.</param>
     private void HandleFileEvent(VideoFileEventArgs? e)
     {
-        var seriesList = e?.Series?.ToList() ?? e?.Video?.Series?.ToList() ?? [];
-        if (seriesList.Count == 0)
+        var seriesList = e?.Series ?? e?.Video?.Series;
+        if (seriesList == null || !seriesList.Any())
             return;
 
         foreach (var series in seriesList)

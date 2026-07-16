@@ -88,7 +88,7 @@ public static class MapHelper
                 all.AddRange(BuildFileMappings(s, metadataService));
 
         // A single physical crossover file linked to multiple Shoko series in an override group will produce duplicate mappings. This ensures the VFS only builds the file once.
-        var deduped = all.GroupBy(m => (m.Video.ID, m.Coords, m.PartIndex, m.IsVariation)).Select(g => g.First()).ToList();
+        var deduped = all.DistinctBy(m => (m.Video.ID, m.Coords, m.PartIndex, m.IsVariation)).ToList();
         return new SeriesFileData(deduped, [.. deduped.Select(m => m.Coords.Season).Distinct().OrderBy(s => s)]);
     }
 
@@ -233,7 +233,7 @@ public static class MapHelper
             result.Add(new FileMapping(video, [.. deduped.Select(x => x.Episode)], firstEp, coords, fileName, allowPt ? fIdx + 1 : null, allowPt ? fCount : 1, tmdbEp, video.IsVariation));
         }
         // Deduplicate mappings by Video ID and Coordinates. This prevents duplicate VFS entries (v1/v2) for crossover series that have been consolidated into a single folder via VFS Overrides.
-        return [.. result.GroupBy(m => (m.Video.ID, m.Coords, m.PartIndex, m.IsVariation)).Select(g => g.First())];
+        return [.. result.DistinctBy(m => (m.Video.ID, m.Coords, m.PartIndex, m.IsVariation))];
     }
 
     /// <summary>Deduplicates a collection of episode-coordinate pairs sharing a single video file, prioritizing primary cross-referenced entries.</summary>

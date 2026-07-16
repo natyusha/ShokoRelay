@@ -51,11 +51,11 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         string normMapped = TextHelper.NormalizePathForPlex(mapped);
 
         var allTargets = GetConfiguredTargets();
-        var matchingTargets = allTargets.Where(target => target.Locations.Any(loc => normMapped.StartsWith(TextHelper.NormalizePathForPlex(loc), StringComparison.OrdinalIgnoreCase))).ToList();
+        var matchingTargets = allTargets.Where(target => target.Locations.Any(loc => normMapped.StartsWith(TextHelper.NormalizePathForPlex(loc), StringComparison.OrdinalIgnoreCase)));
 
         bool anyOk = false;
 
-        if (matchingTargets.Count > 0)
+        if (matchingTargets.Any())
         {
             foreach (var target in matchingTargets)
             {

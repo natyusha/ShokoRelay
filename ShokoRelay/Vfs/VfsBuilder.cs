@@ -160,17 +160,15 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
     private VfsBuildResult BuildInternal(IReadOnlyCollection<int>? seriesIds, bool cleanRoot)
     {
         var rootName = VfsShared.ResolveRootFolderName();
-        var overlapping =
-            videoService
-                .GetAllManagedFolders()
-                ?.Where(f => !string.IsNullOrEmpty(f.Path) && f.Path.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries).Contains(rootName))
-                .Select(f => f.Path)
-                .ToList()
-            ?? [];
+        var overlapping = videoService
+            .GetAllManagedFolders()
+            ?.Where(f => !string.IsNullOrEmpty(f.Path) && f.Path.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries).Contains(rootName))
+            .Select(f => f.Path)
+            .FirstOrDefault();
 
-        if (overlapping.Count > 0)
+        if (overlapping != null)
             throw new InvalidOperationException(
-                $"VFS generation blocked: Shoko import folder '{overlapping[0]}' resides inside or matches the VFS directory. Remove this import folder in Shoko's settings before generating."
+                $"VFS generation blocked: Shoko import folder '{overlapping}' resides inside or matches the VFS directory. Remove this import folder in Shoko's settings before generating."
             );
 
         // Refresh the override cache to catch any link changes made in Shoko since the last operation. This includes VFS Overrides and if MergeTmdbSeries is enabled auto merged TMDB series as well.
