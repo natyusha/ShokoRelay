@@ -338,7 +338,7 @@
                 data-relay-method="POST"
                 data-relay-label="Purge Missing"
                 data-relay-persist="true"
-                data-relay-confirm="Are you sure you want to purge all records for missing files?<br><br><small>This will permanently remove them from Shoko's database and your AniDB MyList.</small>"
+                data-relay-confirm="Are you sure you want to purge all records for missing files?<br><br><small>This will permanently remove them from Shoko's database and your AniDB MyList.<br><br>If <b>Empty Plex Trash Threshold</b> is configured, Plex's trash will also be emptied safely.</small>"
                 data-relay-confirm-dry="true"
                 data-relay-confirm-button="Purge Files"
               >
@@ -611,11 +611,16 @@
               <a href="https://support.plex.tv/articles/local-files-for-tv-show-trailers-and-extras/" title="Plex Articles">Local Files for TV Show Trailers and Extras</a>
               will also be ignored unless the "Plex Local Extras" setting is disabled.
             </small>
-            <h4>Plex Metadata Path</h4>
+            <h4>Plex Data Path</h4>
             <small>
               The path to the Metadata subfolder located in
               <a href="https://support.plex.tv/articles/202915258-where-is-the-plex-media-server-data-directory-located/" title="Plex Articles">Plex's Data Directory</a>. This is used exclusively for the image
               cleanup task that is run at the start of collection generation.
+            </small>
+            <h4>Empty Plex Trash Threshold</h4>
+            <small>
+              Safely empty the Plex trash during a "Purge Missing" action or during the scheduled Plex automation. The threshold represents the maximum percentage of your library that is allowed to be in the
+              trash before the operation aborts. This acts as a safety net against accidentally wiping your entire Plex library if a network drive disconnects.
             </small>
             <h4>Plex Fixup Delay</h4>
             <small>

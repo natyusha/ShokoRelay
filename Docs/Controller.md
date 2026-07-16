@@ -259,8 +259,10 @@ GET  /vfs/tree                                                 -> GetVfsTree
 ### Shoko: Automation
 
 ```
-GET  /shoko/purge-missing?dryRun={true|false}                  -> PurgeMissingFiles          (for preview/testing)
-POST /shoko/purge-missing?dryRun={true|false}                  -> PurgeMissingFiles
+GET  /shoko/purge-missing                                      -> PurgeMissingFiles          (for preview/testing)
+     [?dryRun={true|false}&trashOnly={true|false}&threshold={int}]
+POST /shoko/purge-missing                                      -> PurgeMissingFiles
+     [?dryRun={true|false}&trashOnly={true|false}&threshold={int}]
 
 POST /shoko/import                                             -> RunShokoImport
 GET  /shoko/import/start                                       -> StartShokoImportNow
@@ -272,8 +274,10 @@ POST /sync-watched                                             -> SyncPlexWatche
 GET  /sync-watched/start                                       -> StartWatchedSyncNow
 ```
 
-- `PurgeMissingFiles` completely removes missing files from Shoko's DB and the AniDB MyList (physical files are never touched).
-  - `dryRun`: (default true) set to false to actually remove records from Shoko and AniDB MyList.
+- `PurgeMissingFiles` completely removes missing files from Shoko's DB and the AniDB MyList (physical files are never touched), or safely empties connected Plex library trash.
+  - `dryRun`: (default true) set to false to actually remove records from Shoko/AniDB MyList and empty Plex trash.
+  - `trashOnly`: (default false) set to true to bypass Shoko/AniDB MyList purging and only evaluate/empty Plex trash.
+  - `threshold`: (optional) percentage threshold override (1-100) for Plex trash empty. Defaults to `Advanced.EmptyPlexTrashThreshold`.
 - `RunShokoImport` triggers a scan of managed folders.
 - `SyncPlexWatched` synchronizes watched state between Plex and Shoko (Bi-directional).
   - `dryRun`: (default true) If true, skip database and Plex server writes.

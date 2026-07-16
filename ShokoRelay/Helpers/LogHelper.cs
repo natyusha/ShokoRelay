@@ -218,10 +218,37 @@ public static class LogHelper
     /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
     /// <param name="dryRun">Dry run flag.</param>
     /// <param name="removed">List of removed paths.</param>
-    public static void BuildPurgeMissingReport(StringBuilder sb, bool dryRun, IReadOnlyList<string>? removed)
+    /// <param name="plexRemoved">List of Plex trashed paths.</param>
+    /// <param name="plexMessages">List of Plex trash status messages.</param>
+    public static void BuildPurgeMissingReport(StringBuilder sb, bool dryRun, IReadOnlyList<string>? removed, IReadOnlyList<string>? plexRemoved, IReadOnlyList<string>? plexMessages)
     {
-        var stats = new Dictionary<string, object> { ["Mode"] = dryRun ? "Dry Run" : "Live", ["Files Found"] = removed?.Count ?? 0 };
-        BuildReport(sb, "Purge Missing Files Report", stats, "Removed Paths:", removed?.OrderBy(p => p));
+        var stats = new Dictionary<string, object>
+        {
+            ["Mode"] = dryRun ? "Dry Run" : "Live",
+            ["Shoko Missing Files"] = removed?.Count ?? 0,
+            ["Plex Trash Episodes"] = plexRemoved?.Count ?? 0,
+        };
+
+        var items = new List<string>();
+        if (plexMessages?.Count > 0)
+        {
+            items.Add("Plex Trash Status:");
+            items.AddRange(plexMessages.Select(m => $"  {m}"));
+            items.Add("");
+        }
+        if (removed?.Count > 0)
+        {
+            items.Add("Shoko Removed Paths:");
+            items.AddRange(removed.OrderBy(p => p).Select(p => $"  {p}"));
+            items.Add("");
+        }
+        if (plexRemoved?.Count > 0)
+        {
+            items.Add("Plex Trashed Items:");
+            items.AddRange(plexRemoved.OrderBy(p => p).Select(p => $"  {p}"));
+        }
+
+        BuildReport(sb, "Purge Missing Files Report", stats, "Details:", items);
     }
 
     /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskShokoSyncWatched"/>.</summary>

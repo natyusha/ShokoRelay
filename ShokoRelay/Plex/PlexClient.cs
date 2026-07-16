@@ -185,6 +185,82 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         return resp.IsSuccessStatusCode;
     }
 
+    /// <summary>Evaluates and safely empties the trash for a given Plex library section based on a percentage threshold of episodes.</summary>
+    /// <param name="target">The Plex library target.</param>
+    /// <param name="threshold">The maximum allowed percentage of trashed items (1-100).</param>
+    /// <param name="dryRun">If true, prevents the actual empty trash command from being sent.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A tuple containing success status, the list of trashed item display names, and a status message.</returns>
+    public async Task<(bool Success, List<string> TrashedItems, string Message)> EmptyTrashWithSafetyAsync(PlexLibraryTarget target, int threshold, bool dryRun, CancellationToken ct = default)
+    {
+        if (!IsEnabled || target == null || threshold <= 0)
+            return (false, [], "Threshold is 0 or Plex is disabled.");
+
+        try
+        {
+            // Get Total Library Size at the episode level
+            using var totalReq = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?type={PlexConstants.TypeEpisode}&X-Plex-Container-Start=0&X-Plex-Container-Size=0", target.ServerUrl);
+            using var totalResp = await HttpClient.SendAsync(totalReq, ct).ConfigureAwait(false);
+            var totalContainer = await PlexApi.ReadContainerAsync(totalResp, ct).ConfigureAwait(false);
+            int totalSize = totalContainer?.TotalSize ?? totalContainer?.Size ?? 0;
+
+            if (totalSize == 0)
+                return (false, [], "Library is empty or unreachable.");
+
+            // Get Trashed Items
+            var trashedItems = new List<string>();
+            int start = 0;
+            int trashedSize = 0;
+            while (true)
+            {
+                using var trashReq = CreateRequest(
+                    HttpMethod.Get,
+                    $"/library/sections/{target.SectionId}/all?type={PlexConstants.TypeEpisode}&trash=1&X-Plex-Container-Start={start}&X-Plex-Container-Size=200",
+                    target.ServerUrl
+                );
+                using var trashResp = await HttpClient.SendAsync(trashReq, ct).ConfigureAwait(false);
+                var trashContainer = await PlexApi.ReadContainerAsync(trashResp, ct).ConfigureAwait(false);
+
+                trashedSize = trashContainer?.TotalSize ?? trashContainer?.Size ?? trashedSize;
+
+                if (trashContainer?.Metadata == null || trashContainer.Metadata.Count == 0)
+                    break;
+
+                foreach (var item in trashContainer.Metadata)
+                {
+                    string displayName = $"[{item.GrandparentTitle}] S{item.ParentIndex ?? 0:D2}E{item.Index ?? 0:D2} - {item.Title}";
+                    trashedItems.Add(displayName);
+                }
+
+                if (trashedItems.Count >= trashedSize)
+                    break;
+                start += 200;
+            }
+
+            if (trashedSize == 0)
+                return (true, [], "Trash is already empty.");
+
+            double percent = (double)trashedSize / totalSize * 100;
+            if (percent > threshold)
+                return (false, trashedItems, $"Safety threshold exceeded. {trashedSize}/{totalSize} ({percent:F1}%) items trashed (Limit: {threshold}%).");
+
+            if (!dryRun)
+            {
+                using var emptyReq = CreateRequest(HttpMethod.Put, $"/library/sections/{target.SectionId}/emptyTrash", target.ServerUrl);
+                using var emptyResp = await HttpClient.SendAsync(emptyReq, ct).ConfigureAwait(false);
+                if (!emptyResp.IsSuccessStatusCode)
+                    return (false, trashedItems, $"Plex API rejected the empty trash request: {emptyResp.StatusCode}");
+            }
+
+            return (true, trashedItems, $"Successfully processed {trashedSize} trashed items ({percent:F1}%).");
+        }
+        catch (Exception ex)
+        {
+            s_logger.Warn(ex, "PlexClient: Failed to process empty trash for section {0}", target.SectionId);
+            return (false, [], $"Exception during trash processing: {ex.Message}");
+        }
+    }
+
     #endregion
 
     #region Request Construction

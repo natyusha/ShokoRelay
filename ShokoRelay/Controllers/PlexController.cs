@@ -21,6 +21,8 @@ namespace ShokoRelay.Controllers;
 /// <param name="RatingsResult">The result stats returned by the critic rating application service.</param>
 /// <param name="ImageSyncElapsed">The optional elapsed time for the Plex image synchronization sub-task.</param>
 /// <param name="ImageSyncResult">The optional result stats returned by the Plex image synchronization service.</param>
+/// <param name="TrashElapsed">The optional elapsed time for the Plex empty trash sub-task.</param>
+/// <param name="TrashMessages">The optional list of Plex empty trash status messages.</param>
 public sealed record PlexAutomationRunResult(
     TimeSpan TotalElapsed,
     TimeSpan CollectionsElapsed,
@@ -28,7 +30,9 @@ public sealed record PlexAutomationRunResult(
     TimeSpan RatingsElapsed,
     ApplyRatingsResult RatingsResult,
     TimeSpan? ImageSyncElapsed,
-    ImageSyncResult? ImageSyncResult
+    ImageSyncResult? ImageSyncResult,
+    TimeSpan? TrashElapsed,
+    List<string>? TrashMessages
 );
 
 #endregion
@@ -303,6 +307,12 @@ public class PlexController(
                         sb.AppendLine($"  - Plex Image Sync          : {r.ImageSyncElapsed.Value.TotalSeconds:F2}s");
                         sb.AppendLine($"    Log File URL             : {ApiBase}/logs/{ShokoRelayConstants.TaskPlexImagesSync}-report.log");
                     }
+                    if (r.TrashElapsed.HasValue)
+                    {
+                        sb.AppendLine($"  - Empty Plex Trash         : {r.TrashElapsed.Value.TotalSeconds:F2}s");
+                        foreach (var msg in r.TrashMessages ?? [])
+                            sb.AppendLine($"    -> {msg}");
+                    }
                 },
                 async () =>
                 {
@@ -326,10 +336,26 @@ public class PlexController(
                         swImages.Stop();
                         imageSyncElapsed = swImages.Elapsed;
                     }
+
+                    TimeSpan? trashElapsed = null;
+                    var trashMessages = new List<string>();
+                    int threshold = Settings.Advanced.EmptyPlexTrashThreshold;
+                    if (threshold > 0)
+                    {
+                        var swTrash = Stopwatch.StartNew();
+                        foreach (var target in PlexLibrary.GetConfiguredTargets())
+                        {
+                            var (_, _, msg) = await PlexLibrary.EmptyTrashWithSafetyAsync(target, threshold, false, CancellationToken.None).ConfigureAwait(false);
+                            trashMessages.Add($"[{target.Title}] {msg}");
+                        }
+                        swTrash.Stop();
+                        trashElapsed = swTrash.Elapsed;
+                    }
+
                     sw.Stop();
                     MarkPlexAutomationRunNow();
 
-                    return new PlexAutomationRunResult(sw.Elapsed, swCollections.Elapsed, collectionRes, swRatings.Elapsed, ratingRes, imageSyncElapsed, imageSyncRes);
+                    return new PlexAutomationRunResult(sw.Elapsed, swCollections.Elapsed, collectionRes, swRatings.Elapsed, ratingRes, imageSyncElapsed, imageSyncRes, trashElapsed, trashMessages);
                 },
                 SyncHelper.SyncLock
             );

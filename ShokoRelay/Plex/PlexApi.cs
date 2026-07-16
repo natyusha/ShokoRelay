@@ -124,6 +124,14 @@ public class PlexMetadataItem
     [JsonPropertyName("Collection")]
     public List<PlexTag>? Collection { get; set; }
 
+    /// <summary>Grandparent (Show) title.</summary>
+    [JsonPropertyName("grandparentTitle")]
+    public string? GrandparentTitle { get; set; }
+
+    /// <summary>Parent (Season) index.</summary>
+    [JsonPropertyName("parentIndex")]
+    public int? ParentIndex { get; set; }
+
     /// <summary>True if the collection is a smart collection.</summary>
     [JsonPropertyName("smart")]
     public string? Smart { get; set; }
@@ -150,5 +158,21 @@ public record PlexTag([property: JsonPropertyName("tag")] string? Tag);
 /// <summary>Embedded user-specific information within a Plex metadata item.</summary>
 /// <param name="LastViewedAt">Unix timestamp of when this user last viewed the item.</param>
 public record PlexMetadataUser([property: JsonPropertyName("lastViewedAt")] long? LastViewedAt);
+
+/// <summary>Plex media element containing physical part information.</summary>
+public class PlexMedia
+{
+    /// <summary>List of physical file parts.</summary>
+    [JsonPropertyName("Part")]
+    public List<PlexPart>? Part { get; set; }
+}
+
+/// <summary>Plex physical file part.</summary>
+public class PlexPart
+{
+    /// <summary>The absolute file path.</summary>
+    [JsonPropertyName("file")]
+    public string? File { get; set; }
+}
 
 #endregion

@@ -129,6 +129,7 @@ public class ShokoRelay : BackgroundService
     private readonly ICriticRatingService? _criticRatingService;
     private readonly IMetadataService _metadataService;
     private readonly IImageSyncService? _imageSyncService;
+    private readonly PlexClient? _plexClient;
 
     private static DateTime? s_lastImportRunUtc;
     private static DateTime? s_lastPlexAutomationUtc;
@@ -153,6 +154,7 @@ public class ShokoRelay : BackgroundService
     /// <param name="collectionService">Service for managing Plex collections.</param>
     /// <param name="criticRatingService">Service for applying audience ratings to Plex.</param>
     /// <param name="imageSyncService">Service for syncing thumbnails from Plex to Shoko.</param>
+    /// <param name="plexClient">Client used for interacting with configured Plex server instances.</param>
     public ShokoRelay(
         VfsWatcher watcher,
         ConfigProvider configProvider,
@@ -163,7 +165,8 @@ public class ShokoRelay : BackgroundService
         IShokoImportService? shokoImportService = null,
         ICollectionService? collectionService = null,
         ICriticRatingService? criticRatingService = null,
-        IImageSyncService? imageSyncService = null
+        IImageSyncService? imageSyncService = null,
+        PlexClient? plexClient = null
     )
     {
         _watcher = watcher;
@@ -176,6 +179,7 @@ public class ShokoRelay : BackgroundService
         _collectionService = collectionService;
         _criticRatingService = criticRatingService;
         _imageSyncService = imageSyncService;
+        _plexClient = plexClient;
         s_logger.Info($"ShokoRelay v{ShokoRelayConstants.Version} initialized");
     }
 
@@ -321,6 +325,12 @@ public class ShokoRelay : BackgroundService
                                     await _criticRatingService.ApplyRatingsAsync(null, ct).ConfigureAwait(false);
                                 if (settings.Advanced.EnableImageSync && _imageSyncService != null)
                                     await _imageSyncService.SyncImagesAsync(cancellationToken: ct).ConfigureAwait(false);
+                                int threshold = settings.Advanced.EmptyPlexTrashThreshold;
+                                if (threshold > 0 && _plexClient != null)
+                                {
+                                    foreach (var target in _plexClient.GetConfiguredTargets())
+                                        await _plexClient.EmptyTrashWithSafetyAsync(target, threshold, false, ct).ConfigureAwait(false);
+                                }
                             }
                             finally
                             {

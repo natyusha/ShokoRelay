@@ -144,25 +144,51 @@ public class ShokoController(
 
     #region Automation
 
-    /// <summary>Removes records for video files that no longer exist on disk from the Shoko database and Anidb MyList.</summary>
+    /// <summary>Result data for a Purge Missing Files operation.</summary>
+    /// <param name="DryRun">Whether the operation was a dry run.</param>
+    /// <param name="TrashOnly">Whether only Plex trash was processed.</param>
+    /// <param name="Processed">Count of Shoko database records removed.</param>
+    /// <param name="Removed">List of Shoko file paths removed.</param>
+    /// <param name="PlexRemoved">List of Plex trashed item display names.</param>
+    /// <param name="PlexMessages">List of Plex trash status messages.</param>
+    public record PurgeMissingResult(bool DryRun, bool TrashOnly, int Processed, List<string> Removed, List<string> PlexRemoved, List<string> PlexMessages);
+
+    /// <summary>Removes records for video files that no longer exist on disk from Shoko, or safely empties Plex trash.</summary>
     /// <param name="dryRun">Whether to skip writes.</param>
-    /// <returns>A task representing the result of the removal operation.</returns>
+    /// <param name="trashOnly">If true, skips Shoko database purging and only evaluates/empties Plex trash.</param>
+    /// <param name="threshold">Optional percentage threshold override (1-100) for Plex trash empty.</param>
+    /// <returns>A task representing the result of the purge/empty operation.</returns>
     [Route("shoko/purge-missing")]
     [HttpGet]
     [HttpPost]
-    public Task<IActionResult> PurgeMissingFiles([FromQuery] bool dryRun = true) =>
+    public Task<IActionResult> PurgeMissingFiles([FromQuery] bool dryRun = true, [FromQuery] bool trashOnly = false, [FromQuery] int? threshold = null) =>
         ExecuteTrackedTaskAsync(
             ShokoRelayConstants.TaskShokoPurgeMissing,
-            (sb, r) => LogHelper.BuildPurgeMissingReport(sb, r.DryRun, r.Removed),
+            (sb, r) => LogHelper.BuildPurgeMissingReport(sb, r.DryRun, r.Removed, r.PlexRemoved, r.PlexMessages),
             async () =>
             {
-                var removed = await shokoImportService.PurgeMissingFilesAsync(dryRun).ConfigureAwait(false);
-                return new
+                List<string> removed = [];
+                if (!trashOnly)
+                    removed = [.. await shokoImportService.PurgeMissingFilesAsync(dryRun).ConfigureAwait(false)];
+
+                var plexRemoved = new List<string>();
+                var plexMessages = new List<string>();
+                int effThreshold = threshold ?? Settings.Advanced.EmptyPlexTrashThreshold;
+
+                if (effThreshold > 0 && PlexLibrary.IsEnabled)
                 {
-                    DryRun = dryRun,
-                    Processed = removed.Count,
-                    Removed = removed,
-                };
+                    foreach (var target in PlexLibrary.GetConfiguredTargets())
+                    {
+                        var (_, trashed, message) = await PlexLibrary.EmptyTrashWithSafetyAsync(target, effThreshold, dryRun).ConfigureAwait(false);
+                        plexMessages.Add($"[{target.Title}] {message}");
+                        if (trashed.Count > 0)
+                            plexRemoved.AddRange(trashed.Select(i => $"[{target.Title}] {i}"));
+                    }
+                }
+                else if (trashOnly)
+                    plexMessages.Add("Empty Plex Trash is disabled. Configure a threshold in Advanced Settings or pass 'threshold=N'.");
+
+                return new PurgeMissingResult(dryRun, trashOnly, removed.Count, removed, plexRemoved, plexMessages);
             },
             VfsShared.VfsLock
         );

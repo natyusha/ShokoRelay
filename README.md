@@ -157,6 +157,7 @@ com.plexapp.agents.shokorelay
 - `Plex Int.` An input which will schedule [Generate Collections](#collection-generation), [Apply Critic Ratings](#critic-rating-application), and [Sync Plex Images](#plex-image-sync) every `N` hours
   - These tasks will run on individual series automatically when new episodes are added regardless of the configured interval
   - An interval of 24-hours or above is recommended as Shoko rarely updates this information for old series
+  - This will also safely empty any trash in the managed Plex libraries if `Empty Plex Trash Threshold` is configured
   - _Requires Plex authentication_
 - `Sync Int.` An input which will schedule watched state syncing from Plex to Shoko every `N` hours
   - This includes ratings (votes) and progress if `Include Ratings` or `Include Progress` are enabled respectively in the `Quick Actions > Sync Menu` (Sync Watched States Menu)
@@ -220,6 +221,7 @@ Applying a hyphenated suffix to the image that matches Plex's naming conventions
   - This includes any users configured under `Extra Plex Users` in the "Plex Authentication" section unless the `Sync Users` setting excludes them
   - _Requires Plex authentication_
 - `Purge Missing` A button which will remove files that are no longer present from Shoko
+  - If `Empty Plex Trash Threshold` is configured under Advanced Settings, this will safely empty the trash for your Plex libraries
   - Unlike the "Remove Missing Files" action in Shoko's WebUI this will remove all traces of the files from the Shoko DB
   - This will also remove files that are in folders which the plugin has told Shoko to ignore
   - Entries will _always_ be removed from the AniDB MyList as well
