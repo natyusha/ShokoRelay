@@ -259,9 +259,9 @@ internal static class VfsShared
 
         for (int start = 0, end; start < path.Length; start = end + 1)
         {
-            end = path.IndexOfAny([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], start);
-            if (end < 0)
-                end = path.Length;
+            int relEnd = path.AsSpan(start).IndexOfAny(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            end = relEnd < 0 ? path.Length : start + relEnd;
+
             if (end > start)
             {
                 var seg = path.AsSpan(start, end - start);

@@ -414,7 +414,7 @@ internal static class AnimeThemesHelper
         string title = string.IsNullOrWhiteSpace(lookup.SongTitle) ? "" : " ❯ " + lookup.SongTitle;
         string slugTag = FormatSlugTag(slugSuffix);
 
-        var artistList = !string.IsNullOrWhiteSpace(lookup.ArtistName) ? lookup.ArtistName.Split([" / "], StringSplitOptions.RemoveEmptyEntries) : [];
+        var artistList = !string.IsNullOrWhiteSpace(lookup.ArtistName) ? lookup.ArtistName.Split(" / ", StringSplitOptions.RemoveEmptyEntries) : [];
         string artistDisplay = artistList.Length switch
         {
             >= 4 => "Various Artists",

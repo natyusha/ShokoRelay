@@ -549,7 +549,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
     private void PerformGlobalRootCleanup(string rootName, List<RootCleanupDetails> cleanupDetails)
     {
         s_logger.Info("VFS: Performing global root cleanup...");
-        List<string> allRoots = [.. (videoService.GetAllManagedFolders() ?? []).Select(f => f.Path).Where(p => !string.IsNullOrEmpty(p)).Distinct()];
+        List<string> allRoots = [.. (videoService.GetAllManagedFolders() ?? []).Select(f => f.Path).Where(p => !string.IsNullOrEmpty(p)).Distinct(VfsShared.PathComparer)];
 
         foreach (var root in allRoots)
         {
@@ -623,7 +623,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
     /// <param name="onError">Callback to invoke if an exception occurs during pruning.</param>
     private void PruneSeries(string rootFolderName, int folderId, Action<string> onError)
     {
-        List<string> roots = [.. (videoService.GetAllManagedFolders() ?? []).Select(f => f.Path).Where(p => !string.IsNullOrEmpty(p)).Distinct()];
+        List<string> roots = [.. (videoService.GetAllManagedFolders() ?? []).Select(f => f.Path).Where(p => !string.IsNullOrEmpty(p)).Distinct(VfsShared.PathComparer)];
 
         foreach (var root in roots)
         {
