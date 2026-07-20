@@ -1,5 +1,3 @@
-using NLog;
-
 namespace ShokoRelay.Plex;
 
 /// <summary>Provides utilities for working with Plex collections.</summary>

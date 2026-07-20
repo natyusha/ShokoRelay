@@ -4,7 +4,6 @@ using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Xml;
-using NLog;
 
 namespace ShokoRelay.Plex;
 

@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using NLog;
 using Shoko.Abstractions.Video;
 using Shoko.Abstractions.Video.Enums;
 

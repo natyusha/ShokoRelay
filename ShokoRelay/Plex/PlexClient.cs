@@ -1,5 +1,3 @@
-using NLog;
-
 namespace ShokoRelay.Plex;
 
 /// <summary>HTTP client wrapper that communicates with one or more Plex servers.</summary>

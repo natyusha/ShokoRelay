@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Globalization;
-using NLog;
 
 namespace ShokoRelay.Services;
 

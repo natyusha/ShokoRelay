@@ -38,6 +38,7 @@
 
   <!-- Global using directives for things that are used in 20 files or more across the project -->
   <ItemGroup>
+    <Using Include="NLog" />
     <Using Include="Shoko.Abstractions.Metadata.Shoko" />
     <Using Include="Shoko.Abstractions.Metadata.Services" />
     <Using Include="ShokoRelay.Config" />

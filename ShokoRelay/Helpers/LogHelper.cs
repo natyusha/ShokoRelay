@@ -1,5 +1,4 @@
 using System.Text;
-using NLog;
 using ShokoRelay.AnimeThemes;
 using ShokoRelay.Services;
 using ShokoRelay.Sync;

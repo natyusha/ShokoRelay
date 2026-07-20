@@ -1,4 +1,3 @@
-using NLog;
 using Shoko.Abstractions.Video.Services;
 using ShokoRelay.Vfs;
 

@@ -1,7 +1,6 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using NLog;
 using Shoko.Abstractions.Core.Services;
 using Shoko.Abstractions.Plugin;
 using Shoko.Abstractions.Plugin.Models;

@@ -1,5 +1,4 @@
 using System.Globalization;
-using NLog;
 using Shoko.Abstractions.User.Services;
 
 namespace ShokoRelay.Sync;

@@ -1,5 +1,3 @@
-using NLog;
-
 namespace ShokoRelay.Sync;
 
 #region Data Models

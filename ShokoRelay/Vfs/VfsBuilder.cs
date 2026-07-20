@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using NLog;
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Video;
 using Shoko.Abstractions.Video.Services;

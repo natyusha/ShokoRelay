@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using NLog;
 using Shoko.Abstractions.Video.Events;
 using Shoko.Abstractions.Video.Services;
 using ShokoRelay.AnimeThemes;

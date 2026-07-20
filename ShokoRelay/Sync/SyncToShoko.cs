@@ -1,4 +1,3 @@
-using NLog;
 using Shoko.Abstractions.User.Enums;
 using Shoko.Abstractions.User.Services;
 using Shoko.Abstractions.User.Update;
