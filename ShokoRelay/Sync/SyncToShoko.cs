@@ -90,6 +90,36 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
 
             foreach (var (uName, items, _) in userBuckets)
             {
+                // Pre-resolve and filter which episodes will actually be marked watched to group by SeriesID
+                var epsToMark = new List<IShokoEpisode>();
+                foreach (var item in items)
+                {
+                    if (item.LibrarySectionId.HasValue && item.LibrarySectionId != target.SectionId)
+                        continue;
+                    if (string.IsNullOrWhiteSpace(item.Guid))
+                        continue;
+
+                    if (!episodeCache.TryGetValue(item.Guid, out var ep))
+                    {
+                        var epId = PlexHelper.ExtractShokoEpisodeIdFromGuid(item.Guid);
+                        ep = epId.HasValue ? metadataService.GetShokoEpisodeByID(epId.Value) : null;
+                        episodeCache[item.Guid] = ep;
+                    }
+
+                    if (ep == null || appliedIds.Contains(ep.ID))
+                        continue;
+
+                    var epUserData = userDataService.GetEpisodeUserData(ep, defaultUser);
+                    bool alreadyWatched = epUserData?.LastPlayedAt != null;
+                    bool isWatchedInPlex = item.ViewCount > 0;
+
+                    if (isWatchedInPlex && !alreadyWatched && (ep.VideoList?.Count > 0))
+                        epsToMark.Add(ep);
+                }
+
+                var epsToMarkGrouped = epsToMark.GroupBy(e => e.SeriesID).ToDictionary(g => g.Key, g => g.ToList());
+                var processedEpsToMarkCount = new Dictionary<int, int>();
+
                 foreach (var item in items)
                 {
                     if (item.LibrarySectionId.HasValue && item.LibrarySectionId != target.SectionId)
@@ -143,7 +173,16 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                     if (wouldMark)
                     {
                         if (!dryRun)
-                            await userDataService.SetEpisodeWatchedStatus(ep, defaultUser, true, watchedAt, videoReason: VideoUserDataSaveReason.UserInteraction).ConfigureAwait(false);
+                        {
+                            int currentCount = processedEpsToMarkCount.TryGetValue(ep.SeriesID, out int count) ? count + 1 : 1;
+                            processedEpsToMarkCount[ep.SeriesID] = currentCount;
+
+                            bool isLastInSeries = epsToMarkGrouped.TryGetValue(ep.SeriesID, out var list) && currentCount == list.Count;
+
+                            await userDataService
+                                .SetEpisodeWatchedStatus(ep, defaultUser, true, watchedAt, videoReason: VideoUserDataSaveReason.UserInteraction, noVideoPropagation: false, updateStatsNow: isLastInSeries)
+                                .ConfigureAwait(false);
+                        }
                         appliedIds.Add(ep.ID);
                         result = SyncHelper.IncMarkedWatched(result, result.PerUser, uName);
                         s_logger.Info("WatchedSyncService: {0}Plex -> Shoko: {1} marked {2} S{3}E{4}", logPrefix, uName, ep.Series?.PreferredTitle?.Value, ep.SeasonNumber, ep.EpisodeNumber);
