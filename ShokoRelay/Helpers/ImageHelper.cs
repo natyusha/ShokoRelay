@@ -188,13 +188,7 @@ public static class ImageHelper
                     Url = GetImageUrl(i, forceRemote: addEveryImage),
                 });
 
-        return
-        [
-            .. Project(ImageEntityType.Backdrop, "background"),
-            .. Project(ImageEntityType.Logo, "clearLogo"),
-            .. Project(ImageEntityType.Primary, "coverPoster"),
-            .. Project(ImageEntityType.Primary, "snapshot"),
-        ];
+        return [.. Project(ImageEntityType.Backdrop, "background"), .. Project(ImageEntityType.Logo, "clearLogo"), .. Project(ImageEntityType.Primary, "coverPoster")];
     }
 
     /// <summary>Create a set of cover poster images specifically for a season entry.</summary>
@@ -231,6 +225,26 @@ public static class ImageHelper
                     },
                 ]
             : [.. GenerateImageArray(seriesImages, alt, addEveryImage, imageLanguage).Where(i => i.Type == "coverPoster")];
+    }
+
+    /// <summary>Create a set of snapshot images specifically for an episode entry.</summary>
+    /// <param name="images">The object providing images.</param>
+    /// <param name="alt">Alt text for entries.</param>
+    /// <param name="addEveryImage">Whether to include all images.</param>
+    /// <param name="imageLanguage">The prioritized language setting string.</param>
+    /// <returns>An array of ImageInfo objects.</returns>
+    public static ImageInfo[] BuildSnapshotArray(IWithImages images, string alt, bool addEveryImage, string imageLanguage)
+    {
+        return
+        [
+            .. FilterImagesByLanguage(images.GetAvailableImages(ImageEntityType.Backdrop), imageLanguage, addEveryImage)
+                .Select(i => new ImageInfo
+                {
+                    Alt = alt,
+                    Type = "snapshot",
+                    Url = GetImageUrl(i, forceRemote: addEveryImage),
+                }),
+        ];
     }
 
     #endregion

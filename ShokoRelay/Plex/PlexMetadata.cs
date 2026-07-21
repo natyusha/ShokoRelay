@@ -162,7 +162,7 @@ public class PlexMetadata(IMetadataService metadataService)
             ["index"]                 = seasonNum,
 
             // Force addEveryImage to true if TMDB season posters are present, otherwise fallback to the configuration. (Remove this once Shoko's WebUI supports selecting the preferred poster)
-            ["Image"]                 = ImageHelper.BuildCoverPosterArray(images, seasonTitle, posters != null || Settings.AddEveryImage, Settings.TmdbImageLanguage, posters).ToArray(),
+            ["Image"]                 = ImageHelper.BuildCoverPosterArray(images, seasonTitle, posters != null || Settings.AddEveryImage, Settings.TmdbImageLanguage, posters),
             ["Guid"]                  = BuildSeasonXrefGuidArray(tmdbSeason),
             //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
             // csharpier-ignore-end
@@ -239,7 +239,7 @@ public class PlexMetadata(IMetadataService metadataService)
             ["grandparentArt"]        = seriesImages.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage),
             ["parentIndex"]           = mapped.Season,
 
-            ["Image"]                 = Settings.TmdbThumbnails ? [.. ImageHelper.GenerateImageArray(images, epTitle, Settings.AddEveryImage, Settings.TmdbImageLanguage).Where(img => img.Type == "snapshot")] : Array.Empty<ImageInfo>(),
+            ["Image"]                 = Settings.TmdbThumbnails ? ImageHelper.BuildSnapshotArray(images, epTitle, Settings.AddEveryImage, Settings.TmdbImageLanguage) : [],
             ["Guid"]                  = BuildEpisodeXrefGuidArray(ep, tmdbEpisode),
             //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
             //["Role"]                = CastHelper.GetCastAndCrew(ep), // Large array not used by Plex clients and present in grandparent series metadata
