@@ -86,72 +86,69 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
             {
                 result.PerUser[uName] = result.PerUser[uName] with { Processed = shokoWatched.Count };
 
-                var plexMap = new Dictionary<int, List<string>>();
+                var plexMap = new Dictionary<int, string>();
                 foreach (var item in unwatched)
                 {
                     var plexEpId = PlexHelper.ExtractShokoEpisodeIdFromGuid(item.Guid);
-                    if (plexEpId.HasValue)
+                    if (plexEpId.HasValue && !string.IsNullOrEmpty(item.RatingKey))
                     {
-                        if (!plexMap.TryGetValue(plexEpId.Value, out var list))
-                            plexMap[plexEpId.Value] = list = [];
-                        list.Add(item.RatingKey ?? "");
+                        // Multiple TMDB episodes can map to a single Shoko episode.
+                        // Plex automatically syncs watched states for items sharing the same physical file, so only a single RatingKey needs to be scrobbled.
+                        plexMap.TryAdd(plexEpId.Value, item.RatingKey);
                     }
                 }
 
                 foreach (var sw in shokoWatched)
                 {
-                    if (!plexMap.TryGetValue(sw.UserData.EpisodeID, out var rKeys))
+                    if (!plexMap.TryGetValue(sw.UserData.EpisodeID, out var rKey))
                         continue;
 
                     matchedGlobal.Add(sw.UserData.EpisodeID);
 
-                    foreach (var rKey in rKeys)
+                    if (!dryRun)
                     {
+                        using var req = plexClient.CreateRequest(HttpMethod.Get, $"/:/scrobble?identifier=com.plexapp.plugins.library&key={rKey}", target.ServerUrl, uToken);
+                        using var resp = await plexClient.HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+                        if (!resp.IsSuccessStatusCode)
+                            continue;
+                    }
+
+                    result = SyncHelper.IncMarkedWatched(result, result.PerUser, uName);
+                    s_logger.Info("WatchedSyncService: {0}Plex <- Shoko: {1} marked ep {2} (Plex Key: {3}) on {4}", logPrefix, uName, sw.UserData.EpisodeID, rKey, target.ServerUrl);
+                    SyncHelper.AddPerUserChange(
+                        result.PerUserChanges,
+                        uName,
+                        SyncHelper.MakeChange(
+                            uName,
+                            sw.UserData.EpisodeID,
+                            sw.Episode!.Series?.PreferredTitle?.Value,
+                            sw.Episode.PreferredTitle?.Value,
+                            sw.Episode.SeasonNumber,
+                            sw.Episode.EpisodeNumber,
+                            rKey,
+                            sw.Guid,
+                            null,
+                            sw.UserData.LastPlayedAt,
+                            true,
+                            true,
+                            plexUserRating: sw.UserData.UserRating
+                        )
+                    );
+
+                    if (actualVotes && sw.UserData.HasUserRating)
+                    {
+                        result = SyncHelper.IncVotesFound(result);
                         if (!dryRun)
                         {
-                            using var req = plexClient.CreateRequest(HttpMethod.Get, $"/:/scrobble?identifier=com.plexapp.plugins.library&key={rKey}", target.ServerUrl, uToken);
-                            using var resp = await plexClient.HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
-                            if (!resp.IsSuccessStatusCode)
-                                continue;
+                            using var rateReq = plexClient.CreateRequest(
+                                HttpMethod.Get,
+                                $"/:/rate?identifier=com.plexapp.plugins.library&key={rKey}&rating={sw.UserData.UserRating.Value.ToString(CultureInfo.InvariantCulture)}",
+                                target.ServerUrl,
+                                uToken
+                            );
+                            await plexClient.HttpClient.SendAsync(rateReq, cancellationToken).ConfigureAwait(false);
                         }
-
-                        result = SyncHelper.IncMarkedWatched(result, result.PerUser, uName);
-                        s_logger.Info("WatchedSyncService: {0}Plex <- Shoko: {1} marked ep {2} (Plex Key: {3}) on {4}", logPrefix, uName, sw.UserData.EpisodeID, rKey, target.ServerUrl);
-                        SyncHelper.AddPerUserChange(
-                            result.PerUserChanges,
-                            uName,
-                            SyncHelper.MakeChange(
-                                uName,
-                                sw.UserData.EpisodeID,
-                                sw.Episode!.Series?.PreferredTitle?.Value,
-                                sw.Episode.PreferredTitle?.Value,
-                                sw.Episode.SeasonNumber,
-                                sw.Episode.EpisodeNumber,
-                                rKey,
-                                sw.Guid,
-                                null,
-                                sw.UserData.LastPlayedAt,
-                                true,
-                                true,
-                                plexUserRating: sw.UserData.UserRating
-                            )
-                        );
-
-                        if (actualVotes && sw.UserData.HasUserRating)
-                        {
-                            result = SyncHelper.IncVotesFound(result);
-                            if (!dryRun)
-                            {
-                                using var rateReq = plexClient.CreateRequest(
-                                    HttpMethod.Get,
-                                    $"/:/rate?identifier=com.plexapp.plugins.library&key={rKey}&rating={sw.UserData.UserRating.Value.ToString(CultureInfo.InvariantCulture)}",
-                                    target.ServerUrl,
-                                    uToken
-                                );
-                                await plexClient.HttpClient.SendAsync(rateReq, cancellationToken).ConfigureAwait(false);
-                            }
-                            result = SyncHelper.IncVotesUpdated(result);
-                        }
+                        result = SyncHelper.IncVotesUpdated(result);
                     }
                 }
             }
