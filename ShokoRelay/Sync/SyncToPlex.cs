@@ -48,11 +48,12 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
         if (targets.Count == 0)
             return result;
 
-        var shokoWatchedQuery = userDataService.GetEpisodeUserDataForUser(shokoUser).Where(e => e.IsWatched);
+        // Strict null check on LastPlayedAt bypasses false-positive stub records where IsWatched evaluates to true
+        var shokoWatchedQuery = userDataService.GetEpisodeUserDataForUser(shokoUser).Where(e => e.LastPlayedAt != null);
         if (sinceHours > 0)
         {
             var cutoff = DateTime.UtcNow.AddHours(-sinceHours.Value);
-            shokoWatchedQuery = shokoWatchedQuery.Where(e => (e.LastPlayedAt ?? DateTime.MinValue) >= cutoff);
+            shokoWatchedQuery = shokoWatchedQuery.Where(e => e.LastPlayedAt >= cutoff);
         }
 
         var shokoWatched = shokoWatchedQuery
