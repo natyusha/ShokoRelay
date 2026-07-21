@@ -15,6 +15,34 @@
   "image_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-logo.png",
   "releases": [
     {
+      "version": "0.16.5",
+      "tag": "v0.16.5",
+      "source_revision": "eda0259631f7ce54faa5546b8e1973eb3bef0267",
+      "released_at": "2026-07-21T20:38:45Z",
+      "channel": "Dev",
+      "release_notes": "**Changes:**\r\n- Fix episode snapshot images array being incorrectly mapped to Primary instead of Backdrop images\r\n- Prevent duplicate API scrobble requests when multiple TMDB episodes map to a single Shoko episode\r\n- Replace unreliable IsWatched property evaluation with a strict LastPlayedAt null check in SyncToPlex.cs\r\n- Optimize watched state batch syncing by passing updateStatsNow: false to intermediate SetEpisodeWatchedStatus calls\r\n- Pass VfsShared.PathComparer to Distinct() operations for paths in VfsBuilder and SourceLinkService to correctly handle Windows case-insensitivity\r\n- Switch from .sln to .slnx\r\n- Add NLog to global using directives\r\n- Bump Shoko.Abstractions to 6.0.0-alpha.75\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.16.4...v0.16.5",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.16.5/ShokoRelay-v0.16.5-dev_linux-arm64.zip",
+          "checksum": "7e854818f581f8c0b2e289d12c0b4832f57a26b1eb8182980f1a32e9cb433960"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.16.5/ShokoRelay-v0.16.5-dev_linux-x64.zip",
+          "checksum": "59a56d2f5193c04a8e17da3b87509ebdd4b03936de924b36053db8ee9b20f00c"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.16.5/ShokoRelay-v0.16.5-dev_win-x64.zip",
+          "checksum": "14b77f17048b7a290d4183a2a26a86c305f12bfccaa8c89c9b315ca2657f0163"
+        }
+      ]
+    },
+    {
       "version": "0.16.4",
       "tag": "v0.16.4",
       "source_revision": "bf1bbcebb07b7b1486ce8a1d90bd3a4ea104fe90",
