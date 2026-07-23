@@ -80,16 +80,16 @@ public class ServiceRegistration : IPluginServiceRegistration
 /// <summary>Plugin entry point and descriptor for Shoko Server.</summary>
 public class Plugin : IPlugin
 {
-    /// <summary>Unique plugin ID.</summary>
+    /// <inheritdoc/>
     public Guid ID => new(ShokoRelayConstants.PluginId);
 
-    /// <summary>Plugin display name.</summary>
+    /// <inheritdoc/>
     public string Name => ShokoRelayConstants.Name;
 
-    /// <summary>Plugin description.</summary>
+    /// <inheritdoc/>
     public string? Description => ShokoRelayConstants.Description;
 
-    /// <summary>Plugin thumbnail resource.</summary>
+    /// <inheritdoc/>
     public string? EmbeddedThumbnailResourceName => "ShokoRelay.Assets.shoko-relay-logo.png";
 
     /// <inheritdoc/>

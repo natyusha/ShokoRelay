@@ -18,8 +18,8 @@
 @font-face {
   font-style: normal;
   font-weight: 200;
-  src: url("../fonts/iosevka-nn-extralight.subset.woff2") format("woff2");
-  font-family: "Iosevka NN Extralight";
+  src: url("../fonts/iosevka-nn-condensed-extralight.subset.woff2") format("woff2");
+  font-family: "Iosevka NN Condensed Extralight";
   font-display: swap;
 }
 #brand-header {
@@ -51,7 +51,7 @@
   overflow: hidden;
   font-size: 6rem;
   line-height: 1.1;
-  font-family: "Iosevka NN Extralight";
+  font-family: "Iosevka NN Condensed Extralight";
   letter-spacing: -0.06em;
   user-select: none;
   text-overflow: ellipsis;
