@@ -48,7 +48,12 @@ public class ConfigProvider
             if (HttpContextAccessor?.HttpContext is { } ctx)
             {
                 var request = ctx.Request;
-                var detectedUrl = $"{request.Scheme}://{request.Host}{request.PathBase}".TrimEnd('/');
+
+                // Inspect standard proxy headers to accurately detect HTTPS scheme and external hostname
+                var scheme = request.Headers["X-Forwarded-Proto"].FirstOrDefault()?.Split(',')[0].Trim() ?? (request.IsHttps ? "https" : request.Scheme);
+                var host = request.Headers["X-Forwarded-Host"].FirstOrDefault()?.Split(',')[0].Trim() ?? request.Host.ToString();
+
+                var detectedUrl = $"{scheme}://{host}{request.PathBase}".TrimEnd('/');
                 if (settings.Advanced.ShokoServerUrlContext != detectedUrl)
                 {
                     settings.Advanced.ShokoServerUrlContext = detectedUrl;
