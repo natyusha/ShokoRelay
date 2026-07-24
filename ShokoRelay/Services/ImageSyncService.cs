@@ -76,7 +76,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
             var processedInRun = new HashSet<int>();
             var updatedCache = false;
 
-            // Sync Plex Episode Screenshots
+            // Sync Plex Episode Screenshots & Local Episode Thumbnails
             if (targets.Count > 0)
             {
                 foreach (var target in targets)
@@ -106,53 +106,67 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
 
                                 // Check if a local physical episode thumbnail exists on disk alongside the video file
                                 var localEpisodeThumb = FindLocalEpisodeThumbnail(episode);
-                                if (localEpisodeThumb != null)
+                                var (localExists, localLength) = localEpisodeThumb != null ? GetFileMetadata(localEpisodeThumb) : (false, 0L);
+                                var cacheKeyLocal = episode.ID.ToString();
+                                var preferredBackdropLocal = episode.GetAvailableImages(ImageEntityType.Backdrop).FirstOrDefault(i => i.IsPreferred);
+
+                                if (localExists)
                                 {
-                                    var (exists, length) = GetFileMetadata(localEpisodeThumb);
-                                    if (exists)
+                                    processed++;
+                                    string? localCacheVal = cache.GetValueOrDefault(cacheKeyLocal);
+
+                                    var (skipUpload, newCacheVal) = EvaluateLocalImageCache(localCacheVal, localLength, localEpisodeThumb!, preferredBackdropLocal);
+
+                                    if (skipUpload)
                                     {
-                                        processed++;
-                                        var cacheKeyLocal = episode.ID.ToString();
-                                        var preferredBackdropLocal = episode.GetAvailableImages(ImageEntityType.Backdrop).FirstOrDefault(i => i.IsPreferred);
-                                        string? localCacheVal = cache.GetValueOrDefault(cacheKeyLocal);
-
-                                        var (skipUpload, newCacheVal) = EvaluateLocalImageCache(localCacheVal, length, localEpisodeThumb, preferredBackdropLocal);
-
-                                        if (skipUpload)
+                                        if (localCacheVal != newCacheVal)
                                         {
-                                            if (localCacheVal != newCacheVal)
-                                            {
-                                                cache[cacheKeyLocal] = newCacheVal;
-                                                updatedCache = true;
-                                            }
-                                            skipped++;
-                                            continue;
-                                        }
-
-                                        s_logger.Debug("ImageSyncService: Local thumbnail for episode {0} (ID: {1}) changed or missing -> Purging stale and uploading", epLogName, episode.ID);
-                                        await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
-
-                                        try
-                                        {
-                                            UploadAndPreferLocalImage(localEpisodeThumb, episode, ImageEntityType.Backdrop, userSubmitted: false);
-
-                                            uploaded++;
-                                            uploadedDetails.Add($"[Local Episode Thumb] {episode.Series?.PreferredTitle?.Value} S{episode.SeasonNumber}E{episode.EpisodeNumber}");
                                             cache[cacheKeyLocal] = newCacheVal;
                                             updatedCache = true;
-                                            s_logger.Info("ImageSyncService: Successfully uploaded and preferred local thumbnail for episode {0} (ID: {1})", epLogName, episode.ID);
                                         }
-                                        catch (OperationCanceledException)
-                                        {
-                                            throw;
-                                        }
-                                        catch (Exception ex)
-                                        {
-                                            errors++;
-                                            errorsList.Add($"Failed to process local thumbnail for episode {epLogName}: {ex.Message}");
-                                            s_logger.Warn(ex, "ImageSyncService: Failed to upload local thumbnail for episode {0} (ID: {1})", epLogName, episode.ID);
-                                        }
+                                        skipped++;
                                         continue;
+                                    }
+
+                                    if (localCacheVal == null)
+                                        s_logger.Debug("ImageSyncService: New local thumbnail found for episode {0} (ID: {1}) -> Uploading", epLogName, episode.ID);
+                                    else
+                                        s_logger.Debug("ImageSyncService: Local thumbnail for episode {0} (ID: {1}) changed -> Purging stale and uploading", epLogName, episode.ID);
+
+                                    await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
+
+                                    try
+                                    {
+                                        UploadAndPreferLocalImage(localEpisodeThumb!, episode, ImageEntityType.Backdrop, userSubmitted: false);
+
+                                        uploaded++;
+                                        uploadedDetails.Add($"[Local Episode Thumb] {episode.Series?.PreferredTitle?.Value} S{episode.SeasonNumber}E{episode.EpisodeNumber}");
+                                        cache[cacheKeyLocal] = newCacheVal;
+                                        updatedCache = true;
+                                        s_logger.Info("ImageSyncService: Successfully uploaded and preferred local thumbnail for episode {0} (ID: {1})", epLogName, episode.ID);
+                                    }
+                                    catch (OperationCanceledException)
+                                    {
+                                        throw;
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        errors++;
+                                        errorsList.Add($"Failed to process local thumbnail for episode {epLogName}: {ex.Message}");
+                                        s_logger.Warn(ex, "ImageSyncService: Failed to upload local thumbnail for episode {0} (ID: {1})", epLogName, episode.ID);
+                                    }
+                                    continue;
+                                }
+                                else if (preferredBackdropLocal != null && preferredBackdropLocal.Source is DataSource.User or DataSource.LocallyGenerated)
+                                {
+                                    // Local thumbnail file was removed from disk -> Purge the user/locally-generated image from Shoko
+                                    // Local cache entries start with the file length (digits). Plex cache entries start with a relative path ('/library/...').
+                                    if (cache.TryGetValue(cacheKeyLocal, out var cachedVal) && cachedVal.Length > 0 && char.IsAsciiDigit(cachedVal[0]))
+                                    {
+                                        cache.TryRemove(cacheKeyLocal, out _);
+                                        s_logger.Info("ImageSyncService: Local thumbnail for episode {0} (ID: {1}) no longer present on disk -> Purging from Shoko", epLogName, episode.ID);
+                                        await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
+                                        updatedCache = true;
                                     }
                                 }
 
@@ -287,19 +301,27 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                         continue;
 
                     var groupPosterFile = PlexHelper.FindCollectionImagePathByGroup(seriesInGroup, group.ID, "", metadataService);
-                    if (string.IsNullOrEmpty(groupPosterFile))
-                        continue;
+                    var (exists, length) = !string.IsNullOrEmpty(groupPosterFile) ? GetFileMetadata(groupPosterFile) : (false, 0L);
 
-                    var (exists, length) = GetFileMetadata(groupPosterFile);
-                    if (!exists)
-                        continue;
-
-                    processed++;
                     var cacheKey = "c" + group.ID;
                     var preferredPoster = group.GetAvailableImages(ImageEntityType.Primary).FirstOrDefault(i => i.IsPreferred);
-                    string? cacheVal = cache.GetValueOrDefault(cacheKey);
 
-                    var (skipUpload, newCacheVal) = EvaluateLocalImageCache(cacheVal, length, groupPosterFile, preferredPoster);
+                    if (!exists)
+                    {
+                        bool hadCache = cache.TryRemove(cacheKey, out _);
+                        if (hadCache || (preferredPoster != null && preferredPoster.Source is DataSource.User or DataSource.LocallyGenerated))
+                        {
+                            s_logger.Info("ImageSyncService: Local collection poster for group '{0}' (ID: {1}) no longer present on disk -> Purging from Shoko", group.PreferredTitle?.Value, group.ID);
+                            await PurgeEntityImagesAsync(group, ImageEntityType.Primary, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
+                            updatedCache = true;
+                        }
+                        continue;
+                    }
+
+                    processed++;
+                    var cacheVal = cache.GetValueOrDefault(cacheKey);
+
+                    var (skipUpload, newCacheVal) = EvaluateLocalImageCache(cacheVal, length, groupPosterFile!, preferredPoster);
 
                     if (skipUpload)
                     {
@@ -312,12 +334,16 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                         continue;
                     }
 
-                    s_logger.Debug("ImageSyncService: File changed for collection poster '{0}' (ID: {1}) -> Purging stale poster", group.PreferredTitle?.Value, group.ID);
+                    if (cacheVal == null)
+                        s_logger.Debug("ImageSyncService: New local file found for collection poster '{0}' (ID: {1}) -> Uploading", group.PreferredTitle?.Value, group.ID);
+                    else
+                        s_logger.Debug("ImageSyncService: File changed for collection poster '{0}' (ID: {1}) -> Purging stale poster and uploading", group.PreferredTitle?.Value, group.ID);
+
                     await PurgeEntityImagesAsync(group, ImageEntityType.Primary, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
 
                     s_logger.Trace("ImageSyncService: Uploading local collection poster for group '{0}' (ID: {1})", group.PreferredTitle?.Value, group.ID);
 
-                    UploadAndPreferLocalImage(groupPosterFile, group, ImageEntityType.Primary, userSubmitted: true);
+                    UploadAndPreferLocalImage(groupPosterFile!, group, ImageEntityType.Primary, userSubmitted: true);
 
                     uploaded++;
                     uploadedDetails.Add($"[Collection Poster] {group.PreferredTitle?.Value}");
@@ -393,12 +419,12 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                 )
                 .ConfigureAwait(false);
 
-            if (updatedCache)
+            if (updatedCache || cacheModified == 1)
                 SaveCache(cache);
 
             sw.Stop();
-            s_logger.Info("ImageSyncService: Finished synchronization -> uploaded {0} new images to Shoko in {1}ms", uploaded, sw.ElapsedMilliseconds);
-            return new ImageSyncResult(processed, uploaded, skipped, errors, uploadedDetails, errorsList, sw.Elapsed);
+            s_logger.Info("ImageSyncService: Finished synchronization -> uploaded {0} new images to Shoko in {1}ms", u, sw.ElapsedMilliseconds);
+            return new ImageSyncResult(p, u, s, e, [.. uploadedBag], [.. errsBag], sw.Elapsed);
         }
         finally
         {
@@ -565,17 +591,24 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                 break;
         }
 
-        if (string.IsNullOrEmpty(foundFile))
-            return (true, false, false, false, false);
-
-        var (exists, length) = GetFileMetadata(foundFile);
+        var (exists, length) = !string.IsNullOrEmpty(foundFile) ? GetFileMetadata(foundFile) : (false, 0L);
         if (!exists)
+        {
+            bool hadCache = cache.TryRemove(cacheKey, out _);
+            var preferredImage = series.GetAvailableImages(imageType).FirstOrDefault(i => i.IsPreferred);
+            if (hadCache || (preferredImage != null && preferredImage.Source is DataSource.User or DataSource.LocallyGenerated))
+            {
+                s_logger.Info("ImageSyncService: Local {0} for series '{1}' (ID: {2}) no longer present on disk -> Purging from Shoko", label, series.PreferredTitle?.Value, series.ID);
+                await PurgeEntityImagesAsync(series, imageType, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
+                return (true, false, false, false, true);
+            }
             return (true, false, false, false, false);
+        }
 
-        var preferredImage = series.GetAvailableImages(imageType).FirstOrDefault(i => i.IsPreferred);
+        var preferredImg = series.GetAvailableImages(imageType).FirstOrDefault(i => i.IsPreferred);
         string? cacheVal = cache.GetValueOrDefault(cacheKey);
 
-        var (skipUpload, newCacheVal) = EvaluateLocalImageCache(cacheVal, length, foundFile, preferredImage);
+        var (skipUpload, newCacheVal) = EvaluateLocalImageCache(cacheVal, length, foundFile!, preferredImg);
 
         if (skipUpload)
         {
@@ -585,14 +618,18 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
             return (true, false, true, false, true);
         }
 
-        s_logger.Debug("ImageSyncService: File changed for series {0} '{1}' (ID: {2}) -> Purging stale image", label, series.PreferredTitle?.Value, series.ID);
+        if (cacheVal == null)
+            s_logger.Debug("ImageSyncService: New local file found for series {0} '{1}' (ID: {2}) -> Uploading", label, series.PreferredTitle?.Value, series.ID);
+        else
+            s_logger.Debug("ImageSyncService: File changed for series {0} '{1}' (ID: {2}) -> Purging stale image and uploading", label, series.PreferredTitle?.Value, series.ID);
+
         await PurgeEntityImagesAsync(series, imageType, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
 
         s_logger.Trace("ImageSyncService: Uploading local series {0} for series '{1}' (ID: {2})", label, series.PreferredTitle?.Value, series.ID);
 
         try
         {
-            UploadAndPreferLocalImage(foundFile, series, imageType, userSubmitted: true);
+            UploadAndPreferLocalImage(foundFile!, series, imageType, userSubmitted: true);
             cache[cacheKey] = newCacheVal;
             return (true, true, false, false, true);
         }
