@@ -15,6 +15,34 @@
   "image_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-logo.png",
   "releases": [
     {
+      "version": "0.16.6",
+      "tag": "v0.16.6",
+      "source_revision": "1b851f2aa16879a62e4fc9a6e33730343a07b3ff",
+      "released_at": "2026-07-24T07:19:06Z",
+      "channel": "Dev",
+      "release_notes": "**Changes:**\r\n- Improve Shoko Server URL auto-detection for reverse proxies via X-Forwarded-Proto and X-Forwarded-Host headers\r\n- Fix Shoko to Plex watched state sync regression for multi episode files\r\n- Switch README.md to 'NN Plugins' master manifest\r\n- Bump Shoko.Abstractions to v6.0.0-alpha.76\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.16.5...v0.16.6",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.16.6/ShokoRelay-v0.16.6-dev_linux-arm64.zip",
+          "checksum": "882232fc4b5ff3ffdfc1a77d08782cf4851a40eb5aa1c2edfd784ed7ba7bd7c3"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.16.6/ShokoRelay-v0.16.6-dev_linux-x64.zip",
+          "checksum": "343e98c79e6e6f8063c569f2970b57d8a422c4bf99eb302e9deefdd6e250c4ae"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.16.6/ShokoRelay-v0.16.6-dev_win-x64.zip",
+          "checksum": "6f8c1324cd3c0bb603e21c06236ea4d74a4a8274771e026331a3cf9fac337380"
+        }
+      ]
+    },
+    {
       "version": "0.16.5",
       "tag": "v0.16.5",
       "source_revision": "eda0259631f7ce54faa5546b8e1973eb3bef0267",
