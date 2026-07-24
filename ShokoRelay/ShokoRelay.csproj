@@ -31,7 +31,7 @@
 
   <ItemGroup>
     <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" Version="10.0.0" ExcludeAssets="runtime" />
-    <PackageReference Include="Shoko.Abstractions" Version="6.0.0-alpha.75" ExcludeAssets="runtime" />
+    <PackageReference Include="Shoko.Abstractions" Version="6.0.0-alpha.76" ExcludeAssets="runtime" />
     <PackageReference Include="NLog" Version="6.1.3" ExcludeAssets="runtime" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
