@@ -102,7 +102,10 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                                 if (episode == null || (allowedSet != null && !allowedSet.Contains(episode.SeriesID)))
                                     continue;
 
-                                var epLogName = $"'{episode.Series?.PreferredTitle?.Value}' S{episode.SeasonNumber}E{episode.EpisodeNumber}";
+                                // Resolve coordinates accurately matching the user's TMDB numbering preference
+                                var prefId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series) : null;
+                                var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
+                                var epLogName = $"'{episode.Series?.PreferredTitle?.Value}' S{coords.Season:D2}E{coords.Episode:D2}";
 
                                 // Check if a local physical episode thumbnail exists on disk alongside the video file
                                 var localEpisodeThumb = FindLocalEpisodeThumbnail(episode);
@@ -140,7 +143,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                                         UploadAndPreferLocalImage(localEpisodeThumb!, episode, ImageEntityType.Backdrop, userSubmitted: false);
 
                                         uploaded++;
-                                        uploadedDetails.Add($"[Local Episode Thumb] {episode.Series?.PreferredTitle?.Value} S{episode.SeasonNumber}E{episode.EpisodeNumber}");
+                                        uploadedDetails.Add($"[Local Episode Thumb] {episode.Series?.PreferredTitle?.Value} S{coords.Season:D2}E{coords.Episode:D2}");
                                         cache[cacheKeyLocal] = newCacheVal;
                                         updatedCache = true;
                                         s_logger.Info("ImageSyncService: Successfully uploaded and preferred local thumbnail for episode {0} (ID: {1})", epLogName, episode.ID);
@@ -265,7 +268,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                                 imageManager.SetPreferredImageForEntity(episode, ImageEntityType.Backdrop, uploadedImage);
 
                                 uploaded++;
-                                uploadedDetails.Add($"[Plex Thumb] {episode.Series?.PreferredTitle?.Value} S{episode.SeasonNumber}E{episode.EpisodeNumber}");
+                                uploadedDetails.Add($"[Plex Thumb] {episode.Series?.PreferredTitle?.Value} S{coords.Season:D2}E{coords.Episode:D2}");
                                 cache[cacheKey] = $"{item.Thumb}|{md5Hex}";
                                 updatedCache = true;
                                 s_logger.Info("ImageSyncService: Successfully uploaded and preferred thumbnail for episode {0} (ID: {1})", epLogName, episode.ID);

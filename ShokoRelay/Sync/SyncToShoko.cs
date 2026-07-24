@@ -185,7 +185,7 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                         }
                         appliedIds.Add(ep.ID);
                         result = SyncHelper.IncMarkedWatched(result, result.PerUser, uName);
-                        s_logger.Info("WatchedSyncService: {0}Plex -> Shoko: {1} marked {2} S{3}E{4}", logPrefix, uName, ep.Series?.PreferredTitle?.Value, ep.SeasonNumber, ep.EpisodeNumber);
+                        s_logger.Info("WatchedSyncService: {0}Plex -> Shoko: {1} marked {2} S{3:D2}E{4:D2}", logPrefix, uName, ep.Series?.PreferredTitle?.Value, item.ParentIndex ?? 0, item.Index ?? 0);
                     }
                     else if (wouldUpdateProgress)
                     {
@@ -203,12 +203,12 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                         appliedIds.Add(ep.ID);
                         result = SyncHelper.IncProgressUpdated(result, result.PerUser, uName);
                         s_logger.Info(
-                            "WatchedSyncService: {0}Plex -> Shoko: {1} updated progress {2} S{3}E{4} to {5}",
+                            "WatchedSyncService: {0}Plex -> Shoko: {1} updated progress {2} S{3:D2}E{4:D2} to {5}",
                             logPrefix,
                             uName,
                             ep.Series?.PreferredTitle?.Value,
-                            ep.SeasonNumber,
-                            ep.EpisodeNumber,
+                            item.ParentIndex ?? 0,
+                            item.Index ?? 0,
                             TimeSpan.FromMilliseconds(item.ViewOffset!.Value)
                         );
                     }
@@ -223,8 +223,8 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                             ep.ID,
                             ep.Series?.PreferredTitle?.Value,
                             ep.PreferredTitle?.Value,
-                            ep.SeasonNumber,
-                            ep.EpisodeNumber,
+                            item.ParentIndex ?? 0,
+                            item.Index ?? 0,
                             item.RatingKey,
                             ep.GetPlexGuid(),
                             null,
