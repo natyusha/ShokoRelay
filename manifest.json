@@ -15,6 +15,34 @@
   "image_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-logo.png",
   "releases": [
     {
+      "version": "0.16.7",
+      "tag": "v0.16.7",
+      "source_revision": "faf7aef99f7addd19f3fe3bbf9de79b444145abe",
+      "released_at": "2026-07-29T06:46:11Z",
+      "channel": "Dev",
+      "release_notes": "**Changes:**\r\n- Add AnalyzeItemAsync to PlexClient to trigger the Plex media analysis endpoint and run it during Plex metadata fixup tasks\r\n- Detect when previously cached local posters, backdrops, logos, or episode thumbnails are removed from disk and remove them from the cache and shoko's db\r\n- Fix ConcurrentBags not being returned at the end of SyncImagesAsync, which caused local series artwork uploads and errors to be omitted from the report log\r\n- Check if cacheVal is null to differentiate between a newly discovered local image and an existing one that changed on disk\r\n- Update ImageSyncService/SyncToShoko to respect TMDB numbering in their logs if enabled\r\n- Update SyncToShoko to use incoming Plex item metadata indexes for accurate logging\r\n- Format season and episode numbers in logs uniformly to D2 (e.g., S01E01)\r\n- Bump Shoko.Abstractions to 6.0.0-alpha.77\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.16.6...v0.16.7",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.16.7/ShokoRelay-v0.16.7-dev_linux-arm64.zip",
+          "checksum": "ea178345efb59a5609f93e9431f4e130df0108ab46459c79acc128be6dcdd731"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.16.7/ShokoRelay-v0.16.7-dev_linux-x64.zip",
+          "checksum": "fb0166a89f77c7070e1eb032469997b8c9a8f81683c89984e57b9243762c6eba"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.16.7/ShokoRelay-v0.16.7-dev_win-x64.zip",
+          "checksum": "26b4c6bc94ad1733d043e4b129aea45b42f830c1a47622ec5a75e9e8278196a4"
+        }
+      ]
+    },
+    {
       "version": "0.16.6",
       "tag": "v0.16.6",
       "source_revision": "1b851f2aa16879a62e4fc9a6e33730343a07b3ff",
