@@ -338,8 +338,9 @@ public class VfsWatcher(
                 if (ratingKey.HasValue)
                 {
                     foundInAnyTarget = true;
-                    s_logger.Info("VFS: Triggering debounced metadata fixup for '{0}' (RatingKey: {1}) on {2}", series.PreferredTitle?.Value, ratingKey.Value, target.ServerName);
+                    s_logger.Info("VFS: Triggering debounced metadata fixup and analysis for '{0}' (RatingKey: {1}) on {2}", series.PreferredTitle?.Value, ratingKey.Value, target.ServerName);
                     await plexLibrary.RefreshMetadataAsync(ratingKey.Value, target, token).ConfigureAwait(false);
+                    await plexLibrary.AnalyzeItemAsync(ratingKey.Value, target, token).ConfigureAwait(false);
                 }
             }
 

@@ -183,6 +183,22 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         return resp.IsSuccessStatusCode;
     }
 
+    /// <summary>Request Plex to analyze the media for a specific item (e.g., to regenerate thumbnails or detect stream changes after a file replacement).</summary>
+    /// <param name="ratingKey">Plex unique rating key.</param>
+    /// <param name="target">Target server/section.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>True if the analyze request was successful.</returns>
+    public async Task<bool> AnalyzeItemAsync(int ratingKey, PlexLibraryTarget target, CancellationToken cancellationToken = default)
+    {
+        if (!IsEnabled || ratingKey <= 0 || target == null)
+            return false;
+
+        using var req = CreateRequest(HttpMethod.Put, $"/library/metadata/{ratingKey}/analyze", target.ServerUrl);
+        using var resp = await HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+
+        return resp.IsSuccessStatusCode;
+    }
+
     /// <summary>Evaluates and safely empties the trash for a given Plex library section based on a percentage threshold of episodes.</summary>
     /// <param name="target">The Plex library target.</param>
     /// <param name="threshold">The maximum allowed percentage of trashed items (1-100).</param>
