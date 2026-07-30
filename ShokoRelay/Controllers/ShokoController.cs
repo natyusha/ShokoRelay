@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Text.Json;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
@@ -28,7 +27,8 @@ public class ShokoController(
     SourceLinkService sourceLinkService,
     AnimeThemesMapping atMapping,
     IVideoService videoService,
-    IImageManager imageManager
+    IImageManager imageManager,
+    VfsWatcher vfsWatcher
 ) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
 {
     #region Virtual File System
@@ -53,8 +53,12 @@ public class ShokoController(
                 if (IoFile.Exists(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileAtMapping)))
                     await atMapping.ApplyMappingAsync(filterIds.Count > 0 ? filterIds : null, CancellationToken.None).ConfigureAwait(false);
 
-                if (PlexLibrary.IsEnabled && Settings.Automation.ScanOnVfsRefresh && filterIds.Count > 0)
-                    _ = SchedulePlexRefreshForSeriesAsync(ResolveSeriesList(null, filterIds).Where(s => s != null).Cast<IShokoSeries>());
+                // Trigger standard debounced Plex updates if this is a targeted manual rebuild
+                if (PlexLibrary.IsEnabled && filterIds.Count > 0)
+                {
+                    foreach (var id in filterIds)
+                        vfsWatcher.TriggerPlexUpdates(id);
+                }
 
                 return result;
             },
@@ -356,72 +360,6 @@ public class ShokoController(
 
         Logger.Info("Shoko: Episode backdrop purging complete. Purged {0} images.", purgedCount);
         return Ok(new RelayResponse<object>(Data: new { purged = purgedCount }));
-    }
-
-    #endregion
-
-    #region Private Helpers
-
-    private static readonly ConcurrentDictionary<int, CancellationTokenSource> s_manualPlexRefreshes = new();
-
-    /// <summary>Schedules a debounced background task to scan and subsequently refresh Plex metadata for a specific set of series.</summary>
-    /// <param name="series">The collection of Shoko series metadata objects to refresh.</param>
-    /// <returns>A background task representing the asynchronous refresh operation.</returns>
-    private Task SchedulePlexRefreshForSeriesAsync(IEnumerable<IShokoSeries> series)
-    {
-        foreach (var s in series)
-        {
-            if (s_manualPlexRefreshes.TryRemove(s.ID, out var oldCts))
-            {
-                oldCts.Cancel();
-                oldCts.Dispose();
-            }
-
-            var cts = new CancellationTokenSource();
-            s_manualPlexRefreshes[s.ID] = cts;
-
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    var roots = new HashSet<string>(VfsShared.PathComparer);
-                    string rootName = VfsShared.ResolveRootFolderName();
-                    foreach (var mapping in MapHelper.GetSeriesFileData(s, MetadataService).Mappings)
-                    {
-                        var location = mapping.Video.Files.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l.Path)) ?? mapping.Video.Files.FirstOrDefault();
-                        if (location != null && VfsShared.ResolveImportRootPath(location) is string importRoot)
-                            roots.Add(Path.Combine(importRoot, rootName, s.ID.ToString()));
-                    }
-
-                    foreach (var path in roots)
-                        await PlexLibrary.RefreshSectionPathAsync(path, cts.Token).ConfigureAwait(false);
-
-                    int bufferSeconds = Settings.Advanced.PlexScanDelay;
-                    if (bufferSeconds > 0)
-                        await Task.Delay(TimeSpan.FromSeconds(bufferSeconds), cts.Token).ConfigureAwait(false);
-
-                    var targets = PlexLibrary.GetConfiguredTargets();
-                    foreach (var target in targets)
-                    {
-                        try
-                        {
-                            var ratingKey = await PlexLibrary.FindRatingKeyForShokoSeriesInSectionAsync(s.ID, target, cts.Token).ConfigureAwait(false);
-                            if (ratingKey.HasValue)
-                                await PlexLibrary.RefreshMetadataAsync(ratingKey.Value, target, cts.Token).ConfigureAwait(false);
-                        }
-                        catch { }
-                    }
-                }
-                catch (OperationCanceledException) { }
-                catch { }
-                finally
-                {
-                    if (s_manualPlexRefreshes.TryRemove(new KeyValuePair<int, CancellationTokenSource>(s.ID, cts)))
-                        cts.Dispose();
-                }
-            });
-        }
-        return Task.CompletedTask;
     }
 
     #endregion

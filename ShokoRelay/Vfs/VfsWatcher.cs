@@ -210,7 +210,7 @@ public class VfsWatcher(
 
     /// <summary>Orchestrates debounced library scans, metadata refreshes, and collection updates for a recently modified series.</summary>
     /// <param name="seriesId">The Shoko Series ID to update.</param>
-    private void TriggerPlexUpdates(int seriesId)
+    public void TriggerPlexUpdates(int seriesId)
     {
         if (!plexLibrary.IsEnabled)
             return;
@@ -243,7 +243,8 @@ public class VfsWatcher(
         {
             try
             {
-                await Task.Delay(TimeSpan.FromSeconds(delaySeconds), cts.Token).ConfigureAwait(false);
+                if (delaySeconds > 0)
+                    await Task.Delay(TimeSpan.FromSeconds(delaySeconds), cts.Token).ConfigureAwait(false);
                 await VfsShared.VfsLock.WaitAsync(cts.Token).ConfigureAwait(false); // Acquire lock to prevent Plex update during VFS build.
                 try
                 {
