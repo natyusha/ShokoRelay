@@ -12,6 +12,7 @@ public record PlexWatchedUserResult(int Processed = 0, int MarkedWatched = 0, in
 
 /// <summary>Represents a single change during sync.</summary>
 /// <param name="PlexUser">Plex username.</param>
+/// <param name="LibraryName">Plex library section title.</param>
 /// <param name="ShokoEpisodeId">Shoko episode ID.</param>
 /// <param name="SeriesTitle">Series title.</param>
 /// <param name="EpisodeTitle">Episode title.</param>
@@ -28,6 +29,7 @@ public record PlexWatchedUserResult(int Processed = 0, int MarkedWatched = 0, in
 /// <param name="ShokoUserRating">Shoko user rating.</param>
 public record PlexWatchedChange(
     string PlexUser = "",
+    string? LibraryName = null,
     int ShokoEpisodeId = 0,
     string? SeriesTitle = null,
     string? EpisodeTitle = null,
@@ -134,6 +136,7 @@ public static class SyncHelper
     /// <summary>Factory for watched changes.</summary>
     public static PlexWatchedChange MakeChange(
         string plexUser,
+        string? libraryName = null,
         int shokoEpisodeId = 0,
         string? seriesTitle = null,
         string? episodeTitle = null,
@@ -152,6 +155,7 @@ public static class SyncHelper
         new()
         {
             PlexUser = plexUser,
+            LibraryName = libraryName,
             ShokoEpisodeId = shokoEpisodeId,
             SeriesTitle = seriesTitle,
             EpisodeTitle = episodeTitle,

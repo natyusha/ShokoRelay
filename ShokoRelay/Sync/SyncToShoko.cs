@@ -220,6 +220,7 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                         uName,
                         SyncHelper.MakeChange(
                             uName,
+                            libraryName: target.Title,
                             ep.ID,
                             ep.Series?.PreferredTitle?.Value,
                             ep.PreferredTitle?.Value,

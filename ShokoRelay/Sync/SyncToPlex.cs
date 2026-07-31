@@ -125,6 +125,7 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
                             uName,
                             SyncHelper.MakeChange(
                                 uName,
+                                libraryName: target.Title,
                                 sw.UserData.EpisodeID,
                                 sw.Episode!.Series?.PreferredTitle?.Value,
                                 plexItem.Title ?? sw.Episode.PreferredTitle?.Value,
