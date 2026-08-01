@@ -89,7 +89,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
                         new
                         {
                             guid = series.GetPlexGuid(),
-                            title = series.PreferredTitle?.Value,
+                            title = series.GetDisplayTitle(),
                             year = series.AirDate?.Year,
                             score = 100,
                             thumb = posterUrl,

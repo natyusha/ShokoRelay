@@ -219,13 +219,13 @@ public class PlexController(
                         if (await PlexLibrary.RefreshMetadataAsync(ratingKey.Value, target, HttpContext.RequestAborted).ConfigureAwait(false))
                         {
                             refreshedCount++;
-                            Logger.Info("PlexController: Triggered manual metadata refresh for '{0}' (RatingKey: {1}) on {2}", series.PreferredTitle?.Value, ratingKey.Value, target.ServerName);
+                            Logger.Info("PlexController: Triggered manual metadata refresh for '{0}' (RatingKey: {1}) on {2}", series.GetDisplayTitle(), ratingKey.Value, target.ServerName);
                         }
                         else
-                            errors.Add($"Failed to refresh metadata for '{series.PreferredTitle?.Value}' on {target.ServerName}");
+                            errors.Add($"Failed to refresh metadata for '{series.GetDisplayTitle()}' on {target.ServerName}");
                     }
                     else
-                        errors.Add($"Rating key not found in Plex for '{series.PreferredTitle?.Value}' on {target.ServerName}");
+                        errors.Add($"Rating key not found in Plex for '{series.GetDisplayTitle()}' on {target.ServerName}");
                 }
                 catch (Exception ex)
                 {
@@ -402,7 +402,7 @@ public class PlexController(
         if (user == null)
             return Ok(new { status = "ignored", reason = "no_shoko_user" });
 
-        string seriesName = evt.Metadata.GrandparentTitle ?? shokoEpisode.Series?.PreferredTitle?.Value ?? "Unknown Series";
+        string seriesName = evt.Metadata.GrandparentTitle ?? shokoEpisode.Series.GetDisplayTitle() ?? "Unknown Series";
         string seasonEp = $"S{evt.Metadata.ParentIndex ?? 0:D2}E{evt.Metadata.Index ?? 0:D2}";
 
         if (isRate)

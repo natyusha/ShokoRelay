@@ -98,15 +98,15 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
                     var rating = ComputeSeriesRating(series);
                     if (!NeedsRatingUpdate(item.Rating, rating))
                     {
-                        s_logger.Trace("CriticRatingService: skipping show {0} ({1}) because rating {2} matches Plex", item.RatingKey, series.PreferredTitle?.Value, item.Rating);
+                        s_logger.Trace("CriticRatingService: skipping show {0} ({1}) because rating {2} matches Plex", item.RatingKey, series.GetDisplayTitle(), item.Rating);
                         continue;
                     }
 
                     if (await ApplyRatingAsync(item.RatingKey!, rating, target, cancellationToken))
                     {
                         uS++;
-                        appliedChanges.Add(new RatingChange(series.PreferredTitle?.Value ?? "Unknown", "Show", item.RatingKey!, item.Rating, rating));
-                        s_logger.Info("CriticRatingService: Updated Show '{0}' to {1}", series.PreferredTitle?.Value, rating);
+                        appliedChanges.Add(new RatingChange(series.GetDisplayTitle() ?? "Unknown", "Show", item.RatingKey!, item.Rating, rating));
+                        s_logger.Info("CriticRatingService: Updated Show '{0}' to {1}", series.GetDisplayTitle(), rating);
                     }
                     else
                     {
@@ -140,7 +140,7 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
                     if (await ApplyRatingAsync(item.RatingKey!, rating, target, cancellationToken))
                     {
                         uE++;
-                        appliedChanges.Add(new RatingChange($"{episode.Series?.PreferredTitle?.Value} - S{episode.SeasonNumber}E{episode.EpisodeNumber}", "Episode", item.RatingKey!, item.Rating, rating));
+                        appliedChanges.Add(new RatingChange($"{episode.Series.GetDisplayTitle()} - S{episode.SeasonNumber}E{episode.EpisodeNumber}", "Episode", item.RatingKey!, item.Rating, rating));
                         s_logger.Trace("CriticRatingService: Updated Episode {0} to {1}", item.RatingKey, rating);
                     }
                     else

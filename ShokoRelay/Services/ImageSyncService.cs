@@ -105,7 +105,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                                 // Resolve coordinates accurately matching the user's TMDB numbering preference
                                 var prefId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series) : null;
                                 var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
-                                var epLogName = $"'{episode.Series?.PreferredTitle?.Value}' S{coords.Season:D2}E{coords.Episode:D2}";
+                                var epLogName = $"'{episode.Series.GetDisplayTitle()}' S{coords.Season:D2}E{coords.Episode:D2}";
 
                                 // Check if a local physical episode thumbnail exists on disk alongside the video file
                                 var localEpisodeThumb = FindLocalEpisodeThumbnail(episode);
@@ -143,7 +143,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                                         UploadAndPreferLocalImage(localEpisodeThumb!, episode, ImageEntityType.Backdrop, userSubmitted: false);
 
                                         uploaded++;
-                                        uploadedDetails.Add($"[Local Episode Thumb] {episode.Series?.PreferredTitle?.Value} S{coords.Season:D2}E{coords.Episode:D2}");
+                                        uploadedDetails.Add($"[Local Episode Thumb] {episode.Series.GetDisplayTitle()} S{coords.Season:D2}E{coords.Episode:D2}");
                                         cache[cacheKeyLocal] = newCacheVal;
                                         updatedCache = true;
                                         s_logger.Info("ImageSyncService: Successfully uploaded and preferred local thumbnail for episode {0} (ID: {1})", epLogName, episode.ID);
@@ -268,7 +268,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                                 imageManager.SetPreferredImageForEntity(episode, ImageEntityType.Backdrop, uploadedImage);
 
                                 uploaded++;
-                                uploadedDetails.Add($"[Plex Thumb] {episode.Series?.PreferredTitle?.Value} S{coords.Season:D2}E{coords.Episode:D2}");
+                                uploadedDetails.Add($"[Plex Thumb] {episode.Series.GetDisplayTitle()} S{coords.Season:D2}E{coords.Episode:D2}");
                                 cache[cacheKey] = $"{item.Thumb}|{md5Hex}";
                                 updatedCache = true;
                                 s_logger.Info("ImageSyncService: Successfully uploaded and preferred thumbnail for episode {0} (ID: {1})", epLogName, episode.ID);
@@ -404,7 +404,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                                 if (uploadedOk)
                                 {
                                     Interlocked.Increment(ref u);
-                                    uploadedBag.Add($"[Local {config.Label}] {series.PreferredTitle?.Value}");
+                                    uploadedBag.Add($"[Local {config.Label}] {series.GetDisplayTitle()}");
                                 }
                                 else if (skippedOk)
                                     Interlocked.Increment(ref s);
@@ -601,7 +601,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
             var preferredImage = series.GetAvailableImages(imageType).FirstOrDefault(i => i.IsPreferred);
             if (hadCache || (preferredImage != null && preferredImage.Source is DataSource.User or DataSource.LocallyGenerated))
             {
-                s_logger.Info("ImageSyncService: Local {0} for series '{1}' (ID: {2}) no longer present on disk -> Purging from Shoko", label, series.PreferredTitle?.Value, series.ID);
+                s_logger.Info("ImageSyncService: Local {0} for series '{1}' (ID: {2}) no longer present on disk -> Purging from Shoko", label, series.GetDisplayTitle(), series.ID);
                 await PurgeEntityImagesAsync(series, imageType, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
                 return (true, false, false, false, true);
             }
@@ -622,13 +622,13 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
         }
 
         if (cacheVal == null)
-            s_logger.Debug("ImageSyncService: New local file found for series {0} '{1}' (ID: {2}) -> Uploading", label, series.PreferredTitle?.Value, series.ID);
+            s_logger.Debug("ImageSyncService: New local file found for series {0} '{1}' (ID: {2}) -> Uploading", label, series.GetDisplayTitle(), series.ID);
         else
-            s_logger.Debug("ImageSyncService: File changed for series {0} '{1}' (ID: {2}) -> Purging stale image and uploading", label, series.PreferredTitle?.Value, series.ID);
+            s_logger.Debug("ImageSyncService: File changed for series {0} '{1}' (ID: {2}) -> Purging stale image and uploading", label, series.GetDisplayTitle(), series.ID);
 
         await PurgeEntityImagesAsync(series, imageType, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
 
-        s_logger.Trace("ImageSyncService: Uploading local series {0} for series '{1}' (ID: {2})", label, series.PreferredTitle?.Value, series.ID);
+        s_logger.Trace("ImageSyncService: Uploading local series {0} for series '{1}' (ID: {2})", label, series.GetDisplayTitle(), series.ID);
 
         try
         {
@@ -639,7 +639,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
         catch (Exception ex)
         {
             errorsBag.Add($"Failed to process series {label} for series {series.ID}: {ex.Message}");
-            s_logger.Warn(ex, "ImageSyncService: Failed to upload series {0} for series '{1}' (ID: {2})", label, series.PreferredTitle?.Value, series.ID);
+            s_logger.Warn(ex, "ImageSyncService: Failed to upload series {0} for series '{1}' (ID: {2})", label, series.GetDisplayTitle(), series.ID);
             return (true, false, false, true, false);
         }
     }

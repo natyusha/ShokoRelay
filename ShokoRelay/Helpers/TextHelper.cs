@@ -141,6 +141,11 @@ public static class TextHelper
         return (display, sortTitle, finalAlt);
     }
 
+    /// <summary>Resolves the configured display title for a series respecting plugin language preferences.</summary>
+    /// <param name="series">The series metadata.</param>
+    /// <returns>The resolved display title string, or null if series is null.</returns>
+    public static string? GetDisplayTitle(this ISeries? series) => series != null ? ResolveFullSeriesTitles(series).DisplayTitle : null;
+
     /// <summary>Compute the best title to display for an episode, handling ambiguous names and TMDB reassignments.</summary>
     /// <param name="ep">Episode metadata.</param>
     /// <param name="displaySeriesTitle">Resolved series title for fallback.</param>

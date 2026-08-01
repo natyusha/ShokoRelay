@@ -270,19 +270,26 @@ public static class LogHelper
         };
 
         var items = new List<string>();
-        foreach (var kv in result.PerUserChanges.OrderBy(kv => kv.Key))
+        foreach (var userGroup in result.PerUserChanges.OrderBy(kv => kv.Key))
         {
-            items.Add($"User: {kv.Key}");
-            items.AddRange(
-                kv.Value.OrderBy(c => c.SeriesTitle)
-                    .ThenBy(c => c.SeasonNumber)
-                    .ThenBy(c => c.EpisodeNumber)
-                    .Select(c =>
-                    {
-                        string action = c.Reason == "progress_updated" ? "Updated Progress" : (c.WouldMark && string.IsNullOrEmpty(c.Reason) ? "Marked" : "Already Watched");
-                        return $"- {c.SeriesTitle} (S{c.SeasonNumber:D2}E{c.EpisodeNumber:D2}) -> {action}";
-                    })
-            );
+            items.Add($"User: {userGroup.Key}");
+            var byLibrary = userGroup.Value.GroupBy(c => c.LibraryName ?? "Default").OrderBy(g => g.Key);
+
+            foreach (var libGroup in byLibrary)
+            {
+                items.Add($"  Library: {libGroup.Key}");
+                items.AddRange(
+                    libGroup
+                        .OrderBy(c => c.SeriesTitle)
+                        .ThenBy(c => c.SeasonNumber)
+                        .ThenBy(c => c.EpisodeNumber)
+                        .Select(c =>
+                        {
+                            string action = c.Reason == "progress_updated" ? "Updated Progress" : (c.WouldMark && string.IsNullOrEmpty(c.Reason) ? "Marked" : "Already Watched");
+                            return $"    - {c.SeriesTitle} (S{c.SeasonNumber:D2}E{c.EpisodeNumber:D2}) -> {action}";
+                        })
+                );
+            }
         }
 
         BuildReport(sb, "Sync Watched Report", stats, "Change Details:", items);

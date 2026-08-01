@@ -274,7 +274,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
             if (!series.AirDate.HasValue || series.AirDate.Value < start || series.AirDate.Value > end)
             {
                 string skipMsg = "Series does not match the current season filter.";
-                s_logger.Debug("AnimeThemes MP3: Skipped series '{0}' ({1})", series.PreferredTitle?.Value, skipMsg);
+                s_logger.Debug("AnimeThemes MP3: Skipped series '{0}' ({1})", series.GetDisplayTitle(), skipMsg);
                 return new(folder, "skipped", skipMsg);
             }
         }
@@ -283,14 +283,14 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         try
         {
             if (!query.Batch)
-                s_logger.Info("AnimeThemes MP3: Generating Theme.mp3 for series '{0}' in {1}", series.PreferredTitle?.Value ?? series.ID.ToString(), folder);
+                s_logger.Info("AnimeThemes MP3: Generating Theme.mp3 for series '{0}' in {1}", series.GetDisplayTitle() ?? series.ID.ToString(), folder);
 
             var sel = await FetchThemeAsync(series.AnidbAnimeID, query.Slug, query.Offset, ct);
             if (sel == null)
             {
                 string skipMsg = string.IsNullOrWhiteSpace(query.Slug) ? "Entry not found." : $"No entry for slug '{query.Slug}'.";
                 if (!query.Batch)
-                    s_logger.Info("AnimeThemes MP3: Skipped series '{0}' ({1})", series.PreferredTitle?.Value, skipMsg);
+                    s_logger.Info("AnimeThemes MP3: Skipped series '{0}' ({1})", series.GetDisplayTitle(), skipMsg);
 
                 return new(folder, "skipped", skipMsg);
             }
@@ -299,7 +299,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
             var dur = await ffmpegService.ProbeDurationAsync(temp, ct);
             string title = dur.TotalSeconds < 100 && !string.IsNullOrEmpty(sel.SongTitle) ? sel.SongTitle + " (TV Size)" : sel.SongTitle;
 
-            s_logger.Debug("AnimeThemes MP3: Converting audio for '{0}' ({1})", series.PreferredTitle?.Value, sel.SlugDisplay);
+            s_logger.Debug("AnimeThemes MP3: Converting audio for '{0}' ({1})", series.GetDisplayTitle(), sel.SlugDisplay);
             await ffmpegService.ConvertToMp3FileAsync(temp, "Theme.mp3", title, sel.SlugDisplay, sel.Artist, sel.AnimeTitle, ct, folder).ConfigureAwait(false);
 
             int primaryId = OverrideHelper.GetPrimary(series.ID, metadataService);
@@ -309,7 +309,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
             if (!string.IsNullOrEmpty(vfsLink) && plexClient.IsEnabled)
                 TriggerPlexRefresh(series.ID);
 
-            s_logger.Info("AnimeThemes MP3: Successfully generated '{0}' ({1})", series.PreferredTitle?.Value, sel.SlugDisplay);
+            s_logger.Info("AnimeThemes MP3: Successfully generated '{0}' ({1})", series.GetDisplayTitle(), sel.SlugDisplay);
             return new(folder, "ok", null, themePath, vfsLink, sel.AnimeTitle, sel.AnimeSlug, series.ID, sel.SlugRaw, dur.TotalSeconds);
         }
         catch (Exception ex)
@@ -408,7 +408,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
                                     _themeMp3Cache![folder] = $"{slug}|{upgrade}";
                                     cacheUpdated = true;
                                 }
-                                upgrades.Add($"{s.PreferredTitle?.Value ?? s.ID.ToString()} (Currently: {slug})");
+                                upgrades.Add($"{s.GetDisplayTitle() ?? s.ID.ToString()} (Currently: {slug})");
                             }
                         }
                         catch (Exception ex)
@@ -481,7 +481,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         if (!q.Force && File.Exists(themePath))
             return (new(folder, "skipped", "Theme.mp3 already exists."), null);
 
-        s_logger.Debug("AnimeThemes MP3: Folder {0} maps to series '{1}' (AniDB: {2})", folder, s.PreferredTitle?.Value, s.AnidbAnimeID);
+        s_logger.Debug("AnimeThemes MP3: Folder {0} maps to series '{1}' (AniDB: {2})", folder, s.GetDisplayTitle(), s.AnidbAnimeID);
         return (null, (folder, themePath, vf!, s));
     }
 
