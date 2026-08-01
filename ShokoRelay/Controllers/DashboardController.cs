@@ -223,7 +223,7 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
 
     /// <summary>Serves report files from the plugin's logs directory without allowing browser caching.</summary>
     /// <param name="fileName">The log filename.</param>
-    /// <returns>The log content as text/plain.</returns>
+    /// <returns>The log content as text/plain; charset=utf-8.</returns>
     [HttpGet("logs/{fileName}")]
     public IActionResult GetLog(string fileName)
     {
@@ -237,7 +237,7 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
         Response.Headers["Pragma"] = "no-cache";
         Response.Headers["Expires"] = "0";
 
-        return PhysicalFile(path, "text/plain");
+        return PhysicalFile(path, "text/plain; charset=utf-8");
     }
 
     #endregion

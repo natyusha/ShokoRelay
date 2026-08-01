@@ -23,7 +23,7 @@ public static class LogHelper
         string dir = Path.Combine(pluginDir, "logs");
         Directory.CreateDirectory(dir);
         string path = Path.Combine(dir, fileName);
-        File.WriteAllText(path, content);
+        File.WriteAllText(path, content, Encoding.UTF8);
         return path;
     }
 
