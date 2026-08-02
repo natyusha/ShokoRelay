@@ -15,6 +15,34 @@
   "image_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-logo.png",
   "releases": [
     {
+      "version": "0.16.8",
+      "tag": "v0.16.8",
+      "source_revision": "b58090ffb80b7ce33e5ae7791d5e93374d3517c4",
+      "released_at": "2026-08-02T12:54:58Z",
+      "channel": "Dev",
+      "release_notes": "- Add GetDisplayTitle extension method to TextHelper.cs to resolve series titles using plugin language settings and ensure all task reports and console logs use it\r\n- Extract redundant Plex update logic from ShokoController and delegate it entirely to VfsWatcher (adds media analysis and critic/image sync support to manual vfs refreshes)\r\n- Update GetLog endpoint in DashboardController to serve text/plain; charset=utf-8\r\n- Group Sync Watched change details by user and library\r\n- Remove episode titles from log reports\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.16.7...v0.16.8",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.16.8/ShokoRelay-v0.16.8-dev_linux-arm64.zip",
+          "checksum": "350b2d5ba4e14302ac7694c0b26e3d1d368bbbf04929eb10e8fee1f7a1993370"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.16.8/ShokoRelay-v0.16.8-dev_linux-x64.zip",
+          "checksum": "e007f62be205aaf577e08d2ae47a9acba12ad59973970b07ac1106fe34258b6f"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.16.8/ShokoRelay-v0.16.8-dev_win-x64.zip",
+          "checksum": "e0227c861083f342eebbaa5ceb6f039a0a78cb43a3d4cb9d1b745f69342d6a0b"
+        }
+      ]
+    },
+    {
       "version": "0.16.7",
       "tag": "v0.16.7",
       "source_revision": "faf7aef99f7addd19f3fe3bbf9de79b444145abe",
