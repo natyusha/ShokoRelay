@@ -180,6 +180,11 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         using var req = CreateRequest(HttpMethod.Put, $"/library/metadata/{ratingKey}/refresh", target.ServerUrl);
         using var resp = await HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
 
+        if (resp.IsSuccessStatusCode)
+            s_logger.Debug("PlexClient: Metadata refresh triggered for RatingKey {0} on {1}", ratingKey, target.ServerName);
+        else
+            s_logger.Warn("PlexClient: Metadata refresh failed ({0}) for RatingKey {1} on {2}", resp.StatusCode, ratingKey, target.ServerName);
+
         return resp.IsSuccessStatusCode;
     }
 
@@ -195,6 +200,11 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
 
         using var req = CreateRequest(HttpMethod.Put, $"/library/metadata/{ratingKey}/analyze", target.ServerUrl);
         using var resp = await HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+
+        if (resp.IsSuccessStatusCode)
+            s_logger.Debug("PlexClient: Media analysis triggered for RatingKey {0} on {1}", ratingKey, target.ServerName);
+        else
+            s_logger.Warn("PlexClient: Media analysis failed ({0}) for RatingKey {1} on {2}", resp.StatusCode, ratingKey, target.ServerName);
 
         return resp.IsSuccessStatusCode;
     }
