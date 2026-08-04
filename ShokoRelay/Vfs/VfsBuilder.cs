@@ -48,7 +48,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         int blueprintUpdated = 0;
 
         string rootName = VfsShared.ResolveRootFolderName();
-        var allRoots = videoService.GetAllManagedFolders()?.Where(f => !VfsShared.IsSourceOnly(f)).Select(f => f.Path).Where(p => !string.IsNullOrWhiteSpace(p)).Distinct().ToList() ?? [];
+        var allRoots = videoService.GetAllManagedFolders()?.Where(VfsShared.IsVfsEnabledFolder).Select(f => f.Path).Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(VfsShared.PathComparer).ToList() ?? [];
 
         var validFolderIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var allSeries = metadataService.GetAllShokoSeries();
@@ -390,7 +390,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
 
             foreach (var file in mapping.Video?.Files ?? [])
             {
-                if (VfsShared.IsSourceOnly(file.ManagedFolder))
+                if (!VfsShared.IsVfsEnabledFolder(file.ManagedFolder))
                     continue;
 
                 importRoot = VfsShared.ResolveImportRootPath(file);

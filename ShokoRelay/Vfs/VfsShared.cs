@@ -31,10 +31,26 @@ internal static class VfsShared
 
     #region Path Resolution
 
-    /// <summary>Determines if a managed folder is strictly configured as a source folder (without destination privileges).</summary>
+    /// <summary>Determines if a managed folder is eligible for VFS generation (i.e., not strictly a source folder and not excluded in settings).</summary>
     /// <param name="folder">The managed folder to evaluate.</param>
-    /// <returns>True if the folder is source-only; otherwise, false.</returns>
-    public static bool IsSourceOnly(IManagedFolder? folder) => folder != null && folder.DropFolderType.HasFlag(DropFolderType.Source) && !folder.DropFolderType.HasFlag(DropFolderType.Destination);
+    /// <returns>True if the folder should have a VFS generated inside it; otherwise, false.</returns>
+    public static bool IsVfsEnabledFolder(IManagedFolder? folder)
+    {
+        if (folder == null)
+            return false;
+
+        if (folder.DropFolderType.HasFlag(DropFolderType.Source) && !folder.DropFolderType.HasFlag(DropFolderType.Destination))
+            return false;
+
+        var exclusions = Settings.Advanced.ImportFolderExclusions?.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) ?? [];
+        foreach (var ex in exclusions)
+        {
+            if (string.Equals(ex, folder.ID.ToString(), StringComparison.OrdinalIgnoreCase) || string.Equals(ex, folder.Name, StringComparison.OrdinalIgnoreCase))
+                return false;
+        }
+
+        return true;
+    }
 
     /// <summary>Determines the root import path for a video file.</summary>
     public static string? ResolveImportRootPath(IVideoFile location)
@@ -88,7 +104,7 @@ internal static class VfsShared
         foreach (var mapping in fileData.Mappings)
         {
             var location = mapping.Video.Files.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l.Path)) ?? mapping.Video.Files.FirstOrDefault();
-            if (location == null || IsSourceOnly(location.ManagedFolder))
+            if (location == null || !IsVfsEnabledFolder(location.ManagedFolder))
                 continue;
 
             string? importRoot = ResolveImportRootPath(location);

@@ -106,11 +106,11 @@ public class ShokoController(
 
         try
         {
-            // Normalize Managed Folder paths to remove trailing slashes for consistent comparison with blueprint keys. Filter out folders marked strictly as Source (without Destination).
+            // Normalize Managed Folder paths to remove trailing slashes for consistent comparison with blueprint keys. Filter out folders that are disabled for VFS.
             var managedFolders =
                 videoService
                     .GetAllManagedFolders()
-                    ?.Where(f => !VfsShared.IsSourceOnly(f))
+                    ?.Where(VfsShared.IsVfsEnabledFolder)
                     .Select(f => new { Path = f.Path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), f.Name })
                     .OrderByDescending(f => f.Path.Length)
                     .ToList()

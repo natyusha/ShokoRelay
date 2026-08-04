@@ -373,6 +373,12 @@ public class AdvancedConfig
     [VfsRebuild]
     public string FolderExclusions { get; set; } = "";
 
+    /// <summary>Shoko import folders to exclude from VFS generation.</summary>
+    [Display(Name = "Import Folder Exclusions", Description = "Shoko Import Folder names or IDs to completely exclude from VFS generation. One per line")]
+    [DefaultValue("")]
+    [VfsRebuild]
+    public string ImportFolderExclusions { get; set; } = "";
+
     /// <summary>Whether to sync unique local images and Plex-generated episode thumbnails back to Shoko and mark them as preferred.</summary>
     [Display(Name = "Plex Image Sync", Description = "Enable to automatically upload unique local images and Plex's generated episode thumbnails back to Shoko")]
     [DefaultValue(false)]

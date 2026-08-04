@@ -48,7 +48,7 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
             errors = 0;
 
         string themeRootName = VfsShared.ResolveAnimeThemesFolderName();
-        var managedFolders = videoService.GetAllManagedFolders()?.Where(f => !VfsShared.IsSourceOnly(f)).Select(f => f.Path).Where(p => !string.IsNullOrWhiteSpace(p)).ToList() ?? [];
+        var managedFolders = videoService.GetAllManagedFolders()?.Where(VfsShared.IsVfsEnabledFolder).Select(f => f.Path).Where(p => !string.IsNullOrWhiteSpace(p)).ToList() ?? [];
         string? targetRoot = null;
         if (!string.IsNullOrWhiteSpace(query.Destination))
         {

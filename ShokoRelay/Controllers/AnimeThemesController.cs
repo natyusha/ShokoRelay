@@ -270,7 +270,7 @@ public class AnimeThemesController(
         {
             try
             {
-                var managedFolders = videoService.GetAllManagedFolders()?.Where(f => !VfsShared.IsSourceOnly(f)).Select(f => f.Path).ToList() ?? [];
+                var managedFolders = videoService.GetAllManagedFolders()?.Where(VfsShared.IsVfsEnabledFolder).Select(f => f.Path).ToList() ?? [];
                 string themeRootName = VfsShared.ResolveAnimeThemesFolderName();
                 var entries = AnimeThemesHelper.ParseMappingContentWithComments(IoFile.ReadAllText(mapPath)).Entries;
 
