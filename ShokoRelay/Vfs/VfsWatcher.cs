@@ -28,7 +28,6 @@ public class VfsWatcher(
     private readonly ConcurrentDictionary<int, byte> _pending = new();
     private readonly ConcurrentDictionary<int, CancellationTokenSource> _pendingMetadataFixups = new();
     private readonly ConcurrentDictionary<int, CancellationTokenSource> _pendingLibraryScans = new();
-    private readonly ConcurrentDictionary<int, CancellationTokenSource> _pendingCollectionUpdates = new();
     private bool _processing;
     private readonly Lock _gate = new();
 
@@ -56,20 +55,10 @@ public class VfsWatcher(
             releaseService.ReleaseSaved -= OnVideoReleaseSaved;
 
             foreach (var kvp in _pendingMetadataFixups)
-            {
                 kvp.Value.Cancel();
-                kvp.Value.Dispose();
-            }
+
             foreach (var kvp in _pendingLibraryScans)
-            {
                 kvp.Value.Cancel();
-                kvp.Value.Dispose();
-            }
-            foreach (var kvp in _pendingCollectionUpdates)
-            {
-                kvp.Value.Cancel();
-                kvp.Value.Dispose();
-            }
         }
         catch { }
 
@@ -220,7 +209,6 @@ public class VfsWatcher(
 
         ScheduleLibraryScan(series);
         ScheduleMetadataFixup(series);
-        ScheduleCollectionUpdate(series);
     }
 
     /// <summary>Generic debouncer wrapper to handle delaying tasks and managing cancellations efficiently.</summary>
@@ -231,10 +219,7 @@ public class VfsWatcher(
     private void ScheduleDebouncedAction(int seriesId, int delaySeconds, ConcurrentDictionary<int, CancellationTokenSource> tracker, Func<CancellationToken, Task> action)
     {
         if (tracker.TryRemove(seriesId, out var oldCts))
-        {
             oldCts.Cancel();
-            oldCts.Dispose();
-        }
 
         var cts = new CancellationTokenSource();
         tracker[seriesId] = cts;
@@ -265,8 +250,8 @@ public class VfsWatcher(
             }
             finally
             {
-                if (tracker.TryRemove(new KeyValuePair<int, CancellationTokenSource>(seriesId, cts)))
-                    cts.Dispose();
+                tracker.TryRemove(new KeyValuePair<int, CancellationTokenSource>(seriesId, cts));
+                cts.Dispose();
             }
         });
     }
@@ -320,6 +305,7 @@ public class VfsWatcher(
             if (File.Exists(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileAtMapping)))
                 await atMapping.ApplyMappingAsync([series.ID], token).ConfigureAwait(false);
 
+            // Wait to allow the filesystem or Plex's native auto-scanner to index the newly generated VFS symlinks
             int bufferSeconds = Settings.Advanced.PlexScanDelay;
             if (bufferSeconds > 0)
                 await Task.Delay(TimeSpan.FromSeconds(bufferSeconds), token).ConfigureAwait(false);
@@ -347,27 +333,27 @@ public class VfsWatcher(
 
             if (!foundInAnyTarget)
                 s_logger.Debug("VFS: Debounced fixup for '{0}' skipped; rating key not found in Plex yet", series.GetDisplayTitle());
-
-            s_logger.Info("VFS: Triggering debounced critic rating application for '{0}' (ID: {1})", series.GetDisplayTitle(), series.ID);
-            await criticRatingService.ApplyRatingsAsync([series.ID], token).ConfigureAwait(false);
-
-            if (Settings.Advanced.EnableImageSync)
+            else
             {
-                s_logger.Info("VFS: Triggering debounced image sync for '{0}' (ID: {1})", series.GetDisplayTitle(), series.ID);
-                await imageSyncService.SyncImagesAsync([series.ID], token).ConfigureAwait(false);
+                // Execute subsequent API actions sequentially to guarantee metadata framework exists
+                await RunCollectionUpdateAsync(series, token).ConfigureAwait(false);
+
+                s_logger.Info("VFS: Triggering debounced critic rating application for '{0}' (ID: {1})", series.GetDisplayTitle(), series.ID);
+                await criticRatingService.ApplyRatingsAsync([series.ID], token).ConfigureAwait(false);
+
+                if (Settings.Advanced.EnableImageSync)
+                {
+                    s_logger.Info("VFS: Triggering debounced image sync for '{0}' (ID: {1})", series.GetDisplayTitle(), series.ID);
+                    await imageSyncService.SyncImagesAsync([series.ID], token).ConfigureAwait(false);
+                }
             }
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            s_logger.Error(ex, "VFS: Metadata fixup failed for series {0}", series.ID);
+            s_logger.Error(ex, "VFS: Metadata fixup failed for series {0}", series.GetDisplayTitle() ?? series.ID.ToString());
         }
     }
-
-    /// <summary>Schedules or resets the timer for updating collections and posters in Plex for the given series.</summary>
-    /// <param name="series">The Shoko series metadata.</param>
-    private void ScheduleCollectionUpdate(IShokoSeries series) =>
-        ScheduleDebouncedAction(series.ID, Settings.Advanced.PlexFixupDelay * 60, _pendingCollectionUpdates, token => RunCollectionUpdateAsync(series, token));
 
     /// <summary>Worker task that performs the collection assignment and poster/logo/backdrop upload logic.</summary>
     /// <param name="series">The Shoko series to update.</param>
@@ -411,7 +397,7 @@ public class VfsWatcher(
         }
         catch (Exception ex)
         {
-            s_logger.Error(ex, "VFS: Collection update failed for series {0}", series.ID);
+            s_logger.Error(ex, "VFS: Collection update failed for series {0}", series.GetDisplayTitle() ?? series.ID.ToString());
         }
     }
 
