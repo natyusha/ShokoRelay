@@ -279,10 +279,10 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                     }
 
                     // Capture individual series details for the log report
-                    seriesDetailsBag.Add(new SeriesProcessDetails(series.GetDisplayTitle() ?? series.ID.ToString(), seriesSw.ElapsedMilliseconds, sCreated));
+                    seriesDetailsBag.Add(new SeriesProcessDetails($"'{series.GetDisplayTitle()}' [{series.ID}]", seriesSw.ElapsedMilliseconds, sCreated));
 
                     if (sCreated > 0 || sErrors.Count > 0)
-                        s_logger.Info("VFS: Processed series -> '{0}' ({1} links created) in {2}ms", series.GetDisplayTitle() ?? series.ID.ToString(), sCreated, seriesSw.ElapsedMilliseconds);
+                        s_logger.Info("VFS: Processed series -> '{0}' [{1}] ({2} links created) in {3}ms", series.GetDisplayTitle(), series.ID, sCreated, seriesSw.ElapsedMilliseconds);
 
                     Interlocked.Add(ref created, sCreated);
                     Interlocked.Add(ref skipped, sSkipped);
@@ -295,8 +295,8 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                 }
                 catch (Exception ex)
                 {
-                    errorsBag.Add($"Failed series {series.GetDisplayTitle()}: {ex.Message}");
-                    s_logger.Error(ex, "VFS: Build failed for series {SeriesId}", series.ID);
+                    errorsBag.Add($"Failed series '{series.GetDisplayTitle()}' [{series.ID}]: {ex.Message}");
+                    s_logger.Error(ex, "VFS: Build failed for series '{0}' [{1}]", series.GetDisplayTitle(), series.ID);
                 }
             }
         );
@@ -408,7 +408,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
             if (loc == null || src == null || importRoot == null)
             {
                 skipped++;
-                skippedDetails.Add($"[Missing/Source-Only] {series.GetDisplayTitle()} S{mapping.Coords.Season}E{mapping.Coords.Episode} - {mapping.FileName}");
+                skippedDetails.Add($"[Missing/Source-Only] '{series.GetDisplayTitle()}' [{series.ID}] S{mapping.Coords.Season}E{mapping.Coords.Episode} - {mapping.FileName}");
                 continue;
             }
 
@@ -432,7 +432,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
             if (VfsShared.IsPathIgnored(src, ignoredFolders))
             {
                 skipped++;
-                skippedDetails.Add($"[Excluded Path] {series.GetDisplayTitle()} S{mapping.Coords.Season}E{mapping.Coords.Episode} - {mapping.FileName}");
+                skippedDetails.Add($"[Excluded Path] '{series.GetDisplayTitle()}' [{series.ID}] S{mapping.Coords.Season}E{mapping.Coords.Episode} - {mapping.FileName}");
                 continue;
             }
 

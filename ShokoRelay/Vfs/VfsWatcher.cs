@@ -98,7 +98,7 @@ public class VfsWatcher(
 
         foreach (var series in e.Video.Series)
         {
-            s_logger.Debug("VFS: Adding series '{0}' (ID: {1}) to pending queue due to release save", series.GetDisplayTitle(), series.ID);
+            s_logger.Debug("VFS: Adding series '{0}' [{1}] to pending queue due to release save", series.GetDisplayTitle(), series.ID);
             _pending[series.ID] = 1;
         }
 
@@ -274,7 +274,7 @@ public class VfsWatcher(
                     if (Directory.Exists(path) && Directory.EnumerateFileSystemEntries(path).Any())
                         await plexLibrary.RefreshSectionPathAsync(path, token).ConfigureAwait(false);
                     else
-                        s_logger.Debug("VFS: Library scan for '{0}' skipped -> path '{1}' not ready or empty", series.GetDisplayTitle(), path);
+                        s_logger.Debug("VFS: Library scan for '{0}' [{1}] skipped -> path '{2}' not ready or empty", series.GetDisplayTitle(), series.ID, path);
                 }
             }
         );
@@ -284,7 +284,7 @@ public class VfsWatcher(
     /// <param name="series">The Shoko series metadata.</param>
     private void ScheduleMetadataFixup(IShokoSeries series)
     {
-        s_logger.Debug("VFS: Scheduling metadata fixup for '{0}' (ID: {1}) in {2} minute(s)", series.GetDisplayTitle(), series.ID, Settings.Advanced.PlexFixupDelay);
+        s_logger.Debug("VFS: Scheduling metadata fixup for '{0}' [{1}] in {2} minute(s)", series.GetDisplayTitle(), series.ID, Settings.Advanced.PlexFixupDelay);
         ScheduleDebouncedAction(series.ID, Settings.Advanced.PlexFixupDelay * 60, _pendingMetadataFixups, token => RunMetadataFixupAsync(series, token));
     }
 
@@ -299,7 +299,7 @@ public class VfsWatcher(
             // Regenerate the VFS to account for cases where the episode/season numbering was updated in Shoko after the initial file event was processed
             var vfsResult = builder.Build(series.ID, cleanRoot: false);
             if (vfsResult.CreatedLinks > 0)
-                s_logger.Info("VFS: Re-generated links for '{0}' during fixup phase", series.GetDisplayTitle());
+                s_logger.Info("VFS: Re-generated links for '{0}' [{1}] during fixup phase", series.GetDisplayTitle(), series.ID);
 
             // Restore AnimeThemes links for this specific series if a mapping file exists to prevent the pruned folder from losing them
             if (File.Exists(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileAtMapping)))
@@ -325,25 +325,25 @@ public class VfsWatcher(
                 if (ratingKey.HasValue)
                 {
                     foundInAnyTarget = true;
-                    s_logger.Info("VFS: Triggering debounced metadata fixup and analysis for '{0}' (RatingKey: {1}) on {2}", series.GetDisplayTitle(), ratingKey.Value, target.ServerName);
+                    s_logger.Info("VFS: Triggering debounced metadata fixup and analysis for '{0}' [{1}] (RatingKey: {2}) on {3}", series.GetDisplayTitle(), series.ID, ratingKey.Value, target.ServerName);
                     await plexLibrary.RefreshMetadataAsync(ratingKey.Value, target, token).ConfigureAwait(false);
                     await plexLibrary.AnalyzeItemAsync(ratingKey.Value, target, token).ConfigureAwait(false);
                 }
             }
 
             if (!foundInAnyTarget)
-                s_logger.Debug("VFS: Debounced fixup for '{0}' skipped; rating key not found in Plex yet", series.GetDisplayTitle());
+                s_logger.Debug("VFS: Debounced fixup for '{0}' [{1}] skipped; rating key not found in Plex yet", series.GetDisplayTitle(), series.ID);
             else
             {
                 // Execute subsequent API actions sequentially to guarantee metadata framework exists
                 await RunCollectionUpdateAsync(series, token).ConfigureAwait(false);
 
-                s_logger.Info("VFS: Triggering debounced critic rating application for '{0}' (ID: {1})", series.GetDisplayTitle(), series.ID);
+                s_logger.Info("VFS: Triggering debounced critic rating application for '{0}' [{1}]", series.GetDisplayTitle(), series.ID);
                 await criticRatingService.ApplyRatingsAsync([series.ID], token).ConfigureAwait(false);
 
                 if (Settings.Advanced.EnableImageSync)
                 {
-                    s_logger.Info("VFS: Triggering debounced image sync for '{0}' (ID: {1})", series.GetDisplayTitle(), series.ID);
+                    s_logger.Info("VFS: Triggering debounced image sync for '{0}' [{1}]", series.GetDisplayTitle(), series.ID);
                     await imageSyncService.SyncImagesAsync([series.ID], token).ConfigureAwait(false);
                 }
             }
@@ -351,7 +351,7 @@ public class VfsWatcher(
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            s_logger.Error(ex, "VFS: Metadata fixup failed for series {0}", series.GetDisplayTitle() ?? series.ID.ToString());
+            s_logger.Error(ex, "VFS: Metadata fixup failed for series '{0}' [{1}]", series.GetDisplayTitle(), series.ID);
         }
     }
 
@@ -397,7 +397,7 @@ public class VfsWatcher(
         }
         catch (Exception ex)
         {
-            s_logger.Error(ex, "VFS: Collection update failed for series {0}", series.GetDisplayTitle() ?? series.ID.ToString());
+            s_logger.Error(ex, "VFS: Collection update failed for series '{0}' [{1}]", series.GetDisplayTitle(), series.ID);
         }
     }
 

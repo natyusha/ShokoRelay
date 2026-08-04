@@ -98,20 +98,20 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
                     var rating = ComputeSeriesRating(series);
                     if (!NeedsRatingUpdate(item.Rating, rating))
                     {
-                        s_logger.Trace("CriticRatingService: skipping show {0} ({1}) because rating {2} matches Plex", item.RatingKey, series.GetDisplayTitle(), item.Rating);
+                        s_logger.Trace("CriticRatingService: skipping show '{0}' [{1}] (RatingKey: {2}) because rating {3} matches Plex", series.GetDisplayTitle(), series.ID, item.RatingKey, item.Rating);
                         continue;
                     }
 
                     if (await ApplyRatingAsync(item.RatingKey!, rating, target, cancellationToken))
                     {
                         uS++;
-                        appliedChanges.Add(new RatingChange(series.GetDisplayTitle() ?? "Unknown", "Show", item.RatingKey!, item.Rating, rating));
-                        s_logger.Info("CriticRatingService: Updated Show '{0}' to {1}", series.GetDisplayTitle(), rating);
+                        appliedChanges.Add(new RatingChange($"'{series.GetDisplayTitle() ?? "Unknown"}' [{series.ID}]", "Show", item.RatingKey!, item.Rating, rating));
+                        s_logger.Info("CriticRatingService: Updated Show '{0}' [{1}] to {2}", series.GetDisplayTitle(), series.ID, rating);
                     }
                     else
                     {
                         errs++;
-                        errorsList.Add($"CriticRatingService: Failed update for show {shokoId.Value}");
+                        errorsList.Add($"CriticRatingService: Failed update for show '{series.GetDisplayTitle()}' [{shokoId.Value}]");
                     }
                 }
 
@@ -140,13 +140,15 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
                     if (await ApplyRatingAsync(item.RatingKey!, rating, target, cancellationToken))
                     {
                         uE++;
-                        appliedChanges.Add(new RatingChange($"{episode.Series.GetDisplayTitle()} - S{episode.SeasonNumber}E{episode.EpisodeNumber}", "Episode", item.RatingKey!, item.Rating, rating));
+                        appliedChanges.Add(
+                            new RatingChange($"'{episode.Series?.GetDisplayTitle()}' [{episode.SeriesID}] - S{episode.SeasonNumber}E{episode.EpisodeNumber}", "Episode", item.RatingKey!, item.Rating, rating)
+                        );
                         s_logger.Trace("CriticRatingService: Updated Episode {0} to {1}", item.RatingKey, rating);
                     }
                     else
                     {
                         errs++;
-                        errorsList.Add($"CriticRatingService: Failed update for episode {epId}");
+                        errorsList.Add($"CriticRatingService: Failed update for episode '{episode.Series?.GetDisplayTitle()}' [{episode.SeriesID}] - S{episode.SeasonNumber}E{episode.EpisodeNumber}");
                     }
                 }
             }

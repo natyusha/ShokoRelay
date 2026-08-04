@@ -185,7 +185,15 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                         }
                         appliedIds.Add(ep.ID);
                         result = SyncHelper.IncMarkedWatched(result, result.PerUser, uName);
-                        s_logger.Info("WatchedSyncService: {0}Plex -> Shoko: {1} marked {2} S{3:D2}E{4:D2}", logPrefix, uName, ep.Series.GetDisplayTitle(), item.ParentIndex ?? 0, item.Index ?? 0);
+                        s_logger.Info(
+                            "WatchedSyncService: {0}Plex -> Shoko: {1} marked '{2}' [{3}] S{4:D2}E{5:D2}",
+                            logPrefix,
+                            uName,
+                            ep.Series?.GetDisplayTitle(),
+                            ep.SeriesID,
+                            item.ParentIndex ?? 0,
+                            item.Index ?? 0
+                        );
                     }
                     else if (wouldUpdateProgress)
                     {
@@ -203,10 +211,11 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                         appliedIds.Add(ep.ID);
                         result = SyncHelper.IncProgressUpdated(result, result.PerUser, uName);
                         s_logger.Info(
-                            "WatchedSyncService: {0}Plex -> Shoko: {1} updated progress {2} S{3:D2}E{4:D2} to {5}",
+                            "WatchedSyncService: {0}Plex -> Shoko: {1} updated progress '{2}' [{3}] S{4:D2}E{5:D2} to {6}",
                             logPrefix,
                             uName,
-                            ep.Series.GetDisplayTitle(),
+                            ep.Series?.GetDisplayTitle(),
+                            ep.SeriesID,
                             item.ParentIndex ?? 0,
                             item.Index ?? 0,
                             TimeSpan.FromMilliseconds(item.ViewOffset!.Value)
@@ -222,7 +231,7 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                             uName,
                             libraryName: target.Title,
                             ep.ID,
-                            ep.Series.GetDisplayTitle(),
+                            $"'{ep.Series?.GetDisplayTitle()}' [{ep.SeriesID}]",
                             item.ParentIndex ?? 0,
                             item.Index ?? 0,
                             item.RatingKey,

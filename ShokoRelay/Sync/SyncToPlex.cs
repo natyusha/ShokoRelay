@@ -119,7 +119,16 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
                         }
 
                         result = SyncHelper.IncMarkedWatched(result, result.PerUser, uName);
-                        s_logger.Info("WatchedSyncService: {0}Plex <- Shoko: {1} marked ep {2} (Plex Key: {3}) on {4}", logPrefix, uName, sw.UserData.EpisodeID, plexItem.RatingKey, target.ServerUrl);
+                        s_logger.Info(
+                            "WatchedSyncService: {0}Plex <- Shoko: {1} marked ep {2} (Plex Key: {3}) for '{4}' [{5}] on {6}",
+                            logPrefix,
+                            uName,
+                            sw.UserData.EpisodeID,
+                            plexItem.RatingKey,
+                            sw.Episode!.Series?.GetDisplayTitle(),
+                            sw.Episode.SeriesID,
+                            target.ServerName
+                        );
                         SyncHelper.AddPerUserChange(
                             result.PerUserChanges,
                             uName,
@@ -127,7 +136,7 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
                                 uName,
                                 libraryName: target.Title,
                                 sw.UserData.EpisodeID,
-                                sw.Episode!.Series.GetDisplayTitle(),
+                                $"'{sw.Episode!.Series?.GetDisplayTitle()}' [{sw.Episode.SeriesID}]",
                                 plexItem.ParentIndex ?? sw.Episode.SeasonNumber,
                                 plexItem.Index ?? sw.Episode.EpisodeNumber,
                                 plexItem.RatingKey,

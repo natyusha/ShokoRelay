@@ -105,7 +105,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                                 // Resolve coordinates accurately matching the user's TMDB numbering preference
                                 var prefId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series) : null;
                                 var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
-                                var epLogName = $"'{episode.Series.GetDisplayTitle()}' S{coords.Season:D2}E{coords.Episode:D2}";
+                                var epLogName = $"'{episode.Series?.GetDisplayTitle()}' [{episode.SeriesID}] S{coords.Season:D2}E{coords.Episode:D2}";
 
                                 // Check if a local physical episode thumbnail exists on disk alongside the video file
                                 var localEpisodeThumb = FindLocalEpisodeThumbnail(episode);
@@ -622,13 +622,13 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
         }
 
         if (cacheVal == null)
-            s_logger.Debug("ImageSyncService: New local file found for series {0} '{1}' (ID: {2}) -> Uploading", label, series.GetDisplayTitle(), series.ID);
+            s_logger.Debug("ImageSyncService: New local file found for series {0} '{1}' [{2}] -> Uploading", label, series.GetDisplayTitle(), series.ID);
         else
-            s_logger.Debug("ImageSyncService: File changed for series {0} '{1}' (ID: {2}) -> Purging stale image and uploading", label, series.GetDisplayTitle(), series.ID);
+            s_logger.Debug("ImageSyncService: File changed for series {0} '{1}' [{2}] -> Purging stale image and uploading", label, series.GetDisplayTitle(), series.ID);
 
         await PurgeEntityImagesAsync(series, imageType, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
 
-        s_logger.Trace("ImageSyncService: Uploading local series {0} for series '{1}' (ID: {2})", label, series.GetDisplayTitle(), series.ID);
+        s_logger.Trace("ImageSyncService: Uploading local series {0} for series '{1}' [{2}]", label, series.GetDisplayTitle(), series.ID);
 
         try
         {
@@ -638,8 +638,8 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
         }
         catch (Exception ex)
         {
-            errorsBag.Add($"Failed to process series {label} for series {series.ID}: {ex.Message}");
-            s_logger.Warn(ex, "ImageSyncService: Failed to upload series {0} for series '{1}' (ID: {2})", label, series.GetDisplayTitle(), series.ID);
+            errorsBag.Add($"Failed to process series {label} for series '{series.GetDisplayTitle()}' [{series.ID}]: {ex.Message}");
+            s_logger.Warn(ex, "ImageSyncService: Failed to upload series {0} for series '{1}' [{2}]", label, series.GetDisplayTitle(), series.ID);
             return (true, false, false, true, false);
         }
     }
