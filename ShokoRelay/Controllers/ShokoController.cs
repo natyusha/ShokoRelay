@@ -33,7 +33,7 @@ public class ShokoController(
 {
     #region Virtual File System
 
-    /// <summary>Builds the VFS symlink tree for configured import folders.</summary>
+    /// <summary>Builds the VFS symlink tree for configured managed folders.</summary>
     /// <param name="clean">Whether to clear the existing root.</param>
     /// <param name="run">Flag required to execute build.</param>
     /// <param name="filter">Optional comma-separated list of Shoko or AniDB series IDs to filter the operation.</param>

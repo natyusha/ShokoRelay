@@ -42,7 +42,7 @@ internal static class VfsShared
         if (folder.DropFolderType.HasFlag(DropFolderType.Source) && !folder.DropFolderType.HasFlag(DropFolderType.Destination))
             return false;
 
-        var exclusions = Settings.Advanced.ImportFolderExclusions?.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) ?? [];
+        var exclusions = Settings.Advanced.ManagedFolderExclusions?.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) ?? [];
         foreach (var ex in exclusions)
         {
             if (string.Equals(ex, folder.ID.ToString(), StringComparison.OrdinalIgnoreCase) || string.Equals(ex, folder.Name, StringComparison.OrdinalIgnoreCase))

@@ -9,7 +9,7 @@ namespace ShokoRelay.Vfs;
 /// <summary>Builds a virtual filesystem tree for Plex mapping metadata to conventions.</summary>
 /// <param name="metadataService">Metadata service used for series and episode resolution.</param>
 /// <param name="assetLinker">Service for linking local media assets and Plex extras.</param>
-/// <param name="videoService">Shoko video and import folder service.</param>
+/// <param name="videoService">Shoko video and managed folder service.</param>
 public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLinker, IVideoService videoService)
 {
     #region Setup & State
@@ -167,7 +167,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
 
         if (overlapping != null)
             throw new InvalidOperationException(
-                $"VFS generation blocked: Shoko import folder '{overlapping}' resides inside or matches the VFS directory. Remove this import folder in Shoko's settings before generating."
+                $"VFS generation blocked: Shoko managed folder '{overlapping}' resides inside or matches the VFS directory. Remove this managed folder in Shoko's settings before generating."
             );
 
         // Refresh the override cache to catch any link changes made in Shoko since the last operation. This includes VFS Overrides and if MergeTmdbSeries is enabled auto merged TMDB series as well.

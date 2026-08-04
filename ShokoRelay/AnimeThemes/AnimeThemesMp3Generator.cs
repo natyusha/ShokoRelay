@@ -91,7 +91,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         }
     }
 
-    /// <summary>Forces a re-scan of all managed import folder roots and rebuilds the cache.</summary>
+    /// <summary>Forces a re-scan of all managed folder roots and rebuilds the cache.</summary>
     public void RefreshThemeMp3Cache()
     {
         lock (_cacheLock)
@@ -115,10 +115,10 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         }
     }
 
-    /// <summary>Forces a re-scan of all managed import folder roots and rebuilds the dictionary cache.</summary>
+    /// <summary>Forces a re-scan of all managed folder roots and rebuilds the dictionary cache.</summary>
     private void RefreshThemeMp3CacheInternal()
     {
-        s_logger.Info("AnimeThemes: Building Theme.mp3 cache -> scanning all managed import folders...");
+        s_logger.Info("AnimeThemes: Building Theme.mp3 cache -> scanning all managed folders...");
         var excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { VfsShared.ResolveRootFolderName(), VfsShared.ResolveCollectionImagesFolderName(), VfsShared.ResolveAnimeThemesFolderName() };
         try
         {
@@ -453,7 +453,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         bool isVfsPath = folder.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries).Contains(vfsRoot, StringComparer.OrdinalIgnoreCase);
 
         if (isVfsPath)
-            return (new(folder, "error", $"Cannot generate Theme.mp3 inside the VFS directory '{vfsRoot}'. Target your physical import folder instead."), null);
+            return (new(folder, "error", $"Cannot generate Theme.mp3 inside the VFS directory '{vfsRoot}'. Target your physical managed folder instead."), null);
 
         // Lazily scan subfolders recursively to find the first video file while ignoring VFS and AnimeThemes system directories
         string? vid = Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories).FirstOrDefault(f => AnimeThemesHelper.VideoFileExtensions.Contains(Path.GetExtension(f)) && !VfsShared.IsPathIgnored(f));
