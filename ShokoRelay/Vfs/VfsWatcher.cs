@@ -207,6 +207,13 @@ public class VfsWatcher(
         if (series == null)
             return;
 
+        // If the series has no valid VFS paths (e.g., all files reside in excluded folders), bypass Plex updates entirely.
+        if (!VfsShared.ResolveSeriesVfsPaths(series, metadataService).Any())
+        {
+            s_logger.Debug("VFS: Skipping Plex updates for '{0}' [{1}] -> No valid VFS paths found (series may be fully excluded or empty)", series.GetDisplayTitle(), series.ID);
+            return;
+        }
+
         ScheduleLibraryScan(series);
         ScheduleMetadataFixup(series);
     }
