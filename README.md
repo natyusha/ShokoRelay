@@ -105,7 +105,7 @@ Enable the following options in Shoko to ensure that Plex has at least one sourc
 
 > [!TIP]
 > If you previously used the legacy `ShokoRelay.bundle` you can simply convert your existing libraries to the new agent. This allows you to maintain watched states and video preview thumbnails. Files that end up with different episode assignments will _not_ migrate correctly and will have to be handled manually (this is guaranteed for "Other" type episodes that were in Season -4).\
-> _A full metadata refresh is required after the first scan._
+> _Running "Refresh All Metadata" for the converted libraries is required after the first scan completes._
 
 - The Shoko Relay agent requires a `TV Shows` type library to be created (or an existing one to be used)
 - Under `Add Folders` be sure to only enter the path to `!ShokoRelayVFS` (or the configured `VFS Root Path`) as the directory
