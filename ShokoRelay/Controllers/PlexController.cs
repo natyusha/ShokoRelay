@@ -219,17 +219,17 @@ public class PlexController(
                         if (await PlexLibrary.RefreshMetadataAsync(ratingKey.Value, target, HttpContext.RequestAborted).ConfigureAwait(false))
                         {
                             refreshedCount++;
-                            Logger.Info("PlexController: Triggered manual metadata refresh for '{0}' [{1}] (RatingKey: {2}) on {3}", series.GetDisplayTitle(), series.ID, ratingKey.Value, target.ServerName);
+                            Logger.Info("PlexController: Triggered manual metadata refresh @ {0} [{1}] (RatingKey: {2}) on {3}", series.GetDisplayTitle(), series.ID, ratingKey.Value, target.ServerName);
                         }
                         else
-                            errors.Add($"Failed to refresh metadata for '{series.GetDisplayTitle()}' [{series.ID}] on {target.ServerName}");
+                            errors.Add($"Failed to refresh metadata @ {series.GetDisplayTitle()} [{series.ID}] on {target.ServerName}");
                     }
                     else
-                        errors.Add($"Rating key not found in Plex for '{series.GetDisplayTitle()}' [{series.ID}] on {target.ServerName}");
+                        errors.Add($"Rating key not found in Plex @ {series.GetDisplayTitle()} [{series.ID}] on {target.ServerName}");
                 }
                 catch (Exception ex)
                 {
-                    errors.Add($"Error refreshing metadata for series '{series.GetDisplayTitle()}' [{series.ID}] on {target.ServerName}: {ex.Message}");
+                    errors.Add($"Error refreshing metadata @ {series.GetDisplayTitle()} [{series.ID}] on {target.ServerName}: {ex.Message}");
                 }
             }
         }

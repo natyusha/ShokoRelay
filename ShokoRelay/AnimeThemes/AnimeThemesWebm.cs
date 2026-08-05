@@ -123,7 +123,7 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
                             await videoResp.Content.CopyToAsync(fs, ct).ConfigureAwait(false);
 
                             downloads.Add(video.Basename);
-                            existingFiles.Add(video.Basename); // Add to cache so we don't download it again if it appears in another anime
+                            existingFiles.Add(video.Basename); // Add to cache so it isn't downloaded again if it appears in another anime
                             downloaded++;
                         }
                         catch (HttpRequestException ex) when (ex.StatusCode is System.Net.HttpStatusCode.ServiceUnavailable or System.Net.HttpStatusCode.TooManyRequests)

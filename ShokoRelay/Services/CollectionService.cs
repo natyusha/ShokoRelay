@@ -182,7 +182,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                                     if (!string.IsNullOrEmpty(url) && await plexCollections.UploadCollectionImageByUrlAsync(cid, url, prefix, target, cancellationToken).ConfigureAwait(false))
                                     {
                                         uploaded++;
-                                        s_logger.Debug("CollectionService: Applied {0} for '{1}'", label, collectionName);
+                                        s_logger.Debug("CollectionService: Applied {0} for collection -> {1}", label, collectionName);
                                     }
                                 }
                             }
@@ -205,7 +205,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                                 if (await plexCollections.UploadCollectionImageByUrlAsync(cid, url, prefix, target, cancellationToken).ConfigureAwait(false))
                                 {
                                     uploaded++;
-                                    s_logger.Info("CollectionService: Applied custom {0} to smart collection '{1}' (ID: {2})", label, col.Title, cid);
+                                    s_logger.Info("CollectionService: Applied custom {0} to smart collection -> {1} (ID: {2})", label, col.Title, cid);
                                 }
                             }
                         }

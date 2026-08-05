@@ -103,7 +103,9 @@ public record PlexWatchedSyncResult(
 /// <summary>Shared helpers used by sync services.</summary>
 public static class SyncHelper
 {
-    #region Concurrency
+    #region Setup & Concurrency
+
+    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
 
     /// <summary>Global semaphore to prevent concurrent watched-state synchronization tasks.</summary>
     public static readonly SemaphoreSlim SyncLock = new(1, 1);
@@ -226,7 +228,6 @@ public static class SyncHelper
     /// <summary>Fetches a transient token for a managed user.</summary>
     public static async Task<string?> FetchManagedUserTokenAsync(PlexAuth plexAuth, ConfigProvider configProvider, string userName, string? pin, CancellationToken cancellationToken = default)
     {
-        var logger = LogManager.GetCurrentClassLogger();
         string? userToken = null;
         var adminToken = configProvider.GetPlexToken();
         if (!string.IsNullOrWhiteSpace(adminToken))
@@ -246,21 +247,21 @@ public static class SyncHelper
                     if (!string.IsNullOrWhiteSpace(fetched))
                     {
                         userToken = fetched;
-                        logger.Debug("WatchedSyncService: fetched transient token for managed Plex user '{User}' (id={Id}) not persisted", userName, matched.Id);
+                        s_logger.Debug("WatchedSyncService: fetched transient token for managed Plex user '{User}' (id={Id}) not persisted", userName, matched.Id);
                     }
                     else
-                        logger.Info("WatchedSyncService: SwitchHomeUser returned no token for managed user '{User}' (id={Id})", userName, matched.Id);
+                        s_logger.Info("WatchedSyncService: SwitchHomeUser returned no token for managed user '{User}' (id={Id})", userName, matched.Id);
                 }
                 else
-                    logger.Debug("WatchedSyncService: no matching managed/home user found for '{User}'", userName);
+                    s_logger.Debug("WatchedSyncService: no matching managed/home user found for '{User}'", userName);
             }
             catch (Exception ex)
             {
-                logger.Warn(ex, "WatchedSyncService: failed to auto-fetch token for managed Plex user '{User}'", userName);
+                s_logger.Warn(ex, "WatchedSyncService: failed to auto-fetch token for managed Plex user '{User}'", userName);
             }
         }
         else
-            logger.Info("WatchedSyncService: admin Plex token missing; cannot auto-fetch managed-user token for '{User}'", userName);
+            s_logger.Info("WatchedSyncService: admin Plex token missing; cannot auto-fetch managed-user token for '{User}'", userName);
         return userToken;
     }
 
@@ -289,7 +290,6 @@ public static class SyncHelper
         CancellationToken cancellationToken = default
     )
     {
-        var logger = LogManager.GetCurrentClassLogger();
         try
         {
             string? userToken = await FetchManagedUserTokenAsync(plexAuth, configProvider, userName, pin, cancellationToken).ConfigureAwait(false);
@@ -336,13 +336,13 @@ public static class SyncHelper
             }
             catch (Exception ex)
             {
-                logger.Debug(ex, "WatchedSyncService: failed to resolve server access token for managed user; falling back to user token");
+                s_logger.Debug(ex, "WatchedSyncService: failed to resolve server access token for managed user; falling back to user token");
             }
 
             var effectiveToken = !string.IsNullOrWhiteSpace(serverAccessToken) ? serverAccessToken : userToken;
             long? minLast = (sinceHours.HasValue && sinceHours.Value > 0) ? DateTimeOffset.UtcNow.ToUnixTimeSeconds() - (sinceHours.Value * 3600) : null;
             var list = await plexClient.GetSectionEpisodesAsync(target, effectiveToken, cancellationToken, onlyUnwatched, hasProgress, null, minLast).ConfigureAwait(false);
-            logger.Info(
+            s_logger.Info(
                 "WatchedSyncService: fetched {Count} episodes for user {User} in library '{Library}' on {Server} (since={Since})",
                 list?.Count ?? 0,
                 userName,
@@ -354,7 +354,7 @@ public static class SyncHelper
         }
         catch (Exception ex)
         {
-            logger.Warn(ex, "Failed to fetch episodes for Plex user '{User}' on {Server}:{Section}", userName, target.ServerUrl, target.SectionId);
+            s_logger.Warn(ex, "Failed to fetch episodes for Plex user '{User}' on {Server}:{Section}", userName, target.ServerUrl, target.SectionId);
             return ([], null, $"Failed to fetch episodes for Plex user '{userName}' from {target.ServerUrl}:{target.SectionId} -> {ex.Message}");
         }
     }

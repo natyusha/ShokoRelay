@@ -178,7 +178,7 @@ public class SourceLinkService(IVideoService videoService)
         }
         catch (Exception ex)
         {
-            s_logger.Error(ex, "SourceLinkService: SourceLink failed for {0}", relSrc);
+            s_logger.Error(ex, "SourceLinkService: SourceLink failed -> {0}", relSrc);
             return false;
         }
     }
