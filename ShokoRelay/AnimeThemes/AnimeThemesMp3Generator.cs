@@ -283,7 +283,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         try
         {
             if (!query.Batch)
-                s_logger.Info("AnimeThemes MP3: Generating Theme.mp3 -> {0} [{1}] in {2}", series.GetDisplayTitle() ?? series.ID.ToString(), series.ID, folder);
+                s_logger.Info("AnimeThemes MP3: Generating Theme.mp3 for series -> {0} [{1}] in {2}", series.GetDisplayTitle() ?? series.ID.ToString(), series.ID, folder);
 
             var sel = await FetchThemeAsync(series.AnidbAnimeID, query.Slug, query.Offset, ct);
             if (sel == null)

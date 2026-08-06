@@ -186,7 +186,7 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                         appliedIds.Add(ep.ID);
                         result = SyncHelper.IncMarkedWatched(result, result.PerUser, uName);
                         s_logger.Info(
-                            "WatchedSyncService: {0}Plex -> Shoko: {1} marked ep @ {2} [{3}] S{4:D2}E{5:D2}",
+                            "WatchedSyncService: {0}Plex -> Shoko: {1} marked episode -> {2} [{3}] - S{4:D2}E{5:D2}",
                             logPrefix,
                             uName,
                             ep.Series?.GetDisplayTitle(),
@@ -211,7 +211,7 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                         appliedIds.Add(ep.ID);
                         result = SyncHelper.IncProgressUpdated(result, result.PerUser, uName);
                         s_logger.Info(
-                            "WatchedSyncService: {0}Plex -> Shoko: {1} updated progress @ {2} [{3}] S{4:D2}E{5:D2} to {6}",
+                            "WatchedSyncService: {0}Plex -> Shoko: {1} updated progress for episode -> {2} [{3}] - S{4:D2}E{5:D2} to {6}",
                             logPrefix,
                             uName,
                             ep.Series?.GetDisplayTitle(),

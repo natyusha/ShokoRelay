@@ -209,7 +209,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
                         list.Add((l, srv with { PreferredUri = uri }));
 
                     if (matched.Count > 0)
-                        s_logger.Info("Plex Discovery: Connected to server '{Name}' at {Uri} (Type: {Type}, Libraries: {Count})", srv.Name, uri, isFallback ? "Fallback" : "Preferred", matched.Count);
+                        s_logger.Info("Plex Discovery: Connected to server -> {Name} ... {Uri} (Type: {Type}, Libraries: {Count})", srv.Name, uri, isFallback ? "Fallback" : "Preferred", matched.Count);
                     return true;
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -218,7 +218,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
                 }
                 catch (Exception ex)
                 {
-                    s_logger.Debug("Plex Discovery: Connection to {0} failed for server '{1}' -> {2}", uri, srv.Name, ex.GetBaseException().Message);
+                    s_logger.Debug("Plex Discovery: Connection to {0} failed for server -> {1} ... {2}", uri, srv.Name, ex.GetBaseException().Message);
                     return false;
                 }
             }
@@ -248,7 +248,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
                 }
 
                 if (!ok)
-                    s_logger.Warn("Plex Discovery: Failed to establish any connection to server '{Name}' - check for DNS rebinding protection, firewall rules, or docker network isolation", srv.Name);
+                    s_logger.Warn("Plex Discovery: Failed to establish any connection to server -> {0} ... check for DNS rebinding protection, firewall rules, or docker network isolation", srv.Name);
             }
         }
         return (tokenValid, servers, list);

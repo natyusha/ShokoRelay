@@ -120,7 +120,7 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
 
                         result = SyncHelper.IncMarkedWatched(result, result.PerUser, uName);
                         s_logger.Info(
-                            "WatchedSyncService: {0}Plex <- Shoko: {1} marked ep @ {2} (Plex Key: {3}) for {4} [{5}] on {6}",
+                            "WatchedSyncService: {0}Plex <- Shoko: {1} marked episode -> {2} (Plex Key: {3}) for {4} [{5}] on {6}",
                             logPrefix,
                             uName,
                             sw.UserData.EpisodeID,

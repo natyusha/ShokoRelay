@@ -414,7 +414,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                             catch (Exception ex)
                             {
                                 Interlocked.Increment(ref e);
-                                errsBag.Add($"Failed to process local artwork '{config.Label}' @ {series.ID}: {ex.Message}");
+                                errsBag.Add($"Failed to process local artwork {config.Label} for series -> {series.ID}: {ex.Message}");
                                 s_logger.Warn(ex, "ImageSyncService: Failed to process local series artwork loop iteration");
                             }
                         }
@@ -601,7 +601,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
             var preferredImage = series.GetAvailableImages(imageType).FirstOrDefault(i => i.IsPreferred);
             if (hadCache || (preferredImage != null && preferredImage.Source is DataSource.User or DataSource.LocallyGenerated))
             {
-                s_logger.Info("ImageSyncService: Local image -> {0} | {1} (ID: {2}) no longer present on disk ... Purging from Shoko", label, series.GetDisplayTitle(), series.ID);
+                s_logger.Info("ImageSyncService: Local {0} for series -> {1} [{2}] no longer present on disk ... Purging from Shoko", label, series.GetDisplayTitle(), series.ID);
                 await PurgeEntityImagesAsync(series, imageType, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
                 return (true, false, false, false, true);
             }
@@ -622,13 +622,13 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
         }
 
         if (cacheVal == null)
-            s_logger.Debug("ImageSyncService: New local file found -> {0} | {1} [{2}] ... Uploading", label, series.GetDisplayTitle(), series.ID);
+            s_logger.Debug("ImageSyncService: New local {0} found for series -> {1} [{2}] ... Uploading", label, series.GetDisplayTitle(), series.ID);
         else
-            s_logger.Debug("ImageSyncService: File changed -> {0} | {1} [{2}] ... Purging stale image and uploading", label, series.GetDisplayTitle(), series.ID);
+            s_logger.Debug("ImageSyncService: File changed for series {0} -> {1} [{2}] ... Purging stale image and uploading", label, series.GetDisplayTitle(), series.ID);
 
         await PurgeEntityImagesAsync(series, imageType, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
 
-        s_logger.Trace("ImageSyncService: Uploading local series -> {0} | {1} [{2}]", label, series.GetDisplayTitle(), series.ID);
+        s_logger.Trace("ImageSyncService: Uploading local {0} for series -> {1} [{2}]", label, series.GetDisplayTitle(), series.ID);
 
         try
         {

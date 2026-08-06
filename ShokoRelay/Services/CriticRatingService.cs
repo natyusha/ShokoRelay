@@ -98,7 +98,7 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
                     var rating = ComputeSeriesRating(series);
                     if (!NeedsRatingUpdate(item.Rating, rating))
                     {
-                        s_logger.Trace("CriticRatingService: skipping show -> {0} [{1}] (RatingKey: {2}) because rating {3} matches Plex", series.GetDisplayTitle(), series.ID, item.RatingKey, item.Rating);
+                        s_logger.Trace("CriticRatingService: Skipped series -> {0} [{1}] (RatingKey: {2}) because rating {3} matches Plex", series.GetDisplayTitle(), series.ID, item.RatingKey, item.Rating);
                         continue;
                     }
 
@@ -106,12 +106,12 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
                     {
                         uS++;
                         appliedChanges.Add(new RatingChange($"{series.GetDisplayTitle() ?? "Unknown"} [{series.ID}]", "Show", item.RatingKey!, item.Rating, rating));
-                        s_logger.Info("CriticRatingService: Updated Show -> {0} [{1}] to {2}", series.GetDisplayTitle(), series.ID, rating);
+                        s_logger.Info("CriticRatingService: Updated series -> {0} [{1}] to {2}", series.GetDisplayTitle(), series.ID, rating);
                     }
                     else
                     {
                         errs++;
-                        errorsList.Add($"CriticRatingService: Failed update for show -> {series.GetDisplayTitle()} [{shokoId.Value}]");
+                        errorsList.Add($"CriticRatingService: Failed update for series -> {series.GetDisplayTitle()} [{shokoId.Value}]");
                     }
                 }
 
@@ -133,7 +133,7 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
                     var rating = ComputeEpisodeRating(episode);
                     if (!NeedsRatingUpdate(item.Rating, rating))
                     {
-                        s_logger.Trace("CriticRatingService: skipping episode -> {0} because rating {1} matches Plex", item.RatingKey, item.Rating);
+                        s_logger.Trace("CriticRatingService: Skipped episode -> {0} because rating {1} matches Plex", item.RatingKey, item.Rating);
                         continue;
                     }
 
@@ -143,17 +143,17 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
                         appliedChanges.Add(
                             new RatingChange($"{episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] - S{episode.SeasonNumber}E{episode.EpisodeNumber}", "Episode", item.RatingKey!, item.Rating, rating)
                         );
-                        s_logger.Trace("CriticRatingService: Updated Episode -> {0} to {1}", item.RatingKey, rating);
+                        s_logger.Trace("CriticRatingService: Updated episode -> {0} to {1}", item.RatingKey, rating);
                     }
                     else
                     {
                         errs++;
-                        errorsList.Add($"CriticRatingService: Failed update for episode @ {episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] - S{episode.SeasonNumber}E{episode.EpisodeNumber}");
+                        errorsList.Add($"CriticRatingService: Failed update for episode -> {episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] - S{episode.SeasonNumber}E{episode.EpisodeNumber}");
                     }
                 }
             }
             sw.Stop();
-            s_logger.Info("CriticRatingService: Task finished -> Updated {0} shows and {1} episodes in {2}ms", uS, uE, sw.ElapsedMilliseconds);
+            s_logger.Info("CriticRatingService: Task finished -> Updated {0} series and {1} episodes in {2}ms", uS, uE, sw.ElapsedMilliseconds);
             return new ApplyRatingsResult(pS, uS, pE, uE, errs, errorsList, appliedChanges, sw.Elapsed);
         }
         finally
