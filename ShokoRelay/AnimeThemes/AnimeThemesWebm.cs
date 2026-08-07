@@ -90,8 +90,11 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
 
             foreach (var anime in resp.Anime)
             {
-                string yearFolder = FormatYearFolder(anime.Year);
-                string seasonFolder = FormatSeasonFolder(anime.Season);
+                // Format the year into a decade string if before 2000, otherwise returns the exact year
+                string yearFolder = !anime.Year.HasValue ? "Unknown" : (anime.Year.Value >= 2000 ? anime.Year.Value.ToString() : $"{anime.Year.Value / 10 * 10 % 100:D2}s");
+
+                // Format the season into title case
+                string seasonFolder = string.IsNullOrWhiteSpace(anime.Season) ? "Unknown" : char.ToUpper(anime.Season[0]) + anime.Season[1..].ToLowerInvariant();
 
                 foreach (var theme in anime.Animethemes ?? [])
                 {
@@ -171,27 +174,6 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
 
         s_logger.Info("AnimeThemes WebM: Download operation finished -> {0} downloaded, {1} skipped, {2} errors", downloaded, skipped, errors);
         return new WebmDownloadResult(downloaded, skipped, errors, downloads, messages);
-    }
-
-    #endregion
-
-    #region Internal Helpers
-
-    /// <summary>Formats the year into a decade string if before 2000, otherwise returns the exact year.</summary>
-    private static string FormatYearFolder(int? year)
-    {
-        if (!year.HasValue)
-            return "Unknown";
-        if (year.Value >= 2000)
-            return year.Value.ToString();
-        int decade = year.Value / 10 * 10;
-        return $"{decade % 100:D2}s";
-    }
-
-    /// <summary>Formats the season into title case.</summary>
-    private static string FormatSeasonFolder(string? season)
-    {
-        return string.IsNullOrWhiteSpace(season) ? "Unknown" : char.ToUpper(season[0]) + season[1..].ToLowerInvariant();
     }
 
     #endregion
