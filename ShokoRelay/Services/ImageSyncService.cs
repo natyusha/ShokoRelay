@@ -3,7 +3,6 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Enums;
-using Shoko.Abstractions.Metadata.Image;
 using Shoko.Abstractions.Metadata.Image.CrossReferences;
 using Shoko.Abstractions.Metadata.Image.Options;
 using ShokoRelay.Vfs;
@@ -64,7 +63,22 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
             var syncDetails = Settings.TmdbThumbnails ? "" : " + Plex episode thumbnails";
             s_logger.Info("ImageSyncService: Starting image synchronization (local collection/series artwork{0})...", syncDetails);
 
-            var cache = LoadCache();
+            // Load the local image synchronization cache from disk into a thread-safe concurrent dictionary
+            var cache = new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (File.Exists(CacheFilePath))
+            {
+                try
+                {
+                    foreach (var line in File.ReadAllLines(CacheFilePath))
+                    {
+                        var parts = line.Split('|', 2);
+                        if (parts.Length == 2)
+                            cache[parts[0]] = parts[1];
+                    }
+                }
+                catch { }
+            }
+
             var errsBag = new ConcurrentBag<string>();
             var uploadedBag = new ConcurrentBag<string>();
             int p = 0,
@@ -97,8 +111,15 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
             // Sync Local Series Images (Posters, Backdrops, Logos)
             await SyncLocalSeriesImagesAsync(allSeries, cache, errsBag, uploadedBag, AddStats, cancellationToken).ConfigureAwait(false);
 
+            // Persist the current image synchronization cache to disk
             if (cacheModified == 1)
-                SaveCache(cache);
+            {
+                try
+                {
+                    File.WriteAllLines(CacheFilePath, cache.Select(kvp => $"{kvp.Key}|{kvp.Value}"));
+                }
+                catch { }
+            }
 
             sw.Stop();
             s_logger.Info("ImageSyncService: Finished synchronization -> uploaded {0} new images to Shoko in {1}ms", u, sw.ElapsedMilliseconds);
@@ -138,7 +159,9 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                         continue;
 
                     var epId = PlexHelper.ExtractShokoEpisodeIdFromGuid(item.Guid);
-                    if (!epId.HasValue)
+
+                    // Ensure each Shoko Episode is only processed once globally per run to avoid redundant local asset checks and Plex thumbnail uploads
+                    if (!epId.HasValue || !processedInRun.Add(epId.Value))
                         continue;
 
                     var episode = metadataService.GetShokoEpisodeByID(epId.Value);
@@ -147,9 +170,24 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
 
                     var prefId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series) : null;
                     var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
-                    var epLogName = $"'{episode.Series?.GetDisplayTitle()}' [{episode.SeriesID}] S{coords.Season:D2}E{coords.Episode:D2}";
+                    var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] S{coords.Season:D2}E{coords.Episode:D2}";
 
-                    var localThumb = FindLocalEpisodeThumbnail(episode);
+                    // Find a local episode thumbnail alongside the physical video files
+                    var localThumb = (episode.VideoList ?? [])
+                        .SelectMany(v => v.Files ?? [])
+                        .Select(f => f.Path)
+                        .Where(p => !string.IsNullOrWhiteSpace(p))
+                        .Select(p => (Dir: Path.GetDirectoryName(p), Base: Path.GetFileNameWithoutExtension(p)))
+                        .Where(x => !string.IsNullOrEmpty(x.Dir) && Directory.Exists(x.Dir))
+                        .SelectMany(x =>
+                            Directory
+                                .EnumerateFiles(x.Dir!, $"{x.Base}.*")
+                                .Where(f =>
+                                    string.Equals(Path.GetFileNameWithoutExtension(f), x.Base, StringComparison.OrdinalIgnoreCase) && PlexConstants.LocalMediaAssets.Artwork.Contains(Path.GetExtension(f))
+                                )
+                        )
+                        .FirstOrDefault();
+
                     var (h, u, s, e, cu) = await ProcessLocalAssetAsync(
                             localThumb,
                             episode,
@@ -165,7 +203,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                         .ConfigureAwait(false);
                     addStats(h, u, s, e, cu);
 
-                    if (!h && !Settings.TmdbThumbnails && processedInRun.Add(epId.Value))
+                    if (!h && !Settings.TmdbThumbnails)
                     {
                         var (ph, pu, ps, pe, pcu) = await ProcessPlexThumbnailAsync(item.Thumb, episode, epLogName, target, cache, errsBag, uploadedBag, ct).ConfigureAwait(false);
                         addStats(ph, pu, ps, pe, pcu);
@@ -205,7 +243,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                     ImageEntityType.Primary,
                     "c" + group.ID,
                     "collection poster",
-                    $"group '{group.PreferredTitle?.Value}' [{group.ID}]",
+                    $"group {group.PreferredTitle?.Value} [{group.ID}]",
                     true,
                     $"[Collection Poster] {group.PreferredTitle?.Value}",
                     cache,
@@ -254,14 +292,30 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                             continue;
                         }
 
-                        string? foundFile = FindLocalSeriesArtwork(series, config.Names);
+                        // Find a local artwork file for a series based on a prioritized list of allowed filenames
+                        string? foundFile = null;
+                        foreach (var vfsPath in VfsShared.ResolveSeriesVfsPaths(series, metadataService))
+                        {
+                            if (!Directory.Exists(vfsPath))
+                                continue;
+                            var localArtworks = Directory.EnumerateFiles(vfsPath).Where(f => PlexConstants.LocalMediaAssets.Artwork.Contains(Path.GetExtension(f))).ToList();
+                            foreach (var name in config.Names)
+                            {
+                                foundFile = localArtworks.FirstOrDefault(f => string.Equals(Path.GetFileNameWithoutExtension(f), name, StringComparison.OrdinalIgnoreCase));
+                                if (foundFile != null)
+                                    break;
+                            }
+                            if (foundFile != null)
+                                break;
+                        }
+
                         var (h, u, s, e, cu) = await ProcessLocalAssetAsync(
                                 foundFile,
                                 series,
                                 config.Type,
                                 cacheKey,
                                 config.Label,
-                                $"series '{series.GetDisplayTitle()}' [{series.ID}]",
+                                $"series {series.GetDisplayTitle()} [{series.ID}]",
                                 true,
                                 $"[Local {config.Label}] {series.GetDisplayTitle()}",
                                 cache,
@@ -296,7 +350,22 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
         ConcurrentBag<string> errorsBag
     )
     {
-        var (exists, length) = !string.IsNullOrEmpty(foundFile) ? GetFileMetadata(foundFile) : (false, 0L);
+        // Resolve a file's physical target (bypassing symlinks) and retrieve its physical length
+        bool exists = false;
+        long length = 0;
+        if (!string.IsNullOrEmpty(foundFile))
+        {
+            try
+            {
+                var fi = new FileInfo(foundFile);
+                if (fi.LinkTarget != null && fi.ResolveLinkTarget(true) is FileInfo targetFi)
+                    fi = targetFi;
+                exists = fi.Exists;
+                length = exists ? fi.Length : 0;
+            }
+            catch { }
+        }
+
         var preferredImg = entity.GetAvailableImages(imageType).FirstOrDefault(i => i.IsPreferred);
 
         if (!exists)
@@ -315,27 +384,53 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
         }
 
         string? cacheVal = cache.GetValueOrDefault(cacheKey);
-        var (skipUpload, newCacheVal) = EvaluateLocalImageCache(cacheVal, length, foundFile!, preferredImg);
 
-        if (skipUpload)
+        // Evaluate whether a local image matches the active preferred image in Shoko to safely skip re-uploading
+        string? md5 = null;
+        if (cacheVal != null && cacheVal.StartsWith(length.ToString() + "|"))
         {
-            if (cacheVal == newCacheVal)
-                return (true, false, true, false, false);
-            cache[cacheKey] = newCacheVal;
-            return (true, false, true, false, true);
+            var parts = cacheVal.Split('|');
+            if (parts.Length == 2)
+            {
+                md5 = parts[1];
+                if (preferredImg != null && string.Equals(preferredImg.ResourceID, md5, StringComparison.OrdinalIgnoreCase))
+                    return (true, false, true, false, false); // Skip upload
+            }
+        }
+
+        if (md5 == null)
+        {
+            using var fs = new FileStream(foundFile!, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            md5 = Convert.ToHexString(MD5.HashData(fs));
+        }
+
+        string newCacheVal = $"{length}|{md5}";
+        if (preferredImg != null && string.Equals(preferredImg.ResourceID, md5, StringComparison.OrdinalIgnoreCase))
+        {
+            if (cacheVal != newCacheVal)
+            {
+                cache[cacheKey] = newCacheVal;
+                return (true, false, true, false, true);
+            }
+            return (true, false, true, false, false); // Skip
         }
 
         if (cacheVal == null)
             s_logger.Debug("ImageSyncService: New local {0} found for -> {1} ... Uploading", label, entityName);
         else
-            s_logger.Debug("ImageSyncService: File changed for {0} -> {1} ... Purging stale image and uploading", label, entityName);
+            s_logger.Debug("ImageSyncService: Local {0} changed for -> {1} ... Purging stale image and uploading", label, entityName);
 
         await PurgeEntityImagesAsync(entity, imageType, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
         s_logger.Trace("ImageSyncService: Uploading local {0} for -> {1}", label, entityName);
 
         try
         {
-            UploadAndPreferLocalImage(foundFile!, entity, imageType, userSubmitted);
+            // Upload a local file from disk to Shoko and mark it as preferred for the specified entity
+            using var stream = new FileStream(foundFile!, FileMode.Open, FileAccess.Read, FileShare.Read);
+            var contentType = ImageHelper.GetMimeType(Path.GetExtension(foundFile!)) ?? "image/jpeg";
+            var uploadedImage = imageManager.UploadImage(stream, contentType, userSubmitted: userSubmitted);
+            imageManager.SetPreferredImageForEntity(entity, imageType, uploadedImage);
+
             cache[cacheKey] = newCacheVal;
             if (uploadDetail != null)
                 s_logger.Info("ImageSyncService: Successfully uploaded and preferred {0} for -> {1}", label, entityName);
@@ -436,69 +531,6 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
 
     #region Internal Helpers
 
-    /// <summary>Evaluates whether a local image matches the active preferred image in Shoko to safely skip re-uploading.</summary>
-    /// <param name="cacheVal">The previously cached metadata string.</param>
-    /// <param name="length">The physical length of the local file.</param>
-    /// <param name="filePath">The path to the local file.</param>
-    /// <param name="preferredImage">The currently preferred image in Shoko.</param>
-    /// <returns>A tuple indicating whether to skip the upload, and the newly generated cache string.</returns>
-    private static (bool SkipUpload, string NewCacheVal) EvaluateLocalImageCache(string? cacheVal, long length, string filePath, IImage? preferredImage)
-    {
-        string? md5 = null;
-        if (cacheVal != null && cacheVal.StartsWith(length.ToString() + "|"))
-        {
-            var parts = cacheVal.Split('|');
-            if (parts.Length == 2)
-            {
-                md5 = parts[1];
-                if (preferredImage != null && string.Equals(preferredImage.ResourceID, md5, StringComparison.OrdinalIgnoreCase))
-                    return (true, cacheVal);
-            }
-        }
-        md5 ??= GetFileMD5(filePath);
-        string newCacheVal = $"{length}|{md5}";
-        bool skip = preferredImage != null && string.Equals(preferredImage.ResourceID, md5, StringComparison.OrdinalIgnoreCase);
-        return (skip, newCacheVal);
-    }
-
-    /// <summary>Finds a local artwork file for a series based on a prioritized list of allowed filenames.</summary>
-    /// <param name="series">The Shoko series metadata.</param>
-    /// <param name="allowedNames">Array of valid filenames (without extension).</param>
-    /// <returns>The physical file path if found, otherwise null.</returns>
-    private string? FindLocalSeriesArtwork(IShokoSeries series, string[] allowedNames)
-    {
-        foreach (var vfsPath in VfsShared.ResolveSeriesVfsPaths(series, metadataService))
-        {
-            if (!Directory.Exists(vfsPath))
-                continue;
-            var localArtworks = Directory.EnumerateFiles(vfsPath).Where(f => PlexConstants.LocalMediaAssets.Artwork.Contains(Path.GetExtension(f))).ToList();
-            foreach (var name in allowedNames)
-            {
-                var found = localArtworks.FirstOrDefault(f => string.Equals(Path.GetFileNameWithoutExtension(f), name, StringComparison.OrdinalIgnoreCase));
-                if (found != null)
-                    return found;
-            }
-        }
-        return null;
-    }
-
-    /// <summary>Finds a local episode thumbnail alongside the physical video files.</summary>
-    /// <param name="episode">The Shoko episode to inspect.</param>
-    /// <returns>The physical file path if found, otherwise null.</returns>
-    private string? FindLocalEpisodeThumbnail(IShokoEpisode episode) =>
-        (episode.VideoList ?? [])
-            .SelectMany(v => v.Files ?? [])
-            .Select(f => f.Path)
-            .Where(p => !string.IsNullOrWhiteSpace(p))
-            .Select(p => (Dir: Path.GetDirectoryName(p), Base: Path.GetFileNameWithoutExtension(p)))
-            .Where(x => !string.IsNullOrEmpty(x.Dir) && Directory.Exists(x.Dir))
-            .SelectMany(x =>
-                Directory
-                    .EnumerateFiles(x.Dir!, $"{x.Base}.*")
-                    .Where(f => string.Equals(Path.GetFileNameWithoutExtension(f), x.Base, StringComparison.OrdinalIgnoreCase) && PlexConstants.LocalMediaAssets.Artwork.Contains(Path.GetExtension(f)))
-            )
-            .FirstOrDefault();
-
     /// <summary>Purges stale or demoted cross-referenced images for an entity based on source filters.</summary>
     /// <param name="entity">The Shoko metadata entity.</param>
     /// <param name="imageType">The target image entity type.</param>
@@ -521,78 +553,6 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
         {
             s_logger.Warn(ex, "ImageSyncService: Failed to purge stale images for entity of type {0}", entity.GetType().Name);
         }
-    }
-
-    /// <summary>Uploads a local file from disk to Shoko and marks it as preferred for the specified entity.</summary>
-    /// <param name="filePath">The physical file path on disk.</param>
-    /// <param name="entity">The Shoko metadata entity.</param>
-    /// <param name="imageType">The target image entity type.</param>
-    /// <param name="userSubmitted">Whether the image is user-submitted (manual) or locally generated.</param>
-    private void UploadAndPreferLocalImage(string filePath, IWithImages entity, ImageEntityType imageType, bool userSubmitted)
-    {
-        using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-        var contentType = ImageHelper.GetMimeType(Path.GetExtension(filePath)) ?? "image/jpeg";
-        var uploadedImage = imageManager.UploadImage(stream, contentType, userSubmitted: userSubmitted);
-        imageManager.SetPreferredImageForEntity(entity, imageType, uploadedImage);
-    }
-
-    /// <summary>Resolves a file's physical target (bypassing symlinks) and retrieves its physical length.</summary>
-    /// <param name="path">The file path to inspect.</param>
-    /// <returns>A tuple containing a boolean existence check and the file's physical byte length.</returns>
-    private static (bool Exists, long Length) GetFileMetadata(string path)
-    {
-        try
-        {
-            var fi = new FileInfo(path);
-            if (fi.LinkTarget != null && fi.ResolveLinkTarget(true) is FileInfo targetFi)
-                fi = targetFi;
-            return (fi.Exists, fi.Length);
-        }
-        catch
-        {
-            return (false, 0);
-        }
-    }
-
-    /// <summary>Calculates the MD5 hash of a local file, matching Shoko's internal ResourceID format.</summary>
-    /// <param name="path">The file path to hash.</param>
-    /// <returns>The upper-case hex string representation of the MD5 hash.</returns>
-    private static string GetFileMD5(string path)
-    {
-        using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-        return Convert.ToHexString(MD5.HashData(fs));
-    }
-
-    /// <summary>Loads the local image synchronization cache from disk into a thread-safe concurrent dictionary.</summary>
-    /// <returns>A dictionary containing cached image tracking mappings.</returns>
-    private ConcurrentDictionary<string, string> LoadCache()
-    {
-        var cache = new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        if (File.Exists(CacheFilePath))
-        {
-            try
-            {
-                foreach (var line in File.ReadAllLines(CacheFilePath))
-                {
-                    var parts = line.Split('|', 2);
-                    if (parts.Length == 2)
-                        cache[parts[0]] = parts[1];
-                }
-            }
-            catch { }
-        }
-        return cache;
-    }
-
-    /// <summary>Persists the current image synchronization cache to disk.</summary>
-    /// <param name="cache">The dictionary of cache keys to save.</param>
-    private void SaveCache(ConcurrentDictionary<string, string> cache)
-    {
-        try
-        {
-            File.WriteAllLines(CacheFilePath, cache.Select(kvp => $"{kvp.Key}|{kvp.Value}"));
-        }
-        catch { }
     }
 
     #endregion
