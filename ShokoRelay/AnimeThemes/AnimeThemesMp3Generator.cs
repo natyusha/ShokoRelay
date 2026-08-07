@@ -338,10 +338,31 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
                 int idx = 0;
                 if (string.IsNullOrEmpty(query.Slug))
                 {
-                    int op1 = entry.Animethemes.FindIndex(t => t.Slug != null && (t.Slug.Equals("OP1", StringComparison.OrdinalIgnoreCase) || t.Slug.Equals("OP", StringComparison.OrdinalIgnoreCase)));
-                    int anyOp = entry.Animethemes.FindIndex(t => t.Slug != null && t.Slug.StartsWith("OP", StringComparison.OrdinalIgnoreCase));
-                    int anyEd = entry.Animethemes.FindIndex(t => t.Slug != null && t.Slug.StartsWith("ED", StringComparison.OrdinalIgnoreCase));
-                    idx = op1 >= 0 ? op1 : (anyOp >= 0 ? anyOp : (anyEd >= 0 ? anyEd : 0));
+                    var (bestTheme, bestIndex, _, _) = entry
+                        .Animethemes.Select(
+                            (t, index) =>
+                            {
+                                string s = t.Slug ?? "";
+                                var (baseSlug, _) = AnimeThemesHelper.ParseSlug(s);
+                                bool isOp = baseSlug.StartsWith("OP", StringComparison.OrdinalIgnoreCase);
+                                bool isEd = baseSlug.StartsWith("ED", StringComparison.OrdinalIgnoreCase);
+                                var match = AnimeThemesHelper.NumberRegex.Match(baseSlug);
+                                int num = match.Success && int.TryParse(match.Value, out var n) ? n : 1;
+
+                                int group =
+                                    isOp ? 1
+                                    : isEd ? 2
+                                    : 3;
+                                return (Theme: t, OriginalIndex: index, Group: group, Number: num);
+                            }
+                        )
+                        .OrderBy(x => x.Group)
+                        .ThenBy(x => x.Number)
+                        .ThenBy(x => x.OriginalIndex)
+                        .FirstOrDefault();
+
+                    if (bestTheme != null)
+                        idx = bestIndex;
                 }
 
                 var themeDetail = await _apiClient.FetchAnimeThemeWithArtistsAsync(entry.Animethemes[idx].Id, ct).ConfigureAwait(false);
@@ -360,7 +381,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
                     animeTitle = entry.Name ?? "";
                     animeSlug = entry.Slug ?? "";
 
-                    s_logger.Debug("AnimeThemes MP3: Selected theme: {0} - {1}", slugDisplay, songTitle);
+                    s_logger.Debug("AnimeThemes MP3: Selected theme for series -> {0} [{1}] ({2} - {3})", series.GetDisplayTitle(), series.ID, slugRaw, songTitle);
                 }
             }
 
