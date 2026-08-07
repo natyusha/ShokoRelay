@@ -170,7 +170,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
 
                     var prefId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series) : null;
                     var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
-                    var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] S{coords.Season:D2}E{coords.Episode:D2}";
+                    var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] - S{coords.Season:D2}E{coords.Episode:D2}";
 
                     // Find a local episode thumbnail alongside the physical video files
                     var localThumb = (episode.VideoList ?? [])

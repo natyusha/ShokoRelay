@@ -137,7 +137,6 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
                         continue;
 
                     pE++;
-
                     // Resolve the critic rating for an episode based on user configuration
                     double? rating = Settings.CriticRatingMode switch
                     {
@@ -146,9 +145,13 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
                         _ => null,
                     };
 
+                    var prefId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series) : null;
+                    var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
+                    var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] - S{coords.Season:D2}E{coords.Episode:D2} (RatingKey: {item.RatingKey})";
+
                     if (!NeedsRatingUpdate(item.Rating, rating))
                     {
-                        s_logger.Trace("CriticRatingService: Skipped episode -> {0} because rating {1} matches Plex", item.RatingKey, item.Rating);
+                        s_logger.Trace("CriticRatingService: Skipped episode -> {0} because rating {1} matches Plex", epLogName, item.Rating);
                         continue;
                     }
 
@@ -156,14 +159,14 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
                     {
                         uE++;
                         appliedChanges.Add(
-                            new RatingChange($"{episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] - S{episode.SeasonNumber}E{episode.EpisodeNumber}", "Episode", item.RatingKey!, item.Rating, rating)
+                            new RatingChange($"{episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] - S{coords.Season:D2}E{coords.Episode:D2}", "Episode", item.RatingKey!, item.Rating, rating)
                         );
-                        s_logger.Trace("CriticRatingService: Updated episode -> {0} to {1}", item.RatingKey, rating);
+                        s_logger.Trace("CriticRatingService: Updated episode -> {0} to {1}", epLogName, rating);
                     }
                     else
                     {
                         errs++;
-                        errorsList.Add($"CriticRatingService: Failed update for episode -> {episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] - S{episode.SeasonNumber}E{episode.EpisodeNumber}");
+                        errorsList.Add($"CriticRatingService: Failed update for episode -> {epLogName}");
                     }
                 }
             }
