@@ -75,13 +75,47 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
             List<string> globalRoots = [.. (videoService.GetAllManagedFolders() ?? []).Select(f => f.Path).Where(p => !string.IsNullOrEmpty(p)).Distinct()];
 
             // Execute pre-cleanup pruning of old posters, arts, logos, and square images if configured and enabled
-            if (clean && !string.IsNullOrWhiteSpace(Settings.Advanced.PlexMetadataPath))
+            if (clean && !string.IsNullOrWhiteSpace(Settings.Advanced.PlexMetadataPath) && Directory.Exists(Settings.Advanced.PlexMetadataPath))
             {
+                s_logger.Info("CollectionService: Scanning Plex data directory for old collection images to prune...");
+                int deletedCount = 0;
+                var subFolders = new[] { "posters", "art", "clearLogos", "squareArt" }; // 'Art' / 'squareArt' are NOT plural like the upload endpoints
+
                 foreach (var target in targets)
                 {
                     var collections = await plexClient.GetSectionCollectionsAsync(target, cancellationToken).ConfigureAwait(false) ?? [];
-                    CleanOldPlexImages(collections);
+                    foreach (var col in collections)
+                    {
+                        var metaDir = col.GetMetadataDirectory();
+                        if (string.IsNullOrEmpty(metaDir))
+                            continue;
+
+                        foreach (var folder in subFolders)
+                        {
+                            string imagesPath = Path.Combine(Settings.Advanced.PlexMetadataPath, metaDir, "Uploads", folder);
+                            if (!Directory.Exists(imagesPath))
+                                continue;
+
+                            try
+                            {
+                                var files = new DirectoryInfo(imagesPath).EnumerateFiles().OrderBy(f => f.CreationTimeUtc).ToList();
+                                if (files.Count > 1)
+                                    foreach (var file in files.SkipLast(1))
+                                        try
+                                        {
+                                            file.Delete();
+                                            deletedCount++;
+                                        }
+                                        catch { }
+                            }
+                            catch (Exception ex)
+                            {
+                                s_logger.Warn(ex, "CollectionService: Failed to prune {0} for collection '{1}'", folder, col.Title);
+                            }
+                        }
+                    }
                 }
+                s_logger.Info("CollectionService: Finished pruning. Deleted {0} stale collection images.", deletedCount);
             }
 
             foreach (var target in targets)
@@ -224,56 +258,6 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
         {
             TaskHelper.FinishTask(TaskName);
         }
-    }
-
-    #endregion
-
-    #region Private Helpers
-
-    /// <summary>Prunes old custom images from Plex's local metadata directories, keeping only the most recent upload for each type.</summary>
-    /// <param name="collections">The list of discovered collections in the section.</param>
-    private void CleanOldPlexImages(IEnumerable<PlexMetadataItem> collections)
-    {
-        string dataPath = Settings.Advanced.PlexMetadataPath;
-        if (string.IsNullOrWhiteSpace(dataPath) || !Directory.Exists(dataPath))
-            return;
-
-        s_logger.Info("CollectionService: Scanning Plex data directory for old collection images to prune...");
-        int deletedCount = 0;
-        var subFolders = new[] { "posters", "art", "clearLogos", "squareArt" }; // 'Art' / 'squareArt' are NOT plural like the upload endpoints
-
-        foreach (var col in collections)
-        {
-            var metaDir = col.GetMetadataDirectory();
-            if (string.IsNullOrEmpty(metaDir))
-                continue;
-
-            foreach (var folder in subFolders)
-            {
-                string imagesPath = Path.Combine(dataPath, metaDir, "Uploads", folder);
-                if (!Directory.Exists(imagesPath))
-                    continue;
-
-                try
-                {
-                    var files = new DirectoryInfo(imagesPath).EnumerateFiles().OrderBy(f => f.CreationTimeUtc).ToList();
-                    if (files.Count > 1)
-                        foreach (var file in files.SkipLast(1))
-                            try
-                            {
-                                file.Delete();
-                                deletedCount++;
-                            }
-                            catch { }
-                }
-                catch (Exception ex)
-                {
-                    s_logger.Warn(ex, "CollectionService: Failed to prune {0} for collection '{1}'", folder, col.Title);
-                }
-            }
-        }
-
-        s_logger.Info("CollectionService: Finished pruning. Deleted {0} stale collection images.", deletedCount);
     }
 
     #endregion

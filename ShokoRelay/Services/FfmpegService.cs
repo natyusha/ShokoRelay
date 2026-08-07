@@ -320,7 +320,7 @@ public sealed class FfmpegService(string pluginDirectory, string applicationPath
 
     #endregion
 
-    #region Helpers
+    #region Internal Helpers
 
     /// <summary>Sanitizes metadata values by replacing double quotes with single quotes to ensure command-line argument integrity.</summary>
     /// <param name="value">The raw metadata string to sanitize.</param>
