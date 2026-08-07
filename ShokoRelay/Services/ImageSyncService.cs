@@ -41,388 +41,63 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
 
     private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
     private readonly SemaphoreSlim _syncLock = new(1, 1);
-
     private string CacheFilePath => Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FilePlexImagesCache);
 
     #endregion
 
     #region Public API
 
-    /// <summary>Scans all configured Plex libraries and local VFS paths to upload missing or updated screenshots and posters back to Shoko.</summary>
-    /// <param name="allowedSeriesIds">Optional collection of series IDs to limit processing to.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A summary result containing statistics on the synchronization run.</returns>
+    /// <inheritdoc/>
     public async Task<ImageSyncResult> SyncImagesAsync(IEnumerable<int>? allowedSeriesIds = null, CancellationToken cancellationToken = default)
     {
         var sw = Stopwatch.StartNew();
         await _syncLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var (processed, uploaded, skipped, errors) = (0, 0, 0, 0);
-            var errorsList = new List<string>();
-            var uploadedDetails = new List<string>();
             var targets = plexClient.GetConfiguredTargets();
             var allSeries =
                 allowedSeriesIds != null
                     ? [.. allowedSeriesIds.Distinct().Select(metadataService.GetShokoSeriesByID).OfType<IShokoSeries>()]
                     : metadataService.GetAllShokoSeries()?.Cast<IShokoSeries>().ToList() ?? [];
-
             HashSet<int>? allowedSet = allowedSeriesIds != null ? [.. allowedSeriesIds] : null;
 
             var syncDetails = Settings.TmdbThumbnails ? "" : " + Plex episode thumbnails";
             s_logger.Info("ImageSyncService: Starting image synchronization (local collection/series artwork{0})...", syncDetails);
 
             var cache = LoadCache();
-            var processedInRun = new HashSet<int>();
-            var updatedCache = false;
+            var errsBag = new ConcurrentBag<string>();
+            var uploadedBag = new ConcurrentBag<string>();
+            int p = 0,
+                u = 0,
+                s = 0,
+                e = 0,
+                cacheModified = 0;
 
-            // Sync Plex Episode Screenshots & Local Episode Thumbnails
+            void AddStats(bool handled, bool uploaded, bool skipped, bool error, bool cacheUp)
+            {
+                if (cacheUp)
+                    Interlocked.Exchange(ref cacheModified, 1);
+                if (handled && (uploaded || skipped || error))
+                    Interlocked.Increment(ref p);
+                if (uploaded)
+                    Interlocked.Increment(ref u);
+                else if (skipped)
+                    Interlocked.Increment(ref s);
+                else if (error)
+                    Interlocked.Increment(ref e);
+            }
+
+            // Sync Episode Thumbnails (Local & Plex)
             if (targets.Count > 0)
-            {
-                foreach (var target in targets)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    try
-                    {
-                        var episodes = await plexClient.GetSectionEpisodesAsync(target, null, cancellationToken).ConfigureAwait(false) ?? [];
+                await SyncEpisodeThumbnailsAsync(targets, allowedSet, cache, errsBag, uploadedBag, AddStats, cancellationToken).ConfigureAwait(false);
 
-                        foreach (var item in episodes)
-                        {
-                            cancellationToken.ThrowIfCancellationRequested();
-                            try
-                            {
-                                if (string.IsNullOrWhiteSpace(item.Guid) || string.IsNullOrWhiteSpace(item.Thumb))
-                                    continue;
+            // Sync Collection Posters
+            await SyncCollectionPostersAsync(allSeries, cache, errsBag, uploadedBag, AddStats, cancellationToken).ConfigureAwait(false);
 
-                                var shokoEpisodeId = PlexHelper.ExtractShokoEpisodeIdFromGuid(item.Guid);
-                                if (!shokoEpisodeId.HasValue)
-                                    continue;
+            // Sync Local Series Images (Posters, Backdrops, Logos)
+            await SyncLocalSeriesImagesAsync(allSeries, cache, errsBag, uploadedBag, AddStats, cancellationToken).ConfigureAwait(false);
 
-                                var episode = metadataService.GetShokoEpisodeByID(shokoEpisodeId.Value);
-                                if (episode == null || (allowedSet != null && !allowedSet.Contains(episode.SeriesID)))
-                                    continue;
-
-                                // Resolve coordinates accurately matching the user's TMDB numbering preference
-                                var prefId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series) : null;
-                                var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
-                                var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] S{coords.Season:D2}E{coords.Episode:D2}";
-
-                                // Check if a local physical episode thumbnail exists on disk alongside the video file
-                                var localEpisodeThumb = FindLocalEpisodeThumbnail(episode);
-                                var (localExists, localLength) = localEpisodeThumb != null ? GetFileMetadata(localEpisodeThumb) : (false, 0L);
-                                var cacheKeyLocal = episode.ID.ToString();
-                                var preferredBackdropLocal = episode.GetAvailableImages(ImageEntityType.Backdrop).FirstOrDefault(i => i.IsPreferred);
-
-                                if (localExists)
-                                {
-                                    processed++;
-                                    string? localCacheVal = cache.GetValueOrDefault(cacheKeyLocal);
-
-                                    var (skipUpload, newCacheVal) = EvaluateLocalImageCache(localCacheVal, localLength, localEpisodeThumb!, preferredBackdropLocal);
-
-                                    if (skipUpload)
-                                    {
-                                        if (localCacheVal != newCacheVal)
-                                        {
-                                            cache[cacheKeyLocal] = newCacheVal;
-                                            updatedCache = true;
-                                        }
-                                        skipped++;
-                                        continue;
-                                    }
-
-                                    if (localCacheVal == null)
-                                        s_logger.Debug("ImageSyncService: New local thumbnail found for episode -> {0} (ID: {1}) ... Uploading", epLogName, episode.ID);
-                                    else
-                                        s_logger.Debug("ImageSyncService: Local thumbnail for episode -> {0} (ID: {1}) changed ... Purging stale and uploading", epLogName, episode.ID);
-
-                                    await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
-
-                                    try
-                                    {
-                                        UploadAndPreferLocalImage(localEpisodeThumb!, episode, ImageEntityType.Backdrop, userSubmitted: false);
-
-                                        uploaded++;
-                                        uploadedDetails.Add($"[Local Episode Thumb] {episode.Series.GetDisplayTitle()} S{coords.Season:D2}E{coords.Episode:D2}");
-                                        cache[cacheKeyLocal] = newCacheVal;
-                                        updatedCache = true;
-                                        s_logger.Info("ImageSyncService: Successfully uploaded and preferred local thumbnail for episode -> {0} (ID: {1})", epLogName, episode.ID);
-                                    }
-                                    catch (OperationCanceledException)
-                                    {
-                                        throw;
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        errors++;
-                                        errorsList.Add($"Failed to process local thumbnail for episode -> {epLogName}: {ex.Message}");
-                                        s_logger.Warn(ex, "ImageSyncService: Failed to upload local thumbnail for episode -> {0} (ID: {1})", epLogName, episode.ID);
-                                    }
-                                    continue;
-                                }
-                                else if (preferredBackdropLocal != null && preferredBackdropLocal.Source is DataSource.User or DataSource.LocallyGenerated)
-                                {
-                                    // Local thumbnail file was removed from disk -> Purge the user/locally-generated image from Shoko
-                                    // Local cache entries start with the file length (digits). Plex cache entries start with a relative path ('/library/...').
-                                    if (cache.TryGetValue(cacheKeyLocal, out var cachedVal) && cachedVal.Length > 0 && char.IsAsciiDigit(cachedVal[0]))
-                                    {
-                                        cache.TryRemove(cacheKeyLocal, out _);
-                                        s_logger.Info("ImageSyncService: Local thumbnail for episode -> {0} (ID: {1}) no longer present on disk ... Purging from Shoko", epLogName, episode.ID);
-                                        await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
-                                        updatedCache = true;
-                                    }
-                                }
-
-                                // Skip Plex-generated thumbnail downloads if TMDB thumbnails are enabled
-                                if (Settings.TmdbThumbnails)
-                                    continue;
-
-                                // Avoid duplicate uploads/processing for the same Shoko Episode ID during this active run
-                                if (!processedInRun.Add(shokoEpisodeId.Value))
-                                    continue;
-
-                                processed++;
-                                var isStale = false;
-                                var alreadyUploaded = false;
-                                var cacheKey = episode.ID.ToString();
-                                var preferredBackdrop = episode.GetAvailableImages(ImageEntityType.Backdrop).FirstOrDefault(i => i.IsPreferred);
-
-                                if (cache.TryGetValue(cacheKey, out var cacheVal))
-                                {
-                                    string savedThumb;
-                                    string? savedMd5 = null;
-                                    var pipeIdx = cacheVal.IndexOf('|');
-                                    if (pipeIdx >= 0)
-                                    {
-                                        savedThumb = cacheVal[..pipeIdx];
-                                        savedMd5 = cacheVal[(pipeIdx + 1)..];
-                                    }
-                                    else
-                                        savedThumb = cacheVal;
-
-                                    if (string.Equals(savedThumb, item.Thumb, StringComparison.OrdinalIgnoreCase))
-                                    {
-                                        if (preferredBackdrop != null && (savedMd5 == null || string.Equals(preferredBackdrop.ResourceID, savedMd5, StringComparison.OrdinalIgnoreCase)))
-                                        {
-                                            skipped++;
-                                            alreadyUploaded = true;
-                                        }
-                                    }
-                                    else
-                                        isStale = true; // The thumbnail URL has changed (indicating the file changed or a new thumbnail was generated)
-                                }
-
-                                if (preferredBackdrop != null && preferredBackdrop.Source is not DataSource.LocallyGenerated and not DataSource.User)
-                                {
-                                    skipped++;
-                                    continue;
-                                }
-
-                                if (alreadyUploaded)
-                                    continue;
-
-                                if (isStale)
-                                {
-                                    s_logger.Debug("ImageSyncService: Plex thumbnail URL changed for episode -> {0} (ID: {1}) ... Purging stale thumbnail", epLogName, episode.ID);
-                                    await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
-                                }
-                                else if (preferredBackdrop != null && preferredBackdrop.Source is DataSource.LocallyGenerated or DataSource.User)
-                                {
-                                    s_logger.Debug("ImageSyncService: Preferred thumbnail mismatch for episode -> {0} (ID: {1}) ... Purging incorrect thumbnail", epLogName, episode.ID);
-                                    await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
-                                }
-
-                                s_logger.Trace("ImageSyncService: Fetching Plex thumbnail for episode -> {0} (ID: {1})", epLogName, episode.ID);
-
-                                using var req = plexClient.CreateRequest(HttpMethod.Get, item.Thumb, target.ServerUrl);
-                                using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
-
-                                if (!resp.IsSuccessStatusCode)
-                                {
-                                    errors++;
-                                    errorsList.Add($"Plex download failed for episode -> {epLogName} (ID: {episode.ID}) with status {resp.StatusCode}");
-                                    continue;
-                                }
-
-                                var bytes = await resp.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
-                                var md5Hex = Convert.ToHexString(MD5.HashData(bytes));
-                                var imageId = IImageManager.GetIDForImageSourceAndResourceID(DataSource.LocallyGenerated, md5Hex);
-
-                                // Detect duplicate images on disk before upload and link the existing record as preferred
-                                var existingImage = imageManager.GetImageByID(imageId);
-                                if (existingImage != null)
-                                {
-                                    imageManager.SetPreferredImageForEntity(episode, ImageEntityType.Backdrop, existingImage);
-                                    uploaded++;
-                                    uploadedDetails.Add($"[Linked Existing Plex Thumb] {epLogName}");
-                                    cache[cacheKey] = $"{item.Thumb}|{md5Hex}";
-                                    updatedCache = true;
-                                    s_logger.Info("ImageSyncService: Linked existing duplicate thumbnail for episode -> {0} (ID: {1})", epLogName, episode.ID);
-                                    continue;
-                                }
-
-                                using var stream = new MemoryStream(bytes);
-
-                                // Upload the thumbnail to Shoko and mark it as the preferred backdrop image
-                                var uploadedImage = imageManager.UploadImage(stream, "image/jpeg", userSubmitted: false);
-                                imageManager.SetPreferredImageForEntity(episode, ImageEntityType.Backdrop, uploadedImage);
-
-                                uploaded++;
-                                uploadedDetails.Add($"[Plex Thumb] {episode.Series.GetDisplayTitle()} S{coords.Season:D2}E{coords.Episode:D2}");
-                                cache[cacheKey] = $"{item.Thumb}|{md5Hex}";
-                                updatedCache = true;
-                                s_logger.Info("ImageSyncService: Successfully uploaded and preferred thumbnail for episode -> {0} (ID: {1})", epLogName, episode.ID);
-                            }
-                            catch (Exception ex)
-                            {
-                                errors++;
-                                string errorContext = item.Thumb != null ? $"episode matching Plex URL '{item.Thumb}'" : "unresolved episode";
-                                errorsList.Add($"Failed to process {errorContext}: {ex.Message}");
-                                s_logger.Warn(ex, "ImageSyncService: Failed to process episode loop iteration");
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        errors++;
-                        errorsList.Add($"Failed to scan Plex section {target.SectionId}: {ex.Message}");
-                        s_logger.Warn(ex, "ImageSyncService: Failed to scan library section {0}", target.SectionId);
-                    }
-                }
-            }
-
-            // Sync Collection Posters (From !CollectionImages)
-            var groups = allSeries.Where(s => s != null && s.TopLevelGroupID > 0).Select(s => s.TopLevelGroup).Where(g => g != null).GroupBy(g => g.ID).Select(g => g.First()).ToList();
-
-            foreach (var group in groups)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                try
-                {
-                    var seriesInGroup = allSeries.FirstOrDefault(s => s != null && s.TopLevelGroupID == group.ID);
-                    if (seriesInGroup == null)
-                        continue;
-
-                    var groupPosterFile = PlexHelper.FindCollectionImagePathByGroup(seriesInGroup, group.ID, "", metadataService);
-                    var (exists, length) = !string.IsNullOrEmpty(groupPosterFile) ? GetFileMetadata(groupPosterFile) : (false, 0L);
-
-                    var cacheKey = "c" + group.ID;
-                    var preferredPoster = group.GetAvailableImages(ImageEntityType.Primary).FirstOrDefault(i => i.IsPreferred);
-
-                    if (!exists)
-                    {
-                        bool hadCache = cache.TryRemove(cacheKey, out _);
-                        if (hadCache || (preferredPoster != null && preferredPoster.Source is DataSource.User or DataSource.LocallyGenerated))
-                        {
-                            s_logger.Info("ImageSyncService: Local collection poster for group -> {0} (ID: {1}) no longer present on disk ... Purging from Shoko", group.PreferredTitle?.Value, group.ID);
-                            await PurgeEntityImagesAsync(group, ImageEntityType.Primary, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
-                            updatedCache = true;
-                        }
-                        continue;
-                    }
-
-                    processed++;
-                    var cacheVal = cache.GetValueOrDefault(cacheKey);
-
-                    var (skipUpload, newCacheVal) = EvaluateLocalImageCache(cacheVal, length, groupPosterFile!, preferredPoster);
-
-                    if (skipUpload)
-                    {
-                        if (cacheVal != newCacheVal)
-                        {
-                            cache[cacheKey] = newCacheVal;
-                            updatedCache = true;
-                        }
-                        skipped++;
-                        continue;
-                    }
-
-                    if (cacheVal == null)
-                        s_logger.Debug("ImageSyncService: New local file found for collection poster -> {0} (ID: {1}) ... Uploading", group.PreferredTitle?.Value, group.ID);
-                    else
-                        s_logger.Debug("ImageSyncService: File changed for collection poster -> {0} (ID: {1}) ... Purging stale poster and uploading", group.PreferredTitle?.Value, group.ID);
-
-                    await PurgeEntityImagesAsync(group, ImageEntityType.Primary, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
-
-                    s_logger.Trace("ImageSyncService: Uploading local collection poster for group -> {0} (ID: {1})", group.PreferredTitle?.Value, group.ID);
-
-                    UploadAndPreferLocalImage(groupPosterFile!, group, ImageEntityType.Primary, userSubmitted: true);
-
-                    uploaded++;
-                    uploadedDetails.Add($"[Collection Poster] {group.PreferredTitle?.Value}");
-                    cache[cacheKey] = newCacheVal;
-                    updatedCache = true;
-                    s_logger.Info("ImageSyncService: Successfully uploaded and preferred collection poster for group -> {0} (ID: {1})", group.PreferredTitle?.Value, group.ID);
-                }
-                catch (Exception ex)
-                {
-                    errors++;
-                    errorsList.Add($"Failed to process collection poster for group {group.ID}: {ex.Message}");
-                    s_logger.Warn(ex, "ImageSyncService: Failed to process collection poster");
-                }
-            }
-
-            // Sync Local Series Posters, Backdrops, and Logos (From VFS Root)
-            (string[] Names, string Prefix, ImageEntityType Type, string Label)[] configs =
-            [
-                (["poster", "folder", "show"], "s", ImageEntityType.Primary, "poster"),
-                (["art", "backdrop", "background", "fanart"], "b", ImageEntityType.Backdrop, "backdrop"),
-                (["clearlogo", "logo"], "l", ImageEntityType.Logo, "logo"),
-            ];
-
-            var errsBag = new ConcurrentBag<string>(errorsList);
-            var uploadedBag = new ConcurrentBag<string>(uploadedDetails);
-            int p = processed,
-                u = uploaded,
-                s = skipped,
-                e = errors;
-            int cacheModified = updatedCache ? 1 : 0;
-
-            await Parallel
-                .ForEachAsync(
-                    allSeries,
-                    DefaultParallelOptions(cancellationToken),
-                    async (series, token) =>
-                    {
-                        if (series == null)
-                            return;
-                        foreach (var config in configs)
-                        {
-                            try
-                            {
-                                var (handled, uploadedOk, skippedOk, errorOk, cacheUp) = await ProcessLocalSeriesImageAsync(series, config.Names, config.Prefix, config.Type, config.Label, cache, errsBag)
-                                    .ConfigureAwait(false);
-
-                                if (cacheUp)
-                                    Interlocked.Exchange(ref cacheModified, 1);
-                                if (!handled)
-                                    continue;
-
-                                if (uploadedOk || skippedOk || errorOk)
-                                    Interlocked.Increment(ref p);
-
-                                if (uploadedOk)
-                                {
-                                    Interlocked.Increment(ref u);
-                                    uploadedBag.Add($"[Local {config.Label}] {series.GetDisplayTitle()}");
-                                }
-                                else if (skippedOk)
-                                    Interlocked.Increment(ref s);
-                                else if (errorOk)
-                                    Interlocked.Increment(ref e);
-                            }
-                            catch (Exception ex)
-                            {
-                                Interlocked.Increment(ref e);
-                                errsBag.Add($"Failed to process local artwork {config.Label} for series -> {series.ID}: {ex.Message}");
-                                s_logger.Warn(ex, "ImageSyncService: Failed to process local series artwork loop iteration");
-                            }
-                        }
-                    }
-                )
-                .ConfigureAwait(false);
-
-            if (updatedCache || cacheModified == 1)
+            if (cacheModified == 1)
                 SaveCache(cache);
 
             sw.Stop();
@@ -437,7 +112,329 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
 
     #endregion
 
-    #region Image Helpers
+    #region Modular Sync Loops
+
+    private async Task SyncEpisodeThumbnailsAsync(
+        IReadOnlyList<PlexLibraryTarget> targets,
+        HashSet<int>? allowedSet,
+        ConcurrentDictionary<string, string> cache,
+        ConcurrentBag<string> errsBag,
+        ConcurrentBag<string> uploadedBag,
+        Action<bool, bool, bool, bool, bool> addStats,
+        CancellationToken ct
+    )
+    {
+        var processedInRun = new HashSet<int>();
+        foreach (var target in targets)
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                var episodes = await plexClient.GetSectionEpisodesAsync(target, null, ct).ConfigureAwait(false) ?? [];
+                foreach (var item in episodes)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    if (string.IsNullOrWhiteSpace(item.Guid) || string.IsNullOrWhiteSpace(item.Thumb))
+                        continue;
+
+                    var epId = PlexHelper.ExtractShokoEpisodeIdFromGuid(item.Guid);
+                    if (!epId.HasValue)
+                        continue;
+
+                    var episode = metadataService.GetShokoEpisodeByID(epId.Value);
+                    if (episode == null || (allowedSet != null && !allowedSet.Contains(episode.SeriesID)))
+                        continue;
+
+                    var prefId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series) : null;
+                    var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
+                    var epLogName = $"'{episode.Series?.GetDisplayTitle()}' [{episode.SeriesID}] S{coords.Season:D2}E{coords.Episode:D2}";
+
+                    var localThumb = FindLocalEpisodeThumbnail(episode);
+                    var (h, u, s, e, cu) = await ProcessLocalAssetAsync(
+                            localThumb,
+                            episode,
+                            ImageEntityType.Backdrop,
+                            episode.ID.ToString(),
+                            "local thumbnail",
+                            epLogName,
+                            false,
+                            $"[Local Episode Thumb] {epLogName}",
+                            cache,
+                            errsBag
+                        )
+                        .ConfigureAwait(false);
+                    addStats(h, u, s, e, cu);
+
+                    if (!h && !Settings.TmdbThumbnails && processedInRun.Add(epId.Value))
+                    {
+                        var (ph, pu, ps, pe, pcu) = await ProcessPlexThumbnailAsync(item.Thumb, episode, epLogName, target, cache, errsBag, uploadedBag, ct).ConfigureAwait(false);
+                        addStats(ph, pu, ps, pe, pcu);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                addStats(true, false, false, true, false);
+                errsBag.Add($"Failed to scan Plex section {target.SectionId}: {ex.Message}");
+                s_logger.Warn(ex, "ImageSyncService: Failed to scan library section {0}", target.SectionId);
+            }
+        }
+    }
+
+    private async Task SyncCollectionPostersAsync(
+        List<IShokoSeries> allSeries,
+        ConcurrentDictionary<string, string> cache,
+        ConcurrentBag<string> errsBag,
+        ConcurrentBag<string> uploadedBag,
+        Action<bool, bool, bool, bool, bool> addStats,
+        CancellationToken ct
+    )
+    {
+        var groups = allSeries.Where(s => s.TopLevelGroupID > 0).Select(s => s.TopLevelGroup).OfType<IShokoGroup>().DistinctBy(g => g.ID).ToList();
+        foreach (var group in groups)
+        {
+            ct.ThrowIfCancellationRequested();
+            var seriesInGroup = allSeries.FirstOrDefault(s => s.TopLevelGroupID == group.ID);
+            if (seriesInGroup == null)
+                continue;
+
+            string? groupPosterFile = PlexHelper.FindCollectionImagePathByGroup(seriesInGroup, group.ID, "", metadataService);
+            var (h, u, s, e, cu) = await ProcessLocalAssetAsync(
+                    groupPosterFile,
+                    group,
+                    ImageEntityType.Primary,
+                    "c" + group.ID,
+                    "collection poster",
+                    $"group '{group.PreferredTitle?.Value}' [{group.ID}]",
+                    true,
+                    $"[Collection Poster] {group.PreferredTitle?.Value}",
+                    cache,
+                    errsBag
+                )
+                .ConfigureAwait(false);
+
+            if (h && u)
+                uploadedBag.Add($"[Collection Poster] {group.PreferredTitle?.Value}");
+            addStats(h, u, s, e, cu);
+        }
+    }
+
+    private async Task SyncLocalSeriesImagesAsync(
+        List<IShokoSeries> allSeries,
+        ConcurrentDictionary<string, string> cache,
+        ConcurrentBag<string> errsBag,
+        ConcurrentBag<string> uploadedBag,
+        Action<bool, bool, bool, bool, bool> addStats,
+        CancellationToken ct
+    )
+    {
+        (string[] Names, string Prefix, ImageEntityType Type, string Label)[] configs =
+        [
+            (["poster", "folder", "show"], "s", ImageEntityType.Primary, "poster"),
+            (["art", "backdrop", "background", "fanart"], "b", ImageEntityType.Backdrop, "backdrop"),
+            (["clearlogo", "logo"], "l", ImageEntityType.Logo, "logo"),
+        ];
+
+        await Parallel
+            .ForEachAsync(
+                allSeries,
+                DefaultParallelOptions(ct),
+                async (series, token) =>
+                {
+                    foreach (var config in configs)
+                    {
+                        var cacheKey = config.Prefix + series.ID;
+                        if (EnforceTmdbNumbering && OverrideHelper.GetPrimary(series.ID, metadataService) != series.ID)
+                        {
+                            if (cache.TryRemove(cacheKey, out _))
+                            {
+                                await PurgeEntityImagesAsync(series, config.Type, x => x.Source == DataSource.User && x.IsPreferred).ConfigureAwait(false);
+                                addStats(false, false, false, false, true);
+                            }
+                            continue;
+                        }
+
+                        string? foundFile = FindLocalSeriesArtwork(series, config.Names);
+                        var (h, u, s, e, cu) = await ProcessLocalAssetAsync(
+                                foundFile,
+                                series,
+                                config.Type,
+                                cacheKey,
+                                config.Label,
+                                $"series '{series.GetDisplayTitle()}' [{series.ID}]",
+                                true,
+                                $"[Local {config.Label}] {series.GetDisplayTitle()}",
+                                cache,
+                                errsBag
+                            )
+                            .ConfigureAwait(false);
+
+                        if (h && u)
+                            uploadedBag.Add($"[Local {config.Label}] {series.GetDisplayTitle()}");
+                        addStats(h, u, s, e, cu);
+                    }
+                }
+            )
+            .ConfigureAwait(false);
+    }
+
+    #endregion
+
+    #region Core Processing Logic
+
+    /// <summary>Universal method for caching, purging, and uploading local image assets.</summary>
+    private async Task<(bool Handled, bool Uploaded, bool Skipped, bool Error, bool CacheUpdated)> ProcessLocalAssetAsync(
+        string? foundFile,
+        IWithImages entity,
+        ImageEntityType imageType,
+        string cacheKey,
+        string label,
+        string entityName,
+        bool userSubmitted,
+        string? uploadDetail,
+        ConcurrentDictionary<string, string> cache,
+        ConcurrentBag<string> errorsBag
+    )
+    {
+        var (exists, length) = !string.IsNullOrEmpty(foundFile) ? GetFileMetadata(foundFile) : (false, 0L);
+        var preferredImg = entity.GetAvailableImages(imageType).FirstOrDefault(i => i.IsPreferred);
+
+        if (!exists)
+        {
+            bool hadCache = cache.TryGetValue(cacheKey, out string? cachedVal);
+            bool isLocalCache = hadCache && !string.IsNullOrEmpty(cachedVal) && char.IsAsciiDigit(cachedVal[0]);
+
+            if ((hadCache && isLocalCache) || (!hadCache && preferredImg?.Source is DataSource.User or DataSource.LocallyGenerated))
+            {
+                cache.TryRemove(cacheKey, out _);
+                s_logger.Info("ImageSyncService: Local {0} for -> {1} no longer present on disk ... Purging from Shoko", label, entityName);
+                await PurgeEntityImagesAsync(entity, imageType, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
+                return (true, false, false, false, true);
+            }
+            return (false, false, false, false, false);
+        }
+
+        string? cacheVal = cache.GetValueOrDefault(cacheKey);
+        var (skipUpload, newCacheVal) = EvaluateLocalImageCache(cacheVal, length, foundFile!, preferredImg);
+
+        if (skipUpload)
+        {
+            if (cacheVal == newCacheVal)
+                return (true, false, true, false, false);
+            cache[cacheKey] = newCacheVal;
+            return (true, false, true, false, true);
+        }
+
+        if (cacheVal == null)
+            s_logger.Debug("ImageSyncService: New local {0} found for -> {1} ... Uploading", label, entityName);
+        else
+            s_logger.Debug("ImageSyncService: File changed for {0} -> {1} ... Purging stale image and uploading", label, entityName);
+
+        await PurgeEntityImagesAsync(entity, imageType, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
+        s_logger.Trace("ImageSyncService: Uploading local {0} for -> {1}", label, entityName);
+
+        try
+        {
+            UploadAndPreferLocalImage(foundFile!, entity, imageType, userSubmitted);
+            cache[cacheKey] = newCacheVal;
+            if (uploadDetail != null)
+                s_logger.Info("ImageSyncService: Successfully uploaded and preferred {0} for -> {1}", label, entityName);
+            return (true, true, false, false, true);
+        }
+        catch (Exception ex)
+        {
+            errorsBag.Add($"Failed to process {label} for -> {entityName}: {ex.Message}");
+            s_logger.Warn(ex, "ImageSyncService: Failed to upload {0} for -> {1}", label, entityName);
+            return (true, false, false, true, false);
+        }
+    }
+
+    /// <summary>Downloads and processes Plex-generated thumbnails.</summary>
+    private async Task<(bool Handled, bool Uploaded, bool Skipped, bool Error, bool CacheUpdated)> ProcessPlexThumbnailAsync(
+        string thumbUrl,
+        IShokoEpisode episode,
+        string epLogName,
+        PlexLibraryTarget target,
+        ConcurrentDictionary<string, string> cache,
+        ConcurrentBag<string> errorsBag,
+        ConcurrentBag<string> uploadedBag,
+        CancellationToken ct
+    )
+    {
+        var cacheKey = episode.ID.ToString();
+        var preferredBackdrop = episode.GetAvailableImages(ImageEntityType.Backdrop).FirstOrDefault(i => i.IsPreferred);
+        string? cacheVal = cache.GetValueOrDefault(cacheKey);
+
+        bool isStale = false;
+        if (cacheVal != null)
+        {
+            var parts = cacheVal.Split('|', 2);
+            string savedThumb = parts[0];
+            string? savedMd5 = parts.Length > 1 ? parts[1] : null;
+
+            if (string.Equals(savedThumb, thumbUrl, StringComparison.OrdinalIgnoreCase))
+            {
+                if (preferredBackdrop != null && (savedMd5 == null || string.Equals(preferredBackdrop.ResourceID, savedMd5, StringComparison.OrdinalIgnoreCase)))
+                    return (true, false, true, false, false); // Valid cache, skip
+            }
+            else
+                isStale = true;
+        }
+
+        if (preferredBackdrop != null && preferredBackdrop.Source is not DataSource.LocallyGenerated and not DataSource.User)
+            return (true, false, true, false, false); // Preferred image is external, skip
+
+        if (isStale || (preferredBackdrop != null && preferredBackdrop.Source is DataSource.LocallyGenerated or DataSource.User))
+        {
+            s_logger.Debug("ImageSyncService: Plex thumbnail mismatch for -> {0} ... Purging stale thumbnail", epLogName);
+            await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
+        }
+
+        s_logger.Trace("ImageSyncService: Fetching Plex thumbnail for episode -> {0}", epLogName);
+        try
+        {
+            using var req = plexClient.CreateRequest(HttpMethod.Get, thumbUrl, target.ServerUrl);
+            using var resp = await httpClient.SendAsync(req, ct).ConfigureAwait(false);
+            if (!resp.IsSuccessStatusCode)
+            {
+                errorsBag.Add($"Plex download failed for {epLogName} with status {resp.StatusCode}");
+                return (true, false, false, true, false);
+            }
+
+            var bytes = await resp.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
+            var md5Hex = Convert.ToHexString(MD5.HashData(bytes));
+            var imageId = IImageManager.GetIDForImageSourceAndResourceID(DataSource.LocallyGenerated, md5Hex);
+
+            var existingImage = imageManager.GetImageByID(imageId);
+            if (existingImage != null)
+            {
+                imageManager.SetPreferredImageForEntity(episode, ImageEntityType.Backdrop, existingImage);
+                uploadedBag.Add($"[Linked Existing Plex Thumb] {epLogName}");
+                cache[cacheKey] = $"{thumbUrl}|{md5Hex}";
+                s_logger.Info("ImageSyncService: Linked existing duplicate thumbnail for episode -> {0}", epLogName);
+                return (true, true, false, false, true);
+            }
+
+            using var stream = new MemoryStream(bytes);
+            var uploadedImage = imageManager.UploadImage(stream, "image/jpeg", userSubmitted: false);
+            imageManager.SetPreferredImageForEntity(episode, ImageEntityType.Backdrop, uploadedImage);
+
+            uploadedBag.Add($"[Plex Thumb] {epLogName}");
+            cache[cacheKey] = $"{thumbUrl}|{md5Hex}";
+            s_logger.Info("ImageSyncService: Successfully uploaded and preferred thumbnail for episode -> {0}", epLogName);
+            return (true, true, false, false, true);
+        }
+        catch (Exception ex)
+        {
+            errorsBag.Add($"Failed to process episode matching Plex URL '{thumbUrl}': {ex.Message}");
+            s_logger.Warn(ex, "ImageSyncService: Failed to process Plex thumbnail loop iteration");
+            return (true, false, false, true, false);
+        }
+    }
+
+    #endregion
+
+    #region Internal Helpers
 
     /// <summary>Evaluates whether a local image matches the active preferred image in Shoko to safely skip re-uploading.</summary>
     /// <param name="cacheVal">The previously cached metadata string.</param>
@@ -458,71 +455,31 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                     return (true, cacheVal);
             }
         }
-
         md5 ??= GetFileMD5(filePath);
         string newCacheVal = $"{length}|{md5}";
         bool skip = preferredImage != null && string.Equals(preferredImage.ResourceID, md5, StringComparison.OrdinalIgnoreCase);
         return (skip, newCacheVal);
     }
 
-    /// <summary>Loads the local image synchronization cache from disk into a thread-safe concurrent dictionary.</summary>
-    /// <returns>A dictionary containing cached image tracking mappings.</returns>
-    private ConcurrentDictionary<string, string> LoadCache()
+    /// <summary>Finds a local artwork file for a series based on a prioritized list of allowed filenames.</summary>
+    /// <param name="series">The Shoko series metadata.</param>
+    /// <param name="allowedNames">Array of valid filenames (without extension).</param>
+    /// <returns>The physical file path if found, otherwise null.</returns>
+    private string? FindLocalSeriesArtwork(IShokoSeries series, string[] allowedNames)
     {
-        var cache = new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        if (File.Exists(CacheFilePath))
+        foreach (var vfsPath in VfsShared.ResolveSeriesVfsPaths(series, metadataService))
         {
-            try
+            if (!Directory.Exists(vfsPath))
+                continue;
+            var localArtworks = Directory.EnumerateFiles(vfsPath).Where(f => PlexConstants.LocalMediaAssets.Artwork.Contains(Path.GetExtension(f))).ToList();
+            foreach (var name in allowedNames)
             {
-                foreach (var line in File.ReadAllLines(CacheFilePath))
-                {
-                    var parts = line.Split('|', 2);
-                    if (parts.Length == 2)
-                        cache[parts[0]] = parts[1];
-                }
+                var found = localArtworks.FirstOrDefault(f => string.Equals(Path.GetFileNameWithoutExtension(f), name, StringComparison.OrdinalIgnoreCase));
+                if (found != null)
+                    return found;
             }
-            catch { }
         }
-        return cache;
-    }
-
-    /// <summary>Persists the current image synchronization cache to disk.</summary>
-    /// <param name="cache">The dictionary of cache keys to save.</param>
-    private void SaveCache(ConcurrentDictionary<string, string> cache)
-    {
-        try
-        {
-            var lines = cache.Select(kvp => $"{kvp.Key}|{kvp.Value}");
-            File.WriteAllLines(CacheFilePath, lines);
-        }
-        catch { }
-    }
-
-    /// <summary>Resolves a file's physical target (bypassing symlinks) and retrieves its physical length.</summary>
-    /// <param name="path">The file path to inspect.</param>
-    /// <returns>A tuple containing a boolean existence check and the file's physical byte length.</returns>
-    private static (bool Exists, long Length) GetFileMetadata(string path)
-    {
-        try
-        {
-            var fi = new FileInfo(path);
-            if (fi.LinkTarget != null && fi.ResolveLinkTarget(true) is FileInfo targetFi)
-                fi = targetFi;
-            return (fi.Exists, fi.Length);
-        }
-        catch
-        {
-            return (false, 0);
-        }
-    }
-
-    /// <summary>Calculates the MD5 hash of a local file, matching Shoko's internal ResourceID format.</summary>
-    /// <param name="path">The file path to hash.</param>
-    /// <returns>The upper-case hex string representation of the MD5 hash.</returns>
-    private static string GetFileMD5(string path)
-    {
-        using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-        return Convert.ToHexString(MD5.HashData(fs));
+        return null;
     }
 
     /// <summary>Finds a local episode thumbnail alongside the physical video files.</summary>
@@ -541,108 +498,6 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                     .Where(f => string.Equals(Path.GetFileNameWithoutExtension(f), x.Base, StringComparison.OrdinalIgnoreCase) && PlexConstants.LocalMediaAssets.Artwork.Contains(Path.GetExtension(f)))
             )
             .FirstOrDefault();
-
-    /// <summary>Processes local series artwork (posters, backdrops, or logos) by validating overrides, length/hash states, and uploading to Shoko.</summary>
-    /// <param name="series">The Shoko series metadata.</param>
-    /// <param name="allowedNames">The prioritized array of allowed file names.</param>
-    /// <param name="cachePrefix">The prefix representing the image type in the cache.</param>
-    /// <param name="imageType">The Shoko target image entity type.</param>
-    /// <param name="label">The diagnostic label for logging.</param>
-    /// <param name="cache">The active session cache dictionary.</param>
-    /// <param name="errorsBag">The thread-safe collection of accumulated sync error messages.</param>
-    /// <returns>A tuple indicating handling completion status, upload success, skip state, error presence, and whether the cache was modified.</returns>
-    private async Task<(bool Handled, bool Uploaded, bool Skipped, bool Error, bool CacheUpdated)> ProcessLocalSeriesImageAsync(
-        IShokoSeries series,
-        string[] allowedNames,
-        string cachePrefix,
-        ImageEntityType imageType,
-        string label,
-        ConcurrentDictionary<string, string> cache,
-        ConcurrentBag<string> errorsBag
-    )
-    {
-        var cacheKey = cachePrefix + series.ID;
-        var cacheUpdated = false;
-
-        // Skip secondary series in VFS overrides to prevent duplicate folder scans and upload conflicts
-        if (EnforceTmdbNumbering && OverrideHelper.GetPrimary(series.ID, metadataService) != series.ID)
-        {
-            if (cache.TryRemove(cacheKey, out _))
-            {
-                cacheUpdated = true;
-                await PurgeEntityImagesAsync(series, imageType, x => x.Source == DataSource.User && x.IsPreferred).ConfigureAwait(false);
-            }
-            return (false, false, false, false, cacheUpdated);
-        }
-
-        string? foundFile = null;
-        foreach (var vfsPath in VfsShared.ResolveSeriesVfsPaths(series, metadataService))
-        {
-            if (!Directory.Exists(vfsPath))
-                continue;
-
-            // Enumerate files exactly once per path to avoid severe SMB/Network latency penalties
-            var localArtworks = Directory.EnumerateFiles(vfsPath).Where(f => PlexConstants.LocalMediaAssets.Artwork.Contains(Path.GetExtension(f))).ToList();
-
-            foreach (var name in allowedNames)
-            {
-                foundFile = localArtworks.FirstOrDefault(f => string.Equals(Path.GetFileNameWithoutExtension(f), name, StringComparison.OrdinalIgnoreCase));
-                if (foundFile != null)
-                    break;
-            }
-            if (foundFile != null)
-                break;
-        }
-
-        var (exists, length) = !string.IsNullOrEmpty(foundFile) ? GetFileMetadata(foundFile) : (false, 0L);
-        if (!exists)
-        {
-            bool hadCache = cache.TryRemove(cacheKey, out _);
-            var preferredImage = series.GetAvailableImages(imageType).FirstOrDefault(i => i.IsPreferred);
-            if (hadCache || (preferredImage != null && preferredImage.Source is DataSource.User or DataSource.LocallyGenerated))
-            {
-                s_logger.Info("ImageSyncService: Local {0} for series -> {1} [{2}] no longer present on disk ... Purging from Shoko", label, series.GetDisplayTitle(), series.ID);
-                await PurgeEntityImagesAsync(series, imageType, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
-                return (true, false, false, false, true);
-            }
-            return (true, false, false, false, false);
-        }
-
-        var preferredImg = series.GetAvailableImages(imageType).FirstOrDefault(i => i.IsPreferred);
-        string? cacheVal = cache.GetValueOrDefault(cacheKey);
-
-        var (skipUpload, newCacheVal) = EvaluateLocalImageCache(cacheVal, length, foundFile!, preferredImg);
-
-        if (skipUpload)
-        {
-            if (cacheVal == newCacheVal)
-                return (true, false, true, false, false);
-            cache[cacheKey] = newCacheVal;
-            return (true, false, true, false, true);
-        }
-
-        if (cacheVal == null)
-            s_logger.Debug("ImageSyncService: New local {0} found for series -> {1} [{2}] ... Uploading", label, series.GetDisplayTitle(), series.ID);
-        else
-            s_logger.Debug("ImageSyncService: File changed for series {0} -> {1} [{2}] ... Purging stale image and uploading", label, series.GetDisplayTitle(), series.ID);
-
-        await PurgeEntityImagesAsync(series, imageType, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
-
-        s_logger.Trace("ImageSyncService: Uploading local {0} for series -> {1} [{2}]", label, series.GetDisplayTitle(), series.ID);
-
-        try
-        {
-            UploadAndPreferLocalImage(foundFile!, series, imageType, userSubmitted: true);
-            cache[cacheKey] = newCacheVal;
-            return (true, true, false, false, true);
-        }
-        catch (Exception ex)
-        {
-            errorsBag.Add($"Failed to process series {label} for series -> {series.GetDisplayTitle()} [{series.ID}]: {ex.Message}");
-            s_logger.Warn(ex, "ImageSyncService: Failed to upload series -> {0} | {1} [{2}]", label, series.GetDisplayTitle(), series.ID);
-            return (true, false, false, true, false);
-        }
-    }
 
     /// <summary>Purges stale or demoted cross-referenced images for an entity based on source filters.</summary>
     /// <param name="entity">The Shoko metadata entity.</param>
@@ -679,6 +534,65 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
         var contentType = ImageHelper.GetMimeType(Path.GetExtension(filePath)) ?? "image/jpeg";
         var uploadedImage = imageManager.UploadImage(stream, contentType, userSubmitted: userSubmitted);
         imageManager.SetPreferredImageForEntity(entity, imageType, uploadedImage);
+    }
+
+    /// <summary>Resolves a file's physical target (bypassing symlinks) and retrieves its physical length.</summary>
+    /// <param name="path">The file path to inspect.</param>
+    /// <returns>A tuple containing a boolean existence check and the file's physical byte length.</returns>
+    private static (bool Exists, long Length) GetFileMetadata(string path)
+    {
+        try
+        {
+            var fi = new FileInfo(path);
+            if (fi.LinkTarget != null && fi.ResolveLinkTarget(true) is FileInfo targetFi)
+                fi = targetFi;
+            return (fi.Exists, fi.Length);
+        }
+        catch
+        {
+            return (false, 0);
+        }
+    }
+
+    /// <summary>Calculates the MD5 hash of a local file, matching Shoko's internal ResourceID format.</summary>
+    /// <param name="path">The file path to hash.</param>
+    /// <returns>The upper-case hex string representation of the MD5 hash.</returns>
+    private static string GetFileMD5(string path)
+    {
+        using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        return Convert.ToHexString(MD5.HashData(fs));
+    }
+
+    /// <summary>Loads the local image synchronization cache from disk into a thread-safe concurrent dictionary.</summary>
+    /// <returns>A dictionary containing cached image tracking mappings.</returns>
+    private ConcurrentDictionary<string, string> LoadCache()
+    {
+        var cache = new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (File.Exists(CacheFilePath))
+        {
+            try
+            {
+                foreach (var line in File.ReadAllLines(CacheFilePath))
+                {
+                    var parts = line.Split('|', 2);
+                    if (parts.Length == 2)
+                        cache[parts[0]] = parts[1];
+                }
+            }
+            catch { }
+        }
+        return cache;
+    }
+
+    /// <summary>Persists the current image synchronization cache to disk.</summary>
+    /// <param name="cache">The dictionary of cache keys to save.</param>
+    private void SaveCache(ConcurrentDictionary<string, string> cache)
+    {
+        try
+        {
+            File.WriteAllLines(CacheFilePath, cache.Select(kvp => $"{kvp.Key}|{kvp.Value}"));
+        }
+        catch { }
     }
 
     #endregion
