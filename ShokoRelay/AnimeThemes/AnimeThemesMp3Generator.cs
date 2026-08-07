@@ -429,7 +429,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
                     }
                     catch (Exception ex)
                     {
-                        s_logger.Warn(ex, "AnimeThemes MP3: Failed to trigger Plex refresh for series -> {0}", series.ID);
+                        s_logger.Warn(ex, "AnimeThemes MP3: Failed to trigger Plex refresh for series -> {0} [{1}]", series.GetDisplayTitle(), series.ID);
                     }
                 });
             }

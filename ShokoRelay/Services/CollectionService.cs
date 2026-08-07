@@ -144,7 +144,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                     var series = metadataService.GetShokoSeriesByID(sid.Value);
                     var collectionName = series != null ? mapper.GetCollectionName(series) : null;
 
-                    s_logger.Trace("CollectionService: Processing series {0} (Plex Key: {1})", sid.Value, item.RatingKey);
+                    s_logger.Trace("CollectionService: Processing series -> {0} [{1}] (RatingKey: {2})", series?.GetDisplayTitle() ?? "Unknown", sid.Value, item.RatingKey);
 
                     // Skip standard metadata assignment if only refreshing poster assets
                     if (applyAssignment)
@@ -158,7 +158,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                             if (collectionName == null || !string.Equals(staleName, collectionName, StringComparison.OrdinalIgnoreCase))
                             {
                                 if (await plexCollections.RemoveCollectionFromItemAsync(plexKey, staleName!, target, cancellationToken).ConfigureAwait(false))
-                                    s_logger.Info("CollectionService: Removed incorrect collection '{0}' from '{1}'", staleName, item.Title);
+                                    s_logger.Info("CollectionService: Removed incorrect collection '{0}' from -> {1} [{2}]", staleName, series?.GetDisplayTitle() ?? item.Title, sid.Value);
                             }
                         }
 
@@ -168,7 +168,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                             if (assignmentOk)
                             {
                                 created++;
-                                s_logger.Info("CollectionService: Assigned '{0}' to '{1}'", collectionName, item.Title);
+                                s_logger.Info("CollectionService: Assigned '{0}' to -> {1} [{2}]", collectionName, series?.GetDisplayTitle() ?? item.Title, sid.Value);
                                 createdList.Add(
                                     new
                                     {

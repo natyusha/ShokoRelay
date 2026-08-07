@@ -91,7 +91,7 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
                     if (series == null)
                     {
                         errs++;
-                        errorsList.Add($"Series {shokoId.Value} not found for Plex key {item.RatingKey}");
+                        errorsList.Add($"Series {shokoId.Value} not found for RatingKey {item.RatingKey}");
                         continue;
                     }
 
@@ -112,7 +112,7 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
                     if (await ApplyRatingAsync(item.RatingKey!, rating, target, cancellationToken))
                     {
                         uS++;
-                        appliedChanges.Add(new RatingChange($"{series.GetDisplayTitle() ?? "Unknown"} [{series.ID}]", "Show", item.RatingKey!, item.Rating, rating));
+                        appliedChanges.Add(new RatingChange($"{series.GetDisplayTitle() ?? "Unknown"} [{series.ID}]", "Series", item.RatingKey!, item.Rating, rating));
                         s_logger.Info("CriticRatingService: Updated series -> {0} [{1}] to {2}", series.GetDisplayTitle(), series.ID, rating);
                     }
                     else

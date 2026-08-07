@@ -170,6 +170,9 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
 
                     DateTime? watchedAt = SyncHelper.UnixSecondsToDateTime(item.LastViewedAt);
 
+                    var prefId = ep.Series != null ? MapHelper.GetPreferredTmdbOrderingId(ep.Series) : null;
+                    var coords = PlexMapping.GetPlexCoordinates(ep, prefId);
+
                     if (wouldMark)
                     {
                         if (!dryRun)
@@ -186,13 +189,14 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                         appliedIds.Add(ep.ID);
                         result = SyncHelper.IncMarkedWatched(result, result.PerUser, uName);
                         s_logger.Info(
-                            "WatchedSyncService: {0}Plex -> Shoko: {1} marked episode -> {2} [{3}] - S{4:D2}E{5:D2}",
+                            "WatchedSyncService: {0}Plex -> Shoko: {1} marked episode -> {2} [{3}] - S{4:D2}E{5:D2} (RatingKey: {6})",
                             logPrefix,
                             uName,
                             ep.Series?.GetDisplayTitle(),
                             ep.SeriesID,
-                            item.ParentIndex ?? 0,
-                            item.Index ?? 0
+                            coords.Season,
+                            coords.Episode,
+                            item.RatingKey
                         );
                     }
                     else if (wouldUpdateProgress)
@@ -211,13 +215,14 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                         appliedIds.Add(ep.ID);
                         result = SyncHelper.IncProgressUpdated(result, result.PerUser, uName);
                         s_logger.Info(
-                            "WatchedSyncService: {0}Plex -> Shoko: {1} updated progress for episode -> {2} [{3}] - S{4:D2}E{5:D2} to {6}",
+                            "WatchedSyncService: {0}Plex -> Shoko: {1} updated progress for episode -> {2} [{3}] - S{4:D2}E{5:D2} (RatingKey: {6}) to {7}",
                             logPrefix,
                             uName,
                             ep.Series?.GetDisplayTitle(),
                             ep.SeriesID,
-                            item.ParentIndex ?? 0,
-                            item.Index ?? 0,
+                            coords.Season,
+                            coords.Episode,
+                            item.RatingKey,
                             TimeSpan.FromMilliseconds(item.ViewOffset!.Value)
                         );
                     }

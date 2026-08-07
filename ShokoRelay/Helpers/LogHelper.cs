@@ -93,7 +93,7 @@ public static class LogHelper
         {
             sb.AppendLine().AppendLine("Discovered Libraries:");
             foreach (var l in r)
-                sb.AppendLine($"  - [{l.ServerName}] {l.Title} ({l.Type})");
+                sb.AppendLine($"  - [{l.ServerName}] {l.Title} ({(string.Equals(l.Type, "show", StringComparison.OrdinalIgnoreCase) ? "Series" : l.Type)})");
         }
     }
 

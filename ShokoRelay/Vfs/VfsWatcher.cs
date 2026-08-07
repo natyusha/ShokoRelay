@@ -256,7 +256,8 @@ public class VfsWatcher(
             catch (OperationCanceledException) { }
             catch (Exception ex)
             {
-                s_logger.Error(ex, "VFS: Scheduled action failed for series [{0}]", seriesId);
+                var title = metadataService.GetShokoSeriesByID(seriesId)?.GetDisplayTitle() ?? "Series";
+                s_logger.Error(ex, "VFS: Scheduled action failed for series -> {0} [{1}]", title, seriesId);
             }
             finally
             {

@@ -118,15 +118,19 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
                                 continue;
                         }
 
+                        var prefId = sw.Episode!.Series != null ? MapHelper.GetPreferredTmdbOrderingId(sw.Episode.Series) : null;
+                        var coords = PlexMapping.GetPlexCoordinates(sw.Episode, prefId);
+
                         result = SyncHelper.IncMarkedWatched(result, result.PerUser, uName);
                         s_logger.Info(
-                            "WatchedSyncService: {0}Plex <- Shoko: {1} marked episode -> {2} (Plex Key: {3}) for {4} [{5}] on {6}",
+                            "WatchedSyncService: {0}Plex <- Shoko: {1} marked episode -> {2} [{3}] - S{4:D2}E{5:D2} (RatingKey: {6}) on {7}",
                             logPrefix,
                             uName,
-                            sw.UserData.EpisodeID,
-                            plexItem.RatingKey,
                             sw.Episode!.Series?.GetDisplayTitle(),
                             sw.Episode.SeriesID,
+                            coords.Season,
+                            coords.Episode,
+                            plexItem.RatingKey,
                             target.ServerName
                         );
                         SyncHelper.AddPerUserChange(
