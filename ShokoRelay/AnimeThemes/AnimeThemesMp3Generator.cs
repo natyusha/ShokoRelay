@@ -422,7 +422,13 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
                             var ratingKey = await plexClient.FindRatingKeyForShokoSeriesInSectionAsync(series.ID, target).ConfigureAwait(false);
                             if (ratingKey.HasValue)
                             {
-                                s_logger.Debug("AnimeThemes MP3: Refreshing Plex metadata for ratingKey {0} on {1}", ratingKey.Value, target.ServerName);
+                                s_logger.Debug(
+                                    "AnimeThemes MP3: Refreshing Plex metadata for series -> {0} [{1}] (RatingKey: {2}) on {3}",
+                                    series.GetDisplayTitle(),
+                                    series.ID,
+                                    ratingKey.Value,
+                                    target.ServerName
+                                );
                                 await plexClient.RefreshMetadataAsync(ratingKey.Value, target).ConfigureAwait(false);
                             }
                         }

@@ -146,7 +146,7 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
                     && await ExecuteActionAsync(HttpMethod.Delete, $"/library/collections/{id}", target, $"Delete collection {id}", cancellationToken).ConfigureAwait(false)
                 )
                 {
-                    s_logger.Info("PlexCollections: Deleted empty collection {CollectionId} in section {SectionId}", id, target.SectionId);
+                    s_logger.Info("PlexCollections: Deleted empty collection '{0}' (RatingKey: {1}) in section {2}", m.Title ?? "Unknown", id, target.SectionId);
                     deleted++;
                 }
             }
