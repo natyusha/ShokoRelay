@@ -95,7 +95,7 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
                         continue;
                     }
 
-                    // Resolve the critic rating for a series based on user configuration
+                    // Resolves the critic rating for a series based on user configuration.
                     double? rating = Settings.CriticRatingMode switch
                     {
                         CriticRatingMode.TMDB => series.TmdbShows?.FirstOrDefault()?.Rating > 0 ? series.TmdbShows.First().Rating : null,
@@ -105,7 +105,13 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
 
                     if (!NeedsRatingUpdate(item.Rating, rating))
                     {
-                        s_logger.Trace("CriticRatingService: Skipped series -> {0} [{1}] (RatingKey: {2}) because rating {3} matches Plex", series.GetDisplayTitle(), series.ID, item.RatingKey, item.Rating);
+                        s_logger.Trace(
+                            "CriticRatingService: Skipped series -> {0} [{1}] (RatingKey: {2}) because rating {3} matches Plex",
+                            series.GetDisplayTitle(),
+                            series.ID,
+                            item.RatingKey,
+                            item.Rating?.ToString("F2") ?? "none"
+                        );
                         continue;
                     }
 
@@ -113,7 +119,7 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
                     {
                         uS++;
                         appliedChanges.Add(new RatingChange($"{series.GetDisplayTitle() ?? "Unknown"} [{series.ID}]", "Series", item.RatingKey!, item.Rating, rating));
-                        s_logger.Info("CriticRatingService: Updated series -> {0} [{1}] to {2}", series.GetDisplayTitle(), series.ID, rating);
+                        s_logger.Info("CriticRatingService: Updated series -> {0} [{1}] to {2}", series.GetDisplayTitle(), series.ID, rating?.ToString("F2") ?? "none");
                     }
                     else
                     {
@@ -151,7 +157,7 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
 
                     if (!NeedsRatingUpdate(item.Rating, rating))
                     {
-                        s_logger.Trace("CriticRatingService: Skipped episode -> {0} because rating {1} matches Plex", epLogName, item.Rating);
+                        s_logger.Trace("CriticRatingService: Skipped episode -> {0} because rating {1} matches Plex", epLogName, item.Rating?.ToString("F2") ?? "none");
                         continue;
                     }
 
@@ -161,7 +167,7 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
                         appliedChanges.Add(
                             new RatingChange($"{episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] - S{coords.Season:D2}E{coords.Episode:D2}", "Episode", item.RatingKey!, item.Rating, rating)
                         );
-                        s_logger.Trace("CriticRatingService: Updated episode -> {0} to {1}", epLogName, rating);
+                        s_logger.Trace("CriticRatingService: Updated episode -> {0} to {1}", epLogName, rating?.ToString("F2") ?? "none");
                     }
                     else
                     {
