@@ -317,6 +317,15 @@ internal static class AnimeThemesHelper
 
     #region Naming & Path Logic
 
+    /// <summary>Extracts the numeric suffix from a theme slug, defaulting to 1 if unnumbered or unparseable.</summary>
+    /// <param name="baseSlug">The base slug to extract numbers from.</param>
+    /// <returns>The extracted number, or 1 if unnumbered.</returns>
+    internal static int ExtractSlugNumber(string baseSlug)
+    {
+        var match = NumberRegex.Match(baseSlug);
+        return match.Success && int.TryParse(match.Value, out var n) ? n : 1;
+    }
+
     /// <summary>Standardizes a raw or display theme slug into the canonical 'OP#' or 'ED#' format.</summary>
     /// <param name="slug">The slug string to parse.</param>
     /// <returns>The standardized slug (e.g. OP1, ED2), or the original slug if unparseable.</returns>

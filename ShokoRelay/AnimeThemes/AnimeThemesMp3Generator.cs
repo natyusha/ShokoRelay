@@ -49,13 +49,14 @@ public record ThemeMp3OperationResult(
 public record ThemeMp3BatchResult(string Root, IReadOnlyList<ThemeMp3OperationResult> Items, int Processed, int Skipped, int Errors);
 
 /// <summary>Aggregated results of an MP3 audit operation.</summary>
-/// <param name="Processed">Number of non-OP themes evaluated.</param>
-/// <param name="UpgradesFound">Number of available OP upgrades found on AnimeThemes.</param>
+/// <param name="Processed">Number of non-default themes evaluated.</param>
+/// <param name="UpgradesFound">Number of available upgrades found on AnimeThemes.</param>
 /// <param name="MissingSlugsFixed">Number of missing slugs repaired via local ID3 tag reading.</param>
 /// <param name="Upgrades">List of upgrade notification strings.</param>
-/// <param name="Overridden">List of overridden opening themes (e.g. OP2, OP3).</param>
+/// <param name="OverriddenOps">List of overridden opening themes (e.g. OP2, OP3).</param>
+/// <param name="OverriddenEds">List of overridden ending themes (e.g. ED2, ED3).</param>
 /// <param name="ErrorsList">List of specific error messages.</param>
-public record ThemeMp3AuditResult(int Processed, int UpgradesFound, int MissingSlugsFixed, List<string> Upgrades, List<string> Overridden, List<string> ErrorsList);
+public record ThemeMp3AuditResult(int Processed, int UpgradesFound, int MissingSlugsFixed, List<string> Upgrades, List<string> OverriddenOps, List<string> OverriddenEds, List<string> ErrorsList);
 
 #endregion
 
@@ -346,8 +347,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
                                 var (baseSlug, _) = AnimeThemesHelper.ParseSlug(s);
                                 bool isOp = baseSlug.StartsWith("OP", StringComparison.OrdinalIgnoreCase);
                                 bool isEd = baseSlug.StartsWith("ED", StringComparison.OrdinalIgnoreCase);
-                                var match = AnimeThemesHelper.NumberRegex.Match(baseSlug);
-                                int num = match.Success && int.TryParse(match.Value, out var n) ? n : 1;
+                                int num = AnimeThemesHelper.ExtractSlugNumber(baseSlug);
 
                                 int group =
                                     isOp ? 1
@@ -489,7 +489,8 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
     public async Task<ThemeMp3AuditResult> AuditAsync(CancellationToken ct)
     {
         var upgrades = new ConcurrentBag<string>();
-        var overridden = new ConcurrentBag<string>();
+        var overriddenOps = new ConcurrentBag<string>();
+        var overriddenEds = new ConcurrentBag<string>();
         var errors = new ConcurrentBag<string>();
         int processed = 0,
             fixes = 0;
@@ -534,13 +535,16 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
                 if (!string.IsNullOrEmpty(slug))
                 {
                     bool isOp = slug.StartsWith("OP", StringComparison.OrdinalIgnoreCase) || slug.StartsWith("Opening", StringComparison.OrdinalIgnoreCase);
-                    bool isOp1 = AnimeThemesHelper.Op1Regex.IsMatch(slug);
+                    bool isOp1 = isOp && AnimeThemesHelper.ExtractSlugNumber(slug) == 1;
+                    bool isEd = slug.StartsWith("ED", StringComparison.OrdinalIgnoreCase) || slug.StartsWith("Ending", StringComparison.OrdinalIgnoreCase);
+                    bool isEd1 = isEd && AnimeThemesHelper.ExtractSlugNumber(slug) == 1;
 
                     if (isOp && !isOp1)
-                    {
-                        overridden.Add($"{folder} | {slug}");
-                    }
-                    else if (!isOp)
+                        overriddenOps.Add($"{folder} | {slug}");
+                    else if (isEd && !isEd1)
+                        overriddenEds.Add($"{folder} | {slug}");
+
+                    if (!isOp1)
                     {
                         Interlocked.Increment(ref processed);
                         try
@@ -557,24 +561,34 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
                                 return;
 
                             var anime = await _apiClient.FetchAnimeThemesAsync(s.AnidbAnimeID, null, token).ConfigureAwait(false);
-                            var op = anime?.Anime?.FirstOrDefault()?.Animethemes?.FirstOrDefault(t => t.Slug != null && t.Slug.StartsWith("OP", StringComparison.OrdinalIgnoreCase));
+                            var animethemes = anime?.Anime?.FirstOrDefault()?.Animethemes ?? [];
+                            var op = animethemes
+                                .Where(t => t.Slug != null && t.Slug.StartsWith("OP", StringComparison.OrdinalIgnoreCase))
+                                .OrderBy(t => AnimeThemesHelper.ExtractSlugNumber(t.Slug!))
+                                .FirstOrDefault();
+                            var ed = animethemes
+                                .Where(t => t.Slug != null && t.Slug.StartsWith("ED", StringComparison.OrdinalIgnoreCase))
+                                .OrderBy(t => AnimeThemesHelper.ExtractSlugNumber(t.Slug!))
+                                .FirstOrDefault();
 
-                            if (op != null)
+                            bool isHigherEd = isEd && !isEd1;
+
+                            if (op != null || (isHigherEd && ed != null))
                             {
-                                string newUpgrade = op.Slug!;
+                                string newUpgrade = (op ?? ed!).Slug!;
                                 if (newUpgrade != upgrade)
                                 {
                                     upgrade = newUpgrade;
                                     _themeMp3Cache![folder] = $"{slug}|{upgrade}";
                                     cacheUpdated = true;
                                 }
-                                upgrades.Add($"{s.GetDisplayTitle() ?? s.ID.ToString()} (Currently: {slug})");
+                                upgrades.Add($"{s.GetDisplayTitle() ?? s.ID.ToString()} [{s.ID}] (Currently: {slug})");
                             }
                         }
                         catch (Exception ex)
                         {
                             errors.Add($"Failed to audit {folder}: {ex.Message}");
-                            s_logger.Warn(ex, "AnimeThemes MP3: Failed to audit {Folder}", folder);
+                            s_logger.Warn(ex, "AnimeThemes MP3: Failed to audit -> {Folder}", folder);
                         }
                     }
                 }
@@ -584,8 +598,8 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         if (cacheUpdated)
             SaveCacheToFile();
 
-        s_logger.Info("AnimeThemes MP3: Audit complete -> {0} non-OP themes checked, {1} upgrades found, {2} missing slugs fixed", processed, upgrades.Count, fixes);
-        return new ThemeMp3AuditResult(processed, upgrades.Count, fixes, [.. upgrades], [.. overridden], [.. errors]);
+        s_logger.Info("AnimeThemes MP3: Audit complete -> {0} non-default themes checked, {1} upgrades found, {2} missing slugs fixed", processed, upgrades.Count, fixes);
+        return new ThemeMp3AuditResult(processed, upgrades.Count, fixes, [.. upgrades], [.. overriddenOps], [.. overriddenEds], [.. errors]);
     }
 
     #endregion

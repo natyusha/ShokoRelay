@@ -362,25 +362,33 @@ public static class LogHelper
     {
         var stats = new Dictionary<string, object>
         {
-            ["Non-OP Themes Checked"] = result.Processed,
+            ["Non-OP1 Themes Checked"] = result.Processed,
             ["Missing Slugs Fixed"] = result.MissingSlugsFixed,
-            ["OP Upgrades Found"] = result.UpgradesFound,
-            ["Overridden Openings"] = result.Overridden.Count,
+            ["Non-Standard Themes"] = result.UpgradesFound,
+            ["Overridden Openings"] = result.OverriddenOps.Count,
+            ["Overridden Endings"] = result.OverriddenEds.Count,
         };
 
         var items = new List<string>();
 
         if (result.Upgrades.Count > 0)
         {
-            items.Add("Openings Available:");
+            items.Add("Non-Standard Themes:");
             items.AddRange(result.Upgrades.OrderBy(u => u).Select(u => $"  {u}"));
             items.Add("");
         }
 
-        if (result.Overridden.Count > 0)
+        if (result.OverriddenOps.Count > 0)
         {
             items.Add("Overridden Openings:");
-            items.AddRange(result.Overridden.OrderBy(o => o).Select(o => $"  {o}"));
+            items.AddRange(result.OverriddenOps.OrderBy(o => o).Select(o => $"  {o}"));
+            items.Add("");
+        }
+
+        if (result.OverriddenEds.Count > 0)
+        {
+            items.Add("Overridden Endings:");
+            items.AddRange(result.OverriddenEds.OrderBy(o => o).Select(o => $"  {o}"));
             items.Add("");
         }
 
