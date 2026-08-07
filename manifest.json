@@ -15,6 +15,34 @@
   "image_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-logo.png",
   "releases": [
     {
+      "version": "0.16.9",
+      "tag": "v0.16.9",
+      "source_revision": "26bc830d6cbe33fa9d390a4b00929af583e1cae8",
+      "released_at": "2026-08-07T17:29:09Z",
+      "channel": "Dev",
+      "release_notes": "**Changes:**\r\n- Add ImportFolderExclusions to AdvancedConfig to allow users to prevent VFS generation in specific import folders (by Name or ID) without hiding the media from Shoko\r\n- Standardize logging so series titles, episode number, shoko ids and plex rating keys are listed when available\r\n- Remove premature Dispose() calls from the main thread in ScheduleDebouncedAction and VfsWatcher.Stop()\r\n- Let background tasks handle their own CancellationTokenSource disposal in their finally blocks to prevent crashes when file events arrive rapidly\r\n- Execute RunCollectionUpdateAsync directly inside RunMetadataFixupAsync to ensure collections are processed strictly after VFS rebuilds and Plex scans complete\r\n- Wrap subsequent API tasks in foundInAnyTarget to bypass redundant execution if Plex has not yet recognized the series\r\n- Rename references to 'Import Folders' to 'Managed Folders'\r\n- Add an early return in VfsWatcher.TriggerPlexUpdates if the series has no valid VFS paths\r\n- Inline single-use helper methods across the project excluding PlexMetadata\r\n- Update ConfigProvider.cs with missing XML documentation for private fields, methods, properties, and nested classes\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.16.8...v0.16.9",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.16.9/ShokoRelay-v0.16.9-dev_linux-arm64.zip",
+          "checksum": "a9c3ecdc913fb6e747e6c2d8bab1e02b32e728ee1d4a59804e5d69e90766fd1e"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.16.9/ShokoRelay-v0.16.9-dev_linux-x64.zip",
+          "checksum": "da6ced114e6f02328529469dc8be83dc6d3fa8404e2d17ef59a9622afa7014fd"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.16.9/ShokoRelay-v0.16.9-dev_win-x64.zip",
+          "checksum": "b6f1235e4b5eaa95595264734566339114574082c9f1ea7647c0ea094cc40f0d"
+        }
+      ]
+    },
+    {
       "version": "0.16.8",
       "tag": "v0.16.8",
       "source_revision": "b58090ffb80b7ce33e5ae7791d5e93374d3517c4",
