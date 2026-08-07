@@ -85,7 +85,21 @@ public static class PlexMapping
         }
 
         int epNum = e.EpisodeNumber;
-        int seasonNum = ResolveSeasonNumber(e);
+
+        // Resolve the season number for an episode, falling back to Plex extra season constants for non-standard episodes
+        int seasonNum =
+            e.SeasonNumber
+            ?? e.Type switch
+            {
+                EpisodeType.Episode => PlexConstants.SeasonStandard,
+                EpisodeType.Special => PlexConstants.SeasonSpecials,
+                EpisodeType.Credits => PlexConstants.SeasonCredits,
+                EpisodeType.Trailer => PlexConstants.SeasonTrailers,
+                EpisodeType.Parody => PlexConstants.SeasonParody,
+                EpisodeType.Other => PlexConstants.SeasonOther,
+                _ => PlexConstants.SeasonUnknown,
+            };
+
         result = e.Type switch
         {
             EpisodeType.Other => new PlexCoords { Season = PlexConstants.SeasonOther, Episode = epNum },
@@ -192,26 +206,6 @@ public static class PlexMapping
             ? ep.AllOrderings?.FirstOrDefault(o => string.Equals(o.OrderingID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase)) is { } byAll ? (byAll.SeasonNumber, byAll.EpisodeNumber)
                 : (ep.SeasonNumber, ep.EpisodeNumber)
         : (ep.SeasonNumber, ep.EpisodeNumber);
-
-    #endregion
-
-    #region Private Helpers
-
-    /// <summary>Resolves the season number for an episode, falling back to Plex extra season constants for non-standard episodes.</summary>
-    /// <param name="e">The episode reference to evaluate.</param>
-    /// <returns>The resolved numeric season index.</returns>
-    private static int ResolveSeasonNumber(IEpisode e) =>
-        e.SeasonNumber
-        ?? e.Type switch
-        {
-            EpisodeType.Episode => PlexConstants.SeasonStandard,
-            EpisodeType.Special => PlexConstants.SeasonSpecials,
-            EpisodeType.Credits => PlexConstants.SeasonCredits,
-            EpisodeType.Trailer => PlexConstants.SeasonTrailers,
-            EpisodeType.Parody => PlexConstants.SeasonParody,
-            EpisodeType.Other => PlexConstants.SeasonOther,
-            _ => PlexConstants.SeasonUnknown,
-        };
 
     #endregion
 }

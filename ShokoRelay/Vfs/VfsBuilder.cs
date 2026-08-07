@@ -184,9 +184,48 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
 
         var blueprint = isFiltered ? VfsShared.LoadBlueprint() : new ConcurrentDictionary<string, ConcurrentDictionary<int, VfsBlueprintSeries>>(VfsShared.PathComparer);
 
+        // Delete the entire VFS root folder across all managed locations
         if (cleanRoot && !isFiltered)
         {
-            PerformGlobalRootCleanup(rootName, cleanupDetails);
+            s_logger.Info("VFS: Performing global root cleanup...");
+            var allRoots = videoService.GetAllManagedFolders()?.Select(f => f.Path).Where(p => !string.IsNullOrEmpty(p)).Distinct(VfsShared.PathComparer) ?? [];
+            foreach (var root in allRoots)
+            {
+                string path = Path.Combine(root, rootName);
+                if (Directory.Exists(path))
+                {
+                    if (!VfsShared.IsSafeToDelete(path))
+                    {
+                        s_logger.Warn("VFS: Refusing to delete unsafe path -> {0}", path);
+                        continue;
+                    }
+                    try
+                    {
+                        var cleanSw = Stopwatch.StartNew();
+                        Parallel.ForEach(
+                            Directory.GetDirectories(path),
+                            DefaultParallelOptions(),
+                            dir =>
+                            {
+                                try
+                                {
+                                    Directory.Delete(dir, true);
+                                }
+                                catch { }
+                            }
+                        );
+                        Directory.Delete(path, true);
+                        cleanupDetails.Add(new RootCleanupDetails(path, cleanSw.ElapsedMilliseconds));
+                        s_logger.Info("VFS: Cleaned root folder -> '{0}' in {1}ms", path, cleanSw.ElapsedMilliseconds);
+                        Directory.CreateDirectory(path);
+                        File.WriteAllText(Path.Combine(path, ".ignore"), "");
+                    }
+                    catch (Exception ex)
+                    {
+                        s_logger.Warn(ex, "VFS: Failed to clean root -> {0}", path);
+                    }
+                }
+            }
             cleanRoot = false;
         }
 
@@ -354,7 +393,20 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         var (displayTitle, _, _) = TextHelper.ResolveFullSeriesTitles(series);
         int folderId = EnforceTmdbNumbering ? OverrideHelper.GetPrimary(series.ID, metadataService) : series.ID;
 
-        var fileData = GetSeriesFileDataCached(series, session);
+        // Retrieve the files and episode mappings for a series, leveraging the build-session cache
+        var fileData = !EnforceTmdbNumbering
+            ? session.SeriesFileDataCache.GetOrAdd(series.ID, _ => MapHelper.GetSeriesFileData(series, metadataService))
+            : session.SeriesFileDataCache.GetOrAdd(
+                folderId,
+                _ =>
+                {
+                    var group = OverrideHelper.GetGroup(folderId, metadataService).Select(metadataService.GetShokoSeriesByID).OfType<IShokoSeries>().ToList();
+                    return group.Count <= 1
+                        ? MapHelper.GetSeriesFileData(group.FirstOrDefault() ?? series, metadataService)
+                        : MapHelper.GetSeriesFileDataMerged(group[0], group.Skip(1).Cast<ISeries>(), metadataService);
+                }
+            );
+
         if (!fileData.Mappings.Any())
         {
             PruneSeries(rootFolderName, folderId, errors.Add);
@@ -541,80 +593,6 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
     #endregion
 
     #region Internal Helpers
-
-    /// <summary>Deletes the entire VFS root folder across all managed locations.</summary>
-    /// <param name="rootName">The name of the VFS root folder.</param>
-    /// <param name="cleanupDetails">List to record the cleanup details.</param>
-    private void PerformGlobalRootCleanup(string rootName, List<RootCleanupDetails> cleanupDetails)
-    {
-        s_logger.Info("VFS: Performing global root cleanup...");
-        List<string> allRoots = [.. (videoService.GetAllManagedFolders() ?? []).Select(f => f.Path).Where(p => !string.IsNullOrEmpty(p)).Distinct(VfsShared.PathComparer)];
-
-        foreach (var root in allRoots)
-        {
-            string path = Path.Combine(root, rootName);
-            if (Directory.Exists(path))
-            {
-                if (!VfsShared.IsSafeToDelete(path))
-                {
-                    s_logger.Warn("VFS: Refusing to delete unsafe path -> {0}", path);
-                    continue;
-                }
-                try
-                {
-                    var cleanSw = Stopwatch.StartNew();
-                    var subDirs = Directory.GetDirectories(path);
-
-                    // Delete series folders in parallel to overcome single-threaded network/FUSE bottlenecks
-                    Parallel.ForEach(
-                        subDirs,
-                        DefaultParallelOptions(),
-                        dir =>
-                        {
-                            try
-                            {
-                                Directory.Delete(dir, true);
-                            }
-                            catch { }
-                        }
-                    );
-
-                    Directory.Delete(path, true);
-
-                    cleanupDetails.Add(new RootCleanupDetails(path, cleanSw.ElapsedMilliseconds));
-                    s_logger.Info("VFS: Cleaned root folder -> '{0}' in {1}ms", path, cleanSw.ElapsedMilliseconds);
-
-                    Directory.CreateDirectory(path);
-                    File.WriteAllText(Path.Combine(path, ".ignore"), "");
-                }
-                catch (Exception ex)
-                {
-                    s_logger.Warn(ex, "VFS: Failed to clean root -> {0}", path);
-                }
-            }
-        }
-    }
-
-    /// <summary>Retrieves the files and episode mappings for a series, leveraging the build-session cache.</summary>
-    /// <param name="series">The Shoko series metadata.</param>
-    /// <param name="session">Active build session context containing caches.</param>
-    /// <returns>A data container holding files and coordinates for the series.</returns>
-    private MapHelper.SeriesFileData GetSeriesFileDataCached(IShokoSeries series, VfsBuildSession session)
-    {
-        if (!EnforceTmdbNumbering)
-            return session.SeriesFileDataCache.GetOrAdd(series.ID, _ => MapHelper.GetSeriesFileData(series, metadataService));
-        int pId = OverrideHelper.GetPrimary(series.ID, metadataService);
-        return session.SeriesFileDataCache.GetOrAdd(
-            pId,
-            _ =>
-            {
-                var group = OverrideHelper.GetGroup(pId, metadataService).Select(metadataService.GetShokoSeriesByID).OfType<IShokoSeries>().ToList();
-                return group.Count <= 1
-                    ? MapHelper.GetSeriesFileData(group.FirstOrDefault() ?? series, metadataService)
-                    : MapHelper.GetSeriesFileDataMerged(group[0], group.Skip(1).Cast<ISeries>(), metadataService);
-            }
-        );
-    }
 
     /// <summary>Recursively deletes the virtual directory for a series across all active VFS roots.</summary>
     /// <param name="rootFolderName">The name of the VFS root folder.</param>

@@ -56,9 +56,15 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
         string safePath = path.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
         string requested = Path.GetFullPath(Path.Combine(dashboardDir, safePath));
 
+        // Resolve the MIME content type for a given file path, prioritizing .cshtml templates
         return !requested.StartsWith(Path.GetFullPath(dashboardDir), StringComparison.OrdinalIgnoreCase) || !IoFile.Exists(requested) || requested.EndsWith(".cshtml", StringComparison.OrdinalIgnoreCase)
             ? NotFound()
-            : PhysicalFile(requested, GetContentType(requested));
+            : PhysicalFile(
+                requested,
+                requested.EndsWith(".cshtml") ? "text/html"
+                    : s_contentTypeProvider.TryGetContentType(requested, out var contentType) ? contentType
+                    : "application/octet-stream"
+            );
     }
 
     #endregion
@@ -242,7 +248,7 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
 
     #endregion
 
-    #region Private Helpers
+    #region Internal Helpers
 
     /// <summary>Serves a razor template page from the dashboard directory, processing constants and injecting the base path.</summary>
     /// <param name="fileName">The filename of the razor template to serve.</param>
@@ -255,27 +261,16 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
         if (!requested.StartsWith(Path.GetFullPath(dashboardDir), StringComparison.OrdinalIgnoreCase) || !IoFile.Exists(requested))
             return NotFound();
 
-        var html = ProcessConstants(IoFile.ReadAllText(requested));
-        if (html.IndexOf("<base", StringComparison.OrdinalIgnoreCase) < 0)
-            html = html.Replace("<head>", $"<head>\n    <base href=\"{WebUtility.HtmlEncode($"{Request.PathBase}{ShokoRelayConstants.BasePath}/dashboard/")}\">", StringComparison.OrdinalIgnoreCase);
-        return Content(html, "text/html");
-    }
+        var html = IoFile.ReadAllText(requested);
 
-    /// <summary>Resolves the MIME content type for a given file path, prioritizing .cshtml templates.</summary>
-    /// <param name="filePath">The physical path of the file to inspect.</param>
-    /// <returns>A MIME type string mapping to the file's extension.</returns>
-    private string GetContentType(string filePath) =>
-        filePath.EndsWith(".cshtml") ? "text/html"
-        : s_contentTypeProvider.TryGetContentType(filePath, out var contentType) ? contentType
-        : "application/octet-stream";
-
-    /// <summary>Replaces {{ConstantName}} placeholders with values from ShokoRelayConstants.</summary>
-    private static string ProcessConstants(string html)
-    {
+        // Replace {{ConstantName}} placeholders with values from ShokoRelayConstants
         var fields = typeof(ShokoRelayConstants).GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy).Where(f => f.IsLiteral && !f.IsInitOnly);
         foreach (var field in fields)
             html = Regex.Replace(html, $@"\{{\{{\s?{field.Name}\s?\}}}}", field.GetValue(null)?.ToString() ?? "");
-        return html;
+
+        if (html.IndexOf("<base", StringComparison.OrdinalIgnoreCase) < 0)
+            html = html.Replace("<head>", $"<head>\n    <base href=\"{WebUtility.HtmlEncode($"{Request.PathBase}{ShokoRelayConstants.BasePath}/dashboard/")}\">", StringComparison.OrdinalIgnoreCase);
+        return Content(html, "text/html");
     }
 
     /// <summary>Schema definition for a configuration property.</summary>

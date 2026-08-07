@@ -17,15 +17,31 @@ public class ConfigProvider
 {
     #region Setup & State
 
+    /// <summary>Logger instance for configuration management operations.</summary>
     private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
+
+    /// <summary>Shared JSON serializer options for reading and writing configuration files.</summary>
     private static readonly JsonSerializerOptions s_options = new() { AllowTrailingCommas = true, WriteIndented = true };
 
-    private readonly string _filePath,
-        _tokenPath;
+    /// <summary>File path for the plugin preferences file.</summary>
+    private readonly string _filePath;
+
+    /// <summary>File path for the Plex token secrets file.</summary>
+    private readonly string _tokenPath;
+
+    /// <summary>Synchronization lock for thread-safe access to cached configuration state.</summary>
     private readonly Lock _settingsLock = new();
+
+    /// <summary>Cached in-memory instance of the relay configuration.</summary>
     private RelayConfig? _settings;
+
+    /// <summary>Cached list of extra Plex user entries parsed from settings.</summary>
     private List<(string Name, string? Pin)>? _cachedExtraUsers;
+
+    /// <summary>Cached list of discovered Plex servers.</summary>
     private List<PlexAvailableServer>? _cachedServers;
+
+    /// <summary>Cached admin username retrieved from the Plex account.</summary>
     private string? _cachedAdminUsername;
 
     /// <summary>The absolute path to the plugin's base directory.</summary>
@@ -89,6 +105,8 @@ public class ConfigProvider
 
     #region Watcher Logic
 
+    /// <summary>Initializes a file system watcher to detect external changes to configuration files.</summary>
+    /// <param name="path">The file path to monitor.</param>
     private void SetupWatcher(string path)
     {
         var watcher = new FileSystemWatcher(Path.GetDirectoryName(path)!, Path.GetFileName(path)) { NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName };
@@ -96,6 +114,7 @@ public class ConfigProvider
         watcher.EnableRaisingEvents = true;
     }
 
+    /// <summary>Invalidates cached settings and secrets in memory, forcing a reload on next access.</summary>
     private void InvalidateSettings()
     {
         lock (_settingsLock)
@@ -123,6 +142,9 @@ public class ConfigProvider
             _ => SanitizeConfigObject(JsonSerializer.Deserialize<object>(JsonSerializer.Serialize(obj, s_options), s_options)!),
         };
 
+    /// <summary>Recursively converts a <see cref="JsonElement"/> into plain primitive or dictionary types.</summary>
+    /// <param name="je">The JSON element to convert.</param>
+    /// <returns>A converted object containing standard CLR types.</returns>
     private object SanitizeConfigElement(JsonElement je) =>
         je.ValueKind switch
         {
@@ -150,7 +172,26 @@ public class ConfigProvider
             return current;
 
         lock (_settingsLock)
-            return _settings ??= GetSettingsFromFile();
+        {
+            if (_settings != null)
+                return _settings;
+
+            RelayConfig s;
+            try
+            {
+                s = File.Exists(_filePath) ? JsonSerializer.Deserialize<RelayConfig>(File.ReadAllText(_filePath), s_options) ?? new() : new();
+            }
+            catch (Exception ex)
+            {
+                s_logger.Warn(ex, "Config: Invalid settings -> Using defaults");
+                s = new();
+            }
+            ApplyDefaultValues(s);
+            NormalizePathMappings(s);
+            NormalizeCsvFields(s);
+            NormalizeSettings(s);
+            return _settings = s;
+        }
     }
 
     /// <summary>Return the current settings, applying any path or query overrides from the current HTTP request.</summary>
@@ -242,7 +283,8 @@ public class ConfigProvider
     public void SaveSettings(RelayConfig settings)
     {
         ApplyDefaultValues(settings);
-        ValidateSettings(settings);
+        if (!Validator.TryValidateObject(settings, new ValidationContext(settings), null, true))
+            throw new ArgumentException("Config validation failed.");
         NormalizePathMappings(settings);
         NormalizeCsvFields(settings);
         lock (_settingsLock)
@@ -251,35 +293,26 @@ public class ConfigProvider
         _cachedExtraUsers = null; // Clear the cached extra users so they are re-parsed on the next sync after settings changes
     }
 
-    private RelayConfig GetSettingsFromFile()
-    {
-        RelayConfig s;
-        try
-        {
-            s = File.Exists(_filePath) ? JsonSerializer.Deserialize<RelayConfig>(File.ReadAllText(_filePath), s_options) ?? new() : new();
-        }
-        catch (Exception ex)
-        {
-            s_logger.Warn(ex, "Config: Invalid settings -> Using defaults");
-            s = new();
-        }
-        ApplyDefaultValues(s);
-        NormalizePathMappings(s);
-        NormalizeCsvFields(s);
-        NormalizeSettings(s);
-        return s;
-    }
-
     #endregion
 
     #region Plex Secrets & Tokens
 
+    /// <summary>Data structure representing saved Plex tokens and server discovery details on disk.</summary>
     private sealed class TokenFile
     {
+        /// <summary>The saved Plex authentication token.</summary>
         public string? Token { get; set; }
+
+        /// <summary>The unique client identifier for this installation.</summary>
         public string? ClientIdentifier { get; set; }
+
+        /// <summary>The cached username of the Plex account admin.</summary>
         public string? AdminUsername { get; set; }
+
+        /// <summary>List of discovered Plex servers.</summary>
         public List<PlexAvailableServer>? Servers { get; set; }
+
+        /// <summary>List of discovered Plex libraries.</summary>
         public List<PlexAvailableLibrary>? Libraries { get; set; }
     }
 
@@ -297,6 +330,8 @@ public class ConfigProvider
         }
     }
 
+    /// <summary>Reads and deserializes the Plex token secrets file from disk.</summary>
+    /// <returns>A populated <see cref="TokenFile"/> instance or a new empty structure on failure.</returns>
     private TokenFile ReadTokenFile()
     {
         try
@@ -309,6 +344,12 @@ public class ConfigProvider
         }
     }
 
+    /// <summary>Serializes and writes updated Plex token and discovery details to disk.</summary>
+    /// <param name="t">Plex token.</param>
+    /// <param name="c">Client identifier.</param>
+    /// <param name="a">Admin username.</param>
+    /// <param name="s">Discovered servers list.</param>
+    /// <param name="l">Discovered libraries list.</param>
     private void WriteTokenFile(string? t, string? c, string? a, List<PlexAvailableServer>? s = null, List<PlexAvailableLibrary>? l = null) =>
         File.WriteAllText(
             _tokenPath,
@@ -420,12 +461,26 @@ public class ConfigProvider
 
     #region Normalize & Validate
 
+    /// <summary>Normalizes path mapping keys and values to ensure consistent cross-platform separator formatting.</summary>
+    /// <param name="settings">The relay configuration instance to update.</param>
+    /// <returns>True if any path mappings were changed during normalization.</returns>
     private bool NormalizePathMappings(RelayConfig settings)
     {
         if (settings.Advanced.PathMappings.Count == 0)
             return false;
         var norm = settings.Advanced.PathMappings.ToDictionary(
-            k => NormalizeShokoKey(k.Key),
+            k =>
+            {
+                string n = k.Key.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar).Trim();
+                try
+                {
+                    return Path.IsPathRooted(n) ? Path.GetFullPath(n).TrimEnd(Path.DirectorySeparatorChar) : n.TrimEnd(Path.DirectorySeparatorChar);
+                }
+                catch
+                {
+                    return n;
+                }
+            },
             v => (TextHelper.NormalizePathForPlex(v.Value.Trim()) is var p && !p.StartsWith('/') && !p.Contains(':') && !p.StartsWith("//", StringComparison.Ordinal)) ? "/" + p : p
         );
         if (JsonSerializer.Serialize(settings.Advanced.PathMappings) == JsonSerializer.Serialize(norm))
@@ -434,6 +489,9 @@ public class ConfigProvider
         return true;
     }
 
+    /// <summary>Normalizes comma-separated and newline-separated settings fields by trimming and removing duplicates.</summary>
+    /// <param name="s">The relay configuration instance to normalize.</param>
+    /// <returns>True if any fields were modified during normalization.</returns>
     private bool NormalizeCsvFields(RelayConfig s)
     {
         static string Norm(string? r, char separator) =>
@@ -458,19 +516,8 @@ public class ConfigProvider
         return c;
     }
 
-    private static string NormalizeShokoKey(string k)
-    {
-        string n = k.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar).Trim();
-        try
-        {
-            return Path.IsPathRooted(n) ? Path.GetFullPath(n).TrimEnd(Path.DirectorySeparatorChar) : n.TrimEnd(Path.DirectorySeparatorChar);
-        }
-        catch
-        {
-            return n;
-        }
-    }
-
+    /// <summary>Applies default values to string properties on an object hierarchy where [DefaultValue] attributes exist.</summary>
+    /// <param name="obj">The object to apply default values to.</param>
     private static void ApplyDefaultValues(object obj)
     {
         foreach (var p in obj.GetType().GetProperties().Where(p => p.CanRead && p.CanWrite))
@@ -519,13 +566,6 @@ public class ConfigProvider
                     NormalizeSettings(subObj);
             }
         }
-    }
-
-    private static void ValidateSettings(RelayConfig s)
-    {
-        var results = new List<ValidationResult>();
-        if (!Validator.TryValidateObject(s, new ValidationContext(s), results, true))
-            throw new ArgumentException("Config validation failed.");
     }
 
     #endregion

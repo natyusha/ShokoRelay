@@ -21,9 +21,35 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
     /// <returns>The collection ID or null.</returns>
     public async Task<int?> GetOrCreateCollectionIdAsync(string collectionName, PlexLibraryTarget target, CancellationToken cancellationToken = default)
     {
-        return !IsEnabled || string.IsNullOrWhiteSpace(collectionName) || target == null
-            ? null
-            : await FindCollectionIdAsync(collectionName, target, cancellationToken).ConfigureAwait(false) ?? await CreateCollectionAsync(collectionName, target, cancellationToken).ConfigureAwait(false);
+        if (!IsEnabled || string.IsNullOrWhiteSpace(collectionName) || target == null)
+            return null;
+
+        // Find a collection ID by title
+        using var req = plexClient.CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/collections?title={Uri.EscapeDataString(collectionName)}&X-Plex-Container-Size=10", target.ServerUrl);
+        using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+        var meta = (await PlexApi.ReadContainerAsync(resp, cancellationToken).ConfigureAwait(false))?.Metadata?.FirstOrDefault();
+        if (int.TryParse(meta?.RatingKey, out int id))
+            return id;
+
+        // Create a new collection in the specified target library
+        string path = $"/library/collections?title={Uri.EscapeDataString(collectionName)}&titleSort={Uri.EscapeDataString(collectionName)}&sectionId={target.SectionId}&type={(int)target.LibraryType}";
+        using var req2 = plexClient.CreateRequest(HttpMethod.Post, path, target.ServerUrl);
+        using var resp2 = await httpClient.SendAsync(req2, cancellationToken).ConfigureAwait(false);
+        if (!resp2.IsSuccessStatusCode)
+        {
+            var body = await resp2.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            s_logger.Warn(
+                "PlexCollections: Create collection failed with status {0} for title {1} on {2}/{3}. Response: {4}",
+                resp2.StatusCode,
+                collectionName,
+                target.ServerUrl,
+                target.SectionId,
+                body?.Length > 1024 ? body[..1024] + "..." : body
+            );
+            return null;
+        }
+        var meta2 = (await PlexApi.ReadContainerAsync(resp2, cancellationToken).ConfigureAwait(false))?.Metadata?.FirstOrDefault();
+        return int.TryParse(meta2?.RatingKey, out int id2) ? id2 : null;
     }
 
     #endregion
@@ -113,7 +139,12 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
                 if (TextHelper.IsPlexTrue(m.Smart))
                     continue;
 
-                if (int.TryParse(m.RatingKey, out int id) && m.ChildCount == 0 && await DeleteCollectionAsync(id, target, cancellationToken).ConfigureAwait(false))
+                // Delete a custom collection from the specified Plex library target
+                if (
+                    int.TryParse(m.RatingKey, out int id)
+                    && m.ChildCount == 0
+                    && await ExecuteActionAsync(HttpMethod.Delete, $"/library/collections/{id}", target, $"Delete collection {id}", cancellationToken).ConfigureAwait(false)
+                )
                 {
                     s_logger.Info("PlexCollections: Deleted empty collection {CollectionId} in section {SectionId}", id, target.SectionId);
                     deleted++;
@@ -145,55 +176,7 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
 
     #endregion
 
-    #region Internal API Helpers
-
-    /// <summary>Finds a collection ID by title.</summary>
-    /// <param name="title">Collection title.</param>
-    /// <param name="target">Plex library target.</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>The numeric rating key of the collection, or null if not found.</returns>
-    private async Task<int?> FindCollectionIdAsync(string title, PlexLibraryTarget target, CancellationToken ct)
-    {
-        using var req = plexClient.CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/collections?title={Uri.EscapeDataString(title)}&X-Plex-Container-Size=10", target.ServerUrl);
-        using var resp = await httpClient.SendAsync(req, ct).ConfigureAwait(false);
-        var meta = (await PlexApi.ReadContainerAsync(resp, ct).ConfigureAwait(false))?.Metadata?.FirstOrDefault();
-        return int.TryParse(meta?.RatingKey, out int id) ? id : null;
-    }
-
-    /// <summary>Creates a new collection in the specified target library.</summary>
-    /// <param name="title">Collection title.</param>
-    /// <param name="target">Plex library target.</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>The rating key of the newly created collection, or null on failure.</returns>
-    private async Task<int?> CreateCollectionAsync(string title, PlexLibraryTarget target, CancellationToken ct)
-    {
-        string path = $"/library/collections?title={Uri.EscapeDataString(title)}&titleSort={Uri.EscapeDataString(title)}&sectionId={target.SectionId}&type={(int)target.LibraryType}";
-        using var req = plexClient.CreateRequest(HttpMethod.Post, path, target.ServerUrl);
-        using var resp = await httpClient.SendAsync(req, ct).ConfigureAwait(false);
-        if (!resp.IsSuccessStatusCode)
-        {
-            var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            s_logger.Warn(
-                "PlexCollections: Create collection failed with status {0} for title {1} on {2}/{3}. Response: {4}",
-                resp.StatusCode,
-                title,
-                target.ServerUrl,
-                target.SectionId,
-                body?.Length > 1024 ? body[..1024] + "..." : body
-            );
-            return null;
-        }
-        var meta = (await PlexApi.ReadContainerAsync(resp, ct).ConfigureAwait(false))?.Metadata?.FirstOrDefault();
-        return int.TryParse(meta?.RatingKey, out int id) ? id : null;
-    }
-
-    /// <summary>Deletes a custom collection from the specified Plex library target.</summary>
-    /// <param name="collectionId">The rating key ID of the collection to delete.</param>
-    /// <param name="target">The target Plex library section.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A task representing the async operation containing true if deleted successfully; otherwise, false.</returns>
-    private Task<bool> DeleteCollectionAsync(int collectionId, PlexLibraryTarget target, CancellationToken cancellationToken = default) =>
-        ExecuteActionAsync(HttpMethod.Delete, $"/library/collections/{collectionId}", target, $"Delete collection {collectionId}", cancellationToken);
+    #region Internal Helpers
 
     /// <summary>Executes a generic Plex API action and handles response logging.</summary>
     /// <param name="method">HTTP method.</param>

@@ -290,7 +290,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
 
     #endregion
 
-    #region Private Helpers
+    #region Internal Helpers
 
     /// <summary>Parses the ratingKey and resolves the corresponding episode, part index, and file mapping from the VFS collection.</summary>
     /// <param name="ctx">The series context containing the mapping collection.</param>

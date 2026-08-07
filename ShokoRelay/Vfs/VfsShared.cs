@@ -211,28 +211,19 @@ internal static class VfsShared
             }
         }
 
-        return TryCreateSymlink(dest, relativeTarget, logger);
-    }
-
-    /// <summary>Internal wrapper around the OS file APIs to create standard filesystem relative symbolic links.</summary>
-    /// <param name="linkPath">The target location where the symlink should be created.</param>
-    /// <param name="target">The relative or absolute target destination of the link.</param>
-    /// <param name="logger">Logger reference.</param>
-    /// <returns>True if the symlink was created successfully; otherwise false.</returns>
-    private static bool TryCreateSymlink(string linkPath, string target, Logger logger)
-    {
+        // Internal wrapper around the OS file APIs to create standard filesystem relative symbolic links
         try
         {
             var sw = Stopwatch.StartNew();
-            var info = File.CreateSymbolicLink(linkPath, target);
+            var info = File.CreateSymbolicLink(dest, relativeTarget);
             sw.Stop();
             if (sw.ElapsedMilliseconds > 20)
-                logger.Debug("VFS: Symlink created -> '{Link}' in {Elapsed}ms", linkPath, sw.ElapsedMilliseconds); // only log slow operations, to avoid spamming the logs
+                logger.Debug("VFS: Symlink created -> '{Link}' in {Elapsed}ms", dest, sw.ElapsedMilliseconds); // only log slow operations, to avoid spamming the logs
             return info.Exists;
         }
         catch (Exception ex)
         {
-            logger.Debug(ex, "VFS: Symlink creation failed -> {Link}", linkPath);
+            logger.Debug(ex, "VFS: Symlink creation failed -> {Link}", dest);
             return false;
         }
     }

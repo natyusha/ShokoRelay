@@ -19,7 +19,11 @@ public sealed class FfmpegService(string pluginDirectory, string applicationPath
     private string _ffprobePath = "ffprobe";
     private readonly string _pluginDirectory = pluginDirectory;
     private string _workingDirectory = pluginDirectory;
-    private readonly List<string> _utilitiesDirectories = GetUtilitiesDirectories(applicationPath, dataPath);
+    private readonly List<string> _utilitiesDirectories =
+    [
+        .. !string.IsNullOrWhiteSpace(applicationPath) && Directory.Exists(Path.Combine(applicationPath, "Utilities", "FFmpeg")) ? new[] { Path.Combine(applicationPath, "Utilities", "FFmpeg") } : [],
+        .. !string.IsNullOrWhiteSpace(dataPath) && Directory.Exists(Path.Combine(dataPath, "Utilities", "FFmpeg")) ? new[] { Path.Combine(dataPath, "Utilities", "FFmpeg") } : [],
+    ];
 
     #endregion
 
@@ -75,20 +79,6 @@ public sealed class FfmpegService(string pluginDirectory, string applicationPath
     #endregion
 
     #region Configuration Logic
-
-    /// <summary>Resolves the list of possible FFmpeg utility directories based on Shoko Server installation paths.</summary>
-    /// <param name="appPath">The parent directory of the Shoko Server executable.</param>
-    /// <param name="dataPath">The Shoko Server data directory.</param>
-    /// <returns>A list of verified absolute directory paths.</returns>
-    private static List<string> GetUtilitiesDirectories(string appPath, string dataPath)
-    {
-        var list = new List<string>();
-        if (!string.IsNullOrWhiteSpace(appPath))
-            list.Add(Path.Combine(appPath, "Utilities", "FFmpeg"));
-        if (!string.IsNullOrWhiteSpace(dataPath))
-            list.Add(Path.Combine(dataPath, "Utilities", "FFmpeg"));
-        return list;
-    }
 
     /// <summary>Ensures that the paths to the FFmpeg and FFprobe binaries are resolved and verified. Searches the Shoko utilities folders, configured paths, the plugin directory, and the system PATH.</summary>
     private void EnsureFfmpegConfigured()

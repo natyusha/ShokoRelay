@@ -84,7 +84,7 @@ public class AnimeThemesApi(HttpClient? httpClient = null)
 
     #endregion
 
-    #region Internal Logic
+    #region Internal Helpers
 
     /// <summary>Generic JSON deserialization with automatic rate limiting and error handling.</summary>
     /// <typeparam name="T">The type to deserialize into.</typeparam>

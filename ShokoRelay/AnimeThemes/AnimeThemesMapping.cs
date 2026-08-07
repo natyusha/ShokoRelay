@@ -270,7 +270,15 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                             {
                                 int seriesIdx = overrideOrder.IndexOf(series.ID);
                                 return entries
-                                    .Where(e => e.AniDbId == series.AnidbAnimeID && IsAllowed(e, Settings.Advanced.AnimeThemesOverlapLevel))
+                                    // Determine if a theme mapping's overlap level is allowed based on the configured overlap restriction
+                                    .Where(e =>
+                                        e.AniDbId == series.AnidbAnimeID
+                                        && (
+                                            Settings.Advanced.AnimeThemesOverlapLevel == OverlapLevel.All
+                                            || e.Overlap.Equals("None", StringComparison.Ordinal)
+                                            || (Settings.Advanced.AnimeThemesOverlapLevel == OverlapLevel.TransitionOnly && e.Overlap.Equals("Transition", StringComparison.Ordinal))
+                                        )
+                                    )
                                     .Select(entry =>
                                     {
                                         string relPath = entry.FilePath.TrimStart('/', '\\');
@@ -425,17 +433,6 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
             TaskHelper.FinishTask(ShokoRelayConstants.TaskAtVfsBuild);
         }
     }
-
-    #endregion
-
-    #region Internal Mapping Chk
-
-    /// <summary>Determines if a theme mapping's overlap level is allowed based on the configured overlap restriction.</summary>
-    /// <param name="e">The theme mapping entry to evaluate.</param>
-    /// <param name="level">The maximum allowed level of overlap.</param>
-    /// <returns>True if the theme's overlap satisfies the filter; otherwise, false.</returns>
-    private static bool IsAllowed(AnimeThemesMappingEntry e, OverlapLevel level) =>
-        level == OverlapLevel.All || e.Overlap.Equals("None", StringComparison.Ordinal) || (level == OverlapLevel.TransitionOnly && e.Overlap.Equals("Transition", StringComparison.Ordinal));
 
     #endregion
 

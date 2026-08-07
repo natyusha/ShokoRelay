@@ -95,7 +95,14 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
                         continue;
                     }
 
-                    var rating = ComputeSeriesRating(series);
+                    // Resolve the critic rating for a series based on user configuration
+                    double? rating = Settings.CriticRatingMode switch
+                    {
+                        CriticRatingMode.TMDB => series.TmdbShows?.FirstOrDefault()?.Rating > 0 ? series.TmdbShows.First().Rating : null,
+                        CriticRatingMode.AniDB => series.Rating > 0 ? series.Rating : null,
+                        _ => null,
+                    };
+
                     if (!NeedsRatingUpdate(item.Rating, rating))
                     {
                         s_logger.Trace("CriticRatingService: Skipped series -> {0} [{1}] (RatingKey: {2}) because rating {3} matches Plex", series.GetDisplayTitle(), series.ID, item.RatingKey, item.Rating);
@@ -130,6 +137,8 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
                         continue;
 
                     pE++;
+
+                    // Resolve the critic rating for an episode based on user configuration
                     double? rating = Settings.CriticRatingMode switch
                     {
                         CriticRatingMode.TMDB => episode.TmdbEpisodes?.FirstOrDefault()?.Rating > 0 ? episode.TmdbEpisodes.First().Rating : null,
@@ -170,7 +179,7 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
 
     #endregion
 
-    #region Internal Rating Logic
+    #region Internal Helpers
 
     /// <summary>Pushes a rating value to a specific Plex metadata item.</summary>
     /// <param name="key">The Plex rating key.</param>
@@ -202,17 +211,6 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
     /// <param name="shoko">The target Shoko rating.</param>
     /// <returns>True if the rating differs significantly.</returns>
     private static bool NeedsRatingUpdate(double? plex, double? shoko) => shoko.HasValue ? (!plex.HasValue || Math.Abs(plex.Value - shoko.Value) > 0.05) : (plex.HasValue && plex.Value > 0.05);
-
-    /// <summary>Resolves the critic rating for a series based on user configuration.</summary>
-    /// <param name="s">The Shoko series metadata.</param>
-    /// <returns>The resolved rating value.</returns>
-    private static double? ComputeSeriesRating(IShokoSeries s) =>
-        Settings.CriticRatingMode switch
-        {
-            CriticRatingMode.TMDB => s.TmdbShows?.FirstOrDefault()?.Rating > 0 ? s.TmdbShows.First().Rating : null,
-            CriticRatingMode.AniDB => s.Rating > 0 ? s.Rating : null,
-            _ => null,
-        };
 
     #endregion
 }

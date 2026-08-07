@@ -46,7 +46,6 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
 
     #region Logging Helper
 
-
     /// <summary>Executes a background task with full lifecycle tracking, logging, and standardized response formatting. Supports optional concurrency locking.</summary>
     /// <typeparam name="T">The type of the result data.</typeparam>
     /// <param name="taskName">Unique identifier for UI tracking.</param>
@@ -63,7 +62,8 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
         try
         {
             T result = await action().ConfigureAwait(false);
-            IActionResult actionResult = LogAndReturn($"{taskName}-report.log", result, reportBuilder);
+            LogHelper.WriteReport(ConfigProvider.PluginDirectory, $"{taskName}-report.log", result, reportBuilder);
+            IActionResult actionResult = Ok(new RelayResponse<T>(Data: result, LogUrl: $"{ApiBase}/logs/{taskName}-report.log"));
             TaskHelper.CompleteTask(taskName, (actionResult as OkObjectResult)?.Value!);
             return actionResult;
         }
@@ -77,18 +77,6 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
         {
             semaphore?.Release();
         }
-    }
-
-    /// <summary>Standardized helper for tasks: writes a report and returns a JSON response with a log link.</summary>
-    /// <typeparam name="T">The type of the result data object.</typeparam>
-    /// <param name="logName">The name of the log file to generate.</param>
-    /// <param name="resultData">The data object to return in the JSON response.</param>
-    /// <param name="reportBuilder">The logic used to format the resultData into a text report.</param>
-    /// <returns>An IActionResult containing a RelayResponse with status, data, and logUrl.</returns>
-    protected IActionResult LogAndReturn<T>(string logName, T resultData, Action<StringBuilder, T> reportBuilder)
-    {
-        LogHelper.WriteReport(ConfigProvider.PluginDirectory, logName, resultData, reportBuilder);
-        return Ok(new RelayResponse<T>(Data: resultData, LogUrl: $"{ApiBase}/logs/{logName}"));
     }
 
     #endregion
@@ -165,7 +153,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
         if (validation != null)
             return validation;
 
-        seriesList = ResolveSeriesList(null, filterIds);
+        seriesList = filterIds.Count > 0 ? [.. filterIds.Distinct().Select(MetadataService.GetShokoSeriesByID)] : [.. MetadataService.GetAllShokoSeries().Cast<IShokoSeries?>()];
         return null;
     }
 
@@ -226,19 +214,6 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
     /// <summary>Return an empty Plex match response (zero results).</summary>
     /// <returns>Plex-compatible empty MediaContainer result.</returns>
     protected IActionResult EmptyMatch() => Ok(new { MediaContainer = new { size = 0, Metadata = Array.Empty<object>() } });
-
-    #endregion
-
-    #region Shared Logic Helpers
-
-    /// <summary>Given an optional seriesId or a set of filterIds, returns the corresponding list of Shoko series objects from the database.</summary>
-    /// <param name="seriesId">Optional single series ID.</param>
-    /// <param name="filterIds">Optional collection of series IDs.</param>
-    /// <returns>A list of Shoko series objects.</returns>
-    protected List<IShokoSeries?> ResolveSeriesList(int? seriesId, IReadOnlyCollection<int> filterIds) =>
-        seriesId.HasValue ? [MetadataService.GetShokoSeriesByID(seriesId.Value)]
-        : filterIds.Count > 0 ? [.. filterIds.Distinct().Select(id => MetadataService.GetShokoSeriesByID(id))]
-        : [.. MetadataService.GetAllShokoSeries().Cast<IShokoSeries?>()];
 
     #endregion
 

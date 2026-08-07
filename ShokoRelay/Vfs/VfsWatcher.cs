@@ -215,7 +215,10 @@ public class VfsWatcher(
         }
 
         ScheduleLibraryScan(series);
-        ScheduleMetadataFixup(series);
+
+        // Schedules or resets the timer for a full Plex metadata refresh for the given series
+        s_logger.Debug("VFS: Scheduling metadata fixup for series -> {0} [{1}] in {2} minute(s)", series.GetDisplayTitle(), series.ID, Settings.Advanced.PlexFixupDelay);
+        ScheduleDebouncedAction(series.ID, Settings.Advanced.PlexFixupDelay * 60, _pendingMetadataFixups, token => RunMetadataFixupAsync(series, token));
     }
 
     /// <summary>Generic debouncer wrapper to handle delaying tasks and managing cancellations efficiently.</summary>
@@ -287,14 +290,6 @@ public class VfsWatcher(
         );
     }
 
-    /// <summary>Schedules or resets the timer for a full Plex metadata refresh for the given series.</summary>
-    /// <param name="series">The Shoko series metadata.</param>
-    private void ScheduleMetadataFixup(IShokoSeries series)
-    {
-        s_logger.Debug("VFS: Scheduling metadata fixup for series -> {0} [{1}] in {2} minute(s)", series.GetDisplayTitle(), series.ID, Settings.Advanced.PlexFixupDelay);
-        ScheduleDebouncedAction(series.ID, Settings.Advanced.PlexFixupDelay * 60, _pendingMetadataFixups, token => RunMetadataFixupAsync(series, token));
-    }
-
     /// <summary>Worker task that performs the actual metadata fixup logic, critic rating application, and optional image synchronization after the debounce delay has settled.</summary>
     /// <param name="series">The Shoko series metadata.</param>
     /// <param name="token">Cancellation token.</param>
@@ -349,7 +344,44 @@ public class VfsWatcher(
             else
             {
                 // Execute subsequent API actions sequentially to guarantee metadata framework exists
-                await RunCollectionUpdateAsync(series, token).ConfigureAwait(false);
+                try
+                {
+                    // Worker task that performs the collection assignment and poster/logo/backdrop upload logic
+                    var collectionName = plexMetadata.GetCollectionName(series);
+                    if (!string.IsNullOrWhiteSpace(collectionName))
+                    {
+                        foreach (var target in targets)
+                        {
+                            var ratingKey = await plexLibrary.FindRatingKeyForShokoSeriesInSectionAsync(series.ID, target, token).ConfigureAwait(false);
+                            if (!ratingKey.HasValue)
+                                continue;
+
+                            if (await plexCollections.AssignCollectionToItemByMetadataAsync(ratingKey.Value, collectionName, target, token).ConfigureAwait(false))
+                            {
+                                var collectionId = await plexCollections.GetOrCreateCollectionIdAsync(collectionName, target, token).ConfigureAwait(false);
+                                if (!collectionId.HasValue)
+                                    continue;
+
+                                var desc = TextHelper.GetDescriptionByLanguage(series, Settings.DescriptionLanguage);
+                                var tmdbDesc = series.TmdbShows?.FirstOrDefault()?.PreferredDescription?.Value;
+                                var summary = TextHelper.SanitizeSummaryWithFallback(desc, tmdbDesc, Settings.SummaryMode);
+                                await plexCollections.UpdateCollectionMetadataAsync(collectionId.Value, collectionName, summary, target, token).ConfigureAwait(false);
+
+                                foreach (var config in PlexConstants.CollectionImageConfigs)
+                                {
+                                    var fallback = config.DefaultFallback && Settings.CollectionImages;
+                                    var url = PlexHelper.GetCollectionImageUrl(series, collectionName, collectionId.Value, config.Suffix, config.Suffixes, metadataService, fallback);
+                                    if (!string.IsNullOrEmpty(url))
+                                        await plexCollections.UploadCollectionImageByUrlAsync(collectionId.Value, url, config.Prefix, target, token).ConfigureAwait(false);
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    s_logger.Error(ex, "VFS: Collection update failed for series -> {0} [{1}]", series.GetDisplayTitle(), series.ID);
+                }
 
                 s_logger.Info("VFS: Triggering debounced critic rating application for series -> {0} [{1}]", series.GetDisplayTitle(), series.ID);
                 await criticRatingService.ApplyRatingsAsync([series.ID], token).ConfigureAwait(false);
@@ -365,52 +397,6 @@ public class VfsWatcher(
         catch (Exception ex)
         {
             s_logger.Error(ex, "VFS: Metadata fixup failed for series -> {0} [{1}]", series.GetDisplayTitle(), series.ID);
-        }
-    }
-
-    /// <summary>Worker task that performs the collection assignment and poster/logo/backdrop upload logic.</summary>
-    /// <param name="series">The Shoko series to update.</param>
-    /// <param name="token">Cancellation token.</param>
-    /// <returns>A task representing the update operation.</returns>
-    private async Task RunCollectionUpdateAsync(IShokoSeries series, CancellationToken token)
-    {
-        try
-        {
-            var collectionName = plexMetadata.GetCollectionName(series);
-            if (string.IsNullOrWhiteSpace(collectionName))
-                return;
-
-            var targets = plexLibrary.GetConfiguredTargets();
-            foreach (var target in targets)
-            {
-                var ratingKey = await plexLibrary.FindRatingKeyForShokoSeriesInSectionAsync(series.ID, target, token).ConfigureAwait(false);
-                if (!ratingKey.HasValue)
-                    continue;
-
-                if (await plexCollections.AssignCollectionToItemByMetadataAsync(ratingKey.Value, collectionName, target, token).ConfigureAwait(false))
-                {
-                    var collectionId = await plexCollections.GetOrCreateCollectionIdAsync(collectionName, target, token).ConfigureAwait(false);
-                    if (!collectionId.HasValue)
-                        continue;
-
-                    var desc = TextHelper.GetDescriptionByLanguage(series, Settings.DescriptionLanguage);
-                    var tmdbDesc = series.TmdbShows?.FirstOrDefault()?.PreferredDescription?.Value;
-                    var summary = TextHelper.SanitizeSummaryWithFallback(desc, tmdbDesc, Settings.SummaryMode);
-                    await plexCollections.UpdateCollectionMetadataAsync(collectionId.Value, collectionName, summary, target, token).ConfigureAwait(false);
-
-                    foreach (var config in PlexConstants.CollectionImageConfigs)
-                    {
-                        var fallback = config.DefaultFallback && Settings.CollectionImages;
-                        var url = PlexHelper.GetCollectionImageUrl(series, collectionName, collectionId.Value, config.Suffix, config.Suffixes, metadataService, fallback);
-                        if (!string.IsNullOrEmpty(url))
-                            await plexCollections.UploadCollectionImageByUrlAsync(collectionId.Value, url, config.Prefix, target, token).ConfigureAwait(false);
-                    }
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            s_logger.Error(ex, "VFS: Collection update failed for series -> {0} [{1}]", series.GetDisplayTitle(), series.ID);
         }
     }
 

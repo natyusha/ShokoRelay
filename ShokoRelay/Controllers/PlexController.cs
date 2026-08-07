@@ -378,8 +378,31 @@ public class PlexController(
         if (!Settings.Automation.AutoScrobble)
             return Ok(new { status = "ignored", reason = "auto_scrobble_disabled" });
 
-        var evt = await ExtractPlexWebhookPayloadAsync().ConfigureAwait(false);
-        if (evt == null || evt.Metadata == null)
+        // Extract and parses the raw JSON payload from the Plex webhook request stream
+        string? payloadJson = null;
+        if (Request.HasFormContentType && Request.Form.ContainsKey("payload"))
+            payloadJson = Request.Form["payload"].ToString();
+        else
+        {
+            using var sr = new StreamReader(Request.Body);
+            payloadJson = await sr.ReadToEndAsync().ConfigureAwait(false);
+        }
+
+        if (string.IsNullOrWhiteSpace(payloadJson))
+            return BadRequest(new { status = "error", message = "invalid payload" });
+
+        PlexWebhookPayload? evt = null;
+        try
+        {
+            // Case sensitive to prevent a type conflict between "guid" (string) and "Guid" (array)
+            evt = JsonSerializer.Deserialize<PlexWebhookPayload>(payloadJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = false });
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, "Plex: Failed to deserialize webhook payload. Raw JSON: {Json}", payloadJson);
+        }
+
+        if (evt?.Metadata == null)
             return BadRequest(new { status = "error", message = "invalid payload" });
 
         bool isScrobble = string.Equals(evt.Event, "media.scrobble", StringComparison.OrdinalIgnoreCase);
@@ -389,7 +412,52 @@ public class PlexController(
         if (!(isScrobble || (isProgress && Settings.Automation.ShokoSyncWatchedIncludeProgress) || (isRate && Settings.Automation.ShokoSyncWatchedIncludeRatings)))
             return Ok(new { status = "ignored", reason = "unsupported_event_type" });
 
-        var (allowed, reason) = await ValidateWebhookSource(evt, Settings, HttpContext.RequestAborted);
+        // Validate the incoming webhook request source against known servers and authorized users
+        bool allowed = false;
+        string reason = "";
+
+        if (!ConfigProvider.IsManagedServer(evt.Server?.Uuid))
+            reason = "unrecognized_server_uuid";
+        else
+        {
+            var plexUser = evt.Account?.Title?.Trim();
+            if (string.IsNullOrWhiteSpace(plexUser))
+                reason = "empty_account_title";
+            else
+            {
+                var userType = Settings.Automation.ShokoSyncWatchedUserType;
+                if (userType == SyncUserType.None)
+                    reason = "sync_users_set_to_none";
+                else if ((userType is SyncUserType.All or SyncUserType.Extra) && ConfigProvider.GetExtraPlexUserEntries().Any(e => string.Equals(e.Name, plexUser, StringComparison.OrdinalIgnoreCase)))
+                    allowed = true;
+                else if (evt.Owner == true)
+                {
+                    bool adminAllowed = userType is SyncUserType.All or SyncUserType.Admin;
+                    string? adminName = ConfigProvider.GetAdminUsername();
+                    if (string.IsNullOrEmpty(adminName))
+                    {
+                        await ConfigProvider.RefreshAdminUsername(plexAuth, HttpContext.RequestAborted).ConfigureAwait(false);
+                        adminName = ConfigProvider.GetAdminUsername();
+                    }
+
+                    if (string.IsNullOrEmpty(adminName))
+                    {
+                        allowed = adminAllowed;
+                        reason = !adminAllowed ? "admin_excluded_identity_unknown" : "allowed_owner_identity_assumed";
+                    }
+                    else if (string.Equals(plexUser, adminName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        allowed = adminAllowed;
+                        reason = !adminAllowed ? "admin_excluded_by_config" : "allowed_admin";
+                    }
+                    else
+                        reason = $"unauthorized_managed_user ({plexUser})";
+                }
+                else
+                    reason = $"user_not_authorized ({plexUser})";
+            }
+        }
+
         if (!allowed)
         {
             Logger.Info("Plex: Webhook ignored -> {Reason} | User: {User} | Event: {Event}", reason, evt.Account?.Title, evt.Event);
@@ -454,78 +522,6 @@ public class PlexController(
         if (saved != null)
             Logger.Info("Plex: Scrobble applied -> user='{User}', series='{Series}', episode='{SeasonEp}'", evt.Account?.Title, seriesName, seasonEp);
         return Ok(new { status = "ok", marked = saved != null });
-    }
-
-    #endregion
-
-    #region Webhook Helpers
-
-    /// <summary>Extracts and parses the raw JSON payload from the Plex webhook request stream.</summary>
-    /// <returns>A deserialized <see cref="PlexWebhookPayload"/>, or null if empty/malformed.</returns>
-    private async Task<PlexWebhookPayload?> ExtractPlexWebhookPayloadAsync()
-    {
-        string? payloadJson = null;
-        if (Request.HasFormContentType && Request.Form.ContainsKey("payload"))
-            payloadJson = Request.Form["payload"].ToString();
-        else
-        {
-            using var sr = new StreamReader(Request.Body);
-            payloadJson = await sr.ReadToEndAsync().ConfigureAwait(false);
-        }
-
-        if (string.IsNullOrWhiteSpace(payloadJson))
-            return null;
-
-        try
-        {
-            // Case sensitive to prevent a type conflict between "guid" (string) and "Guid" (array).
-            return JsonSerializer.Deserialize<PlexWebhookPayload>(payloadJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = false });
-        }
-        catch (Exception ex)
-        {
-            Logger.Warn(ex, "Plex: Failed to deserialize webhook payload. Raw JSON: {Json}", payloadJson);
-            return null;
-        }
-    }
-
-    /// <summary>Validates the incoming webhook request source against known servers and authorized users.</summary>
-    /// <param name="evt">The parsed Plex webhook payload.</param>
-    /// <param name="cfg">The active plugin configuration settings.</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>A tuple indicating whether the request is authorized (Allowed) and the descriptive reason (Reason) if rejected.</returns>
-    private async Task<(bool Allowed, string Reason)> ValidateWebhookSource(PlexWebhookPayload evt, RelayConfig cfg, CancellationToken ct)
-    {
-        if (!ConfigProvider.IsManagedServer(evt.Server?.Uuid))
-            return (false, "unrecognized_server_uuid");
-        var plexUser = evt.Account?.Title?.Trim();
-        if (string.IsNullOrWhiteSpace(plexUser))
-            return (false, "empty_account_title");
-
-        var userType = cfg.Automation.ShokoSyncWatchedUserType;
-        if (userType == SyncUserType.None)
-            return (false, "sync_users_set_to_none");
-
-        if (userType is SyncUserType.All or SyncUserType.Extra)
-            if (ConfigProvider.GetExtraPlexUserEntries().Any(e => string.Equals(e.Name, plexUser, StringComparison.OrdinalIgnoreCase)))
-                return (true, "allowed_extra_user");
-
-        if (evt.Owner == true)
-        {
-            bool adminAllowed = userType is SyncUserType.All or SyncUserType.Admin;
-            string? adminName = ConfigProvider.GetAdminUsername();
-            if (string.IsNullOrEmpty(adminName))
-            {
-                await ConfigProvider.RefreshAdminUsername(plexAuth, ct).ConfigureAwait(false);
-                adminName = ConfigProvider.GetAdminUsername();
-            }
-
-            if (string.IsNullOrEmpty(adminName))
-                return !adminAllowed ? (false, "admin_excluded_identity_unknown") : (true, "allowed_owner_identity_assumed");
-            if (string.Equals(plexUser, adminName, StringComparison.OrdinalIgnoreCase))
-                return !adminAllowed ? (false, "admin_excluded_by_config") : (true, "allowed_admin");
-            return (false, $"unauthorized_managed_user ({plexUser})");
-        }
-        return (false, $"user_not_authorized ({plexUser})");
     }
 
     #endregion

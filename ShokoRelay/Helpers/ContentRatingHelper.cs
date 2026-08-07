@@ -25,7 +25,43 @@ public static class ContentRatingHelper
     /// <returns>A tuple of (Rating, IsAdult).</returns>
     public static (string? Rating, bool IsAdult) GetContentRatingAndAdult(ISeries? series)
     {
-        var tagSet = BuildTagSet(series);
+        var tagSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var tags = (series as IShokoSeries)?.Tags;
+        if (tags != null)
+        {
+            foreach (var t in tags)
+            {
+                if (t == null)
+                    continue;
+                var name = t.Name?.Trim();
+                if (string.IsNullOrWhiteSpace(name))
+                    continue;
+                var srcProp = t.GetType().GetProperty("Source");
+                if (srcProp != null)
+                {
+                    var srcVal = srcProp.GetValue(t) as string;
+                    if (!string.IsNullOrEmpty(srcVal) && srcVal.Equals("User", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                }
+                if (!s_ratingTags.Contains(name))
+                    continue;
+                tagSet.Add(name);
+            }
+        }
+
+        // Also include AniDB tags so content-rating can consult them (weights are read separately)
+        if (series is IShokoSeries ss2 && ss2.AnidbAnime?.Tags is IReadOnlyList<IAnidbTagForAnime> anidbTags2)
+        {
+            foreach (var at in anidbTags2)
+            {
+                var name = at?.Name?.Trim();
+                if (string.IsNullOrWhiteSpace(name))
+                    continue;
+                if (!s_ratingTags.Contains(name))
+                    continue;
+                tagSet.Add(name.ToLowerInvariant());
+            }
+        }
 
         // Build AniDB weight dictionary for precision-based decisions (defaults to 0 when not present).
         var anidbWeights = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -100,52 +136,6 @@ public static class ContentRatingHelper
         if (!string.IsNullOrEmpty(c_rating) && c_rating != "X")
             c_rating += descriptor;
         return (c_rating, false);
-    }
-
-    #endregion
-
-    #region Tag Processing
-
-    private static HashSet<string> BuildTagSet(ISeries? series)
-    {
-        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var tags = (series as IShokoSeries)?.Tags;
-        if (tags == null)
-            return set;
-
-        foreach (var t in tags)
-        {
-            if (t == null)
-                continue;
-            var name = t.Name?.Trim();
-            if (string.IsNullOrWhiteSpace(name))
-                continue;
-            var srcProp = t.GetType().GetProperty("Source");
-            if (srcProp != null)
-            {
-                var srcVal = srcProp.GetValue(t) as string;
-                if (!string.IsNullOrEmpty(srcVal) && srcVal.Equals("User", StringComparison.OrdinalIgnoreCase))
-                    continue;
-            }
-            if (!s_ratingTags.Contains(name))
-                continue;
-            set.Add(name);
-        }
-
-        // Also include AniDB tags so content-rating can consult them (weights are read separately).
-        if (series is IShokoSeries ss && ss.AnidbAnime?.Tags is IReadOnlyList<IAnidbTagForAnime> anidbTags)
-        {
-            foreach (var at in anidbTags)
-            {
-                var name = at?.Name?.Trim();
-                if (string.IsNullOrWhiteSpace(name))
-                    continue;
-                if (!s_ratingTags.Contains(name))
-                    continue;
-                set.Add(name.ToLowerInvariant());
-            }
-        }
-        return set;
     }
 
     #endregion

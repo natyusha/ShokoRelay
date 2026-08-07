@@ -127,7 +127,7 @@ public static class MapHelper
 
     #endregion
 
-    #region Mapping Logic
+    #region Internal Helpers
 
     /// <summary>Builds a comprehensive list of file-to-episode mappings for a series, resolving Plex coordinates and handling file versioning.</summary>
     /// <param name="series">The Shoko series metadata containing episodes and video files.</param>
@@ -197,8 +197,12 @@ public static class MapHelper
                 (deduped.Count > 1 && (episodeFileLists.GetValueOrDefault(deduped[0].Episode.ID)?.Count > 1 || deduped.Select(x => x.Episode.Type).Distinct().Count() == 1))
                     ? GetPlexCoordinatesForFile(deduped.Select(x => x.Episode))
                     : deduped[0].Coords;
+            // Apply fallback rules for "Other" (Featurette) season coordinates, remapping them to Standard or Specials folders if those are empty
             if (coords.Season == PlexConstants.SeasonOther)
-                coords = ApplyFeaturettesFallback(coords, s1, s0);
+                coords.Season =
+                    !s1 ? PlexConstants.SeasonStandard
+                    : !s0 ? PlexConstants.SeasonSpecials
+                    : coords.Season;
             videoCoords[video.ID] = (coords, deduped);
         }
 
@@ -272,26 +276,6 @@ public static class MapHelper
             }
         }
         return deduped;
-    }
-
-    /// <summary>Applies fallback rules for "Other" (Featurette) season coordinates, remapping them to Standard or Specials folders if those are empty.</summary>
-    /// <param name="coords">The original Plex coordinate set calculated for the episode.</param>
-    /// <param name="s1">True if the series contains standard episodes (Season 1).</param>
-    /// <param name="s0">True if the series contains special episodes (Season 0).</param>
-    /// <returns>The remapped Plex coordinates after fallback evaluation.</returns>
-    private static PlexCoords ApplyFeaturettesFallback(PlexCoords coords, bool s1, bool s0)
-    {
-        if (!s1)
-        {
-            coords.Season = PlexConstants.SeasonStandard;
-            return coords;
-        }
-        if (!s0)
-        {
-            coords.Season = PlexConstants.SeasonSpecials;
-            return coords;
-        }
-        return coords;
     }
 
     #endregion
