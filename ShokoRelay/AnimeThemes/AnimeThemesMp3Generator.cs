@@ -49,10 +49,10 @@ public record ThemeMp3OperationResult(
 public record ThemeMp3BatchResult(string Root, IReadOnlyList<ThemeMp3OperationResult> Items, int Processed, int Skipped, int Errors);
 
 /// <summary>Aggregated results of an MP3 audit operation.</summary>
-/// <param name="Processed">Number of non-default themes evaluated.</param>
-/// <param name="UpgradesFound">Number of available upgrades found on AnimeThemes.</param>
+/// <param name="Processed">Number of non-OP1 themes evaluated.</param>
+/// <param name="UpgradesFound">Number of non-standard themes found on AnimeThemes.</param>
 /// <param name="MissingSlugsFixed">Number of missing slugs repaired via local ID3 tag reading.</param>
-/// <param name="Upgrades">List of upgrade notification strings.</param>
+/// <param name="Upgrades">List of non-standard theme notification strings.</param>
 /// <param name="OverriddenOps">List of overridden opening themes (e.g. OP2, OP3).</param>
 /// <param name="OverriddenEds">List of overridden ending themes (e.g. ED2, ED3).</param>
 /// <param name="ErrorsList">List of specific error messages.</param>
