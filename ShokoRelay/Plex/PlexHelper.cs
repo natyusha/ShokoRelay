@@ -17,6 +17,9 @@ public static class PlexHelper
     /// <summary>Regex which extracts the ID from an Episode GUID.</summary>
     private static readonly Regex s_episodeIdRegex = new(@"/episode/e(\d+)", RegexOptions.Compiled);
 
+    /// <summary>Regex which extracts the ID from a Movie GUID.</summary>
+    private static readonly Regex s_movieIdRegex = new(@"/movie/m(\d+)", RegexOptions.Compiled);
+
     /// <summary>Parse a Plex GUID string and return the embedded Shoko series ID.</summary>
     /// <param name="guid">Plex GUID.</param>
     /// <returns>Extracted ID or null.</returns>
@@ -25,7 +28,7 @@ public static class PlexHelper
     /// <summary>Parse Shoko episode ID from GUID.</summary>
     /// <param name="guid">Plex GUID.</param>
     /// <returns>Extracted ID or null.</returns>
-    public static int? ExtractShokoEpisodeIdFromGuid(string? guid) => ExtractIdFromGuid(guid, s_episodeIdRegex);
+    public static int? ExtractShokoEpisodeIdFromGuid(string? guid) => ExtractIdFromGuid(guid, s_episodeIdRegex) ?? ExtractIdFromGuid(guid, s_movieIdRegex);
 
     private static int? ExtractIdFromGuid(string? guid, Regex regex)
     {
@@ -35,6 +38,18 @@ public static class PlexHelper
         return match.Success && int.TryParse(match.Groups[1].Value, out var id) ? id : null;
     }
 
+    /// <summary>Determines if a rating key represents an episode.</summary>
+    /// <param name="ratingKey">The rating key to check.</param>
+    /// <returns>True if the key represents an episode.</returns>
+    public static bool IsEpisodeKey(string ratingKey) =>
+        ratingKey.StartsWith(PlexConstants.EpisodePrefix, StringComparison.OrdinalIgnoreCase)
+        || ratingKey.StartsWith(PlexConstants.AniDbPrefix + PlexConstants.EpisodePrefix, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Determines if a rating key represents a standalone movie mapped from an episode.</summary>
+    /// <param name="ratingKey">The rating key to check.</param>
+    /// <returns>True if the key represents a movie.</returns>
+    public static bool IsMovieKey(string ratingKey) => ratingKey.StartsWith(PlexConstants.MoviePrefix, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>Extracts the corresponding Shoko Series ID from any valid Plex Rating Key.</summary>
     /// <remarks>
     /// **Supported RatingKey Formats:**
@@ -42,9 +57,10 @@ public static class PlexHelper
     /// - '123s4' (Shoko Series Season 4) / 'a123s4' (AniDB Series Season 4)
     /// - 'e567' (Shoko Episode ID) / 'ae567' (AniDB Episode ID)
     /// - 'e567p2' (Shoko Episode Part 2) / 'ae567p2' (AniDB Episode Part 2)
+    /// - 'm890' (Shoko Episode ID mapped as a Movie)
     /// - _AniDB IDs resolve to Shoko IDs and must be known to Shoko_
     /// </remarks>
-    /// <param name="ratingKey">Plex rating key representing a show, season or episode.</param>
+    /// <param name="ratingKey">Plex rating key representing a show, season, episode, or movie.</param>
     /// <param name="metadataService">The metadata service used to look up episodes/series.</param>
     /// <returns>The resolved Shoko Series ID, or 0 if not found.</returns>
     public static int ExtractShokoSeriesIdFromRatingKey(string ratingKey, IMetadataService metadataService)
@@ -61,6 +77,14 @@ public static class PlexHelper
                 epIdPart = epIdPart[..partIdx];
             return int.TryParse(epIdPart, out var id) ? (isAniDb ? metadataService.GetShokoEpisodeByAnidbID(id) : metadataService.GetShokoEpisodeByID(id))?.Series?.ID ?? 0 : 0;
         }
+        if (IsMovieKey(ratingKey))
+        {
+            var epIdPart = ratingKey[PlexConstants.MoviePrefix.Length..];
+            int partIdx = epIdPart.IndexOf(PlexConstants.PartPrefix, StringComparison.OrdinalIgnoreCase);
+            if (partIdx >= 0)
+                epIdPart = epIdPart[..partIdx];
+            return int.TryParse(epIdPart, out var id) ? metadataService.GetShokoEpisodeByID(id)?.SeriesID ?? 0 : 0;
+        }
         // Isolate the show component (supports {ID}, a{AniDB}, {ID}s{Season}, or a{AniDB}s{Season})
         int seasonIdx = ratingKey.IndexOf(PlexConstants.SeasonPrefix, StringComparison.OrdinalIgnoreCase);
         var seriesPart = seasonIdx >= 0 ? ratingKey[..seasonIdx] : ratingKey;
@@ -72,13 +96,6 @@ public static class PlexHelper
                 ? sid
                 : 0;
     }
-
-    /// <summary>Determines if a rating key represents an episode.</summary>
-    /// <param name="ratingKey">The rating key to check.</param>
-    /// <returns>True if the key represents an episode.</returns>
-    public static bool IsEpisodeKey(string ratingKey) =>
-        ratingKey.StartsWith(PlexConstants.EpisodePrefix, StringComparison.OrdinalIgnoreCase)
-        || ratingKey.StartsWith(PlexConstants.AniDbPrefix + PlexConstants.EpisodePrefix, StringComparison.OrdinalIgnoreCase);
 
     #endregion
 

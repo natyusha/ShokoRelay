@@ -8,7 +8,8 @@ namespace ShokoRelay.Vfs;
 /// <param name="Name">The display name of the series.</param>
 /// <param name="ElapsedMs">Time taken to process in milliseconds.</param>
 /// <param name="CreatedLinks">Number of links created for this series.</param>
-public record SeriesProcessDetails(string Name, long ElapsedMs, int CreatedLinks);
+/// <param name="IsMovie">Whether this item was generated as a standalone movie.</param>
+public record SeriesProcessDetails(string Name, long ElapsedMs, int CreatedLinks, bool IsMovie = false);
 
 /// <summary>Information about a root cleanup operation.</summary>
 /// <param name="Path">The filesystem path that was cleaned.</param>

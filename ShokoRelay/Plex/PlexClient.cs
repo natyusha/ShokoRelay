@@ -446,6 +446,25 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         long? minLastViewed = null
     ) => GetSectionItemsAsync(target, token, ct, onlyUnwatched, hasProgress, guidFilter, minLastViewed, PlexConstants.TypeEpisode);
 
+    /// <summary>List all movies in the given section with optional filters.</summary>
+    /// <param name="target">Target library.</param>
+    /// <param name="token">Token override.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <param name="onlyUnwatched">Filter for unwatched.</param>
+    /// <param name="hasProgress">Filter for items actively in progress.</param>
+    /// <param name="guidFilter">Filter for specific GUID.</param>
+    /// <param name="minLastViewed">Filter for viewed after.</param>
+    /// <returns>A list of metadata items.</returns>
+    public Task<List<PlexMetadataItem>> GetSectionMoviesAsync(
+        PlexLibraryTarget target,
+        string? token = null,
+        CancellationToken ct = default,
+        bool? onlyUnwatched = null,
+        bool? hasProgress = null,
+        string? guidFilter = null,
+        long? minLastViewed = null
+    ) => GetSectionItemsAsync(target, token, ct, onlyUnwatched, hasProgress, guidFilter, minLastViewed, PlexConstants.TypeMovie);
+
     #endregion
 
     #region Path Mapping

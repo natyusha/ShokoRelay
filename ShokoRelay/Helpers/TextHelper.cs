@@ -182,6 +182,36 @@ public static class TextHelper
         return (!string.IsNullOrEmpty(tmdbTitle) && s_defaultTitleRegex.IsMatch(raw) && !s_defaultTitleRegex.IsMatch(tmdbTitle)) ? tmdbTitle : raw;
     }
 
+    /// <summary>Compute the best title to display for a standalone movie, omitting the episode title if the series only contains one main episode.</summary>
+    /// <param name="ep">The movie episode metadata.</param>
+    /// <param name="series">The parent series metadata.</param>
+    /// <param name="tmdbMovie">The optional TMDB movie metadata.</param>
+    /// <returns>The resolved movie title string.</returns>
+    public static string ResolveMovieTitle(IEpisode ep, ISeries series, object? tmdbMovie)
+    {
+        var (sTitle, _, _) = ResolveFullSeriesTitles(series);
+        if (string.IsNullOrWhiteSpace(sTitle) && tmdbMovie is IWithTitles mt)
+            sTitle = GetTitleByLanguage(mt, Settings.SeriesTitleLanguage);
+        if (string.IsNullOrWhiteSpace(sTitle))
+            sTitle = "Unknown";
+
+        int mainEpCount = series.Episodes.Count(e => e.Type == EpisodeType.Episode);
+        if (mainEpCount <= 1)
+            return sTitle;
+
+        string raw = GetTitleByLanguage(ep, Settings.EpisodeTitleLanguage);
+
+        // Append ambiguous title to series/movie title if not already present
+        if (!string.IsNullOrWhiteSpace(raw) && sTitle != raw && !sTitle.Contains(raw))
+        {
+            // Reduce redundant movie descriptors for cleaner Plex display
+            string result = (raw == "Complete Movie") ? s_movieDescriptorRegex.Replace(sTitle, "").Trim() : sTitle;
+            return $"{result} — {raw}";
+        }
+
+        return sTitle;
+    }
+
     /// <summary>Sanitize AniDB summary and, if the result is empty, fall back to TMDB.</summary>
     /// <param name="summary">Primary summary.</param>
     /// <param name="tmdbSummary">Fallback summary.</param>

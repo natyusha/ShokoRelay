@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Shoko.Abstractions.Metadata;
+using Shoko.Abstractions.Metadata.Enums;
 using Shoko.Abstractions.Video;
 using ShokoRelay.Vfs;
 using static ShokoRelay.Plex.PlexMapping;
@@ -96,6 +97,11 @@ public static class MapHelper
     /// <param name="e">The episode to check.</param>
     /// <returns>True if hidden.</returns>
     public static bool IsHidden(IEpisode e) => e is IShokoEpisode shokoEp && shokoEp.IsHidden;
+
+    /// <summary>Indicates whether a series is considered a movie.</summary>
+    /// <param name="series">The Shoko series to check.</param>
+    /// <returns>True if the series is categorized as a movie.</returns>
+    public static bool IsMovie(IShokoSeries series) => EnforceTmdbNumbering ? series.TmdbMovies?.Any() == true : series.Type == AnimeType.Movie;
 
     /// <summary>Resolves all unique active physical video files associated with a series, accounting for consolidated override groups and filtering out hidden entries.</summary>
     /// <param name="series">The primary series to resolve videos for.</param>

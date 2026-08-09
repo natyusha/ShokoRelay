@@ -105,7 +105,7 @@ GET  /metadata/{ratingKey}/images                              -> GetMetadataIma
 GET  /metadata/{ratingKey}/extras                              -> GetMetadataExtras
 ```
 
-- `GetMediaProvider` returns the agent descriptor describing supported types and features.
+- `GetMediaProvider` returns the agent descriptor describing supported types (Movie, Show, Season, Episode) and features.
 - `Match` looks up a series by filename or title. Priority is given to IDs found in the path.
   - `filename`: The file path provided by Plex.
   - `title`: The Shoko Series ID (used when `manual=1`).
@@ -116,7 +116,7 @@ GET  /metadata/{ratingKey}/extras                              -> GetMetadataExt
   - `t`: (optional) timestamp ticks used for cache busting.
   - `name`: (optional) the collection name for smart collections since they have no mapping to a group ID.
   - `suffix`: (optional) the artwork type suffix (e.g. -logo, -backdrop, -square)
-- `GetMetadata` returns full metadata for a ratingKey (series/season/episode).
+- `GetMetadata` returns full metadata for a ratingKey (movie/series/season/episode).
   - `includeChildren`: (default 0) set to 1 to embed immediate children in the response.
 - `GetChildren` / `GetGrandchildren` return only the immediate or second-level child items respectively.
 - `GetMetadataImages` returns a `MediaContainer` with an `Image` array used by Plex when fetching all artwork.
@@ -136,6 +136,7 @@ GET  /metadata/{ratingKey}/extras                              -> GetMetadataExt
   - `123s4` (Shoko Series Season 4) / `a123s4` (AniDB Series Season 4)
   - `e567` (Shoko Episode ID) / `ae567` (AniDB Episode ID)
   - `e567p2` (Shoko Episode Part 2) / `ae567p2` (AniDB Episode Part 2)
+  - `m890` (Shoko Episode ID mapped as a Movie)
   - _AniDB IDs resolve to Shoko IDs and must be known to Shoko_
 - Part suffixes support both physical multi-part files and virtual TMDB episode segments.
 - Crossover episodes (files belonging to multiple series) are skipped for local metadata/subtitle linking to avoid conflicts.

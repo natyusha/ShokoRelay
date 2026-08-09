@@ -225,7 +225,7 @@ public static class SyncHelper
 
     #region Extra Users
 
-    /// <summary>Fetches episodes for a managed user section, resolving the correct Server Access Token.</summary>
+    /// <summary>Fetches items for a managed user section, resolving the correct Server Access Token.</summary>
     /// <param name="plexAuth">Plex Auth service.</param>
     /// <param name="plexClient">Plex Client service.</param>
     /// <param name="configProvider">Config Provider service.</param>
@@ -233,11 +233,11 @@ public static class SyncHelper
     /// <param name="userName">Managed username.</param>
     /// <param name="pin">Optional user PIN.</param>
     /// <param name="sinceHours">Optional lookback window.</param>
-    /// <param name="onlyUnwatched">If true, only returns unwatched episodes. If false, watched. If null, returns both.</param>
+    /// <param name="onlyUnwatched">If true, only returns unwatched items. If false, watched. If null, returns both.</param>
     /// <param name="hasProgress">Filter for items actively in progress.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A tuple containing the list of episodes, the resolved token, and an optional error message.</returns>
-    public static async Task<(List<PlexMetadataItem> Episodes, string? ResolvedToken, string? ErrorMessage)> FetchManagedUserSectionEpisodesAsync(
+    /// <returns>A tuple containing the list of items, the resolved token, and an optional error message.</returns>
+    public static async Task<(List<PlexMetadataItem> Items, string? ResolvedToken, string? ErrorMessage)> FetchManagedUserSectionItemsAsync(
         PlexAuth plexAuth,
         PlexClient plexClient,
         ConfigProvider configProvider,
@@ -250,6 +250,7 @@ public static class SyncHelper
         CancellationToken cancellationToken = default
     )
     {
+        string typeLabel = target.LibraryType == PlexLibraryType.Movie ? "movies" : "episodes";
         try
         {
             // Fetches a transient token for a managed user.
@@ -336,21 +337,27 @@ public static class SyncHelper
 
             var effectiveToken = !string.IsNullOrWhiteSpace(serverAccessToken) ? serverAccessToken : userToken;
             long? minLast = (sinceHours.HasValue && sinceHours.Value > 0) ? DateTimeOffset.UtcNow.ToUnixTimeSeconds() - (sinceHours.Value * 3600) : null;
-            var list = await plexClient.GetSectionEpisodesAsync(target, effectiveToken, cancellationToken, onlyUnwatched, hasProgress, null, minLast).ConfigureAwait(false);
+
+            List<PlexMetadataItem> list =
+                target.LibraryType == PlexLibraryType.Movie
+                    ? await plexClient.GetSectionMoviesAsync(target, effectiveToken, cancellationToken, onlyUnwatched, hasProgress, null, minLast).ConfigureAwait(false) ?? []
+                    : await plexClient.GetSectionEpisodesAsync(target, effectiveToken, cancellationToken, onlyUnwatched, hasProgress, null, minLast).ConfigureAwait(false) ?? [];
+
             s_logger.Info(
-                "WatchedSyncService: fetched {Count} episodes for user {User} in library '{Library}' on {Server} (since={Since})",
-                list?.Count ?? 0,
+                "WatchedSyncService: fetched {Count} {TypeLabel} for user {User} in library '{Library}' on {Server} (since={Since})",
+                list.Count,
+                typeLabel,
                 userName,
                 target.Title,
                 target.ServerName,
                 minLast?.ToString() ?? "NULL"
             );
-            return (list ?? [], effectiveToken, null); // Return the resolved token so callers can use it for subsequent PUT requests
+            return (list, effectiveToken, null); // Return the resolved token so callers can use it for subsequent PUT requests
         }
         catch (Exception ex)
         {
-            s_logger.Warn(ex, "Failed to fetch episodes for Plex user '{User}' on {Server}:{Section}", userName, target.ServerUrl, target.SectionId);
-            return ([], null, $"Failed to fetch episodes for Plex user '{userName}' from {target.ServerUrl}:{target.SectionId} -> {ex.Message}");
+            s_logger.Warn(ex, "Failed to fetch {TypeLabel} for Plex user '{User}' on {Server}:{Section}", typeLabel, userName, target.ServerUrl, target.SectionId);
+            return ([], null, $"Failed to fetch {typeLabel} for Plex user '{userName}' from {target.ServerUrl}:{target.SectionId} -> {ex.Message}");
         }
     }
 
@@ -386,20 +393,24 @@ public static class SyncHelper
         if (userType is SyncUserType.All or SyncUserType.Admin)
         {
             long? minLast = sinceHours > 0 ? DateTimeOffset.UtcNow.ToUnixTimeSeconds() - (sinceHours.Value * 3600) : null;
-            var adminItems = await plexClient.GetSectionEpisodesAsync(target, null, cancellationToken, onlyUnwatched, hasProgress, null, minLast).ConfigureAwait(false);
-            userBuckets.Add(("admin", adminItems ?? [], null));
+            List<PlexMetadataItem> adminItems =
+                target.LibraryType == PlexLibraryType.Movie
+                    ? await plexClient.GetSectionMoviesAsync(target, null, cancellationToken, onlyUnwatched, hasProgress, null, minLast).ConfigureAwait(false) ?? []
+                    : await plexClient.GetSectionEpisodesAsync(target, null, cancellationToken, onlyUnwatched, hasProgress, null, minLast).ConfigureAwait(false) ?? [];
+
+            userBuckets.Add(("admin", adminItems, null));
         }
 
         if (userType is SyncUserType.All or SyncUserType.Extra)
         {
             foreach (var (name, pin) in extraEntries)
             {
-                var (eps, resolvedToken, err) = await FetchManagedUserSectionEpisodesAsync(plexAuth, plexClient, configProvider, target, name, pin, sinceHours, onlyUnwatched, hasProgress, cancellationToken)
+                var (items, resolvedToken, err) = await FetchManagedUserSectionItemsAsync(plexAuth, plexClient, configProvider, target, name, pin, sinceHours, onlyUnwatched, hasProgress, cancellationToken)
                     .ConfigureAwait(false);
                 if (!string.IsNullOrEmpty(err))
                     result = RecordError(result, result.PerUser, name, err);
                 else
-                    userBuckets.Add((name, eps, resolvedToken));
+                    userBuckets.Add((name, items, resolvedToken));
             }
         }
 

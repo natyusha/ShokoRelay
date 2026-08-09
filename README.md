@@ -353,6 +353,16 @@ In cases where AniDB uses ambiguous episode titles the series title will be used
 > [!NOTE]
 > The appended titles for both series and episodes will appear after an em dash (**—**) making it easy to search for anything affected by this.
 
+### Separate Movie Libraries
+
+If you prefer separate movie libraries (which is not recommended), Shoko Relay provides an opt-in feature to allow this. By enabling `Movie Generation Mode` under `Advanced Settings`, the plugin will generate a dedicated VFS root for movies (default `!ShokoRelayMovieVFS`) alongside the standard unified VFS. To use this feature simply create a Plex "Movies" library and select `Plex Movie` as the Scanner, `Shoko Relay` as the Agent, and point the library path directly to a `!ShokoRelayMovieVFS` folder.
+
+**Important Caveats**
+
+- Shoko groups that blend series and movies will be split across two entirely separate Plex libraries. This breaks the chronological viewing orders that Plex would usually provide for them
+- Plex Movie libraries do not support individual metadata for specials, so they will be relegated to generic "Local Extras" (e.g., `Featurettes/Special Name.mkv`) without descriptions or individual metadata
+- For Shoko series entries containing multiple movies, symlinks for specials will be duplicated across each movie as there is no way to automatically determine which one it belongs to
+
 ### TMDB Matching
 
 If you have a TMDB link for a given series in Shoko, it will have access to several features not available otherwise:

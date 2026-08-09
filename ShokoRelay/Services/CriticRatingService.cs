@@ -128,9 +128,13 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
                     }
                 }
 
-                // Process Episodes
-                var episodes = await plexClient.GetSectionEpisodesAsync(target, null, cancellationToken) ?? [];
-                foreach (var item in episodes)
+                // Process Episodes / Movies
+                bool isMovieTarget = target.LibraryType == PlexLibraryType.Movie;
+                string typeLabel = isMovieTarget ? "Movie" : "Episode";
+                string typeLower = isMovieTarget ? "movie" : "episode";
+                var items = isMovieTarget ? await plexClient.GetSectionMoviesAsync(target, null, cancellationToken) ?? [] : await plexClient.GetSectionEpisodesAsync(target, null, cancellationToken) ?? [];
+
+                foreach (var item in items)
                 {
                     if (string.IsNullOrWhiteSpace(item.Guid))
                         continue;
@@ -143,11 +147,15 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
                         continue;
 
                     pE++;
-                    // Resolve the critic rating for an episode based on user configuration
+                    // Resolve the critic rating for an episode or movie based on user configuration
                     double? rating = Settings.CriticRatingMode switch
                     {
-                        CriticRatingMode.TMDB => episode.TmdbEpisodes?.FirstOrDefault()?.Rating > 0 ? episode.TmdbEpisodes.First().Rating : null,
-                        CriticRatingMode.AniDB => episode.Rating > 0 ? episode.Rating : null,
+                        CriticRatingMode.TMDB => isMovieTarget
+                            ? (episode.TmdbMovies?.FirstOrDefault() ?? episode.Series?.TmdbMovies?.FirstOrDefault())?.Rating > 0
+                                ? (episode.TmdbMovies?.FirstOrDefault() ?? episode.Series?.TmdbMovies?.FirstOrDefault())!.Rating
+                                : (episode.TmdbEpisodes?.FirstOrDefault()?.Rating > 0 ? episode.TmdbEpisodes.First().Rating : null)
+                            : (episode.TmdbEpisodes?.FirstOrDefault()?.Rating > 0 ? episode.TmdbEpisodes.First().Rating : null),
+                        CriticRatingMode.AniDB => episode.Rating > 0 ? episode.Rating : (isMovieTarget && episode.Series?.Rating > 0 ? episode.Series.Rating : null),
                         _ => null,
                     };
 
@@ -157,7 +165,7 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
 
                     if (!NeedsRatingUpdate(item.Rating, rating))
                     {
-                        s_logger.Trace("CriticRatingService: Skipped episode -> {0} because rating {1} matches Plex", epLogName, item.Rating?.ToString("F2") ?? "n/a");
+                        s_logger.Trace("CriticRatingService: Skipped {0} -> {1} because rating {2} matches Plex", typeLower, epLogName, item.Rating?.ToString("F2") ?? "n/a");
                         continue;
                     }
 
@@ -165,14 +173,14 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
                     {
                         uE++;
                         appliedChanges.Add(
-                            new RatingChange($"{episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] - S{coords.Season:D2}E{coords.Episode:D2}", "Episode", item.RatingKey!, item.Rating, rating)
+                            new RatingChange($"{episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] - S{coords.Season:D2}E{coords.Episode:D2}", typeLabel, item.RatingKey!, item.Rating, rating)
                         );
-                        s_logger.Trace("CriticRatingService: Updated episode -> {0} to {1}", epLogName, rating?.ToString("F2") ?? "n/a");
+                        s_logger.Trace("CriticRatingService: Updated {0} -> {1} to {2}", typeLower, epLogName, rating?.ToString("F2") ?? "n/a");
                     }
                     else
                     {
                         errs++;
-                        errorsList.Add($"CriticRatingService: Failed update for episode -> {epLogName}");
+                        errorsList.Add($"CriticRatingService: Failed update for {typeLower} -> {epLogName}");
                     }
                 }
             }

@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using Shoko.Abstractions.Metadata;
-using Shoko.Abstractions.Video;
+using Shoko.Abstractions.Metadata.Enums;
 using Shoko.Abstractions.Video.Services;
 
 namespace ShokoRelay.Vfs;
@@ -48,9 +48,11 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         int blueprintUpdated = 0;
 
         string rootName = VfsShared.ResolveRootFolderName();
+        string movieRootName = VfsShared.ResolveMovieRootFolderName();
         var allRoots = videoService.GetAllManagedFolders()?.Where(VfsShared.IsVfsEnabledFolder).Select(f => f.Path).Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(VfsShared.PathComparer).ToList() ?? [];
 
         var validFolderIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var validMovieFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var allSeries = metadataService.GetAllShokoSeries();
         if (allSeries != null)
         {
@@ -58,87 +60,100 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
             {
                 int folderId = EnforceTmdbNumbering ? OverrideHelper.GetPrimary(s.ID, metadataService) : s.ID;
                 validFolderIds.Add(folderId.ToString());
+
+                bool isMovie = MapHelper.IsMovie(s);
+                if (isMovie && Settings.Advanced.MovieGenerationMode != MovieGenerationMode.Disabled)
+                {
+                    foreach (var ep in s.Episodes.Where(e => e.Type == EpisodeType.Episode))
+                        validMovieFolders.Add(ep.ID.ToString());
+                }
             }
         }
 
         var blueprint = VfsShared.LoadBlueprint();
 
-        foreach (var root in allRoots)
+        void AuditRoot(string rName, HashSet<string> validNames)
         {
-            ct.ThrowIfCancellationRequested();
-            string vfsRoot = Path.Combine(root, rootName);
-            if (!Directory.Exists(vfsRoot))
-                continue;
+            foreach (var root in allRoots)
+            {
+                ct.ThrowIfCancellationRequested();
+                string vfsRoot = Path.Combine(root, rName);
+                if (!Directory.Exists(vfsRoot))
+                    continue;
 
-            Parallel.ForEach(
-                Directory.GetDirectories(vfsRoot),
-                DefaultParallelOptions(ct),
-                seriesFolder =>
-                {
-                    string folderName = Path.GetFileName(seriesFolder);
-
-                    // Ignore special files/folders like .ignore
-                    if (folderName.StartsWith('.'))
-                        return;
-
-                    if (!validFolderIds.Contains(folderName))
+                Parallel.ForEach(
+                    Directory.GetDirectories(vfsRoot),
+                    DefaultParallelOptions(ct),
+                    seriesFolder =>
                     {
-                        try
-                        {
-                            Directory.Delete(seriesFolder, true);
-                            Interlocked.Increment(ref orphanedFolders);
-                            removed.Add($"[Orphaned Series] {seriesFolder}");
+                        string folderName = Path.GetFileName(seriesFolder);
 
-                            if (int.TryParse(folderName, out int parsedFolderId))
+                        // Ignore special files/folders like .ignore
+                        if (folderName.StartsWith('.'))
+                            return;
+
+                        if (!validNames.Contains(folderName))
+                        {
+                            try
                             {
-                                foreach (var rootDict in blueprint.Values)
-                                    if (rootDict.TryRemove(parsedFolderId, out _))
-                                        Interlocked.Exchange(ref blueprintUpdated, 1);
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            errors.Add($"Failed to delete orphaned folder {seriesFolder}: {ex.Message}");
-                        }
-                        return;
-                    }
-
-                    Interlocked.Increment(ref seriesChecked);
-
-                    foreach (var file in Directory.EnumerateFiles(seriesFolder, "*", SearchOption.AllDirectories))
-                    {
-                        try
-                        {
-                            var info = new FileInfo(file);
-                            if (info.LinkTarget != null && !info.Exists)
-                            {
-                                File.Delete(file);
-                                Interlocked.Increment(ref brokenLinks);
-                                removed.Add($"[Broken Link] {file}");
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            errors.Add($"Failed to process file {file}: {ex.Message}");
-                        }
-                    }
-
-                    foreach (var subDir in Directory.GetDirectories(seriesFolder))
-                    {
-                        try
-                        {
-                            if (!Directory.EnumerateFileSystemEntries(subDir).Any())
-                            {
-                                Directory.Delete(subDir, false);
+                                Directory.Delete(seriesFolder, true);
                                 Interlocked.Increment(ref orphanedFolders);
-                                removed.Add($"[Empty Folder] {subDir}");
+                                removed.Add($"[Orphaned Series] {seriesFolder}");
+
+                                if (int.TryParse(folderName, out int parsedFolderId))
+                                {
+                                    foreach (var rootDict in blueprint.Values)
+                                        if (rootDict.TryRemove(parsedFolderId, out _))
+                                            Interlocked.Exchange(ref blueprintUpdated, 1);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                errors.Add($"Failed to delete orphaned folder {seriesFolder}: {ex.Message}");
+                            }
+                            return;
+                        }
+
+                        Interlocked.Increment(ref seriesChecked);
+
+                        foreach (var file in Directory.EnumerateFiles(seriesFolder, "*", SearchOption.AllDirectories))
+                        {
+                            try
+                            {
+                                var info = new FileInfo(file);
+                                if (info.LinkTarget != null && !info.Exists)
+                                {
+                                    File.Delete(file);
+                                    Interlocked.Increment(ref brokenLinks);
+                                    removed.Add($"[Broken Link] {file}");
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                errors.Add($"Failed to process file {file}: {ex.Message}");
                             }
                         }
-                        catch { }
+
+                        foreach (var subDir in Directory.GetDirectories(seriesFolder))
+                        {
+                            try
+                            {
+                                if (!Directory.EnumerateFileSystemEntries(subDir).Any())
+                                {
+                                    Directory.Delete(subDir, false);
+                                    Interlocked.Increment(ref orphanedFolders);
+                                    removed.Add($"[Empty Folder] {subDir}");
+                                }
+                            }
+                            catch { }
+                        }
                     }
-                }
-            );
+                );
+            }
         }
+
+        AuditRoot(rootName, validFolderIds);
+        AuditRoot(movieRootName, validMovieFolders);
 
         if (blueprintUpdated > 0)
             VfsShared.SaveBlueprint(blueprint);
@@ -191,40 +206,9 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
             var allRoots = videoService.GetAllManagedFolders()?.Select(f => f.Path).Where(p => !string.IsNullOrEmpty(p)).Distinct(VfsShared.PathComparer) ?? [];
             foreach (var root in allRoots)
             {
-                string path = Path.Combine(root, rootName);
-                if (Directory.Exists(path))
-                {
-                    if (!VfsShared.IsSafeToDelete(path))
-                    {
-                        s_logger.Warn("VFS: Refusing to delete unsafe path -> {0}", path);
-                        continue;
-                    }
-                    try
-                    {
-                        var cleanSw = Stopwatch.StartNew();
-                        Parallel.ForEach(
-                            Directory.GetDirectories(path),
-                            DefaultParallelOptions(),
-                            dir =>
-                            {
-                                try
-                                {
-                                    Directory.Delete(dir, true);
-                                }
-                                catch { }
-                            }
-                        );
-                        Directory.Delete(path, true);
-                        cleanupDetails.Add(new RootCleanupDetails(path, cleanSw.ElapsedMilliseconds));
-                        s_logger.Info("VFS: Cleaned root folder -> '{0}' in {1}ms", path, cleanSw.ElapsedMilliseconds);
-                        Directory.CreateDirectory(path);
-                        File.WriteAllText(Path.Combine(path, ".ignore"), "");
-                    }
-                    catch (Exception ex)
-                    {
-                        s_logger.Warn(ex, "VFS: Failed to clean root -> {0}", path);
-                    }
-                }
+                CleanVfsRoot(Path.Combine(root, rootName), cleanupDetails);
+                bool doMovie = Settings.Advanced.MovieGenerationMode != MovieGenerationMode.Disabled;
+                CleanVfsRoot(Path.Combine(root, VfsShared.ResolveMovieRootFolderName()), cleanupDetails, true, doMovie);
             }
             cleanRoot = false;
         }
@@ -318,10 +302,12 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                     }
 
                     // Capture individual series details for the log report
-                    seriesDetailsBag.Add(new SeriesProcessDetails($"{series.GetDisplayTitle() ?? series.ID.ToString()} [{series.ID}]", seriesSw.ElapsedMilliseconds, sCreated));
+                    bool isMovie = MapHelper.IsMovie(series);
+                    bool doMovie = isMovie && Settings.Advanced.MovieGenerationMode != MovieGenerationMode.Disabled;
+                    seriesDetailsBag.Add(new SeriesProcessDetails($"{series.GetDisplayTitle() ?? series.ID.ToString()} [{series.ID}]", seriesSw.ElapsedMilliseconds, sCreated, doMovie));
 
                     if (sCreated > 0 || sErrors.Count > 0)
-                        s_logger.Info("VFS: Processed series -> {0} [{1}] ({2} links created) in {3}ms", series.GetDisplayTitle(), series.ID, sCreated, seriesSw.ElapsedMilliseconds);
+                        s_logger.Info("VFS: Processed {0} -> {1} [{2}] ({3} links created) in {4}ms", doMovie ? "movie" : "series", series.GetDisplayTitle(), series.ID, sCreated, seriesSw.ElapsedMilliseconds);
 
                     Interlocked.Add(ref created, sCreated);
                     Interlocked.Add(ref skipped, sSkipped);
@@ -424,143 +410,255 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         var expectedFiles = new HashSet<string>(VfsShared.PathComparer);
         bool skipCheck = cleanRoot && !isFiltered;
 
-        // Callback wrapper to automatically track the expected physical destination of any correctly generated link to protect it from the cleanup phase
-        void LocalOnLink(string importRoot, string season, string fileName, string? source)
-        {
-            string path = string.IsNullOrEmpty(season)
-                ? Path.Combine(importRoot, rootFolderName, folderId.ToString(), fileName)
-                : Path.Combine(importRoot, rootFolderName, folderId.ToString(), season, fileName);
-            expectedFiles.Add(path);
-            onLink?.Invoke(importRoot, season, fileName, source);
-        }
+        // Evaluates the categorization logic to determine if the series should be processed as a movie
+        bool isMovie = MapHelper.IsMovie(series);
+        var mode = Settings.Advanced.MovieGenerationMode;
 
-        foreach (var mapping in fileData.Mappings.OrderBy(m => m.Coords.Season).ThenBy(m => m.Coords.Episode).ThenBy(m => m.PartIndex ?? 0))
-        {
-            IVideoFile? loc = null;
-            string? importRoot = null;
-            string? src = null;
+        bool doTv = mode == MovieGenerationMode.Disabled || !isMovie || (isMovie && mode == MovieGenerationMode.EnabledMaintain);
+        bool doMovie = isMovie && mode != MovieGenerationMode.Disabled;
 
+        (string ImportRoot, string Src)? ResolveLoc(MapHelper.FileMapping mapping)
+        {
             foreach (var file in mapping.Video?.Files ?? [])
             {
                 if (!VfsShared.IsVfsEnabledFolder(file.ManagedFolder))
                     continue;
-
-                importRoot = VfsShared.ResolveImportRootPath(file);
+                var importRoot = VfsShared.ResolveImportRootPath(file);
                 if (importRoot != null)
                 {
-                    src = VfsShared.ResolveSourcePath(file, importRoot);
+                    var src = VfsShared.ResolveSourcePath(file, importRoot);
                     if (src != null)
-                    {
-                        loc = file;
-                        break;
-                    }
+                        return (importRoot, src);
                 }
             }
+            return null;
+        }
 
-            if (loc == null || src == null || importRoot == null)
+        bool TryResolveAndValidate(MapHelper.FileMapping mapping, out (string ImportRoot, string Src) locInfoValue)
+        {
+            var loc = ResolveLoc(mapping);
+            if (loc == null)
             {
                 skipped++;
                 skippedDetails.Add($"[Missing/Source-Only] {series.GetDisplayTitle()} [{series.ID}] S{mapping.Coords.Season}E{mapping.Coords.Episode} - {mapping.FileName}");
-                continue;
+                locInfoValue = default;
+                return false;
             }
-
-            string rootPath = Path.Combine(importRoot, rootFolderName),
-                seriesPath = Path.Combine(rootPath, folderId.ToString());
-            resolvedVfsSeriesPaths.Add(seriesPath);
-
-            if (session.CreatedDirs.TryAdd(rootPath, 0))
-            {
-                Directory.CreateDirectory(rootPath);
-                try
-                {
-                    File.WriteAllText(Path.Combine(rootPath, ".ignore"), "");
-                }
-                catch { }
-            }
-            if (session.CreatedDirs.TryAdd(seriesPath, 0))
-                Directory.CreateDirectory(seriesPath);
-
-            // Check if the source path is ignored under exclusion or extra rules
-            if (VfsShared.IsPathIgnored(src, ignoredFolders))
+            if (VfsShared.IsPathIgnored(loc.Value.Src, ignoredFolders))
             {
                 skipped++;
                 skippedDetails.Add($"[Excluded Path] {series.GetDisplayTitle()} [{series.ID}] S{mapping.Coords.Season}E{mapping.Coords.Episode} - {mapping.FileName}");
-                continue;
+                locInfoValue = default;
+                return false;
+            }
+            locInfoValue = loc.Value;
+            return true;
+        }
+
+        if (doTv)
+        {
+            // Callback wrapper to automatically track the expected physical destination of any correctly generated link to protect it from the cleanup phase
+            void LocalOnLink(string importRoot, string season, string fileName, string? source, string destFilePath)
+            {
+                expectedFiles.Add(destFilePath);
+                onLink?.Invoke(importRoot, season, fileName, source);
             }
 
-            string seasonName = PlexMapping.GetSeasonFolder(mapping.Coords.Season);
-            string seasonPath = Path.Combine(seriesPath, VfsHelper.SanitizeName(seasonName));
-            if (session.CreatedDirs.TryAdd(seasonPath, 0))
-                Directory.CreateDirectory(seasonPath);
-
-            var key = (mapping.Coords.Season, mapping.Coords.Episode, mapping.IsVariation);
-            bool hasPeer = coordCounts.TryGetValue(key, out var count) && count > 1;
-            int? vIdx = (hasPeer && !mapping.PartIndex.HasValue && versionCounters.TryGetValue(key, out var v)) ? (versionCounters[key] = v + 1) - 1 : null;
-            string fileName = VfsHelper.SanitizeName(
-                PlexMapping.TryGetExtraSeason(mapping.Coords.Season, out var ex)
-                    ? VfsHelper.BuildExtrasFileName(
-                        mapping,
-                        ex,
-                        extraPad.GetValueOrDefault(mapping.Coords.Season, 1),
-                        Path.GetExtension(src),
-                        displayTitle,
-                        hasPeer ? mapping.PartIndex : null,
-                        hasPeer ? mapping.PartCount : 1,
-                        vIdx,
-                        mapping.IsVariation
-                    )
-                    : VfsHelper.BuildStandardFileName(
-                        mapping,
-                        epPad,
-                        Path.GetExtension(src),
-                        mapping.Video!.ID,
-                        mapping.PartCount > 1 && mapping.PartIndex.HasValue,
-                        hasPeer ? mapping.PartIndex : null,
-                        hasPeer ? mapping.PartCount : 1,
-                        vIdx,
-                        mapping.IsVariation
-                    )
-            );
-
-            var destFilePath = Path.Combine(seasonPath, fileName);
-
-            if (VfsShared.TryCreateLink(src, destFilePath, s_logger, skipExistenceCheck: skipCheck))
+            foreach (var mapping in fileData.Mappings.OrderBy(m => m.Coords.Season).ThenBy(m => m.Coords.Episode).ThenBy(m => m.PartIndex ?? 0))
             {
-                created++;
-                planned++;
+                if (!TryResolveAndValidate(mapping, out var locInfo))
+                    continue;
 
-                // Resolve Primary IDs to allow local asset linking for crossover files that have been consolidated via VFS Overrides.
-                LocalOnLink(importRoot, seasonName, fileName, src);
-                var distinctPrimarySeriesCount =
-                    mapping.Video?.CrossReferences?.Where(cr => cr.ShokoEpisode != null).Select(cr => OverrideHelper.GetPrimary(cr.ShokoEpisode!.SeriesID, metadataService)).Distinct().Count() ?? 0;
-                if (distinctPrimarySeriesCount <= 1)
+                string rootPath = Path.Combine(locInfo.ImportRoot, rootFolderName),
+                    seriesPath = Path.Combine(rootPath, folderId.ToString());
+                resolvedVfsSeriesPaths.Add(seriesPath);
+
+                EnsureDirectory(rootPath, session, true);
+                EnsureDirectory(seriesPath, session);
+
+                string seasonName = PlexMapping.GetSeasonFolder(mapping.Coords.Season);
+                string seasonPath = Path.Combine(seriesPath, VfsHelper.SanitizeName(seasonName));
+                EnsureDirectory(seasonPath, session);
+
+                var key = (mapping.Coords.Season, mapping.Coords.Episode, mapping.IsVariation);
+                bool hasPeer = coordCounts.TryGetValue(key, out var count) && count > 1;
+                int? vIdx = (hasPeer && !mapping.PartIndex.HasValue && versionCounters.TryGetValue(key, out var v)) ? (versionCounters[key] = v + 1) - 1 : null;
+
+                (string Folder, string Subtype) ex = PlexMapping.TryGetExtraSeason(mapping.Coords.Season, out var e) ? e : ("Featurettes", "featurette");
+
+                string fileName = VfsHelper.SanitizeName(
+                    PlexMapping.TryGetExtraSeason(mapping.Coords.Season, out _)
+                        ? VfsHelper.BuildExtrasFileName(
+                            mapping,
+                            ex,
+                            extraPad.GetValueOrDefault(mapping.Coords.Season, 1),
+                            Path.GetExtension(locInfo.Src),
+                            displayTitle,
+                            hasPeer ? mapping.PartIndex : null,
+                            hasPeer ? mapping.PartCount : 1,
+                            vIdx,
+                            mapping.IsVariation
+                        )
+                        : VfsHelper.BuildStandardFileName(
+                            mapping,
+                            epPad,
+                            Path.GetExtension(locInfo.Src),
+                            mapping.Video!.ID,
+                            mapping.PartCount > 1 && mapping.PartIndex.HasValue,
+                            hasPeer ? mapping.PartIndex : null,
+                            hasPeer ? mapping.PartCount : 1,
+                            vIdx,
+                            mapping.IsVariation
+                        )
+                );
+
+                var destFilePath = Path.Combine(seasonPath, fileName);
+
+                if (VfsShared.TryCreateLink(locInfo.Src, destFilePath, s_logger, skipExistenceCheck: skipCheck))
                 {
-                    assetLinker.LinkSeriesMetadata(Path.GetDirectoryName(src)!, seriesPath, videoBaseNames, session.MetadataFileCache, (name, s) => LocalOnLink(importRoot, "", name, s), skipCheck);
-                    assetLinker.LinkEpisodeMetadata(
-                        src,
-                        Path.GetDirectoryName(src)!,
-                        Path.GetFileNameWithoutExtension(destFilePath),
-                        seasonPath,
-                        session.SubtitleFileCache,
-                        ref planned,
-                        ref skipped,
-                        errors,
-                        ref created,
-                        (name, s) => LocalOnLink(importRoot, seasonName, name, s),
+                    created++;
+                    planned++;
+
+                    // Resolve Primary IDs to allow local asset linking for crossover files that have been consolidated via VFS Overrides.
+                    LocalOnLink(locInfo.ImportRoot, seasonName, fileName, locInfo.Src, destFilePath);
+                    var distinctPrimarySeriesCount =
+                        mapping.Video?.CrossReferences?.Where(cr => cr.ShokoEpisode != null).Select(cr => OverrideHelper.GetPrimary(cr.ShokoEpisode!.SeriesID, metadataService)).Distinct().Count() ?? 0;
+                    if (distinctPrimarySeriesCount <= 1)
+                    {
+                        assetLinker.LinkSeriesMetadata(
+                            Path.GetDirectoryName(locInfo.Src)!,
+                            seriesPath,
+                            videoBaseNames,
+                            session.MetadataFileCache,
+                            (name, s) => LocalOnLink(locInfo.ImportRoot, "", name, s, Path.Combine(seriesPath, name)),
+                            skipCheck
+                        );
+                        assetLinker.LinkEpisodeMetadata(
+                            locInfo.Src,
+                            Path.GetDirectoryName(locInfo.Src)!,
+                            Path.GetFileNameWithoutExtension(destFilePath),
+                            seasonPath,
+                            session.SubtitleFileCache,
+                            ref planned,
+                            ref skipped,
+                            errors,
+                            ref created,
+                            (name, s) => LocalOnLink(locInfo.ImportRoot, seasonName, name, s, Path.Combine(seasonPath, name)),
+                            skipCheck
+                        );
+                    }
+                }
+                else
+                {
+                    skipped++;
+                    errors.Add($"Link failed: {locInfo.Src} -> {destFilePath}");
+                }
+            }
+
+            // Plex Local Extras: Evaluates source directories exactly once, broadcasting results across all unique VFS roots.
+            if (Settings.Advanced.PlexLocalExtras)
+                assetLinker.LinkLocalExtras(
+                    fileData,
+                    resolvedVfsSeriesPaths,
+                    videoBaseNames,
+                    epPad,
+                    (importRoot, season, fileName, source) =>
+                    {
+                        string path = string.IsNullOrEmpty(season)
+                            ? Path.Combine(importRoot, rootFolderName, folderId.ToString(), fileName)
+                            : Path.Combine(importRoot, rootFolderName, folderId.ToString(), season, fileName);
+                        LocalOnLink(importRoot, season, fileName, source, path);
+                    },
+                    skipCheck
+                );
+        }
+
+        if (doMovie)
+        {
+            var movieDirs = new List<(string ImportRoot, string FolderName, string FullPath)>();
+            var mainMappings = fileData.Mappings.Where(m => m.PrimaryEpisode.Type == EpisodeType.Episode).ToList();
+            var extraMappings = fileData.Mappings.Where(m => m.PrimaryEpisode.Type != EpisodeType.Episode).ToList();
+            string movieRootName = VfsShared.ResolveMovieRootFolderName();
+
+            foreach (var mapping in mainMappings)
+            {
+                if (!TryResolveAndValidate(mapping, out var locInfo))
+                    continue;
+
+                string folderName = mapping.PrimaryEpisode.ID.ToString();
+                string rootPath = Path.Combine(locInfo.ImportRoot, movieRootName);
+                string moviePath = Path.Combine(rootPath, folderName);
+
+                resolvedVfsSeriesPaths.Add(moviePath);
+                movieDirs.Add((locInfo.ImportRoot, folderName, moviePath));
+
+                EnsureDirectory(rootPath, session, true);
+                EnsureDirectory(moviePath, session);
+
+                string partSuffix = mapping.PartCount > 1 ? $"-pt{mapping.PartIndex ?? 1}" : "";
+                string fileName = $"{folderName}{partSuffix}{Path.GetExtension(locInfo.Src)}";
+                string destFilePath = Path.Combine(moviePath, fileName);
+
+                if (VfsShared.TryCreateLink(locInfo.Src, destFilePath, s_logger, skipExistenceCheck: skipCheck))
+                {
+                    created++;
+                    planned++;
+                    expectedFiles.Add(destFilePath);
+                    onLink?.Invoke(locInfo.ImportRoot, $"Movie ❯ {folderName}", fileName, locInfo.Src);
+                    assetLinker.LinkSeriesMetadata(
+                        Path.GetDirectoryName(locInfo.Src)!,
+                        moviePath,
+                        videoBaseNames,
+                        session.MetadataFileCache,
+                        (name, s) =>
+                        {
+                            expectedFiles.Add(Path.Combine(moviePath, name));
+                            onLink?.Invoke(locInfo.ImportRoot, $"Movie ❯ {folderName}", name, s);
+                        },
                         skipCheck
                     );
                 }
+                else
+                {
+                    skipped++;
+                    errors.Add($"Link failed: {locInfo.Src} -> {destFilePath}");
+                }
             }
-            else
+
+            foreach (var mapping in extraMappings)
             {
-                skipped++;
-                errors.Add($"Link failed: {src} -> {destFilePath}");
+                if (!TryResolveAndValidate(mapping, out var locInfo))
+                    continue;
+
+                (string Folder, string Subtype) ex = PlexMapping.TryGetExtraSeason(mapping.Coords.Season, out var e) ? e : ("Featurettes", "featurette");
+                string fileName = VfsHelper.BuildExtrasFileName(
+                    mapping,
+                    ex,
+                    extraPad.GetValueOrDefault(mapping.Coords.Season, 1),
+                    Path.GetExtension(locInfo.Src),
+                    displayTitle,
+                    mapping.PartIndex,
+                    mapping.PartCount,
+                    null,
+                    mapping.IsVariation
+                );
+
+                foreach (var (importRoot, folderName, moviePath) in movieDirs)
+                {
+                    string extraPath = Path.Combine(moviePath, ex.Folder);
+                    Directory.CreateDirectory(extraPath);
+                    string destFilePath = Path.Combine(extraPath, fileName);
+
+                    if (VfsShared.TryCreateLink(locInfo.Src, destFilePath, s_logger, skipExistenceCheck: skipCheck))
+                    {
+                        created++;
+                        planned++;
+                        expectedFiles.Add(destFilePath);
+                        onLink?.Invoke(importRoot, $"Movie ❯ {folderName}", $"{ex.Folder} ❯ {fileName}", locInfo.Src);
+                    }
+                }
             }
         }
-
-        // Plex Local Extras: Evaluates source directories exactly once, broadcasting results across all unique VFS roots.
-        if (Settings.Advanced.PlexLocalExtras)
-            assetLinker.LinkLocalExtras(fileData, resolvedVfsSeriesPaths, videoBaseNames, epPad, LocalOnLink, skipCheck);
 
         // Dynamically register physically present AnimeThemes mapping files inside the blueprint Shorts directory to protect them from cleanup
         var anidbIds = EnforceTmdbNumbering
@@ -579,7 +677,12 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                     foreach (var theme in themes)
                     {
                         if (VfsHelper.GetThemeSourcePath(theme.RelativePath, root, themeRootName, session) is string srcPath)
-                            LocalOnLink(root, "Shorts", theme.FinalName, srcPath);
+                        {
+                            string destFilePath = Path.Combine(seriesPath, "Shorts", theme.FinalName);
+                            expectedFiles.Add(destFilePath);
+                            if (doTv && seriesPath.Contains(rootFolderName))
+                                onLink?.Invoke(root, "Shorts", theme.FinalName, srcPath);
+                        }
                     }
                 }
             }
@@ -593,6 +696,76 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
     #endregion
 
     #region Internal Helpers
+
+    /// <summary>Safely purges the contents and removes a root VFS directory.</summary>
+    /// <param name="path">The absolute path of the root directory to clean.</param>
+    /// <param name="cleanupDetails">The tracking list for cleanups.</param>
+    /// <param name="isMovieRoot">Whether this root is the standalone movies directory.</param>
+    /// <param name="recreate">Whether to recreate the empty directory and .ignore file after cleanup.</param>
+    private static void CleanVfsRoot(string path, List<RootCleanupDetails> cleanupDetails, bool isMovieRoot = false, bool recreate = true)
+    {
+        if (!Directory.Exists(path))
+            return;
+
+        if (!VfsShared.IsSafeToDelete(path))
+        {
+            s_logger.Warn("VFS: Refusing to delete unsafe path -> {0}", path);
+            return;
+        }
+
+        try
+        {
+            var cleanSw = Stopwatch.StartNew();
+            Parallel.ForEach(
+                Directory.GetDirectories(path),
+                DefaultParallelOptions(),
+                dir =>
+                {
+                    try
+                    {
+                        Directory.Delete(dir, true);
+                    }
+                    catch { }
+                }
+            );
+            Directory.Delete(path, true);
+            cleanupDetails.Add(new RootCleanupDetails(path, cleanSw.ElapsedMilliseconds));
+            s_logger.Info("VFS: Cleaned {0}root folder -> '{1}' in {2}ms", isMovieRoot ? "movie " : "", path, cleanSw.ElapsedMilliseconds);
+            if (recreate)
+            {
+                Directory.CreateDirectory(path);
+                try
+                {
+                    File.WriteAllText(Path.Combine(path, ".ignore"), "");
+                }
+                catch { }
+            }
+        }
+        catch (Exception ex)
+        {
+            s_logger.Warn(ex, "VFS: Failed to clean {0}root -> {1}", isMovieRoot ? "movie " : "", path);
+        }
+    }
+
+    /// <summary>Safely ensures the existence of a target directory and marks it as ignored by Shoko if it is a VFS root.</summary>
+    /// <param name="path">The absolute path of the directory to ensure.</param>
+    /// <param name="session">The active build session tracking created directories.</param>
+    /// <param name="isRoot">Whether this directory is a top-level VFS root.</param>
+    private static void EnsureDirectory(string path, VfsBuildSession session, bool isRoot = false)
+    {
+        if (session.CreatedDirs.TryAdd(path, 0))
+        {
+            Directory.CreateDirectory(path);
+            if (isRoot)
+            {
+                try
+                {
+                    File.WriteAllText(Path.Combine(path, ".ignore"), "");
+                }
+                catch { }
+            }
+        }
+    }
 
     /// <summary>Recursively deletes the virtual directory for a series across all active VFS roots.</summary>
     /// <param name="rootFolderName">The name of the VFS root folder.</param>

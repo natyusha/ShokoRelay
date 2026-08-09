@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Shoko.Abstractions.Metadata.Enums;
 using Shoko.Abstractions.Video;
 using Shoko.Abstractions.Video.Enums;
 
@@ -90,7 +91,7 @@ internal static class VfsShared
         return null;
     }
 
-    /// <summary>Resolves the list of physical VFS series directories associated with a series across all import roots. Respects Primary ID overrides.</summary>
+    /// <summary>Resolves the list of physical VFS series directories associated with a series across all import roots. Respects Primary ID overrides and movie structures.</summary>
     /// <param name="series">The Shoko series metadata.</param>
     /// <param name="metadataService">Metadata service used for override resolution.</param>
     /// <returns>An enumerable of absolute directory paths.</returns>
@@ -98,7 +99,11 @@ internal static class VfsShared
     {
         var roots = new HashSet<string>(PathComparer);
         string rootName = ResolveRootFolderName();
+        string movieRootName = ResolveMovieRootFolderName();
         int folderId = EnforceTmdbNumbering ? OverrideHelper.GetPrimary(series.ID, metadataService) : series.ID;
+
+        bool isMovie = MapHelper.IsMovie(series);
+        var mode = Settings.Advanced.MovieGenerationMode;
 
         var fileData = MapHelper.GetSeriesFileData(series, metadataService);
         foreach (var mapping in fileData.Mappings)
@@ -111,8 +116,15 @@ internal static class VfsShared
             if (string.IsNullOrWhiteSpace(importRoot))
                 continue;
 
-            string seriesPath = Path.Combine(importRoot, rootName, folderId.ToString());
-            roots.Add(seriesPath);
+            if (mode == MovieGenerationMode.Disabled || (!isMovie && mode != MovieGenerationMode.Disabled) || (isMovie && mode == MovieGenerationMode.EnabledMaintain))
+                roots.Add(Path.Combine(importRoot, rootName, folderId.ToString()));
+
+            if (isMovie && mode != MovieGenerationMode.Disabled)
+            {
+                var mainEps = fileData.Mappings.Where(m => m.PrimaryEpisode.Type == EpisodeType.Episode).Select(m => m.PrimaryEpisode).DistinctBy(e => e.ID);
+                foreach (var ep in mainEps)
+                    roots.Add(Path.Combine(importRoot, movieRootName, ep.ID.ToString()));
+            }
         }
 
         return roots;
@@ -138,6 +150,9 @@ internal static class VfsShared
     /// <summary>Resolves the VFS root folder name.</summary>
     public static string ResolveRootFolderName() => ResolveFolderName(Settings.Advanced.VfsRootPath, ShokoRelayConstants.FolderVfsDefault);
 
+    /// <summary>Resolves the standalone Movies VFS root folder name.</summary>
+    public static string ResolveMovieRootFolderName() => ResolveFolderName(Settings.Advanced.MovieVfsRootPath, ShokoRelayConstants.FolderMoviesDefault);
+
     /// <summary>Resolves the anime themes folder name.</summary>
     public static string ResolveAnimeThemesFolderName() => ResolveFolderName(Settings.Advanced.AnimeThemesRootPath, ShokoRelayConstants.FolderAnimeThemesDefault);
 
@@ -157,7 +172,7 @@ internal static class VfsShared
             if (ReferenceEquals(s_lastSettingsForIgnore, settings) && s_lastIgnoredNames != null)
                 return s_lastIgnoredNames;
 
-            var ignored = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ResolveRootFolderName(), ResolveAnimeThemesFolderName(), ResolveCollectionImagesFolderName() };
+            var ignored = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ResolveRootFolderName(), ResolveMovieRootFolderName(), ResolveAnimeThemesFolderName(), ResolveCollectionImagesFolderName() };
             foreach (var folder in settings.Advanced.FolderExclusions.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                 ignored.Add(folder);
 
@@ -211,7 +226,7 @@ internal static class VfsShared
             }
         }
 
-        // Internal wrapper around the OS file APIs to create standard filesystem relative symbolic links
+        // Internal wrapper around the OS file APIs to create standard filesystem relative symbolic links.
         try
         {
             var sw = Stopwatch.StartNew();

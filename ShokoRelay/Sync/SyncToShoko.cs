@@ -169,9 +169,9 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                     }
 
                     DateTime? watchedAt = SyncHelper.UnixSecondsToDateTime(item.LastViewedAt);
-
                     var prefId = ep.Series != null ? MapHelper.GetPreferredTmdbOrderingId(ep.Series) : null;
                     var coords = PlexMapping.GetPlexCoordinates(ep, prefId);
+                    string typeLabel = PlexHelper.IsMovieKey(item.RatingKey!) ? "movie" : "episode";
 
                     if (wouldMark)
                     {
@@ -189,9 +189,10 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                         appliedIds.Add(ep.ID);
                         result = SyncHelper.IncMarkedWatched(result, result.PerUser, uName);
                         s_logger.Info(
-                            "WatchedSyncService: {0}Plex -> Shoko: {1} marked episode -> {2} [{3}] - S{4:D2}E{5:D2} (RatingKey: {6})",
+                            "WatchedSyncService: {0}Plex -> Shoko: {1} marked {2} -> {3} [{4}] - S{5:D2}E{6:D2} (RatingKey: {7})",
                             logPrefix,
                             uName,
+                            typeLabel,
                             ep.Series?.GetDisplayTitle(),
                             ep.SeriesID,
                             coords.Season,
@@ -215,9 +216,10 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                         appliedIds.Add(ep.ID);
                         result = SyncHelper.IncProgressUpdated(result, result.PerUser, uName);
                         s_logger.Info(
-                            "WatchedSyncService: {0}Plex -> Shoko: {1} updated progress for episode -> {2} [{3}] - S{4:D2}E{5:D2} (RatingKey: {6}) to {7}",
+                            "WatchedSyncService: {0}Plex -> Shoko: {1} updated progress for {2} -> {3} [{4}] - S{5:D2}E{6:D2} (RatingKey: {7}) to {8}",
                             logPrefix,
                             uName,
+                            typeLabel,
                             ep.Series?.GetDisplayTitle(),
                             ep.SeriesID,
                             coords.Season,

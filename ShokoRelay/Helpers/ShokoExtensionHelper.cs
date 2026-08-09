@@ -52,6 +52,20 @@ public static class ShokoExtensionHelper
 
     #endregion
 
+    #region Movies
+
+    /// <summary>Gets the Plex metadata GUID for a movie-type episode.</summary>
+    /// <param name="e">The episode metadata.</param>
+    /// <returns>A Plex-compatible movie GUID string.</returns>
+    public static string GetPlexMovieGuid(this IEpisode e) => $"{ShokoRelayConstants.AgentScheme}://movie/{PlexConstants.MoviePrefix}{e.ID}";
+
+    /// <summary>Gets the Plex rating key for a movie-type episode.</summary>
+    /// <param name="e">The episode metadata.</param>
+    /// <returns>A Plex-compatible movie rating key string.</returns>
+    public static string GetPlexMovieRatingKey(this IEpisode e) => $"{PlexConstants.MoviePrefix}{e.ID}";
+
+    #endregion
+
     #region Groups (Collections)
 
     /// <summary>Gets the Plex metadata GUID for a Shoko group.</summary>

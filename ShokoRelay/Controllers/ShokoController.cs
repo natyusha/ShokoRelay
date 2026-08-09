@@ -127,10 +127,12 @@ public class ShokoController(
                     var parentDir = Path.GetDirectoryName(root.Key)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) ?? string.Empty;
                     var match = managedFolders.FirstOrDefault(f => string.Equals(parentDir, f.Path, StringComparison.OrdinalIgnoreCase));
                     var fallback = Path.GetFileName(parentDir);
-                    return new { Name = match?.Name ?? (string.IsNullOrEmpty(fallback) ? "Unknown" : fallback), Series = root.Value.Values };
+                    string tabName = match?.Name ?? (string.IsNullOrEmpty(fallback) ? "Unknown" : fallback);
+
+                    return new { Name = tabName, Series = root.Value.Values };
                 })
                 .GroupBy(x => x.Name)
-                .Select(g => new { name = g.Key, series = g.SelectMany(x => x.Series).OrderBy(s => s.Title ?? "").ToList() })
+                .Select(g => new { name = g.Key, series = g.SelectMany(x => x.Series).DistinctBy(s => s.Id).OrderBy(s => s.Title ?? "").ToList() })
                 .OrderBy(r => r.name)
                 .ToList();
 

@@ -134,6 +134,22 @@ public enum OverlapLevel
     None = 2,
 }
 
+/// <summary>Determines how movie-type anime are structured within the VFS.</summary>
+public enum MovieGenerationMode
+{
+    /// <summary>Do not generate standalone movie folders.</summary>
+    [Display(Name = "Disabled")]
+    Disabled = 0,
+
+    /// <summary>Generate standalone movie folders but keep them in the standard TV VFS as well.</summary>
+    [Display(Name = "Enabled (Maintain TV VFS)")]
+    EnabledMaintain = 1,
+
+    /// <summary>Generate standalone movie folders and remove them from the standard TV VFS.</summary>
+    [Display(Name = "Enabled (Remove TV VFS)")]
+    EnabledRemove = 2,
+}
+
 #endregion
 
 #region Provider Config
@@ -414,6 +430,12 @@ public class AdvancedConfig
     [VfsRebuild]
     public bool AnimeThemesPreferNc { get; set; } = true;
 
+    /// <summary>Whether to generate standalone movie folders.</summary>
+    [Display(Name = "Movie Generation Mode", Description = "Allows movies to be placed into a dedicated VFS root")]
+    [DefaultValue(MovieGenerationMode.Disabled)]
+    [VfsRebuild]
+    public MovieGenerationMode MovieGenerationMode { get; set; } = MovieGenerationMode.Disabled;
+
     /// <summary>Minimum overlap level for AnimeThemes.</summary>
     [Display(Name = "AnimeThemes Overlap Level", Description = "The amount of overlap allowed for AnimeThemes .webm files to be added to the VFS")]
     [DefaultValue(OverlapLevel.All)]
@@ -425,6 +447,12 @@ public class AdvancedConfig
     [DefaultValue(ShokoRelayConstants.FolderVfsDefault)]
     [VfsRebuild]
     public string VfsRootPath { get; set; } = ShokoRelayConstants.FolderVfsDefault;
+
+    /// <summary>Folder name for the movie specific VFS root.</summary>
+    [Display(Name = "Movie VFS Root Path", Description = "The folder name used for the movie specific VFS (if enabled)")]
+    [DefaultValue(ShokoRelayConstants.FolderMoviesDefault)]
+    [VfsRebuild]
+    public string MovieVfsRootPath { get; set; } = ShokoRelayConstants.FolderMoviesDefault;
 
     /// <summary>Folder name for downloaded themes.</summary>
     [Display(Name = "AnimeThemes Root Path", Description = "The location of AnimeThemes .webm files inside each import root")]

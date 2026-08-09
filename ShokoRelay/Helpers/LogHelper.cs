@@ -183,8 +183,24 @@ public static class LogHelper
             items.AddRange(r.CleanupDetails.OrderBy(c => c.Path).Select(c => $"[{c.ElapsedMs, 5}ms] {c.Path}"));
             items.Add("");
         }
-        items.Add("Processed Series Details:");
-        items.AddRange(r.SeriesDetails.OrderByDescending(x => x.ElapsedMs).ThenBy(x => x.Name).Select(d => $"[{d.ElapsedMs, 5}ms] {d.Name} ({d.CreatedLinks} links)"));
+
+        var tvSeries = r.SeriesDetails.Where(d => !d.IsMovie).ToList();
+        var movies = r.SeriesDetails.Where(d => d.IsMovie).ToList();
+
+        if (tvSeries.Count > 0)
+        {
+            items.Add("Processed Series Details:");
+            items.AddRange(tvSeries.OrderByDescending(x => x.ElapsedMs).ThenBy(x => x.Name).Select(d => $"[{d.ElapsedMs, 5}ms] {d.Name} ({d.CreatedLinks} links)"));
+        }
+
+        if (movies.Count > 0)
+        {
+            if (tvSeries.Count > 0)
+                items.Add("");
+            items.Add("Processed Movie Details:");
+            items.AddRange(movies.OrderByDescending(x => x.ElapsedMs).ThenBy(x => x.Name).Select(d => $"[{d.ElapsedMs, 5}ms] {d.Name} ({d.CreatedLinks} links)"));
+        }
+
         if (r.SkippedDetails.Any())
         {
             items.Add("");

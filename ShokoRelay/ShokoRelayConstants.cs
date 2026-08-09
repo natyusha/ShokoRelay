@@ -12,7 +12,7 @@ public static class ShokoRelayConstants
     public const string Description = "A custom metadata provider and automation toolset for integrating Plex and AnimeThemes with Shoko Server.";
 
     /// <summary>Current version string.</summary>
-    public const string Version = "0.16.10";
+    public const string Version = "0.17.0";
 
     /// <summary>Internal API version.</summary>
     public const string ApiVersion = "1";
@@ -44,6 +44,9 @@ public static class ShokoRelayConstants
 
     /// <summary>Default folder name for the virtual filesystem root.</summary>
     public const string FolderVfsDefault = "!ShokoRelayVFS";
+
+    /// <summary>Default folder name for the movie specific virtual filesystem root.</summary>
+    public const string FolderMoviesDefault = "!ShokoRelayMovieVFS";
 
     #endregion
 

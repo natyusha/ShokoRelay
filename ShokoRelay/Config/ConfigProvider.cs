@@ -187,6 +187,7 @@ public class ConfigProvider
                 s = new();
             }
             ApplyDefaultValues(s);
+            NormalizeVfsRoots(s);
             NormalizePathMappings(s);
             NormalizeCsvFields(s);
             NormalizeSettings(s);
@@ -283,6 +284,7 @@ public class ConfigProvider
     public void SaveSettings(RelayConfig settings)
     {
         ApplyDefaultValues(settings);
+        NormalizeVfsRoots(settings);
         if (!Validator.TryValidateObject(settings, new ValidationContext(settings), null, true))
             throw new ArgumentException("Config validation failed.");
         NormalizePathMappings(settings);
@@ -460,6 +462,18 @@ public class ConfigProvider
     #endregion
 
     #region Normalize & Validate
+
+    /// <summary>Ensures the standard VFS root and the Movie VFS root do not collide.</summary>
+    /// <param name="settings">The relay configuration instance to normalize.</param>
+    private static void NormalizeVfsRoots(RelayConfig settings)
+    {
+        if (!string.IsNullOrWhiteSpace(settings.Advanced.VfsRootPath) && string.Equals(settings.Advanced.VfsRootPath.Trim(), settings.Advanced.MovieVfsRootPath?.Trim(), StringComparison.OrdinalIgnoreCase))
+        {
+            settings.Advanced.MovieVfsRootPath = ShokoRelayConstants.FolderMoviesDefault;
+            if (string.Equals(settings.Advanced.VfsRootPath.Trim(), settings.Advanced.MovieVfsRootPath, StringComparison.OrdinalIgnoreCase))
+                settings.Advanced.MovieVfsRootPath = "!ShokoRelayMovieVFS_Fallback";
+        }
+    }
 
     /// <summary>Normalizes path mapping keys and values to ensure consistent cross-platform separator formatting.</summary>
     /// <param name="settings">The relay configuration instance to update.</param>

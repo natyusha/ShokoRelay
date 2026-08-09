@@ -18,6 +18,8 @@ namespace ShokoRelay.Plex
         public const string SeasonPrefix          = "s";
         /// <summary>Prefix for episode rating keys.</summary>
         public const string EpisodePrefix         = "e";
+        /// <summary>Prefix for movie rating keys.</summary>
+        public const string MoviePrefix           = "m";
         /// <summary>Prefix for multi-part file rating keys.</summary>
         public const string PartPrefix            = "p";
 

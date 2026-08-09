@@ -215,23 +215,18 @@
    * @returns {void}
    */
   function renderSeriesContents(g, ul, forceRender = false) {
-    (g.rootFiles || []).forEach((f) => {
-      const fLi = document.createElement("li");
-      const leaf = document.createElement("div");
-      leaf.className = "leaf";
-      leaf.innerHTML =
-        `<span title="${esc(f.name)}" data-tooltip-overflow-only="true">${f.name}</span>` +
-        `<span class="source-path" title="${esc(f.source || "Unknown")}" data-tooltip-overflow-only="true">${f.source || "Unknown"}</span>`;
-      fLi.appendChild(leaf);
-      ul.appendChild(fLi);
-    });
+    const movieSeasons = (g.seasons || []).filter((s) => s.name.startsWith("Movie ❯ "));
+    const regularSeasons = (g.seasons || []).filter((s) => !s.name.startsWith("Movie ❯ "));
 
-    (g.seasons || []).forEach((s) => {
+    const renderSeason = (s) => {
       const sLi = document.createElement("li");
       const sUl = document.createElement("ul");
+      const isMovie = s.name.startsWith("Movie ❯ ");
+      const movieId = isMovie ? s.name.split(" ❯ ")[1] : null;
 
-      const seasonLink =
-        s.seasonId !== null && s.seasonId !== undefined
+      const seasonLink = isMovie
+        ? `<a href="${base}/metadata/m${movieId}?includeChildren=1" class="vfs-link small" target="_blank" rel="noopener noreferrer">[m${movieId}]</a>`
+        : s.seasonId !== null && s.seasonId !== undefined
           ? `<a href="${base}/metadata/${g.id}s${s.seasonId}?includeChildren=1" class="vfs-link small" target="_blank" rel="noopener noreferrer">[m${g.id}s${s.seasonId}]</a>`
           : "";
 
@@ -246,7 +241,25 @@
 
       sLi.appendChild(sDet);
       ul.appendChild(sLi);
+    };
+
+    // Movie Branches First
+    movieSeasons.forEach(renderSeason);
+
+    // Root Files Second (e.g. Theme.mp3)
+    (g.rootFiles || []).forEach((f) => {
+      const fLi = document.createElement("li");
+      const leaf = document.createElement("div");
+      leaf.className = "leaf";
+      leaf.innerHTML =
+        `<span title="${esc(f.name)}" data-tooltip-overflow-only="true">${f.name}</span>` +
+        `<span class="source-path" title="${esc(f.source || "Unknown")}" data-tooltip-overflow-only="true">${f.source || "Unknown"}</span>`;
+      fLi.appendChild(leaf);
+      ul.appendChild(fLi);
     });
+
+    // Regular TV Seasons Third
+    regularSeasons.forEach(renderSeason);
   }
 
   /**

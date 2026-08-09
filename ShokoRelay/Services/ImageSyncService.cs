@@ -135,6 +135,14 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
 
     #region Modular Sync Loops
 
+    /// <summary>Scans Plex sections to locate, upload, and prefer episode or movie thumbnails.</summary>
+    /// <param name="targets">Configured Plex library targets.</param>
+    /// <param name="allowedSet">Optional filtered series IDs.</param>
+    /// <param name="cache">Cache dictionary for image synchronization state.</param>
+    /// <param name="errsBag">Bag to collect error messages.</param>
+    /// <param name="uploadedBag">Bag to collect uploaded item names.</param>
+    /// <param name="addStats">Action callback to record execution metrics.</param>
+    /// <param name="ct">Cancellation token.</param>
     private async Task SyncEpisodeThumbnailsAsync(
         IReadOnlyList<PlexLibraryTarget> targets,
         HashSet<int>? allowedSet,
@@ -152,7 +160,8 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
             try
             {
                 var episodes = await plexClient.GetSectionEpisodesAsync(target, null, ct).ConfigureAwait(false) ?? [];
-                foreach (var item in episodes)
+                var movies = target.LibraryType == PlexLibraryType.Movie ? await plexClient.GetSectionMoviesAsync(target, null, ct).ConfigureAwait(false) ?? [] : [];
+                foreach (var item in episodes.Concat(movies))
                 {
                     ct.ThrowIfCancellationRequested();
                     if (string.IsNullOrWhiteSpace(item.Guid) || string.IsNullOrWhiteSpace(item.Thumb))
@@ -219,6 +228,13 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
         }
     }
 
+    /// <summary>Scans local collection posters to upload and mark them as preferred in Shoko.</summary>
+    /// <param name="allSeries">List of all Shoko series metadata.</param>
+    /// <param name="cache">Cache dictionary for image synchronization state.</param>
+    /// <param name="errsBag">Bag to collect error messages.</param>
+    /// <param name="uploadedBag">Bag to collect uploaded item names.</param>
+    /// <param name="addStats">Action callback to record execution metrics.</param>
+    /// <param name="ct">Cancellation token.</param>
     private async Task SyncCollectionPostersAsync(
         List<IShokoSeries> allSeries,
         ConcurrentDictionary<string, string> cache,
@@ -257,6 +273,13 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
         }
     }
 
+    /// <summary>Scans local series artwork (posters, backdrops, logos) to upload and mark them as preferred in Shoko.</summary>
+    /// <param name="allSeries">List of all Shoko series metadata.</param>
+    /// <param name="cache">Cache dictionary for image synchronization state.</param>
+    /// <param name="errsBag">Bag to collect error messages.</param>
+    /// <param name="uploadedBag">Bag to collect uploaded item names.</param>
+    /// <param name="addStats">Action callback to record execution metrics.</param>
+    /// <param name="ct">Cancellation token.</param>
     private async Task SyncLocalSeriesImagesAsync(
         List<IShokoSeries> allSeries,
         ConcurrentDictionary<string, string> cache,

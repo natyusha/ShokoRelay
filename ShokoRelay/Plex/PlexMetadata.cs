@@ -8,7 +8,7 @@ using static ShokoRelay.Plex.PlexMapping;
 
 namespace ShokoRelay.Plex;
 
-/// <summary>Converts Shoko series/episode/season metadata into Plex-compatible property dictionaries.</summary>
+/// <summary>Converts Shoko series/episode/season/movie metadata into Plex-compatible property dictionaries.</summary>
 public class PlexMetadata(IMetadataService metadataService)
 {
     #region Series Context
@@ -253,6 +253,71 @@ public class PlexMetadata(IMetadataService metadataService)
 
     #endregion
 
+    #region Movies
+
+    /// <summary>Builds a Plex-compatible metadata dictionary for a standalone movie mapped from an episode.</summary>
+    /// <param name="ep">The episode metadata acting as the movie.</param>
+    /// <param name="series">The parent Shoko series metadata.</param>
+    /// <param name="tmdbMovie">The optional TMDB movie metadata override.</param>
+    /// <param name="titles">The resolved title tuple.</param>
+    /// <returns>A dictionary of Plex metadata properties.</returns>
+    public Dictionary<string, object?> MapMovie(IEpisode ep, ISeries series, ITmdbMovie? tmdbMovie, (string DisplayTitle, string SortTitle, string? OriginalTitle) titles)
+    {
+        var seriesImages = (IWithImages)series;
+        var movieImages = tmdbMovie as IWithImages;
+        string title = TextHelper.ResolveMovieTitle(ep, series, tmdbMovie);
+        string description = TextHelper.GetDescriptionByLanguage(series, Settings.DescriptionLanguage);
+        if (string.IsNullOrWhiteSpace(description))
+            description = TextHelper.GetDescriptionByLanguage(ep, Settings.DescriptionLanguage);
+
+        string? tmdbDescription = tmdbMovie?.PreferredDescription?.Value ?? (series as IShokoSeries)?.TmdbShows?.FirstOrDefault()?.PreferredDescription?.Value;
+        var (rating, isAdult) = ContentRatingHelper.GetContentRatingAndAdult(series);
+        var studios = CastHelper.GetStudioTags(series);
+
+        string? thumbUrl = seriesImages.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage) ?? movieImages?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage);
+        string? artUrl = seriesImages.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage) ?? movieImages?.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage);
+
+        return new Dictionary<string, object?>
+        {
+            // csharpier-ignore-start
+            ["ratingKey"]             = ep.GetPlexMovieRatingKey(),
+            ["key"]                   = $"/metadata/{ep.GetPlexMovieRatingKey()}",
+            ["guid"]                  = ep.GetPlexMovieGuid(),
+            ["type"]                  = "movie",
+            ["title"]                 = title,
+            ["originallyAvailableAt"] = ep.AirDate?.ToString("yyyy-MM-dd", null) ?? tmdbMovie?.ReleaseDate?.ToString("yyyy-MM-dd", null) ?? series.AirDate?.ToDateOnly().ToString("yyyy-MM-dd", null),
+            ["thumb"]                 = thumbUrl,
+            ["art"]                   = artUrl,
+            ["contentRating"]         = rating,
+            ["originalTitle"]         = titles.OriginalTitle,
+            ["titleSort"]             = title,
+            ["year"]                  = ep.AirDate?.Year ?? tmdbMovie?.ReleaseDate?.Year ?? series.AirDate?.Year,
+            ["summary"]               = TextHelper.SanitizeSummaryWithFallback(description, tmdbDescription, Settings.SummaryMode),
+            ["isAdult"]               = isAdult,
+            ["duration"]              = (int)ep.Runtime.TotalMilliseconds,
+            //["tagline"]             = TMDB has this but it is not exposed
+            ["studio"]                = studios.FirstOrDefault()?.Tag,
+            ["theme"]                 = Settings.PlexThemeMusic && series is IShokoSeries ss && ss.TmdbShows?.FirstOrDefault()?.TvdbShowID is int tvdb && tvdb > 0 ? $"https://tvthemes.plexapp.com/{tvdb}.mp3" : null,
+
+            ["Image"]                 = ImageHelper.GenerateImageArray(seriesImages, title, Settings.AddEveryImage, Settings.TmdbImageLanguage),
+            //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
+            ["Genre"]                 = TagHelper.GetFilteredTags(series),
+            ["Guid"]                  = BuildXrefGuidArray(series, tmdbMovie),
+            ["Country"]               = BuildCountryArray(series),
+            ["Role"]                  = CastHelper.GetCastAndCrew(series),
+            ["Director"]              = CastHelper.GetDirectors(series),
+            ["Producer"]              = CastHelper.GetProducers(series),
+            ["Writer"]                = CastHelper.GetWriters(series),
+            ["Similar"]               = BuildSimilarArray(series),
+            ["Studio"]                = studios,
+            ["Collection"]            = GetCollectionName(series) is string c ? new[] { new { tag = c } } : null,
+            ["Rating"]                = BuildRatingArray(tmdbMovie?.Rating ?? (ep as IShokoEpisode)?.TmdbEpisodes?.FirstOrDefault()?.Rating ?? (series as IShokoSeries)?.TmdbShows?.FirstOrDefault()?.Rating ?? series.Rating)
+            // csharpier-ignore-end
+        };
+    }
+
+    #endregion
+
     #region Episodes List
 
     /// <summary>Builds a sorted list of mapped episode metadata objects for a given season.</summary>
@@ -369,11 +434,15 @@ public class PlexMetadata(IMetadataService metadataService)
     private static object[]? CreateTagArray(IEnumerable<string>? tags) =>
         tags?.Where(t => !string.IsNullOrWhiteSpace(t)).Distinct(StringComparer.OrdinalIgnoreCase).Select(t => (object)new { tag = t }).ToArray() is { Length: > 0 } arr ? arr : null;
 
-    /// <summary>Builds an array of external cross-reference GUIDs (TMDB/TVDB) for a series.</summary>
+    /// <summary>Builds an array of external cross-reference GUIDs (TMDB/TVDB/IMDB) for a series or movie.</summary>
     /// <param name="series">The Shoko series metadata.</param>
+    /// <param name="tmdbMovie">The optional TMDB movie metadata override.</param>
     /// <returns>An array of objects containing external IDs.</returns>
-    private object[] BuildXrefGuidArray(ISeries series) =>
-        series is IShokoSeries ss && ss.TmdbShows?.FirstOrDefault() is { } ts ? CreateXrefGuids($"tmdb://{ts.ID}", ts.TvdbShowID > 0 ? $"tvdb://{ts.TvdbShowID}" : null)
+    private object[] BuildXrefGuidArray(ISeries series, ITmdbMovie? tmdbMovie = null) =>
+        tmdbMovie != null ? CreateXrefGuids($"tmdb://{tmdbMovie.ID}", !string.IsNullOrWhiteSpace(tmdbMovie.ImdbMovieID) && tmdbMovie.ImdbMovieID != "0" ? $"imdb://{tmdbMovie.ImdbMovieID}" : null)
+        : series is IShokoSeries ss && ss.TmdbMovies?.FirstOrDefault() is { } tm
+            ? CreateXrefGuids($"tmdb://{tm.ID}", !string.IsNullOrWhiteSpace(tm.ImdbMovieID) && tm.ImdbMovieID != "0" ? $"imdb://{tm.ImdbMovieID}" : null)
+        : series is IShokoSeries ss2 && ss2.TmdbShows?.FirstOrDefault() is { } ts ? CreateXrefGuids($"tmdb://{ts.ID}", ts.TvdbShowID > 0 ? $"tvdb://{ts.TvdbShowID}" : null)
         : series is ITmdbShow s ? CreateXrefGuids(s.ID > 0 ? $"tmdb://{s.ID}" : null, s.TvdbShowID > 0 ? $"tvdb://{s.TvdbShowID}" : null)
         : [];
 
