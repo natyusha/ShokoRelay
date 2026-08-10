@@ -121,7 +121,11 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
             foreach (var target in targets)
             {
                 // Fetch all items at the start to minimize per-item API calls
-                var items = await plexClient.GetSectionShowsAsync(target, cancellationToken).ConfigureAwait(false) ?? [];
+                var items =
+                    target.LibraryType == PlexLibraryType.Movie
+                        ? await plexClient.GetSectionMoviesAsync(target, null, cancellationToken).ConfigureAwait(false) ?? []
+                        : await plexClient.GetSectionShowsAsync(target, cancellationToken).ConfigureAwait(false) ?? [];
+
                 var collections = await plexClient.GetSectionCollectionsAsync(target, cancellationToken).ConfigureAwait(false) ?? [];
 
                 // Map collection names to their Plex RatingKeys (IDs)
@@ -136,7 +140,17 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                 {
                     if (string.IsNullOrWhiteSpace(item.Guid) || !int.TryParse(item.RatingKey, out int plexKey))
                         continue;
-                    var sid = PlexHelper.ExtractShokoSeriesIdFromGuid(item.Guid);
+
+                    int? sid = null;
+                    if (target.LibraryType == PlexLibraryType.Movie)
+                    {
+                        var epId = PlexHelper.ExtractShokoEpisodeIdFromGuid(item.Guid);
+                        if (epId.HasValue)
+                            sid = metadataService.GetShokoEpisodeByID(epId.Value)?.SeriesID;
+                    }
+                    else
+                        sid = PlexHelper.ExtractShokoSeriesIdFromGuid(item.Guid);
+
                     if (!sid.HasValue || (allowedIds.Count > 0 && !allowedIds.Contains(sid.Value)))
                         continue;
 

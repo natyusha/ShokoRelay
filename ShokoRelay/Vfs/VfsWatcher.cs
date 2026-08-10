@@ -324,19 +324,13 @@ public class VfsWatcher(
             bool foundInAnyTarget = false;
             foreach (var target in targets)
             {
-                var ratingKey = await plexLibrary.FindRatingKeyForShokoSeriesInSectionAsync(series.ID, target, token).ConfigureAwait(false);
-                if (ratingKey.HasValue)
+                var ratingKeys = await plexLibrary.FindRatingKeysForShokoSeriesInSectionAsync(series.ID, target, metadataService, token).ConfigureAwait(false);
+                foreach (var ratingKey in ratingKeys)
                 {
                     foundInAnyTarget = true;
-                    s_logger.Info(
-                        "VFS: Triggering debounced metadata fixup and analysis for series -> {0} [{1}] (RatingKey: {2}) on {3}",
-                        series.GetDisplayTitle(),
-                        series.ID,
-                        ratingKey.Value,
-                        target.ServerName
-                    );
-                    await plexLibrary.RefreshMetadataAsync(ratingKey.Value, target, token).ConfigureAwait(false);
-                    await plexLibrary.AnalyzeItemAsync(ratingKey.Value, target, token).ConfigureAwait(false);
+                    s_logger.Info("VFS: Triggering debounced metadata fixup and analysis for series -> {0} [{1}] (RatingKey: {2}) on {3}", series.GetDisplayTitle(), series.ID, ratingKey, target.ServerName);
+                    await plexLibrary.RefreshMetadataAsync(ratingKey, target, token).ConfigureAwait(false);
+                    await plexLibrary.AnalyzeItemAsync(ratingKey, target, token).ConfigureAwait(false);
                 }
             }
 
@@ -353,11 +347,18 @@ public class VfsWatcher(
                     {
                         foreach (var target in targets)
                         {
-                            var ratingKey = await plexLibrary.FindRatingKeyForShokoSeriesInSectionAsync(series.ID, target, token).ConfigureAwait(false);
-                            if (!ratingKey.HasValue)
+                            var ratingKeys = await plexLibrary.FindRatingKeysForShokoSeriesInSectionAsync(series.ID, target, metadataService, token).ConfigureAwait(false);
+                            if (ratingKeys.Count == 0)
                                 continue;
 
-                            if (await plexCollections.AssignCollectionToItemByMetadataAsync(ratingKey.Value, collectionName, target, token).ConfigureAwait(false))
+                            bool collectionAssigned = false;
+                            foreach (var ratingKey in ratingKeys)
+                            {
+                                if (await plexCollections.AssignCollectionToItemByMetadataAsync(ratingKey, collectionName, target, token).ConfigureAwait(false))
+                                    collectionAssigned = true;
+                            }
+
+                            if (collectionAssigned)
                             {
                                 var collectionId = await plexCollections.GetOrCreateCollectionIdAsync(collectionName, target, token).ConfigureAwait(false);
                                 if (!collectionId.HasValue)

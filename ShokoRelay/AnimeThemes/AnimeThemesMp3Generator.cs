@@ -411,19 +411,16 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
             s_logger.Debug("AnimeThemes MP3: Converting audio for -> {0} [{1}] ({2})", series.GetDisplayTitle(), series.ID, slugDisplay);
             await ffmpegService.ConvertToMp3FileAsync(temp, "Theme.mp3", title, slugDisplay, artist, animeTitle, ct, folder).ConfigureAwait(false);
 
-            // Create a relative symbolic link for the Theme.mp3 in the Shoko VFS directory
-            int primaryId = OverrideHelper.GetPrimary(series.ID, metadataService);
+            // Create a relative symbolic link for the Theme.mp3 in the Shoko VFS directories
             string? vfsLink = null;
-            string? importRoot = VfsShared.ResolveImportRootPath(vf!);
-            if (importRoot != null)
+            foreach (var vfsPath in VfsShared.ResolveSeriesVfsPaths(series, metadataService))
             {
-                string destDir = Path.Combine(importRoot, VfsShared.ResolveRootFolderName(), primaryId.ToString());
-                Directory.CreateDirectory(destDir);
-                string dest = Path.Combine(destDir, "Theme.mp3");
+                Directory.CreateDirectory(vfsPath);
+                string dest = Path.Combine(vfsPath, "Theme.mp3");
 
                 s_logger.Debug("AnimeThemes MP3: Linking Theme.mp3 to VFS -> {0}", dest);
                 if (VfsShared.TryCreateLink(themePath, dest, s_logger))
-                    vfsLink = dest;
+                    vfsLink = dest; // Track the last successful link to trigger the Plex refresh
             }
 
             // After a successful VFS link is created, trigger a Plex metadata refresh to ensure the new Theme.mp3 is picked up by the server.
@@ -440,17 +437,11 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
                         var targets = plexClient.GetConfiguredTargets();
                         foreach (var target in targets)
                         {
-                            var ratingKey = await plexClient.FindRatingKeyForShokoSeriesInSectionAsync(series.ID, target).ConfigureAwait(false);
-                            if (ratingKey.HasValue)
+                            var ratingKeys = await plexClient.FindRatingKeysForShokoSeriesInSectionAsync(series.ID, target, metadataService).ConfigureAwait(false);
+                            foreach (var ratingKey in ratingKeys)
                             {
-                                s_logger.Debug(
-                                    "AnimeThemes MP3: Refreshing Plex metadata for series -> {0} [{1}] (RatingKey: {2}) on {3}",
-                                    series.GetDisplayTitle(),
-                                    series.ID,
-                                    ratingKey.Value,
-                                    target.ServerName
-                                );
-                                await plexClient.RefreshMetadataAsync(ratingKey.Value, target).ConfigureAwait(false);
+                                s_logger.Debug("AnimeThemes MP3: Refreshing Plex metadata for series -> {0} [{1}] (RatingKey: {2}) on {3}", series.GetDisplayTitle(), series.ID, ratingKey, target.ServerName);
+                                await plexClient.RefreshMetadataAsync(ratingKey, target).ConfigureAwait(false);
                             }
                         }
                     }

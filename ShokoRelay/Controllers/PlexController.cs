@@ -213,25 +213,28 @@ public class PlexController(
             {
                 try
                 {
-                    var ratingKey = await PlexLibrary.FindRatingKeyForShokoSeriesInSectionAsync(series.ID, target, HttpContext.RequestAborted).ConfigureAwait(false);
-                    if (ratingKey.HasValue)
+                    var ratingKeys = await PlexLibrary.FindRatingKeysForShokoSeriesInSectionAsync(series.ID, target, MetadataService, HttpContext.RequestAborted).ConfigureAwait(false);
+                    if (ratingKeys.Count > 0)
                     {
-                        if (await PlexLibrary.RefreshMetadataAsync(ratingKey.Value, target, HttpContext.RequestAborted).ConfigureAwait(false))
+                        foreach (var ratingKey in ratingKeys)
                         {
-                            refreshedCount++;
-                            Logger.Info(
-                                "PlexController: Triggered manual metadata refresh for series -> {0} [{1}] (RatingKey: {2}) on {3}",
-                                series.GetDisplayTitle(),
-                                series.ID,
-                                ratingKey.Value,
-                                target.ServerName
-                            );
+                            if (await PlexLibrary.RefreshMetadataAsync(ratingKey, target, HttpContext.RequestAborted).ConfigureAwait(false))
+                            {
+                                refreshedCount++;
+                                Logger.Info(
+                                    "PlexController: Triggered manual metadata refresh for series -> {0} [{1}] (RatingKey: {2}) on {3}",
+                                    series.GetDisplayTitle(),
+                                    series.ID,
+                                    ratingKey,
+                                    target.ServerName
+                                );
+                            }
+                            else
+                                errors.Add($"Failed to refresh metadata for series -> {series.GetDisplayTitle()} [{series.ID}] (RatingKey: {ratingKey}) on {target.ServerName}");
                         }
-                        else
-                            errors.Add($"Failed to refresh metadata for series -> {series.GetDisplayTitle()} [{series.ID}] on {target.ServerName}");
                     }
                     else
-                        errors.Add($"Rating key not found in Plex for series -> {series.GetDisplayTitle()} [{series.ID}] on {target.ServerName}");
+                        errors.Add($"Rating keys not found in Plex for series -> {series.GetDisplayTitle()} [{series.ID}] on {target.ServerName}");
                 }
                 catch (Exception ex)
                 {
@@ -476,15 +479,17 @@ public class PlexController(
         if (user == null)
             return Ok(new { status = "ignored", reason = "no_shoko_user" });
 
-        string seriesName = evt.Metadata.GrandparentTitle ?? shokoEpisode.Series.GetDisplayTitle() ?? "Unknown Series";
-        string seasonEp = $"S{evt.Metadata.ParentIndex ?? 0:D2}E{evt.Metadata.Index ?? 0:D2}";
+        bool isMovie = PlexHelper.IsMovieKey(evt.Metadata.Guid ?? "");
+        string typeLabel = isMovie ? "movie" : "episode";
+        string itemTitle = isMovie ? (evt.Metadata.Title ?? shokoEpisode.Series?.GetDisplayTitle() ?? "Unknown") : $"S{evt.Metadata.ParentIndex ?? 0:D2}E{evt.Metadata.Index ?? 0:D2}";
+        string seriesName = evt.Metadata.GrandparentTitle ?? shokoEpisode.Series?.GetDisplayTitle() ?? "Unknown Series";
 
         if (isRate)
         {
             if (evt.Metadata.UserRating.HasValue)
             {
                 await userDataService.RateEpisode(shokoEpisode, user, evt.Metadata.UserRating.Value).ConfigureAwait(false);
-                Logger.Info("Plex: Rating applied -> user='{User}', series='{Series}', episode='{SeasonEp}', rating={Rating}", evt.Account?.Title, seriesName, seasonEp, evt.Metadata.UserRating.Value);
+                Logger.Info("Plex: Rating applied -> user='{User}', series='{Series}', {Type}='{Item}', rating={Rating}", evt.Account?.Title, seriesName, typeLabel, itemTitle, evt.Metadata.UserRating.Value);
             }
             return Ok(new { status = "ok", rated = true });
         }
@@ -507,10 +512,11 @@ public class PlexController(
                     await userDataService.SaveVideoUserData(video, user, update).ConfigureAwait(false);
                 }
                 Logger.Info(
-                    "Plex: Progress updated -> user='{User}', series='{Series}', episode='{SeasonEp}', offset={Offset}",
+                    "Plex: Progress updated -> user='{User}', series='{Series}', {Type}='{Item}', offset={Offset}",
                     evt.Account?.Title,
                     seriesName,
-                    seasonEp,
+                    typeLabel,
+                    itemTitle,
                     TimeSpan.FromMilliseconds(evt.Metadata.ViewOffset.Value)
                 );
                 return Ok(new { status = "ok", progress_updated = true });
@@ -520,7 +526,7 @@ public class PlexController(
 
         var saved = await userDataService.SetEpisodeWatchedStatus(shokoEpisode, user, true, watchedAt, videoReason: VideoUserDataSaveReason.PlaybackEnd).ConfigureAwait(false);
         if (saved != null)
-            Logger.Info("Plex: Scrobble applied -> user='{User}', series='{Series}', episode='{SeasonEp}'", evt.Account?.Title, seriesName, seasonEp);
+            Logger.Info("Plex: Scrobble applied -> user='{User}', series='{Series}', {Type}='{Item}'", evt.Account?.Title, seriesName, typeLabel, itemTitle);
         return Ok(new { status = "ok", marked = saved != null });
     }
 

@@ -625,36 +625,39 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                 }
             }
 
-            foreach (var mapping in extraMappings)
+            if (Settings.Advanced.PlexLocalExtras)
             {
-                if (!TryResolveAndValidate(mapping, out var locInfo))
-                    continue;
-
-                (string Folder, string Subtype) ex = PlexMapping.TryGetExtraSeason(mapping.Coords.Season, out var e) ? e : ("Featurettes", "featurette");
-                string fileName = VfsHelper.BuildExtrasFileName(
-                    mapping,
-                    ex,
-                    extraPad.GetValueOrDefault(mapping.Coords.Season, 1),
-                    Path.GetExtension(locInfo.Src),
-                    displayTitle,
-                    mapping.PartIndex,
-                    mapping.PartCount,
-                    null,
-                    mapping.IsVariation
-                );
-
-                foreach (var (importRoot, folderName, moviePath) in movieDirs)
+                foreach (var mapping in extraMappings)
                 {
-                    string extraPath = Path.Combine(moviePath, ex.Folder);
-                    Directory.CreateDirectory(extraPath);
-                    string destFilePath = Path.Combine(extraPath, fileName);
+                    if (!TryResolveAndValidate(mapping, out var locInfo))
+                        continue;
 
-                    if (VfsShared.TryCreateLink(locInfo.Src, destFilePath, s_logger, skipExistenceCheck: skipCheck))
+                    (string Folder, string Subtype) ex = PlexMapping.TryGetExtraSeason(mapping.Coords.Season, out var e) ? e : ("Featurettes", "featurette");
+                    string fileName = VfsHelper.BuildExtrasFileName(
+                        mapping,
+                        ex,
+                        extraPad.GetValueOrDefault(mapping.Coords.Season, 1),
+                        Path.GetExtension(locInfo.Src),
+                        displayTitle,
+                        mapping.PartIndex,
+                        mapping.PartCount,
+                        null,
+                        mapping.IsVariation
+                    );
+
+                    foreach (var (importRoot, folderName, moviePath) in movieDirs)
                     {
-                        created++;
-                        planned++;
-                        expectedFiles.Add(destFilePath);
-                        onLink?.Invoke(importRoot, $"Movie ❯ {folderName}", $"{ex.Folder} ❯ {fileName}", locInfo.Src);
+                        string extraPath = Path.Combine(moviePath, ex.Folder);
+                        Directory.CreateDirectory(extraPath);
+                        string destFilePath = Path.Combine(extraPath, fileName);
+
+                        if (VfsShared.TryCreateLink(locInfo.Src, destFilePath, s_logger, skipExistenceCheck: skipCheck))
+                        {
+                            created++;
+                            planned++;
+                            expectedFiles.Add(destFilePath);
+                            onLink?.Invoke(importRoot, $"Movie ❯ {folderName}", $"{ex.Folder} ❯ {fileName}", locInfo.Src);
+                        }
                     }
                 }
             }

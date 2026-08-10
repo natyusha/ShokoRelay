@@ -247,8 +247,12 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                     int primaryId = folderGroup.Key;
                     var overrideOrder = OverrideHelper.GetGroup(primaryId, metadataService).ToList();
 
-                    var roots = folderGroup.SelectMany(s => PlexHelper.ResolveImportRoots(s!, metadataService)).Distinct(VfsShared.PathComparer).ToList();
-                    if (!roots.Any())
+                    var primarySeries = metadataService.GetShokoSeriesByID(primaryId);
+                    if (primarySeries == null)
+                        return;
+
+                    var vfsPaths = VfsShared.ResolveSeriesVfsPaths(primarySeries, metadataService).ToList();
+                    if (vfsPaths.Count == 0)
                     {
                         Interlocked.Increment(ref state.Skipped);
                         return;
@@ -258,9 +262,10 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                     var isFilteredRun = seriesFilter?.Any() == true;
                     var myPrefixes = folderGroup.Select(s => overrideOrder.IndexOf(s!.ID) is var idx && idx > 0 ? $"P{idx + 1} ❯ " : null).ToHashSet();
 
-                    foreach (var root in roots)
+                    foreach (var vfsPath in vfsPaths)
                     {
-                        string shortsDir = Path.Combine(root, vfsRoot, primaryId.ToString(), "Shorts");
+                        string shortsDir = Path.Combine(vfsPath, "Shorts");
+                        string root = Path.GetDirectoryName(Path.GetDirectoryName(vfsPath))!;
                         var plannedFilenames = new HashSet<string>(VfsShared.PathComparer);
 
                         var potentialLinks = overrideOrder
@@ -386,6 +391,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                     var newCacheLines = new List<string>();
                     var primaryIdsToPurge = new HashSet<string>(seriesFilter.Select(id => EnforceTmdbNumbering ? OverrideHelper.GetPrimary(id, metadataService).ToString() : id.ToString()));
                     string searchToken = $"/{vfsRoot}/";
+                    string movieSearchToken = $"/{VfsShared.ResolveMovieRootFolderName()}/";
 
                     if (File.Exists(cachePath))
                     {
@@ -409,6 +415,21 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                                         // Safely drop lines belonging to the incrementally updated series to prevent ghosts
                                         if (primaryIdsToPurge.Contains(seriesIdStr))
                                             continue;
+                                    }
+                                }
+                                else
+                                {
+                                    rootIdx = parts[0].IndexOf(movieSearchToken, StringComparison.OrdinalIgnoreCase);
+                                    if (rootIdx >= 0)
+                                    {
+                                        int startIdx = rootIdx + movieSearchToken.Length;
+                                        int endIdx = parts[0].IndexOf('/', startIdx);
+                                        if (endIdx > startIdx)
+                                        {
+                                            string epIdStr = parts[0][startIdx..endIdx];
+                                            if (int.TryParse(epIdStr, out int epId) && metadataService.GetShokoEpisodeByID(epId) is { SeriesID: int sid } && primaryIdsToPurge.Contains(sid.ToString()))
+                                                continue;
+                                        }
                                     }
                                 }
                             }

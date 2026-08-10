@@ -56,11 +56,7 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
             shokoWatchedQuery = shokoWatchedQuery.Where(e => e.LastPlayedAt >= cutoff);
         }
 
-        var shokoWatched = shokoWatchedQuery
-            .Select(sw => (UserData: sw, Episode: metadataService.GetShokoEpisodeByID(sw.EpisodeID)))
-            .Where(x => x.Episode != null)
-            .Select(x => (x.UserData, x.Episode, Guid: x.Episode!.GetPlexGuid()))
-            .ToList();
+        var shokoWatched = shokoWatchedQuery.Select(sw => (UserData: sw, Episode: metadataService.GetShokoEpisodeByID(sw.EpisodeID))).Where(x => x.Episode != null).Select(x => (x.UserData, x.Episode)).ToList();
 
         result = result with { Processed = shokoWatched.Count };
         var extraEntries = configProvider.GetExtraPlexUserEntries();
@@ -101,12 +97,12 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
                     }
                 }
 
-                foreach (var sw in shokoWatched)
+                foreach (var (userData, episode) in shokoWatched)
                 {
-                    if (!plexMap.TryGetValue(sw.UserData.EpisodeID, out var plexItems))
+                    if (!plexMap.TryGetValue(userData.EpisodeID, out var plexItems))
                         continue;
 
-                    matchedGlobal.Add(sw.UserData.EpisodeID);
+                    matchedGlobal.Add(userData.EpisodeID);
 
                     foreach (var plexItem in plexItems.DistinctBy(i => i.RatingKey))
                     {
@@ -118,8 +114,8 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
                                 continue;
                         }
 
-                        var prefId = sw.Episode!.Series != null ? MapHelper.GetPreferredTmdbOrderingId(sw.Episode.Series) : null;
-                        var coords = PlexMapping.GetPlexCoordinates(sw.Episode, prefId);
+                        var prefId = episode!.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series) : null;
+                        var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
                         string typeLabel = PlexHelper.IsMovieKey(plexItem.RatingKey!) ? "movie" : "episode";
 
                         result = SyncHelper.IncMarkedWatched(result, result.PerUser, uName);
@@ -128,8 +124,8 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
                             logPrefix,
                             uName,
                             typeLabel,
-                            sw.Episode!.Series?.GetDisplayTitle(),
-                            sw.Episode.SeriesID,
+                            episode.Series?.GetDisplayTitle(),
+                            episode.SeriesID,
                             coords.Season,
                             coords.Episode,
                             plexItem.RatingKey,
@@ -141,28 +137,28 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
                             SyncHelper.MakeChange(
                                 uName,
                                 libraryName: target.Title,
-                                sw.UserData.EpisodeID,
-                                $"{sw.Episode!.Series?.GetDisplayTitle()} [{sw.Episode.SeriesID}]",
-                                plexItem.ParentIndex ?? sw.Episode.SeasonNumber,
-                                plexItem.Index ?? sw.Episode.EpisodeNumber,
+                                userData.EpisodeID,
+                                $"{episode.Series?.GetDisplayTitle()} [{episode.SeriesID}]",
+                                plexItem.ParentIndex ?? episode.SeasonNumber,
+                                plexItem.Index ?? episode.EpisodeNumber,
                                 plexItem.RatingKey,
-                                plexItem.Guid ?? sw.Guid,
+                                plexItem.Guid ?? (target.LibraryType == PlexLibraryType.Movie ? episode.GetPlexMovieGuid() : episode.GetPlexGuid()),
                                 null,
-                                sw.UserData.LastPlayedAt,
+                                userData.LastPlayedAt,
                                 true,
                                 true,
-                                plexUserRating: sw.UserData.UserRating
+                                plexUserRating: userData.UserRating
                             )
                         );
 
-                        if (actualVotes && sw.UserData.HasUserRating)
+                        if (actualVotes && userData.HasUserRating)
                         {
                             result = SyncHelper.IncVotesFound(result);
                             if (!dryRun)
                             {
                                 using var rateReq = plexClient.CreateRequest(
                                     HttpMethod.Get,
-                                    $"/:/rate?identifier=com.plexapp.plugins.library&key={plexItem.RatingKey}&rating={sw.UserData.UserRating.Value.ToString(CultureInfo.InvariantCulture)}",
+                                    $"/:/rate?identifier=com.plexapp.plugins.library&key={plexItem.RatingKey}&rating={userData.UserRating.Value.ToString(CultureInfo.InvariantCulture)}",
                                     target.ServerUrl,
                                     uToken
                                 );

@@ -76,111 +76,160 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
             var allowedSet = allowedSeriesIds != null ? new HashSet<int>(allowedSeriesIds) : null;
             foreach (var target in plexClient.GetConfiguredTargets())
             {
-                // Process Shows
-                var shows = await plexClient.GetSectionShowsAsync(target, cancellationToken) ?? [];
-                foreach (var item in shows)
+                if (target.LibraryType != PlexLibraryType.Movie)
                 {
-                    if (string.IsNullOrWhiteSpace(item.Guid))
-                        continue;
-                    var shokoId = PlexHelper.ExtractShokoSeriesIdFromGuid(item.Guid);
-                    if (!shokoId.HasValue || (allowedSet != null && !allowedSet.Contains(shokoId.Value)))
-                        continue;
-
-                    pS++;
-                    var series = metadataService.GetShokoSeriesByID(shokoId.Value);
-                    if (series == null)
+                    // Process Shows
+                    var shows = await plexClient.GetSectionShowsAsync(target, cancellationToken) ?? [];
+                    foreach (var item in shows)
                     {
-                        errs++;
-                        errorsList.Add($"Series {shokoId.Value} not found for RatingKey {item.RatingKey}");
-                        continue;
+                        if (string.IsNullOrWhiteSpace(item.Guid))
+                            continue;
+                        var shokoId = PlexHelper.ExtractShokoSeriesIdFromGuid(item.Guid);
+                        if (!shokoId.HasValue || (allowedSet != null && !allowedSet.Contains(shokoId.Value)))
+                            continue;
+
+                        pS++;
+                        var series = metadataService.GetShokoSeriesByID(shokoId.Value);
+                        if (series == null)
+                        {
+                            errs++;
+                            errorsList.Add($"Series {shokoId.Value} not found for RatingKey {item.RatingKey}");
+                            continue;
+                        }
+
+                        // Resolve the critic rating for a series based on user configuration
+                        double? rating = Settings.CriticRatingMode switch
+                        {
+                            CriticRatingMode.TMDB => series.TmdbShows?.FirstOrDefault()?.Rating > 0 ? series.TmdbShows.First().Rating : null,
+                            CriticRatingMode.AniDB => series.Rating > 0 ? series.Rating : null,
+                            _ => null,
+                        };
+
+                        if (!NeedsRatingUpdate(item.Rating, rating))
+                        {
+                            s_logger.Trace(
+                                "CriticRatingService: Skipped series -> {0} [{1}] (RatingKey: {2}) because rating {3} matches Plex",
+                                series.GetDisplayTitle(),
+                                series.ID,
+                                item.RatingKey,
+                                item.Rating?.ToString("F2") ?? "n/a"
+                            );
+                            continue;
+                        }
+
+                        if (await ApplyRatingAsync(item.RatingKey!, rating, target, cancellationToken))
+                        {
+                            uS++;
+                            appliedChanges.Add(new RatingChange($"{series.GetDisplayTitle() ?? "Unknown"} [{series.ID}]", "Series", item.RatingKey!, item.Rating, rating));
+                            s_logger.Info("CriticRatingService: Updated series -> {0} [{1}] to {2}", series.GetDisplayTitle(), series.ID, rating?.ToString("F2") ?? "n/a");
+                        }
+                        else
+                        {
+                            errs++;
+                            errorsList.Add($"CriticRatingService: Failed update for series -> {series.GetDisplayTitle()} [{shokoId.Value}]");
+                        }
                     }
 
-                    // Resolve the critic rating for a series based on user configuration
-                    double? rating = Settings.CriticRatingMode switch
+                    // Process Episodes
+                    var episodes = await plexClient.GetSectionEpisodesAsync(target, null, cancellationToken) ?? [];
+                    foreach (var item in episodes)
                     {
-                        CriticRatingMode.TMDB => series.TmdbShows?.FirstOrDefault()?.Rating > 0 ? series.TmdbShows.First().Rating : null,
-                        CriticRatingMode.AniDB => series.Rating > 0 ? series.Rating : null,
-                        _ => null,
-                    };
+                        if (string.IsNullOrWhiteSpace(item.Guid))
+                            continue;
+                        var epId = PlexHelper.ExtractShokoEpisodeIdFromGuid(item.Guid);
+                        if (!epId.HasValue)
+                            continue;
 
-                    if (!NeedsRatingUpdate(item.Rating, rating))
-                    {
-                        s_logger.Trace(
-                            "CriticRatingService: Skipped series -> {0} [{1}] (RatingKey: {2}) because rating {3} matches Plex",
-                            series.GetDisplayTitle(),
-                            series.ID,
-                            item.RatingKey,
-                            item.Rating?.ToString("F2") ?? "n/a"
-                        );
-                        continue;
-                    }
+                        var episode = metadataService.GetShokoEpisodeByID(epId.Value);
+                        if (episode == null || (allowedSet != null && !allowedSet.Contains(episode.SeriesID)))
+                            continue;
 
-                    if (await ApplyRatingAsync(item.RatingKey!, rating, target, cancellationToken))
-                    {
-                        uS++;
-                        appliedChanges.Add(new RatingChange($"{series.GetDisplayTitle() ?? "Unknown"} [{series.ID}]", "Series", item.RatingKey!, item.Rating, rating));
-                        s_logger.Info("CriticRatingService: Updated series -> {0} [{1}] to {2}", series.GetDisplayTitle(), series.ID, rating?.ToString("F2") ?? "n/a");
-                    }
-                    else
-                    {
-                        errs++;
-                        errorsList.Add($"CriticRatingService: Failed update for series -> {series.GetDisplayTitle()} [{shokoId.Value}]");
+                        pE++;
+                        // Resolve the critic rating for an episode based on user configuration
+                        double? rating = Settings.CriticRatingMode switch
+                        {
+                            CriticRatingMode.TMDB => episode.TmdbEpisodes?.FirstOrDefault()?.Rating > 0 ? episode.TmdbEpisodes.First().Rating : null,
+                            CriticRatingMode.AniDB => episode.Rating > 0 ? episode.Rating : null,
+                            _ => null,
+                        };
+
+                        var prefId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series) : null;
+                        var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
+                        var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] - S{coords.Season:D2}E{coords.Episode:D2} (RatingKey: {item.RatingKey})";
+
+                        if (!NeedsRatingUpdate(item.Rating, rating))
+                        {
+                            s_logger.Trace("CriticRatingService: Skipped episode -> {0} because rating {1} matches Plex", epLogName, item.Rating?.ToString("F2") ?? "n/a");
+                            continue;
+                        }
+
+                        if (await ApplyRatingAsync(item.RatingKey!, rating, target, cancellationToken))
+                        {
+                            uE++;
+                            appliedChanges.Add(
+                                new RatingChange($"{episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] - S{coords.Season:D2}E{coords.Episode:D2}", "Episode", item.RatingKey!, item.Rating, rating)
+                            );
+                            s_logger.Trace("CriticRatingService: Updated episode -> {0} to {1}", epLogName, rating?.ToString("F2") ?? "n/a");
+                        }
+                        else
+                        {
+                            errs++;
+                            errorsList.Add($"CriticRatingService: Failed update for episode -> {epLogName}");
+                        }
                     }
                 }
-
-                // Process Episodes / Movies
-                bool isMovieTarget = target.LibraryType == PlexLibraryType.Movie;
-                string typeLabel = isMovieTarget ? "Movie" : "Episode";
-                string typeLower = isMovieTarget ? "movie" : "episode";
-                var items = isMovieTarget ? await plexClient.GetSectionMoviesAsync(target, null, cancellationToken) ?? [] : await plexClient.GetSectionEpisodesAsync(target, null, cancellationToken) ?? [];
-
-                foreach (var item in items)
+                else
                 {
-                    if (string.IsNullOrWhiteSpace(item.Guid))
-                        continue;
-                    var epId = PlexHelper.ExtractShokoEpisodeIdFromGuid(item.Guid);
-                    if (!epId.HasValue)
-                        continue;
-
-                    var episode = metadataService.GetShokoEpisodeByID(epId.Value);
-                    if (episode == null || (allowedSet != null && !allowedSet.Contains(episode.SeriesID)))
-                        continue;
-
-                    pE++;
-                    // Resolve the critic rating for an episode or movie based on user configuration
-                    double? rating = Settings.CriticRatingMode switch
+                    // Process Movies
+                    var movies = await plexClient.GetSectionMoviesAsync(target, null, cancellationToken) ?? [];
+                    foreach (var item in movies)
                     {
-                        CriticRatingMode.TMDB => isMovieTarget
-                            ? (episode.TmdbMovies?.FirstOrDefault() ?? episode.Series?.TmdbMovies?.FirstOrDefault())?.Rating > 0
+                        if (string.IsNullOrWhiteSpace(item.Guid))
+                            continue;
+                        var epId = PlexHelper.ExtractShokoEpisodeIdFromGuid(item.Guid);
+                        if (!epId.HasValue)
+                            continue;
+
+                        var episode = metadataService.GetShokoEpisodeByID(epId.Value);
+                        if (episode == null || (allowedSet != null && !allowedSet.Contains(episode.SeriesID)))
+                            continue;
+
+                        pE++;
+                        // Resolve the critic rating for a movie based on user configuration
+                        double? rating = Settings.CriticRatingMode switch
+                        {
+                            CriticRatingMode.TMDB => (episode.TmdbMovies?.FirstOrDefault() ?? episode.Series?.TmdbMovies?.FirstOrDefault())?.Rating > 0
                                 ? (episode.TmdbMovies?.FirstOrDefault() ?? episode.Series?.TmdbMovies?.FirstOrDefault())!.Rating
-                                : (episode.TmdbEpisodes?.FirstOrDefault()?.Rating > 0 ? episode.TmdbEpisodes.First().Rating : null)
-                            : (episode.TmdbEpisodes?.FirstOrDefault()?.Rating > 0 ? episode.TmdbEpisodes.First().Rating : null),
-                        CriticRatingMode.AniDB => episode.Rating > 0 ? episode.Rating : (isMovieTarget && episode.Series?.Rating > 0 ? episode.Series.Rating : null),
-                        _ => null,
-                    };
+                                : (episode.TmdbEpisodes?.FirstOrDefault()?.Rating > 0 ? episode.TmdbEpisodes.First().Rating : null),
+                            CriticRatingMode.AniDB => episode.Rating > 0 ? episode.Rating
+                            : episode.Series?.Rating > 0 ? episode.Series.Rating
+                            : null,
+                            _ => null,
+                        };
 
-                    var prefId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series) : null;
-                    var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
-                    var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] - S{coords.Season:D2}E{coords.Episode:D2} (RatingKey: {item.RatingKey})";
+                        var prefId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series) : null;
+                        var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
+                        var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] - S{coords.Season:D2}E{coords.Episode:D2} (RatingKey: {item.RatingKey})";
 
-                    if (!NeedsRatingUpdate(item.Rating, rating))
-                    {
-                        s_logger.Trace("CriticRatingService: Skipped {0} -> {1} because rating {2} matches Plex", typeLower, epLogName, item.Rating?.ToString("F2") ?? "n/a");
-                        continue;
-                    }
+                        if (!NeedsRatingUpdate(item.Rating, rating))
+                        {
+                            s_logger.Trace("CriticRatingService: Skipped movie -> {0} because rating {1} matches Plex", epLogName, item.Rating?.ToString("F2") ?? "n/a");
+                            continue;
+                        }
 
-                    if (await ApplyRatingAsync(item.RatingKey!, rating, target, cancellationToken))
-                    {
-                        uE++;
-                        appliedChanges.Add(
-                            new RatingChange($"{episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] - S{coords.Season:D2}E{coords.Episode:D2}", typeLabel, item.RatingKey!, item.Rating, rating)
-                        );
-                        s_logger.Trace("CriticRatingService: Updated {0} -> {1} to {2}", typeLower, epLogName, rating?.ToString("F2") ?? "n/a");
-                    }
-                    else
-                    {
-                        errs++;
-                        errorsList.Add($"CriticRatingService: Failed update for {typeLower} -> {epLogName}");
+                        if (await ApplyRatingAsync(item.RatingKey!, rating, target, cancellationToken))
+                        {
+                            uE++;
+                            appliedChanges.Add(
+                                new RatingChange($"{episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] - S{coords.Season:D2}E{coords.Episode:D2}", "Movie", item.RatingKey!, item.Rating, rating)
+                            );
+                            s_logger.Trace("CriticRatingService: Updated movie -> {0} to {1}", epLogName, rating?.ToString("F2") ?? "n/a");
+                        }
+                        else
+                        {
+                            errs++;
+                            errorsList.Add($"CriticRatingService: Failed update for movie -> {epLogName}");
+                        }
                     }
                 }
             }

@@ -204,7 +204,11 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
                     cts.CancelAfter(TimeSpan.FromSeconds(5));
 
                     var libs = await GetPlexLibrariesAsync(token, cid, uri, cts.Token).ConfigureAwait(false);
-                    var matched = libs.Where(l => string.Equals(l.Agent, ShokoRelayConstants.AgentScheme, StringComparison.OrdinalIgnoreCase)).ToList();
+                    var matched = libs.Where(l =>
+                            string.Equals(l.Agent, ShokoRelayConstants.AgentScheme, StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(l.Agent, ShokoRelayConstants.MovieAgentScheme, StringComparison.OrdinalIgnoreCase)
+                        )
+                        .ToList();
                     foreach (var l in matched)
                         list.Add((l, srv with { PreferredUri = uri }));
 

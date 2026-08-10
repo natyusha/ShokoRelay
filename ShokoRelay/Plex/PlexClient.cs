@@ -1,3 +1,5 @@
+using Shoko.Abstractions.Metadata.Enums;
+
 namespace ShokoRelay.Plex;
 
 /// <summary>HTTP client wrapper that communicates with one or more Plex servers.</summary>
@@ -75,19 +77,32 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         if (string.IsNullOrWhiteSpace(vfsRootName))
             vfsRootName = ShokoRelayConstants.FolderVfsDefault;
 
-        string searchStr = $"/{vfsRootName}/";
-        int vfsIdx = normMapped.IndexOf(searchStr, StringComparison.OrdinalIgnoreCase);
-        int tokenLength = vfsRootName.Length + 2;
+        string movieRootName = configProvider.GetSettings().Advanced.MovieVfsRootPath;
+        if (string.IsNullOrWhiteSpace(movieRootName))
+            movieRootName = ShokoRelayConstants.FolderMoviesDefault;
 
-        // Fallback for custom relative paths that might start directly with the VFS root name
-        if (vfsIdx < 0 && normMapped.StartsWith(vfsRootName + "/", StringComparison.OrdinalIgnoreCase))
+        string? activeRootName = null;
+        int vfsIdx = normMapped.IndexOf($"/{movieRootName}/", StringComparison.OrdinalIgnoreCase);
+        if (vfsIdx >= 0 || normMapped.StartsWith(movieRootName + "/", StringComparison.OrdinalIgnoreCase))
         {
-            vfsIdx = 0;
-            tokenLength = vfsRootName.Length + 1;
+            activeRootName = movieRootName;
+            if (vfsIdx < 0)
+                vfsIdx = 0;
+        }
+        else
+        {
+            vfsIdx = normMapped.IndexOf($"/{vfsRootName}/", StringComparison.OrdinalIgnoreCase);
+            if (vfsIdx >= 0 || normMapped.StartsWith(vfsRootName + "/", StringComparison.OrdinalIgnoreCase))
+            {
+                activeRootName = vfsRootName;
+                if (vfsIdx < 0)
+                    vfsIdx = 0;
+            }
         }
 
-        if (vfsIdx >= 0)
+        if (vfsIdx >= 0 && activeRootName != null)
         {
+            int tokenLength = vfsIdx == 0 ? activeRootName.Length + 1 : activeRootName.Length + 2;
             string relativeSuffix = normMapped[(vfsIdx + tokenLength)..];
 
             // Extract Shoko's parent directory name preceding the VFS root
@@ -107,9 +122,9 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
                 foreach (var loc in target.Locations)
                 {
                     string normLoc = TextHelper.NormalizePathForPlex(loc);
-                    string locSuffix = $"/{vfsRootName}";
+                    string locSuffix = $"/{activeRootName}";
 
-                    if (normLoc.EndsWith(locSuffix, StringComparison.OrdinalIgnoreCase) || string.Equals(normLoc, vfsRootName, StringComparison.OrdinalIgnoreCase))
+                    if (normLoc.EndsWith(locSuffix, StringComparison.OrdinalIgnoreCase) || string.Equals(normLoc, activeRootName, StringComparison.OrdinalIgnoreCase))
                     {
                         // Detect Plex's native directory separator and format the path to match the target OS
                         char plexSep = loc.Contains('\\') ? '\\' : '/';
@@ -209,7 +224,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         return resp.IsSuccessStatusCode;
     }
 
-    /// <summary>Evaluates and safely empties the trash for a given Plex library section based on a percentage threshold of episodes.</summary>
+    /// <summary>Evaluates and safely empties the trash for a given Plex library section based on a percentage threshold of items.</summary>
     /// <param name="target">The Plex library target.</param>
     /// <param name="threshold">The maximum allowed percentage of trashed items (1-100).</param>
     /// <param name="dryRun">If true, prevents the actual empty trash command from being sent.</param>
@@ -222,8 +237,10 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
 
         try
         {
-            // Get Total Library Size at the episode level
-            using var totalReq = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?type={PlexConstants.TypeEpisode}&X-Plex-Container-Start=0&X-Plex-Container-Size=0", target.ServerUrl);
+            int typeId = target.LibraryType == PlexLibraryType.Movie ? PlexConstants.TypeMovie : PlexConstants.TypeEpisode;
+
+            // Get Total Library Size at the episode/movie level
+            using var totalReq = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?type={typeId}&X-Plex-Container-Start=0&X-Plex-Container-Size=0", target.ServerUrl);
             using var totalResp = await HttpClient.SendAsync(totalReq, ct).ConfigureAwait(false);
             var totalContainer = await PlexApi.ReadContainerAsync(totalResp, ct).ConfigureAwait(false);
             int totalSize = totalContainer?.TotalSize ?? totalContainer?.Size ?? 0;
@@ -237,11 +254,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
             int trashedSize = 0;
             while (true)
             {
-                using var trashReq = CreateRequest(
-                    HttpMethod.Get,
-                    $"/library/sections/{target.SectionId}/all?type={PlexConstants.TypeEpisode}&trash=1&X-Plex-Container-Start={start}&X-Plex-Container-Size=200",
-                    target.ServerUrl
-                );
+                using var trashReq = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?type={typeId}&trash=1&X-Plex-Container-Start={start}&X-Plex-Container-Size=200", target.ServerUrl);
                 using var trashResp = await HttpClient.SendAsync(trashReq, ct).ConfigureAwait(false);
                 var trashContainer = await PlexApi.ReadContainerAsync(trashResp, ct).ConfigureAwait(false);
 
@@ -252,7 +265,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
 
                 foreach (var item in trashContainer.Metadata)
                 {
-                    string displayName = $"[{item.GrandparentTitle}] S{item.ParentIndex ?? 0:D2}E{item.Index ?? 0:D2} - {item.Title}";
+                    string displayName = target.LibraryType == PlexLibraryType.Movie ? item.Title ?? "Unknown" : $"[{item.GrandparentTitle}] S{item.ParentIndex ?? 0:D2}E{item.Index ?? 0:D2} - {item.Title}";
                     trashedItems.Add(displayName);
                 }
 
@@ -339,27 +352,53 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
 
     #region Metadata Queries
 
-    /// <summary>Find the Plex ratingKey for a Shoko series within the given Plex section using its metadata GUID.</summary>
+    /// <summary>Finds the Plex rating keys for a Shoko series within the given Plex section using its metadata GUID.</summary>
     /// <param name="shokoSeriesId">Shoko series ID.</param>
     /// <param name="target">Target server/section.</param>
+    /// <param name="metadataService">Metadata service used to resolve episodes for movies.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The numeric rating key if found, otherwise null.</returns>
-    public async Task<int?> FindRatingKeyForShokoSeriesInSectionAsync(int shokoSeriesId, PlexLibraryTarget target, CancellationToken cancellationToken = default)
+    /// <returns>A list of numeric rating keys if found, otherwise empty.</returns>
+    public async Task<List<int>> FindRatingKeysForShokoSeriesInSectionAsync(int shokoSeriesId, PlexLibraryTarget target, IMetadataService metadataService, CancellationToken cancellationToken = default)
     {
         if (!IsEnabled || shokoSeriesId <= 0 || target == null)
-            return null;
+            return [];
         try
         {
-            string guid = $"{ShokoRelayConstants.AgentScheme}://show/{shokoSeriesId}";
-            using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?guid={Uri.EscapeDataString(guid)}&X-Plex-Container-Start=0&X-Plex-Container-Size=1", target.ServerUrl);
-            using var resp = await HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
-            var item = (await PlexApi.ReadContainerAsync(resp, cancellationToken).ConfigureAwait(false))?.Metadata?.FirstOrDefault();
-            return int.TryParse(item?.RatingKey, out int key) ? key : null;
+            if (target.LibraryType == PlexLibraryType.Movie)
+            {
+                var series = metadataService.GetShokoSeriesByID(shokoSeriesId);
+                if (series == null)
+                    return [];
+
+                var keys = new List<int>();
+                foreach (var ep in series.Episodes.Where(e => e.Type == EpisodeType.Episode))
+                {
+                    string guid = $"{ShokoRelayConstants.MovieAgentScheme}://movie/{PlexConstants.MoviePrefix}{ep.ID}";
+                    using var req = CreateRequest(
+                        HttpMethod.Get,
+                        $"/library/sections/{target.SectionId}/all?guid={Uri.EscapeDataString(guid)}&X-Plex-Container-Start=0&X-Plex-Container-Size=1",
+                        target.ServerUrl
+                    );
+                    using var resp = await HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+                    var item = (await PlexApi.ReadContainerAsync(resp, cancellationToken).ConfigureAwait(false))?.Metadata?.FirstOrDefault();
+                    if (int.TryParse(item?.RatingKey, out int key))
+                        keys.Add(key);
+                }
+                return keys;
+            }
+            else
+            {
+                string guid = $"{ShokoRelayConstants.AgentScheme}://show/{shokoSeriesId}";
+                using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?guid={Uri.EscapeDataString(guid)}&X-Plex-Container-Start=0&X-Plex-Container-Size=1", target.ServerUrl);
+                using var resp = await HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+                var item = (await PlexApi.ReadContainerAsync(resp, cancellationToken).ConfigureAwait(false))?.Metadata?.FirstOrDefault();
+                return int.TryParse(item?.RatingKey, out int key) ? [key] : [];
+            }
         }
         catch (Exception ex)
         {
             s_logger.Trace(ex, "PlexClient: Failed to find rating key for Shoko series {0} in section {1}", shokoSeriesId, target.SectionId);
-            return null;
+            return [];
         }
     }
 

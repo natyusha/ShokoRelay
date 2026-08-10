@@ -241,7 +241,7 @@ public static class LogHelper
         {
             ["Mode"] = dryRun ? "Dry Run" : "Live",
             ["Shoko Missing Files"] = removed?.Count ?? 0,
-            ["Plex Trash Episodes"] = plexRemoved?.Count ?? 0,
+            ["Plex Trash Items"] = plexRemoved?.Count ?? 0,
         };
 
         var items = new List<string>();

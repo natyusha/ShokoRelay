@@ -242,7 +242,7 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                             item.ParentIndex ?? 0,
                             item.Index ?? 0,
                             item.RatingKey,
-                            ep.GetPlexGuid(),
+                            item.Guid ?? (target.LibraryType == PlexLibraryType.Movie ? ep.GetPlexMovieGuid() : ep.GetPlexGuid()),
                             null,
                             watchedAt,
                             wouldMark || wouldUpdateProgress,

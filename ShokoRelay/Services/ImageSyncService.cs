@@ -159,9 +159,12 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
             ct.ThrowIfCancellationRequested();
             try
             {
-                var episodes = await plexClient.GetSectionEpisodesAsync(target, null, ct).ConfigureAwait(false) ?? [];
-                var movies = target.LibraryType == PlexLibraryType.Movie ? await plexClient.GetSectionMoviesAsync(target, null, ct).ConfigureAwait(false) ?? [] : [];
-                foreach (var item in episodes.Concat(movies))
+                var items =
+                    target.LibraryType == PlexLibraryType.Movie
+                        ? await plexClient.GetSectionMoviesAsync(target, null, ct).ConfigureAwait(false) ?? []
+                        : await plexClient.GetSectionEpisodesAsync(target, null, ct).ConfigureAwait(false) ?? [];
+
+                foreach (var item in items)
                 {
                     ct.ThrowIfCancellationRequested();
                     if (string.IsNullOrWhiteSpace(item.Guid) || string.IsNullOrWhiteSpace(item.Thumb))

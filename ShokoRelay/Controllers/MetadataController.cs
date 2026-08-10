@@ -267,6 +267,9 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     [HttpGet("metadata/{ratingKey}/children")]
     public IActionResult GetChildren(string ratingKey)
     {
+        if (PlexHelper.IsMovieKey(ratingKey))
+            return EmptyMatch();
+
         var ctx = mapper.GetSeriesContext(ratingKey);
         if (ctx == null)
             return NotFound();
@@ -286,6 +289,9 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     [HttpGet("metadata/{ratingKey}/grandchildren")]
     public IActionResult GetGrandchildren(string ratingKey)
     {
+        if (PlexHelper.IsMovieKey(ratingKey))
+            return EmptyMatch();
+
         var ctx = mapper.GetSeriesContext(ratingKey);
         if (ctx == null)
             return NotFound();
