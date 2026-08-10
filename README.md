@@ -8,7 +8,7 @@
 
 <!-- prettier-ignore-end -->
 
-This is a plugin for [Shoko](https://shokoanime.com/) that acts as a [Custom Metadata Provider](https://forums.plex.tv/t/announcement-custom-metadata-providers/934384) for Plex. It is a successor to the [ShokoRelay.bundle](https://github.com/natyusha/ShokoRelay.bundle) legacy agent/scanner and mirrors all of its functionality (including the automation scripts). Scanning is much faster and there are many new features included as well. Just like the old bundle this is intended to work with series of all types within a single "TV Shows" library. All you need to get started is a populated [Shoko Server](https://shokoanime.com/downloads/shoko-server) (using a daily build) and [Plex Media Server](https://www.plex.tv/media-server-downloads/).
+This is a plugin for [Shoko](https://shokoanime.com/) that acts as a [Custom Metadata Provider](https://forums.plex.tv/t/announcement-custom-metadata-providers/934384) for Plex. It is a successor to the [ShokoRelay.bundle](https://github.com/natyusha/ShokoRelay.bundle) legacy agent/scanner and mirrors all of its functionality (including the automation scripts). Scanning is much faster and there are many new features included as well. Just like the old bundle this is intended to work with series of all types within a single "TV Shows" library. All you need to get started is a populated [Shoko Server](https://shokoanime.com/downloads/shoko-server) (_using a daily build_) and [Plex Media Server](https://www.plex.tv/media-server-downloads/).
 
 Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File System) to ensure that varied folder structures are supported. This means that your anime can be organised with whatever file or folder structure you want. There is one caveat though. A folder cannot contain more than one AniDB series at a time if you want it to correctly support [local media assets](https://support.plex.tv/articles/200220717-local-media-assets-tv-shows/) (like posters or theme songs). The VFS will be automatically updated when a file move or rename is detected by Shoko.
 
@@ -355,13 +355,27 @@ In cases where AniDB uses ambiguous episode titles the series title will be used
 
 ### Separate Movie Libraries
 
-If you prefer separate movie libraries (which is not recommended), Shoko Relay provides an opt-in feature to allow this. By enabling `Movie Generation Mode` under `Advanced Settings`, the plugin will generate a dedicated VFS root for movies (default `!ShokoRelayMovieVFS`) alongside the standard unified VFS. To use this feature simply create a Plex "Movies" library and select `Plex Movie` as the Scanner, `Shoko Relay` as the Agent, and point the library path directly to a `!ShokoRelayMovieVFS` folder.
+If you prefer separate movie libraries (which is not recommended), Shoko Relay provides an opt-in feature to allow this. By enabling `Movie Generation Mode` under `Advanced Settings`, the plugin will generate a dedicated VFS root for movies (default `!ShokoRelayMovieVFS`) alongside the standard unified VFS.
 
-**Important Caveats**
+**Caveats**
 
-- Shoko groups that blend series and movies will be split across two entirely separate Plex libraries. This breaks the chronological viewing orders that Plex would usually provide for them
-- Plex Movie libraries do not support individual metadata for specials, so they will be relegated to generic "Local Extras" (e.g., `Featurettes/Special Name.mkv`) without descriptions or individual metadata
+- Shoko groups that blend series and movies will be split across two entirely separate Plex libraries, breaking the chronological viewing order that Plex would usually provide for them
 - For Shoko series entries containing multiple movies, symlinks for specials will be duplicated across each movie as there is no way to automatically determine which one it belongs to
+- Plex Movie libraries do not support individual metadata for specials, so they will be relegated to generic "Local Extras" without descriptions or any other metadata
+
+<details>
+<summary><b>Usage</b></summary><br>
+
+- Navigate to `Settings > Metadata Agents`
+- Click `Add Provider` in the Metadata Providers header and supply the following URL:
+  - `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/movie`
+- Click `Add Agent` in the Metadata Agents header, name it `Shoko Relay Movie` and select it as the primary provider
+- Optional: Under `additional providers` select `Plex NFO Movie` then click the `+`
+- Under `additional providers` select `Plex Local Media` then click the `+` and `Save`
+- Create a Plex "Movies" library and point it to a `!ShokoRelayMovieVFS` folder
+- Be sure to set the Scanner to `Plex Movie` and the agent to `Shoko Relay Movie`
+
+</details>
 
 ### TMDB Matching
 

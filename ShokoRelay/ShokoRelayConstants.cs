@@ -20,8 +20,11 @@ public static class ShokoRelayConstants
     /// <summary>Unique plugin ID used for configuration storage.</summary>
     public const string PluginId = "2b0f5a7e-3d2b-4f3d-9e6b-7f0a6b2d8c9a";
 
-    /// <summary>Plex agent URI scheme identifier.</summary>
+    /// <summary>Plex TV agent URI scheme identifier.</summary>
     public const string AgentScheme = "tv.plex.agents.custom.shoko";
+
+    /// <summary>Plex Movie agent URI scheme identifier.</summary>
+    public const string MovieAgentScheme = "tv.plex.agents.custom.shoko.movie";
 
     /// <summary>Base HTTP path for plugin endpoints.</summary>
     public const string BasePath = "/api/plugin/ShokoRelay";

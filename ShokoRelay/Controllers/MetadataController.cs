@@ -15,19 +15,41 @@ namespace ShokoRelay.Controllers;
 [ApiVersion(ShokoRelayConstants.ApiVersion)]
 [Route(ShokoRelayConstants.BasePath)]
 [Route(ShokoRelayConstants.BasePath + "/options/{overrides}")]
+[Route(ShokoRelayConstants.BasePath + "/movie")]
+[Route(ShokoRelayConstants.BasePath + "/movie/options/{overrides}")]
 public class MetadataController(IMetadataService metadataService, PlexMetadata mapper, ConfigProvider configProvider, PlexClient plexLibrary, IVideoService videoService)
     : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
 {
     #region Provider Descriptor
 
-    /// <summary>Announces the media provider capabilities to Plex.</summary>
+    /// <summary>Announces the media provider capabilities to Plex based on the requested endpoint type (TV or Movie).</summary>
     /// <returns>A media provider descriptor object.</returns>
     [HttpGet]
     public IActionResult GetMediaProvider()
     {
-        var supportedTypes = new[] { PlexConstants.TypeMovie, PlexConstants.TypeShow, PlexConstants.TypeSeason, PlexConstants.TypeEpisode };
+        bool isMovieEndpoint = Request.Path.Value?.Contains("/movie", StringComparison.OrdinalIgnoreCase) == true || string.Equals(Request.Query["type"], "1");
+
+        if (isMovieEndpoint)
+        {
+            return Ok(
+                new
+                {
+                    MediaProvider = new
+                    {
+                        identifier = ShokoRelayConstants.MovieAgentScheme,
+                        title = $"{ShokoRelayConstants.Name} Movie",
+                        version = ShokoRelayConstants.Version,
+                        Types = new[] { new { type = PlexConstants.TypeMovie, Scheme = new[] { new { scheme = ShokoRelayConstants.MovieAgentScheme } } } },
+                        Feature = new[] { new { type = "metadata", key = "/metadata" }, new { type = "match", key = "/matches" }, new { type = "collection", key = "/collections" } },
+                    },
+                }
+            );
+        }
+
+        var supportedTypes = new[] { PlexConstants.TypeShow, PlexConstants.TypeSeason, PlexConstants.TypeEpisode };
         var typePayload = supportedTypes.Select(t => new { type = t, Scheme = new[] { new { scheme = ShokoRelayConstants.AgentScheme } } });
         var featurePayload = new[] { new { type = "metadata", key = "/metadata" }, new { type = "match", key = "/matches" }, new { type = "collection", key = "/collections" } };
+
         return Ok(
             new
             {
@@ -78,7 +100,8 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             || string.Equals(Request.Query["type"], "1", StringComparison.OrdinalIgnoreCase)
             || string.Equals(Request.Query["type"], "movie", StringComparison.OrdinalIgnoreCase)
             || string.Equals(bodyType, "1", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(bodyType, "movie", StringComparison.OrdinalIgnoreCase);
+            || string.Equals(bodyType, "movie", StringComparison.OrdinalIgnoreCase)
+            || Request.Path.Value?.Contains("/movie", StringComparison.OrdinalIgnoreCase) == true;
 
         IActionResult ReturnMovieMatch(IShokoEpisode ep)
         {
@@ -93,7 +116,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
                     MediaContainer = new
                     {
                         size = 1,
-                        identifier = ShokoRelayConstants.AgentScheme,
+                        identifier = ShokoRelayConstants.MovieAgentScheme,
                         Metadata = new[]
                         {
                             new
@@ -194,7 +217,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             if (ep == null || series == null)
                 return NotFound();
             var titles = TextHelper.ResolveFullSeriesTitles(series);
-            return WrapInContainer(mapper.MapMovie(ep, series, tmdbMovie, titles));
+            return WrapInContainer(mapper.MapMovie(ep, series, tmdbMovie, titles), ShokoRelayConstants.MovieAgentScheme);
         }
 
         var ctx = mapper.GetSeriesContext(ratingKey);
@@ -205,7 +228,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             {
                 var tmdbMovie = movieEp.TmdbMovies?.FirstOrDefault() ?? movieEp.Series.TmdbMovies?.FirstOrDefault();
                 var titles = TextHelper.ResolveFullSeriesTitles(movieEp.Series);
-                return WrapInContainer(mapper.MapMovie(movieEp, movieEp.Series, tmdbMovie, titles));
+                return WrapInContainer(mapper.MapMovie(movieEp, movieEp.Series, tmdbMovie, titles), ShokoRelayConstants.MovieAgentScheme);
             }
             return NotFound();
         }
@@ -300,7 +323,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
                     {
                         offset = 0,
                         totalSize = images.Length,
-                        identifier = ShokoRelayConstants.AgentScheme,
+                        identifier = ShokoRelayConstants.MovieAgentScheme,
                         size = images.Length,
                         Image = images,
                     },

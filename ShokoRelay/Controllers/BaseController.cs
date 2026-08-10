@@ -163,9 +163,12 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
 
     /// <summary>Wrap a single metadata object in the standard Plex MediaContainer envelope.</summary>
     /// <param name="metadata">The metadata item to embed.</param>
+    /// <param name="identifier">Optional provider identifier override.</param>
     /// <returns>Plex-compatible JSON response.</returns>
-    protected IActionResult WrapInContainer(object metadata) =>
-        Ok(
+    protected IActionResult WrapInContainer(object metadata, string? identifier = null)
+    {
+        string defaultIdentifier = Request.Path.Value?.Contains("/movie", StringComparison.OrdinalIgnoreCase) == true ? ShokoRelayConstants.MovieAgentScheme : ShokoRelayConstants.AgentScheme;
+        return Ok(
             new
             {
                 MediaContainer = new
@@ -173,16 +176,18 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
                     size = 1,
                     totalSize = 1,
                     offset = 0,
-                    identifier = ShokoRelayConstants.AgentScheme,
+                    identifier = identifier ?? defaultIdentifier,
                     Metadata = new[] { metadata },
                 },
             }
         );
+    }
 
     /// <summary>Wrap a list of metadata objects in a paged MediaContainer, honouring Plex pagination headers or query parameters.</summary>
     /// <param name="metadataList">Collection of metadata items to page.</param>
+    /// <param name="identifier">Optional provider identifier override.</param>
     /// <returns>Paged Plex-compatible JSON response.</returns>
-    protected IActionResult WrapInPagedContainer(IEnumerable<object> metadataList)
+    protected IActionResult WrapInPagedContainer(IEnumerable<object> metadataList, string? identifier = null)
     {
         int start =
             int.TryParse(Request.Headers["X-Plex-Container-Start"], out var s) ? s
@@ -195,6 +200,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
 
         var allItems = metadataList.ToList();
         var pagedData = allItems.Skip(start).Take(size).ToArray();
+        string defaultIdentifier = Request.Path.Value?.Contains("/movie", StringComparison.OrdinalIgnoreCase) == true ? ShokoRelayConstants.MovieAgentScheme : ShokoRelayConstants.AgentScheme;
 
         return Ok(
             new
@@ -203,7 +209,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
                 {
                     offset = start,
                     totalSize = allItems.Count,
-                    identifier = ShokoRelayConstants.AgentScheme,
+                    identifier = identifier ?? defaultIdentifier,
                     size = pagedData.Length,
                     Metadata = pagedData,
                 },

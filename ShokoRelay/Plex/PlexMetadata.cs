@@ -438,13 +438,14 @@ public class PlexMetadata(IMetadataService metadataService)
     /// <param name="series">The Shoko series metadata.</param>
     /// <param name="tmdbMovie">The optional TMDB movie metadata override.</param>
     /// <returns>An array of objects containing external IDs.</returns>
-    private object[] BuildXrefGuidArray(ISeries series, ITmdbMovie? tmdbMovie = null) =>
-        tmdbMovie != null ? CreateXrefGuids($"tmdb://{tmdbMovie.ID}", !string.IsNullOrWhiteSpace(tmdbMovie.ImdbMovieID) && tmdbMovie.ImdbMovieID != "0" ? $"imdb://{tmdbMovie.ImdbMovieID}" : null)
-        : series is IShokoSeries ss && ss.TmdbMovies?.FirstOrDefault() is { } tm
-            ? CreateXrefGuids($"tmdb://{tm.ID}", !string.IsNullOrWhiteSpace(tm.ImdbMovieID) && tm.ImdbMovieID != "0" ? $"imdb://{tm.ImdbMovieID}" : null)
-        : series is IShokoSeries ss2 && ss2.TmdbShows?.FirstOrDefault() is { } ts ? CreateXrefGuids($"tmdb://{ts.ID}", ts.TvdbShowID > 0 ? $"tvdb://{ts.TvdbShowID}" : null)
-        : series is ITmdbShow s ? CreateXrefGuids(s.ID > 0 ? $"tmdb://{s.ID}" : null, s.TvdbShowID > 0 ? $"tvdb://{s.TvdbShowID}" : null)
-        : [];
+    private object[] BuildXrefGuidArray(ISeries series, ITmdbMovie? tmdbMovie = null)
+    {
+        var tm = tmdbMovie ?? (series as IShokoSeries)?.TmdbMovies?.FirstOrDefault();
+        return tm != null ? CreateXrefGuids($"tmdb://{tm.ID}", !string.IsNullOrWhiteSpace(tm.ImdbMovieID) && tm.ImdbMovieID != "0" ? $"imdb://{tm.ImdbMovieID}" : null)
+            : series is IShokoSeries ss && ss.TmdbShows?.FirstOrDefault() is { } ts ? CreateXrefGuids($"tmdb://{ts.ID}", ts.TvdbShowID > 0 ? $"tvdb://{ts.TvdbShowID}" : null)
+            : series is ITmdbShow s ? CreateXrefGuids(s.ID > 0 ? $"tmdb://{s.ID}" : null, s.TvdbShowID > 0 ? $"tvdb://{s.TvdbShowID}" : null)
+            : [];
+    }
 
     /// <summary>Builds an array of external cross-reference GUIDs (TMDB) for a season.</summary>
     /// <param name="tmdbSeason">The TMDB season metadata object.</param>

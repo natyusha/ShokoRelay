@@ -14,11 +14,8 @@ public static class PlexHelper
     /// <summary>Regex which extracts the ID from a Show GUID.</summary>
     private static readonly Regex s_showIdRegex = new(@"/show/(\d+)", RegexOptions.Compiled);
 
-    /// <summary>Regex which extracts the ID from an Episode GUID.</summary>
-    private static readonly Regex s_episodeIdRegex = new(@"/episode/e(\d+)", RegexOptions.Compiled);
-
-    /// <summary>Regex which extracts the ID from a Movie GUID.</summary>
-    private static readonly Regex s_movieIdRegex = new(@"/movie/m(\d+)", RegexOptions.Compiled);
+    /// <summary>Regex which extracts the ID from an Episode or Movie GUID.</summary>
+    private static readonly Regex s_episodeIdRegex = new(@"/(?:episode/e|movie/m)(\d+)", RegexOptions.Compiled);
 
     /// <summary>Parse a Plex GUID string and return the embedded Shoko series ID.</summary>
     /// <param name="guid">Plex GUID.</param>
@@ -28,7 +25,7 @@ public static class PlexHelper
     /// <summary>Parse Shoko episode ID from GUID.</summary>
     /// <param name="guid">Plex GUID.</param>
     /// <returns>Extracted ID or null.</returns>
-    public static int? ExtractShokoEpisodeIdFromGuid(string? guid) => ExtractIdFromGuid(guid, s_episodeIdRegex) ?? ExtractIdFromGuid(guid, s_movieIdRegex);
+    public static int? ExtractShokoEpisodeIdFromGuid(string? guid) => ExtractIdFromGuid(guid, s_episodeIdRegex);
 
     private static int? ExtractIdFromGuid(string? guid, Regex regex)
     {
@@ -67,23 +64,16 @@ public static class PlexHelper
     {
         if (string.IsNullOrWhiteSpace(ratingKey))
             return 0;
-        if (IsEpisodeKey(ratingKey))
+        if (IsEpisodeKey(ratingKey) || IsMovieKey(ratingKey))
         {
-            // Shoko Episode ID (e{ID} or e{ID}p{Part}) // AniDB Episode Alias (ae{ID} or ae{ID}p{Part})
+            bool isMovie = IsMovieKey(ratingKey);
             bool isAniDb = ratingKey.StartsWith(PlexConstants.AniDbPrefix, StringComparison.OrdinalIgnoreCase);
-            var epIdPart = ratingKey[(isAniDb ? PlexConstants.AniDbPrefix.Length + PlexConstants.EpisodePrefix.Length : PlexConstants.EpisodePrefix.Length)..];
+            int prefixLen = isMovie ? PlexConstants.MoviePrefix.Length : (isAniDb ? PlexConstants.AniDbPrefix.Length + PlexConstants.EpisodePrefix.Length : PlexConstants.EpisodePrefix.Length);
+            var epIdPart = ratingKey[prefixLen..];
             int partIdx = epIdPart.IndexOf(PlexConstants.PartPrefix, StringComparison.OrdinalIgnoreCase);
             if (partIdx >= 0)
                 epIdPart = epIdPart[..partIdx];
             return int.TryParse(epIdPart, out var id) ? (isAniDb ? metadataService.GetShokoEpisodeByAnidbID(id) : metadataService.GetShokoEpisodeByID(id))?.Series?.ID ?? 0 : 0;
-        }
-        if (IsMovieKey(ratingKey))
-        {
-            var epIdPart = ratingKey[PlexConstants.MoviePrefix.Length..];
-            int partIdx = epIdPart.IndexOf(PlexConstants.PartPrefix, StringComparison.OrdinalIgnoreCase);
-            if (partIdx >= 0)
-                epIdPart = epIdPart[..partIdx];
-            return int.TryParse(epIdPart, out var id) ? metadataService.GetShokoEpisodeByID(id)?.SeriesID ?? 0 : 0;
         }
         // Isolate the show component (supports {ID}, a{AniDB}, {ID}s{Season}, or a{AniDB}s{Season})
         int seasonIdx = ratingKey.IndexOf(PlexConstants.SeasonPrefix, StringComparison.OrdinalIgnoreCase);
