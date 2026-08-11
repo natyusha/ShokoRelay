@@ -72,13 +72,21 @@ public class PlexMetadata(IMetadataService metadataService)
     /// <remarks>Count how many distinct Primary IDs exist in this group. This ensures that VFS Overrides are respected if they merge the entirety of a Shoko Group into a single series in Plex.</remarks>
     /// <param name="series">The Shoko series metadata.</param>
     /// <returns>The group's preferred title, or null if no collection applies.</returns>
-    public string? GetCollectionName(ISeries series) =>
-        series is IShokoSeries { TopLevelGroupID: > 0 } ss
-        && metadataService.GetShokoGroupByID(ss.TopLevelGroupID) is { } group
-        && group.Series.Select(s => OverrideHelper.GetPrimary(s.ID, metadataService)).Distinct().Count() > 1
-        && group is IWithTitles { PreferredTitle.Value: { } title }
-            ? title
-            : null;
+    public string? GetCollectionName(ISeries series)
+    {
+        if (
+            series is IShokoSeries { TopLevelGroupID: > 0 } ss
+            && metadataService.GetShokoGroupByID(ss.TopLevelGroupID) is { } group
+            && group.Series.Select(s => OverrideHelper.GetPrimary(s.ID, metadataService)).Distinct().Count() > 1
+            && group is IWithTitles { PreferredTitle.Value: { } title }
+        )
+        {
+            return title;
+        }
+
+        // Standalone Multi-Part Movie fallback: If no group collection exists, but it's a multi-part movie, group the split parts into a collection named after the series display title
+        return series is IShokoSeries shokoSeries && MapHelper.IsMovie(shokoSeries) && shokoSeries.Episodes.Count(e => e.Type == EpisodeType.Episode) > 1 ? series.GetDisplayTitle() : null;
+    }
 
     #endregion
 

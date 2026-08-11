@@ -246,21 +246,20 @@ public static class PlexHelper
             string b = string.IsNullOrWhiteSpace(baseUrl) ? ServerBaseUrl : baseUrl?.TrimEnd('/') ?? string.Empty;
             return $"{b}{ShokoRelayConstants.BasePath}/collections/user/{series.TopLevelGroupID}?suffix={suffix}&t={ticks}";
         }
-        if (allowPrimarySeriesFallback && metadataService != null)
+        if (allowPrimarySeriesFallback)
         {
             var group = metadataService.GetShokoGroupByID(series.TopLevelGroupID);
-            var primarySeries = group?.MainSeries ?? group?.Series?.FirstOrDefault();
-            if (primarySeries != null)
-            {
-                var imgType =
-                    suffix is "-logo" or "-clearlogo" ? ImageEntityType.Logo
-                    : suffix is "-art" or "-backdrop" or "-background" or "-fanart" ? ImageEntityType.Backdrop
-                    : ImageEntityType.Primary;
+            var primarySeries = group?.MainSeries ?? group?.Series?.FirstOrDefault() ?? series;
+            var imgType =
+                suffix is "-logo" or "-clearlogo" ? ImageEntityType.Logo
+                : suffix is "-art" or "-backdrop" or "-background" or "-fanart" ? ImageEntityType.Backdrop
+                : ImageEntityType.Primary;
 
-                var posterUrl = (primarySeries as IWithImages)?.GetPreferredImageUrl(imgType, Settings.TmdbImageLanguage);
-                if (posterUrl != null)
-                    return posterUrl;
-            }
+            var posterUrl =
+                (primarySeries as IWithImages)?.GetPreferredImageUrl(imgType, Settings.TmdbImageLanguage)
+                ?? (primarySeries.TmdbMovies?.FirstOrDefault() as IWithImages)?.GetPreferredImageUrl(imgType, Settings.TmdbImageLanguage);
+            if (posterUrl != null)
+                return posterUrl;
         }
         return null;
     }

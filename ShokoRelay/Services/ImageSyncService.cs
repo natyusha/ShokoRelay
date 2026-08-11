@@ -154,7 +154,9 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
     )
     {
         var processedInRun = new HashSet<int>();
-        foreach (var target in targets)
+        var orderedTargets = targets.OrderBy(t => t.LibraryType == PlexLibraryType.Movie ? 1 : 0).ToList();
+
+        foreach (var target in orderedTargets)
         {
             ct.ThrowIfCancellationRequested();
             try
@@ -172,7 +174,8 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
 
                     var epId = PlexHelper.ExtractShokoEpisodeIdFromGuid(item.Guid);
 
-                    // Ensure each Shoko Episode is only processed once globally per run to avoid redundant local asset checks and Plex thumbnail uploads
+                    // Ensure each Shoko Episode (including specials and movies) is only processed once globally per run
+                    // Ordering TV targets first ensures Movie libraries skip episodes/specials already synced from TV libraries
                     if (!epId.HasValue || !processedInRun.Add(epId.Value))
                         continue;
 
