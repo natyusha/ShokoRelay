@@ -159,15 +159,15 @@ public class PlexMetadata(IMetadataService metadataService)
         var seriesImages = (IWithImages)series;
         var movieImages = tmdbMovie as IWithImages;
         string title = TextHelper.ResolveMovieTitle(ep, series, tmdbMovie);
-        string description = TextHelper.GetDescriptionByLanguage(series, Settings.DescriptionLanguage);
+        string description = TextHelper.GetDescriptionByLanguage(ep, Settings.DescriptionLanguage);
         if (string.IsNullOrWhiteSpace(description))
-            description = TextHelper.GetDescriptionByLanguage(ep, Settings.DescriptionLanguage);
+            description = TextHelper.GetDescriptionByLanguage(series, Settings.DescriptionLanguage);
 
         string? tmdbDescription = tmdbMovie?.PreferredDescription?.Value ?? (series as IShokoSeries)?.TmdbShows?.FirstOrDefault()?.PreferredDescription?.Value;
         var (rating, isAdult) = ContentRatingHelper.GetContentRatingAndAdult(series);
         var studios = CastHelper.GetStudioTags(series);
 
-        string? thumbUrl = seriesImages.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage) ?? movieImages?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage);
+        var imagesArray = ImageHelper.GenerateMovieImageArray(seriesImages, movieImages, ep.EpisodeNumber, title, Settings.AddEveryImage, Settings.TmdbImageLanguage, out string? thumbUrl);
         string? artUrl = seriesImages.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage) ?? movieImages?.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage);
 
         return new Dictionary<string, object?>
@@ -183,7 +183,7 @@ public class PlexMetadata(IMetadataService metadataService)
             ["art"]                   = artUrl,
             ["contentRating"]         = rating,
             ["originalTitle"]         = titles.OriginalTitle,
-            ["titleSort"]             = title,
+            ["titleSort"]             = string.IsNullOrWhiteSpace(titles.OriginalTitle) ? title : $"{title} – {titles.OriginalTitle}",
             ["year"]                  = ep.AirDate?.Year ?? tmdbMovie?.ReleaseDate?.Year ?? series.AirDate?.Year,
             ["summary"]               = TextHelper.SanitizeSummaryWithFallback(description, tmdbDescription, Settings.SummaryMode),
             ["isAdult"]               = isAdult,
@@ -192,7 +192,7 @@ public class PlexMetadata(IMetadataService metadataService)
             ["studio"]                = studios.FirstOrDefault()?.Tag,
             ["theme"]                 = Settings.PlexThemeMusic && series is IShokoSeries ss && ss.TmdbShows?.FirstOrDefault()?.TvdbShowID is int tvdb && tvdb > 0 ? $"https://tvthemes.plexapp.com/{tvdb}.mp3" : null,
 
-            ["Image"]                 = ImageHelper.GenerateImageArray(seriesImages, title, Settings.AddEveryImage, Settings.TmdbImageLanguage),
+            ["Image"]                 = imagesArray,
             //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
             ["Genre"]                 = TagHelper.GetFilteredTags(series),
             ["Guid"]                  = BuildXrefGuidArray(series, tmdbMovie),

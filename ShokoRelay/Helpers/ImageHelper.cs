@@ -191,6 +191,50 @@ public static class ImageHelper
         return [.. Project(ImageEntityType.Backdrop, "background"), .. Project(ImageEntityType.Logo, "clearLogo"), .. Project(ImageEntityType.Primary, "coverPoster")];
     }
 
+    /// <summary>Build an array of ImageInfo records for a standalone movie, utilizing unique TMDB posters for multi-part movies.</summary>
+    /// <param name="seriesImages">The series providing fallback images.</param>
+    /// <param name="movieImages">The specific movie providing images.</param>
+    /// <param name="episodeNumber">The episode number to determine if unique posters are needed.</param>
+    /// <param name="title">Alt text for entries.</param>
+    /// <param name="addEveryImage">Whether to include all images or only preferred ones.</param>
+    /// <param name="imageLanguage">The prioritized language setting string.</param>
+    /// <param name="thumbUrl">Outputs the resolved primary thumbnail URL.</param>
+    /// <returns>An array of ImageInfo objects.</returns>
+    public static ImageInfo[] GenerateMovieImageArray(IWithImages seriesImages, IWithImages? movieImages, int episodeNumber, string title, bool addEveryImage, string imageLanguage, out string? thumbUrl)
+    {
+        string? defaultThumb = seriesImages.GetPreferredImageUrl(ImageEntityType.Primary, imageLanguage) ?? movieImages?.GetPreferredImageUrl(ImageEntityType.Primary, imageLanguage);
+        thumbUrl = defaultThumb;
+
+        var imagesArray = GenerateImageArray(seriesImages, title, addEveryImage, imageLanguage).ToList();
+
+        // For multi-part movies, attempt to fetch a unique TMDB poster matching the language setting instead of repeating the default series poster
+        if (episodeNumber > 1 && movieImages != null)
+        {
+            var tmdbImages = FilterImagesByLanguage(movieImages.GetAvailableImages(ImageEntityType.Primary), imageLanguage, true).ToList();
+            var uniqueImage = tmdbImages.FirstOrDefault(i => GetImageUrl(i) != defaultThumb);
+
+            if (uniqueImage != null)
+            {
+                thumbUrl = GetImageUrl(uniqueImage);
+                imagesArray.RemoveAll(i => i.Type == "coverPoster");
+
+                var uniqueImages = tmdbImages.Where(i => GetImageUrl(i) != defaultThumb).ToList();
+                var selectedImages = addEveryImage ? uniqueImages : uniqueImages.Take(1);
+
+                imagesArray.AddRange(
+                    selectedImages.Select(i => new ImageInfo
+                    {
+                        Alt = title,
+                        Type = "coverPoster",
+                        Url = GetImageUrl(i, forceRemote: addEveryImage),
+                    })
+                );
+            }
+        }
+
+        return [.. imagesArray];
+    }
+
     /// <summary>Create a set of cover poster images specifically for a season entry.</summary>
     /// <remarks>
     /// Season posters are hardcoded by the caller to always use direct CDN routing when TMDB season posters are present.
