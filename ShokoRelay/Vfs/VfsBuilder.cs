@@ -63,10 +63,8 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
 
                 bool isMovie = MapHelper.IsMovie(s);
                 if (isMovie && Settings.Advanced.MovieGenerationMode != MovieGenerationMode.Disabled)
-                {
                     foreach (var ep in s.Episodes.Where(e => e.Type == EpisodeType.Episode))
                         validMovieFolders.Add(ep.ID.ToString());
-                }
             }
         }
 

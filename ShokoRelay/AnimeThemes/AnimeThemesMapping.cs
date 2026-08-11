@@ -134,8 +134,8 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
 
             foreach (string file in filesBag)
             {
-                string? root = roots.FirstOrDefault(r => file.StartsWith(r + Path.DirectorySeparatorChar));
-                string rel = root != null ? "/" + Path.GetRelativePath(root, file).Replace('\\', '/') : file;
+                string rel = roots.FirstOrDefault(r => file.StartsWith(r + Path.DirectorySeparatorChar)) is string root ? "/" + Path.GetRelativePath(root, file).Replace('\\', '/') : file;
+
                 if (existing.TryGetValue(rel, out var old))
                     entries.Add(old);
                 else if (existingByFilename.TryGetValue(Path.GetFileName(file), out var oldByName))

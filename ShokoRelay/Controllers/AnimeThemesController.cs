@@ -24,6 +24,7 @@ public class AnimeThemesController(
 {
     #region Setup
 
+    /// <summary>Semaphore to prevent concurrent WebM download operations.</summary>
     private static readonly SemaphoreSlim s_webmDownloadLock = new(1, 1);
 
     #endregion

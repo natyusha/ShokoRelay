@@ -132,16 +132,8 @@ public static class PlexHelper
 
                 foreach (var suffix in suffixes)
                 {
-                    if (series != null)
-                    {
-                        if (IsIdMatch(baseName, groupId, suffix) || IsIdMatch(baseName, collectionId, suffix) || IsNameMatch(baseName, normalizedTitle, suffix))
-                            return file;
-                    }
-                    else
-                    {
-                        if (IsNameMatch(baseName, normalizedTitle, suffix) || IsIdMatch(baseName, collectionId, suffix))
-                            return file;
-                    }
+                    if (IsIdMatch(baseName, collectionId, suffix) || IsNameMatch(baseName, normalizedTitle, suffix) || (series != null && IsIdMatch(baseName, groupId, suffix)))
+                        return file;
                 }
             }
         }

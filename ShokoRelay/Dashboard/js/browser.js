@@ -58,15 +58,15 @@
     const rawFt = (uiFilter?.value || "").toLowerCase();
     const ft = rawFt.trim();
     if (!ft) return root.series;
+
+    const isExact = rawFt.endsWith(" ");
     if (/^a\d+\s*$/.test(rawFt.trimStart())) {
       const aid = ft.substring(1);
-      const exact = rawFt.endsWith(" ");
-      return root.series.filter((s) => (exact ? String(s.anidbId) === aid : String(s.anidbId).startsWith(aid)));
+      return root.series.filter((s) => (isExact ? String(s.anidbId) === aid : String(s.anidbId).startsWith(aid)));
     }
     if (/^m\d+\s*$/.test(rawFt.trimStart())) {
       const sid = ft.substring(1);
-      const exact = rawFt.endsWith(" ");
-      return root.series.filter((s) => (exact ? String(s.id) === sid : String(s.id).startsWith(sid)));
+      return root.series.filter((s) => (isExact ? String(s.id) === sid : String(s.id).startsWith(sid)));
     }
     return root.series.filter((s) => s.title.toLowerCase().includes(ft) || String(s.id).includes(ft));
   }

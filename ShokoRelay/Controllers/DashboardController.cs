@@ -59,12 +59,7 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
         // Resolve the MIME content type for a given file path, prioritizing .cshtml templates
         return !requested.StartsWith(Path.GetFullPath(dashboardDir), StringComparison.OrdinalIgnoreCase) || !IoFile.Exists(requested) || requested.EndsWith(".cshtml", StringComparison.OrdinalIgnoreCase)
             ? NotFound()
-            : PhysicalFile(
-                requested,
-                requested.EndsWith(".cshtml") ? "text/html"
-                    : s_contentTypeProvider.TryGetContentType(requested, out var contentType) ? contentType
-                    : "application/octet-stream"
-            );
+            : PhysicalFile(requested, s_contentTypeProvider.TryGetContentType(requested, out var contentType) ? contentType : "application/octet-stream");
     }
 
     #endregion

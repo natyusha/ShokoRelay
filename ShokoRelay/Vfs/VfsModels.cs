@@ -80,7 +80,6 @@ public record VfsBlueprintSeries(
 );
 
 /// <summary>Holds caching dictionaries for a single VFS build session to minimize disk and database I/O.</summary>
-/// <summary>Holds caching dictionaries for a single VFS build session to minimize disk and database I/O.</summary>
 public sealed class VfsBuildSession
 {
     /// <summary>Caches the resolved file data and Plex mappings for series to prevent redundant processing.</summary>

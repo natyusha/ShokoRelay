@@ -12,10 +12,7 @@
    */
   window._sr.getAtParams = () => {
     const ps = new URLSearchParams();
-    ["path", "slug", "offset"].forEach((k) => {
-      const val = el(`at-${k}`)?.value;
-      if (val != null && String(val) !== "") ps.set(k, String(val));
-    });
+    ["path", "slug", "offset"].forEach((k) => window._sr.setIfNotEmpty(ps, k, el(`at-${k}`)?.value));
     if (el("at-mp3-force")?.getAttribute("aria-pressed") === "true") ps.set("force", "true");
     if (el("at-mp3-batch")?.getAttribute("aria-pressed") === "true") ps.set("batch", "true");
     if (el("at-seasonal")?.value === "1") ps.set("seasonal", "true");

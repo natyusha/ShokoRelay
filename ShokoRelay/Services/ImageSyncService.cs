@@ -438,12 +438,11 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
         string newCacheVal = $"{length}|{md5}";
         if (preferredImg != null && string.Equals(preferredImg.ResourceID, md5, StringComparison.OrdinalIgnoreCase))
         {
-            if (cacheVal != newCacheVal)
-            {
-                cache[cacheKey] = newCacheVal;
-                return (true, false, true, false, true);
-            }
-            return (true, false, true, false, false); // Skip
+            if (cacheVal == newCacheVal)
+                return (true, false, true, false, false); // Skip
+
+            cache[cacheKey] = newCacheVal;
+            return (true, false, true, false, true);
         }
 
         if (cacheVal == null)

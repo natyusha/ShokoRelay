@@ -93,8 +93,16 @@ public static class CastHelper
 
     #region Internal Helpers
 
+    /// <summary>Resolves the creator's name with a fallback value.</summary>
+    /// <param name="creator">The creator metadata object.</param>
+    /// <param name="fallback">The fallback name.</param>
+    /// <returns>The resolved name string.</returns>
     private static string? GetName(ICreator? creator, string fallback) => creator?.Name ?? fallback;
 
+    /// <summary>Filters the crew by a specific role type and returns a formatted array of tags.</summary>
+    /// <param name="item">The media item containing cast and crew.</param>
+    /// <param name="roleType">The role type to filter for.</param>
+    /// <returns>An array of anonymous objects containing crew tags.</returns>
     private static object[] FilterCrew(IWithCastAndCrew item, CrewRoleType roleType) =>
         item.Crew?.Where(c => c.RoleType == roleType).Select(c => (object)new { tag = GetName(c.Creator, c.Name) }).ToArray() ?? [];
 

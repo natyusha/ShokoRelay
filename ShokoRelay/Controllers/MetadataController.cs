@@ -159,21 +159,16 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             );
         }
 
-        if (isMovie)
-        {
-            var ep = MetadataService.GetShokoEpisodeByID(id.Value);
-            if (ep?.Series != null)
-                return ReturnMovieMatch(ep);
-        }
+        var ep = MetadataService.GetShokoEpisodeByID(id.Value);
+        if (isMovie && ep?.Series != null)
+            return ReturnMovieMatch(ep);
 
         var series = MetadataService.GetShokoSeriesByID(id.Value);
         if (series != null)
             return ReturnSeriesMatch(series);
 
-        // Fallback for movie match requests where type/path was omitted by Plex
-        var fallbackEp = MetadataService.GetShokoEpisodeByID(id.Value);
-        if (fallbackEp?.Series != null)
-            return ReturnMovieMatch(fallbackEp);
+        if (ep?.Series != null)
+            return ReturnMovieMatch(ep);
 
         Logger.Info("Metadata: No Shoko series or episode found for id {Id}", id.Value);
         return EmptyMatch();
