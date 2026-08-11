@@ -89,11 +89,22 @@ public static class LogHelper
     {
         AppendHeader(sb, "Plex Discovery Report");
         sb.AppendLine($"  Libraries Found          : {r.Count}");
-        if (r.Count > 0)
+
+        var tvLibs = r.Where(l => !string.Equals(l.Type, "movie", StringComparison.OrdinalIgnoreCase)).ToList();
+        var movieLibs = r.Where(l => string.Equals(l.Type, "movie", StringComparison.OrdinalIgnoreCase)).ToList();
+
+        if (tvLibs.Count > 0)
         {
-            sb.AppendLine().AppendLine("Discovered Libraries:");
-            foreach (var l in r)
-                sb.AppendLine($"  - [{l.ServerName}] {l.Title} ({(string.Equals(l.Type, "show", StringComparison.OrdinalIgnoreCase) ? "Series" : l.Type)})");
+            sb.AppendLine().AppendLine("TV Shows Libraries:");
+            foreach (var l in tvLibs)
+                sb.AppendLine($"  - [{l.ServerName}] {l.Title}");
+        }
+
+        if (movieLibs.Count > 0)
+        {
+            sb.AppendLine().AppendLine("Movie Libraries:");
+            foreach (var l in movieLibs)
+                sb.AppendLine($"  - [{l.ServerName}] {l.Title}");
         }
     }
 
@@ -112,13 +123,41 @@ public static class LogHelper
             ["Errors"] = r.Errors,
         };
 
-        var items = new List<string>();
-        foreach (dynamic c in r.CreatedCollections)
-            items.Add($"[{c.sectionId}] {c.collectionName} (Series: {c.seriesId})");
-        foreach (var e in r.ErrorsList)
-            items.Add($"ERROR: {e}");
+        var tvAssigned = r.CreatedCollections.Where(c => !c.IsMovie).OrderBy(c => c.CollectionName).ToList();
+        var movieAssigned = r.CreatedCollections.Where(c => c.IsMovie).OrderBy(c => c.CollectionName).ToList();
 
-        BuildReport(sb, "Collection Build Report", stats, "Assignments & Errors:", items);
+        var tvUploaded = r.UploadedDetails.Where(u => !u.IsMovie).OrderBy(u => u.CollectionName).ToList();
+        var movieUploaded = r.UploadedDetails.Where(u => u.IsMovie).OrderBy(u => u.CollectionName).ToList();
+
+        var items = new List<string>();
+
+        if (tvAssigned.Count > 0 || tvUploaded.Count > 0)
+        {
+            items.Add("TV Shows Libraries:");
+            foreach (var c in tvAssigned)
+                items.Add($"  ASSIGNED: [{c.SectionId}] {c.CollectionName} (Series: {c.SeriesId})");
+            foreach (var u in tvUploaded)
+                items.Add($"  UPLOADED: [{u.TargetTitle}] Applied {u.Label} for collection -> {u.CollectionName} (RatingKey: {u.RatingKey})");
+            items.Add("");
+        }
+
+        if (movieAssigned.Count > 0 || movieUploaded.Count > 0)
+        {
+            items.Add("Movie Libraries:");
+            foreach (var c in movieAssigned)
+                items.Add($"  ASSIGNED: [{c.SectionId}] {c.CollectionName} (Series: {c.SeriesId})");
+            foreach (var u in movieUploaded)
+                items.Add($"  UPLOADED: [{u.TargetTitle}] Applied {u.Label} for collection -> {u.CollectionName} (RatingKey: {u.RatingKey})");
+            items.Add("");
+        }
+
+        if (r.ErrorsList.Count > 0)
+        {
+            items.Add("Errors:");
+            items.AddRange(r.ErrorsList.Select(e => $"  ERROR: {e}"));
+        }
+
+        BuildReport(sb, "Collection Build Report", stats, "Details:", items);
     }
 
     /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskPlexRatingsApply"/>.</summary>
@@ -136,10 +175,40 @@ public static class LogHelper
             ["Errors"] = result.Errors,
         };
 
-        var items = result.AppliedChanges.OrderBy(x => x.Title).Select(c => $"[{c.Type}] {c.Title} ({c.RatingKey}): {c.OldRating?.ToString("F2") ?? "0.00"} -> {c.NewRating?.ToString("F2") ?? "0.00"}").ToList();
-        items.AddRange(result.ErrorsList.Select(e => $"ERROR: {e}"));
+        var seriesChanges = result.AppliedChanges.Where(x => x.Type == "Series").OrderBy(x => x.Title).ToList();
+        var episodeChanges = result.AppliedChanges.Where(x => x.Type == "Episode").OrderBy(x => x.Title).ToList();
+        var movieChanges = result.AppliedChanges.Where(x => x.Type == "Movie").OrderBy(x => x.Title).ToList();
 
-        BuildReport(sb, "Audience Rating Report", stats, "Updates & Errors:", items);
+        var items = new List<string>();
+
+        if (seriesChanges.Count > 0)
+        {
+            items.Add("Series Updates:");
+            items.AddRange(seriesChanges.Select(c => $"  {c.Title} ({c.RatingKey}): {c.OldRating?.ToString("F2") ?? "0.00"} -> {c.NewRating?.ToString("F2") ?? "0.00"}"));
+            items.Add("");
+        }
+
+        if (episodeChanges.Count > 0)
+        {
+            items.Add("Episode Updates:");
+            items.AddRange(episodeChanges.Select(c => $"  {c.Title} ({c.RatingKey}): {c.OldRating?.ToString("F2") ?? "0.00"} -> {c.NewRating?.ToString("F2") ?? "0.00"}"));
+            items.Add("");
+        }
+
+        if (movieChanges.Count > 0)
+        {
+            items.Add("Movie Updates:");
+            items.AddRange(movieChanges.Select(c => $"  {c.Title} ({c.RatingKey}): {c.OldRating?.ToString("F2") ?? "0.00"} -> {c.NewRating?.ToString("F2") ?? "0.00"}"));
+            items.Add("");
+        }
+
+        if (result.ErrorsList.Count > 0)
+        {
+            items.Add("Errors:");
+            items.AddRange(result.ErrorsList.Select(e => $"  ERROR: {e}"));
+        }
+
+        BuildReport(sb, "Audience Rating Report", stats, "Details:", items);
     }
 
     /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskPlexImagesSync"/>.</summary>

@@ -203,6 +203,8 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                         )
                         .FirstOrDefault();
 
+                    string labelType = target.LibraryType == PlexLibraryType.Movie ? "Movie" : "Episode";
+
                     var (h, u, s, e, cu) = await ProcessLocalAssetAsync(
                             localThumb,
                             episode,
@@ -211,7 +213,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                             "local thumbnail",
                             epLogName,
                             false,
-                            $"[Local Episode Thumb] {epLogName}",
+                            $"[Local {labelType} Thumb] {epLogName}",
                             cache,
                             errsBag
                         )
