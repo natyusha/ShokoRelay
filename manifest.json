@@ -15,6 +15,34 @@
   "image_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-logo.png",
   "releases": [
     {
+      "version": "0.17.0",
+      "tag": "v0.17.0",
+      "source_revision": "d9f6812ed0619d86fac46c41b067977961d2075f",
+      "released_at": "2026-08-11T17:51:41Z",
+      "channel": "Dev",
+      "release_notes": "This is the largest release in quite some time and is primarily dedicated to adding support for movie libraries in Plex.\r\n\r\n**Changes:**\r\n- Added dedicated Plex Movie library support (tv.plex.agents.custom.shoko.movie scheme) with standalone Movie VFS generation (!ShokoRelayMovieVFS)\r\n- Added m{id} movie rating keys, movie GUID resolution, and movie library support across matching, metadata, and agent endpoints\r\n- Implemented unique TMDB poster selection, sort titles, and prioritized episode descriptions for multi-part movies\r\n- Updated watched state, scrobble, webhook, critic ratings, image sync, and empty trash automation to natively support Movie library sections\r\n- Expanded VFS Browser to render, merge, and navigate Movie branches, local extra subdirectories, and direct metadata links\r\n- Added zero-width and hair space formatting to Opening and Ending extra titles to bypass Plex's automatic prefix truncation\r\n- Refined theme selection priority (lowest-numbered OP -> lowest-numbered ED) and added ED upgrade checks to the MP3 audit tool\r\n- Updated Collection Build, Discovery, and Task Reports to segregate TV Shows and Movie libraries, including tracking deleted empty collections (REMOVED:)\r\n- Automatically strip trailing AniDB moderator comments (--) from tag names in TagHelper\r\n- Added Cache-Control headers to VFS tree endpoint responses to prevent stale browser caching\r\n- Optimized database lookups in MetadataController match logic and performed general code cleanups and documentation updates\r\n- Updated README/Controller.md with details on the new functionality\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.16.9...v0.17.0",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.17.0/ShokoRelay-v0.17.0-dev_linux-arm64.zip",
+          "checksum": "aae7be28f56d0360965fc9690bf097cabcfe28fe9cb9625cd4afed4938d6e50f"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.17.0/ShokoRelay-v0.17.0-dev_linux-x64.zip",
+          "checksum": "186506ce7c9c91b0803fa65e1e2fdccec6f99e662083b6595659b7253644b9f6"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.17.0/ShokoRelay-v0.17.0-dev_win-x64.zip",
+          "checksum": "4c134ea68ca2ce5f1f00488ae3a72920edd7385f117e0a7e28ea1b7ba141e4b6"
+        }
+      ]
+    },
+    {
       "version": "0.16.9",
       "tag": "v0.16.9",
       "source_revision": "26bc830d6cbe33fa9d390a4b00929af583e1cae8",
