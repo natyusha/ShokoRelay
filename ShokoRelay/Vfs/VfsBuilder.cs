@@ -378,6 +378,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         var (created, skipped, planned, errors, skippedDetails) = (0, 0, 0, new List<string>(), new List<string>());
         var (displayTitle, _, _) = TextHelper.ResolveFullSeriesTitles(series);
         int folderId = EnforceTmdbNumbering ? OverrideHelper.GetPrimary(series.ID, metadataService) : series.ID;
+        string movieRootName = VfsShared.ResolveMovieRootFolderName();
 
         // Retrieve the files and episode mappings for a series, leveraging the build-session cache
         var fileData = !EnforceTmdbNumbering
@@ -578,7 +579,6 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
             var movieDirs = new List<(string ImportRoot, string FolderName, string FullPath)>();
             var mainMappings = fileData.Mappings.Where(m => m.PrimaryEpisode.Type == EpisodeType.Episode).ToList();
             var extraMappings = fileData.Mappings.Where(m => m.PrimaryEpisode.Type != EpisodeType.Episode).ToList();
-            string movieRootName = VfsShared.ResolveMovieRootFolderName();
 
             foreach (var mapping in mainMappings)
             {
@@ -656,7 +656,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                             created++;
                             planned++;
                             expectedFiles.Add(destFilePath);
-                            onLink?.Invoke(importRoot, $"Movie ❯ {folderName}", $"{ex.Folder} ❯ {fileName}", locInfo.Src);
+                            onLink?.Invoke(importRoot, $"Movie ❯ {folderName}", $"{ex.Folder}/{fileName}", locInfo.Src);
                         }
                     }
                 }
@@ -672,6 +672,8 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         {
             string root = Path.GetDirectoryName(Path.GetDirectoryName(seriesPath))!;
             string themeRootName = VfsShared.ResolveAnimeThemesFolderName();
+            bool isMoviePath = seriesPath.Contains(movieRootName, StringComparison.OrdinalIgnoreCase);
+            string folderName = Path.GetFileName(seriesPath);
 
             foreach (var anidbId in anidbIds)
             {
@@ -683,8 +685,11 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                         {
                             string destFilePath = Path.Combine(seriesPath, "Shorts", theme.FinalName);
                             expectedFiles.Add(destFilePath);
-                            if (doTv && seriesPath.Contains(rootFolderName))
-                                onLink?.Invoke(root, "Shorts", theme.FinalName, srcPath);
+
+                            string seasonArg = isMoviePath ? $"Movie ❯ {folderName}" : "Shorts";
+                            string fileArg = isMoviePath ? $"Shorts/{theme.FinalName}" : theme.FinalName;
+
+                            onLink?.Invoke(root, seasonArg, fileArg, srcPath);
                         }
                     }
                 }

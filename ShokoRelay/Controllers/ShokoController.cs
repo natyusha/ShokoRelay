@@ -95,6 +95,10 @@ public class ShokoController(
     [HttpGet("vfs/tree")]
     public async Task<IActionResult> GetVfsTree()
     {
+        Response.Headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+        Response.Headers["Pragma"] = "no-cache";
+        Response.Headers["Expires"] = "0";
+
         IActionResult EmptyTree() =>
             Content( /*lang=json,strict*/
                 "{\"roots\":[]}",
@@ -132,7 +136,38 @@ public class ShokoController(
                     return new { Name = tabName, Series = root.Value.Values };
                 })
                 .GroupBy(x => x.Name)
-                .Select(g => new { name = g.Key, series = g.SelectMany(x => x.Series).DistinctBy(s => s.Id).OrderBy(s => s.Title ?? "").ToList() })
+                .Select(g =>
+                {
+                    // Safely merge TV and Movie blueprint entries sharing the same Shoko Series ID within a unified root tab
+                    var mergedSeries = g.SelectMany(x => x.Series)
+                        .GroupBy(s => s.Id)
+                        .Select(sg =>
+                        {
+                            var first = sg.First();
+                            if (sg.Count() == 1)
+                                return first;
+
+                            var allRootFiles = sg.SelectMany(s => s.RootFiles).DistinctBy(f => f.Name).ToList();
+                            var allSeasons = sg.SelectMany(s => s.Seasons)
+                                .GroupBy(s => s.Name)
+                                .Select(seasonGroup =>
+                                {
+                                    var sFirst = seasonGroup.First();
+                                    return seasonGroup.Count() == 1 ? sFirst : (sFirst with { Files = [.. seasonGroup.SelectMany(sx => sx.Files).DistinctBy(f => f.Name)] });
+                                })
+                                .ToList();
+
+                            return first with
+                            {
+                                RootFiles = allRootFiles,
+                                Seasons = allSeasons,
+                            };
+                        })
+                        .OrderBy(s => s.Title ?? "")
+                        .ToList();
+
+                    return new { name = g.Key, series = mergedSeries };
+                })
                 .OrderBy(r => r.name)
                 .ToList();
 

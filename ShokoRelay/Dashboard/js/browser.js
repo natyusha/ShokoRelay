@@ -189,13 +189,28 @@
 
   // #region Tree & Navigation
   /**
-   * Dynamically renders and appends file nodes inside a season container.
+   * Dynamically renders and appends file nodes inside a season container, automatically nesting subdirectories.
    * @param {Object} s - The season data object.
    * @param {HTMLUListElement} sUl - The sub-list container element to append file nodes to.
    * @returns {void}
    */
   function renderSeasonContents(s, sUl) {
+    const subfolders = new Map();
+    const directFiles = [];
+
     s.files.forEach((f) => {
+      const parts = f.name.replace(/\\/g, "/").split("/");
+      if (parts.length > 1) {
+        const subName = parts[0];
+        const actualName = parts.slice(1).join("/");
+        if (!subfolders.has(subName)) subfolders.set(subName, []);
+        subfolders.get(subName).push({ ...f, name: actualName });
+      } else {
+        directFiles.push(f);
+      }
+    });
+
+    directFiles.forEach((f) => {
       const eLi = document.createElement("li");
       const leaf = document.createElement("div");
       leaf.className = "leaf";
@@ -205,6 +220,16 @@
       eLi.appendChild(leaf);
       sUl.appendChild(eLi);
     });
+
+    [...subfolders.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .forEach(([subName, files]) => {
+        const sLi = document.createElement("li");
+        const subUl = document.createElement("ul");
+        const sDet = window._sr.createLazyDetails(subName, subUl, (container) => renderSeasonContents({ files }, container), false);
+        sLi.appendChild(sDet);
+        sUl.appendChild(sLi);
+      });
   }
 
   /**
@@ -217,12 +242,19 @@
   function renderSeriesContents(g, ul, forceRender = false) {
     const movieSeasons = (g.seasons || []).filter((s) => s.name.startsWith("Movie ❯ "));
     const regularSeasons = (g.seasons || []).filter((s) => !s.name.startsWith("Movie ❯ "));
+    let movieCount = 0;
 
     const renderSeason = (s) => {
       const sLi = document.createElement("li");
       const sUl = document.createElement("ul");
       const isMovie = s.name.startsWith("Movie ❯ ");
       const movieId = isMovie ? s.name.split(" ❯ ")[1] : null;
+
+      let displayName = s.name;
+      if (isMovie) {
+        movieCount++;
+        displayName = movieSeasons.length > 1 ? `Movie ${movieCount}` : `Movie`;
+      }
 
       const seasonLink = isMovie
         ? `<a href="${base}/metadata/m${movieId}?includeChildren=1" class="vfs-link small" target="_blank" rel="noopener noreferrer">[m${movieId}]</a>`
@@ -231,7 +263,7 @@
           : "";
 
       const sDet = window._sr.createLazyDetails(
-        `${s.name} ${seasonLink}`,
+        `${displayName} ${seasonLink}`,
         sUl,
         (container) => {
           renderSeasonContents(s, container);
