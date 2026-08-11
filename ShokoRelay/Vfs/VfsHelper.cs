@@ -81,6 +81,8 @@ public static class VfsHelper
     }
 
     /// <summary>Cleans episode titles for filename use.</summary>
+    /// <param name="title">The title string to clean.</param>
+    /// <returns>A cleaned episode title string.</returns>
     public static string CleanEpisodeTitleForFilename(string? title)
     {
         if (string.IsNullOrWhiteSpace(title))
@@ -89,6 +91,15 @@ public static class VfsHelper
         foreach (var (f, r) in s_styledReplacements)
             c = c.Replace(f, r, StringComparison.Ordinal);
         c = s_quotedTextRegex.Replace(c, "“$1”");
+
+        const string Zwsp = "\u200B",
+            Hsp = "\u200A";
+
+        // Zero-width space (\u200B) and hair space (\u200A) bypass Plex's undocumented behavior of automatically stripping OP/ED/extra prefixes from display titles while also sorting Openings before Endings
+        if (c.StartsWith("Opening", StringComparison.OrdinalIgnoreCase))
+            c = $"{Hsp}O{Zwsp}pening{c[7..]}";
+        else if (c.StartsWith("Ending", StringComparison.OrdinalIgnoreCase))
+            c = $"E{Zwsp}nding{c[6..]}";
 
         if (c.AsSpan().IndexOfAny(s_replacementChars) >= 0)
         {

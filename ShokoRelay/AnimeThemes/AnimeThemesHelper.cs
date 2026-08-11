@@ -417,6 +417,7 @@ internal static class AnimeThemesHelper
         const string Zwsp = "\u200B",
             Hsp = "\u200A";
 
+        // Zero-width space (\u200B) and hair space (\u200A) bypass Plex's undocumented behavior of automatically stripping OP/ED/extra prefixes from display titles and sort OP before ED
         if (slug.StartsWith("OP", StringComparison.OrdinalIgnoreCase))
             slug = $"{Hsp}O{Zwsp}P{slug[2..]}";
         else if (slug.StartsWith("ED", StringComparison.OrdinalIgnoreCase))
