@@ -17,23 +17,6 @@ public interface ICollectionService
     Task<BuildCollectionsResult> BuildCollectionsAsync(IEnumerable<IShokoSeries?> seriesList, bool applyAssignment = true, bool clean = true, CancellationToken cancellationToken = default);
 }
 
-/// <summary>Details of a collection assignment operation.</summary>
-/// <param name="TargetTitle">Title of the Plex target section.</param>
-/// <param name="SectionId">Plex section ID.</param>
-/// <param name="CollectionName">Name of the assigned collection.</param>
-/// <param name="SeriesId">Shoko series ID.</param>
-/// <param name="RatingKey">Plex rating key.</param>
-/// <param name="IsMovie">Whether the target library is a movie library.</param>
-public sealed record CollectionAssignmentDetail(string TargetTitle, int SectionId, string CollectionName, int SeriesId, int RatingKey, bool IsMovie);
-
-/// <summary>Details of a collection artwork upload operation.</summary>
-/// <param name="TargetTitle">Title of the Plex target section.</param>
-/// <param name="IsMovie">Whether the target library is a movie library.</param>
-/// <param name="Label">Artwork label (poster, backdrop, logo, square art).</param>
-/// <param name="CollectionName">Name of the collection.</param>
-/// <param name="RatingKey">Plex collection rating key.</param>
-public sealed record CollectionUploadDetail(string TargetTitle, bool IsMovie, string Label, string CollectionName, int RatingKey);
-
 /// <summary>Result returned by <see cref="ICollectionService.BuildCollectionsAsync"/>.</summary>
 /// <param name="Processed">Number of series processed.</param>
 /// <param name="Created">Number of collections successfully assigned.</param>
@@ -44,6 +27,7 @@ public sealed record CollectionUploadDetail(string TargetTitle, bool IsMovie, st
 /// <param name="DeletedEmptyCollections">Number of empty collections removed.</param>
 /// <param name="CreatedCollections">List of metadata objects for created collections.</param>
 /// <param name="UploadedDetails">List of specific uploaded poster details.</param>
+/// <param name="DeletedCollections">List of deleted empty collection details.</param>
 /// <param name="ErrorsList">List of specific error messages.</param>
 /// <param name="TotalElapsed">The total time elapsed during the task.</param>
 public sealed record BuildCollectionsResult(
@@ -56,6 +40,7 @@ public sealed record BuildCollectionsResult(
     int DeletedEmptyCollections,
     List<CollectionAssignmentDetail> CreatedCollections,
     List<CollectionUploadDetail> UploadedDetails,
+    List<CollectionDeletionDetail> DeletedCollections,
     List<string> ErrorsList,
     TimeSpan TotalElapsed
 );
@@ -89,7 +74,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
             var targets = plexClient.GetConfiguredTargets();
 
             if (targets.Count == 0)
-                return new BuildCollectionsResult(0, 0, 0, 0, 0, 0, 0, createdList, uploadedDetails, errorsList, sw.Elapsed);
+                return new BuildCollectionsResult(0, 0, 0, 0, 0, 0, 0, createdList, uploadedDetails, [], errorsList, sw.Elapsed);
 
             List<string> globalRoots = [.. (videoService.GetAllManagedFolders() ?? []).Select(f => f.Path).Where(p => !string.IsNullOrEmpty(p)).Distinct()];
 
@@ -274,13 +259,14 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                     }
                 }
             }
-            int deleted = 0;
+
+            var deletedList = new List<CollectionDeletionDetail>();
             if (applyAssignment)
-                deleted = await plexCollections.DeleteEmptyCollectionsAsync(cancellationToken).ConfigureAwait(false);
+                deletedList = await plexCollections.DeleteEmptyCollectionsAsync(cancellationToken).ConfigureAwait(false);
 
             sw.Stop();
             s_logger.Info("CollectionService: Task finished -> {0} collections assigned in {1}ms", created, sw.ElapsedMilliseconds);
-            return new BuildCollectionsResult(uniqueSeries.Count, created, uploaded, 0, uniqueSeries.Count - created, errs, deleted, createdList, uploadedDetails, errorsList, sw.Elapsed);
+            return new BuildCollectionsResult(uniqueSeries.Count, created, uploaded, 0, uniqueSeries.Count - created, errs, deletedList.Count, createdList, uploadedDetails, deletedList, errorsList, sw.Elapsed);
         }
         finally
         {

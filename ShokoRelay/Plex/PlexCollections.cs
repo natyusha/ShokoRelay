@@ -1,5 +1,33 @@
 namespace ShokoRelay.Plex;
 
+#region Data Models
+
+/// <summary>Details of a collection assignment operation.</summary>
+/// <param name="TargetTitle">Title of the Plex target section.</param>
+/// <param name="SectionId">Plex section ID.</param>
+/// <param name="CollectionName">Name of the assigned collection.</param>
+/// <param name="SeriesId">Shoko series ID.</param>
+/// <param name="RatingKey">Plex rating key.</param>
+/// <param name="IsMovie">Whether the target library is a movie library.</param>
+public sealed record CollectionAssignmentDetail(string TargetTitle, int SectionId, string CollectionName, int SeriesId, int RatingKey, bool IsMovie);
+
+/// <summary>Details of a collection artwork upload operation.</summary>
+/// <param name="TargetTitle">Title of the Plex target section.</param>
+/// <param name="IsMovie">Whether the target library is a movie library.</param>
+/// <param name="Label">Artwork label (poster, backdrop, logo, square art).</param>
+/// <param name="CollectionName">Name of the collection.</param>
+/// <param name="RatingKey">Plex collection rating key.</param>
+public sealed record CollectionUploadDetail(string TargetTitle, bool IsMovie, string Label, string CollectionName, int RatingKey);
+
+/// <summary>Details of a collection deletion operation.</summary>
+/// <param name="TargetTitle">Title of the Plex target section.</param>
+/// <param name="IsMovie">Whether the target library is a movie library.</param>
+/// <param name="CollectionName">Name of the collection.</param>
+/// <param name="RatingKey">Plex collection rating key.</param>
+public sealed record CollectionDeletionDetail(string TargetTitle, bool IsMovie, string CollectionName, int RatingKey);
+
+#endregion
+
 /// <summary>Provides utilities for working with Plex collections.</summary>
 public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
 {
@@ -119,15 +147,16 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
 
     /// <summary>Scans Plex libraries and deletes empty collections.</summary>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>Number of deleted collections.</returns>
-    public async Task<int> DeleteEmptyCollectionsAsync(CancellationToken cancellationToken = default)
+    /// <returns>A list of deleted collection details.</returns>
+    public async Task<List<CollectionDeletionDetail>> DeleteEmptyCollectionsAsync(CancellationToken cancellationToken = default)
     {
-        int deleted = 0;
+        var deleted = new List<CollectionDeletionDetail>();
         if (!IsEnabled)
-            return 0;
+            return deleted;
 
         foreach (var target in plexClient.GetConfiguredTargets())
         {
+            bool isMovie = target.LibraryType == PlexLibraryType.Movie;
             using var request = plexClient.CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?type={PlexConstants.TypeCollection}&X-Plex-Container-Size=500", target.ServerUrl);
             using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
@@ -147,7 +176,7 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
                 )
                 {
                     s_logger.Info("PlexCollections: Deleted empty collection '{0}' (RatingKey: {1}) in section {2}", m.Title ?? "Unknown", id, target.SectionId);
-                    deleted++;
+                    deleted.Add(new CollectionDeletionDetail(target.Title, isMovie, m.Title ?? "Unknown", id));
                 }
             }
         }

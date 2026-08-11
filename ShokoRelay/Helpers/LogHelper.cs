@@ -129,25 +129,32 @@ public static class LogHelper
         var tvUploaded = r.UploadedDetails.Where(u => !u.IsMovie).OrderBy(u => u.TargetTitle).ThenBy(u => u.CollectionName).ToList();
         var movieUploaded = r.UploadedDetails.Where(u => u.IsMovie).OrderBy(u => u.TargetTitle).ThenBy(u => u.CollectionName).ToList();
 
+        var tvDeleted = r.DeletedCollections.Where(d => !d.IsMovie).OrderBy(d => d.TargetTitle).ThenBy(d => d.CollectionName).ToList();
+        var movieDeleted = r.DeletedCollections.Where(d => d.IsMovie).OrderBy(d => d.TargetTitle).ThenBy(d => d.CollectionName).ToList();
+
         var items = new List<string>();
 
-        if (tvAssigned.Count > 0 || tvUploaded.Count > 0)
+        if (tvAssigned.Count > 0 || tvUploaded.Count > 0 || tvDeleted.Count > 0)
         {
             items.Add("TV Shows Libraries:");
             foreach (var c in tvAssigned)
                 items.Add($"  ASSIGNED: [{c.TargetTitle}] {c.CollectionName} (Series: {c.SeriesId})");
             foreach (var u in tvUploaded)
                 items.Add($"  UPLOADED: [{u.TargetTitle}] Applied {u.Label} for collection -> {u.CollectionName} (RatingKey: {u.RatingKey})");
+            foreach (var d in tvDeleted)
+                items.Add($"  REMOVED:  [{d.TargetTitle}] {d.CollectionName} (RatingKey: {d.RatingKey})");
             items.Add("");
         }
 
-        if (movieAssigned.Count > 0 || movieUploaded.Count > 0)
+        if (movieAssigned.Count > 0 || movieUploaded.Count > 0 || movieDeleted.Count > 0)
         {
             items.Add("Movie Libraries:");
             foreach (var c in movieAssigned)
                 items.Add($"  ASSIGNED: [{c.TargetTitle}] {c.CollectionName} (Series: {c.SeriesId})");
             foreach (var u in movieUploaded)
                 items.Add($"  UPLOADED: [{u.TargetTitle}] Applied {u.Label} for collection -> {u.CollectionName} (RatingKey: {u.RatingKey})");
+            foreach (var d in movieDeleted)
+                items.Add($"  REMOVED:  [{d.TargetTitle}] {d.CollectionName} (RatingKey: {d.RatingKey})");
             items.Add("");
         }
 
