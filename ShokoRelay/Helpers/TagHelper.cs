@@ -13,6 +13,9 @@ public static class TagHelper
     /// <summary>Regex which matches alphanumeric text including single quotes and hyphens until a space or other special character.</summary>
     private static readonly Regex s_wordRegex = new(@"[\'\w\d-]+\b", RegexOptions.Compiled);
 
+    /// <summary>Regex which strips moderator notes and trailing comments starting with double hyphens from AniDB tags.</summary>
+    private static readonly Regex s_tagCleanupRegex = new(@"\s*--.*$", RegexOptions.Compiled);
+
     // csharpier-ignore-start
     /// <summary><c>TagBlacklistAniDBHelpers</c>: https://github.com/ShokoAnime/ShokoServer/blob/master/Shoko.Server/Utilities/TagFilter.cs#L37</summary>
     private static readonly FrozenSet<string> s_tagBlacklistAniDBHelpers = new[] {
@@ -76,7 +79,9 @@ public static class TagHelper
     /// <param name="userBlacklist">The array of blacklisted tag names to filter out.</param>
     /// <returns>An enumerable collection of formatted anonymous objects containing the sanitized tags.</returns>
     private static IEnumerable<object> FilterAndFormat(IEnumerable<string> tags, string[] userBlacklist) =>
-        tags.Where(tagName => !string.IsNullOrWhiteSpace(tagName) && !s_tagBlacklistAniDBHelpers.Contains(tagName) && !userBlacklist.Contains(tagName, StringComparer.OrdinalIgnoreCase))
+        tags.Where(tagName => !string.IsNullOrWhiteSpace(tagName))
+            .Select(tagName => s_tagCleanupRegex.Replace(tagName, "").Trim())
+            .Where(tagName => !string.IsNullOrWhiteSpace(tagName) && !s_tagBlacklistAniDBHelpers.Contains(tagName) && !userBlacklist.Contains(tagName, StringComparer.OrdinalIgnoreCase))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(tagName => new { tag = TitleCase(tagName) });
 

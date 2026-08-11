@@ -38,6 +38,50 @@ public class PlexMetadata(IMetadataService metadataService)
 
     #endregion
 
+    #region Collections
+
+    /// <summary>Builds a Plex-compatible metadata dictionary for a Shoko group collection.</summary>
+    /// <param name="group">The Shoko group.</param>
+    /// <param name="primarySeries">The series providing the artwork.</param>
+    /// <returns>A dictionary of Plex metadata properties.</returns>
+    public Dictionary<string, object?> MapCollection(IShokoGroup group, ISeries primarySeries)
+    {
+        var desc = TextHelper.GetDescriptionByLanguage(primarySeries, Settings.DescriptionLanguage);
+        var tmdbDesc = (primarySeries as IShokoSeries)?.TmdbShows?.FirstOrDefault()?.PreferredDescription?.Value;
+        var summary = TextHelper.SanitizeSummaryWithFallback(desc, tmdbDesc, Settings.SummaryMode);
+
+        return new()
+        {
+            // csharpier-ignore-start
+            ["ratingKey"]             = group.GetPlexRatingKey(),
+            ["guid"]                  = group.GetPlexGuid(),
+            ["key"]                   = $"/collection/{group.ID}",
+            ["type"]                  = "collection",
+            ["subtype"]               = "show",
+            ["title"]                 = group is IWithTitles titled && !string.IsNullOrWhiteSpace(titled.PreferredTitle?.Value) ? titled.PreferredTitle.Value : $"Group {group.ID}",
+            ["thumb"]                 = (primarySeries as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage),
+            ["art"]                   = (primarySeries as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage),
+            ["titleSort"]             = group is IWithTitles t && !string.IsNullOrWhiteSpace(t.PreferredTitle?.Value) ? t.PreferredTitle.Value : $"Group {group.ID}",
+            ["summary"]               = summary,
+            //["Image"]               = Likely an image array will be used here
+            // csharpier-ignore-end
+        };
+    }
+
+    /// <summary>Returns the collection name for a series based on its top-level Shoko group.</summary>
+    /// <remarks>Count how many distinct Primary IDs exist in this group. This ensures that VFS Overrides are respected if they merge the entirety of a Shoko Group into a single series in Plex.</remarks>
+    /// <param name="series">The Shoko series metadata.</param>
+    /// <returns>The group's preferred title, or null if no collection applies.</returns>
+    public string? GetCollectionName(ISeries series) =>
+        series is IShokoSeries { TopLevelGroupID: > 0 } ss
+        && metadataService.GetShokoGroupByID(ss.TopLevelGroupID) is { } group
+        && group.Series.Select(s => OverrideHelper.GetPrimary(s.ID, metadataService)).Distinct().Count() > 1
+        && group is IWithTitles { PreferredTitle.Value: { } title }
+            ? title
+            : null;
+
+    #endregion
+
     #region Series
 
     /// <summary>Builds a Plex-compatible metadata dictionary for a series (show).</summary>
@@ -88,6 +132,71 @@ public class PlexMetadata(IMetadataService metadataService)
             ["Network"]               = BuildNetworkArray(series),
             ["Rating"]                = BuildRatingArray(series),
             //[SeasonType]            = Not relevant
+            // csharpier-ignore-end
+        };
+    }
+
+    #endregion
+
+    #region Movies
+
+    /// <summary>Builds a Plex-compatible metadata dictionary for a standalone movie mapped from an episode.</summary>
+    /// <param name="ep">The episode metadata acting as the movie.</param>
+    /// <param name="series">The parent Shoko series metadata.</param>
+    /// <param name="tmdbMovie">The optional TMDB movie metadata override.</param>
+    /// <param name="titles">The resolved title tuple.</param>
+    /// <returns>A dictionary of Plex metadata properties.</returns>
+    public Dictionary<string, object?> MapMovie(IEpisode ep, ISeries series, ITmdbMovie? tmdbMovie, (string DisplayTitle, string SortTitle, string? OriginalTitle) titles)
+    {
+        var seriesImages = (IWithImages)series;
+        var movieImages = tmdbMovie as IWithImages;
+        string title = TextHelper.ResolveMovieTitle(ep, series, tmdbMovie);
+        string description = TextHelper.GetDescriptionByLanguage(series, Settings.DescriptionLanguage);
+        if (string.IsNullOrWhiteSpace(description))
+            description = TextHelper.GetDescriptionByLanguage(ep, Settings.DescriptionLanguage);
+
+        string? tmdbDescription = tmdbMovie?.PreferredDescription?.Value ?? (series as IShokoSeries)?.TmdbShows?.FirstOrDefault()?.PreferredDescription?.Value;
+        var (rating, isAdult) = ContentRatingHelper.GetContentRatingAndAdult(series);
+        var studios = CastHelper.GetStudioTags(series);
+
+        string? thumbUrl = seriesImages.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage) ?? movieImages?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage);
+        string? artUrl = seriesImages.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage) ?? movieImages?.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage);
+
+        return new Dictionary<string, object?>
+        {
+            // csharpier-ignore-start
+            ["ratingKey"]             = ep.GetPlexMovieRatingKey(),
+            ["key"]                   = $"/metadata/{ep.GetPlexMovieRatingKey()}",
+            ["guid"]                  = ep.GetPlexMovieGuid(),
+            ["type"]                  = "movie",
+            ["title"]                 = title,
+            ["originallyAvailableAt"] = ep.AirDate?.ToString("yyyy-MM-dd", null) ?? tmdbMovie?.ReleaseDate?.ToString("yyyy-MM-dd", null) ?? series.AirDate?.ToDateOnly().ToString("yyyy-MM-dd", null),
+            ["thumb"]                 = thumbUrl,
+            ["art"]                   = artUrl,
+            ["contentRating"]         = rating,
+            ["originalTitle"]         = titles.OriginalTitle,
+            ["titleSort"]             = title,
+            ["year"]                  = ep.AirDate?.Year ?? tmdbMovie?.ReleaseDate?.Year ?? series.AirDate?.Year,
+            ["summary"]               = TextHelper.SanitizeSummaryWithFallback(description, tmdbDescription, Settings.SummaryMode),
+            ["isAdult"]               = isAdult,
+            ["duration"]              = (int)ep.Runtime.TotalMilliseconds,
+            //["tagline"]             = TMDB has this but it is not exposed
+            ["studio"]                = studios.FirstOrDefault()?.Tag,
+            ["theme"]                 = Settings.PlexThemeMusic && series is IShokoSeries ss && ss.TmdbShows?.FirstOrDefault()?.TvdbShowID is int tvdb && tvdb > 0 ? $"https://tvthemes.plexapp.com/{tvdb}.mp3" : null,
+
+            ["Image"]                 = ImageHelper.GenerateImageArray(seriesImages, title, Settings.AddEveryImage, Settings.TmdbImageLanguage),
+            //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
+            ["Genre"]                 = TagHelper.GetFilteredTags(series),
+            ["Guid"]                  = BuildXrefGuidArray(series, tmdbMovie),
+            ["Country"]               = BuildCountryArray(series),
+            ["Role"]                  = CastHelper.GetCastAndCrew(series),
+            ["Director"]              = CastHelper.GetDirectors(series),
+            ["Producer"]              = CastHelper.GetProducers(series),
+            ["Writer"]                = CastHelper.GetWriters(series),
+            ["Similar"]               = BuildSimilarArray(series),
+            ["Studio"]                = studios,
+            ["Collection"]            = GetCollectionName(series) is string c ? new[] { new { tag = c } } : null,
+            ["Rating"]                = BuildRatingArray(tmdbMovie?.Rating ?? (ep as IShokoEpisode)?.TmdbEpisodes?.FirstOrDefault()?.Rating ?? (series as IShokoSeries)?.TmdbShows?.FirstOrDefault()?.Rating ?? series.Rating)
             // csharpier-ignore-end
         };
     }
@@ -253,71 +362,6 @@ public class PlexMetadata(IMetadataService metadataService)
 
     #endregion
 
-    #region Movies
-
-    /// <summary>Builds a Plex-compatible metadata dictionary for a standalone movie mapped from an episode.</summary>
-    /// <param name="ep">The episode metadata acting as the movie.</param>
-    /// <param name="series">The parent Shoko series metadata.</param>
-    /// <param name="tmdbMovie">The optional TMDB movie metadata override.</param>
-    /// <param name="titles">The resolved title tuple.</param>
-    /// <returns>A dictionary of Plex metadata properties.</returns>
-    public Dictionary<string, object?> MapMovie(IEpisode ep, ISeries series, ITmdbMovie? tmdbMovie, (string DisplayTitle, string SortTitle, string? OriginalTitle) titles)
-    {
-        var seriesImages = (IWithImages)series;
-        var movieImages = tmdbMovie as IWithImages;
-        string title = TextHelper.ResolveMovieTitle(ep, series, tmdbMovie);
-        string description = TextHelper.GetDescriptionByLanguage(series, Settings.DescriptionLanguage);
-        if (string.IsNullOrWhiteSpace(description))
-            description = TextHelper.GetDescriptionByLanguage(ep, Settings.DescriptionLanguage);
-
-        string? tmdbDescription = tmdbMovie?.PreferredDescription?.Value ?? (series as IShokoSeries)?.TmdbShows?.FirstOrDefault()?.PreferredDescription?.Value;
-        var (rating, isAdult) = ContentRatingHelper.GetContentRatingAndAdult(series);
-        var studios = CastHelper.GetStudioTags(series);
-
-        string? thumbUrl = seriesImages.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage) ?? movieImages?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage);
-        string? artUrl = seriesImages.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage) ?? movieImages?.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage);
-
-        return new Dictionary<string, object?>
-        {
-            // csharpier-ignore-start
-            ["ratingKey"]             = ep.GetPlexMovieRatingKey(),
-            ["key"]                   = $"/metadata/{ep.GetPlexMovieRatingKey()}",
-            ["guid"]                  = ep.GetPlexMovieGuid(),
-            ["type"]                  = "movie",
-            ["title"]                 = title,
-            ["originallyAvailableAt"] = ep.AirDate?.ToString("yyyy-MM-dd", null) ?? tmdbMovie?.ReleaseDate?.ToString("yyyy-MM-dd", null) ?? series.AirDate?.ToDateOnly().ToString("yyyy-MM-dd", null),
-            ["thumb"]                 = thumbUrl,
-            ["art"]                   = artUrl,
-            ["contentRating"]         = rating,
-            ["originalTitle"]         = titles.OriginalTitle,
-            ["titleSort"]             = title,
-            ["year"]                  = ep.AirDate?.Year ?? tmdbMovie?.ReleaseDate?.Year ?? series.AirDate?.Year,
-            ["summary"]               = TextHelper.SanitizeSummaryWithFallback(description, tmdbDescription, Settings.SummaryMode),
-            ["isAdult"]               = isAdult,
-            ["duration"]              = (int)ep.Runtime.TotalMilliseconds,
-            //["tagline"]             = TMDB has this but it is not exposed
-            ["studio"]                = studios.FirstOrDefault()?.Tag,
-            ["theme"]                 = Settings.PlexThemeMusic && series is IShokoSeries ss && ss.TmdbShows?.FirstOrDefault()?.TvdbShowID is int tvdb && tvdb > 0 ? $"https://tvthemes.plexapp.com/{tvdb}.mp3" : null,
-
-            ["Image"]                 = ImageHelper.GenerateImageArray(seriesImages, title, Settings.AddEveryImage, Settings.TmdbImageLanguage),
-            //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
-            ["Genre"]                 = TagHelper.GetFilteredTags(series),
-            ["Guid"]                  = BuildXrefGuidArray(series, tmdbMovie),
-            ["Country"]               = BuildCountryArray(series),
-            ["Role"]                  = CastHelper.GetCastAndCrew(series),
-            ["Director"]              = CastHelper.GetDirectors(series),
-            ["Producer"]              = CastHelper.GetProducers(series),
-            ["Writer"]                = CastHelper.GetWriters(series),
-            ["Similar"]               = BuildSimilarArray(series),
-            ["Studio"]                = studios,
-            ["Collection"]            = GetCollectionName(series) is string c ? new[] { new { tag = c } } : null,
-            ["Rating"]                = BuildRatingArray(tmdbMovie?.Rating ?? (ep as IShokoEpisode)?.TmdbEpisodes?.FirstOrDefault()?.Rating ?? (series as IShokoSeries)?.TmdbShows?.FirstOrDefault()?.Rating ?? series.Rating)
-            // csharpier-ignore-end
-        };
-    }
-
-    #endregion
-
     #region Episodes List
 
     /// <summary>Builds a sorted list of mapped episode metadata objects for a given season.</summary>
@@ -377,49 +421,6 @@ public class PlexMetadata(IMetadataService metadataService)
 
     #endregion
 
-    #region Collections
-
-    /// <summary>Builds a Plex-compatible metadata dictionary for a Shoko group collection.</summary>
-    /// <param name="group">The Shoko group.</param>
-    /// <param name="primarySeries">The series providing the artwork.</param>
-    /// <returns>A dictionary of Plex metadata properties.</returns>
-    public Dictionary<string, object?> MapCollection(IShokoGroup group, ISeries primarySeries)
-    {
-        var desc = TextHelper.GetDescriptionByLanguage(primarySeries, Settings.DescriptionLanguage);
-        var tmdbDesc = (primarySeries as IShokoSeries)?.TmdbShows?.FirstOrDefault()?.PreferredDescription?.Value;
-        var summary = TextHelper.SanitizeSummaryWithFallback(desc, tmdbDesc, Settings.SummaryMode);
-
-        return new()
-        {
-            // csharpier-ignore-start
-            ["ratingKey"]             = group.GetPlexRatingKey(),
-            ["guid"]                  = group.GetPlexGuid(),
-            ["key"]                   = $"/collection/{group.ID}",
-            ["type"]                  = "collection",
-            ["subtype"]               = "show",
-            ["title"]                 = group is IWithTitles titled && !string.IsNullOrWhiteSpace(titled.PreferredTitle?.Value) ? titled.PreferredTitle.Value : $"Group {group.ID}",
-            ["thumb"]                 = (primarySeries as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage),
-            ["art"]                   = (primarySeries as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage),
-            ["titleSort"]             = group is IWithTitles t && !string.IsNullOrWhiteSpace(t.PreferredTitle?.Value) ? t.PreferredTitle.Value : $"Group {group.ID}",
-            ["summary"]               = summary,
-            //["Image"]               = Likely an image array will be used here
-            // csharpier-ignore-end
-        };
-    }
-
-    /// <summary>Returns the collection name for a series based on its top-level Shoko group.</summary>
-    /// <remarks>Count how many distinct Primary IDs exist in this group. This ensures that VFS Overrides are respected if they merge the entirety of a Shoko Group into a single series in Plex.</remarks>
-    /// <param name="series">The Shoko series metadata.</param>
-    /// <returns>The group's preferred title, or null if no collection applies.</returns>
-    public string? GetCollectionName(ISeries series) =>
-        series is IShokoSeries { TopLevelGroupID: > 0 } ss
-        && metadataService.GetShokoGroupByID(ss.TopLevelGroupID) is { } group
-        && group.Series.Select(s => OverrideHelper.GetPrimary(s.ID, metadataService)).Distinct().Count() > 1
-        && group is IWithTitles { PreferredTitle.Value: { } title }
-            ? title
-            : null;
-
-    #endregion
 
     #region Key & Array Builders
 
