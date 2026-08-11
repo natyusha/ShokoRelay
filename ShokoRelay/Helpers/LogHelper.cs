@@ -123,11 +123,11 @@ public static class LogHelper
             ["Errors"] = r.Errors,
         };
 
-        var tvAssigned = r.CreatedCollections.Where(c => !c.IsMovie).OrderBy(c => c.CollectionName).ToList();
-        var movieAssigned = r.CreatedCollections.Where(c => c.IsMovie).OrderBy(c => c.CollectionName).ToList();
+        var tvAssigned = r.CreatedCollections.Where(c => !c.IsMovie).OrderBy(c => c.TargetTitle).ThenBy(c => c.CollectionName).ToList();
+        var movieAssigned = r.CreatedCollections.Where(c => c.IsMovie).OrderBy(c => c.TargetTitle).ThenBy(c => c.CollectionName).ToList();
 
-        var tvUploaded = r.UploadedDetails.Where(u => !u.IsMovie).OrderBy(u => u.CollectionName).ToList();
-        var movieUploaded = r.UploadedDetails.Where(u => u.IsMovie).OrderBy(u => u.CollectionName).ToList();
+        var tvUploaded = r.UploadedDetails.Where(u => !u.IsMovie).OrderBy(u => u.TargetTitle).ThenBy(u => u.CollectionName).ToList();
+        var movieUploaded = r.UploadedDetails.Where(u => u.IsMovie).OrderBy(u => u.TargetTitle).ThenBy(u => u.CollectionName).ToList();
 
         var items = new List<string>();
 
@@ -135,7 +135,7 @@ public static class LogHelper
         {
             items.Add("TV Shows Libraries:");
             foreach (var c in tvAssigned)
-                items.Add($"  ASSIGNED: [{c.SectionId}] {c.CollectionName} (Series: {c.SeriesId})");
+                items.Add($"  ASSIGNED: [{c.TargetTitle}] {c.CollectionName} (Series: {c.SeriesId})");
             foreach (var u in tvUploaded)
                 items.Add($"  UPLOADED: [{u.TargetTitle}] Applied {u.Label} for collection -> {u.CollectionName} (RatingKey: {u.RatingKey})");
             items.Add("");
@@ -145,7 +145,7 @@ public static class LogHelper
         {
             items.Add("Movie Libraries:");
             foreach (var c in movieAssigned)
-                items.Add($"  ASSIGNED: [{c.SectionId}] {c.CollectionName} (Series: {c.SeriesId})");
+                items.Add($"  ASSIGNED: [{c.TargetTitle}] {c.CollectionName} (Series: {c.SeriesId})");
             foreach (var u in movieUploaded)
                 items.Add($"  UPLOADED: [{u.TargetTitle}] Applied {u.Label} for collection -> {u.CollectionName} (RatingKey: {u.RatingKey})");
             items.Add("");

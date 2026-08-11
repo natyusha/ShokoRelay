@@ -18,12 +18,13 @@ public interface ICollectionService
 }
 
 /// <summary>Details of a collection assignment operation.</summary>
+/// <param name="TargetTitle">Title of the Plex target section.</param>
 /// <param name="SectionId">Plex section ID.</param>
 /// <param name="CollectionName">Name of the assigned collection.</param>
 /// <param name="SeriesId">Shoko series ID.</param>
 /// <param name="RatingKey">Plex rating key.</param>
 /// <param name="IsMovie">Whether the target library is a movie library.</param>
-public sealed record CollectionAssignmentDetail(int SectionId, string CollectionName, int SeriesId, int RatingKey, bool IsMovie);
+public sealed record CollectionAssignmentDetail(string TargetTitle, int SectionId, string CollectionName, int SeriesId, int RatingKey, bool IsMovie);
 
 /// <summary>Details of a collection artwork upload operation.</summary>
 /// <param name="TargetTitle">Title of the Plex target section.</param>
@@ -202,7 +203,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                             {
                                 created++;
                                 s_logger.Info("CollectionService: Assigned '{0}' to -> {1} [{2}]", collectionName, series?.GetDisplayTitle() ?? item.Title, sid.Value);
-                                createdList.Add(new CollectionAssignmentDetail(target.SectionId, collectionName, sid.Value, plexKey, isMovieTarget));
+                                createdList.Add(new CollectionAssignmentDetail(target.Title, target.SectionId, collectionName, sid.Value, plexKey, isMovieTarget));
                             }
                             else
                             {
