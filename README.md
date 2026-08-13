@@ -177,7 +177,7 @@ The button in the top right of the Automation Controls panel will run all three 
 
 ### Collection Generation
 
-- Currently Plex's Provider Framework does not allow collections to be automatically assigned
+- Currently Plex's Provider Framework does not allow collections to be automatically assigned to TV Shows
   - They have to be injected manually via Plex's HTTP API instead
 - Click the `Generate Collections` button in the "Quick Actions" section of the dashboard to start this process
 - If `Advanced Settings > Plex Data Path` is configured this action will also clean up old collection images
@@ -486,7 +486,7 @@ Due to this plugin relying on Plex's metadata provider feature (which is still u
 ## TODO
 
 - Once available in Plex metadata providers:
-  - Switch collection support from the Plex HTTP API "Generate Collections" button to the provider
-  - Add custom or generic series/episode ratings directly through the provider
-  - Add rich cast info (bios) for cast and crew
+  - Switch collection support for TV Shows from the Plex HTTP API "Generate Collections" button to the provider
+  - Add custom or generic series/episode ratings directly through the provider instead of via HTTP API
+  - Add rich cast info (bios) for cast and crew (currently feature exclusive to official Plex providers)
   - Include generic ratings for "old experience" Plex clients without using the HTTP API

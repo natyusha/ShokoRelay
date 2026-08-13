@@ -197,6 +197,7 @@ public class AnimeThemesController(
     {
         var items = new List<object>();
         var seriesTitleCache = new Dictionary<int, (string GroupTitle, string SeriesTitle, int AniDbId)>();
+        var seenSeriesVideoKeys = new HashSet<(int SeriesId, int VideoId)>();
 
         // Load VFS WebM Cache (Existing Anime)
         string cachePath = Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileAtWebmCache);
@@ -215,13 +216,23 @@ public class AnimeThemesController(
                     var segments = pathRaw.Replace('\\', '/').Trim().Split('/', StringSplitOptions.RemoveEmptyEntries);
                     int? seriesId = null;
                     for (int i = 0; i < segments.Length; i++)
+                    {
                         if (int.TryParse(segments[i], out int sid))
                         {
-                            seriesId = sid;
-                            break;
+                            if (MetadataService.GetShokoSeriesByID(sid) is { } series)
+                            {
+                                seriesId = series.ID;
+                                break;
+                            }
+                            if (MetadataService.GetShokoEpisodeByID(sid) is { SeriesID: int epSeriesId })
+                            {
+                                seriesId = epSeriesId;
+                                break;
+                            }
                         }
+                    }
 
-                    if (!seriesId.HasValue)
+                    if (!seriesId.HasValue || (videoId > 0 && !seenSeriesVideoKeys.Add((seriesId.Value, videoId))))
                         continue;
 
                     if (!seriesTitleCache.TryGetValue(seriesId.Value, out var info))

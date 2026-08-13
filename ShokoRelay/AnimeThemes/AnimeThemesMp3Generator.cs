@@ -116,7 +116,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
     private void RefreshThemeMp3CacheInternal()
     {
         s_logger.Info("AnimeThemes: Building Theme.mp3 cache -> scanning all managed folders...");
-        var excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { VfsShared.ResolveRootFolderName(), VfsShared.ResolveCollectionImagesFolderName(), VfsShared.ResolveAnimeThemesFolderName() };
+        var excluded = VfsShared.GetIgnoredFolderNames(Settings);
         try
         {
             var roots = (videoService.GetAllManagedFolders() ?? [])
