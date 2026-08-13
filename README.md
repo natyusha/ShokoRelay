@@ -377,6 +377,20 @@ If you prefer separate movie libraries (which is not recommended), Shoko Relay p
 
 </details>
 
+<details>
+<summary><b>Info</b></summary><br>
+
+**VFS Mapping**
+
+When building the movie VFS files are placed into folders which are named according to their Shoko EpisodeID. Movies placed into those folders are named with the following pattern: `Movie(-pt#)(-v#) [{ShokoFileID}]([{isVariation}]).ext` (the parts in parenthesis are conditional). Files with `-pt#` in their name will also have `[{ShokoFileID}]([{isVariation}])` stripped to fully follow the format described [here](https://support.plex.tv/articles/naming-and-organizing-your-movie-media-files/#toc-3). Non standard episodes on the other hand are handled the same way as the [standard VFS](#vfs-mapping).\
+_The ShokoFileID is unused by Plex and is there purely to help users visualise the file mappings._
+
+**VFS Browser**
+
+When enabled movies will also appear in the [VFS Browser](#vfs-browser) as entries under their corresponding ShokoSeriesID.
+
+</details>
+
 ### TMDB Matching
 
 If you have a TMDB link for a given series in Shoko, it will have access to several features not available otherwise:

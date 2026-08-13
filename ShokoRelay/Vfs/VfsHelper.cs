@@ -163,6 +163,45 @@ public static class VfsHelper
         string name = $"S{mapping.Coords.Season:D2}E{mapping.Coords.Episode.ToString($"D{pad}")}";
         if (mapping.Coords.EndEpisode.HasValue && mapping.Coords.EndEpisode != mapping.Coords.Episode)
             name += $"-E{mapping.Coords.EndEpisode.Value.ToString($"D{pad}")}";
+
+        return FormatVfsFileName(name, mapping, ext, fileId, omitFileId, partIdx, partCount, vIdx, isVariation);
+    }
+
+    /// <summary>Builds a movie filename based on part indexing, versioning, and variation status.</summary>
+    /// <param name="mapping">The mapping containing coordinates and video data.</param>
+    /// <param name="ext">The file extension (including the dot).</param>
+    /// <param name="fileId">The unique Shoko video identifier.</param>
+    /// <param name="omitFileId">Whether to exclude the Shoko video identifier from the filename.</param>
+    /// <param name="partIdx">The 1-based index for multi-part files.</param>
+    /// <param name="partCount">The total number of parts for the file.</param>
+    /// <param name="vIdx">The 1-based version index for duplicate items in the same variation bucket.</param>
+    /// <param name="isVariation">Whether the file is marked as a variation in Shoko.</param>
+    /// <returns>A formatted movie filename string (e.g., "Movie [{ShokoFileID}].mkv").</returns>
+    public static string BuildMovieFileName(
+        MapHelper.FileMapping mapping,
+        string ext,
+        int fileId,
+        bool omitFileId = false,
+        int? partIdx = null,
+        int? partCount = null,
+        int? vIdx = null,
+        bool isVariation = false
+    ) => FormatVfsFileName("Movie", mapping, ext, fileId, omitFileId, partIdx, partCount, vIdx, isVariation);
+
+    /// <summary>Appends part indexing, versioning, file ID, and variation tags to a base VFS filename.</summary>
+    /// <param name="baseName">The base prefix (e.g. "S01E01" or "Movie").</param>
+    /// <param name="mapping">The mapping containing part and variation metadata.</param>
+    /// <param name="ext">The file extension (including the dot).</param>
+    /// <param name="fileId">The unique Shoko video identifier.</param>
+    /// <param name="omitFileId">Whether to exclude the Shoko video identifier from the filename.</param>
+    /// <param name="partIdx">The 1-based index for multi-part files.</param>
+    /// <param name="partCount">The total number of parts for the file.</param>
+    /// <param name="vIdx">The 1-based version index for duplicate items in the same variation bucket.</param>
+    /// <param name="isVariation">Whether the file is marked as a variation in Shoko.</param>
+    /// <returns>A formatted VFS filename string.</returns>
+    private static string FormatVfsFileName(string baseName, MapHelper.FileMapping mapping, string ext, int fileId, bool omitFileId, int? partIdx, int? partCount, int? vIdx, bool isVariation)
+    {
+        string name = baseName;
         int totalParts = partCount ?? mapping.PartCount;
         if (totalParts > 1)
             name += $"-pt{partIdx ?? mapping.PartIndex}";

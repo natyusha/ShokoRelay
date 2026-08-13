@@ -577,6 +577,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
             var movieDirs = new List<(string ImportRoot, string FolderName, string FullPath)>();
             var mainMappings = fileData.Mappings.Where(m => m.PrimaryEpisode.Type == EpisodeType.Episode).ToList();
             var extraMappings = fileData.Mappings.Where(m => m.PrimaryEpisode.Type != EpisodeType.Episode).ToList();
+            var movieVersionCounters = coordCounts.Where(g => g.Value > 1).ToDictionary(g => g.Key, _ => 1);
 
             foreach (var mapping in mainMappings)
             {
@@ -593,8 +594,22 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                 EnsureDirectory(rootPath, session, true);
                 EnsureDirectory(moviePath, session);
 
-                string partSuffix = mapping.PartCount > 1 ? $"-pt{mapping.PartIndex ?? 1}" : "";
-                string fileName = $"{folderName}{partSuffix}{Path.GetExtension(locInfo.Src)}";
+                var key = (mapping.Coords.Season, mapping.Coords.Episode, mapping.IsVariation);
+                bool hasPeer = coordCounts.TryGetValue(key, out var count) && count > 1;
+                int? vIdx = (hasPeer && !mapping.PartIndex.HasValue && movieVersionCounters.TryGetValue(key, out var v)) ? (movieVersionCounters[key] = v + 1) - 1 : null;
+
+                string fileName = VfsHelper.SanitizeName(
+                    VfsHelper.BuildMovieFileName(
+                        mapping,
+                        Path.GetExtension(locInfo.Src),
+                        mapping.Video!.ID,
+                        mapping.PartCount > 1 && mapping.PartIndex.HasValue,
+                        hasPeer ? mapping.PartIndex : null,
+                        hasPeer ? mapping.PartCount : 1,
+                        vIdx,
+                        mapping.IsVariation
+                    )
+                );
                 string destFilePath = Path.Combine(moviePath, fileName);
 
                 if (VfsShared.TryCreateLink(locInfo.Src, destFilePath, s_logger, skipExistenceCheck: skipCheck))
