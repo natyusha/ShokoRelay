@@ -45,8 +45,8 @@ Installation can be completed via Shoko's WebUI (Recommended) or Manually. Both 
 - **Mandatory:**
   - Click the `Generate VFS` button in the "Shoko: VFS" section to initialize your collection
     - First time generation may take several minutes to complete with a large library
-  - A report of the run will be written to `logs/vfs-report.log` inside the plugin directory
-    - You can download the latest report via a dashboard toast that will appear when the process completes
+  - A report of the run will be written to `logs/shoko-vfs-build-report.log` inside the plugin directory
+    - You can download the report via the dashboard's "Task Logs" section or a toast that will appear on task completion
   - The VFS will automatically update when it detects files have been renamed or moved
 - **Recommended:**
   - Link the plugin to your Plex account via the `Start Plex Auth` button in the "Plex Authentication" section
@@ -204,7 +204,7 @@ Applying a hyphenated suffix to the image that matches Plex's naming conventions
 ### Plex Image Sync
 
 - An optional Plex automation which syncs the following types of local metadata images back to Shoko and marks them as preferred:
-  - Collection Posters in the configured `Collection Posters Root Path`
+  - Collection Posters in the configured `Collection Images Root Path`
   - Local posters from the VFS Root of a series (`poster.ext`, `folder.ext` or `show.ext`)
   - Local backdrops from the VFS Root of a series (`art.ext`, `backdrop.ext`, `background.ext` or `fanart.ext`)
   - Local logos from the VFS Root of a series (`clearlogo.ext` or `logo.ext`)
