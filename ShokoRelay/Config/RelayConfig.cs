@@ -141,12 +141,12 @@ public enum MovieGenerationMode
     [Display(Name = "Disabled")]
     Disabled = 0,
 
-    /// <summary>Generate standalone movie folders but keep them in the standard TV VFS as well.</summary>
-    [Display(Name = "Enabled (Maintain TV VFS)")]
+    /// <summary>Generate standalone movie folders but keep them in the standard VFS as well.</summary>
+    [Display(Name = "Enabled (Maintain Movies in Standard VFS)")]
     EnabledMaintain = 1,
 
-    /// <summary>Generate standalone movie folders and remove them from the standard TV VFS.</summary>
-    [Display(Name = "Enabled (Remove TV VFS)")]
+    /// <summary>Generate standalone movie folders and remove them from the standard VFS.</summary>
+    [Display(Name = "Enabled (Remove Movies from Standard VFS)")]
     EnabledRemove = 2,
 }
 

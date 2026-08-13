@@ -54,15 +54,19 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         var validFolderIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var validMovieFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var allSeries = metadataService.GetAllShokoSeries();
+        var mode = Settings.Advanced.MovieGenerationMode;
+
         if (allSeries != null)
         {
             foreach (var s in allSeries)
             {
                 int folderId = EnforceTmdbNumbering ? OverrideHelper.GetPrimary(s.ID, metadataService) : s.ID;
-                validFolderIds.Add(folderId.ToString());
-
                 bool isMovie = MapHelper.IsMovie(s);
-                if (isMovie && Settings.Advanced.MovieGenerationMode != MovieGenerationMode.Disabled)
+
+                if (mode == MovieGenerationMode.Disabled || !isMovie || (isMovie && mode == MovieGenerationMode.EnabledMaintain))
+                    validFolderIds.Add(folderId.ToString());
+
+                if (isMovie && mode != MovieGenerationMode.Disabled)
                     foreach (var ep in s.Episodes.Where(e => e.Type == EpisodeType.Episode))
                         validMovieFolders.Add(ep.ID.ToString());
             }
@@ -416,43 +420,8 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         bool doTv = mode == MovieGenerationMode.Disabled || !isMovie || (isMovie && mode == MovieGenerationMode.EnabledMaintain);
         bool doMovie = isMovie && mode != MovieGenerationMode.Disabled;
 
-        (string ImportRoot, string Src)? ResolveLoc(MapHelper.FileMapping mapping)
-        {
-            foreach (var file in mapping.Video?.Files ?? [])
-            {
-                if (!VfsShared.IsVfsEnabledFolder(file.ManagedFolder))
-                    continue;
-                var importRoot = VfsShared.ResolveImportRootPath(file);
-                if (importRoot != null)
-                {
-                    var src = VfsShared.ResolveSourcePath(file, importRoot);
-                    if (src != null)
-                        return (importRoot, src);
-                }
-            }
-            return null;
-        }
-
-        bool TryResolveAndValidate(MapHelper.FileMapping mapping, out (string ImportRoot, string Src) locInfoValue)
-        {
-            var loc = ResolveLoc(mapping);
-            if (loc == null)
-            {
-                skipped++;
-                skippedDetails.Add($"[Missing/Source-Only] {series.GetDisplayTitle()} [{series.ID}] S{mapping.Coords.Season}E{mapping.Coords.Episode} - {mapping.FileName}");
-                locInfoValue = default;
-                return false;
-            }
-            if (VfsShared.IsPathIgnored(loc.Value.Src, ignoredFolders))
-            {
-                skipped++;
-                skippedDetails.Add($"[Excluded Path] {series.GetDisplayTitle()} [{series.ID}] S{mapping.Coords.Season}E{mapping.Coords.Episode} - {mapping.FileName}");
-                locInfoValue = default;
-                return false;
-            }
-            locInfoValue = loc.Value;
-            return true;
-        }
+        if (!doTv)
+            PruneSeries(rootFolderName, folderId, errors.Add);
 
         if (doTv)
         {
@@ -570,6 +539,44 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                     },
                     skipCheck
                 );
+        }
+
+        (string ImportRoot, string Src)? ResolveLoc(MapHelper.FileMapping mapping)
+        {
+            foreach (var file in mapping.Video?.Files ?? [])
+            {
+                if (!VfsShared.IsVfsEnabledFolder(file.ManagedFolder))
+                    continue;
+                var importRoot = VfsShared.ResolveImportRootPath(file);
+                if (importRoot != null)
+                {
+                    var src = VfsShared.ResolveSourcePath(file, importRoot);
+                    if (src != null)
+                        return (importRoot, src);
+                }
+            }
+            return null;
+        }
+
+        bool TryResolveAndValidate(MapHelper.FileMapping mapping, out (string ImportRoot, string Src) locInfoValue)
+        {
+            var loc = ResolveLoc(mapping);
+            if (loc == null)
+            {
+                skipped++;
+                skippedDetails.Add($"[Missing/Source-Only] {series.GetDisplayTitle()} [{series.ID}] S{mapping.Coords.Season}E{mapping.Coords.Episode} - {mapping.FileName}");
+                locInfoValue = default;
+                return false;
+            }
+            if (VfsShared.IsPathIgnored(loc.Value.Src, ignoredFolders))
+            {
+                skipped++;
+                skippedDetails.Add($"[Excluded Path] {series.GetDisplayTitle()} [{series.ID}] S{mapping.Coords.Season}E{mapping.Coords.Episode} - {mapping.FileName}");
+                locInfoValue = default;
+                return false;
+            }
+            locInfoValue = loc.Value;
+            return true;
         }
 
         if (doMovie)
