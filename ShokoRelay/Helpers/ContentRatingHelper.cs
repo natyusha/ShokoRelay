@@ -49,38 +49,22 @@ public static class ContentRatingHelper
             }
         }
 
-        // Also include AniDB tags so content-rating can consult them (weights are read separately)
-        if (series is IShokoSeries ss2 && ss2.AnidbAnime?.Tags is IReadOnlyList<IAnidbTagForAnime> anidbTags2)
-        {
-            foreach (var at in anidbTags2)
-            {
-                var name = at?.Name?.Trim();
-                if (string.IsNullOrWhiteSpace(name))
-                    continue;
-                if (!s_ratingTags.Contains(name))
-                    continue;
-                tagSet.Add(name.ToLowerInvariant());
-            }
-        }
-
-        // Build AniDB weight dictionary for precision-based decisions (defaults to 0 when not present).
+        // Build AniDB weight dictionary and populate tagSet for precision-based decisions (defaults to 0 when not present).
         var anidbWeights = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         if (series is IShokoSeries ss && ss.AnidbAnime?.Tags is IReadOnlyList<IAnidbTagForAnime> atags)
         {
             foreach (var t in atags)
             {
-                if (t == null)
+                var name = t?.Name?.Trim();
+                if (string.IsNullOrWhiteSpace(name) || !s_ratingTags.Contains(name))
                     continue;
-                var name = t.Name?.Trim();
-                if (string.IsNullOrWhiteSpace(name))
-                    continue;
-                if (!s_ratingTags.Contains(name))
-                    continue;
-                anidbWeights[name.ToLowerInvariant()] = t.Weight;
+                var lower = name.ToLowerInvariant();
+                tagSet.Add(lower);
+                anidbWeights[lower] = t!.Weight;
             }
         }
 
-        // 18 restricted => X (adult) immediately
+        // 18 restricted -> X (adult) immediately
         if (tagSet.Contains("18 restricted"))
             return ("X", true);
         if (!Settings.AssumedContentRatings)

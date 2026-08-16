@@ -260,6 +260,11 @@ public static class PlexHelper
 
     #region Internal Helpers
 
+    /// <summary>Determines if a filename base matches a specific ID and suffix.</summary>
+    /// <param name="value">The base filename string.</param>
+    /// <param name="id">The expected numeric ID.</param>
+    /// <param name="suffix">The expected image type suffix.</param>
+    /// <returns>True if the value matches the ID and suffix.</returns>
     private static bool IsIdMatch(string value, int id, string suffix)
     {
         if (id <= 0)
@@ -272,24 +277,21 @@ public static class PlexHelper
         return int.TryParse(s.StartsWith("c", StringComparison.OrdinalIgnoreCase) ? s[1..] : s, out int parsed) && parsed == id;
     }
 
-    private static bool IsNameMatch(string baseName, string normalizedTitle, string suffix)
-    {
-        if (!baseName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
-            return false;
-        string cleanedBase = baseName;
-        if (suffix != "")
-            cleanedBase = baseName[..^suffix.Length].Trim();
-        return NormalizeCollectionKey(cleanedBase) == normalizedTitle;
-    }
+    /// <summary>Determines if a filename base matches a specific normalized title and suffix.</summary>
+    /// <param name="baseName">The base filename string.</param>
+    /// <param name="normalizedTitle">The normalized title to match against.</param>
+    /// <param name="suffix">The expected image type suffix.</param>
+    /// <returns>True if the value matches the title and suffix.</returns>
+    private static bool IsNameMatch(string baseName, string normalizedTitle, string suffix) =>
+        baseName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) && NormalizeCollectionKey(suffix != "" ? baseName[..^suffix.Length].Trim() : baseName) == normalizedTitle;
 
-    private static string? NormalizeCollectionKey(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return null;
-        var invalid = Path.GetInvalidFileNameChars();
-        string cleaned = TextHelper.CondenseSpaces(new string([.. value.Where(c => !invalid.Contains(c))]).Trim());
-        return cleaned.Length == 0 ? null : cleaned.ToLowerInvariant();
-    }
+    /// <summary>Sanitizes and normalizes a collection title string for comparison.</summary>
+    /// <param name="value">The raw collection title.</param>
+    /// <returns>The normalized collection key, or null if empty.</returns>
+    private static string? NormalizeCollectionKey(string? value) =>
+        !string.IsNullOrWhiteSpace(value) && TextHelper.CondenseSpaces(new string([.. value.Where(c => !Path.GetInvalidFileNameChars().Contains(c))]).Trim()) is var cleaned && cleaned.Length > 0
+            ? cleaned.ToLowerInvariant()
+            : null;
 
     #endregion
 }

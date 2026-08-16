@@ -320,11 +320,7 @@ internal static class AnimeThemesHelper
     /// <summary>Extracts the numeric suffix from a theme slug, defaulting to 1 if unnumbered or unparseable.</summary>
     /// <param name="baseSlug">The base slug to extract numbers from.</param>
     /// <returns>The extracted number, or 1 if unnumbered.</returns>
-    internal static int ExtractSlugNumber(string baseSlug)
-    {
-        var match = NumberRegex.Match(baseSlug);
-        return match.Success && int.TryParse(match.Value, out var n) ? n : 1;
-    }
+    internal static int ExtractSlugNumber(string baseSlug) => NumberRegex.Match(baseSlug) is { Success: true } match && int.TryParse(match.Value, out var n) ? n : 1;
 
     /// <summary>Standardizes a raw or display theme slug into the canonical 'OP#' or 'ED#' format.</summary>
     /// <param name="slug">The slug string to parse.</param>
@@ -381,27 +377,18 @@ internal static class AnimeThemesHelper
     /// <summary>Calculates a bitmask for metadata flags used in the webm cache.</summary>
     /// <param name="e">The mapping entry.</param>
     /// <returns>An integer bitmask.</returns>
-    internal static int CalculateBitmask(AnimeThemesMappingEntry e)
-    {
-        int flags = 0;
-        if (e.NC)
-            flags |= 1;
-        if (e.Lyrics)
-            flags |= 2;
-        if (e.Subbed)
-            flags |= 4;
-        if (e.Uncen)
-            flags |= 8;
-        if (e.NSFW)
-            flags |= 16;
-        if (e.Spoiler)
-            flags |= 32;
-        if (e.Overlap == "Transition")
-            flags |= 64;
-        else if (e.Overlap == "Over")
-            flags |= 128;
-        return flags;
-    }
+    internal static int CalculateBitmask(AnimeThemesMappingEntry e) =>
+        (e.NC ? 1 : 0)
+        | (e.Lyrics ? 2 : 0)
+        | (e.Subbed ? 4 : 0)
+        | (e.Uncen ? 8 : 0)
+        | (e.NSFW ? 16 : 0)
+        | (e.Spoiler ? 32 : 0)
+        | (
+            e.Overlap == "Transition" ? 64
+            : e.Overlap == "Over" ? 128
+            : 0
+        );
 
     /// <summary>Constructs a sanitized filename from theme metadata.</summary>
     /// <param name="lookup">The metadata lookup object.</param>
@@ -492,11 +479,10 @@ internal static class AnimeThemesHelper
     /// <param name="importRoot">The Shoko import root.</param>
     /// <param name="themeRootFolder">The AnimeThemes folder name.</param>
     /// <returns>The full path or null if missing.</returns>
-    internal static string? ResolveThemeSourcePath(string relativeFilePath, string importRoot, string themeRootFolder)
-    {
-        string path = Path.Combine(importRoot, themeRootFolder, relativeFilePath.TrimStart('/', '\\').Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar));
-        return File.Exists(path) ? Path.GetFullPath(path) : null;
-    }
+    internal static string? ResolveThemeSourcePath(string relativeFilePath, string importRoot, string themeRootFolder) =>
+        Path.Combine(importRoot, themeRootFolder, relativeFilePath.TrimStart('/', '\\').Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar)) is var path && File.Exists(path)
+            ? Path.GetFullPath(path)
+            : null;
 
     /// <summary>Builds the relative target path for a symlink to point back to the theme root.</summary>
     /// <param name="relativeFilePath">Relative path to the theme file.</param>

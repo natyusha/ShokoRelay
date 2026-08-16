@@ -73,10 +73,10 @@ public static class LogHelper
         }
     }
 
-    private static void AppendHeader(StringBuilder sb, string title)
-    {
-        sb.AppendLine($"{title} - {DateTime.Now:yyyy-MM-dd HH:mm:ss}").AppendLine(new string('-', 60)).AppendLine();
-    }
+    /// <summary>Appends a standardized header to a report string builder.</summary>
+    /// <param name="sb">The string builder to append to.</param>
+    /// <param name="title">The title for the report header.</param>
+    private static void AppendHeader(StringBuilder sb, string title) => sb.AppendLine($"{title} - {DateTime.Now:yyyy-MM-dd HH:mm:ss}").AppendLine(new string('-', 60)).AppendLine();
 
     #endregion
 

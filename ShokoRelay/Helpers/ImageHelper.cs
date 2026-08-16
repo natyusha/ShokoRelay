@@ -133,14 +133,11 @@ public static class ImageHelper
         {
             if (lang.Equals("shoko", StringComparison.OrdinalIgnoreCase))
             {
-                var p = remaining.FirstOrDefault(i => i.IsPreferred);
-                if (p != null)
+                if (remaining.FirstOrDefault(i => i.IsPreferred) is { } p)
                 {
                     ordered.Add(p);
                     remaining.Remove(p);
                 }
-                if (!addEveryImage && ordered.Count > 0)
-                    return ordered.Take(1);
             }
             else
             {
@@ -158,9 +155,10 @@ public static class ImageHelper
                     ordered.Add(match);
                     remaining.Remove(match);
                 }
-                if (!addEveryImage && ordered.Count > 0)
-                    return ordered.Take(1);
             }
+
+            if (!addEveryImage && ordered.Count > 0)
+                return ordered.Take(1);
         }
 
         if (addEveryImage)

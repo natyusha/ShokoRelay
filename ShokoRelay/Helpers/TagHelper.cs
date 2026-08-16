@@ -101,16 +101,10 @@ public static class TagHelper
         string result = s_wordRegex.Replace(
             text.ToLower(),
             m =>
-            {
-                string word = m.Value;
-                if (s_forceLower.Contains(word))
-                    return word.ToLower();
-                if (s_forceUpper.Contains(word))
-                    return word.ToUpper();
-
+                s_forceLower.Contains(m.Value) ? m.Value.ToLower()
+                : s_forceUpper.Contains(m.Value) ? m.Value.ToUpper()
                 // Capitalise all words accounting for apostrophes first
-                return char.ToUpper(word[0]) + word[1..];
-            }
+                : char.ToUpper(m.Value[0]) + m.Value[1..]
         );
 
         // Force capitalise the first character no matter what
