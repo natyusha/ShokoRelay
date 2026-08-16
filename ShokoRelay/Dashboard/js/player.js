@@ -192,7 +192,34 @@
       w.startsWith("-") ? tagExclusions.push(w.substring(1)) : w.startsWith("+") ? tagInclusions.push(w.substring(1)) : searchTerms.push(w);
     });
 
-    const matchesTag = (tag, item) => ({ spoil: item.spoiler, nsfw: item.nsfw, lyrics: item.lyrics, subs: item.subs, uncen: item.uncen, nc: item.nc, trans: item.trans, over: item.over })[tag] || false;
+    /**
+     * Checks if a theme item possesses a given attribute tag without object allocation.
+     * @param {string} tag - The tag identifier to test.
+     * @param {Object} item - The theme item to evaluate.
+     * @returns {boolean} True if the item matches the tag.
+     */
+    const matchesTag = (tag, item) => {
+      switch (tag) {
+        case "spoil":
+          return !!item.spoiler;
+        case "nsfw":
+          return !!item.nsfw;
+        case "lyrics":
+          return !!item.lyrics;
+        case "subs":
+          return !!item.subs;
+        case "uncen":
+          return !!item.uncen;
+        case "nc":
+          return !!item.nc;
+        case "trans":
+          return !!item.trans;
+        case "over":
+          return !!item.over;
+        default:
+          return false;
+      }
+    };
 
     return webmTreeData.filter((item) => {
       if (isFavQuery && (!item.videoId || !favourites.has(item.videoId))) return false;

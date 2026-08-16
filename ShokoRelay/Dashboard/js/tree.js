@@ -87,6 +87,7 @@
     det.appendChild(sum);
 
     if (isOpen) {
+      det.dataset.rendered = "true";
       renderFn(ul);
       det.appendChild(ul);
     } else {
