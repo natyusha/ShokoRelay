@@ -76,6 +76,7 @@ All automation endpoints utilize the `LogAndReturn` helper (via `ExecuteTrackedT
 /plex/images/sync                                              -> plex-images-sync-report.log
 /plex/automation/run                                           -> plex-automation-run-report.log
 /vfs                                                           -> shoko-vfs-build-report.log
+/vfs/audit                                                     -> shoko-vfs-audit-report.log
 /shoko/purge-missing                                           -> shoko-purge-missing-report.log
 /sync-watched                                                  -> shoko-sync-watched-report.log
 /map-symlinks                                                  -> shoko-map-symlinks-report.log
