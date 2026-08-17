@@ -96,6 +96,16 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
             }
             bool cacheModified = false;
 
+            // Prune cache entries belonging to library sections that are no longer configured or discovered in Plex
+            var validSectionIds = new HashSet<string>(targets.Select(t => t.SectionId.ToString()));
+            var staleSectionKeys = cache.Keys.Where(k => k.IndexOf('|') is int idx && idx > 0 && !validSectionIds.Contains(k[..idx])).ToList();
+            if (staleSectionKeys.Count > 0)
+            {
+                foreach (var k in staleSectionKeys)
+                    cache.Remove(k);
+                cacheModified = true;
+            }
+
             // Execute pre-cleanup pruning of old posters, arts, logos, and square images if configured and enabled
             if (clean && !string.IsNullOrWhiteSpace(Settings.Advanced.PlexMetadataPath) && Directory.Exists(Settings.Advanced.PlexMetadataPath))
             {
