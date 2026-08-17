@@ -87,9 +87,9 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                 {
                     foreach (var line in File.ReadAllLines(cachePath))
                     {
-                        var parts = line.Split('|', 2);
-                        if (parts.Length == 2)
-                            cache[parts[0]] = parts[1];
+                        var parts = line.Split('|', 4);
+                        if (parts.Length == 4)
+                            cache[$"{parts[0]}|{parts[1]}|{parts[2]}"] = parts[3];
                     }
                 }
                 catch { }
@@ -254,13 +254,14 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                                     var url = PlexHelper.GetCollectionImageUrl(series!, collectionName, cid, suffix, suffixes, metadataService, fallback);
                                     if (!string.IsNullOrEmpty(url))
                                     {
+                                        string cacheVal = NormalizeCacheUrl(url);
                                         string cacheKey = $"{target.SectionId}|{cid}|{prefix}";
-                                        if (cache.TryGetValue(cacheKey, out var lastUrl) && string.Equals(lastUrl, url, StringComparison.Ordinal))
+                                        if (cache.TryGetValue(cacheKey, out var lastVal) && string.Equals(lastVal, cacheVal, StringComparison.Ordinal))
                                             continue;
 
                                         if (await plexCollections.UploadCollectionImageByUrlAsync(cid, url, prefix, target, cancellationToken).ConfigureAwait(false))
                                         {
-                                            cache[cacheKey] = url;
+                                            cache[cacheKey] = cacheVal;
                                             cacheModified = true;
                                             uploaded++;
                                             uploadedDetails.Add(new CollectionUploadDetail(target.Title, isMovieTarget, label, collectionName, cid));
@@ -286,13 +287,14 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                                 var url =
                                     $"{ServerBaseUrl}{ShokoRelayConstants.BasePath}/collections/user/sc{cid}?name={Uri.EscapeDataString(col.Title)}&suffix={suffix}&t={new FileInfo(posterPath).LastWriteTimeUtc.Ticks}";
 
+                                string cacheVal = NormalizeCacheUrl(url);
                                 string cacheKey = $"{target.SectionId}|sc{cid}|{prefix}";
-                                if (cache.TryGetValue(cacheKey, out var lastUrl) && string.Equals(lastUrl, url, StringComparison.Ordinal))
+                                if (cache.TryGetValue(cacheKey, out var lastVal) && string.Equals(lastVal, cacheVal, StringComparison.Ordinal))
                                     continue;
 
                                 if (await plexCollections.UploadCollectionImageByUrlAsync(cid, url, prefix, target, cancellationToken).ConfigureAwait(false))
                                 {
-                                    cache[cacheKey] = url;
+                                    cache[cacheKey] = cacheVal;
                                     cacheModified = true;
                                     uploaded++;
                                     uploadedDetails.Add(new CollectionUploadDetail(target.Title, isMovieTarget, $"custom {label}", col.Title, cid));
@@ -339,6 +341,15 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
             TaskHelper.FinishTask(TaskName);
         }
     }
+
+    #endregion
+
+    #region Internal Helpers
+
+    /// <summary>Normalizes an artwork URL for caching by stripping the host and port if it targets a local API endpoint.</summary>
+    /// <param name="url">The full image URL.</param>
+    /// <returns>A normalized relative or external URL string.</returns>
+    private static string NormalizeCacheUrl(string url) => url.IndexOf("/api/", StringComparison.OrdinalIgnoreCase) is int idx && idx >= 0 ? url[idx..] : url;
 
     #endregion
 }
