@@ -91,11 +91,16 @@
           });
         } else {
           const existing = seriesMap.get(s.id);
-          existing.rootFiles.push(...(s.rootFiles || []));
+          (s.rootFiles || []).forEach((f) => {
+            if (!existing.rootFiles.some((ef) => ef.name === f.name && ef.source === f.source)) existing.rootFiles.push(f);
+          });
           (s.seasons || []).forEach((se) => {
             const existSeason = existing.seasons.find((ese) => ese.name === se.name);
-            if (existSeason) existSeason.files.push(...se.files);
-            else existing.seasons.push({ name: se.name, seasonId: se.seasonId, files: [...se.files] });
+            if (existSeason) {
+              se.files.forEach((f) => {
+                if (!existSeason.files.some((ef) => ef.name === f.name && ef.source === f.source)) existSeason.files.push(f);
+              });
+            } else existing.seasons.push({ name: se.name, seasonId: se.seasonId, files: [...se.files] });
           });
         }
       });

@@ -105,7 +105,7 @@ internal static class VfsShared
         bool isMovie = MapHelper.IsMovie(series);
         var mode = Settings.Advanced.MovieGenerationMode;
 
-        var fileData = MapHelper.GetSeriesFileData(series, metadataService);
+        var fileData = MapHelper.GetConsolidatedSeriesFileData(series, metadataService);
         foreach (var mapping in fileData.Mappings)
         {
             var location = mapping.Video.Files.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l.Path)) ?? mapping.Video.Files.FirstOrDefault();
