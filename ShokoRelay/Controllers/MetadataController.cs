@@ -108,7 +108,8 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             var tmdbMovie = ep.TmdbMovies?.FirstOrDefault() ?? ep.Series?.TmdbMovies?.FirstOrDefault();
             string movieTitle = TextHelper.ResolveMovieTitle(ep, ep.Series!, tmdbMovie);
             var posterUrl =
-                (ep.Series as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage)
+                (ep.EpisodeNumber > 1 && tmdbMovie is IWithImages mi ? mi.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage) : null)
+                ?? (ep.Series as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage)
                 ?? (tmdbMovie as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage);
             return Ok(
                 new
