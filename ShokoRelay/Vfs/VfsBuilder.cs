@@ -60,7 +60,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         {
             foreach (var s in allSeries)
             {
-                int folderId = EnforceTmdbNumbering ? OverrideHelper.GetPrimary(s.ID, metadataService) : s.ID;
+                int folderId = s.GetPrimaryId(metadataService);
                 bool isMovie = MapHelper.IsMovie(s);
 
                 if (mode == MovieGenerationMode.Disabled || !isMovie || (isMovie && mode == MovieGenerationMode.EnabledMaintain))
@@ -258,7 +258,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                     // SeriesNode structure: { id, anidbId, title, seasons: { "Season 1": [ { name, source } ] }, rootFiles: [ { name, source } ] }
                     var seasons = new ConcurrentDictionary<string, ConcurrentDictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
                     var rootFiles = new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                    int folderId = EnforceTmdbNumbering ? OverrideHelper.GetPrimary(series.ID, metadataService) : series.ID;
+                    int folderId = series.GetPrimaryId(metadataService);
 
                     // Ensure stale entries for this series are removed across all roots before rebuilding its node.
                     foreach (var rootDict in blueprint.Values)
@@ -379,7 +379,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
     {
         var (created, skipped, planned, errors, skippedDetails) = (0, 0, 0, new List<string>(), new List<string>());
         var (displayTitle, _, _) = TextHelper.ResolveFullSeriesTitles(series);
-        int folderId = EnforceTmdbNumbering ? OverrideHelper.GetPrimary(series.ID, metadataService) : series.ID;
+        int folderId = series.GetPrimaryId(metadataService);
         string movieRootName = VfsShared.ResolveMovieRootFolderName();
 
         // Retrieve the files and episode mappings for a series, leveraging the build-session cache
@@ -684,9 +684,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         }
 
         // Dynamically register physically present AnimeThemes mapping files inside the blueprint Shorts directory to protect them from cleanup
-        var anidbIds = EnforceTmdbNumbering
-            ? OverrideHelper.GetGroup(folderId, metadataService).Select(metadataService.GetShokoSeriesByID).OfType<IShokoSeries>().Select(s => s.AnidbAnimeID).ToList()
-            : [series.AnidbAnimeID];
+        var anidbIds = OverrideHelper.GetGroup(folderId, metadataService).Select(metadataService.GetShokoSeriesByID).OfType<IShokoSeries>().Select(s => s.AnidbAnimeID).ToList();
 
         foreach (var seriesPath in resolvedVfsSeriesPaths)
         {

@@ -17,6 +17,18 @@ public static class ShokoExtensionHelper
     /// <returns>A Plex-compatible rating key string.</returns>
     public static string GetPlexRatingKey(this ISeries s) => s.ID.ToString();
 
+    /// <summary>Gets the primary Shoko series ID according to VFS override groups and TMDB configuration.</summary>
+    /// <param name="s">The series metadata.</param>
+    /// <param name="metadataService">The metadata service used for override resolution.</param>
+    /// <returns>The resolved primary Shoko series ID.</returns>
+    public static int GetPrimaryId(this ISeries s, IMetadataService metadataService) => OverrideHelper.GetPrimary(s.ID, metadataService);
+
+    /// <summary>Gets the collection of series IDs associated with this series in an override group.</summary>
+    /// <param name="s">The series metadata.</param>
+    /// <param name="metadataService">The metadata service used for override resolution.</param>
+    /// <returns>A list of Shoko series IDs with the primary series first.</returns>
+    public static IReadOnlyList<int> GetOverrideGroup(this ISeries s, IMetadataService metadataService) => OverrideHelper.GetGroup(s.ID, metadataService);
+
     #endregion
 
     #region Seasons

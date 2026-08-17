@@ -100,7 +100,7 @@ internal static class VfsShared
         var roots = new HashSet<string>(PathComparer);
         string rootName = ResolveRootFolderName();
         string movieRootName = ResolveMovieRootFolderName();
-        int folderId = EnforceTmdbNumbering ? OverrideHelper.GetPrimary(series.ID, metadataService) : series.ID;
+        int folderId = series.GetPrimaryId(metadataService);
 
         bool isMovie = MapHelper.IsMovie(series);
         var mode = Settings.Advanced.MovieGenerationMode;

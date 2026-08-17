@@ -73,7 +73,7 @@ public class CriticRatingService(HttpClient httpClient, PlexClient plexClient, I
             if (!plexClient.IsEnabled)
                 return new ApplyRatingsResult(0, 0, 0, 0, 0, errorsList, appliedChanges, sw.Elapsed);
 
-            var allowedSet = allowedSeriesIds != null ? new HashSet<int>(allowedSeriesIds) : null;
+            var allowedSet = allowedSeriesIds != null ? new HashSet<int>(allowedSeriesIds.Select(id => OverrideHelper.GetPrimary(id, metadataService))) : null;
             foreach (var target in plexClient.GetConfiguredTargets())
             {
                 if (target.LibraryType != PlexLibraryType.Movie)

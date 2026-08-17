@@ -55,10 +55,8 @@ public static class MapHelper
     /// <returns>A SeriesFileData object.</returns>
     public static SeriesFileData GetConsolidatedSeriesFileData(ISeries series, IMetadataService metadataService)
     {
-        if (!EnforceTmdbNumbering)
-            return GetSeriesFileData(series, metadataService);
-        int pId = OverrideHelper.GetPrimary(series.ID, metadataService);
-        var group = OverrideHelper.GetGroup(pId, metadataService).Select(metadataService.GetShokoSeriesByID).OfType<IShokoSeries>().ToList();
+        int pId = series.GetPrimaryId(metadataService);
+        var group = series.GetOverrideGroup(metadataService).Select(metadataService.GetShokoSeriesByID).OfType<IShokoSeries>().ToList();
         return group.Count <= 1 ? GetSeriesFileData(group.FirstOrDefault() ?? series, metadataService) : GetSeriesFileDataMerged(group[0], group.Skip(1).Cast<ISeries>(), metadataService);
     }
 
@@ -109,13 +107,7 @@ public static class MapHelper
     /// <returns>An enumerable collection of active <see cref="IVideo"/> files.</returns>
     public static IEnumerable<IVideo> GetActiveVideos(ISeries series, IMetadataService metadataService)
     {
-        var seriesList = new List<ISeries> { series };
-        if (EnforceTmdbNumbering)
-        {
-            int primaryId = OverrideHelper.GetPrimary(series.ID, metadataService);
-            seriesList = [.. OverrideHelper.GetGroup(primaryId, metadataService).Select(metadataService.GetShokoSeriesByID).OfType<ISeries>()];
-        }
-
+        var seriesList = series.GetOverrideGroup(metadataService).Select(metadataService.GetShokoSeriesByID).OfType<ISeries>();
         var seenVideoIds = new HashSet<int>();
         foreach (var s in seriesList)
         {

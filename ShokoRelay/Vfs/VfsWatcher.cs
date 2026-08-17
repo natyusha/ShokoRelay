@@ -98,8 +98,9 @@ public class VfsWatcher(
 
         foreach (var series in e.Video.Series)
         {
-            s_logger.Debug("VFS: Adding series -> {0} [{1}] to pending queue due to release save", series.GetDisplayTitle(), series.ID);
-            _pending[series.ID] = 1;
+            int primaryId = series.GetPrimaryId(metadataService);
+            s_logger.Debug("VFS: Adding series -> {0} [{1}] (Primary: {2}) to pending queue due to release save", series.GetDisplayTitle(), series.ID, primaryId);
+            _pending[primaryId] = 1;
         }
 
         KickProcessLoop();
@@ -114,7 +115,10 @@ public class VfsWatcher(
             return;
 
         foreach (var series in seriesList)
-            _pending[series.ID] = 1;
+        {
+            int primaryId = series.GetPrimaryId(metadataService);
+            _pending[primaryId] = 1;
+        }
         KickProcessLoop();
     }
 
@@ -203,7 +207,9 @@ public class VfsWatcher(
     {
         if (!plexLibrary.IsEnabled)
             return;
-        var series = metadataService.GetShokoSeriesByID(seriesId);
+
+        int primaryId = OverrideHelper.GetPrimary(seriesId, metadataService);
+        var series = metadataService.GetShokoSeriesByID(primaryId);
         if (series == null)
             return;
 

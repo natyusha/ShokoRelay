@@ -54,11 +54,10 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
         try
         {
             var targets = plexClient.GetConfiguredTargets();
+            var allowedPrimaryIds = allowedSeriesIds?.Select(id => OverrideHelper.GetPrimary(id, metadataService)).Distinct().ToList();
             var allSeries =
-                allowedSeriesIds != null
-                    ? [.. allowedSeriesIds.Distinct().Select(metadataService.GetShokoSeriesByID).OfType<IShokoSeries>()]
-                    : metadataService.GetAllShokoSeries()?.Cast<IShokoSeries>().ToList() ?? [];
-            HashSet<int>? allowedSet = allowedSeriesIds != null ? [.. allowedSeriesIds] : null;
+                allowedPrimaryIds != null ? [.. allowedPrimaryIds.Select(metadataService.GetShokoSeriesByID).OfType<IShokoSeries>()] : metadataService.GetAllShokoSeries()?.Cast<IShokoSeries>().ToList() ?? [];
+            HashSet<int>? allowedSet = allowedPrimaryIds != null ? [.. allowedPrimaryIds] : null;
 
             var syncDetails = Settings.TmdbThumbnails ? "" : " + Plex episode thumbnails";
             s_logger.Info("ImageSyncService: Starting image synchronization (local collection/series artwork{0})...", syncDetails);
@@ -313,7 +312,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                     foreach (var config in configs)
                     {
                         var cacheKey = config.Prefix + series.ID;
-                        if (EnforceTmdbNumbering && OverrideHelper.GetPrimary(series.ID, metadataService) != series.ID)
+                        if (OverrideHelper.GetPrimary(series.ID, metadataService) != series.ID)
                         {
                             if (cache.TryRemove(cacheKey, out _))
                             {

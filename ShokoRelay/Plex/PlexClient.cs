@@ -364,9 +364,10 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
             return [];
         try
         {
+            int primaryId = OverrideHelper.GetPrimary(shokoSeriesId, metadataService);
             if (target.LibraryType == PlexLibraryType.Movie)
             {
-                var series = metadataService.GetShokoSeriesByID(shokoSeriesId);
+                var series = metadataService.GetShokoSeriesByID(primaryId);
                 if (series == null)
                     return [];
 
@@ -388,7 +389,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
             }
             else
             {
-                string guid = $"{ShokoRelayConstants.AgentScheme}://show/{shokoSeriesId}";
+                string guid = $"{ShokoRelayConstants.AgentScheme}://show/{primaryId}";
                 using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?guid={Uri.EscapeDataString(guid)}&X-Plex-Container-Start=0&X-Plex-Container-Size=1", target.ServerUrl);
                 using var resp = await HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
                 var item = (await PlexApi.ReadContainerAsync(resp, cancellationToken).ConfigureAwait(false))?.Metadata?.FirstOrDefault();
