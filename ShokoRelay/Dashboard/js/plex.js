@@ -137,6 +137,7 @@
   }
   // #endregion
 
-  //Initialization
+  // Initialization
+  window._sr.refreshPlexState = refreshPlexState;
   refreshPlexState();
 })();

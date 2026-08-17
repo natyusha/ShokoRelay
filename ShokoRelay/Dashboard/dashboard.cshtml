@@ -93,7 +93,15 @@
             <!-- State: Linked -->
             <div class="plex-auth-state full" hidden>
               <button id="plex-unlink" class="danger">Unlink Plex</button>
-              <button id="{{ TaskPlexAuthRefresh }}" class="w46-button" title="Refresh Plex Libraries" data-relay-endpoint="/plex/auth/refresh" data-relay-method="POST" data-relay-label="Plex Discovery">
+              <button
+                id="{{ TaskPlexAuthRefresh }}"
+                class="w46-button"
+                title="Refresh Plex Libraries"
+                data-relay-endpoint="/plex/auth/refresh"
+                data-relay-method="POST"
+                data-relay-label="Plex Discovery"
+                data-relay-persist="true"
+              >
                 <svg class="icon-svg"><use href="img/icons.svg#refresh"></use></svg>
               </button>
             </div>

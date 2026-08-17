@@ -67,6 +67,7 @@
         toastOperation({ ok: isOk, data: result }, taskName.replace(/-/g, " "), { hideOnSucceed: fInput?.value?.trim() ? TOAST_MS : 0 });
         await fetch(base + `/tasks/clear/${taskName}`, { method: "POST" });
         hasNewLogs = true;
+        if (taskName === window._sr.tasks.plexAuthRefresh) window._sr.refreshPlexState?.();
       }
       if (hasNewLogs) loadLogs();
     }
@@ -188,6 +189,7 @@
         showToast(`${label}${forceDryRun ? " (Dry Run)" : ""}: Processing...`, "info", TOAST_MS);
         const res = await fetchJson(url, { method });
         toastOperation(res, label, { hideOnSucceed });
+        if (btn.id === window._sr.tasks.plexAuthRefresh && res.ok) window._sr.refreshPlexState?.();
       } else if (actionKey) {
         const handler = window._sr.actions[actionKey];
         if (handler) await handler(btn);
