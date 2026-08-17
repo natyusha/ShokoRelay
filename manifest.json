@@ -15,6 +15,34 @@
   "image_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-logo.png",
   "releases": [
     {
+      "version": "0.17.1",
+      "tag": "v0.17.1",
+      "source_revision": "ef8a8bd0bb904106276fa39a868e8ea79fe9bd40",
+      "released_at": "2026-08-17T18:29:34Z",
+      "channel": "Dev",
+      "release_notes": "After updating to this version, users of the dedicated Movie VFS (or those who often have multiple files for the same episode) should run a full VFS regeneration.\r\n\r\n**Changes:**\r\n- Update standalone Movie VFS filename generation to use 'Movie [{ShokoFileID}]' naming convention\r\n- Standardize duplicate file collision suffix from '-v#' to '-dup#' across standard and movie VFS filenames\r\n- Implement URL-based caching for Plex collection artwork to skip re-uploading unchanged posters, backdrops, and logos\r\n- Update Collection Build Report and Image Sync Report statistics to display Uploaded vs Already Uploaded counts\r\n- Fix external subtitle and sidecar linking in standalone Movie VFS (LinkEpisodeMetadata)\r\n- Ensure merged series resolve primary series IDs when triggering plex metadata refreshes/analysis\r\n- Ensure merged series across multiple import roots resolve paths and refresh Plex metadata accurately\r\n- Optimize AnimeThemes Video Player tag search filtering to eliminate GC memory allocations\r\n- Bump Shoko.Abstractions to v6.0.0-alpha.81\r\n- General optimizations and fixes\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.17.0...v0.17.1",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.17.1/ShokoRelay-v0.17.1-dev_linux-arm64.zip",
+          "checksum": "33e5e873503665b3d924f465ac2e6d4bb04a095097fd7e9a11637fd55d32b16b"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.17.1/ShokoRelay-v0.17.1-dev_linux-x64.zip",
+          "checksum": "4bdd802fbf20f514f814fe4566e044452c09a2302fab10afe974c5aae1c6eb51"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.17.1/ShokoRelay-v0.17.1-dev_win-x64.zip",
+          "checksum": "689ba52578b79a28910079a419db65f92db3038388f05243f9bc7603eb355f18"
+        }
+      ]
+    },
+    {
       "version": "0.17.0",
       "tag": "v0.17.0",
       "source_revision": "d9f6812ed0619d86fac46c41b067977961d2075f",
