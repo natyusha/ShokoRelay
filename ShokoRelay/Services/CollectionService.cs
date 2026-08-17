@@ -21,6 +21,7 @@ public interface ICollectionService
 /// <param name="Processed">Number of series processed.</param>
 /// <param name="Created">Number of collections successfully assigned.</param>
 /// <param name="Uploaded">Number of posters uploaded.</param>
+/// <param name="AlreadyUploaded">Number of collection images already set and skipped from re-uploading.</param>
 /// <param name="SeasonPostersUploaded">Number of season-specific posters uploaded.</param>
 /// <param name="Skipped">Number of items skipped.</param>
 /// <param name="Errors">Count of errors encountered.</param>
@@ -34,6 +35,7 @@ public sealed record BuildCollectionsResult(
     int Processed,
     int Created,
     int Uploaded,
+    int AlreadyUploaded,
     int SeasonPostersUploaded,
     int Skipped,
     int Errors,
@@ -57,6 +59,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
 
     #endregion
 
+
     #region Collection Building
 
     /// <inheritdoc/>
@@ -69,13 +72,13 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
 
         try
         {
-            var (created, uploaded, errs, uniqueSeries) = (0, 0, 0, new HashSet<int>());
+            var (created, uploaded, alreadyUploaded, errs, uniqueSeries) = (0, 0, 0, 0, new HashSet<int>());
             var (createdList, uploadedDetails, errorsList) = (new List<CollectionAssignmentDetail>(), new List<CollectionUploadDetail>(), new List<string>());
             var allowedIds = new HashSet<int>(seriesList?.Where(s => s != null).Select(s => OverrideHelper.GetPrimary(s!.ID, metadataService)) ?? []);
             var targets = plexClient.GetConfiguredTargets();
 
             if (targets.Count == 0)
-                return new BuildCollectionsResult(0, 0, 0, 0, 0, 0, 0, createdList, uploadedDetails, [], errorsList, sw.Elapsed);
+                return new BuildCollectionsResult(0, 0, 0, 0, 0, 0, 0, 0, createdList, uploadedDetails, [], errorsList, sw.Elapsed);
 
             List<string> globalRoots = [.. (videoService.GetAllManagedFolders() ?? []).Select(f => f.Path).Where(p => !string.IsNullOrEmpty(p)).Distinct()];
 
@@ -160,6 +163,27 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                     : await plexClient.GetSectionShowsAsync(target, cancellationToken).ConfigureAwait(false) ?? [];
 
                 var collections = await plexClient.GetSectionCollectionsAsync(target, cancellationToken).ConfigureAwait(false) ?? [];
+
+                // Map collection rating keys to metadata items to inspect existing poster state
+                var collectionRatingKeyMap = collections.Where(c => !string.IsNullOrEmpty(c.RatingKey)).ToDictionary(c => c.RatingKey!, StringComparer.OrdinalIgnoreCase);
+
+                // Prune cache keys for collections that no longer exist in this target (e.g. library deleted and rebuilt)
+                var targetPrefix = $"{target.SectionId}|";
+                var staleCollectionKeys = cache
+                    .Keys.Where(k =>
+                        k.StartsWith(targetPrefix, StringComparison.Ordinal)
+                        && k.Split('|') is var parts
+                        && parts.Length == 3
+                        && !collectionRatingKeyMap.ContainsKey(parts[1].StartsWith("sc", StringComparison.OrdinalIgnoreCase) ? parts[1][2..] : parts[1])
+                    )
+                    .ToList();
+
+                if (staleCollectionKeys.Count > 0)
+                {
+                    foreach (var k in staleCollectionKeys)
+                        cache.Remove(k);
+                    cacheModified = true;
+                }
 
                 // Map collection names to their Plex RatingKeys (IDs)
                 var collectionIdMap = collections
@@ -256,8 +280,19 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                                     {
                                         string cacheVal = NormalizeCacheUrl(url);
                                         string cacheKey = $"{target.SectionId}|{cid}|{prefix}";
-                                        if (cache.TryGetValue(cacheKey, out var lastVal) && string.Equals(lastVal, cacheVal, StringComparison.Ordinal))
+
+                                        // If checking poster, verify that the collection in Plex actually has a custom poster set (not empty or composite)
+                                        bool plexHasPoster =
+                                            prefix != "posters"
+                                            || (
+                                                collectionRatingKeyMap.TryGetValue(cid.ToString(), out var pCol) && pCol.Thumb != null && !pCol.Thumb.Contains("/composite/", StringComparison.OrdinalIgnoreCase)
+                                            );
+
+                                        if (plexHasPoster && cache.TryGetValue(cacheKey, out var lastVal) && string.Equals(lastVal, cacheVal, StringComparison.Ordinal))
+                                        {
+                                            alreadyUploaded++;
                                             continue;
+                                        }
 
                                         if (await plexCollections.UploadCollectionImageByUrlAsync(cid, url, prefix, target, cancellationToken).ConfigureAwait(false))
                                         {
@@ -289,8 +324,14 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
 
                                 string cacheVal = NormalizeCacheUrl(url);
                                 string cacheKey = $"{target.SectionId}|sc{cid}|{prefix}";
-                                if (cache.TryGetValue(cacheKey, out var lastVal) && string.Equals(lastVal, cacheVal, StringComparison.Ordinal))
+
+                                bool plexHasPoster = prefix != "posters" || (col.Thumb != null && !col.Thumb.Contains("/composite/", StringComparison.OrdinalIgnoreCase));
+
+                                if (plexHasPoster && cache.TryGetValue(cacheKey, out var lastVal) && string.Equals(lastVal, cacheVal, StringComparison.Ordinal))
+                                {
+                                    alreadyUploaded++;
                                     continue;
+                                }
 
                                 if (await plexCollections.UploadCollectionImageByUrlAsync(cid, url, prefix, target, cancellationToken).ConfigureAwait(false))
                                 {
@@ -334,7 +375,21 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
 
             sw.Stop();
             s_logger.Info("CollectionService: Task finished -> {0} collections assigned in {1}ms", created, sw.ElapsedMilliseconds);
-            return new BuildCollectionsResult(uniqueSeries.Count, created, uploaded, 0, uniqueSeries.Count - created, errs, deletedList.Count, createdList, uploadedDetails, deletedList, errorsList, sw.Elapsed);
+            return new BuildCollectionsResult(
+                uniqueSeries.Count,
+                created,
+                uploaded,
+                alreadyUploaded,
+                0,
+                uniqueSeries.Count - created,
+                errs,
+                deletedList.Count,
+                createdList,
+                uploadedDetails,
+                deletedList,
+                errorsList,
+                sw.Elapsed
+            );
         }
         finally
         {

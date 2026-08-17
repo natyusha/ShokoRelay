@@ -24,7 +24,7 @@ public interface IImageSyncService
 /// <summary>Represents the final result of an image synchronization task.</summary>
 /// <param name="Processed">Total number of images evaluated.</param>
 /// <param name="Uploaded">Total number of images successfully uploaded to Shoko.</param>
-/// <param name="Skipped">Total number of images skipped because they already had primary artwork.</param>
+/// <param name="Skipped">Total number of images already set and skipped from re-uploading.</param>
 /// <param name="Errors">Count of errors encountered during connection or upload.</param>
 /// <param name="UploadedDetails">List of specific images that were uploaded.</param>
 /// <param name="ErrorsList">List of specific error messages.</param>

@@ -120,7 +120,8 @@ public static class LogHelper
             ["Elapsed Time"] = $"{r.TotalElapsed.TotalSeconds:F2}s",
             ["Series Processed"] = r.Processed,
             ["Collections Assigned"] = r.Created,
-            ["Posters Uploaded"] = r.Uploaded,
+            ["Images Uploaded"] = r.Uploaded,
+            ["Images Already Uploaded"] = r.AlreadyUploaded,
             ["Empty Collections Deleted"] = r.DeletedEmptyCollections,
             ["Errors"] = r.Errors,
         };
@@ -228,9 +229,9 @@ public static class LogHelper
         var stats = new Dictionary<string, object>
         {
             ["Elapsed Time"] = $"{r.TotalElapsed.TotalSeconds:F2}s",
-            ["Processed Episodes"] = r.Processed,
-            ["Uploaded Screenshots"] = r.Uploaded,
-            ["Skipped Episodes"] = r.Skipped,
+            ["Images Processed"] = r.Processed,
+            ["Images Uploaded"] = r.Uploaded,
+            ["Images Already Uploaded"] = r.Skipped,
             ["Errors"] = r.Errors,
         };
         var items = r.UploadedDetails.OrderBy(u => u).Select(u => $"UPLOADED: {u}").ToList();
