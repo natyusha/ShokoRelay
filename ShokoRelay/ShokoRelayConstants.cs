@@ -73,6 +73,9 @@ public static class ShokoRelayConstants
     /// <summary>Filename for the Plex token.</summary>
     public const string FilePlexToken = "plex.token";
 
+    /// <summary>Filename for the Plex collection artwork upload cache.</summary>
+    public const string FilePlexCollectionsCache = "collections_shokorelay.cache";
+
     /// <summary>Filename for the Plex-generated episode image sync cache.</summary>
     public const string FilePlexImagesCache = "images_shokorelay.cache";
 

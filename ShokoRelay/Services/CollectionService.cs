@@ -48,7 +48,8 @@ public sealed record BuildCollectionsResult(
 #endregion
 
 /// <summary>Default implementation of <see cref="ICollectionService"/>.</summary>
-public class CollectionService(PlexClient plexClient, PlexCollections plexCollections, IMetadataService metadataService, PlexMetadata mapper, IVideoService videoService) : ICollectionService
+public class CollectionService(PlexClient plexClient, PlexCollections plexCollections, IMetadataService metadataService, PlexMetadata mapper, IVideoService videoService, ConfigProvider configProvider)
+    : ICollectionService
 {
     #region Setup
 
@@ -77,6 +78,23 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                 return new BuildCollectionsResult(0, 0, 0, 0, 0, 0, 0, createdList, uploadedDetails, [], errorsList, sw.Elapsed);
 
             List<string> globalRoots = [.. (videoService.GetAllManagedFolders() ?? []).Select(f => f.Path).Where(p => !string.IsNullOrEmpty(p)).Distinct()];
+
+            string cachePath = Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FilePlexCollectionsCache);
+            var cache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (File.Exists(cachePath))
+            {
+                try
+                {
+                    foreach (var line in File.ReadAllLines(cachePath))
+                    {
+                        var parts = line.Split('|', 2);
+                        if (parts.Length == 2)
+                            cache[parts[0]] = parts[1];
+                    }
+                }
+                catch { }
+            }
+            bool cacheModified = false;
 
             // Execute pre-cleanup pruning of old posters, arts, logos, and square images if configured and enabled
             if (clean && !string.IsNullOrWhiteSpace(Settings.Advanced.PlexMetadataPath) && Directory.Exists(Settings.Advanced.PlexMetadataPath))
@@ -224,11 +242,20 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                                 {
                                     var fallback = defaultFallback && Settings.CollectionImages;
                                     var url = PlexHelper.GetCollectionImageUrl(series!, collectionName, cid, suffix, suffixes, metadataService, fallback);
-                                    if (!string.IsNullOrEmpty(url) && await plexCollections.UploadCollectionImageByUrlAsync(cid, url, prefix, target, cancellationToken).ConfigureAwait(false))
+                                    if (!string.IsNullOrEmpty(url))
                                     {
-                                        uploaded++;
-                                        uploadedDetails.Add(new CollectionUploadDetail(target.Title, isMovieTarget, label, collectionName, cid));
-                                        s_logger.Debug("CollectionService: Applied {0} for collection -> {1}", label, collectionName);
+                                        string cacheKey = $"{target.SectionId}|{cid}|{prefix}";
+                                        if (cache.TryGetValue(cacheKey, out var lastUrl) && string.Equals(lastUrl, url, StringComparison.Ordinal))
+                                            continue;
+
+                                        if (await plexCollections.UploadCollectionImageByUrlAsync(cid, url, prefix, target, cancellationToken).ConfigureAwait(false))
+                                        {
+                                            cache[cacheKey] = url;
+                                            cacheModified = true;
+                                            uploaded++;
+                                            uploadedDetails.Add(new CollectionUploadDetail(target.Title, isMovieTarget, label, collectionName, cid));
+                                            s_logger.Debug("CollectionService: Applied {0} for collection -> {1}", label, collectionName);
+                                        }
                                     }
                                 }
                             }
@@ -248,8 +275,15 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                             {
                                 var url =
                                     $"{ServerBaseUrl}{ShokoRelayConstants.BasePath}/collections/user/sc{cid}?name={Uri.EscapeDataString(col.Title)}&suffix={suffix}&t={new FileInfo(posterPath).LastWriteTimeUtc.Ticks}";
+
+                                string cacheKey = $"{target.SectionId}|sc{cid}|{prefix}";
+                                if (cache.TryGetValue(cacheKey, out var lastUrl) && string.Equals(lastUrl, url, StringComparison.Ordinal))
+                                    continue;
+
                                 if (await plexCollections.UploadCollectionImageByUrlAsync(cid, url, prefix, target, cancellationToken).ConfigureAwait(false))
                                 {
+                                    cache[cacheKey] = url;
+                                    cacheModified = true;
                                     uploaded++;
                                     uploadedDetails.Add(new CollectionUploadDetail(target.Title, isMovieTarget, $"custom {label}", col.Title, cid));
                                     s_logger.Info("CollectionService: Applied custom {0} to smart collection -> {1} (RatingKey: {2})", label, col.Title, cid);
@@ -263,6 +297,28 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
             var deletedList = new List<CollectionDeletionDetail>();
             if (applyAssignment)
                 deletedList = await plexCollections.DeleteEmptyCollectionsAsync(cancellationToken).ConfigureAwait(false);
+
+            if (deletedList.Count > 0)
+            {
+                foreach (var del in deletedList)
+                {
+                    var targetKeys = cache.Keys.Where(k => k.Contains($"|{del.RatingKey}|") || k.Contains($"|sc{del.RatingKey}|")).ToList();
+                    foreach (var k in targetKeys)
+                    {
+                        cache.Remove(k);
+                        cacheModified = true;
+                    }
+                }
+            }
+
+            if (cacheModified)
+            {
+                try
+                {
+                    File.WriteAllLines(cachePath, cache.Select(kvp => $"{kvp.Key}|{kvp.Value}"));
+                }
+                catch { }
+            }
 
             sw.Stop();
             s_logger.Info("CollectionService: Task finished -> {0} collections assigned in {1}ms", created, sw.ElapsedMilliseconds);
