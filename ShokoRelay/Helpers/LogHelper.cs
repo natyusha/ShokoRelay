@@ -1,5 +1,6 @@
 using System.Text;
 using ShokoRelay.AnimeThemes;
+using ShokoRelay.Controllers;
 using ShokoRelay.Services;
 using ShokoRelay.Sync;
 using ShokoRelay.Vfs;
@@ -76,7 +77,8 @@ public static class LogHelper
     /// <summary>Appends a standardized header to a report string builder.</summary>
     /// <param name="sb">The string builder to append to.</param>
     /// <param name="title">The title for the report header.</param>
-    private static void AppendHeader(StringBuilder sb, string title) => sb.AppendLine($"{title} - {DateTime.Now:yyyy-MM-dd HH:mm:ss}").AppendLine(new string('-', 60)).AppendLine();
+    private static void AppendHeader(StringBuilder sb, string title) =>
+        sb.AppendLine($"{title} - {DateTime.Now:yyyy-MM-dd HH:mm:ss} - {ShokoRelayConstants.Name} v{ShokoRelayConstants.Version}").AppendLine(new string('-', 90)).AppendLine();
 
     #endregion
 
@@ -234,6 +236,35 @@ public static class LogHelper
         var items = r.UploadedDetails.OrderBy(u => u).Select(u => $"UPLOADED: {u}").ToList();
         items.AddRange(r.ErrorsList.OrderBy(e => e).Select(e => $"ERROR: {e}"));
         BuildReport(sb, "Plex Image Sync Report", stats, "Details:", items);
+    }
+
+    /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskPlexAutomationRun"/>.</summary>
+    /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
+    /// <param name="r">Automation run result data.</param>
+    /// <param name="apiBase">The base API URL for report links.</param>
+    public static void BuildPlexAutomationReport(StringBuilder sb, PlexAutomationRunResult r, string apiBase)
+    {
+        AppendHeader(sb, "Plex Automation Run Report");
+        sb.AppendLine($"  Total Elapsed Time         : {r.TotalElapsed.TotalSeconds:F2}s");
+        sb.AppendLine();
+        sb.AppendLine("Tasks Executed:");
+        sb.AppendLine($"  - Collection Generation    : {r.CollectionsElapsed.TotalSeconds:F2}s");
+        sb.AppendLine($"    Log File URL             : {apiBase}/logs/{ShokoRelayConstants.TaskPlexCollectionsBuild}-report.log");
+        sb.AppendLine($"  - Critic Rating Application: {r.RatingsElapsed.TotalSeconds:F2}s");
+        sb.AppendLine($"    Log File URL             : {apiBase}/logs/{ShokoRelayConstants.TaskPlexRatingsApply}-report.log");
+
+        if (r.ImageSyncElapsed.HasValue)
+        {
+            sb.AppendLine($"  - Plex Image Sync          : {r.ImageSyncElapsed.Value.TotalSeconds:F2}s");
+            sb.AppendLine($"    Log File URL             : {apiBase}/logs/{ShokoRelayConstants.TaskPlexImagesSync}-report.log");
+        }
+
+        if (r.TrashElapsed.HasValue)
+        {
+            sb.AppendLine($"  - Empty Plex Trash         : {r.TrashElapsed.Value.TotalSeconds:F2}s");
+            foreach (var msg in r.TrashMessages ?? [])
+                sb.AppendLine($"    -> {msg}");
+        }
     }
 
     /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskVfsBuild"/>.</summary>

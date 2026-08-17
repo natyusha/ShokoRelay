@@ -299,30 +299,7 @@ public class PlexController(
             ? Task.FromResult<IActionResult>(BadRequest(new RelayResponse<object>(Status: "error", Message: "Plex configuration missing.")))
             : ExecuteTrackedTaskAsync(
                 ShokoRelayConstants.TaskPlexAutomationRun,
-                (sb, r) =>
-                {
-                    sb.AppendLine($"Plex Automation Run Report - {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-                    sb.AppendLine(new string('-', 60));
-                    sb.AppendLine();
-                    sb.AppendLine($"  Total Elapsed Time         : {r.TotalElapsed.TotalSeconds:F2}s");
-                    sb.AppendLine();
-                    sb.AppendLine("Tasks Executed:");
-                    sb.AppendLine($"  - Collection Generation    : {r.CollectionsElapsed.TotalSeconds:F2}s");
-                    sb.AppendLine($"    Log File URL             : {ApiBase}/logs/{ShokoRelayConstants.TaskPlexCollectionsBuild}-report.log");
-                    sb.AppendLine($"  - Critic Rating Application: {r.RatingsElapsed.TotalSeconds:F2}s");
-                    sb.AppendLine($"    Log File URL             : {ApiBase}/logs/{ShokoRelayConstants.TaskPlexRatingsApply}-report.log");
-                    if (r.ImageSyncElapsed.HasValue)
-                    {
-                        sb.AppendLine($"  - Plex Image Sync          : {r.ImageSyncElapsed.Value.TotalSeconds:F2}s");
-                        sb.AppendLine($"    Log File URL             : {ApiBase}/logs/{ShokoRelayConstants.TaskPlexImagesSync}-report.log");
-                    }
-                    if (r.TrashElapsed.HasValue)
-                    {
-                        sb.AppendLine($"  - Empty Plex Trash         : {r.TrashElapsed.Value.TotalSeconds:F2}s");
-                        foreach (var msg in r.TrashMessages ?? [])
-                            sb.AppendLine($"    -> {msg}");
-                    }
-                },
+                (sb, r) => LogHelper.BuildPlexAutomationReport(sb, r, ApiBase),
                 async () =>
                 {
                     var sw = Stopwatch.StartNew();
