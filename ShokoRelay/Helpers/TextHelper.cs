@@ -26,7 +26,6 @@ public static class TextHelper
     private static readonly Regex s_bbCodeSolitaryRegex = new(@"\[\/?i\]", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex s_condenseLinesRegex = new(@"(\r?\n\s*){2,}", RegexOptions.Compiled);
     private static readonly Regex s_condenseSpacesRegex = new(@"\s{2,}", RegexOptions.Compiled);
-    private static readonly Regex s_numbersRegex = new(@"\d+", RegexOptions.Compiled);
     private static readonly Regex s_unicodeEscapeRegex = new(@"\\u([0-9a-fA-F]{4})", RegexOptions.Compiled);
 
     #endregion
@@ -249,10 +248,21 @@ public static class TextHelper
     /// <returns>A normalized path string.</returns>
     public static string NormalizePathForPlex(string? path) => string.IsNullOrWhiteSpace(path) ? string.Empty : path.Replace('\\', '/').TrimEnd('/');
 
-    /// <summary>Extracts the first sequence of digits from a string (Series ID lookup).</summary>
-    /// <param name="text">The string to parse.</param>
-    /// <returns>The extracted integer, or null.</returns>
-    public static int? ExtractSeriesId(string? text) => (text != null && s_numbersRegex.Match(text) is { Success: true } m && int.TryParse(m.Value, out var id)) ? id : null;
+    /// <summary>Extracts the numeric Series or Episode ID from a path or string value.</summary>
+    /// <param name="text">The string or path to parse.</param>
+    /// <returns>The extracted integer ID, or null if none found.</returns>
+    public static int? ExtractSeriesId(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+
+        var segments = NormalizePathForPlex(text).Split('/', StringSplitOptions.RemoveEmptyEntries);
+        for (int i = segments.Length - 1; i >= 0; i--)
+            if (int.TryParse(segments[i], out int id))
+                return id;
+
+        return null;
+    }
 
     /// <summary>Checks if a Plex string value (which mimics a boolean, e.g. "1") represents true.</summary>
     /// <param name="value">The Plex string value to check.</param>

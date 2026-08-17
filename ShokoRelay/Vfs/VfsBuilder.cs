@@ -637,6 +637,23 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                         },
                         skipCheck
                     );
+                    assetLinker.LinkEpisodeMetadata(
+                        locInfo.Src,
+                        Path.GetDirectoryName(locInfo.Src)!,
+                        Path.GetFileNameWithoutExtension(destFilePath),
+                        moviePath,
+                        session.SubtitleFileCache,
+                        ref planned,
+                        ref skipped,
+                        errors,
+                        ref created,
+                        (name, s) =>
+                        {
+                            expectedFiles.Add(Path.Combine(moviePath, name));
+                            onLink?.Invoke(locInfo.ImportRoot, $"Movie ❯ {folderName}", name, s);
+                        },
+                        skipCheck
+                    );
                 }
                 else
                 {
