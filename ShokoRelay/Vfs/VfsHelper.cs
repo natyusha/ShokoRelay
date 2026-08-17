@@ -147,7 +147,7 @@ public static class VfsHelper
     /// <param name="partCount">The total number of parts for the file.</param>
     /// <param name="vIdx">The 1-based version index for duplicate items in the same variation bucket.</param>
     /// <param name="isVariation">Whether the file is marked as a variation in Shoko.</param>
-    /// <returns>A formatted filename string (e.g., "S01E01-v1 [123][variation].mkv").</returns>
+    /// <returns>A formatted filename string (e.g., "S01E01-dup1 [123][variation].mkv").</returns>
     public static string BuildStandardFileName(
         MapHelper.FileMapping mapping,
         int pad,
@@ -206,7 +206,7 @@ public static class VfsHelper
         if (totalParts > 1)
             name += $"-pt{partIdx ?? mapping.PartIndex}";
         else if (vIdx.HasValue)
-            name += $"-v{vIdx}";
+            name += $"-dup{vIdx}";
 
         string result = omitFileId ? name : $"{name} [{fileId}]";
         if (isVariation && totalParts <= 1)
@@ -239,7 +239,7 @@ public static class VfsHelper
     {
         string ep = s_extraTypePrefixes.TryGetValue(ex.Subtype, out var pref) ? pref + mapping.Coords.Episode.ToString($"D{pad}") : mapping.Coords.Episode.ToString($"D{pad}");
         int totalParts = partCount ?? mapping.PartCount;
-        string part = totalParts > 1 ? $"-pt{partIdx ?? mapping.PartIndex}" : (vIdx.HasValue ? $"-v{vIdx}" : "");
+        string part = totalParts > 1 ? $"-pt{partIdx ?? mapping.PartIndex}" : (vIdx.HasValue ? $"-dup{vIdx}" : "");
 
         string name = $"{ep}{part} ❯ {CleanEpisodeTitleForFilename(TextHelper.ResolveEpisodeTitle(mapping.PrimaryEpisode, seriesTitle))}";
         if (isVariation && totalParts <= 1)
