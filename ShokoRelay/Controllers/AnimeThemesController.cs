@@ -199,6 +199,24 @@ public class AnimeThemesController(
         var seriesTitleCache = new Dictionary<int, (string GroupTitle, string SeriesTitle, int AniDbId)>();
         var seenSeriesVideoKeys = new HashSet<(int SeriesId, int VideoId)>();
 
+        // Load Mapping CSV early to extract original relative source paths
+        string mapPath = Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileAtMapping);
+        var videoIdToRelPath = new Dictionary<int, string>();
+        List<AnimeThemesMappingEntry> entries = [];
+        if (IoFile.Exists(mapPath))
+        {
+            try
+            {
+                entries = AnimeThemesHelper.ParseMappingContentWithComments(IoFile.ReadAllText(mapPath)).Entries;
+                foreach (var entry in entries)
+                    videoIdToRelPath.TryAdd(entry.VideoId, entry.FilePath);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "AnimeThemes: Failed to parse mapping CSV for webm tree");
+            }
+        }
+
         // Load VFS WebM Cache (Existing Anime)
         string cachePath = Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileAtWebmCache);
         if (IoFile.Exists(cachePath))
@@ -256,6 +274,7 @@ public class AnimeThemesController(
                             seriesId = seriesId.Value,
                             anidbId = info.AniDbId,
                             file = Path.GetFileNameWithoutExtension(segments[^1]),
+                            relPath = videoIdToRelPath.GetValueOrDefault(videoId),
                             path = pathRaw.Replace('\\', '/').Trim(),
                             videoId,
                             nc = (flags & 1) != 0,
@@ -276,15 +295,13 @@ public class AnimeThemesController(
             }
         }
 
-        // Load Mapping CSV (Missing Anime)
-        string mapPath = Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileAtMapping);
-        if (IoFile.Exists(mapPath))
+        // Process Mapping CSV (Missing Anime)
+        if (entries.Count > 0)
         {
             try
             {
                 var managedFolders = videoService.GetAllManagedFolders()?.Where(VfsShared.IsVfsEnabledFolder).Select(f => f.Path).ToList() ?? [];
                 string themeRootName = VfsShared.ResolveAnimeThemesFolderName();
-                var entries = AnimeThemesHelper.ParseMappingContentWithComments(IoFile.ReadAllText(mapPath)).Entries;
 
                 // Pre-calculate a fast lookup hashset for series that physically exist in the local collection
                 var localSeriesWithFiles = new HashSet<int>(MetadataService.GetAllShokoSeries()?.Where(s => s.Episodes.Any(e => e.VideoList?.Count > 0)).Select(s => s.AnidbAnimeID) ?? []);
@@ -324,6 +341,7 @@ public class AnimeThemesController(
                             seriesId = 0,
                             anidbId = entry.AniDbId,
                             file = AnimeThemesHelper.BuildNewFileName(lookup, ""),
+                            relPath = entry.FilePath,
                             path = absolutePath.Replace('\\', '/').Trim(),
                             videoId = entry.VideoId,
                             nc = entry.NC,

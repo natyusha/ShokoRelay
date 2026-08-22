@@ -79,6 +79,10 @@
               <svg class="icon-svg mode next"><use href="img/icons.svg#shuffle-disabled"></use></svg>
               <svg class="icon-svg mode off"><use href="img/icons.svg#sync-off"></use></svg>
             </button>
+            <button id="sort-toggle" class="img-btn" title="Sort by Source Folder" data-sort="series" type="button">
+              <svg class="icon-svg sort series"><use href="img/icons.svg#sort-variant"></use></svg>
+              <svg class="icon-svg sort source"><use href="img/icons.svg#sort-variant-off"></use></svg>
+            </button>
             <span class="filter-wrap">
               <svg class="filter-icon magnify"><use href="img/icons.svg#magnify"></use></svg>
               <input id="filter" type="text" placeholder=" " />
@@ -109,7 +113,7 @@
                 <li><kbd>J</kbd><small>Seek -10s</small></li>
                 <li><kbd>,</kbd><small>Seek -1 Frame</small></li>
                 <li><kbd>B</kbd><small>Prev Theme</small></li>
-                <li><kbd>;</kbd><small>Prev Playback Mode</small></li>
+                <li><kbd>;</kbd><small>Switch Playback Mode</small></li>
                 <li><kbd>↓</kbd><small>Volume Down</small></li>
                 <li><kbd>M</kbd><small>Toggle Mute</small></li>
                 <li><kbd>V</kbd><small>Toggle Video</small></li>
@@ -122,7 +126,7 @@
                 <li><kbd>L</kbd><small>Seek +10s</small></li>
                 <li><kbd>.</kbd><small>Seek +1 Frame</small></li>
                 <li><kbd>N</kbd><small>Next Theme</small></li>
-                <li><kbd>'</kbd><small>Next Playback Mode</small></li>
+                <li><kbd>'</kbd><small>Tree Mode Toggle</small></li>
                 <li><kbd>↑</kbd><small>Volume Up</small></li>
                 <li><kbd>F</kbd><small>Toggle Fullscreen</small></li>
                 <li><kbd>R</kbd><small>Restart Theme</small></li>

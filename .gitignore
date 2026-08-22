@@ -1,6 +1,7 @@
 # Build results
 bin/
 obj/
+publish/
 publish-linux/
 
 # VS Code

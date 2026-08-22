@@ -21,6 +21,7 @@
   const uiFilterClear = el("filter-clear");
   const playerNextBtn = el("next");
   const playerModeBtn = el("mode");
+  const playerSortBtn = el("sort-toggle");
 
   // DOM Elements - Metadata Header
   const playerTitle = el("title");
@@ -47,6 +48,8 @@
   let favourites = new Set();
   /** @type {number|null} */
   let progressRaf;
+  /** @type {boolean} Determines if the tree renders using original folder structures instead of metadata groups. */
+  let useFolderView = localStorage.getItem("player-folder-view") === "true";
 
   const PATH_KEY = "player-current-path";
   const MISSING_LABEL = "Missing from Collection";
@@ -133,6 +136,16 @@
 
     localStorage.setItem("player-volume", vol);
     localStorage.setItem("player-muted", playerVideo.muted);
+  };
+
+  /**
+   * Synchronizes the sort button UI with the active folder view state.
+   * @returns {void}
+   */
+  const syncSortUI = () => {
+    if (!playerSortBtn) return;
+    playerSortBtn.setAttribute("data-sort", useFolderView ? "source" : "series");
+    playerSortBtn.title = useFolderView ? "Sort by Series" : "Sort by Source Folder";
   };
 
   /**
@@ -279,70 +292,61 @@
     }
 
     const esc = (str) => (str || "").replace(/"/g, "&quot;");
-    const groups = new Map();
-    items.forEach((i) => {
-      if (!groups.has(i.group)) groups.set(i.group, new Map());
-      const sMap = groups.get(i.group);
-      if (!sMap.has(i.series)) sMap.set(i.series, []);
-      sMap.get(i.series).push(i);
-    });
-
-    /**
-     * Helper to construct a standard folder node in the tree with deferred child rendering.
-     * @param {string} name - The display name for the folder.
-     * @param {HTMLElement[]} children - The array of child list-item elements.
-     * @param {boolean} isOpen - If true, forces children to render immediately.
-     * @param {boolean} [isItalic=false] - Whether to italicize the title text.
-     * @param {string} [extraHtml=""] - Additional HTML to append to the folder title.
-     * @returns {HTMLLIElement} The completed folder list item node.
-     */
-    const makeNode = (name, children, isOpen, isItalic = false, extraHtml = "") => {
-      const li = document.createElement("li");
-      const ul = document.createElement("ul");
-      const det = window._sr.createLazyDetails(
-        "",
-        ul,
-        (container) => {
-          children.forEach((c) => container.appendChild(c));
-        },
-        isOpen,
-      );
-      const sum = det.querySelector("summary");
-      const titleHtml = `<span class="vfs-title${isItalic ? " tree-italic" : ""}" title="${esc(name)}" data-tooltip-overflow-only="true">${esc(name)}</span>${extraHtml}`;
-      sum.insertAdjacentHTML("beforeend", titleHtml);
-      sum.title = name;
-
-      li.appendChild(det);
-      return li;
-    };
-
     const rootUl = document.createElement("ul");
     rootUl.className = "tree";
 
-    const sortedGroupNames = [...groups.keys()].sort((a, b) => {
-      if (a === MISSING_LABEL && b !== MISSING_LABEL) return -1;
-      if (b === MISSING_LABEL && a !== MISSING_LABEL) return 1;
-      return a.localeCompare(b);
-    });
+    if (useFolderView) {
+      // Source Folder Structure View (Year -> Season -> Song)
+      const rootNode = { folders: new Map(), files: [] };
+      items.forEach((i) => {
+        const parts = (i.relPath || `Unknown/${i.file}`).replace(/\\/g, "/").split("/").filter(Boolean);
+        i._originalName = parts.pop();
+        let current = rootNode;
+        parts.forEach((p) => {
+          if (!current.folders.has(p)) current.folders.set(p, { folders: new Map(), files: [] });
+          current = current.folders.get(p);
+        });
+        current.files.push(i);
+      });
 
-    sortedGroupNames.forEach((gName) => {
-      const sMap = groups.get(gName),
-        sKeys = [...sMap.keys()].sort((a, b) => a.localeCompare(b)),
-        ft = (uiFilter?.value || "").trim();
-      const sNodes = sKeys.map((sName) => {
-        const files = sMap.get(sName).map((f) => {
-          const li = document.createElement("li"),
-            leaf = document.createElement("div"),
-            name = decodeUnicode(f.file);
-          leaf.className = `leaf ${f.path === currentWebmPath ? "active" : ""}`;
-          leaf.dataset.path = f.path;
+      function renderFolderTree(node, container, isRoot) {
+        const seasonOrder = { winter: 1, spring: 2, summer: 3, fall: 4 };
+        const getSeasonWeight = (name) => seasonOrder[name.toLowerCase()] || 99;
+
+        const sortedFolders = [...node.folders.keys()].sort((a, b) => {
+          const wA = getSeasonWeight(a);
+          const wB = getSeasonWeight(b);
+          if (wA !== 99 || wB !== 99) {
+            if (wA !== wB) return wA - wB;
+          }
+          return a.localeCompare(b, undefined, { numeric: true });
+        });
+
+        sortedFolders.forEach((folderName) => {
+          const childNode = node.folders.get(folderName);
+          const li = document.createElement("li");
+          const ul = document.createElement("ul");
+          const isDecade = /^\d{2}s$/i.test(folderName);
+          const isOpen = (isRoot && !isDecade) || !!uiFilter?.value.trim();
+          const det = window._sr.createLazyDetails(folderName, ul, (cont) => renderFolderTree(childNode, cont, false), isOpen);
+          li.appendChild(det);
+          container.appendChild(li);
+        });
+
+        const sortedFiles = node.files.sort((a, b) => a._originalName.localeCompare(b._originalName, undefined, { numeric: true }));
+        sortedFiles.forEach((item) => {
+          const li = document.createElement("li");
+          const leaf = document.createElement("div");
+          const name = decodeUnicode(item._originalName);
+          leaf.className = `leaf ${item.path === currentWebmPath ? "active" : ""}`;
+          leaf.dataset.path = item.path;
 
           const heart = document.createElement("span");
-          heart.className = `fav-icon ${favourites.has(f.videoId) ? "favourited" : ""}`;
+          heart.className = `fav-icon ${favourites.has(item.videoId) ? "favourited" : ""}`;
           heart.textContent = "❤";
           heart.onclick = (e) => {
             e.stopPropagation();
-            toggleFavourite(f.videoId, heart);
+            toggleFavourite(item.videoId, heart);
           };
 
           const text = document.createElement("span");
@@ -350,26 +354,114 @@
           text.title = name;
           text.dataset.tooltipOverflowOnly = "true";
 
+          if (item.group === MISSING_LABEL) {
+            text.classList.add("tree-italic");
+            text.style.opacity = "0.6";
+          }
+
           leaf.onclick = () => {
             resetNavigationHistory();
-            playFile(f.path);
+            playFile(item.path);
           };
           leaf.append(heart, text);
           li.appendChild(leaf);
-          return li;
+          container.appendChild(li);
         });
+      }
 
-        const firstFile = sMap.get(sName)[0];
-        const shokoBase = location.origin + base.split(/\/api\//i)[0];
-        let extraHtml = "";
-        if (firstFile.seriesId)
-          extraHtml += `<a href="${shokoBase}/webui/collection/series/${firstFile.seriesId}/overview" class="vfs-link small" target="_blank" rel="noopener noreferrer">[${firstFile.seriesId}]</a>`;
-        if (firstFile.anidbId) extraHtml += `<a href="https://anidb.net/a${firstFile.anidbId}" class="vfs-link small" target="_blank" rel="noopener noreferrer">[a${firstFile.anidbId}]</a>`;
-
-        return makeNode(sName, files, !!ft, gName === MISSING_LABEL, extraHtml);
+      renderFolderTree(rootNode, rootUl, true);
+    } else {
+      // Standard Metadata View (Group -> Series -> File)
+      const groups = new Map();
+      items.forEach((i) => {
+        if (!groups.has(i.group)) groups.set(i.group, new Map());
+        const sMap = groups.get(i.group);
+        if (!sMap.has(i.series)) sMap.set(i.series, []);
+        sMap.get(i.series).push(i);
       });
-      rootUl.appendChild(sKeys.length === 1 && gName !== MISSING_LABEL ? sNodes[0] : makeNode(gName, sNodes, !!ft, gName === MISSING_LABEL));
-    });
+
+      /**
+       * Helper to construct a standard folder node in the tree with deferred child rendering.
+       * @param {string} name - The display name for the folder.
+       * @param {HTMLElement[]} children - The array of child list-item elements.
+       * @param {boolean} isOpen - If true, forces children to render immediately.
+       * @param {boolean} [isItalic=false] - Whether to italicize the title text.
+       * @param {string} [extraHtml=""] - Additional HTML to append to the folder title.
+       * @returns {HTMLLIElement} The completed folder list item node.
+       */
+      const makeNode = (name, children, isOpen, isItalic = false, extraHtml = "") => {
+        const li = document.createElement("li");
+        const ul = document.createElement("ul");
+        const det = window._sr.createLazyDetails(
+          "",
+          ul,
+          (container) => {
+            children.forEach((c) => container.appendChild(c));
+          },
+          isOpen,
+        );
+        const sum = det.querySelector("summary");
+        const titleHtml = `<span class="vfs-title${isItalic ? " tree-italic" : ""}" title="${esc(name)}" data-tooltip-overflow-only="true">${esc(name)}</span>${extraHtml}`;
+        sum.insertAdjacentHTML("beforeend", titleHtml);
+        sum.title = name;
+
+        li.appendChild(det);
+        return li;
+      };
+
+      const sortedGroupNames = [...groups.keys()].sort((a, b) => {
+        if (a === MISSING_LABEL && b !== MISSING_LABEL) return -1;
+        if (b === MISSING_LABEL && a !== MISSING_LABEL) return 1;
+        return a.localeCompare(b);
+      });
+
+      sortedGroupNames.forEach((gName) => {
+        const sMap = groups.get(gName),
+          sKeys = [...sMap.keys()].sort((a, b) => a.localeCompare(b)),
+          ft = (uiFilter?.value || "").trim();
+        const sNodes = sKeys.map((sName) => {
+          const files = sMap.get(sName).map((f) => {
+            const li = document.createElement("li"),
+              leaf = document.createElement("div"),
+              name = decodeUnicode(f.file);
+            leaf.className = `leaf ${f.path === currentWebmPath ? "active" : ""}`;
+            leaf.dataset.path = f.path;
+
+            const heart = document.createElement("span");
+            heart.className = `fav-icon ${favourites.has(f.videoId) ? "favourited" : ""}`;
+            heart.textContent = "❤";
+            heart.onclick = (e) => {
+              e.stopPropagation();
+              toggleFavourite(f.videoId, heart);
+            };
+
+            const text = document.createElement("span");
+            text.textContent = name;
+            text.title = name;
+            text.dataset.tooltipOverflowOnly = "true";
+
+            leaf.onclick = () => {
+              resetNavigationHistory();
+              playFile(f.path);
+            };
+            leaf.append(heart, text);
+            li.appendChild(leaf);
+            return li;
+          });
+
+          const firstFile = sMap.get(sName)[0];
+          const shokoBase = location.origin + base.split(/\/api\//i)[0];
+          let extraHtml = "";
+          if (firstFile.seriesId)
+            extraHtml += `<a href="${shokoBase}/webui/collection/series/${firstFile.seriesId}/overview" class="vfs-link small" target="_blank" rel="noopener noreferrer">[${firstFile.seriesId}]</a>`;
+          if (firstFile.anidbId) extraHtml += `<a href="https://anidb.net/a${firstFile.anidbId}" class="vfs-link small" target="_blank" rel="noopener noreferrer">[a${firstFile.anidbId}]</a>`;
+
+          return makeNode(sName, files, !!ft, gName === MISSING_LABEL, extraHtml);
+        });
+        rootUl.appendChild(sKeys.length === 1 && gName !== MISSING_LABEL ? sNodes[0] : makeNode(gName, sNodes, !!ft, gName === MISSING_LABEL));
+      });
+    }
+
     playerTree.appendChild(rootUl);
   }
 
@@ -380,21 +472,37 @@
     const item = webmTreeData.find((i) => i.path === currentWebmPath);
     if (!item) return;
     const getSummaryTitle = (summary) => (summary ? summary.dataset.tooltipText || summary.getAttribute("title") || "" : "");
-    const topDetails = [...playerTree.querySelectorAll(".tree > li > details")];
 
-    // Find and expand the Group folder (if it exists as a parent)
-    const groupDet = topDetails.find((d) => getSummaryTitle(d.querySelector("summary")) === item.group);
-    if (groupDet) {
-      groupDet.open = true;
-      if (!groupDet.dataset.rendered) groupDet.dispatchEvent(new Event("toggle"));
-    }
+    if (useFolderView) {
+      const parts = (item.relPath || `Unknown/${item.file}`).replace(/\\/g, "/").split("/").filter(Boolean);
+      parts.pop(); // Remove filename
+      let currentScope = playerTree;
+      parts.forEach((p) => {
+        const det = [...currentScope.querySelectorAll("details")].find((d) => getSummaryTitle(d.querySelector("summary")) === p);
+        if (det) {
+          det.open = true;
+          if (!det.dataset.rendered) det.dispatchEvent(new Event("toggle"));
+          currentScope = det;
+        }
+      });
+    } else {
+      const topDetails = [...playerTree.querySelectorAll(".tree > li > details")];
 
-    // Find and expand the Series folder (top-level or nested)
-    const searchScope = groupDet || playerTree;
-    const seriesDet = [...searchScope.querySelectorAll("details")].find((d) => getSummaryTitle(d.querySelector("summary")) === item.series);
-    if (seriesDet) {
-      seriesDet.open = true;
-      if (!seriesDet.dataset.rendered) seriesDet.dispatchEvent(new Event("toggle"));
+      // Find and expand the Group folder (if it exists as a parent)
+      const groupDet = topDetails.find((d) => getSummaryTitle(d.querySelector("summary")) === item.group);
+      if (groupDet) {
+        groupDet.open = true;
+        if (!groupDet.dataset.rendered) groupDet.dispatchEvent(new Event("toggle"));
+      }
+
+      const searchScope = groupDet || playerTree;
+
+      // Find and expand the Series folder (top-level or nested)
+      const seriesDet = [...searchScope.querySelectorAll("details")].find((d) => getSummaryTitle(d.querySelector("summary")) === item.series);
+      if (seriesDet) {
+        seriesDet.open = true;
+        if (!seriesDet.dataset.rendered) seriesDet.dispatchEvent(new Event("toggle"));
+      }
     }
 
     const leaf = playerTree.querySelector(`.leaf[data-path="${CSS.escape(currentWebmPath)}"]`);
@@ -544,6 +652,18 @@
   }
 
   /**
+   * Toggles the tree view between standard metadata grouping and source folder structures.
+   * @returns {void}
+   */
+  function toggleFolderView() {
+    useFolderView = !useFolderView;
+    syncSortUI();
+    localStorage.setItem("player-folder-view", useFolderView);
+    renderTree(getFilteredItems());
+    setTimeout(locateCurrentInTree, 100);
+  }
+
+  /**
    * Standard toggle for browser fullscreen API.
    * @returns {void}
    */
@@ -554,6 +674,11 @@
   // #endregion
 
   // #region Initialization
+  if (playerSortBtn) {
+    syncSortUI();
+    playerSortBtn.onclick = toggleFolderView;
+  }
+
   if (playerVideo) {
     const savedVol = localStorage.getItem("player-volume");
     const savedMuted = localStorage.getItem("player-muted");
@@ -734,8 +859,8 @@
         case ".": if (playerVideo.src) { playerVideo.pause(); playerVideo.currentTime = Math.min(playerVideo.duration, playerVideo.currentTime + 1 / 24); } break;
         case "b": case "B": playMove(isShuffle, -1); break;
         case "n": case "N": playMove(isShuffle, 1); break;
-        case ";": updateMode(-1); break;
-        case "'": updateMode(1); break;
+        case ";": updateMode(1); break;
+        case "'": toggleFolderView(); break;
         case "ArrowDown": playerVideo.volume = Math.max(0, playerVideo.volume - 0.1); break;
         case "ArrowUp": playerVideo.volume = Math.min(1, playerVideo.volume + 0.1); break;
         case "m": case "M": if (playerVideo.src) playerVideo.muted = !playerVideo.muted; break;
@@ -756,7 +881,7 @@
       if (treeRes.ok) {
         webmTreeData = (getData(treeRes)?.items || [])
           .map((item) => {
-            item._searchIndex = `${item.group} ${item.series} ${decodeUnicode(item.file)}`.toLowerCase().replace(/[\u200B\u200A]/g, "");
+            item._searchIndex = `${item.group} ${item.series} ${decodeUnicode(item.file)} ${item.relPath || ""}`.toLowerCase().replace(/[\u200B\u200A]/g, "");
             return item;
           })
           .sort((a, b) => {

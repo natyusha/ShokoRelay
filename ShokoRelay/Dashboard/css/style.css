@@ -368,6 +368,7 @@ code {
 .img-btn[data-state="playing"] .play,
 .img-btn .next,
 .img-btn .mode,
+.img-btn .sort,
 .img-btn.toggle[aria-pressed="false"] .enabled,
 .img-btn.toggle[aria-pressed="true"] .disabled {
   display: none;
@@ -382,6 +383,8 @@ code {
 .img-btn[data-mode="shuffle"] .mode.shuffle,
 .img-btn[data-mode="next"] .mode.next,
 .img-btn[data-mode="off"] .mode.off,
+.img-btn[data-sort="source"] .sort.source,
+.img-btn[data-sort="series"] .sort.series,
 .img-btn.toggle[aria-pressed="true"] .enabled {
   display: inline;
 }
