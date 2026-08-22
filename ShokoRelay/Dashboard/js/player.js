@@ -145,7 +145,7 @@
   const syncSortUI = () => {
     if (!playerSortBtn) return;
     playerSortBtn.setAttribute("data-sort", useFolderView ? "source" : "series");
-    playerSortBtn.title = useFolderView ? "Sort by Series" : "Sort by Source Folder";
+    playerSortBtn.title = useFolderView ? "Sort by Collected Series" : "Sort by Source Folder";
   };
 
   /**
@@ -247,6 +247,27 @@
     navigationStack = [];
     stackIndex = -1;
   };
+
+  /**
+   * Toggles the tree view between standard metadata grouping and source folder structures.
+   * @returns {void}
+   */
+  function toggleFolderView() {
+    useFolderView = !useFolderView;
+    syncSortUI();
+    localStorage.setItem("player-folder-view", useFolderView);
+    renderTree(getFilteredItems());
+    setTimeout(locateCurrentInTree, 100);
+  }
+
+  /**
+   * Standard toggle for browser fullscreen API.
+   * @returns {void}
+   */
+  function toggleFullscreen() {
+    if (!document.fullscreenElement) playerContainer.requestFullscreen().catch(() => {});
+    else document.exitFullscreen();
+  }
   // #endregion
 
   // #region Tree & Navigation
@@ -291,85 +312,128 @@
       return;
     }
 
-    const esc = (str) => (str || "").replace(/"/g, "&quot;");
     const rootUl = document.createElement("ul");
     rootUl.className = "tree";
+    const ft = !!uiFilter?.value.trim();
+    const shokoBase = location.origin + base.split(/\/api\//i)[0];
+
+    /**
+     * Helper to construct a standard file node in the tree.
+     * @param {Object} item - The theme entry metadata.
+     * @param {string} displayName - The text to display for the file.
+     * @returns {HTMLLIElement} The completed file list item node.
+     */
+    const createFileNode = (item, displayName) => {
+      const li = document.createElement("li");
+      const leaf = document.createElement("div");
+      leaf.className = `leaf ${item.path === currentWebmPath ? "active" : ""}`;
+      leaf.dataset.path = item.path;
+
+      const heart = document.createElement("span");
+      heart.className = `fav-icon ${favourites.has(item.videoId) ? "favourited" : ""}`;
+      heart.textContent = "❤";
+      heart.onclick = (e) => {
+        e.stopPropagation();
+        toggleFavourite(item.videoId, heart);
+      };
+
+      const text = document.createElement("span");
+      text.textContent = displayName;
+      text.title = displayName;
+      text.dataset.tooltipOverflowOnly = "true";
+
+      if (item.group === MISSING_LABEL) text.classList.add("tree-missing");
+
+      leaf.onclick = () => {
+        resetNavigationHistory();
+        playFile(item.path);
+      };
+      leaf.append(heart, text);
+      li.appendChild(leaf);
+      return li;
+    };
+
+    /**
+     * Helper to construct a standard folder node in the tree with deferred child rendering.
+     * @param {string} name - The display name for the folder.
+     * @param {HTMLElement[]} childrenElements - The array of child list-item elements.
+     * @param {boolean} isOpen - If true, forces children to render immediately.
+     * @param {boolean} [isMissing=false] - Whether to apply missing collection styling to the title.
+     * @param {string} [extraHtml=""] - Additional HTML to append to the folder title.
+     * @returns {HTMLLIElement} The completed folder list item node.
+     */
+    const createFolderNode = (name, childrenElements, isOpen, isMissing = false, extraHtml = "") => {
+      const li = document.createElement("li");
+      const ul = document.createElement("ul");
+      const det = window._sr.createLazyDetails(name, ul, (container) => childrenElements.forEach((c) => container.appendChild(c)), isOpen);
+      const sum = det.querySelector("summary");
+      if (isMissing) sum.querySelector(".vfs-title")?.classList.add("tree-missing");
+      if (extraHtml) sum.insertAdjacentHTML("beforeend", extraHtml);
+      li.appendChild(det);
+      return li;
+    };
+
+    /**
+     * Generates external links for a given series.
+     * @param {number} seriesId - The Shoko Series ID.
+     * @param {number} anidbId - The AniDB ID.
+     * @returns {string} The concatenated anchor HTML.
+     */
+    const buildSeriesLinks = (seriesId, anidbId) => {
+      let html = "";
+      if (seriesId) html += `<a href="${shokoBase}/webui/collection/series/${seriesId}/overview" class="vfs-link small" target="_blank" rel="noopener noreferrer">[${seriesId}]</a>`;
+      if (anidbId) html += `<a href="https://anidb.net/a${anidbId}" class="vfs-link small" target="_blank" rel="noopener noreferrer">[a${anidbId}]</a>`;
+      return html;
+    };
 
     if (useFolderView) {
-      // Source Folder Structure View (Year -> Season -> Song)
+      // Source Folder Structure View (Year -> Season -> Series -> Song)
       const rootNode = { folders: new Map(), files: [] };
       items.forEach((i) => {
         const parts = (i.relPath || `Unknown/${i.file}`).replace(/\\/g, "/").split("/").filter(Boolean);
-        i._originalName = parts.pop();
+        i._originalName = parts.pop(); // Remove original filename
+        parts.push(i.series); // Group by series within the source folders
         let current = rootNode;
         parts.forEach((p) => {
           if (!current.folders.has(p)) current.folders.set(p, { folders: new Map(), files: [] });
           current = current.folders.get(p);
         });
+        current.isSeries = true;
+        current.seriesId = i.seriesId;
+        current.anidbId = i.anidbId;
+        if (i.group === MISSING_LABEL) current.isMissing = true;
+
         current.files.push(i);
       });
 
-      function renderFolderTree(node, container, isRoot) {
-        const seasonOrder = { winter: 1, spring: 2, summer: 3, fall: 4 };
-        const getSeasonWeight = (name) => seasonOrder[name.toLowerCase()] || 99;
+      const seasonOrder = { winter: 1, spring: 2, summer: 3, fall: 4 };
+      const getSeasonWeight = (name) => seasonOrder[name.toLowerCase()] || 99;
+
+      const renderFolderTree = (node, isRoot) => {
+        const childrenElements = [];
 
         const sortedFolders = [...node.folders.keys()].sort((a, b) => {
           const wA = getSeasonWeight(a);
           const wB = getSeasonWeight(b);
-          if (wA !== 99 || wB !== 99) {
-            if (wA !== wB) return wA - wB;
-          }
+          if (wA !== 99 || wB !== 99) return wA !== wB ? wA - wB : a.localeCompare(b, undefined, { numeric: true });
           return a.localeCompare(b, undefined, { numeric: true });
         });
 
         sortedFolders.forEach((folderName) => {
           const childNode = node.folders.get(folderName);
-          const li = document.createElement("li");
-          const ul = document.createElement("ul");
           const isDecade = /^\d{2}s$/i.test(folderName);
-          const isOpen = (isRoot && !isDecade) || !!uiFilter?.value.trim();
-          const det = window._sr.createLazyDetails(folderName, ul, (cont) => renderFolderTree(childNode, cont, false), isOpen);
-          li.appendChild(det);
-          container.appendChild(li);
+          const isOpen = (isRoot && !isDecade) || ft;
+          const extraHtml = childNode.isSeries ? buildSeriesLinks(childNode.seriesId, childNode.anidbId) : "";
+          childrenElements.push(createFolderNode(folderName, renderFolderTree(childNode, false), isOpen, childNode.isMissing, extraHtml));
         });
 
-        const sortedFiles = node.files.sort((a, b) => a._originalName.localeCompare(b._originalName, undefined, { numeric: true }));
-        sortedFiles.forEach((item) => {
-          const li = document.createElement("li");
-          const leaf = document.createElement("div");
-          const name = decodeUnicode(item._originalName);
-          leaf.className = `leaf ${item.path === currentWebmPath ? "active" : ""}`;
-          leaf.dataset.path = item.path;
+        const sortedFiles = node.files.sort((a, b) => a.file.localeCompare(b.file, undefined, { numeric: true }));
+        sortedFiles.forEach((item) => childrenElements.push(createFileNode(item, decodeUnicode(item.file))));
 
-          const heart = document.createElement("span");
-          heart.className = `fav-icon ${favourites.has(item.videoId) ? "favourited" : ""}`;
-          heart.textContent = "❤";
-          heart.onclick = (e) => {
-            e.stopPropagation();
-            toggleFavourite(item.videoId, heart);
-          };
+        return childrenElements;
+      };
 
-          const text = document.createElement("span");
-          text.textContent = name;
-          text.title = name;
-          text.dataset.tooltipOverflowOnly = "true";
-
-          if (item.group === MISSING_LABEL) {
-            text.classList.add("tree-italic");
-            text.style.opacity = "0.6";
-          }
-
-          leaf.onclick = () => {
-            resetNavigationHistory();
-            playFile(item.path);
-          };
-          leaf.append(heart, text);
-          li.appendChild(leaf);
-          container.appendChild(li);
-        });
-      }
-
-      renderFolderTree(rootNode, rootUl, true);
+      renderFolderTree(rootNode, true).forEach((n) => rootUl.appendChild(n));
     } else {
       // Standard Metadata View (Group -> Series -> File)
       const groups = new Map();
@@ -380,35 +444,6 @@
         sMap.get(i.series).push(i);
       });
 
-      /**
-       * Helper to construct a standard folder node in the tree with deferred child rendering.
-       * @param {string} name - The display name for the folder.
-       * @param {HTMLElement[]} children - The array of child list-item elements.
-       * @param {boolean} isOpen - If true, forces children to render immediately.
-       * @param {boolean} [isItalic=false] - Whether to italicize the title text.
-       * @param {string} [extraHtml=""] - Additional HTML to append to the folder title.
-       * @returns {HTMLLIElement} The completed folder list item node.
-       */
-      const makeNode = (name, children, isOpen, isItalic = false, extraHtml = "") => {
-        const li = document.createElement("li");
-        const ul = document.createElement("ul");
-        const det = window._sr.createLazyDetails(
-          "",
-          ul,
-          (container) => {
-            children.forEach((c) => container.appendChild(c));
-          },
-          isOpen,
-        );
-        const sum = det.querySelector("summary");
-        const titleHtml = `<span class="vfs-title${isItalic ? " tree-italic" : ""}" title="${esc(name)}" data-tooltip-overflow-only="true">${esc(name)}</span>${extraHtml}`;
-        sum.insertAdjacentHTML("beforeend", titleHtml);
-        sum.title = name;
-
-        li.appendChild(det);
-        return li;
-      };
-
       const sortedGroupNames = [...groups.keys()].sort((a, b) => {
         if (a === MISSING_LABEL && b !== MISSING_LABEL) return -1;
         if (b === MISSING_LABEL && a !== MISSING_LABEL) return 1;
@@ -416,49 +451,19 @@
       });
 
       sortedGroupNames.forEach((gName) => {
-        const sMap = groups.get(gName),
-          sKeys = [...sMap.keys()].sort((a, b) => a.localeCompare(b)),
-          ft = (uiFilter?.value || "").trim();
+        const sMap = groups.get(gName);
+        const isMissing = gName === MISSING_LABEL;
+        const sKeys = [...sMap.keys()].sort((a, b) => a.localeCompare(b));
+
         const sNodes = sKeys.map((sName) => {
-          const files = sMap.get(sName).map((f) => {
-            const li = document.createElement("li"),
-              leaf = document.createElement("div"),
-              name = decodeUnicode(f.file);
-            leaf.className = `leaf ${f.path === currentWebmPath ? "active" : ""}`;
-            leaf.dataset.path = f.path;
-
-            const heart = document.createElement("span");
-            heart.className = `fav-icon ${favourites.has(f.videoId) ? "favourited" : ""}`;
-            heart.textContent = "❤";
-            heart.onclick = (e) => {
-              e.stopPropagation();
-              toggleFavourite(f.videoId, heart);
-            };
-
-            const text = document.createElement("span");
-            text.textContent = name;
-            text.title = name;
-            text.dataset.tooltipOverflowOnly = "true";
-
-            leaf.onclick = () => {
-              resetNavigationHistory();
-              playFile(f.path);
-            };
-            leaf.append(heart, text);
-            li.appendChild(leaf);
-            return li;
-          });
-
-          const firstFile = sMap.get(sName)[0];
-          const shokoBase = location.origin + base.split(/\/api\//i)[0];
-          let extraHtml = "";
-          if (firstFile.seriesId)
-            extraHtml += `<a href="${shokoBase}/webui/collection/series/${firstFile.seriesId}/overview" class="vfs-link small" target="_blank" rel="noopener noreferrer">[${firstFile.seriesId}]</a>`;
-          if (firstFile.anidbId) extraHtml += `<a href="https://anidb.net/a${firstFile.anidbId}" class="vfs-link small" target="_blank" rel="noopener noreferrer">[a${firstFile.anidbId}]</a>`;
-
-          return makeNode(sName, files, !!ft, gName === MISSING_LABEL, extraHtml);
+          const seriesFiles = sMap.get(sName);
+          const fileNodes = seriesFiles.map((f) => createFileNode(f, decodeUnicode(f.file)));
+          const firstFile = seriesFiles[0];
+          const extraHtml = buildSeriesLinks(firstFile.seriesId, firstFile.anidbId);
+          return createFolderNode(sName, fileNodes, ft, isMissing, extraHtml);
         });
-        rootUl.appendChild(sKeys.length === 1 && gName !== MISSING_LABEL ? sNodes[0] : makeNode(gName, sNodes, !!ft, gName === MISSING_LABEL));
+
+        rootUl.appendChild(sKeys.length === 1 && !isMissing ? sNodes[0] : createFolderNode(gName, sNodes, ft, isMissing));
       });
     }
 
@@ -471,43 +476,32 @@
 
     const item = webmTreeData.find((i) => i.path === currentWebmPath);
     if (!item) return;
+
     const getSummaryTitle = (summary) => (summary ? summary.dataset.tooltipText || summary.getAttribute("title") || "" : "");
+    const pathSegments = [];
 
     if (useFolderView) {
       const parts = (item.relPath || `Unknown/${item.file}`).replace(/\\/g, "/").split("/").filter(Boolean);
-      parts.pop(); // Remove filename
-      let currentScope = playerTree;
-      parts.forEach((p) => {
-        const det = [...currentScope.querySelectorAll("details")].find((d) => getSummaryTitle(d.querySelector("summary")) === p);
-        if (det) {
-          det.open = true;
-          if (!det.dataset.rendered) det.dispatchEvent(new Event("toggle"));
-          currentScope = det;
-        }
-      });
+      parts.pop();
+      parts.push(item.series);
+      pathSegments.push(...parts);
     } else {
-      const topDetails = [...playerTree.querySelectorAll(".tree > li > details")];
-
-      // Find and expand the Group folder (if it exists as a parent)
-      const groupDet = topDetails.find((d) => getSummaryTitle(d.querySelector("summary")) === item.group);
-      if (groupDet) {
-        groupDet.open = true;
-        if (!groupDet.dataset.rendered) groupDet.dispatchEvent(new Event("toggle"));
-      }
-
-      const searchScope = groupDet || playerTree;
-
-      // Find and expand the Series folder (top-level or nested)
-      const seriesDet = [...searchScope.querySelectorAll("details")].find((d) => getSummaryTitle(d.querySelector("summary")) === item.series);
-      if (seriesDet) {
-        seriesDet.open = true;
-        if (!seriesDet.dataset.rendered) seriesDet.dispatchEvent(new Event("toggle"));
-      }
+      pathSegments.push(item.group, item.series);
     }
+
+    let currentScope = playerTree;
+    pathSegments.forEach((p) => {
+      const det = [...currentScope.querySelectorAll("details")].find((d) => getSummaryTitle(d.querySelector("summary")) === p);
+      if (det) {
+        det.open = true;
+        if (!det.dataset.rendered) det.dispatchEvent(new Event("toggle"));
+        currentScope = det;
+      }
+    });
 
     const leaf = playerTree.querySelector(`.leaf[data-path="${CSS.escape(currentWebmPath)}"]`);
     if (leaf) {
-      playerTree.querySelectorAll(".leaf").forEach((el) => el.classList.toggle("active", el.dataset.path === currentWebmPath)); // Force sync active highlights for newly appended lazy elements
+      playerTree.querySelectorAll(".leaf").forEach((el) => el.classList.toggle("active", el.dataset.path === currentWebmPath));
       leaf.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   }
@@ -542,7 +536,7 @@
     if (playerAnime) {
       playerAnime.textContent = playerAnime.title = item ? item.series : "Select a theme to begin...";
       const isMissing = item?.group === MISSING_LABEL;
-      playerAnime.classList.toggle("tree-italic", isMissing);
+      playerAnime.classList.toggle("tree-missing", isMissing);
 
       if (item?.seriesId) {
         const shokoBase = location.origin + base.split("/api/")[0];
@@ -649,27 +643,6 @@
       setValueByPath(cfg, "Playback.AnimeThemesWebmMode", next);
       await saveSettings(cfg);
     }
-  }
-
-  /**
-   * Toggles the tree view between standard metadata grouping and source folder structures.
-   * @returns {void}
-   */
-  function toggleFolderView() {
-    useFolderView = !useFolderView;
-    syncSortUI();
-    localStorage.setItem("player-folder-view", useFolderView);
-    renderTree(getFilteredItems());
-    setTimeout(locateCurrentInTree, 100);
-  }
-
-  /**
-   * Standard toggle for browser fullscreen API.
-   * @returns {void}
-   */
-  function toggleFullscreen() {
-    if (!document.fullscreenElement) playerContainer.requestFullscreen().catch(() => {});
-    else document.exitFullscreen();
   }
   // #endregion
 

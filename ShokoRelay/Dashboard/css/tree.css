@@ -208,7 +208,8 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.tree-italic {
+.tree-missing {
+  opacity: 0.6;
   padding-right: 0.15em;
   font-style: italic;
 }
