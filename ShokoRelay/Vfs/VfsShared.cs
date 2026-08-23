@@ -1,7 +1,9 @@
+using System.Buffers;
 using System.Diagnostics;
 using Shoko.Abstractions.Metadata.Enums;
 using Shoko.Abstractions.Video;
 using Shoko.Abstractions.Video.Enums;
+using Shoko.Abstractions.Video.Services;
 
 namespace ShokoRelay.Vfs;
 
@@ -9,6 +11,9 @@ namespace ShokoRelay.Vfs;
 internal static class VfsShared
 {
     #region Consts & Concurrency
+
+    /// <summary>SIMD-accelerated search values for locating directory path separators rapidly.</summary>
+    private static readonly SearchValues<char> s_pathSeparators = SearchValues.Create(['/', '\\']);
 
     /// <summary>Global semaphore used to prevent concurrent structural VFS operations (Builds, Mapping, and MP3 generation).</summary>
     public static readonly SemaphoreSlim VfsLock = new(1, 1);
@@ -266,9 +271,10 @@ internal static class VfsShared
 
     /// <summary>Determines if any segment of a path or the file itself should be ignored based on current settings.</summary>
     /// <param name="path">The absolute or relative path to evaluate.</param>
+    /// <param name="videoService">Shoko video service to check for valid extensions when validating inline extras.</param>
     /// <param name="ignoredNames">Optional pre-computed set of ignored folder names for performance.</param>
     /// <returns>True if any segment of the path or the filename matches an ignore rule.</returns>
-    public static bool IsPathIgnored(string path, HashSet<string>? ignoredNames = null)
+    public static bool IsPathIgnored(string path, IVideoService videoService, HashSet<string>? ignoredNames = null)
     {
         if (string.IsNullOrEmpty(path))
             return false;
@@ -277,10 +283,11 @@ internal static class VfsShared
         var plexLocalExtras = settings.Advanced.PlexLocalExtras;
         var names = ignoredNames ?? GetIgnoredFolderNames(settings);
         var alternateLookup = names.GetAlternateLookup<ReadOnlySpan<char>>();
+        int lastSlash = -1;
 
         for (int start = 0, end; start < path.Length; start = end + 1)
         {
-            int relEnd = path.AsSpan(start).IndexOfAny(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            int relEnd = path.AsSpan(start).IndexOfAny(s_pathSeparators);
             end = relEnd < 0 ? path.Length : start + relEnd;
 
             if (end > start)
@@ -289,9 +296,36 @@ internal static class VfsShared
                 if (alternateLookup.Contains(seg) || (plexLocalExtras && VfsHelper.IsLocalExtraDir(seg)))
                     return true;
             }
+
+            if (relEnd >= 0)
+                lastSlash = end;
         }
 
-        return plexLocalExtras && VfsHelper.IsLocalExtraFile(Path.GetFileNameWithoutExtension(path.AsSpan()));
+        if (plexLocalExtras)
+        {
+            var fileSpan = path.AsSpan(lastSlash >= 0 ? lastSlash + 1 : 0);
+            int lastDot = fileSpan.LastIndexOf('.');
+            var nameWithoutExt = lastDot >= 0 ? fileSpan[..lastDot] : fileSpan;
+
+            if (nameWithoutExt.Length > 0 && VfsHelper.IsLocalExtraFile(nameWithoutExt, out int suffixIndex))
+            {
+                string? dir = Path.GetDirectoryName(path);
+                if (string.IsNullOrEmpty(dir))
+                    dir = ".";
+
+                string searchPattern = string.Concat(nameWithoutExt[..suffixIndex], ".*");
+
+                try
+                {
+                    foreach (var file in Directory.EnumerateFiles(dir, searchPattern))
+                        if (videoService.IsAllowedVideoExtension(file))
+                            return true;
+                }
+                catch { }
+            }
+        }
+
+        return false;
     }
 
     #endregion
@@ -341,13 +375,13 @@ internal static class VfsShared
 #region VFS Ignore Rule
 
 /// <summary>Automatically ignores Shoko Relay's internal VFS and local asset directories during Shoko's import scans.</summary>
-public class VfsIgnoreRule : IManagedFolderIgnoreRule
+public class VfsIgnoreRule(IVideoService videoService) : IManagedFolderIgnoreRule
 {
     /// <inheritdoc/>
     public string Name => "Shoko Relay Ignore Rule";
 
     /// <inheritdoc/>
-    public bool ShouldIgnore(IManagedFolder folder, FileSystemInfo fileSystemInfo) => VfsShared.IsPathIgnored(fileSystemInfo.FullName);
+    public bool ShouldIgnore(IManagedFolder folder, FileSystemInfo fileSystemInfo) => VfsShared.IsPathIgnored(fileSystemInfo.FullName, videoService);
 }
 
 #endregion

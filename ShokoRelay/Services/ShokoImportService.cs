@@ -80,7 +80,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
             var ignoredNames = VfsShared.GetIgnoredFolderNames(Settings);
 
             // A file is considered "missing" if it doesn't exist on disk OR if its path is now blocked by Relay ignore rules.
-            var toDelete = all.Where(f => !File.Exists(f.Path) || VfsShared.IsPathIgnored(f.Path, ignoredNames)).ToList();
+            var toDelete = all.Where(f => !File.Exists(f.Path) || VfsShared.IsPathIgnored(f.Path, videoService, ignoredNames)).ToList();
 
             if (!dryRun && toDelete.Count > 0)
             {

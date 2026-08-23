@@ -568,7 +568,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                 locInfoValue = default;
                 return false;
             }
-            if (VfsShared.IsPathIgnored(loc.Value.Src, ignoredFolders))
+            if (VfsShared.IsPathIgnored(loc.Value.Src, videoService, ignoredFolders))
             {
                 skipped++;
                 skippedDetails.Add($"[Excluded Path] {series.GetDisplayTitle()} [{series.ID}] S{mapping.Coords.Season}E{mapping.Coords.Episode} - {mapping.FileName}");

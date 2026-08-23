@@ -1,4 +1,3 @@
-using System.Collections.Frozen;
 using System.Text;
 using System.Text.RegularExpressions;
 using ShokoRelay.Vfs;
@@ -115,8 +114,6 @@ internal static class AnimeThemesHelper
 
     internal const string AtApiBase = "https://api.animethemes.moe";
     internal const string AtRawMapUrl = "https://gist.githubusercontent.com/natyusha/bb33a3b3bc95bc7a3869633e23d522bb/raw/";
-
-    internal static readonly FrozenSet<string> VideoFileExtensions = FrozenSet.ToFrozenSet([".mkv", ".avi", ".mp4", ".mov", ".ogm", ".wmv", ".mpg", ".mpeg", ".mk3d", ".m4v"], StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Regex for matching known AnimeThemes slug formats.</summary>
     internal static readonly Regex SlugRegex = new("^(?:op|ed)(?!0)[0-9]{0,2}(?:-(?:bd|web|tv|original))?$", RegexOptions.IgnoreCase | RegexOptions.Compiled);

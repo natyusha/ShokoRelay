@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using Shoko.Abstractions.Video.Services;
-using ShokoRelay.AnimeThemes;
 
 namespace ShokoRelay.Vfs;
 
@@ -130,7 +129,7 @@ public class VfsAssetLinker(IVideoService videoService)
                 string plexDirName = PlexConstants.LocalExtraDirs.First(d => string.Equals(d, type, StringComparison.OrdinalIgnoreCase));
                 string seasonFolder = string.IsNullOrEmpty(seasonNum) ? "" : VfsHelper.SanitizeName(PlexMapping.GetSeasonFolder(int.Parse(seasonNum)));
 
-                foreach (var file in Directory.EnumerateFiles(subDir).Where(f => AnimeThemesHelper.VideoFileExtensions.Contains(Path.GetExtension(f))))
+                foreach (var file in Directory.EnumerateFiles(subDir).Where(videoService.IsAllowedVideoExtension))
                 {
                     if (videoService.GetVideoFileByAbsolutePath(file)?.Video?.CrossReferences?.Any(cr => cr.ShokoEpisode != null) == true)
                         continue;
@@ -146,7 +145,7 @@ public class VfsAssetLinker(IVideoService videoService)
             }
 
             // Episode-Level Inline Extras
-            foreach (var file in Directory.EnumerateFiles(srcDir!).Where(f => AnimeThemesHelper.VideoFileExtensions.Contains(Path.GetExtension(f))))
+            foreach (var file in Directory.EnumerateFiles(srcDir!).Where(videoService.IsAllowedVideoExtension))
             {
                 string name = Path.GetFileNameWithoutExtension(file);
                 if (videoBaseNames.Contains(name) || videoService.GetVideoFileByAbsolutePath(file)?.Video?.CrossReferences?.Any(cr => cr.ShokoEpisode != null) == true)

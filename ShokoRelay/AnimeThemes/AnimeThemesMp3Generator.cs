@@ -134,7 +134,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
                     foreach (var f in Directory.EnumerateFiles(r!, "Theme.mp3", SearchOption.AllDirectories))
                     {
                         string dir = Path.GetDirectoryName(f)!;
-                        if (!VfsShared.IsPathIgnored(dir, excluded))
+                        if (!VfsShared.IsPathIgnored(dir, videoService, excluded))
                             _themeMp3Cache.TryAdd(dir, "|");
                     }
                 }
@@ -225,7 +225,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         var (results, p, s, e) = (new List<ThemeMp3OperationResult>(), 0, 0, 0);
 
         // Scan recursively for all directories, skipping ignored/VFS folders
-        var folders = Directory.EnumerateDirectories(root, "*", SearchOption.AllDirectories).Prepend(root).Where(f => !VfsShared.IsPathIgnored(f)).ToList();
+        var folders = Directory.EnumerateDirectories(root, "*", SearchOption.AllDirectories).Prepend(root).Where(f => !VfsShared.IsPathIgnored(f, videoService)).ToList();
 
         var processedSeries = new ConcurrentDictionary<int, byte>();
 
@@ -272,7 +272,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         if (isVfsPath)
             return new(folder, "error", $"Cannot generate Theme.mp3 inside the VFS directory '{vfsRoot}'. Target your physical managed folder instead.");
 
-        string? vid = Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories).FirstOrDefault(f => AnimeThemesHelper.VideoFileExtensions.Contains(Path.GetExtension(f)) && !VfsShared.IsPathIgnored(f));
+        string? vid = Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories).FirstOrDefault(f => videoService.IsAllowedVideoExtension(f) && !VfsShared.IsPathIgnored(f, videoService));
         if (vid == null)
         {
             s_logger.Debug("AnimeThemes MP3: No recognized video files in folder -> {0}", folder);
@@ -542,7 +542,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
                         {
                             string? vid = Directory
                                 .EnumerateFiles(folder, "*", SearchOption.AllDirectories)
-                                .FirstOrDefault(f => AnimeThemesHelper.VideoFileExtensions.Contains(Path.GetExtension(f)) && !VfsShared.IsPathIgnored(f));
+                                .FirstOrDefault(f => videoService.IsAllowedVideoExtension(f) && !VfsShared.IsPathIgnored(f, videoService));
                             if (vid == null)
                                 return;
 

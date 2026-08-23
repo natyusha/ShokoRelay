@@ -1,4 +1,5 @@
 using Shoko.Abstractions.Metadata.Enums;
+using ShokoRelay.Vfs;
 
 namespace ShokoRelay.Plex;
 
@@ -73,13 +74,8 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         }
 
         // If Path Mappings aren't configured, safely infer the correct Plex path by matching the VFS root name to Plex's configured library locations.
-        string vfsRootName = configProvider.GetSettings().Advanced.VfsRootPath;
-        if (string.IsNullOrWhiteSpace(vfsRootName))
-            vfsRootName = ShokoRelayConstants.FolderVfsDefault;
-
-        string movieRootName = configProvider.GetSettings().Advanced.MovieVfsRootPath;
-        if (string.IsNullOrWhiteSpace(movieRootName))
-            movieRootName = ShokoRelayConstants.FolderMoviesDefault;
+        string vfsRootName = VfsShared.ResolveRootFolderName();
+        string movieRootName = VfsShared.ResolveMovieRootFolderName();
 
         string? activeRootName = null;
         int vfsIdx = normMapped.IndexOf($"/{movieRootName}/", StringComparison.OrdinalIgnoreCase);

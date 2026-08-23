@@ -266,10 +266,22 @@ public static class VfsHelper
     /// <returns>True if it matches the pattern.</returns>
     public static bool IsLocalExtraDir(ReadOnlySpan<char> name) => s_localExtraDirRegex.IsMatch(name);
 
-    /// <summary>Identifies local extra files directly from a string span based on Plex naming suffixes (e.g., "-trailer").</summary>
+    /// <summary>Identifies local extra files from a string span and returns the start index of the suffix if matched.</summary>
     /// <param name="fileNameWithoutExtension">The filename without its extension to evaluate.</param>
-    /// <returns>True if it matches the pattern.</returns>
-    public static bool IsLocalExtraFile(ReadOnlySpan<char> fileNameWithoutExtension) => s_localExtraFileRegex.IsMatch(fileNameWithoutExtension);
+    /// <param name="suffixIndex">The 0-based start index of the matched suffix, or -1 if not matched.</param>
+    /// <returns>True if the filename matches a Plex local extra pattern; otherwise, false.</returns>
+    public static bool IsLocalExtraFile(ReadOnlySpan<char> fileNameWithoutExtension, out int suffixIndex)
+    {
+        var enumerator = s_localExtraFileRegex.EnumerateMatches(fileNameWithoutExtension);
+        if (enumerator.MoveNext())
+        {
+            suffixIndex = enumerator.Current.Index;
+            return true;
+        }
+
+        suffixIndex = -1;
+        return false;
+    }
 
     #endregion
 
