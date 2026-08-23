@@ -3,7 +3,7 @@
  * @description Logic for the Shoko Relay stand-alone AnimeThemes VFS video player.
  */
 (() => {
-  const { base, configUrl, el, fetchJson, unwrapConfig, setValueByPath, openModal, updatePlaybackTooltip, saveSettings, getData, initSearchInteractions } = window._sr;
+  const { base, shokoBase, configUrl, el, esc, fetchJson, unwrapConfig, setValueByPath, openModal, updatePlaybackTooltip, saveSettings, getData, initSearchInteractions } = window._sr;
 
   // DOM Elements - UI Indicators
   /** @type {HTMLElement} */ const playerTime = el("time-display");
@@ -317,7 +317,6 @@
     const rootUl = document.createElement("ul");
     rootUl.className = "tree";
     const ft = !!uiFilter?.value.trim();
-    const shokoBase = location.origin + base.split(/\/api\//i)[0];
 
     /**
      * Helper to construct a standard file node in the tree.
@@ -541,7 +540,6 @@
       playerAnime.classList.toggle("tree-missing", isMissing);
 
       if (item?.seriesId) {
-        const shokoBase = location.origin + base.split("/api/")[0];
         playerAnime.href = `${shokoBase}/webui/collection/series/${item.seriesId}/overview`;
         playerAnime.style.pointerEvents = "auto";
         playerAnime.style.color = "";

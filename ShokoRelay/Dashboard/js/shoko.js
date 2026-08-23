@@ -3,7 +3,7 @@
  * @description Dedicated logic for Shoko VFS and Automation tasks on the Shoko Relay dashboard.
  */
 (() => {
-  const { base, configUrl, el, fetchJson, showToast, toastOperation, summarizeResult, initToggle, openModal, setButtonLoading, getData } = window._sr;
+  const { base, shokoBase, configUrl, el, fetchJson, showToast, toastOperation, summarizeResult, initToggle, openModal, setButtonLoading, getData } = window._sr;
 
   // #region Helpers
   /**
@@ -11,7 +11,6 @@
    * @returns {void}
    */
   const resolveSystemLinks = () => {
-    const origin = location.origin;
     const links = {
       "relay-api-link": "/swagger/index.html?urls.primaryName=Shoko+Relay+V1",
       "shoko-api-link": "/swagger/index.html",
@@ -20,7 +19,7 @@
 
     Object.entries(links).forEach(([id, path]) => {
       const anchor = el(id);
-      if (anchor) anchor.href = origin + path;
+      if (anchor) anchor.href = shokoBase + path;
     });
   };
   resolveSystemLinks();

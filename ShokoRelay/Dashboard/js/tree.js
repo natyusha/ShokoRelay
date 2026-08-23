@@ -13,7 +13,7 @@
     let timeout;
     return (...args) => {
       clearTimeout(timeout);
-      timeout = setTimeout(() => fn.apply(this, args), ms);
+      timeout = setTimeout(() => fn(...args), ms);
     };
   };
 

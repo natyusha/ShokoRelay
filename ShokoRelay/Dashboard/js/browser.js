@@ -3,7 +3,7 @@
  * @description Logic for the Shoko Relay VFS Browser, providing a hierarchical view of the virtual filesystem.
  */
 (() => {
-  const { base, el, fetchJson, showToast, toastOperation, getData, initSearchInteractions, TOAST_MS } = window._sr;
+  const { base, shokoBase, el, esc, fetchJson, showToast, toastOperation, getData, initSearchInteractions, TOAST_MS } = window._sr;
 
   /** @type {HTMLElement} The container element for the VFS tree. */
   const vfsTree = el("tree");
@@ -25,13 +25,6 @@
   let activeTabName = localStorage.getItem(TABS_KEY) || "All";
 
   // #region Utilities
-  /**
-   * Escapes double quotes inside a string to prevent HTML attribute syntax corruption.
-   * @param {string} str - The raw string to escape.
-   * @returns {string} The HTML-safe escaped string.
-   */
-  const esc = (str) => (str || "").replace(/"/g, "&quot;");
-
   /**
    * Refreshes the VFS for a specific series and displays the result toast.
    * @param {number} id - The Shoko Series ID to rebuild.
@@ -201,6 +194,22 @@
 
   // #region Tree & Navigation
   /**
+   * Helper to construct a file leaf node with source path tooltip.
+   * @param {Object} f - The file metadata object.
+   * @returns {HTMLLIElement} The file list item element.
+   */
+  const createFileLeaf = (f) => {
+    const li = document.createElement("li");
+    const leaf = document.createElement("div");
+    leaf.className = "leaf";
+    leaf.innerHTML =
+      `<span title="${esc(f.name)}" data-tooltip-overflow-only="true">${f.name}</span>` +
+      `<span class="source-path" title="${esc(f.source || "Unknown")}" data-tooltip-overflow-only="true">${f.source || "Unknown"}</span>`;
+    li.appendChild(leaf);
+    return li;
+  };
+
+  /**
    * Dynamically renders and appends file nodes inside a season container, automatically nesting subdirectories.
    * @param {Object} s - The season data object.
    * @param {HTMLUListElement} sUl - The sub-list container element to append file nodes to.
@@ -222,16 +231,7 @@
       }
     });
 
-    directFiles.forEach((f) => {
-      const eLi = document.createElement("li");
-      const leaf = document.createElement("div");
-      leaf.className = "leaf";
-      leaf.innerHTML =
-        `<span title="${esc(f.name)}" data-tooltip-overflow-only="true">${f.name}</span>` +
-        `<span class="source-path" title="${esc(f.source || "Unknown")}" data-tooltip-overflow-only="true">${f.source || "Unknown"}</span>`;
-      eLi.appendChild(leaf);
-      sUl.appendChild(eLi);
-    });
+    directFiles.forEach((f) => sUl.appendChild(createFileLeaf(f)));
 
     [...subfolders.entries()]
       .sort((a, b) => a[0].localeCompare(b[0]))
@@ -291,16 +291,7 @@
     movieSeasons.forEach(renderSeason);
 
     // Root Files Second (e.g. Theme.mp3)
-    (g.rootFiles || []).forEach((f) => {
-      const fLi = document.createElement("li");
-      const leaf = document.createElement("div");
-      leaf.className = "leaf";
-      leaf.innerHTML =
-        `<span title="${esc(f.name)}" data-tooltip-overflow-only="true">${f.name}</span>` +
-        `<span class="source-path" title="${esc(f.source || "Unknown")}" data-tooltip-overflow-only="true">${f.source || "Unknown"}</span>`;
-      fLi.appendChild(leaf);
-      ul.appendChild(fLi);
-    });
+    (g.rootFiles || []).forEach((f) => ul.appendChild(createFileLeaf(f)));
 
     // Regular TV Seasons Third
     regularSeasons.forEach(renderSeason);
@@ -327,8 +318,6 @@
 
     const rootUl = document.createElement("ul");
     rootUl.className = "tree";
-
-    const shokoBase = location.origin + base.split(/\/api\//i)[0];
 
     items.forEach((g) => {
       const li = document.createElement("li");

@@ -5,7 +5,7 @@
 (() => {
   if (window.self === window.top) document.documentElement.style.scrollbarGutter = "stable"; // prevent layout shifts when scrollbars appear/disappear on the dashboard
 
-  const { base, configUrl, el, TOAST_MS, fetchJson, showToast, toastOperation, saveSettings, getData, openModal } = window._sr;
+  const { base, el, TOAST_MS, fetchJson, showToast, toastOperation, getData, openModal } = window._sr;
 
   /** @type {string[]} Array of all managed task identifiers configured on the server. */
   const MANAGED_TASK_IDS = Object.values(window._sr?.tasks || {});

@@ -5,6 +5,8 @@
 (() => {
   /** @type {string} Base path for API requests determined dynamically from the location. */
   const base = location.pathname.split(/\/(?:dashboard|player|browser)/i)[0];
+  /** @type {string} Root base URL for Shoko Server, safe for reverse-proxy sub-paths. */
+  const shokoBase = location.origin + base.split(/\/api\//i)[0];
   /** @type {string} URL endpoint for configuration data. */
   const configUrl = base + "/config";
   /**
@@ -13,6 +15,12 @@
    * @returns {HTMLElement|null} The DOM element.
    */
   const el = (id) => document.getElementById(id);
+  /**
+   * Escapes double quotes inside a string to prevent HTML attribute syntax corruption.
+   * @param {string} str - The raw string to escape.
+   * @returns {string} The HTML-safe escaped string.
+   */
+  const esc = (str) => (str || "").replace(/"/g, "&quot;");
 
   /** @type {number} Default auto-dismiss duration (ms) for transient toasts. Use 0 for persistent toasts. */
   const TOAST_MS = 5000;
@@ -211,8 +219,10 @@
   // Populate shared global object IMMEDIATELY so feature scripts can destructure it
   window._sr = Object.assign(window._sr || {}, {
     base,
+    shokoBase,
     configUrl,
     el,
+    esc,
     TOAST_MS,
     fetchJson,
     showToast,
