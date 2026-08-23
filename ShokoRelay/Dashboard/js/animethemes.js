@@ -107,8 +107,11 @@
   initToggle("at-mp3-force", false);
   initToggle("at-mp3-batch", false);
 
+  /** @type {HTMLAudioElement|null} Reference to the active HTML5 Audio element. */
   let atAudio = null;
+  /** @type {HTMLElement|null} Reference to the active 'Now Playing' toast element. */
   let nowPlayingToast = null;
+  /** @type {string|null} The folder path of the currently playing theme. */
   let atCurrentFolder = null;
 
   const atTrack = el("at-progress-track");

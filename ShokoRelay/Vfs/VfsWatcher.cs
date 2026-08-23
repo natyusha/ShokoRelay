@@ -25,10 +25,19 @@ public class VfsWatcher(
 
     private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
 
+    /// <summary>Tracks series IDs pending VFS rebuild.</summary>
     private readonly ConcurrentDictionary<int, byte> _pending = new();
+
+    /// <summary>Tracks cancellation tokens for pending debounced metadata fixups.</summary>
     private readonly ConcurrentDictionary<int, CancellationTokenSource> _pendingMetadataFixups = new();
+
+    /// <summary>Tracks cancellation tokens for pending debounced library scans.</summary>
     private readonly ConcurrentDictionary<int, CancellationTokenSource> _pendingLibraryScans = new();
+
+    /// <summary>Indicates if the background processing loop is currently active.</summary>
     private bool _processing;
+
+    /// <summary>Lock object for synchronizing the processing loop state.</summary>
     private readonly Lock _gate = new();
 
     #endregion

@@ -10,22 +10,43 @@ public static class TextHelper
 {
     #region Compiled Regex
 
+    /// <summary>Regex for isolating common prefixes from series titles.</summary>
     private static readonly Regex s_seriesPrefixRegex = new(@"^(Gekijou ?(?:ban(?: 3D)?|Tanpen|Remix Ban|Henshuuban|Soushuuhen)|Eiga|OVA) (.*$)", RegexOptions.Compiled);
+
+    /// <summary>Regex for removing redundant movie descriptors from titles.</summary>
     private static readonly Regex s_movieDescriptorRegex = new(@"(?i)(:? The)?( Movie| Motion Picture)", RegexOptions.Compiled);
+
+    /// <summary>Regex for identifying default or ambiguous episode titles.</summary>
     private static readonly Regex s_defaultTitleRegex = new(@"^(Episode|Volume|Special|Short|(Short )?Movie) [S0]?[1-9][0-9]*$", RegexOptions.Compiled);
+
+    /// <summary>Regex for isolating and removing source notes from summaries.</summary>
     private static readonly Regex s_sourceNoteSummaryRegex = new(
         @"(?m)^\(?\b((Modified )?Sour?ces?|Note( [1-9])?|Summ?ary|From|See Also):(?!$| a daikon)([^\r\n]+|$)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase
     );
+
+    /// <summary>Regex for isolating and removing list indicators from summaries.</summary>
     private static readonly Regex s_listIndicatorRegex = new(@"(?m)^(\*|[\u2014~-] (adapted|source|description|summary|translated|written):?) ([^\r\n]+|$)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    /// <summary>Regex for cleaning up AniDB links in summaries.</summary>
     private static readonly Regex s_aniDBLinkRegex = new(@"(?:http:\/\/anidb\.net\/(?:ch|co|cr|[feast]|(?:character|creator|file|episode|anime|tag)\/)(?:\d+)) \[([^\]]+)]", RegexOptions.Compiled);
+
+    /// <summary>Regex for stripping broken BBCode italic tags from specific AniDB summaries.</summary>
     private static readonly Regex s_bbCodeItalicBugRegex = new(
         @"(?is)\[i\](?!" + Regex.Escape("\"The Sasami") + @"|" + Regex.Escape("\"Stellar") + @"|In the distant| occurred in)(.*?)\[\/i\]",
         RegexOptions.Compiled
     );
+
+    /// <summary>Regex for removing solitary BBCode italic tags.</summary>
     private static readonly Regex s_bbCodeSolitaryRegex = new(@"\[\/?i\]", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    /// <summary>Regex for condensing multiple newlines into a single line break.</summary>
     private static readonly Regex s_condenseLinesRegex = new(@"(\r?\n\s*){2,}", RegexOptions.Compiled);
+
+    /// <summary>Regex for condensing multiple spaces into a single space.</summary>
     private static readonly Regex s_condenseSpacesRegex = new(@"\s{2,}", RegexOptions.Compiled);
+
+    /// <summary>Regex for decoding Unicode escape sequences.</summary>
     private static readonly Regex s_unicodeEscapeRegex = new(@"\\u([0-9a-fA-F]{4})", RegexOptions.Compiled);
 
     #endregion

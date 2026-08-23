@@ -5,7 +5,9 @@
 (() => {
   const { base, configUrl, el, fetchJson, unwrapConfig, saveSettings, getData, withButtonAction } = window._sr;
 
+  /** @type {string} The unique identifier for the current Plex PIN request. */
   let plexPinId = "";
+  /** @type {number|null} Reference to the active Plex authentication polling timer. */
   let plexPollTimer = null;
 
   // #region Helpers

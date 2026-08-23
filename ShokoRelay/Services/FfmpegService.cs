@@ -12,13 +12,28 @@ public sealed class FfmpegService(string pluginDirectory, string applicationPath
 {
     #region Setup & State
 
+    /// <summary>Logger instance for FfmpegService.</summary>
     private readonly Logger _logger = LogManager.GetCurrentClassLogger();
+
+    /// <summary>Lock object for synchronizing FFmpeg binary discovery.</summary>
     private readonly Lock _ffmpegLock = new();
+
+    /// <summary>Tracks whether FFmpeg paths have been successfully configured.</summary>
     private bool _ffmpegConfigured;
+
+    /// <summary>The resolved path to the FFmpeg executable.</summary>
     private string _ffmpegPath = "ffmpeg";
+
+    /// <summary>The resolved path to the FFprobe executable.</summary>
     private string _ffprobePath = "ffprobe";
+
+    /// <summary>The root directory of the plugin.</summary>
     private readonly string _pluginDirectory = pluginDirectory;
+
+    /// <summary>The current working directory for FFmpeg process execution.</summary>
     private string _workingDirectory = pluginDirectory;
+
+    /// <summary>A list of potential directories to search for FFmpeg binaries.</summary>
     private readonly List<string> _utilitiesDirectories =
     [
         .. !string.IsNullOrWhiteSpace(applicationPath) && Directory.Exists(Path.Combine(applicationPath, "Utilities", "FFmpeg")) ? new[] { Path.Combine(applicationPath, "Utilities", "FFmpeg") } : [],

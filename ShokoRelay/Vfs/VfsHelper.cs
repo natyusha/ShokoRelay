@@ -14,14 +14,19 @@ public static class VfsHelper
     /// <summary>Regex to match whitespace except for Hair Space and Zero Width Spaceas they are part of some Plex Extra filename formatting.</summary>
     private static readonly Regex s_whitespaceRegex = new(@"((?![\u200A\u200B])\s)+", RegexOptions.Compiled);
 
+    /// <summary>Regex to identify Plex-style split tags in filenames.</summary>
     private static readonly Regex s_plexSplitTagRegex = new(@"(?ix)(?:^|[\s._-])(cd|disc|disk|dvd|part|pt)[\s._-]*([1-8])(?!\d)", RegexOptions.Compiled);
 
+    /// <summary>Regex to match local extra directories with optional season suffixes.</summary>
     private static readonly Regex s_localExtraDirRegex = new($@"^({string.Join("|", PlexConstants.LocalExtraDirs)})(\s+[sS](\d+))?$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+    /// <summary>Regex to match local extra file suffixes.</summary>
     private static readonly Regex s_localExtraFileRegex = new($@"-(?:behindthescenes|deleted|featurette|interview|scene|short|trailer|other)\d*$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+    /// <summary>Array of styled text replacements for cleaning episode titles.</summary>
     private static readonly (string Find, string Replace)[] s_styledReplacements = [("1/2", "½"), ("1/6", "⅙"), ("-->", "→"), ("<--", "←"), ("->", "→"), ("<-", "←")];
 
+    /// <summary>Dictionary mapping local extra subtypes to their filename prefixes.</summary>
     private static readonly IReadOnlyDictionary<string, string> s_extraTypePrefixes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
         ["trailer"] = "T",

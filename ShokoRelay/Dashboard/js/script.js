@@ -3,14 +3,21 @@
  * @description Core shared layout utilities for the Shoko Relay client interface.
  */
 (() => {
+  /** @type {string} Base path for API requests determined dynamically from the location. */
   const base = location.pathname.split(/\/(?:dashboard|player|browser)/i)[0];
+  /** @type {string} URL endpoint for configuration data. */
   const configUrl = base + "/config";
+  /**
+   * Shorthand helper for document.getElementById.
+   * @param {string} id - The ID of the element to retrieve.
+   * @returns {HTMLElement|null} The DOM element.
+   */
   const el = (id) => document.getElementById(id);
 
-  /** Default auto-dismiss duration (ms) for transient toasts. Use 0 for persistent toasts. */
+  /** @type {number} Default auto-dismiss duration (ms) for transient toasts. Use 0 for persistent toasts. */
   const TOAST_MS = 5000;
 
-  /** Standardized labels for playback controls used by both MP3 and Video players. */
+  /** @type {Object<string, string>} Standardized labels for playback controls used by both MP3 and Video players. */
   const PLAYBACK_LABELS = { loop: "Loop", shuffle: "Shuffle", next: "Next", off: "Once", idle: "Play", playing: "Next" };
 
   // #region Helpers

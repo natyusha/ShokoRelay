@@ -112,7 +112,10 @@ internal static class AnimeThemesHelper
 {
     #region Constants & Fields
 
+    /// <summary>The base URL for the AnimeThemes API.</summary>
     internal const string AtApiBase = "https://api.animethemes.moe";
+
+    /// <summary>The raw URL to the curated AnimeThemes mapping CSV on GitHub.</summary>
     internal const string AtRawMapUrl = "https://gist.githubusercontent.com/natyusha/bb33a3b3bc95bc7a3869633e23d522bb/raw/";
 
     /// <summary>Regex for matching known AnimeThemes slug formats.</summary>
@@ -133,6 +136,7 @@ internal static class AnimeThemesHelper
     /// <summary>Regex for identifying default Opening 1 themes (including their alternate names and suffixes).</summary>
     internal static readonly Regex Op1Regex = new(@"^(?:OP|Opening)\s*(?:1\b|-|\(|$)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+    /// <summary>Dictionary mapping slug suffixes to their formatted display strings.</summary>
     private static readonly Dictionary<string, string> s_slugFormatting = new(StringComparer.OrdinalIgnoreCase)
     {
         { "Animax", "Animax" },

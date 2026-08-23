@@ -7,6 +7,7 @@
 
   const { base, configUrl, el, TOAST_MS, fetchJson, showToast, toastOperation, saveSettings, getData, openModal } = window._sr;
 
+  /** @type {string[]} Array of all managed task identifiers configured on the server. */
   const MANAGED_TASK_IDS = Object.values(window._sr?.tasks || {});
 
   // #region Helpers

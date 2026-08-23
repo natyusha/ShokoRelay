@@ -6,52 +6,54 @@
   const { base, configUrl, el, fetchJson, unwrapConfig, setValueByPath, openModal, updatePlaybackTooltip, saveSettings, getData, initSearchInteractions } = window._sr;
 
   // DOM Elements - UI Indicators
-  const playerTime = el("time-display");
-  const playerVolText = el("volume-text");
-  const playerFullscreenBtn = el("fullscreen");
-  const playerCloseBtn = el("close-session");
-  const playerMuteBtn = el("volume-icon");
-  const playerContainer = el("video").parentElement;
-  const playerVideo = el("video");
-  const playerVideoBtn = el("video-toggle");
+  /** @type {HTMLElement} */ const playerTime = el("time-display");
+  /** @type {HTMLElement} */ const playerVolText = el("volume-text");
+  /** @type {HTMLElement} */ const playerFullscreenBtn = el("fullscreen");
+  /** @type {HTMLElement} */ const playerCloseBtn = el("close-session");
+  /** @type {HTMLElement} */ const playerMuteBtn = el("volume-icon");
+  /** @type {HTMLElement} */ const playerContainer = el("video").parentElement;
+  /** @type {HTMLVideoElement} */ const playerVideo = el("video");
+  /** @type {HTMLElement} */ const playerVideoBtn = el("video-toggle");
 
   // DOM Elements - Navigation & Search
-  const playerTree = el("tree");
-  const uiFilter = el("filter");
-  const uiFilterClear = el("filter-clear");
-  const playerNextBtn = el("next");
-  const playerModeBtn = el("mode");
-  const playerSortBtn = el("sort-toggle");
+  /** @type {HTMLElement} */ const playerTree = el("tree");
+  /** @type {HTMLInputElement} */ const uiFilter = el("filter");
+  /** @type {HTMLElement} */ const uiFilterClear = el("filter-clear");
+  /** @type {HTMLElement} */ const playerNextBtn = el("next");
+  /** @type {HTMLElement} */ const playerModeBtn = el("mode");
+  /** @type {HTMLElement} */ const playerSortBtn = el("sort-toggle");
 
   // DOM Elements - Metadata Header
-  const playerTitle = el("title");
-  const playerAnime = el("anime");
-  const playerAnidb = el("anidb");
-  const playerNowPlayingFav = el("now-playing-fav");
-  const playerLocateBtn = el("locate-current");
+  /** @type {HTMLElement} */ const playerTitle = el("title");
+  /** @type {HTMLElement} */ const playerAnime = el("anime");
+  /** @type {HTMLElement} */ const playerAnidb = el("anidb");
+  /** @type {HTMLElement} */ const playerNowPlayingFav = el("now-playing-fav");
+  /** @type {HTMLElement} */ const playerLocateBtn = el("locate-current");
 
   // DOM Elements - Progress Bar
-  const playerFill = el("player-progress-fill");
-  const playerTrack = el("player-progress-track");
+  /** @type {HTMLElement} */ const playerFill = el("player-progress-fill");
+  /** @type {HTMLElement} */ const playerTrack = el("player-progress-track");
 
   // DOM Elements - Help
-  const helpModal = el("player-help-modal");
-  const helpOpenBtn = el("help-open");
+  /** @type {HTMLElement} */ const helpModal = el("player-help-modal");
+  /** @type {HTMLElement} */ const helpOpenBtn = el("help-open");
 
-  /** @type {Function|null} Track the active modal close callback to support toggle hotkeys */
+  /** @type {Function|null} Reference to the active modal close callback to support toggle hotkeys. */
   let activeModalClose = null;
-  /** @type {WebmEntry[]} */
+  /** @type {Object[]} The hierarchical list of WebM themes. */
   let webmTreeData = [];
-  /** @type {string} */
+  /** @type {string} The relative VFS path of the currently playing theme. */
   let currentWebmPath = "";
-  /** @type {Set<number>} */
+  /** @type {Set<number>} Set of video IDs marked as favourite. */
   let favourites = new Set();
-  /** @type {number|null} */
+  /** @type {number|null} Reference to the active requestAnimationFrame for the progress bar. */
   let progressRaf;
   /** @type {boolean} Determines if the tree renders using original folder structures instead of metadata groups. */
   let useFolderView = localStorage.getItem("player-folder-view") === "true";
 
+  /** @type {string} Local storage key for persisting the currently playing path. */
   const PATH_KEY = "player-current-path";
+  /** @type {string} Label used for themes missing from the Shoko collection. */
   const MISSING_LABEL = "Missing from Collection";
 
   /** @type {Set<string>} Track played paths during shuffle to ensure a full cycle before repeats. */

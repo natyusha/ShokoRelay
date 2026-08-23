@@ -25,7 +25,7 @@
   };
   resolveSystemLinks();
 
-  /** Placeholder text for the VFS Overrides Editor, concatenated to stay under the column limit. */
+  /** @type {string} Placeholder text for the VFS Overrides Editor, concatenated to stay under the column limit. */
   const OVERRIDES_PLACEHOLDER =
     "This allows shows which are separated on AniDB but part of the same TMDB listing to be combined into a single entry in Plex.\n" +
     "Each line should contain a comma separated list of AniDB IDs you wish to merge.\n" +
@@ -94,6 +94,7 @@
   // #endregion
 
   // #region Shoko: Automation
+  /** @type {HTMLSelectElement} Dropdown element for configuring synchronized users. */
   const syncUsersSelect = el("sync-users");
 
   /**
@@ -121,7 +122,7 @@
       const dirToggle = el("sync-direction-toggle");
       const dirArrow = el("sync-direction-arrow");
 
-      /** @type {boolean} dirImport - true if syncing Plex to Shoko, false for Shoko to Plex. */
+      /** @type {boolean} True if syncing Plex to Shoko, false for Shoko to Plex. */
       let dirImport = localStorage.getItem("shoko-sync-direction") === "import";
 
       /**

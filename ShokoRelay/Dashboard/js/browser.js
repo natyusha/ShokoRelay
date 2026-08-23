@@ -4,17 +4,24 @@
  */
 (() => {
   const { base, el, fetchJson, showToast, toastOperation, getData, initSearchInteractions, TOAST_MS } = window._sr;
+
+  /** @type {HTMLElement} The container element for the VFS tree. */
   const vfsTree = el("tree");
+  /** @type {HTMLInputElement} The search filter input element. */
   const uiFilter = el("filter");
+  /** @type {HTMLButtonElement} The clear button for the search filter. */
   const uiFilterClear = el("filter-clear");
+  /** @type {HTMLElement} The element displaying the total series count. */
   const vfsCount = el("vfs-count");
+  /** @type {HTMLElement} The container element for the root selection tabs. */
   const rootTabs = el("root-tabs");
 
+  /** @type {string} Local storage key for persisting the active tab. */
   const TABS_KEY = "vfs-active-tab";
 
-  /** @type {Object[]} displayRoots - Array of root objects (including virtual "All" tab) containing series hierarchies. */
+  /** @type {Object[]} Array of root objects (including virtual "All" tab) containing series hierarchies. */
   let displayRoots = [];
-  /** @type {string} activeTabName - The name of the currently selected VFS root tab. */
+  /** @type {string} The name of the currently selected VFS root tab. */
   let activeTabName = localStorage.getItem(TABS_KEY) || "All";
 
   // #region Utilities

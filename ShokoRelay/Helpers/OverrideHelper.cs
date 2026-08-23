@@ -8,9 +8,16 @@ public static class OverrideHelper
 {
     #region Setup & Constants
 
+    /// <summary>Cached dictionary of primary to secondary series ID mappings.</summary>
     private static IReadOnlyDictionary<int, List<int>> s_groups = new Dictionary<int, List<int>>();
+
+    /// <summary>Tracks whether the override groups have been initialized.</summary>
     private static bool s_isInitialized;
+
+    /// <summary>Lock object for synchronizing override initialization.</summary>
     private static readonly Lock s_loadLock = new();
+
+    /// <summary>The absolute path to the VFS overrides CSV file.</summary>
     private static string OverridesPath => Path.Combine(ConfigDirectory, ShokoRelayConstants.FileVfsOverrides);
 
     #endregion
