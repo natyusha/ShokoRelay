@@ -15,6 +15,34 @@
   "image_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-logo.png",
   "releases": [
     {
+      "version": "0.17.2",
+      "tag": "v0.17.2",
+      "source_revision": "fa0ae35f1b75243a9c3b0273ef6033aab7185afb",
+      "released_at": "2026-08-23T18:56:33Z",
+      "channel": "Dev",
+      "release_notes": "**Changes:**\r\n- Added a Source Folder view toggle to the AnimeThemes Player to organize themes chronologically (Year -> Season -> Series -> Theme)\r\n- Updated AnimeThemes Player search indexing to support filtering by original source folder names\r\n- Refined inline Plex extra detection to verify the physical existence of a base video file before ignoring extras\r\n- Replaced hardcoded video extension lists with Shoko Server's dynamic IsAllowedVideoExtension configuration\r\n- Accelerated path ignore evaluation and separator scanning using SIMD vectorization and zero-allocation span matching\r\n- Centralized reverse-proxy-safe URL routing (shokoBase) and HTML escaping across frontend scripts\r\n- Refactored and DRYed up DOM tree node creation across the VFS Browser and AnimeThemes Player\r\n- Added comprehensive XML documentation and standardized JSDoc annotations across the project\r\n\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.17.1...v0.17.2",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.17.2/ShokoRelay-v0.17.2-dev_linux-arm64.zip",
+          "checksum": "99b75cc61c93f3f849a5cc64cfb144291a1db14e72384166ef73f2afb7d70b22"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.17.2/ShokoRelay-v0.17.2-dev_linux-x64.zip",
+          "checksum": "198c558af99c259e8f75d73b3a0c019dfdbd6918baf4b417fb3c5ffe9cc9882d"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.17.2/ShokoRelay-v0.17.2-dev_win-x64.zip",
+          "checksum": "d0e2df4891db96cbaab03e4859810acf513813e9e3887dda1f34a042f5f00228"
+        }
+      ]
+    },
+    {
       "version": "0.17.1",
       "tag": "v0.17.1",
       "source_revision": "ef8a8bd0bb904106276fa39a868e8ea79fe9bd40",
