@@ -40,7 +40,9 @@ public class SourceLinkService(IVideoService videoService)
             // Use the centralized ignored folder set for purge safety
             var protectedFolders = VfsShared.GetIgnoredFolderNames(Settings);
             foreach (var root in roots)
-                count += PurgeDirectoryLinks(root!, protectedFolders);
+                count += PurgeDirectoryLinks(root!, protectedFolders, details);
+
+            s_logger.Info("SourceLinkService: Finished purge operation -> {0} links removed.", count);
             return new SourceLinkResult(count, true, details);
         }
 
@@ -126,7 +128,9 @@ public class SourceLinkService(IVideoService videoService)
                         lines[i] = "#" + lines[i];
                         modified = true;
                         count++;
-                        details.Add($"{srcInfo.Path} -> {destInfo.Path}");
+                        string logMsg = $"{srcInfo.Path} -> {destInfo.Path}";
+                        details.Add(logMsg);
+                        s_logger.Info("SourceLinkService: Created link -> {0}", logMsg);
                     }
                 }
                 catch (Exception ex)
@@ -137,6 +141,8 @@ public class SourceLinkService(IVideoService videoService)
             if (modified)
                 await File.WriteAllLinesAsync(txtPath, lines);
         }
+
+        s_logger.Info("SourceLinkService: Finished mapping operation -> {0} links created.", count);
         return new SourceLinkResult(count, false, details);
     }
 
@@ -147,8 +153,9 @@ public class SourceLinkService(IVideoService videoService)
     /// <summary>Recursively removes symlinks and _attach folders from a directory, skipping protected system folders.</summary>
     /// <param name="path">The directory path to scan.</param>
     /// <param name="protectedFolders">A set of folder names to exclude from the purge.</param>
+    /// <param name="details">A list to record the paths of purged items.</param>
     /// <returns>The number of items deleted.</returns>
-    private static int PurgeDirectoryLinks(string path, HashSet<string> protectedFolders)
+    private static int PurgeDirectoryLinks(string path, HashSet<string> protectedFolders, List<string> details)
     {
         int deleted = 0;
         try
@@ -166,6 +173,9 @@ public class SourceLinkService(IVideoService videoService)
                         Directory.Delete(entry);
                     else
                         File.Delete(entry);
+
+                    details.Add(entry);
+                    s_logger.Info("SourceLinkService: Purged link -> {0}", entry);
                     deleted++;
                 }
                 else if (Directory.Exists(entry))
@@ -174,10 +184,12 @@ public class SourceLinkService(IVideoService videoService)
                     if (name.EndsWith("_attach", StringComparison.OrdinalIgnoreCase))
                     {
                         Directory.Delete(entry, true);
+                        details.Add(entry);
+                        s_logger.Info("SourceLinkService: Purged attachment folder -> {0}", entry);
                         deleted++;
                     }
                     else
-                        deleted += PurgeDirectoryLinks(entry, protectedFolders);
+                        deleted += PurgeDirectoryLinks(entry, protectedFolders, details);
                 }
             }
         }
