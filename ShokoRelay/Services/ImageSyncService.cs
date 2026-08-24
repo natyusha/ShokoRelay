@@ -34,7 +34,7 @@ public sealed record ImageSyncResult(int Processed, int Uploaded, int Skipped, i
 #endregion
 
 /// <summary>Default implementation of <see cref="IImageSyncService"/>.</summary>
-public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMetadataService metadataService, IImageManager imageManager, ConfigProvider configProvider) : IImageSyncService
+public class ImageSyncService(PlexClient plexClient, IMetadataService metadataService, IImageManager imageManager, ConfigProvider configProvider) : IImageSyncService
 {
     #region Setup
 
@@ -232,14 +232,14 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                             if (target.LibraryType == PlexLibraryType.Movie)
                             {
                                 using var req = plexClient.CreateRequest(HttpMethod.Get, $"/library/metadata/{ratingKey}?X-Plex-Container-Start=0&X-Plex-Container-Size=1", target.ServerUrl);
-                                using var resp = await httpClient.SendAsync(req, ct).ConfigureAwait(false);
+                                using var resp = await plexClient.SendAsync(req, ct).ConfigureAwait(false);
                                 if ((await PlexApi.ReadContainerAsync(resp, ct).ConfigureAwait(false))?.Metadata?.FirstOrDefault() is { } movieItem)
                                     await ProcessThumbnailItem(movieItem).ConfigureAwait(false);
                             }
                             else
                             {
                                 using var req = plexClient.CreateRequest(HttpMethod.Get, $"/library/metadata/{ratingKey}/allLeaves?X-Plex-Container-Start=0&X-Plex-Container-Size=5000", target.ServerUrl);
-                                using var resp = await httpClient.SendAsync(req, ct).ConfigureAwait(false);
+                                using var resp = await plexClient.SendAsync(req, ct).ConfigureAwait(false);
                                 foreach (var epItem in (await PlexApi.ReadContainerAsync(resp, ct).ConfigureAwait(false))?.Metadata ?? [])
                                     await ProcessThumbnailItem(epItem).ConfigureAwait(false);
                             }
@@ -550,7 +550,7 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
         try
         {
             using var req = plexClient.CreateRequest(HttpMethod.Get, thumbUrl, target.ServerUrl);
-            using var resp = await httpClient.SendAsync(req, ct).ConfigureAwait(false);
+            using var resp = await plexClient.SendAsync(req, ct).ConfigureAwait(false);
             if (!resp.IsSuccessStatusCode)
             {
                 errorsBag.Add($"Plex download failed for {epLogName} with status {resp.StatusCode}");

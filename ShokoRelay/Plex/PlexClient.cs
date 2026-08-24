@@ -10,9 +10,6 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
 
     private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
 
-    /// <summary>Internal access to the shared HttpClient instance.</summary>
-    internal HttpClient HttpClient => httpClient;
-
     private string Token => configProvider.GetPlexToken();
     private string ClientIdentifier => configProvider.GetPlexClientIdentifier();
     private IReadOnlyList<PlexAvailableLibrary> DiscoveredLibraries => configProvider.GetPlexDiscoveredLibraries();
@@ -61,7 +58,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
             foreach (var target in matchingTargets)
             {
                 using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/refresh?path={Uri.EscapeDataString(mapped)}", target.ServerUrl);
-                using var resp = await HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+                using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
                 if (resp.IsSuccessStatusCode)
                 {
                     anyOk = true;
@@ -160,7 +157,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
                     continue;
 
                 using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{tgt.SectionId}/refresh?path={Uri.EscapeDataString(guessedPath)}", tgt.ServerUrl);
-                using var resp = await HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+                using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
                 if (resp.IsSuccessStatusCode)
                 {
                     anyOk = true;
@@ -189,7 +186,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
             return false;
 
         using var req = CreateRequest(HttpMethod.Put, $"/library/metadata/{ratingKey}/refresh", target.ServerUrl);
-        using var resp = await HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+        using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
 
         if (resp.IsSuccessStatusCode)
             s_logger.Debug("PlexClient: Metadata refresh triggered for RatingKey {0} on {1}", ratingKey, target.ServerName);
@@ -210,7 +207,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
             return false;
 
         using var req = CreateRequest(HttpMethod.Put, $"/library/metadata/{ratingKey}/analyze", target.ServerUrl);
-        using var resp = await HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+        using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
 
         if (resp.IsSuccessStatusCode)
             s_logger.Debug("PlexClient: Media analysis triggered for RatingKey {0} on {1}", ratingKey, target.ServerName);
@@ -237,7 +234,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
 
             // Get Total Library Size at the episode/movie level
             using var totalReq = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?type={typeId}&X-Plex-Container-Start=0&X-Plex-Container-Size=0", target.ServerUrl);
-            using var totalResp = await HttpClient.SendAsync(totalReq, ct).ConfigureAwait(false);
+            using var totalResp = await httpClient.SendAsync(totalReq, ct).ConfigureAwait(false);
             var totalContainer = await PlexApi.ReadContainerAsync(totalResp, ct).ConfigureAwait(false);
             int totalSize = totalContainer?.TotalSize ?? totalContainer?.Size ?? 0;
 
@@ -251,7 +248,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
             while (true)
             {
                 using var trashReq = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?type={typeId}&trash=1&X-Plex-Container-Start={start}&X-Plex-Container-Size=200", target.ServerUrl);
-                using var trashResp = await HttpClient.SendAsync(trashReq, ct).ConfigureAwait(false);
+                using var trashResp = await httpClient.SendAsync(trashReq, ct).ConfigureAwait(false);
                 var trashContainer = await PlexApi.ReadContainerAsync(trashResp, ct).ConfigureAwait(false);
 
                 trashedSize = trashContainer?.TotalSize ?? trashContainer?.Size ?? trashedSize;
@@ -280,7 +277,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
             if (!dryRun)
             {
                 using var emptyReq = CreateRequest(HttpMethod.Put, $"/library/sections/{target.SectionId}/emptyTrash", target.ServerUrl);
-                using var emptyResp = await HttpClient.SendAsync(emptyReq, ct).ConfigureAwait(false);
+                using var emptyResp = await httpClient.SendAsync(emptyReq, ct).ConfigureAwait(false);
                 if (!emptyResp.IsSuccessStatusCode)
                     return (false, trashedItems, $"Plex API rejected the empty trash request: {emptyResp.StatusCode}");
             }
@@ -315,6 +312,12 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         req.Headers.TryAddWithoutValidation("Accept", "application/json");
         return req;
     }
+
+    /// <summary>Sends an HTTP request to the Plex server.</summary>
+    /// <param name="request">The configured request message.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The HTTP response message.</returns>
+    public Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken = default) => httpClient.SendAsync(request, cancellationToken);
 
     #endregion
 
@@ -376,7 +379,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
                         $"/library/sections/{target.SectionId}/all?guid={Uri.EscapeDataString(guid)}&X-Plex-Container-Start=0&X-Plex-Container-Size=1",
                         target.ServerUrl
                     );
-                    using var resp = await HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+                    using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
                     var item = (await PlexApi.ReadContainerAsync(resp, cancellationToken).ConfigureAwait(false))?.Metadata?.FirstOrDefault();
                     if (int.TryParse(item?.RatingKey, out int key))
                         keys.Add(key);
@@ -387,7 +390,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
             {
                 string guid = $"{ShokoRelayConstants.AgentScheme}://show/{primaryId}";
                 using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?guid={Uri.EscapeDataString(guid)}&X-Plex-Container-Start=0&X-Plex-Container-Size=1", target.ServerUrl);
-                using var resp = await HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+                using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
                 var item = (await PlexApi.ReadContainerAsync(resp, cancellationToken).ConfigureAwait(false))?.Metadata?.FirstOrDefault();
                 return int.TryParse(item?.RatingKey, out int key) ? [key] : [];
             }
@@ -439,7 +442,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
                 q.Add($"lastViewedAt>={minLastViewed.Value}");
 
             using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?{string.Join("&", q)}", target.ServerUrl, token);
-            using var resp = await HttpClient.SendAsync(req, ct).ConfigureAwait(false);
+            using var resp = await httpClient.SendAsync(req, ct).ConfigureAwait(false);
             var cont = resp.IsSuccessStatusCode ? await PlexApi.ReadContainerAsync(resp, ct).ConfigureAwait(false) : null;
             if (cont?.Metadata == null || cont.Metadata.Count == 0)
                 break;

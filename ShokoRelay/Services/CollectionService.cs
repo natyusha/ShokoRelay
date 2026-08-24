@@ -59,7 +59,6 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
 
     #endregion
 
-
     #region Collection Building
 
     /// <inheritdoc/>
@@ -167,7 +166,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                         foreach (var ratingKey in ratingKeys)
                         {
                             using var req = plexClient.CreateRequest(HttpMethod.Get, $"/library/metadata/{ratingKey}?X-Plex-Container-Start=0&X-Plex-Container-Size=1", target.ServerUrl);
-                            using var resp = await plexClient.HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+                            using var resp = await plexClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
                             if ((await PlexApi.ReadContainerAsync(resp, cancellationToken).ConfigureAwait(false))?.Metadata?.FirstOrDefault() is { } item)
                                 items.Add(item);
                         }

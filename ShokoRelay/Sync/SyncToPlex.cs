@@ -109,7 +109,7 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
                         if (!dryRun)
                         {
                             using var req = plexClient.CreateRequest(HttpMethod.Get, $"/:/scrobble?identifier=com.plexapp.plugins.library&key={plexItem.RatingKey}", target.ServerUrl, uToken);
-                            using var resp = await plexClient.HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+                            using var resp = await plexClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
                             if (!resp.IsSuccessStatusCode)
                                 continue;
                         }
@@ -162,7 +162,7 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
                                     target.ServerUrl,
                                     uToken
                                 );
-                                await plexClient.HttpClient.SendAsync(rateReq, cancellationToken).ConfigureAwait(false);
+                                await plexClient.SendAsync(rateReq, cancellationToken).ConfigureAwait(false);
                             }
                             result = SyncHelper.IncVotesUpdated(result);
                         }
