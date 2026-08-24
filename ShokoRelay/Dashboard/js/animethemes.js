@@ -13,9 +13,7 @@
   window._sr.getAtParams = () => {
     const ps = new URLSearchParams();
     ["path", "slug", "offset"].forEach((k) => window._sr.setIfNotEmpty(ps, k, el(`at-${k}`)?.value));
-    if (el("at-mp3-force")?.getAttribute("aria-pressed") === "true") ps.set("force", "true");
-    if (el("at-mp3-batch")?.getAttribute("aria-pressed") === "true") ps.set("batch", "true");
-    if (el("at-seasonal")?.value === "1") ps.set("seasonal", "true");
+    ["seasonal", "force", "batch"].forEach((t) => el(`at-mp3-${t}`)?.getAttribute("aria-pressed") === "true" && ps.set(t, "true"));
     return ps;
   };
 
@@ -25,8 +23,7 @@
    */
   window._sr.getAtMapParams = () => {
     const ps = new URLSearchParams();
-    const filter = el("at-filter-map")?.value;
-    if (filter) ps.set("filter", filter);
+    window._sr.setIfNotEmpty(ps, "filter", el("at-filter-map")?.value);
     return ps;
   };
 
@@ -104,8 +101,9 @@
   // #endregion
 
   // #region MP3 - State and UI
+  initToggle("at-mp3-seasonal", false);
   initToggle("at-mp3-force", false);
-  initToggle("at-mp3-batch", false);
+  initToggle("at-mp3-batch", true);
 
   /** @type {HTMLAudioElement|null} Reference to the active HTML5 Audio element. */
   let atAudio = null;
@@ -118,7 +116,7 @@
   const atFill = el("at-progress-fill");
 
   /**
-   * Initializes real-time input sanitization event listeners for the Slug, Offset, Cour, and Filter fields.
+   * Initializes real-time input sanitization event listeners for the Slug, Offset, and Filter fields.
    * @returns {void}
    */
   function initAtSanitizers() {
@@ -133,13 +131,6 @@
     if (offsetInput) {
       offsetInput.oninput = () => {
         offsetInput.value = offsetInput.value.replace(/[^0-9]/g, "");
-      };
-    }
-
-    const seasonalInput = el("at-seasonal");
-    if (seasonalInput) {
-      seasonalInput.oninput = () => {
-        seasonalInput.value = seasonalInput.value.replace(/[^01]/g, "").slice(0, 1);
       };
     }
 

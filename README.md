@@ -253,13 +253,13 @@ There is also support for generating `Theme.mp3` files as local metadata. This w
 - Input the path (relative to Shoko or a mapping) to a folder containing an anime series and then click `Generate`
 - The `Audit Theme.mp3 Files` button will check for the availability of an opening for any theme file that isn't tagged as "Opening 1"
   - This is for cases where the ED was downloaded before the OP existed on AnimeThemes
+- The `Current Season Filter Toggle` will limit batch operations to anime airing in the current season (with a one-month buffer)
 - The `Force Overwrite Toggle` will overwrite any `Theme.mp3` files found in the configured path (or during a batch)
-- The `Recursive Batch Toggle` will enable batch operations on every subfolder of the configured path
+- The `Recursive Batch Toggle` (on by default) will enable batch operations on every subfolder of the configured path
 - By default this will grab the first available OP with a fallback to the first ED
 - If you want a specific OP/ED you can enter it under `Slug` i.e. `OP2`
 - Rarely a single AniDB entry will be mapped to multiple AnimeThemes entries. In cases like this the `Off.` or "Index Override" can be set to pick the next match
   - Generally this means entering a `1`
-- If you want to limit batch operations to the current season set `Cour` to `1`
 - _Theme.mp3 generation can be run per folder from the [VFS Browser](#vfs-browser) page (uses the default settings)_
 
 **Miniplayer**
@@ -268,7 +268,7 @@ There is a mini media player included on the dashboard which will play downloade
 
 ### AnimeThemes Player
 
-Shoko Relay includes a browser based video player designed specifically for local AnimeThemes playback. It can be accessed via the `Open Video Player` icon (clap board) within the "AnimeThemes: VFS" section of the dashboard, as an embed in Shoko's WebUI under `Settings > Plugins > Shoko Relay > AnimeThemes Player`, or via a dedicated URL: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/player`.
+Shoko Relay includes a browser based video player designed specifically for local AnimeThemes playback. It can be accessed via the `Open Video Player` icon (clapboard) within the "AnimeThemes: VFS" section of the dashboard, as an embed in Shoko's WebUI under `Settings > Plugins > Shoko Relay > AnimeThemes Player`, or via a dedicated URL: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/player`.
 
 There is an included tree view which allows you to browse your themes by `Group > Series` (as they would appear in Plex) or by `Source Folder > Series`. Within the tree view any series which is not associated with Shoko's collection will be greyed out (group view will also place them in the "Missing from Collection" branch). A search box is included which will filter the tree view based on series, group, folder or filename level queries. The filter supports tag-based filtering syntax using `+` (inclusion) and `-` (exclusion) operators. Support for Loop, Shuffle, and Sequential playback is also available via a 4 stage toggle button.
 
@@ -329,6 +329,10 @@ Non standard episodes on the other hand, are placed into a local series level Ex
 **Crossover Episode Limitations**
 
 Crossover episodes are files which are linked to multiple episodes spanning separate AniDB series. Due to Plex's architecture they will only function in one series at a time. Since the plugin doesn't know which episode the user prefers, unwanted crossover entries must be hidden via Shoko's series page. To work around this limitation crossover episodes can also be modified (so the file's hash changes) then manually linked in Shoko to the desired episode.
+
+**VFS Audit**
+
+The VFS includes built-in audit functionality that scans existing VFS directories to find and prune orphaned folders, empty subdirectories, and broken symlinks whose source files were deleted or moved. It also updates the VFS Browser blueprint and generates a report at `logs/shoko-vfs-audit-report.log` in the plugin directory. It can be accessed via the `VFS Audit` button (database checkmark) in the "Shoko: VFS" section of the dashboard.
 
 ### VFS Browser
 
