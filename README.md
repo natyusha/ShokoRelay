@@ -211,7 +211,7 @@ Applying a hyphenated suffix to the image that matches Plex's naming conventions
   - Local episode thumbnails from the VFS Root of a series (with the same base filename as the corresponding episode)
   - Plex's auto generated episode thumbnails (skipped if "TMDB Thumbnails" is enabled or a local thumbnail is present)
 - This allows Shoko and Plex to share the same local image metadata with a single source of truth
-- This will not run during the Plex Metadata Fixup or scheduled Plex Automation Interval unless `Advanced Settings -> Plex Image Sync` is enabled
+- This will not run during the Plex Metadata Fixup or scheduled Plex Automation Interval unless `Advanced Settings > Plex Image Sync` is enabled
 - _Requires Plex authentication_
 
 ### Shoko Actions
@@ -268,7 +268,9 @@ There is a mini media player included on the dashboard which will play downloade
 
 ### AnimeThemes Player
 
-Shoko Relay includes a browser based video player designed specifically for local AnimeThemes playback. It can be accessed via the `Open Video Player` icon (clap board) within the "AnimeThemes: VFS" section of the dashboard, as an embed in Shoko's WebUI under `Settings > Plugins > Shoko Relay > AnimeThemes Player`, or by a dedicated URL: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/player`. There is an included tree view which allows you to browse your themes by Group/Series as they would appear in Plex. Support for Loop, Shuffle, and Sequential playback is also available via a 4 stage toggle button. A search box is included which will filter the tree view based on series, group, or filename level queries. The filter supports tag-based filtering syntax using `+` (inclusion) and `-` (exclusion) operators.
+Shoko Relay includes a browser based video player designed specifically for local AnimeThemes playback. It can be accessed via the `Open Video Player` icon (clap board) within the "AnimeThemes: VFS" section of the dashboard, as an embed in Shoko's WebUI under `Settings > Plugins > Shoko Relay > AnimeThemes Player`, or via a dedicated URL: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/player`.
+
+There is an included tree view which allows you to browse your themes by `Group > Series` (as they would appear in Plex) or by `Source Folder > Series`. Within the tree view any series which is not associated with Shoko's collection will be greyed out (group view will also place them in the "Missing from Collection" branch). A search box is included which will filter the tree view based on series, group, folder or filename level queries. The filter supports tag-based filtering syntax using `+` (inclusion) and `-` (exclusion) operators. Support for Loop, Shuffle, and Sequential playback is also available via a 4 stage toggle button.
 
 > [!TIP]
 > There is a help button in the top right of the video player which will show a full list of keybinds and filters.

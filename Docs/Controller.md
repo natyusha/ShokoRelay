@@ -392,7 +392,7 @@ POST /animethemes/webm/download                                -> DownloadAnimeT
      [?name={string}&year={int}&season={string}&force={true|false}&destination={path}]
 ```
 
-- `AnimeThemesWebmTree` returns the hierarchical tree including bitmask flags and `videoId`.
+- `AnimeThemesWebmTree` returns the hierarchical tree including bitmask flags, `videoId`, and `relPath` (source folder path for folder view support).
 - `AnimeThemesWebmStream` supports HTTP range requests for seekable browser playback.
 - `GetAnimeThemesFavourites` returns a list of `videoId` favourites from `favs_animethemes.cache`.
 - `UpdateAnimeThemesFavourite` toggles a `videoId` in the favourites list using a raw integer body.
