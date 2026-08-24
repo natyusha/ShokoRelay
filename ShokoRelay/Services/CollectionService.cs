@@ -157,10 +157,29 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
             {
                 bool isMovieTarget = target.LibraryType == PlexLibraryType.Movie;
 
-                // Fetch all items at the start to minimize per-item API calls
-                var items = isMovieTarget
-                    ? await plexClient.GetSectionMoviesAsync(target, null, cancellationToken).ConfigureAwait(false) ?? []
-                    : await plexClient.GetSectionShowsAsync(target, cancellationToken).ConfigureAwait(false) ?? [];
+                var items = new List<PlexMetadataItem>();
+                if (allowedIds.Count > 0)
+                {
+                    // Targeted fast-path for filtered series
+                    foreach (var seriesId in allowedIds)
+                    {
+                        var ratingKeys = await plexClient.FindRatingKeysForShokoSeriesInSectionAsync(seriesId, target, metadataService, cancellationToken).ConfigureAwait(false);
+                        foreach (var ratingKey in ratingKeys)
+                        {
+                            using var req = plexClient.CreateRequest(HttpMethod.Get, $"/library/metadata/{ratingKey}?X-Plex-Container-Start=0&X-Plex-Container-Size=1", target.ServerUrl);
+                            using var resp = await plexClient.HttpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+                            if ((await PlexApi.ReadContainerAsync(resp, cancellationToken).ConfigureAwait(false))?.Metadata?.FirstOrDefault() is { } item)
+                                items.Add(item);
+                        }
+                    }
+                }
+                else
+                {
+                    // Bulk path: query all items in library section
+                    items = isMovieTarget
+                        ? await plexClient.GetSectionMoviesAsync(target, null, cancellationToken).ConfigureAwait(false) ?? []
+                        : await plexClient.GetSectionShowsAsync(target, cancellationToken).ConfigureAwait(false) ?? [];
+                }
 
                 var collections = await plexClient.GetSectionCollectionsAsync(target, cancellationToken).ConfigureAwait(false) ?? [];
 

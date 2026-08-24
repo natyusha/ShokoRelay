@@ -13,9 +13,8 @@ public class VfsWatcher(
     IVideoReleaseService releaseService,
     VfsBuilder builder,
     IMetadataService metadataService,
-    PlexMetadata plexMetadata,
     PlexClient plexLibrary,
-    PlexCollections plexCollections,
+    ICollectionService collectionService,
     AnimeThemesMapping atMapping,
     ICriticRatingService criticRatingService,
     IImageSyncService imageSyncService
@@ -354,51 +353,8 @@ public class VfsWatcher(
             else
             {
                 // Execute subsequent API actions sequentially to guarantee metadata framework exists
-                try
-                {
-                    // Worker task that performs the collection assignment and poster/logo/backdrop upload logic
-                    var collectionName = plexMetadata.GetCollectionName(series);
-                    if (!string.IsNullOrWhiteSpace(collectionName))
-                    {
-                        foreach (var target in targets)
-                        {
-                            var ratingKeys = await plexLibrary.FindRatingKeysForShokoSeriesInSectionAsync(series.ID, target, metadataService, token).ConfigureAwait(false);
-                            if (ratingKeys.Count == 0)
-                                continue;
-
-                            bool collectionAssigned = false;
-                            foreach (var ratingKey in ratingKeys)
-                            {
-                                if (await plexCollections.AssignCollectionToItemByMetadataAsync(ratingKey, collectionName, target, token).ConfigureAwait(false))
-                                    collectionAssigned = true;
-                            }
-
-                            if (collectionAssigned)
-                            {
-                                var collectionId = await plexCollections.GetOrCreateCollectionIdAsync(collectionName, target, token).ConfigureAwait(false);
-                                if (!collectionId.HasValue)
-                                    continue;
-
-                                var desc = TextHelper.GetDescriptionByLanguage(series, Settings.DescriptionLanguage);
-                                var tmdbDesc = series.TmdbShows?.FirstOrDefault()?.PreferredDescription?.Value;
-                                var summary = TextHelper.SanitizeSummaryWithFallback(desc, tmdbDesc, Settings.SummaryMode);
-                                await plexCollections.UpdateCollectionMetadataAsync(collectionId.Value, collectionName, summary, target, token).ConfigureAwait(false);
-
-                                foreach (var config in PlexConstants.CollectionImageConfigs)
-                                {
-                                    var fallback = config.DefaultFallback && Settings.CollectionImages;
-                                    var url = PlexHelper.GetCollectionImageUrl(series, collectionName, collectionId.Value, config.Suffix, config.Suffixes, metadataService, fallback);
-                                    if (!string.IsNullOrEmpty(url))
-                                        await plexCollections.UploadCollectionImageByUrlAsync(collectionId.Value, url, config.Prefix, target, token).ConfigureAwait(false);
-                                }
-                            }
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    s_logger.Error(ex, "VFS: Collection update failed for series -> {0} [{1}]", series.GetDisplayTitle(), series.ID);
-                }
+                s_logger.Info("VFS: Triggering debounced collection update for series -> {0} [{1}]", series.GetDisplayTitle(), series.ID);
+                await collectionService.BuildCollectionsAsync([series], clean: false, cancellationToken: token).ConfigureAwait(false);
 
                 s_logger.Info("VFS: Triggering debounced critic rating application for series -> {0} [{1}]", series.GetDisplayTitle(), series.ID);
                 await criticRatingService.ApplyRatingsAsync([series.ID], token).ConfigureAwait(false);

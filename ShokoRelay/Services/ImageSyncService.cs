@@ -160,27 +160,22 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
             ct.ThrowIfCancellationRequested();
             try
             {
-                var items =
-                    target.LibraryType == PlexLibraryType.Movie
-                        ? await plexClient.GetSectionMoviesAsync(target, null, ct).ConfigureAwait(false) ?? []
-                        : await plexClient.GetSectionEpisodesAsync(target, null, ct).ConfigureAwait(false) ?? [];
-
-                foreach (var item in items)
+                async Task ProcessThumbnailItem(PlexMetadataItem item)
                 {
                     ct.ThrowIfCancellationRequested();
                     if (string.IsNullOrWhiteSpace(item.Guid) || string.IsNullOrWhiteSpace(item.Thumb))
-                        continue;
+                        return;
 
                     var epId = PlexHelper.ExtractShokoEpisodeIdFromGuid(item.Guid);
 
                     // Ensure each Shoko Episode (including specials and movies) is only processed once globally per run
                     // Ordering TV targets first ensures Movie libraries skip episodes/specials already synced from TV libraries
                     if (!epId.HasValue || !processedInRun.Add(epId.Value))
-                        continue;
+                        return;
 
                     var episode = metadataService.GetShokoEpisodeByID(epId.Value);
                     if (episode == null || (allowedSet != null && !allowedSet.Contains(episode.SeriesID)))
-                        continue;
+                        return;
 
                     var prefId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series) : null;
                     var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
@@ -224,6 +219,43 @@ public class ImageSyncService(PlexClient plexClient, HttpClient httpClient, IMet
                         var (ph, pu, ps, pe, pcu) = await ProcessPlexThumbnailAsync(item.Thumb, episode, epLogName, target, cache, errsBag, uploadedBag, ct).ConfigureAwait(false);
                         addStats(ph, pu, ps, pe, pcu);
                     }
+                }
+
+                if (allowedSet != null)
+                {
+                    // Targeted fast-path for filtered series
+                    foreach (var seriesId in allowedSet)
+                    {
+                        var ratingKeys = await plexClient.FindRatingKeysForShokoSeriesInSectionAsync(seriesId, target, metadataService, ct).ConfigureAwait(false);
+                        foreach (var ratingKey in ratingKeys)
+                        {
+                            if (target.LibraryType == PlexLibraryType.Movie)
+                            {
+                                using var req = plexClient.CreateRequest(HttpMethod.Get, $"/library/metadata/{ratingKey}?X-Plex-Container-Start=0&X-Plex-Container-Size=1", target.ServerUrl);
+                                using var resp = await httpClient.SendAsync(req, ct).ConfigureAwait(false);
+                                if ((await PlexApi.ReadContainerAsync(resp, ct).ConfigureAwait(false))?.Metadata?.FirstOrDefault() is { } movieItem)
+                                    await ProcessThumbnailItem(movieItem).ConfigureAwait(false);
+                            }
+                            else
+                            {
+                                using var req = plexClient.CreateRequest(HttpMethod.Get, $"/library/metadata/{ratingKey}/allLeaves?X-Plex-Container-Start=0&X-Plex-Container-Size=5000", target.ServerUrl);
+                                using var resp = await httpClient.SendAsync(req, ct).ConfigureAwait(false);
+                                foreach (var epItem in (await PlexApi.ReadContainerAsync(resp, ct).ConfigureAwait(false))?.Metadata ?? [])
+                                    await ProcessThumbnailItem(epItem).ConfigureAwait(false);
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    // Bulk path: query all items in library section
+                    var items =
+                        target.LibraryType == PlexLibraryType.Movie
+                            ? await plexClient.GetSectionMoviesAsync(target, null, ct).ConfigureAwait(false) ?? []
+                            : await plexClient.GetSectionEpisodesAsync(target, null, ct).ConfigureAwait(false) ?? [];
+
+                    foreach (var item in items)
+                        await ProcessThumbnailItem(item).ConfigureAwait(false);
                 }
             }
             catch (Exception ex)
