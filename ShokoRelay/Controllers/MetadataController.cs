@@ -80,16 +80,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
         string? rawPath = body?.Filename ?? Request.Query["filename"];
         string? title = body?.Title ?? Request.Query["title"];
         int? manual = body?.Manual ?? (int.TryParse(Request.Query["manual"], out var m) ? m : null);
-        int? id;
-        if (string.IsNullOrWhiteSpace(rawPath))
-        {
-            if (manual == 1 && int.TryParse(title, out var manualId))
-                id = manualId;
-            else
-                return EmptyMatch();
-        }
-        else
-            id = TextHelper.ExtractSeriesId(rawPath);
+        int? id = string.IsNullOrWhiteSpace(rawPath) ? (manual == 1 && int.TryParse(title, out var manualId) ? manualId : null) : TextHelper.ExtractSeriesId(rawPath);
 
         if (!id.HasValue)
             return EmptyMatch();

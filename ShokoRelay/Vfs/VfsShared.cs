@@ -166,7 +166,7 @@ internal static class VfsShared
                 return s_lastIgnoredNames;
 
             var ignored = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ResolveRootFolderName(), ResolveMovieRootFolderName(), ResolveAnimeThemesFolderName(), ResolveCollectionImagesFolderName() };
-            foreach (var folder in settings.Advanced.FolderExclusions.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            foreach (var folder in (settings.Advanced.FolderExclusions ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                 ignored.Add(folder);
 
             // If Plex Local Extras are enabled, automatically include the standard Plex extra subdirectories in the ignore list.

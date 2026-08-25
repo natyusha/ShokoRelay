@@ -20,11 +20,11 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
     /// <summary>Expose the configuration setting controlling automatic library scans.</summary>
     public bool ScanOnVfsRefresh => Settings.Automation.ScanOnVfsRefresh;
 
-    /// <summary>Cached list of prioritized Shoko-to-Plex path mappings.</summary>
-    private readonly List<(string In, string Out)> _shokoToPlexMappings = [];
+    /// <summary>Cached array of prioritized Shoko-to-Plex path mappings.</summary>
+    private (string In, string Out)[] _shokoToPlexMappings = [];
 
-    /// <summary>Cached list of prioritized Plex-to-Shoko path mappings.</summary>
-    private readonly List<(string In, string Out)> _plexToShokoMappings = [];
+    /// <summary>Cached array of prioritized Plex-to-Shoko path mappings.</summary>
+    private (string In, string Out)[] _plexToShokoMappings = [];
 
     /// <summary>Reference to the last cached raw path mappings dictionary used to detect configuration changes.</summary>
     private Dictionary<string, string>? _lastCachedMappings;
@@ -531,26 +531,20 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         if (currentMappings == null || currentMappings.Count == 0)
             return path;
 
-        IReadOnlyList<(string In, string Out)> list;
+        (string In, string Out)[] list;
         lock (_mappingLock)
         {
             if (!ReferenceEquals(_lastCachedMappings, currentMappings))
             {
-                _shokoToPlexMappings.Clear();
-                _plexToShokoMappings.Clear();
-
                 var pairs = currentMappings.Select(m => new { Shoko = TextHelper.NormalizePathForPlex(m.Key), Plex = TextHelper.NormalizePathForPlex(m.Value) }).ToList();
-
-                _shokoToPlexMappings.AddRange(pairs.Select(p => (p.Shoko, p.Plex)).OrderByDescending(p => p.Shoko.Length));
-
-                _plexToShokoMappings.AddRange(pairs.Select(p => (p.Plex, p.Shoko)).OrderByDescending(p => p.Plex.Length));
-
+                _shokoToPlexMappings = [.. pairs.Select(p => (p.Shoko, p.Plex)).OrderByDescending(p => p.Shoko.Length)];
+                _plexToShokoMappings = [.. pairs.Select(p => (p.Plex, p.Shoko)).OrderByDescending(p => p.Plex.Length)];
                 _lastCachedMappings = currentMappings;
             }
             list = shokoToPlex ? _shokoToPlexMappings : _plexToShokoMappings;
         }
 
-        if (list.Count == 0)
+        if (list.Length == 0)
             return path;
 
         string input = TextHelper.NormalizePathForPlex(path);

@@ -82,12 +82,12 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
         try
         {
             string themeFolder = VfsShared.ResolveAnimeThemesFolderName();
-            var roots = videoService
-                .GetAllVideoFiles()
-                .Select(v => v.ManagedFolder?.Path)
+            var roots = (videoService.GetAllManagedFolders() ?? [])
+                .Where(VfsShared.IsVfsEnabledFolder)
+                .Select(f => f.Path)
                 .Where(p => !string.IsNullOrWhiteSpace(p))
-                .Distinct()
-                .Select(p => Path.Combine(p!, themeFolder))
+                .Distinct(VfsShared.PathComparer)
+                .Select(p => Path.Combine(p, themeFolder))
                 .Where(Directory.Exists)
                 .ToList();
             if (roots.Count == 0)
