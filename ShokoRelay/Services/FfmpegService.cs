@@ -72,21 +72,16 @@ public sealed class FfmpegService(string pluginDirectory, string applicationPath
     public async Task ConvertToMp3FileAsync(string inputPath, string outputPath, string title, string slugDisplay, string artist, string album, CancellationToken ct, string? workingDir = null)
     {
         EnsureFfmpegConfigured();
-        // csharpier-ignore-start
+        // csharpier-ignore
         var args = new List<string>
         {
             "-y", "-loglevel", "error", "-i", inputPath, "-vn", "-acodec", "libmp3lame", "-b:a", "320k",
-            "-metadata",
-            $"title={EscapeMetadata(title)}",      // Title
-            "-metadata",
-            $"TIT3={EscapeMetadata(slugDisplay)}", // Subtitle
-            "-metadata",
-            $"artist={EscapeMetadata(artist)}",    // Contributing artists
-            "-metadata",
-            $"album={EscapeMetadata(album)}",      // Album
+            "-metadata", $"title={EscapeMetadata(title)}",      // Title
+            "-metadata", $"TIT3={EscapeMetadata(slugDisplay)}", // Subtitle
+            "-metadata", $"artist={EscapeMetadata(artist)}",    // Contributing artists
+            "-metadata", $"album={EscapeMetadata(album)}",      // Album
             outputPath,
         };
-        // csharpier-ignore-end
 
         await RunProcessAsync(_ffmpegPath, args, null, null, ct, workingDir).ConfigureAwait(false);
     }

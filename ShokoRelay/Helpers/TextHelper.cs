@@ -66,7 +66,8 @@ public static class TextHelper
     /// <summary>Decode \uXXXX escape sequences back into their actual Unicode characters.</summary>
     /// <param name="value">The string containing escape sequences.</param>
     /// <returns>A decoded string.</returns>
-    public static string UnescapeUnicode(string value) => string.IsNullOrEmpty(value) ? value : s_unicodeEscapeRegex.Replace(value, m => ((char)Convert.ToInt32(m.Groups[1].Value, 16)).ToString());
+    public static string UnescapeUnicode(string value) =>
+        string.IsNullOrEmpty(value) || !value.Contains(@"\u", StringComparison.Ordinal) ? value : s_unicodeEscapeRegex.Replace(value, m => ((char)Convert.ToInt32(m.Groups[1].Value, 16)).ToString());
 
     /// <summary>Splits a CSV line on commas.</summary>
     /// <param name="line">The raw CSV line.</param>

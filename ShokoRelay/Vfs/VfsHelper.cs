@@ -165,9 +165,15 @@ public static class VfsHelper
         bool isVariation = false
     )
     {
-        string name = $"S{mapping.Coords.Season:D2}E{mapping.Coords.Episode.ToString($"D{pad}")}";
-        if (mapping.Coords.EndEpisode.HasValue && mapping.Coords.EndEpisode != mapping.Coords.Episode)
-            name += $"-E{mapping.Coords.EndEpisode.Value.ToString($"D{pad}")}";
+        string epFormat =
+            pad == 2 ? "D2"
+            : pad == 3 ? "D3"
+            : pad == 4 ? "D4"
+            : $"D{pad}";
+        string name =
+            mapping.Coords.EndEpisode.HasValue && mapping.Coords.EndEpisode != mapping.Coords.Episode
+                ? $"S{mapping.Coords.Season:D2}E{mapping.Coords.Episode.ToString(epFormat)}-E{mapping.Coords.EndEpisode.Value.ToString(epFormat)}"
+                : $"S{mapping.Coords.Season:D2}E{mapping.Coords.Episode.ToString(epFormat)}";
 
         return FormatVfsFileName(name, mapping, ext, fileId, omitFileId, partIdx, partCount, vIdx, isVariation);
     }

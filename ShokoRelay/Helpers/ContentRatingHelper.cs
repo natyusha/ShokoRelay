@@ -9,12 +9,14 @@ public static class ContentRatingHelper
 {
     #region Constants
 
-    // csharpier-ignore-start
+    // csharpier-ignore
     /// <summary>Tags used to determine Assumed Content Ratings.</summary>
     private static readonly FrozenSet<string> s_ratingTags = new[] {
         "kodomo", "mina", "shoujo", "shounen", "josei", "seinen", "borderline porn", "18 restricted", "nudity", "sex", "violence", "sexual humour"
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
-    // csharpier-ignore-end
+
+    /// <summary>Static weight thresholds for content rating checks.</summary>
+    private static readonly (string Key, int Tv14, int TvMa)[] s_weightedRatingChecks = [("nudity", 400, 500), ("violence", 400, 500), ("sex", 300, 400)];
 
     #endregion
 
@@ -81,7 +83,7 @@ public static class ContentRatingHelper
         string? c_rating = null;
 
         // Iterate tags in order, check AniDB weight thresholds
-        (string Rating, bool IsAdult)? ApplyWeightedChecks(params (string Key, int Tv14, int TvMa)[] checks)
+        (string Rating, bool IsAdult)? ApplyWeightedChecks((string Key, int Tv14, int TvMa)[] checks)
         {
             foreach (var (key, tv14, tvma) in checks)
             {
@@ -101,7 +103,7 @@ public static class ContentRatingHelper
             return ("TV-MA" + descriptor, false);
 
         // Run weighted checks in priority order (nudity, violence, sex). Returns immediately on TV-MA.
-        if (ApplyWeightedChecks(("nudity", 400, 500), ("violence", 400, 500), ("sex", 300, 400)) is (var finalRating, var finalAdult))
+        if (ApplyWeightedChecks(s_weightedRatingChecks) is (var finalRating, var finalAdult))
             return (finalRating, finalAdult);
 
         // Uses the AniDB "target audience" tags to select a baseline rating when no weighted content indicators apply: https://anidb.net/tag/2606/animetb

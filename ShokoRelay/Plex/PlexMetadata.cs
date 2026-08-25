@@ -49,10 +49,9 @@ public class PlexMetadata(IMetadataService metadataService)
         var desc = TextHelper.GetDescriptionByLanguage(primarySeries, Settings.DescriptionLanguage);
         var tmdbDesc = (primarySeries as IShokoSeries)?.TmdbShows?.FirstOrDefault()?.PreferredDescription?.Value;
         var summary = TextHelper.SanitizeSummaryWithFallback(desc, tmdbDesc, Settings.SummaryMode);
-
+        // csharpier-ignore
         return new()
         {
-            // csharpier-ignore-start
             ["ratingKey"]             = group.GetPlexRatingKey(),
             ["guid"]                  = group.GetPlexGuid(),
             ["key"]                   = $"/collection/{group.ID}",
@@ -64,7 +63,6 @@ public class PlexMetadata(IMetadataService metadataService)
             ["titleSort"]             = group is IWithTitles t && !string.IsNullOrWhiteSpace(t.PreferredTitle?.Value) ? t.PreferredTitle.Value : $"Group {group.ID}",
             ["summary"]               = summary,
             //["Image"]               = Likely an image array will be used here
-            // csharpier-ignore-end
         };
     }
 
@@ -97,9 +95,9 @@ public class PlexMetadata(IMetadataService metadataService)
         var tmdbDescription = (series as IShokoSeries)?.TmdbShows?.FirstOrDefault()?.PreferredDescription?.Value;
         var studios = CastHelper.GetStudioTags(series);
         var (rating, isAdult) = ContentRatingHelper.GetContentRatingAndAdult(series);
+        // csharpier-ignore
         return new Dictionary<string, object?>
         {
-            // csharpier-ignore-start
             ["ratingKey"]             = series.GetPlexRatingKey(),
             ["key"]                   = $"/metadata/{series.GetPlexRatingKey()}/children",
             ["guid"]                  = series.GetPlexGuid(),
@@ -134,7 +132,6 @@ public class PlexMetadata(IMetadataService metadataService)
             ["Network"]               = BuildNetworkArray(series),
             ["Rating"]                = BuildRatingArray(series),
             //[SeasonType]            = Not relevant
-            // csharpier-ignore-end
         };
     }
 
@@ -163,10 +160,9 @@ public class PlexMetadata(IMetadataService metadataService)
 
         var imagesArray = ImageHelper.GenerateMovieImageArray(seriesImages, movieImages, ep.EpisodeNumber, title, Settings.AddEveryImage, Settings.TmdbImageLanguage, out string? thumbUrl);
         string? artUrl = seriesImages.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage) ?? movieImages?.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage);
-
+        // csharpier-ignore
         return new Dictionary<string, object?>
         {
-            // csharpier-ignore-start
             ["ratingKey"]             = ep.GetPlexMovieRatingKey(),
             ["key"]                   = $"/metadata/{ep.GetPlexMovieRatingKey()}",
             ["guid"]                  = ep.GetPlexMovieGuid(),
@@ -199,7 +195,6 @@ public class PlexMetadata(IMetadataService metadataService)
             ["Studio"]                = studios,
             ["Collection"]            = GetCollectionName(series) is string c ? new[] { new { tag = c } } : null,
             ["Rating"]                = BuildRatingArray(tmdbMovie?.Rating ?? (ep as IShokoEpisode)?.TmdbEpisodes?.FirstOrDefault()?.Rating ?? (series as IShokoSeries)?.TmdbShows?.FirstOrDefault()?.Rating ?? series.Rating)
-            // csharpier-ignore-end
         };
     }
 
@@ -221,7 +216,7 @@ public class PlexMetadata(IMetadataService metadataService)
         var ps = ctx.Series;
         var images = ps;
         var seasonTitle = GetSeasonFolder(seasonNum);
-        var seasonDate = ctx.FileData.Mappings.Where(m => m.Coords.Season == seasonNum).SelectMany(m => m.Episodes).Where(e => e.AirDate.HasValue).Min(e => e.AirDate);
+        var seasonDate = ctx.FileData.GetForSeason(seasonNum).SelectMany(m => m.Episodes).Where(e => e.AirDate.HasValue).Min(e => e.AirDate);
         string? seasonSummary = null;
 
         // When using VFS overrides find a Shoko series in the group which contains the TMDB metadata for the requisite season number.
@@ -245,10 +240,9 @@ public class PlexMetadata(IMetadataService metadataService)
         string? thumb = null;
         if (Settings.TmdbSeasonPosters && tmdbSeason != null)
             thumb = tmdbSeason.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage);
-
+        // csharpier-ignore
         return new Dictionary<string, object?>
         {
-            // csharpier-ignore-start
             ["ratingKey"]             = series.GetPlexRatingKey(seasonNum),
             ["key"]                   = $"/metadata/{series.GetPlexRatingKey(seasonNum)}/children",
             ["guid"]                  = series.GetPlexGuid(seasonNum),
@@ -276,7 +270,6 @@ public class PlexMetadata(IMetadataService metadataService)
             ["Image"]                 = ImageHelper.BuildCoverPosterArray(images, seasonTitle, posters != null || Settings.AddEveryImage, Settings.TmdbImageLanguage, posters),
             ["Guid"]                  = BuildSeasonXrefGuidArray(tmdbSeason),
             //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
-            // csharpier-ignore-end
         };
     }
 
@@ -312,9 +305,9 @@ public class PlexMetadata(IMetadataService metadataService)
             var s = metadataService.GetShokoSeriesByID(OverrideHelper.GetPrimary(series.ID, metadataService));
             parentThumb = s?.TmdbSeasons?.FirstOrDefault(ts => ts.SeasonNumber == mapped.Season)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage);
         }
+        // csharpier-ignore
         return new Dictionary<string, object?>
         {
-            // csharpier-ignore-start
             ["ratingKey"]             = ep.GetPlexRatingKey(partIndex),
             ["key"]                   = $"/metadata/{ep.GetPlexRatingKey(partIndex)}",
             ["guid"]                  = ep.GetPlexGuid(partIndex),
@@ -358,7 +351,6 @@ public class PlexMetadata(IMetadataService metadataService)
             ["Producer"]              = CastHelper.GetProducers(ep),
             ["Writer"]                = CastHelper.GetWriters(ep),
             ["Rating"]                = BuildRatingArray(ep)
-            // csharpier-ignore-end
         };
     }
 

@@ -16,7 +16,7 @@ public static class TagHelper
     /// <summary>Regex which strips moderator notes and trailing comments starting with double hyphens from AniDB tags.</summary>
     private static readonly Regex s_tagCleanupRegex = new(@"\s*--.*$", RegexOptions.Compiled);
 
-    // csharpier-ignore-start
+    // csharpier-ignore
     /// <summary><c>TagBlacklistAniDBHelpers</c>: https://github.com/ShokoAnime/ShokoServer/blob/master/Shoko.Server/Utilities/TagFilter.cs#L37</summary>
     private static readonly FrozenSet<string> s_tagBlacklistAniDBHelpers = new[] {
         "asia", "awards", "body and host", "breasts", "cast missing", "cast", "complete manga adaptation", "content indicators", "delayed 16-9 broadcast", "description missing",
@@ -25,22 +25,25 @@ public static class TagHelper
         "tales", "target audience", "technical aspects", "themes", "time", "to be moved to character", "to be moved to episode", "translation convention", "tropes", "unsorted"
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
+    // csharpier-ignore
     /// <summary>Words to force lowercase in tags to follow AniDB capitalisation rules: https://wiki.anidb.net/Capitalisation</summary>
     private static readonly FrozenSet<string> s_forceLower = new[] {
-        "a", "an", "the", "and", "but", "or", "nor", "at", "by", "for", "from", "in", "into", "of", "off", "on", "onto", "out", "over", "per", "to", "up", "with", "as", "4-koma",
-        "-hime", "-kei", "-kousai", "-sama", "-warashi", "no", "vs", "x"
+        "a", "an", "the", "and", "but", "or", "nor", "at", "by", "for", "from", "in", "into", "of", "off", "on", "onto", "out",
+        "over", "per", "to", "up", "with", "as", "4-koma", "-hime", "-kei", "-kousai", "-sama", "-warashi", "no", "vs", "x"
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Abbreviations or acronyms that should be fully capitalised</summary>
-    private static readonly FrozenSet<string> s_forceUpper = new[] {
-        "3d", "bdsm", "cg", "cgi", "ed", "fff", "ffm", "ii", "milf", "mmf", "mmm", "npc", "op", "rpg", "tbs", "tv"
-    }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+    private static readonly FrozenSet<string> s_forceUpper = new[] { "3d", "bdsm", "cg", "cgi", "ed", "fff", "ffm", "ii", "milf", "mmf", "mmm", "npc", "op", "rpg", "tbs", "tv" }.ToFrozenSet(
+        StringComparer.OrdinalIgnoreCase
+    );
 
     /// <summary>Special cases where a specific capitalisation style is preferred</summary>
-    private static readonly FrozenDictionary<string, string> s_forceSpecial = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
-        { "comicfesta", "ComicFesta" }, { "d'etat", "d'Etat" }, { "noitamina", "noitaminA" }
+    private static readonly FrozenDictionary<string, string> s_forceSpecial = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        { "comicfesta", "ComicFesta" },
+        { "d'etat", "d'Etat" },
+        { "noitamina", "noitaminA" },
     }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-    // csharpier-ignore-end
 
     #endregion
 
@@ -55,7 +58,7 @@ public static class TagHelper
         var shokoTags = shokoSeries?.Tags;
         if (shokoTags == null)
             return [];
-        var userBlacklist = Settings.TagBlacklist.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var userBlacklist = string.IsNullOrWhiteSpace(Settings.TagBlacklist) ? [] : Settings.TagBlacklist.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         var sourceSetting = Settings.TagSources;
         var shokoNames = shokoTags.Select(t => t.Name).Where(n => !string.IsNullOrWhiteSpace(n));
 
@@ -81,7 +84,9 @@ public static class TagHelper
     private static IEnumerable<object> FilterAndFormat(IEnumerable<string> tags, string[] userBlacklist) =>
         tags.Where(tagName => !string.IsNullOrWhiteSpace(tagName))
             .Select(tagName => s_tagCleanupRegex.Replace(tagName, "").Trim())
-            .Where(tagName => !string.IsNullOrWhiteSpace(tagName) && !s_tagBlacklistAniDBHelpers.Contains(tagName) && !userBlacklist.Contains(tagName, StringComparer.OrdinalIgnoreCase))
+            .Where(tagName =>
+                !string.IsNullOrWhiteSpace(tagName) && !s_tagBlacklistAniDBHelpers.Contains(tagName) && (userBlacklist.Length == 0 || !userBlacklist.Contains(tagName, StringComparer.OrdinalIgnoreCase))
+            )
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(tagName => new { tag = TitleCase(tagName) });
 
