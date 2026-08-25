@@ -159,7 +159,7 @@ jobs:
           shopt -s nullglob
           for ZIP in ShokoRelay-v*.zip; do
             RID=$(echo "$ZIP" | sed -E 's/.*_(.*)\.zip/\1/')
-            CHECKSUM=$(sha256sum "$ZIP" | awk '{ print $1 }')
+            CHECKSUM="sha256:$(sha256sum "$ZIP" | awk '{ print $1 }')"
             URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${ZIP}"
             ARCHIVE_ENTRY=$(jq -n \
               --arg runtime "$RID" \

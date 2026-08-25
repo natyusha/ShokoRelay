@@ -15,19 +15,30 @@
   <PropertyGroup>
     <Title>Shoko Relay</Title>
     <Authors>natyusha</Authors>
+
     <VersionRegex>Version\s*=\s*"([^"]+)"</VersionRegex>
     <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
     <ShokoRelayConstantsFile>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/ShokoRelayConstants.cs'))</ShokoRelayConstantsFile>
     <Version>$([System.Text.RegularExpressions.Regex]::Match($(ShokoRelayConstantsFile), $(VersionRegex)).Groups[1].Value)</Version>
 
+    <ReleaseChannel Condition="'$(RELEASE_CHANNEL)' != ''">$(RELEASE_CHANNEL)</ReleaseChannel>
+    <ReleaseChannel Condition="'$(RELEASE_CHANNEL)' == ''">Dev</ReleaseChannel>
+
     <!-- Default to Stable (0) and If the Release Channel is Dev (set via GitHub Actions), use revision 1 to trigger Shoko's Dev Channel detection -->
     <BuildRevision>0</BuildRevision>
-    <BuildRevision Condition="'$(RELEASE_CHANNEL)' == 'Dev'">1</BuildRevision>
+    <BuildRevision Condition="'$(ReleaseChannel)' == 'Dev'">1</BuildRevision>
 
     <AssemblyVersion>$(Version).0</AssemblyVersion>
     <FileVersion>$(Version).0</FileVersion>
     <InformationalVersion Condition="'$(BuildRevision)' == '1'">$(Version)-dev.1</InformationalVersion>
   </PropertyGroup>
+
+  <!-- Embed Identity Metadata manually to satisfy Shoko Server's pre-load checks -->
+  <ItemGroup>
+    <AssemblyMetadata Include="PackageID" Value="2b0f5a7e-3d2b-4f3d-9e6b-7f0a6b2d8c9a" />
+    <AssemblyMetadata Include="PackageName" Value="$(Title)" />
+    <AssemblyMetadata Include="PackageOverview" Value="A custom metadata provider and automation toolset for integrating Plex and AnimeThemes with Shoko Server." />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" Version="10.0.0" ExcludeAssets="runtime" />
@@ -47,6 +58,7 @@
     <Using Include="ShokoRelay.ShokoRelay" Static="true" />
   </ItemGroup>
 
+  <!-- Embed the plugin logo for Shoko's WebUI and preserve dashboard static assets in the output directory -->
   <ItemGroup>
     <EmbeddedResource Include="Assets\shoko-relay-logo.png">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
@@ -82,7 +94,7 @@
     </PropertyGroup>
     <ItemGroup>
       <AssemblyMetadata Include="RuntimeIdentifier" Value="$(RuntimeIdentifier)" Condition="'$(RuntimeIdentifier)' != ''" />
-      <AssemblyMetadata Include="ReleaseChannel" Value="$(RELEASE_CHANNEL)" Condition="'$(RELEASE_CHANNEL)' != ''" />
+      <AssemblyMetadata Include="ReleaseChannel" Value="$(ReleaseChannel)" />
       <AssemblyMetadata Include="ReleaseDate" Value="$(ReleaseDate)" Condition="'$(ReleaseDate)' != ''" />
       <AssemblyMetadata Include="ReleaseTag" Value="$(ReleaseTag)" Condition="'$(ReleaseTag)' != ''" />
       <AssemblyMetadata Include="SourceRevision" Value="$(SourceRevision)" Condition="'$(SourceRevision)' != ''" />
