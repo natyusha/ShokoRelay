@@ -64,10 +64,11 @@ public static class PlexHelper
     {
         if (string.IsNullOrWhiteSpace(ratingKey))
             return 0;
-        if (IsEpisodeKey(ratingKey) || IsMovieKey(ratingKey))
+
+        bool isMovie = IsMovieKey(ratingKey);
+        if (isMovie || IsEpisodeKey(ratingKey))
         {
-            bool isMovie = IsMovieKey(ratingKey);
-            bool isAniDb = ratingKey.StartsWith(PlexConstants.AniDbPrefix, StringComparison.OrdinalIgnoreCase);
+            bool isAniDb = !isMovie && ratingKey.StartsWith(PlexConstants.AniDbPrefix, StringComparison.OrdinalIgnoreCase);
             int prefixLen = isMovie ? PlexConstants.MoviePrefix.Length : (isAniDb ? PlexConstants.AniDbPrefix.Length + PlexConstants.EpisodePrefix.Length : PlexConstants.EpisodePrefix.Length);
             var epIdPart = ratingKey[prefixLen..];
             int partIdx = epIdPart.IndexOf(PlexConstants.PartPrefix, StringComparison.OrdinalIgnoreCase);
@@ -75,6 +76,7 @@ public static class PlexHelper
                 epIdPart = epIdPart[..partIdx];
             return int.TryParse(epIdPart, out var id) ? (isAniDb ? metadataService.GetShokoEpisodeByAnidbID(id) : metadataService.GetShokoEpisodeByID(id))?.Series?.ID ?? 0 : 0;
         }
+
         // Isolate the show component (supports {ID}, a{AniDB}, {ID}s{Season}, or a{AniDB}s{Season})
         int seasonIdx = ratingKey.IndexOf(PlexConstants.SeasonPrefix, StringComparison.OrdinalIgnoreCase);
         var seriesPart = seasonIdx >= 0 ? ratingKey[..seasonIdx] : ratingKey;

@@ -211,10 +211,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
             return new ThemeMp3BatchResult(root, [new(root, "error", "Batch root not found.")], 0, 0, 1);
         }
 
-        string vfsRoot = VfsShared.ResolveRootFolderName();
-        bool isVfsPath = root.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries).Contains(vfsRoot, StringComparer.OrdinalIgnoreCase);
-
-        if (isVfsPath)
+        if (VfsHelper.IsInVfsRoot(root, out string vfsRoot))
         {
             string msg = $"Cannot execute batch generation inside the VFS directory '{vfsRoot}'. Target your physical managed folder instead.";
             s_logger.Warn("AnimeThemes MP3: {0}", msg);
@@ -267,9 +264,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         if (!Directory.Exists(folder))
             return new(folder, "error", "Folder not found.");
 
-        string vfsRoot = VfsShared.ResolveRootFolderName();
-        bool isVfsPath = folder.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries).Contains(vfsRoot, StringComparer.OrdinalIgnoreCase);
-        if (isVfsPath)
+        if (VfsHelper.IsInVfsRoot(folder, out string vfsRoot))
             return new(folder, "error", $"Cannot generate Theme.mp3 inside the VFS directory '{vfsRoot}'. Target your physical managed folder instead.");
 
         string? vid = Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories).FirstOrDefault(f => videoService.IsAllowedVideoExtension(f) && !VfsShared.IsPathIgnored(f, videoService));

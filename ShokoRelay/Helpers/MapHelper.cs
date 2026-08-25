@@ -39,6 +39,13 @@ public static class MapHelper
 
     #region Public API
 
+    /// <summary>Determines if TV and/or Movie VFS directories should be generated for a series based on the current configuration.</summary>
+    /// <param name="isMovie">Whether the series is categorized as a movie.</param>
+    /// <param name="mode">The configured movie generation mode.</param>
+    /// <returns>A tuple indicating whether TV and Movie directories should be generated.</returns>
+    public static (bool DoTv, bool DoMovie) GetGenerationModes(bool isMovie, MovieGenerationMode mode) =>
+        (mode == MovieGenerationMode.Disabled || !isMovie || mode == MovieGenerationMode.EnabledMaintain, isMovie && mode != MovieGenerationMode.Disabled);
+
     /// <summary>Generate SeriesFileData for the given series by building file mappings and seasons.</summary>
     /// <param name="series">The Shoko series metadata.</param>
     /// <param name="metadataService">Metadata service used for override resolution.</param>

@@ -40,23 +40,12 @@ internal static class VfsShared
     /// <summary>Determines if a managed folder is eligible for VFS generation (i.e., not strictly a source folder and not excluded in settings).</summary>
     /// <param name="folder">The managed folder to evaluate.</param>
     /// <returns>True if the folder should have a VFS generated inside it; otherwise, false.</returns>
-    public static bool IsVfsEnabledFolder(IManagedFolder? folder)
-    {
-        if (folder == null)
-            return false;
-
-        if (folder.DropFolderType.HasFlag(DropFolderType.Source) && !folder.DropFolderType.HasFlag(DropFolderType.Destination))
-            return false;
-
-        var exclusions = Settings.Advanced.ManagedFolderExclusions?.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) ?? [];
-        foreach (var ex in exclusions)
-        {
-            if (string.Equals(ex, folder.ID.ToString(), StringComparison.OrdinalIgnoreCase) || string.Equals(ex, folder.Name, StringComparison.OrdinalIgnoreCase))
-                return false;
-        }
-
-        return true;
-    }
+    public static bool IsVfsEnabledFolder(IManagedFolder? folder) =>
+        folder != null
+        && (!folder.DropFolderType.HasFlag(DropFolderType.Source) || folder.DropFolderType.HasFlag(DropFolderType.Destination))
+        && !(Settings.Advanced.ManagedFolderExclusions?.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) ?? []).Any(ex =>
+            string.Equals(ex, folder.ID.ToString(), StringComparison.OrdinalIgnoreCase) || string.Equals(ex, folder.Name, StringComparison.OrdinalIgnoreCase)
+        );
 
     /// <summary>Determines the root import path for a video file.</summary>
     public static string? ResolveImportRootPath(IVideoFile location)
@@ -107,8 +96,7 @@ internal static class VfsShared
         string movieRootName = ResolveMovieRootFolderName();
         int folderId = series.GetPrimaryId(metadataService);
 
-        bool isMovie = MapHelper.IsMovie(series);
-        var mode = Settings.Advanced.MovieGenerationMode;
+        var (doTv, doMovie) = MapHelper.GetGenerationModes(MapHelper.IsMovie(series), Settings.Advanced.MovieGenerationMode);
 
         var fileData = MapHelper.GetConsolidatedSeriesFileData(series, metadataService);
         foreach (var mapping in fileData.Mappings)
@@ -121,10 +109,10 @@ internal static class VfsShared
             if (string.IsNullOrWhiteSpace(importRoot))
                 continue;
 
-            if (mode == MovieGenerationMode.Disabled || (!isMovie && mode != MovieGenerationMode.Disabled) || (isMovie && mode == MovieGenerationMode.EnabledMaintain))
+            if (doTv)
                 roots.Add(Path.Combine(importRoot, rootName, folderId.ToString()));
 
-            if (isMovie && mode != MovieGenerationMode.Disabled)
+            if (doMovie)
             {
                 var mainEps = fileData.Mappings.Where(m => m.PrimaryEpisode.Type == EpisodeType.Episode).Select(m => m.PrimaryEpisode).DistinctBy(e => e.ID);
                 foreach (var ep in mainEps)

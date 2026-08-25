@@ -96,7 +96,7 @@ public class PlexMetadata(IMetadataService metadataService)
         var studios = CastHelper.GetStudioTags(series);
         var (rating, isAdult) = ContentRatingHelper.GetContentRatingAndAdult(series);
         // csharpier-ignore
-        return new Dictionary<string, object?>
+        return new()
         {
             ["ratingKey"]             = series.GetPlexRatingKey(),
             ["key"]                   = $"/metadata/{series.GetPlexRatingKey()}/children",
@@ -161,7 +161,7 @@ public class PlexMetadata(IMetadataService metadataService)
         var imagesArray = ImageHelper.GenerateMovieImageArray(seriesImages, movieImages, ep.EpisodeNumber, title, Settings.AddEveryImage, Settings.TmdbImageLanguage, out string? thumbUrl);
         string? artUrl = seriesImages.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage) ?? movieImages?.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage);
         // csharpier-ignore
-        return new Dictionary<string, object?>
+        return new()
         {
             ["ratingKey"]             = ep.GetPlexMovieRatingKey(),
             ["key"]                   = $"/metadata/{ep.GetPlexMovieRatingKey()}",
@@ -241,7 +241,7 @@ public class PlexMetadata(IMetadataService metadataService)
         if (Settings.TmdbSeasonPosters && tmdbSeason != null)
             thumb = tmdbSeason.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage);
         // csharpier-ignore
-        return new Dictionary<string, object?>
+        return new()
         {
             ["ratingKey"]             = series.GetPlexRatingKey(seasonNum),
             ["key"]                   = $"/metadata/{series.GetPlexRatingKey(seasonNum)}/children",
@@ -306,7 +306,7 @@ public class PlexMetadata(IMetadataService metadataService)
             parentThumb = s?.TmdbSeasons?.FirstOrDefault(ts => ts.SeasonNumber == mapped.Season)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage);
         }
         // csharpier-ignore
-        return new Dictionary<string, object?>
+        return new()
         {
             ["ratingKey"]             = ep.GetPlexRatingKey(partIndex),
             ["key"]                   = $"/metadata/{ep.GetPlexRatingKey(partIndex)}",

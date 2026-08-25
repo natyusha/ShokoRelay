@@ -61,12 +61,12 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
             foreach (var s in allSeries)
             {
                 int folderId = s.GetPrimaryId(metadataService);
-                bool isMovie = MapHelper.IsMovie(s);
+                var (doTv, doMovie) = MapHelper.GetGenerationModes(MapHelper.IsMovie(s), mode);
 
-                if (mode == MovieGenerationMode.Disabled || !isMovie || (isMovie && mode == MovieGenerationMode.EnabledMaintain))
+                if (doTv)
                     validFolderIds.Add(folderId.ToString());
 
-                if (isMovie && mode != MovieGenerationMode.Disabled)
+                if (doMovie)
                     foreach (var ep in s.Episodes.Where(e => e.Type == EpisodeType.Episode))
                         validMovieFolders.Add(ep.ID.ToString());
             }
@@ -176,11 +176,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
     private VfsBuildResult BuildInternal(IReadOnlyCollection<int>? seriesIds, bool cleanRoot)
     {
         var rootName = VfsShared.ResolveRootFolderName();
-        var overlapping = videoService
-            .GetAllManagedFolders()
-            ?.Where(f => !string.IsNullOrEmpty(f.Path) && f.Path.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries).Contains(rootName))
-            .Select(f => f.Path)
-            .FirstOrDefault();
+        var overlapping = videoService.GetAllManagedFolders()?.Select(f => f.Path).FirstOrDefault(p => !string.IsNullOrEmpty(p) && VfsHelper.IsInVfsRoot(p, out _));
 
         if (overlapping != null)
             throw new InvalidOperationException(
@@ -414,13 +410,9 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         bool skipCheck = cleanRoot && !isFiltered;
 
         // Evaluates the categorization logic to determine if the series should be processed as a movie
-        bool isMovie = MapHelper.IsMovie(series);
-        var mode = Settings.Advanced.MovieGenerationMode;
+        var (doTv, doMovie) = MapHelper.GetGenerationModes(MapHelper.IsMovie(series), Settings.Advanced.MovieGenerationMode);
 
-        bool doTv = mode == MovieGenerationMode.Disabled || !isMovie || (isMovie && mode == MovieGenerationMode.EnabledMaintain);
-        bool doMovie = isMovie && mode != MovieGenerationMode.Disabled;
-
-        if (!doTv)
+        if (!doTv && !doMovie)
             PruneSeries(rootFolderName, folderId, errors.Add);
 
         if (doTv)

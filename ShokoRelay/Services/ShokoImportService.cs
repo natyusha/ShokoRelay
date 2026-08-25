@@ -38,8 +38,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
         List<string> folders = [];
         try
         {
-            var mf = videoService.GetAllManagedFolders();
-            if (mf != null)
+            if (videoService.GetAllManagedFolders() is { } mf)
                 folders = [.. mf.Select(f => f.Name ?? f.Path ?? string.Empty).Where(s => !string.IsNullOrEmpty(s))];
         }
         catch (Exception ex)

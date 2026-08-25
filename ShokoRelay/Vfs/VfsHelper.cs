@@ -262,6 +262,16 @@ public static class VfsHelper
 
     #region VFS/Plex Helpers
 
+    /// <summary>Checks if a path resides within the VFS root directory.</summary>
+    /// <param name="path">The folder path to evaluate.</param>
+    /// <param name="vfsRoot">Outputs the resolved VFS root folder name.</param>
+    /// <returns>True if the path intersects the VFS boundary.</returns>
+    public static bool IsInVfsRoot(string path, out string vfsRoot)
+    {
+        vfsRoot = VfsShared.ResolveRootFolderName();
+        return path.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries).Contains(vfsRoot, StringComparer.OrdinalIgnoreCase);
+    }
+
     /// <summary>Determine if a filename contains a Plex-style split tag (e.g. "pt1").</summary>
     /// <param name="fileName">The filename to check.</param>
     /// <returns>True if a split tag is found.</returns>

@@ -4,6 +4,8 @@ using ShokoRelay.AnimeThemes;
 
 namespace ShokoRelay.Vfs;
 
+#region Data Models
+
 /// <summary>Information about a specific series processed during a VFS build.</summary>
 /// <param name="Name">The display name of the series.</param>
 /// <param name="ElapsedMs">Time taken to process in milliseconds.</param>
@@ -79,6 +81,10 @@ public record VfsBlueprintSeries(
     [property: JsonPropertyName("seasons")] IEnumerable<VfsBlueprintSeason> Seasons
 );
 
+#endregion
+
+#region Build Session
+
 /// <summary>Holds caching dictionaries for a single VFS build session to minimize disk and database I/O.</summary>
 public sealed class VfsBuildSession
 {
@@ -100,3 +106,5 @@ public sealed class VfsBuildSession
     /// <summary>Caches the enumeration of physically present WebM files in the AnimeThemes directory to speed up path resolution.</summary>
     public ConcurrentDictionary<string, Lazy<Dictionary<string, string>>> PhysicalThemeCaches { get; } = new(VfsShared.PathComparer);
 }
+
+#endregion

@@ -126,40 +126,26 @@ public static class LogHelper
             ["Errors"] = r.Errors,
         };
 
-        var tvAssigned = r.CreatedCollections.Where(c => !c.IsMovie).OrderBy(c => c.TargetTitle).ThenBy(c => c.CollectionName).ToList();
-        var movieAssigned = r.CreatedCollections.Where(c => c.IsMovie).OrderBy(c => c.TargetTitle).ThenBy(c => c.CollectionName).ToList();
-
-        var tvUploaded = r.UploadedDetails.Where(u => !u.IsMovie).OrderBy(u => u.TargetTitle).ThenBy(u => u.CollectionName).ToList();
-        var movieUploaded = r.UploadedDetails.Where(u => u.IsMovie).OrderBy(u => u.TargetTitle).ThenBy(u => u.CollectionName).ToList();
-
-        var tvDeleted = r.DeletedCollections.Where(d => !d.IsMovie).OrderBy(d => d.TargetTitle).ThenBy(d => d.CollectionName).ToList();
-        var movieDeleted = r.DeletedCollections.Where(d => d.IsMovie).OrderBy(d => d.TargetTitle).ThenBy(d => d.CollectionName).ToList();
-
         var items = new List<string>();
 
-        if (tvAssigned.Count > 0 || tvUploaded.Count > 0 || tvDeleted.Count > 0)
+        void AddItems(string header, bool isMovie)
         {
-            items.Add("TV Shows Libraries:");
-            foreach (var c in tvAssigned)
-                items.Add($"  ASSIGNED: [{c.TargetTitle}] {c.CollectionName} (Series: {c.SeriesId})");
-            foreach (var u in tvUploaded)
-                items.Add($"  UPLOADED: [{u.TargetTitle}] Applied {u.Label} for collection -> {u.CollectionName} (RatingKey: {u.RatingKey})");
-            foreach (var d in tvDeleted)
-                items.Add($"  REMOVED:  [{d.TargetTitle}] {d.CollectionName} (RatingKey: {d.RatingKey})");
+            var assigned = r.CreatedCollections.Where(c => c.IsMovie == isMovie).OrderBy(c => c.TargetTitle).ThenBy(c => c.CollectionName).ToList();
+            var uploaded = r.UploadedDetails.Where(u => u.IsMovie == isMovie).OrderBy(u => u.TargetTitle).ThenBy(u => u.CollectionName).ToList();
+            var deleted = r.DeletedCollections.Where(d => d.IsMovie == isMovie).OrderBy(d => d.TargetTitle).ThenBy(d => d.CollectionName).ToList();
+
+            if (assigned.Count == 0 && uploaded.Count == 0 && deleted.Count == 0)
+                return;
+
+            items.Add(header);
+            items.AddRange(assigned.Select(c => $"  ASSIGNED: [{c.TargetTitle}] {c.CollectionName} (Series: {c.SeriesId})"));
+            items.AddRange(uploaded.Select(u => $"  UPLOADED: [{u.TargetTitle}] Applied {u.Label} for collection -> {u.CollectionName} (RatingKey: {u.RatingKey})"));
+            items.AddRange(deleted.Select(d => $"  REMOVED:  [{d.TargetTitle}] {d.CollectionName} (RatingKey: {d.RatingKey})"));
             items.Add("");
         }
 
-        if (movieAssigned.Count > 0 || movieUploaded.Count > 0 || movieDeleted.Count > 0)
-        {
-            items.Add("Movie Libraries:");
-            foreach (var c in movieAssigned)
-                items.Add($"  ASSIGNED: [{c.TargetTitle}] {c.CollectionName} (Series: {c.SeriesId})");
-            foreach (var u in movieUploaded)
-                items.Add($"  UPLOADED: [{u.TargetTitle}] Applied {u.Label} for collection -> {u.CollectionName} (RatingKey: {u.RatingKey})");
-            foreach (var d in movieDeleted)
-                items.Add($"  REMOVED:  [{d.TargetTitle}] {d.CollectionName} (RatingKey: {d.RatingKey})");
-            items.Add("");
-        }
+        AddItems("TV Shows Libraries:", false);
+        AddItems("Movie Libraries:", true);
 
         if (r.ErrorsList.Count > 0)
         {
@@ -185,32 +171,22 @@ public static class LogHelper
             ["Errors"] = result.Errors,
         };
 
-        var seriesChanges = result.AppliedChanges.Where(x => x.Type == "Series").OrderBy(x => x.Title).ToList();
-        var episodeChanges = result.AppliedChanges.Where(x => x.Type == "Episode").OrderBy(x => x.Title).ToList();
-        var movieChanges = result.AppliedChanges.Where(x => x.Type == "Movie").OrderBy(x => x.Title).ToList();
-
         var items = new List<string>();
 
-        if (seriesChanges.Count > 0)
+        void AddChanges(string header, string type)
         {
-            items.Add("Series Updates:");
-            items.AddRange(seriesChanges.Select(c => $"  {c.Title} ({c.RatingKey}): {c.OldRating?.ToString("F2") ?? "0.00"} -> {c.NewRating?.ToString("F2") ?? "0.00"}"));
+            var changes = result.AppliedChanges.Where(x => x.Type == type).OrderBy(x => x.Title).ToList();
+            if (changes.Count == 0)
+                return;
+
+            items.Add(header);
+            items.AddRange(changes.Select(c => $"  {c.Title} ({c.RatingKey}): {c.OldRating?.ToString("F2") ?? "0.00"} -> {c.NewRating?.ToString("F2") ?? "0.00"}"));
             items.Add("");
         }
 
-        if (episodeChanges.Count > 0)
-        {
-            items.Add("Episode Updates:");
-            items.AddRange(episodeChanges.Select(c => $"  {c.Title} ({c.RatingKey}): {c.OldRating?.ToString("F2") ?? "0.00"} -> {c.NewRating?.ToString("F2") ?? "0.00"}"));
-            items.Add("");
-        }
-
-        if (movieChanges.Count > 0)
-        {
-            items.Add("Movie Updates:");
-            items.AddRange(movieChanges.Select(c => $"  {c.Title} ({c.RatingKey}): {c.OldRating?.ToString("F2") ?? "0.00"} -> {c.NewRating?.ToString("F2") ?? "0.00"}"));
-            items.Add("");
-        }
+        AddChanges("Series Updates:", "Series");
+        AddChanges("Episode Updates:", "Episode");
+        AddChanges("Movie Updates:", "Movie");
 
         if (result.ErrorsList.Count > 0)
         {

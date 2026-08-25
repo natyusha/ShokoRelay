@@ -62,11 +62,10 @@ public class VfsWatcher(
             videoService.VideoFileDeleted -= OnVideoFileDeleted;
             releaseService.ReleaseSaved -= OnVideoReleaseSaved;
 
-            foreach (var kvp in _pendingMetadataFixups)
-                kvp.Value.Cancel();
-
-            foreach (var kvp in _pendingLibraryScans)
-                kvp.Value.Cancel();
+            foreach (var cts in _pendingMetadataFixups.Values)
+                cts.Cancel();
+            foreach (var cts in _pendingLibraryScans.Values)
+                cts.Cancel();
         }
         catch { }
 
