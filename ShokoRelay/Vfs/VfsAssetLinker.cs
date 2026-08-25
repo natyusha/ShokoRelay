@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Collections.Frozen;
 using Shoko.Abstractions.Video.Services;
 
 namespace ShokoRelay.Vfs;
@@ -10,8 +11,16 @@ public class VfsAssetLinker(IVideoService videoService)
     #region Setup
 
     private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
-    private static readonly HashSet<string> s_seriesMetadataExtensions = [.. PlexConstants.LocalMediaAssets.Artwork, .. PlexConstants.LocalMediaAssets.SeriesMetadata];
-    private static readonly HashSet<string> s_episodeMetadataExtensions = [.. PlexConstants.LocalMediaAssets.Artwork, .. PlexConstants.LocalMediaAssets.EpisodeMetadata];
+
+    /// <summary>Combined set of recognized file extensions for series-level local metadata and artwork.</summary>
+    private static readonly FrozenSet<string> s_seriesMetadataExtensions = PlexConstants
+        .LocalMediaAssets.Artwork.Keys.Concat(PlexConstants.LocalMediaAssets.SeriesMetadata)
+        .ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Combined set of recognized file extensions for episode-level local metadata, subtitles, and sidecars.</summary>
+    private static readonly FrozenSet<string> s_episodeMetadataExtensions = PlexConstants
+        .LocalMediaAssets.Artwork.Keys.Concat(PlexConstants.LocalMediaAssets.EpisodeMetadata)
+        .ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     #endregion
 

@@ -124,7 +124,7 @@ public static class PlexHelper
             foreach (var file in Directory.EnumerateFiles(postersPath))
             {
                 string extension = Path.GetExtension(file);
-                if (string.IsNullOrWhiteSpace(extension) || !PlexConstants.LocalMediaAssets.Artwork.Contains(extension))
+                if (string.IsNullOrWhiteSpace(extension) || !PlexConstants.LocalMediaAssets.Artwork.ContainsKey(extension))
                     continue;
                 string baseName = Path.GetFileNameWithoutExtension(file);
                 if (string.IsNullOrWhiteSpace(baseName))
@@ -165,7 +165,7 @@ public static class PlexHelper
             foreach (var file in Directory.EnumerateFiles(postersPath))
             {
                 string extension = Path.GetExtension(file);
-                if (string.IsNullOrWhiteSpace(extension) || !PlexConstants.LocalMediaAssets.Artwork.Contains(extension))
+                if (string.IsNullOrWhiteSpace(extension) || !PlexConstants.LocalMediaAssets.Artwork.ContainsKey(extension))
                     continue;
                 string baseName = Path.GetFileNameWithoutExtension(file);
                 if (string.IsNullOrWhiteSpace(baseName))

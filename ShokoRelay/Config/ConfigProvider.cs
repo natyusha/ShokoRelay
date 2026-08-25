@@ -23,6 +23,14 @@ public class ConfigProvider
     /// <summary>Shared JSON serializer options for reading and writing configuration files.</summary>
     private static readonly JsonSerializerOptions s_options = new() { AllowTrailingCommas = true, WriteIndented = true };
 
+    /// <summary>Pre-cached array of overridable configuration properties to eliminate reflection overhead on requests.</summary>
+    private static readonly PropertyInfo[] s_overridableProps =
+    [
+        .. typeof(RelayConfig)
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(p => p.CanWrite && p.PropertyType != typeof(AdvancedConfig) && p.PropertyType != typeof(AutomationConfig) && p.PropertyType != typeof(PlaybackConfig)),
+    ];
+
     /// <summary>File path for the plugin preferences file.</summary>
     private readonly string _filePath;
 
@@ -226,19 +234,11 @@ public class ConfigProvider
         foreach (var q in ctx.Request.Query)
             overrides[q.Key] = q.Value.ToString();
 
-        if (overrides.Count == 0)
-            return settings;
-
-        var overridableProps = typeof(RelayConfig)
-            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(p => p.CanWrite && p.PropertyType != typeof(AdvancedConfig) && p.PropertyType != typeof(AutomationConfig) && p.PropertyType != typeof(PlaybackConfig))
-            .ToList();
-
-        if (!overridableProps.Any(p => overrides.ContainsKey(p.Name)))
+        if (overrides.Count == 0 || !s_overridableProps.Any(p => overrides.ContainsKey(p.Name)))
             return settings;
 
         var cloned = JsonSerializer.Deserialize<RelayConfig>(JsonSerializer.Serialize(settings, s_options), s_options)!;
-        foreach (var prop in overridableProps)
+        foreach (var prop in s_overridableProps)
         {
             if (overrides.TryGetValue(prop.Name, out var val) && !string.IsNullOrWhiteSpace(val))
             {
@@ -497,7 +497,7 @@ public class ConfigProvider
             },
             v => (TextHelper.NormalizePathForPlex(v.Value.Trim()) is var p && !p.StartsWith('/') && !p.Contains(':') && !p.StartsWith("//", StringComparison.Ordinal)) ? "/" + p : p
         );
-        if (JsonSerializer.Serialize(settings.Advanced.PathMappings) == JsonSerializer.Serialize(norm))
+        if (settings.Advanced.PathMappings.Count == norm.Count && settings.Advanced.PathMappings.SequenceEqual(norm))
             return false;
         settings.Advanced.PathMappings = norm;
         return true;

@@ -202,12 +202,15 @@ internal static class AnimeThemesHelper
                     3 => Encoding.UTF8.GetString(d, p + 11, sz - 1),
                     _ => Encoding.Latin1.GetString(d, p + 11, sz - 1),
                 };
-                tags[
-                    id.Replace("TIT2", "Title", StringComparison.Ordinal)
-                        .Replace("TIT3", "Slug", StringComparison.Ordinal)
-                        .Replace("TPE1", "Artist", StringComparison.Ordinal)
-                        .Replace("TALB", "Album", StringComparison.Ordinal)
-                ] = val.TrimEnd('\0').Replace("\uFEFF", "", StringComparison.Ordinal);
+                string tagKey = id switch
+                {
+                    "TIT2" => "Title",
+                    "TIT3" => "Slug",
+                    "TPE1" => "Artist",
+                    "TALB" => "Album",
+                    _ => id,
+                };
+                tags[tagKey] = val.TrimEnd('\0').Replace("\uFEFF", "", StringComparison.Ordinal);
             }
             p += 10 + sz;
         }

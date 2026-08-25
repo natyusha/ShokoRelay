@@ -192,7 +192,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                             Directory
                                 .EnumerateFiles(x.Dir!, $"{x.Base}.*")
                                 .Where(f =>
-                                    string.Equals(Path.GetFileNameWithoutExtension(f), x.Base, StringComparison.OrdinalIgnoreCase) && PlexConstants.LocalMediaAssets.Artwork.Contains(Path.GetExtension(f))
+                                    string.Equals(Path.GetFileNameWithoutExtension(f), x.Base, StringComparison.OrdinalIgnoreCase) && PlexConstants.LocalMediaAssets.Artwork.ContainsKey(Path.GetExtension(f))
                                 )
                         )
                         .FirstOrDefault();
@@ -360,7 +360,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                         {
                             if (!Directory.Exists(vfsPath))
                                 continue;
-                            var localArtworks = Directory.EnumerateFiles(vfsPath).Where(f => PlexConstants.LocalMediaAssets.Artwork.Contains(Path.GetExtension(f))).ToList();
+                            var localArtworks = Directory.EnumerateFiles(vfsPath).Where(f => PlexConstants.LocalMediaAssets.Artwork.ContainsKey(Path.GetExtension(f))).ToList();
                             foreach (var name in config.Names)
                             {
                                 foundFile = localArtworks.FirstOrDefault(f => string.Equals(Path.GetFileNameWithoutExtension(f), name, StringComparison.OrdinalIgnoreCase));

@@ -130,11 +130,12 @@ namespace ShokoRelay.Plex
         public static class LocalMediaAssets
         {
             // csharpier-ignore
-            /// <summary>Image file extensions considered local artwork by Plex.</summary>
+            /// <summary>Dictionary of image file extensions to MIME types considered local artwork by Plex.</summary>
             /// <remarks>Contrary to Plex's docs most of the formats supported by FreeImage work: https://freeimage.sourceforge.io/features.html</remarks>
-            public static readonly FrozenSet<string> Artwork = new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
-                ".bmp", ".gif", ".jpe", ".jpeg", ".jpg", ".png", ".tbn", ".tif", ".tiff", ".webp"
-            }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+            public static readonly FrozenDictionary<string, string> Artwork = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
+                { ".bmp", "image/bmp" }, { ".gif", "image/gif" }, { ".jpe", "image/jpeg" }, { ".jpeg", "image/jpeg" }, { ".jpg", "image/jpeg" },
+                { ".png", "image/png" }, { ".tbn", "image/jpeg" }, { ".tif", "image/tiff" }, { ".tiff", "image/tiff" }, { ".webp", "image/webp" }
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
             /// <summary>Series level metadata including: Audio extensions that Plex treats as theme songs and NFO Metadata files.</summary>
             public static readonly FrozenSet<string> SeriesMetadata = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".mp3", ".nfo" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
