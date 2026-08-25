@@ -24,7 +24,7 @@ public record WebmDownloadResult(int Downloaded, int Skipped, int Errors, List<s
 #endregion
 
 /// <summary>Provides functionality for bulk downloading and organizing AnimeThemes WebM files.</summary>
-public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService videoService)
+public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService videoService, AnimeThemesMapping mappingService)
 {
     #region Setup
 
@@ -43,6 +43,7 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
     {
         var messages = new List<string>();
         var downloads = new List<string>();
+        var downloadedItems = new List<(string RelPath, string FileName)>();
         int downloaded = 0,
             skipped = 0,
             errors = 0;
@@ -114,6 +115,7 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
                         }
 
                         string targetPath = Path.Combine(baseThemePath, yearFolder, seasonFolder, video.Basename);
+                        string relPath = $"/{yearFolder}/{seasonFolder}/{video.Basename}";
                         Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
                         s_logger.Info("AnimeThemes WebM: Downloading -> {0}...", video.Basename);
 
@@ -126,6 +128,7 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
                             await videoResp.Content.CopyToAsync(fs, ct).ConfigureAwait(false);
 
                             downloads.Add(video.Basename);
+                            downloadedItems.Add((relPath, video.Basename));
                             existingFiles.Add(video.Basename); // Add to cache so it isn't downloaded again if it appears in another anime
                             downloaded++;
                         }
@@ -143,6 +146,7 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
                                 await retryResp.Content.CopyToAsync(fs, ct).ConfigureAwait(false);
 
                                 downloads.Add(video.Basename);
+                                downloadedItems.Add((relPath, video.Basename));
                                 existingFiles.Add(video.Basename);
                                 downloaded++;
                             }
@@ -170,6 +174,13 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
 
             hasNext = !string.IsNullOrWhiteSpace(resp.Links?.Next);
             page++;
+        }
+
+        if (downloadedItems.Count > 0)
+        {
+            int mapped = await mappingService.AppendEntriesToMappingFileAsync(downloadedItems, ct).ConfigureAwait(false);
+            if (mapped > 0)
+                messages.Add($"Auto-mapped {mapped} new entries into {ShokoRelayConstants.FileAtMapping}");
         }
 
         s_logger.Info("AnimeThemes WebM: Download operation finished -> {0} downloaded, {1} skipped, {2} errors", downloaded, skipped, errors);

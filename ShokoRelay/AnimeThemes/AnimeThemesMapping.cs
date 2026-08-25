@@ -197,6 +197,67 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
         }
     }
 
+    /// <summary>Resolves metadata and appends newly downloaded theme entries to the mapping CSV file.</summary>
+    /// <param name="newFiles">Collection of relative file paths and filenames to map.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Count of new mapping entries successfully written.</returns>
+    public async Task<int> AppendEntriesToMappingFileAsync(IReadOnlyCollection<(string FilePath, string FileName)> newFiles, CancellationToken ct = default)
+    {
+        if (newFiles.Count == 0)
+            return 0;
+
+        string mapPath = Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FileAtMapping);
+        var entries = new List<AnimeThemesMappingEntry>();
+        var existingComments = new List<string>();
+        var existing = new Dictionary<string, AnimeThemesMappingEntry>(StringComparer.OrdinalIgnoreCase);
+
+        if (File.Exists(mapPath))
+        {
+            try
+            {
+                (existingComments, entries) = AnimeThemesHelper.ParseMappingContentWithComments(await File.ReadAllTextAsync(mapPath, ct).ConfigureAwait(false));
+                foreach (var e in entries)
+                    existing.TryAdd(e.FilePath, e);
+            }
+            catch { }
+        }
+
+        int addedCount = 0;
+        foreach (var (relPath, fileName) in newFiles)
+        {
+            if (existing.ContainsKey(relPath))
+                continue;
+
+            try
+            {
+                var (lookup, idMissing) = await FetchMetadataAsync(fileName, ct).ConfigureAwait(false);
+                if (lookup != null)
+                {
+                    var entry = new AnimeThemesMappingEntry(relPath, lookup);
+                    entries.Add(entry);
+                    existing[relPath] = entry;
+                    addedCount++;
+                    s_logger.Info("AnimeThemes: Auto-mapped '{0}' -> VideoID: {1}, AniDB ID: {2}", relPath, lookup.VideoId, lookup.AniDbId);
+                }
+                else
+                    s_logger.Warn("AnimeThemes: Failed to auto-map '{0}' -> {1}", relPath, idMissing ? "AniDB ID missing" : "Metadata missing");
+            }
+            catch (Exception ex)
+            {
+                s_logger.Warn(ex, "AnimeThemes: Exception auto-mapping '{0}'", relPath);
+            }
+        }
+
+        if (addedCount > 0)
+        {
+            var finalEntries = entries.DistinctBy(e => e.FilePath).OrderBy(e => AnimeThemesHelper.GetYearForSort(e.FilePath)).ThenBy(e => e.FilePath).ToList();
+            await File.WriteAllTextAsync(mapPath, AnimeThemesHelper.SerializeMapping(existingComments, finalEntries), ct).ConfigureAwait(false);
+            s_logger.Info("AnimeThemes: Appended {0} new entries to mapping file.", addedCount);
+        }
+
+        return addedCount;
+    }
+
     /// <summary>Test the mapping process for a single webm filename without adding it to the CSV.</summary>
     /// <param name="webmFileName">The webm filename to test.</param>
     /// <param name="ct">Cancellation token.</param>

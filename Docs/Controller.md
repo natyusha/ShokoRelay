@@ -402,6 +402,7 @@ POST /animethemes/webm/download                                -> DownloadAnimeT
   - `force`: (default false) set to true to overwrite existing `.webm` files.
   - `destination`: (optional) absolute path to a specific managed folder to force downloads into.
   - Files from before the year 2000 will sort by Decade/Season
+  - Automatically appends mapping entries for newly downloaded themes to the mapping CSV (`anidb_animethemes_xrefs.csv`).
 
 ---
 
