@@ -15,6 +15,34 @@
   "image_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-logo.png",
   "releases": [
     {
+      "version": "0.17.3",
+      "tag": "v0.17.3",
+      "source_revision": "1952a2796d245c7b190b98ddac05903d58ce25f4",
+      "released_at": "2026-08-25T20:07:42Z",
+      "channel": "Dev",
+      "release_notes": "For this release force refreshing the dashboard (`Ctrl-F5`) may be required for all of the front end changes to take effect.\r\n\r\n**Changes:**\r\n- Automatically append newly downloaded AnimeThemes WebM files directly to `anidb_animethemes_xrefs.csv` upon download completion\r\n- Implement targeted Plex API fast-paths in `CollectionService`, `CriticRatingService`, and `ImageSyncService` to bypass full-library fetches during filtered requests and debounced VFS fixups\r\n- Replace the \"Cour\" number input with a \"Current Season Filter\" toggle button on the dashboard for Theme.mp3 batch generation\r\n- Fix potential race conditions during concurrent path translations by storing cached mappings in atomic immutable arrays\r\n- Embed `PackageID`, `PackageName`, and `PackageOverview` identity metadata directly via MSBuild to satisfy Shoko Server pre-load verification\r\n- Optimize AnimeThemes mapping root discovery by querying managed folders directly instead of enumerating all database video files\r\n- Unify Plex HTTP communications through `PlexClient.SendAsync` and remove redundant `HttpClient` dependencies across sub-services\r\n- Enhance `SourceLinkService` logging to track individually created or purged symlinks and attachment folders in reports\r\n- Prefix release archive checksums with `sha256:` in build workflows to align with the updated plugin manifest schema\r\n- Micro-optimize artwork MIME type resolution (`FrozenDictionary`), Unicode unescaping, tag blacklist filtering, and config reflection\r\n- Bump `Shoko.Abstractions` to `v6.0.0-alpha.82`\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.17.2...v0.17.3",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.17.3/ShokoRelay-v0.17.3-dev_linux-arm64.zip",
+          "checksum": "sha256:bc25879d75243a16d4ab20b9d7cbcd0b4dad4a0ec18b5467db7dcffc1321b86f"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.17.3/ShokoRelay-v0.17.3-dev_linux-x64.zip",
+          "checksum": "sha256:e83d7fa97b1987c9d89dddb20742a05d439ef1cf11449dd079dc50d297b2e073"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.17.3/ShokoRelay-v0.17.3-dev_win-x64.zip",
+          "checksum": "sha256:cecd427d5aff37446c4668f660f77cd902f0d2eacb34d87f7444a274f180f9e0"
+        }
+      ]
+    },
+    {
       "version": "0.17.2",
       "tag": "v0.17.2",
       "source_revision": "fa0ae35f1b75243a9c3b0273ef6033aab7185afb",
