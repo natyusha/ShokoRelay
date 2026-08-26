@@ -455,7 +455,7 @@ code {
   color: var(--text-color);
 }
 .modal.help {
-  width: 500px;
+  width: 525px;
 }
 .modal section {
   margin: 0;
