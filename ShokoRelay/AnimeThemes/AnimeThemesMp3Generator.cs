@@ -115,7 +115,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
     /// <summary>Forces a re-scan of all managed folder roots and rebuilds the dictionary cache.</summary>
     private void RefreshThemeMp3CacheInternal()
     {
-        s_logger.Info("AnimeThemes: Building Theme.mp3 cache -> scanning all managed folders...");
+        s_logger.Info("AnimeThemes MP3: Building Theme.mp3 cache -> scanning all managed folders...");
         var excluded = VfsShared.GetIgnoredFolderNames(Settings);
         try
         {
@@ -141,11 +141,11 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
             );
 
             SaveCacheToFile();
-            s_logger.Info("AnimeThemes: Theme.mp3 cache refreshed -> {0} folders found across {1} roots", _themeMp3Cache.Count, roots.Count);
+            s_logger.Info("AnimeThemes MP3: Theme.mp3 cache refreshed -> {0} folders found across {1} roots", _themeMp3Cache.Count, roots.Count);
         }
         catch (Exception ex)
         {
-            s_logger.Warn(ex, "AnimeThemes: RefreshThemeMp3Cache -> Repositories not ready");
+            s_logger.Warn(ex, "AnimeThemes MP3: RefreshThemeMp3Cache -> Repositories not ready");
             _themeMp3Cache ??= new(VfsShared.PathComparer);
         }
     }
@@ -177,7 +177,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
             }
             catch
             {
-                s_logger.Warn("AnimeThemes: Failed to read {0} -> Attempting full scan", ShokoRelayConstants.FileAtMp3Cache);
+                s_logger.Warn("AnimeThemes MP3: Failed to read {0} -> Attempting full scan", ShokoRelayConstants.FileAtMp3Cache);
             }
         }
         RefreshThemeMp3CacheInternal();

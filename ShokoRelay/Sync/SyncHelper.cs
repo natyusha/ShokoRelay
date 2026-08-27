@@ -356,8 +356,9 @@ public static class SyncHelper
         }
         catch (Exception ex)
         {
-            s_logger.Warn(ex, "Failed to fetch {TypeLabel} for Plex user '{User}' on {Server}:{Section}", typeLabel, userName, target.ServerUrl, target.SectionId);
-            return ([], null, $"Failed to fetch {typeLabel} for Plex user '{userName}' from {target.ServerUrl}:{target.SectionId} -> {ex.Message}");
+            string msg = $"Failed to fetch {typeLabel} for Plex user '{userName}' from {target.ServerUrl}:{target.SectionId}";
+            s_logger.Warn(ex, "WatchedSyncService: {Message}", msg);
+            return ([], null, $"{msg} -> {ex.Message}");
         }
     }
 

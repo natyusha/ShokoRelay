@@ -177,7 +177,7 @@ public class VfsWatcher(
 
                     sw.Stop();
                     s_logger.Info(
-                        "VFS: batch refreshed for {0} series in {1}ms -> created={2} planned={3} skipped={4} seriesProcessed={5} errors={6}",
+                        "VFS: Batch refreshed for {0} series in {1}ms -> created={2} planned={3} skipped={4} seriesProcessed={5} errors={6}",
                         seriesIds.Count,
                         sw.ElapsedMilliseconds,
                         result.CreatedLinks,

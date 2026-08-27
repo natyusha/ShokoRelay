@@ -79,9 +79,9 @@ public class AnimeThemesController(
     [HttpPost("animethemes/vfs/import")]
     public async Task<IActionResult> ImportAnimeThemesMapping(CancellationToken cancellationToken = default)
     {
-        Logger.Info("AnimeThemes: Fetching curated mapping file from GitHub...");
+        Logger.Info("AnimeThemes Map: Fetching curated mapping file from GitHub...");
         var (count, _) = await animeThemesMapping.ImportMappingFromUrlAsync(AnimeThemesHelper.AtRawMapUrl + ShokoRelayConstants.FileAtMapping, cancellationToken).ConfigureAwait(false);
-        Logger.Info("AnimeThemes: Import successful. {0} entries updated.", count);
+        Logger.Info("AnimeThemes Map: Import successful. {0} entries updated.", count);
         return Ok(new RelayResponse<object>(Data: new { count }));
     }
 
@@ -213,7 +213,7 @@ public class AnimeThemesController(
             }
             catch (Exception ex)
             {
-                Logger.Warn(ex, "AnimeThemes: Failed to parse mapping CSV for webm tree");
+                Logger.Warn(ex, "AnimeThemes Player: Failed to parse mapping CSV for webm tree");
             }
         }
 
@@ -291,7 +291,7 @@ public class AnimeThemesController(
             }
             catch (Exception ex)
             {
-                Logger.Warn(ex, "AnimeThemes: Failed to parse webm cache");
+                Logger.Warn(ex, "AnimeThemes Player: Failed to parse webm cache");
             }
         }
 
@@ -358,7 +358,7 @@ public class AnimeThemesController(
             }
             catch (Exception ex)
             {
-                Logger.Warn(ex, "AnimeThemes: Failed to append missing themes to tree");
+                Logger.Warn(ex, "AnimeThemes Player: Failed to append missing themes to tree");
             }
         }
 

@@ -176,7 +176,7 @@ public class ShokoController(
         }
         catch (Exception ex)
         {
-            Logger.Error(ex, "ShokoController: Failed to parse VFS blueprint cache");
+            Logger.Warn(ex, "Shoko: Failed to parse VFS blueprint cache");
             return EmptyTree();
         }
     }

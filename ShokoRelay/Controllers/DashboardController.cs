@@ -173,7 +173,7 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
         }
         catch (Exception ex)
         {
-            Logger.Warn(ex, "Theme: Failed to generate dynamic mapped CSS for theme {0}", themeId);
+            Logger.Warn(ex, "Dashboard: Failed to generate dynamic mapped CSS for theme {0}", themeId);
             return Content(string.Empty, "text/css");
         }
     }

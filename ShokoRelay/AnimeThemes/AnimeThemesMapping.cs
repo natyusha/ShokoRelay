@@ -66,7 +66,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
         }
         catch (Exception ex)
         {
-            s_logger.Warn(ex, "AnimeThemes: Failed to import mapping from URL");
+            s_logger.Warn(ex, "AnimeThemes Map: Failed to import mapping from URL");
             return (0, "Import failed: " + ex.Message);
         }
     }
@@ -77,7 +77,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
     public async Task<AnimeThemesMappingBuildResult> BuildMappingFileAsync(CancellationToken ct = default)
     {
         TaskHelper.StartTask(ShokoRelayConstants.TaskAtMapBuild);
-        s_logger.Info("AnimeThemes: Starting mapping task...");
+        s_logger.Info("AnimeThemes Map: Starting mapping task...");
 
         try
         {
@@ -144,7 +144,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                     toProcess.Add((file, rel));
             }
 
-            s_logger.Info("AnimeThemes: Found {0} total files ({1} cached, {2} pending mapping resolution)...", filesBag.Count, existing.Count, toProcess.Count);
+            s_logger.Info("AnimeThemes Map: Found {0} total files ({1} cached, {2} pending mapping resolution)...", filesBag.Count, existing.Count, toProcess.Count);
 
             int reusedCount = entries.Count;
             var errorsList = new ConcurrentBag<string>();
@@ -163,7 +163,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                             {
                                 string errMsg = idMissing ? $"AniDB ID missing for {item.Rel}" : $"Missing metadata for {item.Rel}";
                                 errorsList.Add(errMsg);
-                                s_logger.Warn("AnimeThemes: Failed to map '{0}' -> {1}", item.Rel, idMissing ? "AniDB ID missing" : "Metadata missing");
+                                s_logger.Warn("AnimeThemes Map: Failed to map '{0}' -> {1}", item.Rel, idMissing ? "AniDB ID missing" : "Metadata missing");
                                 Interlocked.Increment(ref errors);
                                 return;
                             }
@@ -171,13 +171,13 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                                 entries.Add(new AnimeThemesMappingEntry(item.Rel, lookup));
                             string mapMsg = $"Mapped: {item.Rel} -> VideoID: {lookup.VideoId}, AniDB ID: {lookup.AniDbId}";
                             newMappingsList.Add(mapMsg);
-                            s_logger.Info("AnimeThemes: Mapped '{0}' -> VideoID: {1}, AniDB ID: {2}", item.Rel, lookup.VideoId, lookup.AniDbId);
+                            s_logger.Info("AnimeThemes Map: Mapped '{0}' -> VideoID: {1}, AniDB ID: {2}", item.Rel, lookup.VideoId, lookup.AniDbId);
                         }
                         catch (Exception ex)
                         {
                             string errMsg = $"{item.Rel}: {ex.Message}";
                             errorsList.Add(errMsg);
-                            s_logger.Warn(ex, "AnimeThemes: Exception mapping '{0}' -> {1}", item.Rel, ex.Message);
+                            s_logger.Warn(ex, "AnimeThemes Map: Exception mapping '{0}' -> {1}", item.Rel, ex.Message);
                             Interlocked.Increment(ref errors);
                         }
                     }
@@ -187,7 +187,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
             var finalEntries = entries.DistinctBy(e => e.FilePath).OrderBy(e => AnimeThemesHelper.GetYearForSort(e.FilePath)).ThenBy(e => e.FilePath).ToList();
 
             await File.WriteAllTextAsync(mapPath, AnimeThemesHelper.SerializeMapping(existingComments, finalEntries), ct).ConfigureAwait(false);
-            s_logger.Info("AnimeThemes: Finished mapping task -> {0} entries written.", finalEntries.Count);
+            s_logger.Info("AnimeThemes Map: Finished mapping task -> {0} entries written.", finalEntries.Count);
             List<string> finalMessages = [.. errorsList.OrderBy(m => m), .. newMappingsList.OrderBy(m => m)];
             return new AnimeThemesMappingBuildResult(mapPath, finalEntries.Count, reusedCount, errors, finalMessages);
         }
@@ -237,14 +237,14 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                     entries.Add(entry);
                     existing[relPath] = entry;
                     addedCount++;
-                    s_logger.Info("AnimeThemes: Auto-mapped '{0}' -> VideoID: {1}, AniDB ID: {2}", relPath, lookup.VideoId, lookup.AniDbId);
+                    s_logger.Info("AnimeThemes Map: Auto-mapped '{0}' -> VideoID: {1}, AniDB ID: {2}", relPath, lookup.VideoId, lookup.AniDbId);
                 }
                 else
-                    s_logger.Warn("AnimeThemes: Failed to auto-map '{0}' -> {1}", relPath, idMissing ? "AniDB ID missing" : "Metadata missing");
+                    s_logger.Warn("AnimeThemes Map: Failed to auto-map '{0}' -> {1}", relPath, idMissing ? "AniDB ID missing" : "Metadata missing");
             }
             catch (Exception ex)
             {
-                s_logger.Warn(ex, "AnimeThemes: Exception auto-mapping '{0}'", relPath);
+                s_logger.Warn(ex, "AnimeThemes Map: Exception auto-mapping '{0}'", relPath);
             }
         }
 
@@ -252,7 +252,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
         {
             var finalEntries = entries.DistinctBy(e => e.FilePath).OrderBy(e => AnimeThemesHelper.GetYearForSort(e.FilePath)).ThenBy(e => e.FilePath).ToList();
             await File.WriteAllTextAsync(mapPath, AnimeThemesHelper.SerializeMapping(existingComments, finalEntries), ct).ConfigureAwait(false);
-            s_logger.Info("AnimeThemes: Appended {0} new entries to mapping file.", addedCount);
+            s_logger.Info("AnimeThemes Map: Appended {0} new entries to mapping file.", addedCount);
         }
 
         return addedCount;

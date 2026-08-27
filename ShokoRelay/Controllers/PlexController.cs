@@ -221,13 +221,7 @@ public class PlexController(
                             if (await PlexLibrary.RefreshMetadataAsync(ratingKey, target, HttpContext.RequestAborted).ConfigureAwait(false))
                             {
                                 refreshedCount++;
-                                Logger.Info(
-                                    "PlexController: Triggered manual metadata refresh for series -> {0} [{1}] (RatingKey: {2}) on {3}",
-                                    series.GetDisplayTitle(),
-                                    series.ID,
-                                    ratingKey,
-                                    target.ServerName
-                                );
+                                Logger.Info("Plex: Triggered manual metadata refresh for series -> {0} [{1}] (RatingKey: {2}) on {3}", series.GetDisplayTitle(), series.ID, ratingKey, target.ServerName);
                             }
                             else
                                 errors.Add($"Failed to refresh metadata for series -> {series.GetDisplayTitle()} [{series.ID}] (RatingKey: {ratingKey}) on {target.ServerName}");
