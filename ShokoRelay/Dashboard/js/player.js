@@ -422,10 +422,8 @@
 
         sortedFolders.forEach((folderName) => {
           const childNode = node.folders.get(folderName);
-          const isDecade = /^\d{2}s$/i.test(folderName);
-          const isOpen = (isRoot && !isDecade) || ft;
           const extraHtml = childNode.isSeries ? buildSeriesLinks(childNode.seriesId, childNode.anidbId) : "";
-          childrenElements.push(createFolderNode(folderName, renderFolderTree(childNode, false), isOpen, childNode.isMissing, extraHtml));
+          childrenElements.push(createFolderNode(folderName, renderFolderTree(childNode, false), ft, childNode.isMissing, extraHtml));
         });
 
         const sortedFiles = node.files.sort((a, b) => a.file.localeCompare(b.file, undefined, { numeric: true }));
@@ -477,6 +475,9 @@
 
     const item = webmTreeData.find((i) => i.path === currentWebmPath);
     if (!item) return;
+
+    // Collapse all open folders to reset the tree state before locating
+    playerTree.querySelectorAll("details[open]").forEach((det) => (det.open = false));
 
     const getSummaryTitle = (summary) => (summary ? summary.dataset.tooltipText || summary.getAttribute("title") || "" : "");
     const pathSegments = [];
