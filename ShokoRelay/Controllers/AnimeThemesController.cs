@@ -304,7 +304,7 @@ public class AnimeThemesController(
                 string themeRootName = VfsShared.ResolveAnimeThemesFolderName();
 
                 // Pre-calculate a fast lookup hashset for series that physically exist in the local collection
-                var localSeriesWithFiles = new HashSet<int>(MetadataService.GetAllShokoSeries()?.Where(s => s.Episodes.Any(e => e.VideoList?.Count > 0)).Select(s => s.AnidbAnimeID) ?? []);
+                var localSeriesWithFiles = new HashSet<int>(MetadataService.GetAllShokoSeries()?.Where(s => s.Episodes.Any(e => e.Videos?.Count > 0)).Select(s => s.AnidbAnimeID) ?? []);
 
                 foreach (var entry in entries)
                 {

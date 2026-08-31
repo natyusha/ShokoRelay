@@ -120,10 +120,10 @@ public static class MapHelper
         {
             foreach (var ep in s.Episodes)
             {
-                if (IsHidden(ep) || ep.VideoList == null)
+                if (IsHidden(ep) || ep.Videos == null)
                     continue;
 
-                foreach (var v in ep.VideoList)
+                foreach (var v in ep.Videos)
                     if (seenVideoIds.Add(v.ID))
                         yield return v;
             }
@@ -141,7 +141,7 @@ public static class MapHelper
     private static List<FileMapping> BuildFileMappings(ISeries series, IMetadataService metadataService)
     {
         var result = new List<FileMapping>();
-        var seriesEpisodes = series.Episodes.Where(e => e.VideoList.Count > 0 && !IsHidden(e)).Select(e => (Episode: e, Videos: e.VideoList)).ToList();
+        var seriesEpisodes = series.Episodes.Where(e => e.Videos.Count > 0 && !IsHidden(e)).Select(e => (Episode: e, e.Videos)).ToList();
         if (seriesEpisodes.Count == 0)
             return result;
 

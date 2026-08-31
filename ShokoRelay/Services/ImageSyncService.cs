@@ -182,7 +182,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                     var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] - S{coords.Season:D2}E{coords.Episode:D2}";
 
                     // Find a local episode thumbnail alongside the physical video files
-                    var localThumb = (episode.VideoList ?? [])
+                    var localThumb = (episode.Videos ?? [])
                         .SelectMany(v => v.Files ?? [])
                         .Select(f => f.Path)
                         .Where(p => !string.IsNullOrWhiteSpace(p))

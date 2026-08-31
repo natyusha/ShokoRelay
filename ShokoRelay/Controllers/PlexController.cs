@@ -474,7 +474,7 @@ public class PlexController(
 
             if (evt.Metadata.ViewOffset.HasValue && evt.Metadata.ViewOffset.Value > 0)
             {
-                foreach (var video in shokoEpisode.VideoList ?? [])
+                foreach (var video in shokoEpisode.Videos ?? [])
                 {
                     var videoData = userDataService.GetVideoUserData(video, user);
                     var update = videoData != null ? new VideoUserDataUpdate(videoData) : new VideoUserDataUpdate();

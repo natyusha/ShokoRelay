@@ -113,7 +113,7 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                     bool alreadyWatched = epUserData?.LastPlayedAt != null;
                     bool isWatchedInPlex = item.ViewCount > 0;
 
-                    if (isWatchedInPlex && !alreadyWatched && (ep.VideoList?.Count > 0))
+                    if (isWatchedInPlex && !alreadyWatched && (ep.Videos?.Count > 0))
                         epsToMark.Add(ep);
                 }
 
@@ -153,13 +153,13 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                     bool isWatchedInPlex = item.ViewCount > 0;
                     bool hasProgressInPlex = item.ViewOffset > 0;
 
-                    bool wouldMark = isWatchedInPlex && !alreadyWatched && (ep.VideoList?.Count > 0);
+                    bool wouldMark = isWatchedInPlex && !alreadyWatched && (ep.Videos?.Count > 0);
                     bool wouldUpdateProgress = false;
 
-                    if (!isWatchedInPlex && hasProgressInPlex && !alreadyWatched && (ep.VideoList?.Count > 0))
+                    if (!isWatchedInPlex && hasProgressInPlex && !alreadyWatched && (ep.Videos?.Count > 0))
                     {
                         wouldUpdateProgress = true;
-                        var existingData = userDataService.GetVideoUserData(ep.VideoList.First(), defaultUser);
+                        var existingData = userDataService.GetVideoUserData(ep.Videos.First(), defaultUser);
                         if (existingData != null)
                         {
                             var diff = Math.Abs(existingData.ProgressPosition.TotalMilliseconds - item.ViewOffset!.Value);
@@ -204,7 +204,7 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                     {
                         if (!dryRun)
                         {
-                            foreach (var video in ep.VideoList!)
+                            foreach (var video in ep.Videos!)
                             {
                                 var videoData = userDataService.GetVideoUserData(video, defaultUser);
                                 var update = videoData != null ? new VideoUserDataUpdate(videoData) : new VideoUserDataUpdate();
