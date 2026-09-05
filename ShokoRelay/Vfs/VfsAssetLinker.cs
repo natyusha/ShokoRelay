@@ -146,7 +146,8 @@ public class VfsAssetLinker(IVideoService videoService)
                     foreach (var vfsSeriesPath in vfsSeriesPaths)
                     {
                         string destDir = string.IsNullOrEmpty(seasonFolder) ? Path.Combine(vfsSeriesPath, plexDirName) : Path.Combine(vfsSeriesPath, seasonFolder, plexDirName);
-                        Directory.CreateDirectory(destDir);
+                        if (!Settings.Advanced.DisableVfsGeneration)
+                            Directory.CreateDirectory(destDir);
                         if (VfsShared.TryCreateLink(file, Path.Combine(destDir, Path.GetFileName(file)), s_logger, skipExistenceCheck: skipExistenceCheck))
                             onLink?.Invoke(Path.GetDirectoryName(Path.GetDirectoryName(vfsSeriesPath))!, seasonFolder, Path.Combine(plexDirName, Path.GetFileName(file)), file);
                     }

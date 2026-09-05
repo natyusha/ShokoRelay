@@ -386,7 +386,8 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
 
                                 if (!isFilteredRun || folderGroup.Any(s => s!.ID == item.OriginalId))
                                 {
-                                    Directory.CreateDirectory(shortsDir);
+                                    if (!Settings.Advanced.DisableVfsGeneration)
+                                        Directory.CreateDirectory(shortsDir);
                                     if (VfsShared.TryCreateLink(item.SourcePath, destPath, s_logger, targetOverride: AnimeThemesHelper.BuildThemeRelativeTarget(item.RelativePath, themeRootName)))
                                     {
                                         Interlocked.Increment(ref state.Created);
@@ -427,11 +428,15 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                                     if (!isMyFile)
                                         continue;
                                 }
-                                try
+
+                                if (!Settings.Advanced.DisableVfsGeneration)
                                 {
-                                    File.Delete(file);
+                                    try
+                                    {
+                                        File.Delete(file);
+                                    }
+                                    catch { }
                                 }
-                                catch { }
                             }
                         }
                     }

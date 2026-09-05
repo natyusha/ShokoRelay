@@ -37,6 +37,12 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
     /// <returns>A result object containing audit statistics.</returns>
     public VfsAuditResult Audit(CancellationToken ct = default)
     {
+        if (Settings.Advanced.DisableVfsGeneration)
+        {
+            s_logger.Info("VFS Audit: Skipped -> VFS generation is disabled.");
+            return new VfsAuditResult(0, 0, 0, [], []);
+        }
+
         s_logger.Info("VFS Audit: Starting task...");
         var sw = Stopwatch.StartNew();
 
@@ -677,7 +683,8 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                     foreach (var (importRoot, folderName, moviePath) in movieDirs)
                     {
                         string extraPath = Path.Combine(moviePath, ex.Folder);
-                        Directory.CreateDirectory(extraPath);
+                        if (!Settings.Advanced.DisableVfsGeneration)
+                            Directory.CreateDirectory(extraPath);
                         string destFilePath = Path.Combine(extraPath, fileName);
 
                         if (VfsShared.TryCreateLink(locInfo.Src, destFilePath, s_logger, skipExistenceCheck: skipCheck))
@@ -739,7 +746,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
     /// <param name="recreate">Whether to recreate the empty directory and .ignore file after cleanup.</param>
     private static void CleanVfsRoot(string path, List<RootCleanupDetails> cleanupDetails, bool isMovieRoot = false, bool recreate = true)
     {
-        if (!Directory.Exists(path))
+        if (Settings.Advanced.DisableVfsGeneration || !Directory.Exists(path))
             return;
 
         if (!VfsShared.IsSafeToDelete(path))
@@ -788,7 +795,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
     /// <param name="isRoot">Whether this directory is a top-level VFS root.</param>
     private static void EnsureDirectory(string path, VfsBuildSession session, bool isRoot = false)
     {
-        if (session.CreatedDirs.TryAdd(path, 0))
+        if (session.CreatedDirs.TryAdd(path, 0) && !Settings.Advanced.DisableVfsGeneration)
         {
             Directory.CreateDirectory(path);
             if (isRoot)
@@ -808,6 +815,9 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
     /// <param name="onError">Callback to invoke if an exception occurs during pruning.</param>
     private void PruneSeries(string rootFolderName, int folderId, Action<string> onError)
     {
+        if (Settings.Advanced.DisableVfsGeneration)
+            return;
+
         List<string> roots = [.. (videoService.GetAllManagedFolders() ?? []).Select(f => f.Path).Where(p => !string.IsNullOrEmpty(p)).Distinct(VfsShared.PathComparer)];
 
         foreach (var root in roots)

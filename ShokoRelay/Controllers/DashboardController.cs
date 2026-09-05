@@ -107,7 +107,7 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
     [HttpGet("theme.css")]
     public IActionResult GetDynamicThemeCss()
     {
-        string themeId = ConfigProvider.GetSettings().Advanced.SelectedTheme;
+        string themeId = Settings.Advanced.SelectedTheme;
         if (string.IsNullOrWhiteSpace(themeId) || themeId.Equals("default", StringComparison.OrdinalIgnoreCase))
             return Content(string.Empty, "text/css");
 

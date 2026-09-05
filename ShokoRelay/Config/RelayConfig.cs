@@ -503,6 +503,11 @@ public class AdvancedConfig
     [Display(Name = "Plugin Theme", Description = "Select a Shoko WebUI theme to apply its colour scheme to the dashboard/player/browser")]
     [DefaultValue("default")]
     public string SelectedTheme { get; set; } = "default";
+
+    /// <summary>Whether to completely disable internal VFS generation.</summary>
+    [Display(Name = "Disable VFS Generation", Description = "Disable internal VFS generation. *Requires external emulation of the complete VFS structure")]
+    [DefaultValue(false)]
+    public bool DisableVfsGeneration { get; set; } = false;
 }
 
 #endregion

@@ -410,7 +410,8 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
             string? vfsLink = null;
             foreach (var vfsPath in VfsShared.ResolveSeriesVfsPaths(series, metadataService))
             {
-                Directory.CreateDirectory(vfsPath);
+                if (!Settings.Advanced.DisableVfsGeneration)
+                    Directory.CreateDirectory(vfsPath);
                 string dest = Path.Combine(vfsPath, "Theme.mp3");
 
                 s_logger.Debug("AnimeThemes MP3: Linking Theme.mp3 to VFS -> {0}", dest);

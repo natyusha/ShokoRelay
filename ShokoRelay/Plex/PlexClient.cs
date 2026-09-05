@@ -527,7 +527,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         if (string.IsNullOrWhiteSpace(path))
             return path;
 
-        var currentMappings = configProvider.GetSettings().Advanced.PathMappings;
+        var currentMappings = Settings.Advanced.PathMappings;
         if (currentMappings == null || currentMappings.Count == 0)
             return path;
 

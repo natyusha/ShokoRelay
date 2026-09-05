@@ -313,6 +313,9 @@ public static class VfsHelper
     /// <param name="expectedFiles">The tracked set of files that should exist.</param>
     public static void CleanupOrphanedFilesAndFolders(HashSet<string> resolvedVfsSeriesPaths, HashSet<string> expectedFiles)
     {
+        if (Settings.Advanced.DisableVfsGeneration)
+            return;
+
         string themeRootName = VfsShared.ResolveAnimeThemesFolderName();
         foreach (var seriesPath in resolvedVfsSeriesPaths)
         {

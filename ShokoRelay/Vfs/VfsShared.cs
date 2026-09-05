@@ -194,6 +194,9 @@ internal static class VfsShared
     /// <returns>True if the link exists and is correct, or was successfully created.</returns>
     public static bool TryCreateLink(string source, string dest, Logger logger, string? targetOverride = null, bool useRelativeTarget = true, bool skipExistenceCheck = false)
     {
+        if (Settings.Advanced.DisableVfsGeneration)
+            return true;
+
         string linkDir = Path.GetDirectoryName(dest) ?? string.Empty;
         string relativeTarget = targetOverride ?? source;
         if (targetOverride == null && useRelativeTarget && !string.IsNullOrWhiteSpace(linkDir))
