@@ -252,10 +252,15 @@ public static class LogHelper
         var stats = new Dictionary<string, object>
         {
             ["Elapsed Time"] = $"{r.TotalElapsed.TotalSeconds:F2}s",
+            ["Mode"] = Settings.Advanced.MovieGenerationMode switch
+            {
+                MovieGenerationMode.EnabledMaintain => "Standard + Movies (Maintained in Standard VFS)",
+                MovieGenerationMode.EnabledRemove => "Standard + Movies (Removed from Standard VFS)",
+                _ => "Standard",
+            },
             ["Series Processed"] = r.SeriesProcessed,
             ["Consolidated (Overrides)"] = r.ConsolidatedSeries,
             ["Links Created"] = r.CreatedLinks,
-            ["Links Planned"] = r.PlannedLinks,
             ["Links Skipped"] = r.Skipped,
             ["Errors"] = r.Errors.Count,
         };
