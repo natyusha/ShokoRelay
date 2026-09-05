@@ -506,6 +506,7 @@ public class AdvancedConfig
 
     /// <summary>Whether to completely disable internal VFS generation.</summary>
     [Display(Name = "Disable VFS Generation", Description = "Disable internal VFS generation. *Requires external emulation of the complete VFS structure")]
+    [Browsable(false)]
     [DefaultValue(false)]
     public bool DisableVfsGeneration { get; set; } = false;
 }
