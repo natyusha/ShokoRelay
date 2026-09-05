@@ -178,7 +178,7 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
 
         if (downloadedItems.Count > 0)
         {
-            int mapped = await mappingService.AppendEntriesToMappingFileAsync(downloadedItems, ct).ConfigureAwait(false);
+            int mapped = await mappingService.AppendEntriesToMappingFileAsync(downloadedItems, CancellationToken.None).ConfigureAwait(false);
             if (mapped > 0)
                 messages.Add($"Auto-mapped {mapped} new entries into {ShokoRelayConstants.FileAtMapping}");
         }

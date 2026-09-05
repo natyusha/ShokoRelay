@@ -287,13 +287,26 @@ public sealed class FfmpegService(string pluginDirectory, string applicationPath
                 stderr.AppendLine(e.Data);
         };
 
-        process.Start();
-        process.BeginErrorReadLine();
+        try
+        {
+            process.Start();
+            process.BeginErrorReadLine();
 
-        string output = await process.StandardOutput.ReadToEndAsync().ConfigureAwait(false);
-        await process.WaitForExitAsync(ct).ConfigureAwait(false);
+            string output = await process.StandardOutput.ReadToEndAsync(ct).ConfigureAwait(false);
+            await process.WaitForExitAsync(ct).ConfigureAwait(false);
 
-        return process.ExitCode != 0 ? throw new InvalidOperationException($"{fileName} exited with code {process.ExitCode}: {stderr.ToString().Trim()}") : output;
+            return process.ExitCode != 0 ? throw new InvalidOperationException($"{fileName} exited with code {process.ExitCode}: {stderr.ToString().Trim()}") : output;
+        }
+        catch (OperationCanceledException)
+        {
+            try
+            {
+                if (!process.HasExited)
+                    process.Kill(true);
+            }
+            catch { }
+            throw;
+        }
     }
 
     /// <summary>Initializes a <see cref="ProcessStartInfo"/> object with common plugin requirements.</summary>

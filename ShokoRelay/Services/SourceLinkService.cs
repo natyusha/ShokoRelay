@@ -162,40 +162,47 @@ public class SourceLinkService(IVideoService videoService)
         {
             foreach (var entry in Directory.EnumerateFileSystemEntries(path))
             {
-                var name = Path.GetFileName(entry);
-                if (protectedFolders.Contains(name))
-                    continue;
-
-                var attr = File.GetAttributes(entry);
-                if (attr.HasFlag(FileAttributes.ReparsePoint))
+                try
                 {
-                    if (Directory.Exists(entry))
-                        Directory.Delete(entry);
-                    else
-                        File.Delete(entry);
+                    var name = Path.GetFileName(entry);
+                    if (protectedFolders.Contains(name))
+                        continue;
 
-                    details.Add(entry);
-                    s_logger.Info("SourceLinkService: Purged link -> {0}", entry);
-                    deleted++;
-                }
-                else if (Directory.Exists(entry))
-                {
-                    // Specifically target the sidecar attachment folders created by the plugin
-                    if (name.EndsWith("_attach", StringComparison.OrdinalIgnoreCase))
+                    var attr = File.GetAttributes(entry);
+                    if (attr.HasFlag(FileAttributes.ReparsePoint))
                     {
-                        Directory.Delete(entry, true);
+                        if (Directory.Exists(entry))
+                            Directory.Delete(entry);
+                        else
+                            File.Delete(entry);
+
                         details.Add(entry);
-                        s_logger.Info("SourceLinkService: Purged attachment folder -> {0}", entry);
+                        s_logger.Info("SourceLinkService: Purged link -> {0}", entry);
                         deleted++;
                     }
-                    else
-                        deleted += PurgeDirectoryLinks(entry, protectedFolders, details);
+                    else if (Directory.Exists(entry))
+                    {
+                        // Specifically target the sidecar attachment folders created by the plugin
+                        if (name.EndsWith("_attach", StringComparison.OrdinalIgnoreCase))
+                        {
+                            Directory.Delete(entry, true);
+                            details.Add(entry);
+                            s_logger.Info("SourceLinkService: Purged attachment folder -> {0}", entry);
+                            deleted++;
+                        }
+                        else
+                            deleted += PurgeDirectoryLinks(entry, protectedFolders, details);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    s_logger.Warn(ex, "SourceLinkService: Failed to purge entry -> {0}", entry);
                 }
             }
         }
         catch (Exception ex)
         {
-            s_logger.Trace(ex, "SourceLinkService: Purge failed for ->{0}", path);
+            s_logger.Trace(ex, "SourceLinkService: Purge failed for -> {0}", path);
         }
         return deleted;
     }

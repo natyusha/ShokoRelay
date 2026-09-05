@@ -72,7 +72,12 @@ public static class CastHelper
     /// <param name="item">Source item.</param>
     /// <returns>An array of anonymous objects containing writer names.</returns>
     public static object[] GetWriters(IWithCastAndCrew item) =>
-        item.Crew?.Where(c => c.RoleType is CrewRoleType.SeriesComposer or CrewRoleType.SourceWork).Select(c => (object)new { tag = GetName(c.Creator, c.Name) }).ToArray() ?? [];
+        item.Crew?.Where(c => c.RoleType is CrewRoleType.SeriesComposer or CrewRoleType.SourceWork)
+            .Select(c => GetName(c.Creator, c.Name))
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => (object)new { tag = name })
+            .ToArray()
+        ?? [];
 
     /// <summary>Retrieve producer credits for the given item.</summary>
     /// <param name="item">Item with cast/crew data.</param>
@@ -104,7 +109,7 @@ public static class CastHelper
     /// <param name="roleType">The role type to filter for.</param>
     /// <returns>An array of anonymous objects containing crew tags.</returns>
     private static object[] FilterCrew(IWithCastAndCrew item, CrewRoleType roleType) =>
-        item.Crew?.Where(c => c.RoleType == roleType).Select(c => (object)new { tag = GetName(c.Creator, c.Name) }).ToArray() ?? [];
+        item.Crew?.Where(c => c.RoleType == roleType).Select(c => GetName(c.Creator, c.Name)).Where(name => !string.IsNullOrWhiteSpace(name)).Select(name => (object)new { tag = name }).ToArray() ?? [];
 
     #endregion
 }

@@ -1,3 +1,4 @@
+using Shoko.Abstractions.User;
 using Shoko.Abstractions.User.Enums;
 using Shoko.Abstractions.User.Services;
 using Shoko.Abstractions.User.Update;
@@ -56,6 +57,7 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
 
         // Session-level cache to prevent redundant database lookups and GUID parsing when the same episode exists in multiple libraries or is watched by multiple users.
         var episodeCache = new Dictionary<string, IShokoEpisode?>(StringComparer.OrdinalIgnoreCase);
+        var userDataCache = new Dictionary<int, IEpisodeUserData?>();
 
         foreach (var target in targets)
         {
@@ -109,7 +111,9 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                     if (ep == null || appliedIds.Contains(ep.ID))
                         continue;
 
-                    var epUserData = userDataService.GetEpisodeUserData(ep, defaultUser);
+                    if (!userDataCache.TryGetValue(ep.ID, out var epUserData))
+                        userDataCache[ep.ID] = epUserData = userDataService.GetEpisodeUserData(ep, defaultUser);
+
                     bool alreadyWatched = epUserData?.LastPlayedAt != null;
                     bool isWatchedInPlex = item.ViewCount > 0;
 
@@ -147,7 +151,9 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                         continue;
                     }
 
-                    var epUserData = userDataService.GetEpisodeUserData(ep, defaultUser);
+                    if (!userDataCache.TryGetValue(ep.ID, out var epUserData))
+                        userDataCache[ep.ID] = epUserData = userDataService.GetEpisodeUserData(ep, defaultUser);
+
                     bool alreadyWatched = epUserData?.LastPlayedAt != null;
 
                     bool isWatchedInPlex = item.ViewCount > 0;
