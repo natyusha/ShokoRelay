@@ -185,12 +185,11 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                     var localThumb = (episode.Videos ?? [])
                         .SelectMany(v => v.Files ?? [])
                         .Select(f => f.Path)
-                        .Where(p => !string.IsNullOrWhiteSpace(p))
-                        .Select(p => (Dir: Path.GetDirectoryName(p), Base: Path.GetFileNameWithoutExtension(p)))
-                        .Where(x => !string.IsNullOrEmpty(x.Dir) && Directory.Exists(x.Dir))
+                        .Where(p => !string.IsNullOrWhiteSpace(p) && Directory.Exists(Path.GetDirectoryName(p)))
+                        .Select(p => (Dir: Path.GetDirectoryName(p)!, Base: Path.GetFileNameWithoutExtension(p)))
                         .SelectMany(x =>
                             Directory
-                                .EnumerateFiles(x.Dir!, $"{x.Base}.*")
+                                .EnumerateFiles(x.Dir, $"{x.Base}.*")
                                 .Where(f =>
                                     string.Equals(Path.GetFileNameWithoutExtension(f), x.Base, StringComparison.OrdinalIgnoreCase) && PlexConstants.LocalMediaAssets.Artwork.ContainsKey(Path.GetExtension(f))
                                 )
@@ -229,20 +228,14 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                         var ratingKeys = await plexClient.FindRatingKeysForShokoSeriesInSectionAsync(seriesId, target, metadataService, ct).ConfigureAwait(false);
                         foreach (var ratingKey in ratingKeys)
                         {
-                            if (target.LibraryType == PlexLibraryType.Movie)
-                            {
-                                using var req = plexClient.CreateRequest(HttpMethod.Get, $"/library/metadata/{ratingKey}?X-Plex-Container-Start=0&X-Plex-Container-Size=1", target.ServerUrl);
-                                using var resp = await plexClient.SendAsync(req, ct).ConfigureAwait(false);
-                                if ((await PlexApi.ReadContainerAsync(resp, ct).ConfigureAwait(false))?.Metadata?.FirstOrDefault() is { } movieItem)
-                                    await ProcessThumbnailItem(movieItem).ConfigureAwait(false);
-                            }
-                            else
-                            {
-                                using var req = plexClient.CreateRequest(HttpMethod.Get, $"/library/metadata/{ratingKey}/allLeaves?X-Plex-Container-Start=0&X-Plex-Container-Size=5000", target.ServerUrl);
-                                using var resp = await plexClient.SendAsync(req, ct).ConfigureAwait(false);
-                                foreach (var epItem in (await PlexApi.ReadContainerAsync(resp, ct).ConfigureAwait(false))?.Metadata ?? [])
-                                    await ProcessThumbnailItem(epItem).ConfigureAwait(false);
-                            }
+                            string path =
+                                target.LibraryType == PlexLibraryType.Movie
+                                    ? $"/library/metadata/{ratingKey}?X-Plex-Container-Start=0&X-Plex-Container-Size=1"
+                                    : $"/library/metadata/{ratingKey}/allLeaves?X-Plex-Container-Start=0&X-Plex-Container-Size=5000";
+                            using var req = plexClient.CreateRequest(HttpMethod.Get, path, target.ServerUrl);
+                            using var resp = await plexClient.SendAsync(req, ct).ConfigureAwait(false);
+                            foreach (var item in (await PlexApi.ReadContainerAsync(resp, ct).ConfigureAwait(false))?.Metadata ?? [])
+                                await ProcessThumbnailItem(item).ConfigureAwait(false);
                         }
                     }
                 }
@@ -251,10 +244,9 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                     // Bulk path: query all items in library section
                     var items =
                         target.LibraryType == PlexLibraryType.Movie
-                            ? await plexClient.GetSectionMoviesAsync(target, null, ct).ConfigureAwait(false) ?? []
-                            : await plexClient.GetSectionEpisodesAsync(target, null, ct).ConfigureAwait(false) ?? [];
-
-                    foreach (var item in items)
+                            ? await plexClient.GetSectionMoviesAsync(target, null, ct).ConfigureAwait(false)
+                            : await plexClient.GetSectionEpisodesAsync(target, null, ct).ConfigureAwait(false);
+                    foreach (var item in items ?? [])
                         await ProcessThumbnailItem(item).ConfigureAwait(false);
                 }
             }
@@ -386,21 +378,16 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                         }
 
                         // Find a local artwork file for a series based on a prioritized list of allowed filenames
-                        string? foundFile = null;
-                        foreach (var vfsPath in VfsShared.ResolveSeriesVfsPaths(series, metadataService))
-                        {
-                            if (!Directory.Exists(vfsPath))
-                                continue;
-                            var localArtworks = Directory.EnumerateFiles(vfsPath).Where(f => PlexConstants.LocalMediaAssets.Artwork.ContainsKey(Path.GetExtension(f))).ToList();
-                            foreach (var name in config.Names)
-                            {
-                                foundFile = localArtworks.FirstOrDefault(f => string.Equals(Path.GetFileNameWithoutExtension(f), name, StringComparison.OrdinalIgnoreCase));
-                                if (foundFile != null)
-                                    break;
-                            }
-                            if (foundFile != null)
-                                break;
-                        }
+                        string? foundFile = VfsShared
+                            .ResolveSeriesVfsPaths(series, metadataService)
+                            .Where(Directory.Exists)
+                            .SelectMany(Directory.EnumerateFiles)
+                            .Where(f => PlexConstants.LocalMediaAssets.Artwork.ContainsKey(Path.GetExtension(f)))
+                            .Select(f => new { File = f, Index = Array.FindIndex(config.Names, n => string.Equals(Path.GetFileNameWithoutExtension(f), n, StringComparison.OrdinalIgnoreCase)) })
+                            .Where(x => x.Index >= 0)
+                            .OrderBy(x => x.Index)
+                            .FirstOrDefault()
+                            ?.File;
 
                         var (h, u, s, e, cu) = await ProcessLocalAssetAsync(
                                 foundFile,
@@ -451,10 +438,9 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
             try
             {
                 var fi = new FileInfo(foundFile);
-                if (fi.LinkTarget != null && fi.ResolveLinkTarget(true) is FileInfo targetFi)
-                    fi = targetFi;
-                exists = fi.Exists;
-                length = exists ? fi.Length : 0;
+                fi = fi.LinkTarget != null ? (fi.ResolveLinkTarget(true) as FileInfo ?? fi) : fi;
+                if (exists = fi.Exists)
+                    length = fi.Length;
             }
             catch { }
         }
@@ -632,20 +618,15 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
     {
         try
         {
-            var existingXrefs = entity.GetImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = imageType });
-            foreach (var xref in existingXrefs)
+            foreach (var xref in entity.GetImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = imageType }).Where(predicate))
             {
-                if (predicate(xref))
-                {
-                    imageManager.RemoveImageCrossReference(xref);
-                    if (imageManager.GetImageByID(xref.ImageID) is { } oldImg)
-                    {
-                        // Only purge the underlying image if no other entities are actively referencing it
-                        var remainingXrefs = imageManager.GetAllImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = imageType }).Where(x => x.ImageID == oldImg.ID && x.ID != xref.ID);
-                        if (!remainingXrefs.Any())
-                            await imageManager.PurgeImage(oldImg).ConfigureAwait(false);
-                    }
-                }
+                imageManager.RemoveImageCrossReference(xref);
+                // Only purge the underlying image if no other entities are actively referencing it
+                if (
+                    imageManager.GetImageByID(xref.ImageID) is { } oldImg
+                    && !imageManager.GetAllImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = imageType }).Any(x => x.ImageID == oldImg.ID)
+                )
+                    await imageManager.PurgeImage(oldImg).ConfigureAwait(false);
             }
         }
         catch (Exception ex)
