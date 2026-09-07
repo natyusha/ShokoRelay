@@ -265,6 +265,37 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                 s_logger.Warn(ex, "ImageSyncService: Failed to scan library section {0}", target.SectionId);
             }
         }
+
+        // Prune cache keys and Shoko images for episodes that no longer have a thumbnail in Plex (e.g., deleted, unmapped, or assignment changed)
+        var epCacheKeys = cache.Keys.Where(k => int.TryParse(k, out _)).ToList();
+        foreach (var key in epCacheKeys)
+        {
+            int epId = int.Parse(key);
+            if (processedInRun.Contains(epId))
+                continue;
+
+            var episode = metadataService.GetShokoEpisodeByID(epId);
+            if (episode == null)
+            {
+                if (cache.TryRemove(key, out _))
+                    addStats(false, false, false, false, true);
+                continue;
+            }
+
+            if (allowedSet != null && !allowedSet.Contains(episode.SeriesID))
+                continue;
+
+            if (cache.TryRemove(key, out _))
+            {
+                var prefId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series) : null;
+                var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
+                var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] - S{coords.Season:D2}E{coords.Episode:D2}";
+
+                s_logger.Info("ImageSyncService: Episode thumbnail for -> {0} is no longer present in Plex ... Purging from Shoko", epLogName);
+                await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
+                addStats(false, false, false, false, true);
+            }
+        }
     }
 
     /// <summary>Scans local collection posters to upload and mark them as preferred in Shoko.</summary>
@@ -603,12 +634,19 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
         {
             var existingXrefs = entity.GetImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = imageType });
             foreach (var xref in existingXrefs)
+            {
                 if (predicate(xref))
                 {
                     imageManager.RemoveImageCrossReference(xref);
                     if (imageManager.GetImageByID(xref.ImageID) is { } oldImg)
-                        await imageManager.PurgeImage(oldImg).ConfigureAwait(false);
+                    {
+                        // Only purge the underlying image if no other entities are actively referencing it
+                        var remainingXrefs = imageManager.GetAllImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = imageType }).Where(x => x.ImageID == oldImg.ID && x.ID != xref.ID);
+                        if (!remainingXrefs.Any())
+                            await imageManager.PurgeImage(oldImg).ConfigureAwait(false);
+                    }
                 }
+            }
         }
         catch (Exception ex)
         {
