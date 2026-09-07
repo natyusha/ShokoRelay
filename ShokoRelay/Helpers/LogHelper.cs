@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+using System.Reflection;
 using System.Text;
 using ShokoRelay.AnimeThemes;
 using ShokoRelay.Controllers;
@@ -249,15 +251,13 @@ public static class LogHelper
     /// <param name="r">Build result data.</param>
     public static void BuildVfsReport(StringBuilder sb, VfsBuildResult r)
     {
+        var mode = Settings.Advanced.MovieGenerationMode;
+        string modeName = typeof(MovieGenerationMode).GetField(mode.ToString())?.GetCustomAttribute<DisplayAttribute>()?.Name ?? mode.ToString();
+
         var stats = new Dictionary<string, object>
         {
             ["Elapsed Time"] = $"{r.TotalElapsed.TotalSeconds:F2}s",
-            ["Mode"] = Settings.Advanced.MovieGenerationMode switch
-            {
-                MovieGenerationMode.EnabledMaintain => "Standard + Movies (Maintained in Standard VFS)",
-                MovieGenerationMode.EnabledRemove => "Standard + Movies (Removed from Standard VFS)",
-                _ => "Standard",
-            },
+            ["Movie Generation Mode"] = modeName,
             ["Series Processed"] = r.SeriesProcessed,
             ["Consolidated (Overrides)"] = r.ConsolidatedSeries,
             ["Links Created"] = r.CreatedLinks,
