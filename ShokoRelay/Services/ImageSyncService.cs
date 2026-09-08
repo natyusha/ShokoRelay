@@ -174,14 +174,31 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                         return;
 
                     var episode = metadataService.GetShokoEpisodeByID(epId.Value);
-                    if (episode == null || (allowedSet != null && !allowedSet.Contains(OverrideHelper.GetPrimary(episode.SeriesID, metadataService))))
+                    if (episode == null)
+                        return;
+
+                    int primarySeriesId = OverrideHelper.GetPrimary(episode.SeriesID, metadataService);
+                    if (allowedSet != null && !allowedSet.Contains(primarySeriesId))
                         return;
 
                     var prefId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series) : null;
                     var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
                     bool isMovie = target.LibraryType == PlexLibraryType.Movie;
                     string labelType = isMovie ? "Movie" : "Episode";
-                    var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] - {(isMovie ? $"Movie [{episode.ID}]" : $"S{coords.Season:D2}E{coords.Episode:D2}")}";
+                    string coordsStr = $"S{coords.Season:D2}E{coords.Episode:D2}";
+                    var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] - {(isMovie ? $"Movie [{episode.ID}]" : coordsStr)}";
+
+                    // File-Anchor Verification: An episode cannot receive a Plex video thumbnail if it possesses no active physical video files
+                    var hasPhysicalFiles = (episode.Videos ?? []).Any(v => v.Files != null && v.Files.Any(f => !string.IsNullOrWhiteSpace(f.Path) && File.Exists(f.Path)));
+                    if (!hasPhysicalFiles)
+                    {
+                        if (cache.TryRemove(episode.ID.ToString(), out _))
+                        {
+                            await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, x => x.Source == DataSource.LocallyGenerated).ConfigureAwait(false);
+                            addStats(false, false, false, false, true);
+                        }
+                        return;
+                    }
 
                     // Coordinate Alignment Guard: Detect when Plex's metadata is in a transient or mismatched state
                     if (!isMovie && item.ParentIndex.HasValue && item.Index.HasValue)
@@ -200,7 +217,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                         if (isMismatch)
                         {
                             addStats(true, false, false, true, false);
-                            errsBag.Add($"[Coordinate Mismatch] {epLogName} (Plex: S{item.ParentIndex.Value:D2}E{item.Index.Value:D2}, Shoko: S{coords.Season:D2}E{coords.Episode:D2})");
+                            errsBag.Add($"[Coordinate Mismatch] {epLogName} (Plex: S{item.ParentIndex.Value:D2}E{item.Index.Value:D2}, Shoko: {coordsStr})");
                             return;
                         }
                     }
@@ -321,7 +338,8 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                 {
                     var prefId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series) : null;
                     var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
-                    var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] - S{coords.Season:D2}E{coords.Episode:D2}";
+                    string coordsStr = $"S{coords.Season:D2}E{coords.Episode:D2}";
+                    var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] - {coordsStr}";
 
                     s_logger.Info("ImageSyncService: Episode thumbnail for -> {0} is no longer present in Plex ... Purging from Shoko", epLogName);
                     await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, x => x.Source == DataSource.LocallyGenerated).ConfigureAwait(false);
