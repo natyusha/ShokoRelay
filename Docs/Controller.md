@@ -178,7 +178,7 @@ GET  /plex/collections/build                                   -> BuildPlexColle
 
 GET  /plex/ratings/apply?filter={csv}                          -> ApplyAudienceRatings
 
-GET  /plex/images/sync                                         -> SyncPlexImages
+GET  /plex/images/sync?filter={csv}                            -> SyncPlexImages
 
 GET  /plex/automation/run                                      -> RunPlexAutomationNow
 ```

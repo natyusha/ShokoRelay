@@ -273,15 +273,16 @@ public class PlexController(
             );
 
     /// <summary>Synchronizes Plex-generated episode screenshots back to Shoko.</summary>
+    /// <param name="filter">Optional comma-separated list of Shoko or AniDB series IDs to filter the operation.</param>
     /// <returns>A task representing the result of the image synchronization run.</returns>
     [HttpGet("plex/images/sync")]
-    public Task<IActionResult> SyncPlexImages() =>
-        !PlexLibrary.IsEnabled
-            ? Task.FromResult<IActionResult>(BadRequest(new RelayResponse<object>(Status: "error", Message: "Plex server configuration is missing or no library selected.")))
+    public Task<IActionResult> SyncPlexImages([FromQuery] string? filter = null) =>
+        ValidatePlexFilterRequest(filter, out var seriesList, out var filterIds) is { } guard
+            ? Task.FromResult(guard)
             : ExecuteTrackedTaskAsync(
                 ShokoRelayConstants.TaskPlexImagesSync,
                 LogHelper.BuildImageSyncReport,
-                () => imageSyncService.SyncImagesAsync(cancellationToken: CancellationToken.None),
+                () => imageSyncService.SyncImagesAsync(filterIds.Count > 0 ? filterIds : null, CancellationToken.None),
                 SyncHelper.SyncLock
             );
 

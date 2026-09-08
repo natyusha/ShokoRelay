@@ -25,9 +25,9 @@ public interface IImageSyncService
 /// <param name="Processed">Total number of images evaluated.</param>
 /// <param name="Uploaded">Total number of images successfully uploaded to Shoko.</param>
 /// <param name="Skipped">Total number of images already set and skipped from re-uploading.</param>
-/// <param name="Errors">Count of errors encountered during connection or upload.</param>
+/// <param name="Errors">Count of errors encountered during connection, upload, or missing thumbnails.</param>
 /// <param name="UploadedDetails">List of specific images that were uploaded.</param>
-/// <param name="ErrorsList">List of specific error messages.</param>
+/// <param name="ErrorsList">List of specific error messages and items failing to provide thumbnails.</param>
 /// <param name="TotalElapsed">The total time elapsed during the task.</param>
 public sealed record ImageSyncResult(int Processed, int Uploaded, int Skipped, int Errors, List<string> UploadedDetails, List<string> ErrorsList, TimeSpan TotalElapsed);
 
@@ -122,7 +122,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
 
             sw.Stop();
             s_logger.Info("ImageSyncService: Finished synchronization -> uploaded {0} new images to Shoko in {1}ms", u, sw.ElapsedMilliseconds);
-            return new ImageSyncResult(p, u, s, e, [.. uploadedBag], [.. errsBag], sw.Elapsed);
+            return new ImageSyncResult(p, u, s, e, [.. uploadedBag.OrderBy(x => x)], [.. errsBag.OrderBy(x => x)], sw.Elapsed);
         }
         finally
         {
@@ -138,7 +138,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
     /// <param name="targets">Configured Plex library targets.</param>
     /// <param name="allowedSet">Optional filtered series IDs.</param>
     /// <param name="cache">Cache dictionary for image synchronization state.</param>
-    /// <param name="errsBag">Bag to collect error messages.</param>
+    /// <param name="errsBag">Bag to collect error messages and missing thumbnail diagnostics.</param>
     /// <param name="uploadedBag">Bag to collect uploaded item names.</param>
     /// <param name="addStats">Action callback to record execution metrics.</param>
     /// <param name="ct">Cancellation token.</param>
@@ -174,12 +174,49 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                         return;
 
                     var episode = metadataService.GetShokoEpisodeByID(epId.Value);
-                    if (episode == null || (allowedSet != null && !allowedSet.Contains(episode.SeriesID)))
+                    if (episode == null || (allowedSet != null && !allowedSet.Contains(OverrideHelper.GetPrimary(episode.SeriesID, metadataService))))
                         return;
 
                     var prefId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series) : null;
                     var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
-                    var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] - S{coords.Season:D2}E{coords.Episode:D2}";
+                    bool isMovie = target.LibraryType == PlexLibraryType.Movie;
+                    string labelType = isMovie ? "Movie" : "Episode";
+                    var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] - {(isMovie ? $"Movie [{episode.ID}]" : $"S{coords.Season:D2}E{coords.Episode:D2}")}";
+
+                    // Coordinate Alignment Guard: Detect when Plex's metadata is in a transient or mismatched state
+                    if (!isMovie && item.ParentIndex.HasValue && item.Index.HasValue)
+                    {
+                        bool isMismatch = item.ParentIndex.Value != coords.Season || item.Index.Value != coords.Episode;
+
+                        // Compensate for "Other" type episode fallback logic where Season -4 maps to Season 1 or 0
+                        if (
+                            isMismatch
+                            && coords.Season == PlexConstants.SeasonOther
+                            && (item.ParentIndex.Value == PlexConstants.SeasonStandard || item.ParentIndex.Value == PlexConstants.SeasonSpecials)
+                            && item.Index.Value == coords.Episode
+                        )
+                            isMismatch = false;
+
+                        if (isMismatch)
+                        {
+                            addStats(true, false, false, true, false);
+                            errsBag.Add($"[Coordinate Mismatch] {epLogName} (Plex: S{item.ParentIndex.Value:D2}E{item.Index.Value:D2}, Shoko: S{coords.Season:D2}E{coords.Episode:D2})");
+                            return;
+                        }
+                    }
+
+                    // Strict Missing Thumbnail Reporting: Track every Plex item that fails to provide a generated thumbnail
+                    if (string.IsNullOrWhiteSpace(item.Thumb))
+                    {
+                        addStats(true, false, false, true, false);
+                        errsBag.Add($"[Missing Plex Thumbnail] {epLogName} (No thumbnail generated or available in Plex)");
+                        if (cache.TryRemove(episode.ID.ToString(), out _))
+                        {
+                            await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, x => x.Source == DataSource.LocallyGenerated).ConfigureAwait(false);
+                            addStats(false, false, false, false, true);
+                        }
+                        return;
+                    }
 
                     // Find a local episode thumbnail alongside the physical video files
                     var localThumb = (episode.Videos ?? [])
@@ -195,8 +232,6 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                                 )
                         )
                         .FirstOrDefault();
-
-                    string labelType = target.LibraryType == PlexLibraryType.Movie ? "Movie" : "Episode";
 
                     var (h, u, s, e, cu) = await ProcessLocalAssetAsync(
                             localThumb,
@@ -215,7 +250,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
 
                     if (!h && !Settings.TmdbThumbnails)
                     {
-                        var (ph, pu, ps, pe, pcu) = await ProcessPlexThumbnailAsync(item.Thumb, episode, epLogName, target, cache, errsBag, uploadedBag, ct).ConfigureAwait(false);
+                        var (ph, pu, ps, pe, pcu) = await ProcessPlexThumbnailAsync(item.Thumb, episode, coords, isMovie, epLogName, target, cache, errsBag, uploadedBag, ct).ConfigureAwait(false);
                         addStats(ph, pu, ps, pe, pcu);
                     }
                 }
@@ -244,9 +279,10 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                     // Bulk path: query all items in library section
                     var items =
                         target.LibraryType == PlexLibraryType.Movie
-                            ? await plexClient.GetSectionMoviesAsync(target, null, ct).ConfigureAwait(false)
-                            : await plexClient.GetSectionEpisodesAsync(target, null, ct).ConfigureAwait(false);
-                    foreach (var item in items ?? [])
+                            ? await plexClient.GetSectionMoviesAsync(target, null, ct).ConfigureAwait(false) ?? []
+                            : await plexClient.GetSectionEpisodesAsync(target, null, ct).ConfigureAwait(false) ?? [];
+
+                    foreach (var item in items)
                         await ProcessThumbnailItem(item).ConfigureAwait(false);
                 }
             }
@@ -258,34 +294,39 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
             }
         }
 
-        // Prune cache keys and Shoko images for episodes that no longer have a thumbnail in Plex (e.g., deleted, unmapped, or assignment changed)
-        var epCacheKeys = cache.Keys.Where(k => int.TryParse(k, out _)).ToList();
-        foreach (var key in epCacheKeys)
+        // Safely purge orphaned Plex thumbnails for episodes completely removed from Plex
+        if (allowedSet == null && errsBag.IsEmpty)
         {
-            int epId = int.Parse(key);
-            if (processedInRun.Contains(epId))
-                continue;
-
-            var episode = metadataService.GetShokoEpisodeByID(epId);
-            if (episode == null)
+            var epCacheKeys = cache.Keys.Where(k => int.TryParse(k, out _)).ToList();
+            foreach (var key in epCacheKeys)
             {
+                int epId = int.Parse(key);
+                if (processedInRun.Contains(epId))
+                    continue;
+
+                // Local assets store string keys starting with their file length. Exclude them to prevent false purges.
+                bool isLocalCache = cache.TryGetValue(key, out string? val) && !string.IsNullOrEmpty(val) && char.IsAsciiDigit(val[0]);
+                if (isLocalCache)
+                    continue;
+
+                var episode = metadataService.GetShokoEpisodeByID(epId);
+                if (episode == null)
+                {
+                    if (cache.TryRemove(key, out _))
+                        addStats(false, false, false, false, true);
+                    continue;
+                }
+
                 if (cache.TryRemove(key, out _))
+                {
+                    var prefId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series) : null;
+                    var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
+                    var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] - S{coords.Season:D2}E{coords.Episode:D2}";
+
+                    s_logger.Info("ImageSyncService: Episode thumbnail for -> {0} is no longer present in Plex ... Purging from Shoko", epLogName);
+                    await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, x => x.Source == DataSource.LocallyGenerated).ConfigureAwait(false);
                     addStats(false, false, false, false, true);
-                continue;
-            }
-
-            if (allowedSet != null && !allowedSet.Contains(episode.SeriesID))
-                continue;
-
-            if (cache.TryRemove(key, out _))
-            {
-                var prefId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series) : null;
-                var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
-                var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] - S{coords.Season:D2}E{coords.Episode:D2}";
-
-                s_logger.Info("ImageSyncService: Episode thumbnail for -> {0} is no longer present in Plex ... Purging from Shoko", epLogName);
-                await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
-                addStats(false, false, false, false, true);
+                }
             }
         }
     }
@@ -452,7 +493,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
             bool hadCache = cache.TryGetValue(cacheKey, out string? cachedVal);
             bool isLocalCache = hadCache && !string.IsNullOrEmpty(cachedVal) && char.IsAsciiDigit(cachedVal[0]);
 
-            if ((hadCache && isLocalCache) || (!hadCache && preferredImg?.Source is DataSource.User or DataSource.LocallyGenerated))
+            if (hadCache && isLocalCache)
             {
                 cache.TryRemove(cacheKey, out _);
                 s_logger.Info("ImageSyncService: Local {0} for -> {1} no longer present on disk ... Purging from Shoko", label, entityName);
@@ -522,10 +563,12 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
         }
     }
 
-    /// <summary>Downloads and processes Plex-generated thumbnails.</summary>
+    /// <summary>Downloads and processes Plex-generated thumbnails with self-healing compound caching.</summary>
     private async Task<(bool Handled, bool Uploaded, bool Skipped, bool Error, bool CacheUpdated)> ProcessPlexThumbnailAsync(
         string thumbUrl,
         IShokoEpisode episode,
+        PlexMapping.PlexCoords coords,
+        bool isMovie,
         string epLogName,
         PlexLibraryTarget target,
         ConcurrentDictionary<string, string> cache,
@@ -536,31 +579,40 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
     {
         var cacheKey = episode.ID.ToString();
         var preferredBackdrop = episode.GetAvailableImages(ImageEntityType.Backdrop).FirstOrDefault(i => i.IsPreferred);
+
+        // Strict User Preference Protection: Non-locally-generated preferred images (User, TMDB, AniDB) must never be overwritten
+        if (preferredBackdrop != null && preferredBackdrop.Source != DataSource.LocallyGenerated)
+            return (true, false, true, false, false);
+
         string? cacheVal = cache.GetValueOrDefault(cacheKey);
+        string coordsToken = isMovie ? $"M{episode.ID}" : $"S{coords.Season:D2}E{coords.Episode:D2}";
 
         bool isStale = false;
         if (cacheVal != null)
         {
-            var parts = cacheVal.Split('|', 2);
-            string savedThumb = parts[0];
-            string? savedMd5 = parts.Length > 1 ? parts[1] : null;
+            var parts = cacheVal.Split('|', 3);
+            // Support legacy 2-part cache (url|md5) and 3-part cache (coord|url|md5)
+            string savedCoords = parts.Length == 3 ? parts[0] : "";
+            string savedThumb = parts.Length == 3 ? parts[1] : parts[0];
+            string? savedMd5 = parts.Length == 3 ? parts[2] : (parts.Length > 1 ? parts[1] : null);
 
-            if (string.Equals(savedThumb, thumbUrl, StringComparison.OrdinalIgnoreCase))
+            // Self-Healing Validation: Verify matching coordinates, matching Plex thumb URL, and actual database attachment in Shoko
+            bool coordsMatch = string.IsNullOrEmpty(savedCoords) || string.Equals(savedCoords, coordsToken, StringComparison.OrdinalIgnoreCase);
+            bool thumbMatch = string.Equals(savedThumb, thumbUrl, StringComparison.OrdinalIgnoreCase);
+            bool shokoHasImage = preferredBackdrop != null && (savedMd5 == null || string.Equals(preferredBackdrop.ResourceID, savedMd5, StringComparison.OrdinalIgnoreCase));
+
+            if (coordsMatch && thumbMatch && shokoHasImage)
             {
-                if (preferredBackdrop != null && (savedMd5 == null || string.Equals(preferredBackdrop.ResourceID, savedMd5, StringComparison.OrdinalIgnoreCase)))
-                    return (true, false, true, false, false); // Valid cache, skip
+                if (string.IsNullOrEmpty(savedCoords) && savedMd5 != null)
+                {
+                    // Cache Migration: Rewrite old (url|md5) entries to new (coord|url|md5) format without re-downloading
+                    cache[cacheKey] = $"{coordsToken}|{thumbUrl}|{savedMd5}";
+                    return (true, false, true, false, true);
+                }
+                return (true, false, true, false, false); // State verified, skip
             }
-            else
-                isStale = true;
-        }
 
-        if (preferredBackdrop != null && preferredBackdrop.Source is not DataSource.LocallyGenerated and not DataSource.User)
-            return (true, false, true, false, false); // Preferred image is external, skip
-
-        if (isStale || (preferredBackdrop != null && preferredBackdrop.Source is DataSource.LocallyGenerated or DataSource.User))
-        {
-            s_logger.Debug("ImageSyncService: Plex thumbnail mismatch for -> {0} ... Purging stale thumbnail", epLogName);
-            await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
+            isStale = true;
         }
 
         s_logger.Trace("ImageSyncService: Fetching Plex thumbnail for episode -> {0}", epLogName);
@@ -570,37 +622,31 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
             using var resp = await plexClient.SendAsync(req, ct).ConfigureAwait(false);
             if (!resp.IsSuccessStatusCode)
             {
-                errorsBag.Add($"Plex download failed for {epLogName} with status {resp.StatusCode}");
+                errorsBag.Add($"[Failed Plex Download] {epLogName} (HTTP {resp.StatusCode})");
                 return (true, false, false, true, false);
             }
 
             var bytes = await resp.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
             var md5Hex = Convert.ToHexString(MD5.HashData(bytes));
-            var imageId = IImageManager.GetIDForImageSourceAndResourceID(DataSource.LocallyGenerated, md5Hex);
 
-            var existingImage = imageManager.GetImageByID(imageId);
-            if (existingImage != null)
-            {
-                imageManager.SetPreferredImageForEntity(episode, ImageEntityType.Backdrop, existingImage);
-                uploadedBag.Add($"[Linked Existing Plex Thumb] {epLogName}");
-                cache[cacheKey] = $"{thumbUrl}|{md5Hex}";
-                s_logger.Info("ImageSyncService: Linked existing duplicate thumbnail for episode -> {0}", epLogName);
-                return (true, true, false, false, true);
-            }
+            // Safely unlink stale local image cross-references before uploading replacement artwork
+            if (isStale && preferredBackdrop != null && preferredBackdrop.Source == DataSource.LocallyGenerated)
+                await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
 
+            // Stream through imageManager.UploadImage to guarantee cross-reference creation for both new and existing images
             using var stream = new MemoryStream(bytes);
             var uploadedImage = imageManager.UploadImage(stream, "image/jpeg", userSubmitted: false);
             imageManager.SetPreferredImageForEntity(episode, ImageEntityType.Backdrop, uploadedImage);
 
             uploadedBag.Add($"[Plex Thumb] {epLogName}");
-            cache[cacheKey] = $"{thumbUrl}|{md5Hex}";
+            cache[cacheKey] = $"{coordsToken}|{thumbUrl}|{md5Hex}";
             s_logger.Info("ImageSyncService: Successfully uploaded and preferred thumbnail for episode -> {0}", epLogName);
             return (true, true, false, false, true);
         }
         catch (Exception ex)
         {
-            errorsBag.Add($"Failed to process episode matching Plex URL '{thumbUrl}': {ex.Message}");
-            s_logger.Warn(ex, "ImageSyncService: Failed to process Plex thumbnail loop iteration");
+            errorsBag.Add($"[Plex Thumbnail Exception] {epLogName}: {ex.Message}");
+            s_logger.Warn(ex, "ImageSyncService: Failed to process Plex thumbnail for {0}", epLogName);
             return (true, false, false, true, false);
         }
     }
@@ -624,7 +670,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                 // Only purge the underlying image if no other entities are actively referencing it
                 if (
                     imageManager.GetImageByID(xref.ImageID) is { } oldImg
-                    && !imageManager.GetAllImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = imageType }).Any(x => x.ImageID == oldImg.ID)
+                    && !imageManager.GetAllImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = imageType }).Any(x => x.ImageID == oldImg.ID && x.ID != xref.ID)
                 )
                     await imageManager.PurgeImage(oldImg).ConfigureAwait(false);
             }
