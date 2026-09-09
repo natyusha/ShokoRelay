@@ -255,6 +255,8 @@ GET  /vfs/tree                                                 -> GetVfsTree
   - If `PlexLocalExtras` is enabled all folders and files matching Plex local extra formatting will be ignored as well.
 - Overrides allow grouping multiple AniDB IDs under a single primary Shoko Series ID for Plex.
 - `VfsWatcher` automatically triggers batch VFS builds when file events are detected.
+- If `Advanced.DeferVfsCreationUntilFixup` is enabled, `VfsWatcher` postpones generating VFS links until the Plex Fixup Delay window settles.
+  - This prevents Plex from potentially scanning intermediate states.
 - Executing `BuildVfs` also generates or updates `vfs_blueprint.cache`.
 - If `Advanced.DisableVfsGeneration` is enabled, the endpoints will act as if a dry-run is being performed.
   - This will simulate the build in memory to populate the caches and frontend UI without writing actual symlinks/directories to disk.

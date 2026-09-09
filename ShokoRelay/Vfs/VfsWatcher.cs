@@ -165,34 +165,43 @@ public class VfsWatcher(
 
             try
             {
-                await VfsShared.VfsLock.WaitAsync().ConfigureAwait(false); // Wait for any active dashboard VFS operations to complete before processing the automated queue
-                try
+                if (Settings.Advanced.DeferVfsCreationUntilFixup && plexLibrary.IsEnabled)
                 {
-                    var sw = Stopwatch.StartNew();
-                    var result = builder.Build(seriesIds, cleanRoot: false);
-
-                    // Restore AnimeThemes links for the affected series if a mapping file exists
-                    if (File.Exists(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileAtMapping)))
-                        await atMapping.ApplyMappingAsync(seriesIds, CancellationToken.None).ConfigureAwait(false);
-
-                    sw.Stop();
-                    s_logger.Info(
-                        "VFS: Batch refreshed for {0} series in {1}ms -> created={2} planned={3} skipped={4} seriesProcessed={5} errors={6}",
-                        seriesIds.Count,
-                        sw.ElapsedMilliseconds,
-                        result.CreatedLinks,
-                        result.PlannedLinks,
-                        result.Skipped,
-                        result.SeriesProcessed,
-                        result.Errors?.Count ?? 0
-                    );
-
+                    s_logger.Info("VFS: Deferring VFS creation for {0} series until fixup ({1}m delay)", seriesIds.Count, Settings.Advanced.PlexFixupDelay);
                     foreach (var seriesId in seriesIds)
-                        TriggerPlexUpdates(seriesId);
+                        TriggerPlexUpdates(seriesId, deferScan: true);
                 }
-                finally
+                else
                 {
-                    VfsShared.VfsLock.Release();
+                    await VfsShared.VfsLock.WaitAsync().ConfigureAwait(false); // Wait for any active dashboard VFS operations to complete before processing the automated queue
+                    try
+                    {
+                        var sw = Stopwatch.StartNew();
+                        var result = builder.Build(seriesIds, cleanRoot: false);
+
+                        // Restore AnimeThemes links for the affected series if a mapping file exists
+                        if (File.Exists(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileAtMapping)))
+                            await atMapping.ApplyMappingAsync(seriesIds, CancellationToken.None).ConfigureAwait(false);
+
+                        sw.Stop();
+                        s_logger.Info(
+                            "VFS: Batch refreshed for {0} series in {1}ms -> created={2} planned={3} skipped={4} seriesProcessed={5} errors={6}",
+                            seriesIds.Count,
+                            sw.ElapsedMilliseconds,
+                            result.CreatedLinks,
+                            result.PlannedLinks,
+                            result.Skipped,
+                            result.SeriesProcessed,
+                            result.Errors?.Count ?? 0
+                        );
+
+                        foreach (var seriesId in seriesIds)
+                            TriggerPlexUpdates(seriesId);
+                    }
+                    finally
+                    {
+                        VfsShared.VfsLock.Release();
+                    }
                 }
             }
             catch (Exception ex)
@@ -210,7 +219,8 @@ public class VfsWatcher(
 
     /// <summary>Orchestrates debounced library scans, metadata refreshes, and collection updates for a recently modified series.</summary>
     /// <param name="seriesId">The Shoko Series ID to update.</param>
-    public void TriggerPlexUpdates(int seriesId)
+    /// <param name="deferScan">Whether to suppress the immediate library scan and only run the deferred fixup.</param>
+    public void TriggerPlexUpdates(int seriesId, bool deferScan = false)
     {
         if (!plexLibrary.IsEnabled)
             return;
@@ -227,7 +237,8 @@ public class VfsWatcher(
             return;
         }
 
-        ScheduleLibraryScan(series);
+        if (!deferScan)
+            ScheduleLibraryScan(series);
 
         // Schedules or resets the timer for a full Plex metadata refresh for the given series
         s_logger.Debug("VFS: Scheduling metadata fixup for series -> {0} [{1}] in {2} minute(s)", series.GetDisplayTitle(), series.ID, Settings.Advanced.PlexFixupDelay);

@@ -395,6 +395,11 @@ public class AdvancedConfig
     [VfsRebuild]
     public string ManagedFolderExclusions { get; set; } = "";
 
+    /// <summary>Whether to defer initial VFS creation until the metadata fixup.</summary>
+    [Display(Name = "Defer VFS Creation Until Fixup", Description = "Enable to wait for the configured Plex Fixup Delay before generating VFS links")]
+    [DefaultValue(false)]
+    public bool DeferVfsCreationUntilFixup { get; set; } = false;
+
     /// <summary>Whether to sync unique local images and Plex-generated episode thumbnails back to Shoko and mark them as preferred.</summary>
     [Display(Name = "Plex Image Sync", Description = "Enable to automatically upload unique local images and Plex's generated episode thumbnails back to Shoko")]
     [DefaultValue(false)]
