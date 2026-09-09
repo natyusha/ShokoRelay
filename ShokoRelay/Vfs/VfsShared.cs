@@ -209,8 +209,13 @@ internal static class VfsShared
                 var fi = new FileInfo(dest);
                 if (fi.Exists || fi.LinkTarget != null) // Accurately captures both valid files and broken symlinks
                 {
-                    if (fi.Attributes.HasFlag(FileAttributes.ReparsePoint) && string.Equals(fi.LinkTarget, relativeTarget, StringComparison.Ordinal))
-                        return true;
+                    if (fi.Attributes.HasFlag(FileAttributes.ReparsePoint))
+                    {
+                        string currentTarget = fi.LinkTarget?.Replace('\\', '/') ?? string.Empty;
+                        string expectedTarget = relativeTarget.Replace('\\', '/');
+                        if (string.Equals(currentTarget, expectedTarget, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                            return true;
+                    }
 
                     fi.Delete();
                 }
