@@ -15,6 +15,34 @@
   "image_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-logo.png",
   "releases": [
     {
+      "version": "0.17.4",
+      "tag": "v0.17.4",
+      "source_revision": "2be163c46a8ce723e9ab889a8f1c4be7e4cdca67",
+      "released_at": "2026-09-09T18:08:59Z",
+      "channel": "Dev",
+      "release_notes": "**Changes:**\r\n- Add Shoko.BuildTools $schema reference to manifest.json for automated schema validation\r\n- Update locateCurrentInTree in player.js to automatically collapse all open folders before expanding the path to the currently playing theme\r\n- Add hidden DisableVfsGeneration property to RelayConfig to allow bypassing physical file writes for external VFS emulation\r\n- Add Mode statistic to VfsBuildReport detailing the status of MovieGenerationMode to easily identify users of the nonstandard format\r\n- Rework ImageSyncService to use a new cache format as well as MapHelper based resolution (functionality remains largely the same)\r\n- Extract VfsIgnoreRule from the bottom of VfsShared.cs into its own dedicated VfsIgnoreRule.cs file\r\n- Inject ConfigProvider directly into VfsIgnoreRule to decouple it from static BackgroundService initialization timing\r\n- Bump Shoko.Abstractions to v6.0.0-alpha.84\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.17.3...v0.17.4",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.17.4/ShokoRelay-v0.17.4-dev_linux-arm64.zip",
+          "checksum": "sha256:949999566d5b19671de307c01be1db8646565c9adbe6a2e882124dbfce64ca5d"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.17.4/ShokoRelay-v0.17.4-dev_linux-x64.zip",
+          "checksum": "sha256:b543cc8a4307f4b1dbdc1438074e62b7202e30a508ef23623e5d630f71259766"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.17.4/ShokoRelay-v0.17.4-dev_win-x64.zip",
+          "checksum": "sha256:0add65742a45626c50cd831e3cd4dcc049952f50bc3226bdea650df4a8c00b43"
+        }
+      ]
+    },
+    {
       "version": "0.17.3",
       "tag": "v0.17.3",
       "source_revision": "1952a2796d245c7b190b98ddac05903d58ce25f4",
