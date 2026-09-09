@@ -31,8 +31,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
 
     #region Import Logic
 
-    /// <summary>Trigger import scans for every managed folder to find new or unrecognized files.</summary>
-    /// <returns>A read-only list of folder names that were scheduled for scanning.</returns>
+    /// <inheritdoc/>
     public async Task<IReadOnlyList<string>> TriggerImportAsync()
     {
         List<string> folders = [];
@@ -62,9 +61,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
 
     #region Housekeeping Logic
 
-    /// <summary>Scan for video file entries whose physical file has disappeared or is now in an ignored location, and optionally remove those records.</summary>
-    /// <param name="dryRun">When <c>true</c>, list missing files without deleting them.</param>
-    /// <returns>A read-only list of paths for files that were identified as missing or ignored.</returns>
+    /// <inheritdoc/>
     public async Task<IReadOnlyList<string>> PurgeMissingFilesAsync(bool dryRun = false)
     {
         const string TaskName = ShokoRelayConstants.TaskShokoPurgeMissing;
@@ -79,7 +76,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
             var ignoredNames = VfsShared.GetIgnoredFolderNames(Settings);
 
             // A file is considered "missing" if it doesn't exist on disk OR if its path is now blocked by Relay ignore rules.
-            var toDelete = all.Where(f => !File.Exists(f.Path) || VfsShared.IsPathIgnored(f.Path, videoService, ignoredNames)).ToList();
+            var toDelete = all.Where(f => !File.Exists(f.Path) || VfsShared.IsPathIgnored(f.Path, videoService, Settings, ignoredNames)).ToList();
 
             if (!dryRun && toDelete.Count > 0)
             {

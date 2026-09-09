@@ -268,14 +268,14 @@ internal static class VfsShared
     /// <summary>Determines if any segment of a path or the file itself should be ignored based on current settings.</summary>
     /// <param name="path">The absolute or relative path to evaluate.</param>
     /// <param name="videoService">Shoko video service to check for valid extensions when validating inline extras.</param>
+    /// <param name="settings">The current relay configuration.</param>
     /// <param name="ignoredNames">Optional pre-computed set of ignored folder names for performance.</param>
     /// <returns>True if any segment of the path or the filename matches an ignore rule.</returns>
-    public static bool IsPathIgnored(string path, IVideoService videoService, HashSet<string>? ignoredNames = null)
+    public static bool IsPathIgnored(string path, IVideoService videoService, RelayConfig settings, HashSet<string>? ignoredNames = null)
     {
         if (string.IsNullOrEmpty(path))
             return false;
 
-        var settings = Settings;
         var plexLocalExtras = settings.Advanced.PlexLocalExtras;
         var names = ignoredNames ?? GetIgnoredFolderNames(settings);
         var alternateLookup = names.GetAlternateLookup<ReadOnlySpan<char>>();
@@ -367,17 +367,3 @@ internal static class VfsShared
 
     #endregion
 }
-
-#region VFS Ignore Rule
-
-/// <summary>Automatically ignores Shoko Relay's internal VFS and local asset directories during Shoko's import scans.</summary>
-public class VfsIgnoreRule(IVideoService videoService) : IManagedFolderIgnoreRule
-{
-    /// <inheritdoc/>
-    public string Name => "Shoko Relay Ignore Rule";
-
-    /// <inheritdoc/>
-    public bool ShouldIgnore(IManagedFolder folder, FileSystemInfo fileSystemInfo) => VfsShared.IsPathIgnored(fileSystemInfo.FullName, videoService);
-}
-
-#endregion
