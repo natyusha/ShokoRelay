@@ -117,6 +117,9 @@
   width: 112px;
   font-size: 0.8em;
 }
+.subtitle-rule-row {
+  position: relative;
+}
 .subtitle-rule-row input {
   margin: 0;
   width: 100%;
@@ -131,14 +134,25 @@
   opacity: 0.5;
   cursor: default;
 }
-.subtitle-rule-dragging {
+.subtitle-rule-dragging > * {
   opacity: 0.5;
 }
-.subtitle-rule-drop-before {
-  box-shadow: 0 -3px var(--highlight-color);
+.subtitle-rule-drop-before::before,
+.subtitle-rule-drop-after::after {
+  position: absolute;
+  right: 0;
+  left: 0;
+  background: var(--highlight-color);
+  height: 3px;
+  pointer-events: none;
+  content: "";
 }
-.subtitle-rule-drop-after {
-  box-shadow: 0 3px var(--highlight-color);
+/* Center the 3px marker in the 8px gap between rows. */
+.subtitle-rule-drop-before::before {
+  top: -5.5px;
+}
+.subtitle-rule-drop-after::after {
+  bottom: -5.5px;
 }
 .subtitle-rule-actions {
   display: flex;
