@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using System.Net;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Shoko.Abstractions.Core.Services;
@@ -33,7 +34,7 @@ public class ServiceRegistration : IPluginServiceRegistration
                 {
                     UseCookies = true,
                     AllowAutoRedirect = true,
-                    AutomaticDecompression = System.Net.DecompressionMethods.All,
+                    AutomaticDecompression = DecompressionMethods.All,
                     PooledConnectionLifetime = TimeSpan.FromMinutes(2),
                 }
             );

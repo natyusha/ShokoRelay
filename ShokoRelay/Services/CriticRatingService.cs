@@ -183,14 +183,11 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
 
                 pE++;
                 // Resolve the critic rating for a movie based on user configuration
+                var tmdbCandidate = episode.TmdbMovies?.FirstOrDefault() ?? episode.Series?.TmdbMovies?.FirstOrDefault();
                 double? rating = Settings.CriticRatingMode switch
                 {
-                    CriticRatingMode.TMDB => (episode.TmdbMovies?.FirstOrDefault() ?? episode.Series?.TmdbMovies?.FirstOrDefault())?.Rating > 0
-                        ? (episode.TmdbMovies?.FirstOrDefault() ?? episode.Series?.TmdbMovies?.FirstOrDefault())!.Rating
-                        : (episode.TmdbEpisodes?.FirstOrDefault()?.Rating > 0 ? episode.TmdbEpisodes.First().Rating : null),
-                    CriticRatingMode.AniDB => episode.Rating > 0 ? episode.Rating
-                    : episode.Series?.Rating > 0 ? episode.Series.Rating
-                    : null,
+                    CriticRatingMode.TMDB => tmdbCandidate?.Rating > 0 ? tmdbCandidate.Rating : (episode.TmdbEpisodes?.FirstOrDefault()?.Rating > 0 ? episode.TmdbEpisodes.First().Rating : null),
+                    CriticRatingMode.AniDB => episode.Rating > 0 ? episode.Rating : (episode.Series?.Rating > 0 ? episode.Series.Rating : null),
                     _ => null,
                 };
 

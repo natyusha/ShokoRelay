@@ -141,15 +141,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
             }
 
             // Filter to only parent-matching locations if any exist; otherwise fallback to broad scan
-            bool hasParentMatch = false;
-            foreach (var (target, guessedPath, isParentMatch) in potentialFallbacks)
-            {
-                if (isParentMatch)
-                {
-                    hasParentMatch = true;
-                    break;
-                }
-            }
+            bool hasParentMatch = potentialFallbacks.Any(f => f.IsParentMatch);
 
             foreach (var (tgt, guessedPath, isParentMatch) in potentialFallbacks)
             {

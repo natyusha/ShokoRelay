@@ -39,6 +39,15 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
     #region Setup
 
     private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
+
+    /// <summary>Static configurations for local series artwork types.</summary>
+    private static readonly (string[] Names, string Prefix, ImageEntityType Type, string Label)[] s_seriesImageConfigs =
+    [
+        (["poster", "folder", "show"], "s", ImageEntityType.Primary, "poster"),
+        (["art", "backdrop", "background", "fanart"], "b", ImageEntityType.Backdrop, "backdrop"),
+        (["clearlogo", "logo"], "l", ImageEntityType.Logo, "logo"),
+    ];
+
     private readonly SemaphoreSlim _syncLock = new(1, 1);
     private string CacheFilePath => Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FilePlexImagesCache);
 
@@ -410,20 +419,13 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
         CancellationToken ct
     )
     {
-        (string[] Names, string Prefix, ImageEntityType Type, string Label)[] configs =
-        [
-            (["poster", "folder", "show"], "s", ImageEntityType.Primary, "poster"),
-            (["art", "backdrop", "background", "fanart"], "b", ImageEntityType.Backdrop, "backdrop"),
-            (["clearlogo", "logo"], "l", ImageEntityType.Logo, "logo"),
-        ];
-
         await Parallel
             .ForEachAsync(
                 allSeries,
                 DefaultParallelOptions(ct),
                 async (series, token) =>
                 {
-                    foreach (var config in configs)
+                    foreach (var config in s_seriesImageConfigs)
                     {
                         var cacheKey = config.Prefix + series.ID;
                         if (OverrideHelper.GetPrimary(series.ID, metadataService) != series.ID)
@@ -682,14 +684,12 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
     {
         try
         {
-            foreach (var xref in entity.GetImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = imageType }).Where(predicate))
+            var filterOpts = new ImageCrossReferenceFilteringOptions { ImageType = imageType };
+            foreach (var xref in entity.GetImageCrossReferences(filterOpts).Where(predicate))
             {
                 imageManager.RemoveImageCrossReference(xref);
                 // Only purge the underlying image if no other entities are actively referencing it
-                if (
-                    imageManager.GetImageByID(xref.ImageID) is { } oldImg
-                    && !imageManager.GetAllImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = imageType }).Any(x => x.ImageID == oldImg.ID && x.ID != xref.ID)
-                )
+                if (imageManager.GetImageByID(xref.ImageID) is { } oldImg && !imageManager.GetAllImageCrossReferences(filterOpts).Any(x => x.ImageID == oldImg.ID && x.ID != xref.ID))
                     await imageManager.PurgeImage(oldImg).ConfigureAwait(false);
             }
         }

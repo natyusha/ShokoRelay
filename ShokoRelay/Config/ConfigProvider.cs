@@ -477,12 +477,11 @@ public class ConfigProvider
 
     /// <summary>Normalizes path mapping keys and values to ensure consistent cross-platform separator formatting.</summary>
     /// <param name="settings">The relay configuration instance to update.</param>
-    /// <returns>True if any path mappings were changed during normalization.</returns>
-    private bool NormalizePathMappings(RelayConfig settings)
+    private static void NormalizePathMappings(RelayConfig settings)
     {
         if (settings.Advanced.PathMappings.Count == 0)
-            return false;
-        var norm = settings.Advanced.PathMappings.ToDictionary(
+            return;
+        settings.Advanced.PathMappings = settings.Advanced.PathMappings.ToDictionary(
             k =>
             {
                 string n = k.Key.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar).Trim();
@@ -497,37 +496,21 @@ public class ConfigProvider
             },
             v => (TextHelper.NormalizePathForPlex(v.Value.Trim()) is var p && !p.StartsWith('/') && !p.Contains(':') && !p.StartsWith("//", StringComparison.Ordinal)) ? "/" + p : p
         );
-        if (settings.Advanced.PathMappings.Count == norm.Count && settings.Advanced.PathMappings.SequenceEqual(norm))
-            return false;
-        settings.Advanced.PathMappings = norm;
-        return true;
     }
 
     /// <summary>Normalizes comma-separated and newline-separated settings fields by trimming and removing duplicates.</summary>
     /// <param name="s">The relay configuration instance to normalize.</param>
-    /// <returns>True if any fields were modified during normalization.</returns>
-    private bool NormalizeCsvFields(RelayConfig s)
+    private static void NormalizeCsvFields(RelayConfig s)
     {
         static string Norm(string? r, char separator) =>
             string.Join(separator + " ", (r ?? "").Split(separator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase));
 
-        var (nt, ne) = (Norm(s.TagBlacklist, ','), Norm(s.Automation.ExtraPlexUsers, ','));
-        bool c = s.TagBlacklist != nt || s.Automation.ExtraPlexUsers != ne;
-        s.TagBlacklist = nt;
-        s.Automation.ExtraPlexUsers = ne;
-
-        // Normalize Path Exclusions (Newline separated)
-        var nex = string.Join(
+        s.TagBlacklist = Norm(s.TagBlacklist, ',');
+        s.Automation.ExtraPlexUsers = Norm(s.Automation.ExtraPlexUsers, ',');
+        s.Advanced.FolderExclusions = string.Join(
             Environment.NewLine,
             (s.Advanced.FolderExclusions ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(VfsShared.NormalizeSeparators).Distinct(VfsShared.PathComparer)
         );
-
-        if (s.Advanced.FolderExclusions != nex)
-        {
-            s.Advanced.FolderExclusions = nex;
-            c = true;
-        }
-        return c;
     }
 
     /// <summary>Applies default values to string properties on an object hierarchy where [DefaultValue] attributes exist.</summary>

@@ -53,7 +53,6 @@ public static class PlexMapping
         if (e == null)
             return new PlexCoords { Season = PlexConstants.SeasonStandard, Episode = 1 };
         string? showPrefId = seriesPreferredOrderingId;
-        PlexCoords result;
 
         if (EnforceTmdbNumbering && e is IShokoEpisode shokoEpisode && shokoEpisode.TmdbEpisodes != null && shokoEpisode.TmdbEpisodes.Any())
         {
@@ -73,42 +72,27 @@ public static class PlexMapping
                         if (lastSeason == season)
                             endEp = lastEpisode;
                     }
-                    result = new PlexCoords
+                    return new PlexCoords
                     {
                         Season = season.Value,
                         Episode = episode,
                         EndEpisode = endEp,
                     };
-                    return result;
                 }
             }
         }
 
-        int epNum = e.EpisodeNumber;
-
-        // Resolve the season number for an episode, falling back to Plex extra season constants for non-standard episodes
-        int seasonNum =
-            e.SeasonNumber
-            ?? e.Type switch
-            {
-                EpisodeType.Episode => PlexConstants.SeasonStandard,
-                EpisodeType.Special => PlexConstants.SeasonSpecials,
-                EpisodeType.Credits => PlexConstants.SeasonCredits,
-                EpisodeType.Trailer => PlexConstants.SeasonTrailers,
-                EpisodeType.Parody => PlexConstants.SeasonParody,
-                EpisodeType.Other => PlexConstants.SeasonOther,
-                _ => PlexConstants.SeasonUnknown,
-            };
-
-        result = e.Type switch
+        // Resolve season coordinate, falling back to Plex extra season constants for non-standard episodes
+        int seasonNum = e.Type switch
         {
-            EpisodeType.Other => new PlexCoords { Season = PlexConstants.SeasonOther, Episode = epNum },
-            EpisodeType.Credits => new PlexCoords { Season = PlexConstants.SeasonCredits, Episode = epNum },
-            EpisodeType.Trailer => new PlexCoords { Season = PlexConstants.SeasonTrailers, Episode = epNum },
-            EpisodeType.Parody => new PlexCoords { Season = PlexConstants.SeasonParody, Episode = epNum },
-            _ => new PlexCoords { Season = seasonNum, Episode = epNum },
+            EpisodeType.Other => PlexConstants.SeasonOther,
+            EpisodeType.Credits => PlexConstants.SeasonCredits,
+            EpisodeType.Trailer => PlexConstants.SeasonTrailers,
+            EpisodeType.Parody => PlexConstants.SeasonParody,
+            _ => e.SeasonNumber ?? (e.Type == EpisodeType.Special ? PlexConstants.SeasonSpecials : PlexConstants.SeasonStandard),
         };
-        return result;
+
+        return new PlexCoords { Season = seasonNum, Episode = e.EpisodeNumber };
     }
 
     /// <summary>Determine Plex coordinates for episodes sharing a file.</summary>
@@ -117,7 +101,7 @@ public static class PlexMapping
     public static PlexCoords GetPlexCoordinatesForFile(IEnumerable<IEpisode> episodes)
     {
         var eps = (episodes ?? []).ToList();
-        if (!eps.Any())
+        if (eps.Count == 0)
             return new PlexCoords
             {
                 Season = 1,
@@ -153,8 +137,8 @@ public static class PlexMapping
         }
         if (eps.Count == 1)
             return GetPlexCoordinates(eps[0]);
-        var start = GetPlexCoordinates(eps.First());
-        var end = GetPlexCoordinates(eps.Last());
+        var start = GetPlexCoordinates(eps[0]);
+        var end = GetPlexCoordinates(eps[^1]);
         int? endEpisodeFinal = start.Season == end.Season ? end.Episode : null;
         return new PlexCoords
         {
