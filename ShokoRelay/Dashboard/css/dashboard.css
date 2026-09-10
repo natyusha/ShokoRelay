@@ -104,6 +104,61 @@
 
 /* #region MARK: Dashboard Modals
 */
+/* Ordered subtitle suffix mappings */
+.subtitle-rule-head,
+.subtitle-rule-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.subtitle-rule-head > :last-child {
+  width: 112px;
+  font-size: 0.8em;
+}
+.subtitle-rule-row input {
+  margin: 0;
+  width: 100%;
+  min-width: 0;
+}
+.subtitle-rule-actions {
+  display: flex;
+}
+.subtitle-rule-actions button {
+  padding: 0;
+  width: 38px;
+}
+.subtitle-rules button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.subtitle-rule-retry[hidden] {
+  display: none;
+}
+.subtitle-rule-row input[aria-invalid="true"] {
+  border-color: var(--danger-color);
+}
+.subtitle-rule-status {
+  display: block;
+  margin: 8px 0;
+}
+.subtitle-preview-results {
+  max-height: 350px;
+  overflow: auto;
+}
+.subtitle-preview-results table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85em;
+}
+.subtitle-preview-results th,
+.subtitle-preview-results td {
+  border-bottom: 1px solid var(--border-color);
+  padding: 6px;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
 .modal textarea {
   margin: 0;
   border-radius: 0;

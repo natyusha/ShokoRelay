@@ -93,7 +93,14 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
         if (config == null)
             return BadRequest(new { status = "error", message = "Config payload is required." });
         Logger.Info("Dashboard: Saving updated provider settings...");
-        ConfigProvider.SaveSettings(config);
+        try
+        {
+            ConfigProvider.SaveSettings(config);
+        }
+        catch (ValidationException ex)
+        {
+            return BadRequest(new { status = "error", message = ex.Message });
+        }
         return Ok(new { status = "ok" });
     }
 
@@ -321,6 +328,8 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
                 props.Add(new ConfigPropertySchema(path, "string", display?.Name, display?.Description, defaultValue, null, isAdvanced, needsRebuild));
             else if (propType.IsPrimitive || propType == typeof(decimal))
                 props.Add(new ConfigPropertySchema(path, "number", display?.Name, display?.Description, defaultValue, null, isAdvanced, needsRebuild));
+            else if (propType == typeof(List<SubtitleRenameRule>))
+                props.Add(new ConfigPropertySchema(path, "subtitleRules", display?.Name, display?.Description, defaultValue, null, isAdvanced, needsRebuild));
             else if (typeof(IDictionary).IsAssignableFrom(propType))
                 props.Add(new ConfigPropertySchema(path, "json", display?.Name, display?.Description, defaultValue, null, isAdvanced, needsRebuild));
             else if (propType.IsClass)

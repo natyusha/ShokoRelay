@@ -302,6 +302,37 @@ Shoko Relay has full support for all of Plex's features which involve local meta
   - _Requires the `Plex NFO Series` provider to be added to the Shoko Relay Agent in Plex_
 - Be sure to read each of the above Plex articles if you need help figuring out the format for any of the local metadata
 
+### Subtitle Suffix Rules
+
+Under `Provider Settings > Advanced Settings > Subtitle Suffix Rules`, add an original suffix and a final suffix on each row. The suffix is the complete text between the video basename and the subtitle extension, without the surrounding dots. Matching is literal and case-insensitive. There are no preset rules.
+
+For example, enter these rows in this order:
+
+| Original suffix | Final suffix |
+| :-------------- | :----------- |
+| scjp            | zh-Hans      |
+| scjp            | ja           |
+| chs             | zh-Hans      |
+| cht             | zh-Hant      |
+
+If an episode has both `.scjp.ass` and `.chs.ass`, its VFS subtitles will be `.zh-Hans.ass` and `.ja.ass`, both linking to the original `.scjp.ass`. If it also has `.cht.ass`, a third link, `.zh-Hant.ass`, is generated. Original subtitle files are never renamed, modified, or duplicated on disk.
+
+Selection happens separately for each final suffix:
+
+1. An original subtitle already using the final suffix wins automatically.
+2. Otherwise, the first matching row supplies the subtitle. Move rows up or down to change priority.
+3. For the chosen source suffix, one format is selected in this order: ASS, SSA, SRT, VTT, SMI. Format preference never overrides the first two steps.
+
+Subtitles without a suffix, subtitles unrelated to the configured rules, and other sidecars retain their existing names after the normal VFS video-basename change. Matched sources that lose priority are omitted from the VFS. Conversions always read original filenames; generated suffixes are never processed as new inputs.
+
+Case-only duplicates with the same extension, such as `.SCJP.ass` and `.scjp.ass`, are all linked with their original suffix spelling and excluded from conversion. Other formats of that ambiguous source suffix are also preserved. Lower-priority unambiguous sources can still supply conversions. If the ambiguous suffix is itself a final suffix, its existing variants are preserved and no conversion replaces them.
+
+Compound suffixes require explicit rows: `chs` does not match `chs.forced`; use `chs.forced` → `zh-Hans.forced` to convert that filename. These are filename mappings, so the final suffix need not be a language code. Plex recognition still depends on the filename conventions supported by the server and client.
+
+Like the other inline settings, valid rule edits save automatically when you leave a field. Reordering or removing rows saves immediately. Incomplete or invalid edits remain in the editor without replacing the saved rules; complete or remove those rows to save the changes. Failed saves show a retry control and retain your edits.
+
+Use **Preview a series** with a Shoko series ID to inspect the current sidecars using the rules in the editor. It shows output suffixes and the reason each source was selected or omitted, without writing VFS links. Refresh the VFS after the rules have saved to apply the changes. Remove all rows and refresh to restore the original suffixes. Subtitle files added separately from their video may need a manual VFS refresh.
+
 ### VFS Mapping
 
 > [!IMPORTANT]
@@ -502,6 +533,10 @@ Due to this plugin relying on Plex's metadata provider feature (which is still u
 
 - Collections for TV Show libraries (currently implemented via Plex's HTTP API)
 - Custom or generic rating icons
+
+## Development
+
+See [Testing](./Docs/Testing.md) for the focused subtitle tests, local checks, and CI workflow.
 
 ## TODO
 

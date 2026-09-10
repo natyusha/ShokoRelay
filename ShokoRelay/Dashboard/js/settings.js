@@ -79,6 +79,217 @@
   };
   // #endregion
 
+  // #region Subtitle Rules
+  /**
+   * Builds an ordered two-column editor that automatically saves valid changes and previews a series' sidecars.
+   * @param {HTMLElement} wrap - Setting container.
+   * @param {Object} property - Server configuration schema entry.
+   * @param {Object} config - Shared saved configuration.
+   * @returns {void}
+   */
+  function buildSubtitleRules(wrap, property, config) {
+    const path = property.Path;
+    const rules = (getValueByPath(config, path) || []).map((rule) => ({ ...rule }));
+    let savedRules = rules.map((rule) => ({ ...rule }));
+    wrap.classList.add("subtitle-rules");
+    wrap.innerHTML = `<label><span>${property.Display}</span><small>${property.Description}</small></label>
+      <div class="subtitle-rule-head"><span>Original suffix</span><span>Final suffix</span><span>Order / Remove</span></div>
+      <div class="subtitle-rule-list"></div>
+      <div class="full"><button type="button" class="subtitle-rule-add">Add rule</button><button type="button" class="subtitle-rule-retry" hidden>Retry saving</button></div>
+      <small>Enter suffixes without surrounding dots, for example chs → zh-Hans. Valid changes save automatically when you leave a field; reordering and removal save immediately.</small>
+      <small class="subtitle-rule-status" role="status"></small>
+      <details><summary>Preview a series</summary>
+        <p>Inspect these rules on a Shoko series before refreshing the VFS. The preview shows the suffix after the VFS video name.</p>
+        <div class="full"><input type="number" min="1" max="2147483647" step="1" placeholder="Shoko series ID" aria-label="Shoko series ID"><button type="button" class="subtitle-rule-preview">Preview</button></div>
+        <div class="subtitle-preview-results" aria-live="polite"></div>
+      </details>`;
+    const list = wrap.querySelector(".subtitle-rule-list");
+    const retry = wrap.querySelector(".subtitle-rule-retry");
+    const status = wrap.querySelector(".subtitle-rule-status");
+    const preview = wrap.querySelector(".subtitle-rule-preview");
+    const results = wrap.querySelector(".subtitle-preview-results");
+    const seriesInput = wrap.querySelector('input[type="number"]');
+    let revision = 0;
+    let editRevision = 0;
+    let saveRevision = 0;
+
+    seriesInput.oninput = () => {
+      revision++;
+      results.replaceChildren();
+    };
+
+    const changed = () => {
+      revision++;
+      editRevision++;
+      retry.hidden = true;
+      status.textContent = "Finish editing both suffixes, then leave the field to save automatically.";
+      results.replaceChildren();
+    };
+
+    const render = () => {
+      list.replaceChildren();
+      if (!rules.length) {
+        const empty = document.createElement("p");
+        empty.className = "placeholder";
+        empty.textContent = "No rules. Subtitle names will be kept.";
+        list.appendChild(empty);
+      }
+      rules.forEach((rule, index) => {
+        const row = document.createElement("div");
+        row.className = "subtitle-rule-row";
+        ["OriginalSuffix", "FinalSuffix"].forEach((key) => {
+          const input = document.createElement("input");
+          input.type = "text";
+          input.placeholder = key === "OriginalSuffix" ? "Original suffix" : "Final suffix";
+          input.setAttribute("aria-label", `${input.placeholder}, rule ${index + 1}`);
+          input.autocomplete = "off";
+          input.spellcheck = false;
+          bindConfig(input, key, rule, persistRules);
+          input.oninput = () => {
+            rule[key] = input.value;
+            input.setCustomValidity("");
+            input.removeAttribute("aria-invalid");
+            changed();
+          };
+          row.appendChild(input);
+        });
+        const actions = document.createElement("div");
+        actions.className = "subtitle-rule-actions";
+        [
+          ["↑", "Move up", -1],
+          ["↓", "Move down", 1],
+          ["×", "Remove", 0],
+        ].forEach(([text, label, direction]) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.textContent = text;
+          button.setAttribute("aria-label", `${label}, rule ${index + 1}`);
+          button.title = `${label}, rule ${index + 1}`;
+          button.disabled = (direction === -1 && index === 0) || (direction === 1 && index === rules.length - 1);
+          button.onclick = () => {
+            if (direction) [rules[index], rules[index + direction]] = [rules[index + direction], rules[index]];
+            else rules.splice(index, 1);
+            changed();
+            render();
+            list.querySelectorAll(".subtitle-rule-row")[Math.min(index + direction, rules.length - 1)]?.querySelector("input")?.focus();
+            void persistRules();
+          };
+          actions.appendChild(button);
+        });
+        row.appendChild(actions);
+        list.appendChild(row);
+      });
+    };
+
+    const readRules = (report = false) => {
+      const normalized = [];
+      for (const [index, rule] of rules.entries()) {
+        const original = rule.OriginalSuffix.trim();
+        const final = rule.FinalSuffix.trim();
+        if (!original && !final) continue;
+        for (const [column, value] of [original, final].entries()) {
+          if (!value || value.startsWith(".") || value.endsWith(".") || /[<>:"/\\|?*\u0000-\u001f\u007f-\u009f]/.test(value)) {
+            const input = list.querySelectorAll(".subtitle-rule-row")[index].querySelectorAll("input")[column];
+            const message = value ? "Use suffixes without surrounding dots, path separators, or invalid filename characters." : "Complete both suffixes.";
+            input.setCustomValidity(message);
+            input.setAttribute("aria-invalid", "true");
+            status.textContent = `Rule ${index + 1}: ${message} These edits have not been saved.`;
+            if (report) input.reportValidity();
+            return null;
+          }
+        }
+        normalized.push({ OriginalSuffix: original, FinalSuffix: final });
+      }
+      return normalized;
+    };
+
+    wrap.querySelector(".subtitle-rule-add").onclick = () => {
+      rules.push({ OriginalSuffix: "", FinalSuffix: "" });
+      changed();
+      render();
+      list.lastElementChild.querySelector("input").focus();
+    };
+    const persistRules = async () => {
+      const normalized = readRules();
+      if (!normalized) return;
+      const serialized = JSON.stringify(normalized);
+      if (serialized === JSON.stringify(getValueByPath(config, path) || [])) {
+        status.textContent = serialized === JSON.stringify(savedRules) ? "Rules saved. Refresh the VFS to apply changes." : "Saving rules…";
+        return;
+      }
+      const requestedEdit = editRevision;
+      const requestedSave = ++saveRevision;
+      status.textContent = "Saving rules…";
+      retry.hidden = true;
+      setValueByPath(config, path, normalized);
+      try {
+        const res = await saveSettings(config);
+        if (res.ok) {
+          savedRules = normalized;
+          if (requestedEdit === editRevision) status.textContent = "Rules saved. Refresh the VFS to apply changes.";
+        } else if (requestedSave === saveRevision) saveFailed();
+      } catch {
+        if (requestedSave === saveRevision) saveFailed();
+      }
+
+      function saveFailed() {
+        setValueByPath(config, path, savedRules);
+        status.textContent = "Could not save rules. Your edits are kept here; retry saving.";
+        retry.hidden = false;
+      }
+    };
+    retry.onclick = () => void persistRules();
+    preview.onclick = async () => {
+      const normalized = readRules(true);
+      if (!normalized) return;
+      if (!seriesInput.value || !seriesInput.reportValidity()) {
+        seriesInput.focus();
+        return;
+      }
+      const requestedRevision = revision;
+      preview.disabled = true;
+      results.textContent = "Reading subtitles…";
+      try {
+        const res = await fetchJson(window._sr.base + "/vfs/subtitles/preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ SeriesId: Number(seriesInput.value), Rules: normalized }),
+        });
+        if (requestedRevision !== revision) return;
+        results.replaceChildren();
+        if (!res.ok) {
+          results.textContent = res.data?.message || "Unable to preview this series.";
+          return;
+        }
+        const files = res.data.files || [];
+        const summary = document.createElement("p");
+        summary.textContent = files.length ? `${files.filter((file) => file.suffix).length} subtitle links planned. Sources are unchanged.` : "No eligible subtitles found for this series.";
+        results.appendChild(summary);
+        if (files.length) {
+          const table = document.createElement("table");
+          table.innerHTML = "<thead><tr><th>Source subtitle</th><th>VFS suffix</th><th>Selection</th></tr></thead>";
+          const body = table.createTBody();
+          files.forEach((file) => {
+            const row = body.insertRow();
+            [file.source, file.suffix || "—", file.reason].forEach((text) => {
+              row.insertCell().textContent = text;
+            });
+          });
+          results.appendChild(table);
+        }
+        (res.data.errors || []).forEach((error) => {
+          const message = document.createElement("p");
+          message.textContent = error;
+          results.appendChild(message);
+        });
+      } finally {
+        preview.disabled = false;
+      }
+    };
+    render();
+  }
+  // #endregion
+
   // #region Form Generation
   /**
    * Builds the configuration settings form dynamically based on the server schema.
@@ -111,7 +322,9 @@
       const value = getValueByPath(config, p.Path);
       let input;
 
-      if (p.Path.endsWith("SelectedTheme")) {
+      if (p.Type === "subtitleRules") {
+        buildSubtitleRules(wrap, p, config);
+      } else if (p.Path.endsWith("SelectedTheme")) {
         label.innerHTML = `<span>${p.Display || p.Path.split(".").pop()}</span>${p.Description ? `<small>${p.Description}</small>` : ""}`;
         wrap.appendChild(label);
         input = document.createElement("select");

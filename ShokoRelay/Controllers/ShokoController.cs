@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
@@ -32,6 +34,79 @@ public class ShokoController(
 ) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
 {
     #region Virtual File System
+
+    /// <summary>Draft rules and the series whose physical sidecars should be previewed.</summary>
+    /// <param name="SeriesId">Shoko series ID.</param>
+    /// <param name="Rules">Rules in priority order; they are not saved by the preview.</param>
+    public sealed record SubtitlePreviewRequest([Range(1, int.MaxValue)] int SeriesId, List<SubtitleRenameRule>? Rules);
+
+    /// <summary>Previews subtitle suffix selection without building the VFS or modifying configuration or caches on disk.</summary>
+    /// <param name="request">Series and draft rules to inspect.</param>
+    /// <param name="cancellationToken">Request cancellation token.</param>
+    /// <returns>Source filenames, proposed suffixes, and selection explanations.</returns>
+    [HttpPost("vfs/subtitles/preview")]
+    public IActionResult PreviewSubtitleRules([FromBody] SubtitlePreviewRequest request, CancellationToken cancellationToken)
+    {
+        List<SubtitleRenameRule> rules;
+        try
+        {
+            rules = SubtitleRenameRule.Normalize(request.Rules);
+        }
+        catch (ValidationException ex)
+        {
+            return BadRequest(new { status = "error", message = ex.Message });
+        }
+        var series = MetadataService.GetShokoSeriesByID(request.SeriesId);
+        if (series == null)
+            return NotFound(new { status = "error", message = "Shoko series not found." });
+
+        var settings = Settings;
+        var fileData = EnforceTmdbNumbering ? MapHelper.GetConsolidatedSeriesFileData(series, MetadataService) : MapHelper.GetSeriesFileData(series, MetadataService);
+        var (doTv, doMovie) = MapHelper.GetGenerationModes(MapHelper.IsMovie(series), settings.Advanced.MovieGenerationMode);
+        var cache = new ConcurrentDictionary<string, Lazy<string[]>>(VfsShared.PathComparer);
+        var visited = new HashSet<string>(VfsShared.PathComparer);
+        var ignored = VfsShared.GetIgnoredFolderNames(settings);
+        var results = new List<EpisodeSidecarLink>();
+        var errors = new List<string>();
+        foreach (var mapping in fileData.Mappings)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            bool hasMovieSidecars = doMovie && mapping.PrimaryEpisode.Type == EpisodeType.Episode;
+            if (!hasMovieSidecars && (!doTv || !VfsShared.CanLinkTvSidecars(mapping.Video, MetadataService)))
+                continue;
+            var location = VfsShared.ResolveVideoLocation(mapping.Video);
+            if (location is not { } loc || !visited.Add(loc.Src) || VfsShared.IsPathIgnored(loc.Src, videoService, settings, ignored))
+                continue;
+            try
+            {
+                var candidates = VfsAssetLinker.GetEpisodeMetadataCandidates(Path.GetDirectoryName(loc.Src)!, cache);
+                var available = SubtitleRenamer
+                    .Plan(loc.Src, "", candidates, [])
+                    .Where(l => PlexConstants.LocalMediaAssets.SubtitleExtensions.Contains(Path.GetExtension(l.Source), StringComparer.OrdinalIgnoreCase))
+                    .ToList();
+                var selected = SubtitleRenamer.Plan(loc.Src, "", available.Select(l => l.Source), rules);
+                results.AddRange(selected);
+                var selectedSources = selected.Select(l => l.Source).ToHashSet(StringComparer.Ordinal);
+                results.AddRange(available.Where(l => !selectedSources.Contains(l.Source)).Select(l => l with { Name = "", Reason = "Lower priority source or format; omitted" }));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                errors.Add($"Unable to read subtitles for {Path.GetFileName(loc.Src)}: {ex.Message}");
+            }
+        }
+        return Ok(
+            new
+            {
+                files = results.Select(l => new
+                {
+                    source = Path.GetFileName(l.Source),
+                    suffix = l.Name,
+                    reason = l.Reason,
+                }),
+                errors,
+            }
+        );
+    }
 
     /// <summary>Builds the VFS symlink tree for configured managed folders.</summary>
     /// <param name="clean">Whether to clear the existing root.</param>

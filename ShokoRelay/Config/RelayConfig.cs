@@ -383,6 +383,14 @@ public class AdvancedConfig
     [Display(Name = "Path Mappings", Description = "Mappings for working base paths to Shoko base paths. Enter one mapping per line")]
     public Dictionary<string, string> PathMappings { get; set; } = [];
 
+    /// <summary>Ordered literal suffix mappings applied to external subtitles in the VFS.</summary>
+    [Display(
+        Name = "Subtitle Suffix Rules",
+        Description = "Existing final suffixes take priority, then the first matching row. Repeat an original suffix to create multiple VFS links. Empty rules keep existing names"
+    )]
+    [VfsRebuild]
+    public List<SubtitleRenameRule> SubtitleRenameRules { get; set; } = [];
+
     /// <summary>Folders to ignore when generating the VFS.</summary>
     [Display(Name = "Folder Exclusions", Description = "Folders within Shoko destinations which you do not want VFS generation to consider. One per line")]
     [DefaultValue("")]

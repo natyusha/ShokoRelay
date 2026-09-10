@@ -199,6 +199,15 @@ public class ConfigProvider
             NormalizePathMappings(s);
             NormalizeCsvFields(s);
             NormalizeSettings(s);
+            try
+            {
+                s.Advanced.SubtitleRenameRules = SubtitleRenameRule.Normalize(s.Advanced.SubtitleRenameRules);
+            }
+            catch (ValidationException ex)
+            {
+                s_logger.Warn(ex, "Config: Invalid subtitle rules -> Keeping original subtitle names");
+                s.Advanced.SubtitleRenameRules = [];
+            }
             return _settings = s;
         }
     }
@@ -283,6 +292,7 @@ public class ConfigProvider
     /// <param name="settings">The <see cref="RelayConfig"/> instance to save.</param>
     public void SaveSettings(RelayConfig settings)
     {
+        settings.Advanced.SubtitleRenameRules = SubtitleRenameRule.Normalize(settings.Advanced.SubtitleRenameRules);
         ApplyDefaultValues(settings);
         NormalizeVfsRoots(settings);
         if (!Validator.TryValidateObject(settings, new ValidationContext(settings), null, true))
@@ -538,7 +548,7 @@ public class ConfigProvider
         {
             if (p.PropertyType == typeof(string) && string.IsNullOrWhiteSpace(p.GetValue(obj) as string) && p.GetCustomAttribute<DefaultValueAttribute>() is { } d)
                 p.SetValue(obj, d.Value);
-            else if (p.PropertyType.IsClass && p.PropertyType != typeof(string) && !typeof(IDictionary).IsAssignableFrom(p.PropertyType))
+            else if (p.PropertyType.IsClass && p.PropertyType != typeof(string) && !typeof(IEnumerable).IsAssignableFrom(p.PropertyType))
                 ApplyDefaultValues(p.GetValue(obj)!);
         }
     }
