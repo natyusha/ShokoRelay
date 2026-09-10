@@ -93,10 +93,10 @@
     let savedRules = rules.map((rule) => ({ ...rule }));
     wrap.classList.add("subtitle-rules");
     wrap.innerHTML = `<label><span>${property.Display}</span><small>${property.Description}</small></label>
-      <div class="subtitle-rule-head"><span>Original suffix</span><span>Final suffix</span><span>Order / Remove</span></div>
+      <div class="subtitle-rule-head"><span></span><span>Original suffix</span><span>Final suffix</span><span>Order / Remove</span></div>
       <div class="subtitle-rule-list"></div>
       <div class="full"><button type="button" class="subtitle-rule-add">Add rule</button><button type="button" class="subtitle-rule-retry" hidden>Retry saving</button></div>
-      <small>Enter suffixes without surrounding dots, for example chs → zh-Hans. Valid changes save automatically when you leave a field; reordering and removal save immediately.</small>
+      <small>Enter suffixes without surrounding dots, for example chs → zh-Hans. Drag the three-line handle or use ↑ / ↓ to reorder. Valid changes save automatically when you leave a field; reordering and removal save immediately.</small>
       <small class="subtitle-rule-status" role="status"></small>
       <details><summary>Preview a series</summary>
         <p>Inspect these rules on a Shoko series before refreshing the VFS. The preview shows the suffix after the VFS video name.</p>
@@ -126,6 +126,53 @@
       results.replaceChildren();
     };
 
+    const updateRules = (index) => {
+      changed();
+      render();
+      list.querySelectorAll(".subtitle-rule-row")[index]?.querySelector("input")?.focus();
+      void persistRules();
+    };
+    const moveRule = (from, to) => {
+      if (from === to) return;
+      rules.splice(to, 0, rules.splice(from, 1)[0]);
+      updateRules(to);
+    };
+
+    let draggedIndex = null;
+    let dropIndex = null;
+    const clearDropTarget = () => {
+      list.querySelectorAll(".subtitle-rule-row").forEach((row) => row.classList.remove("subtitle-rule-drop-before", "subtitle-rule-drop-after"));
+      dropIndex = null;
+    };
+    const endDrag = () => {
+      clearDropTarget();
+      list.querySelector(".subtitle-rule-dragging")?.classList.remove("subtitle-rule-dragging");
+      draggedIndex = null;
+    };
+    list.ondragover = (event) => {
+      if (draggedIndex === null) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      const row = event.target.closest(".subtitle-rule-row");
+      if (!row) return;
+      clearDropTarget();
+      const bounds = row.getBoundingClientRect();
+      const after = event.clientY > bounds.top + bounds.height / 2;
+      dropIndex = Array.from(list.children).indexOf(row) + (after ? 1 : 0);
+      row.classList.add(after ? "subtitle-rule-drop-after" : "subtitle-rule-drop-before");
+    };
+    list.ondragleave = (event) => {
+      if (!list.contains(event.relatedTarget)) clearDropTarget();
+    };
+    list.ondrop = (event) => {
+      if (draggedIndex === null) return;
+      event.preventDefault();
+      const from = draggedIndex;
+      const to = dropIndex;
+      endDrag();
+      if (to !== null) moveRule(from, to > from ? to - 1 : to);
+    };
+
     const render = () => {
       list.replaceChildren();
       if (!rules.length) {
@@ -137,6 +184,21 @@
       rules.forEach((rule, index) => {
         const row = document.createElement("div");
         row.className = "subtitle-rule-row";
+        const handle = document.createElement("span");
+        handle.className = "subtitle-rule-handle";
+        handle.draggable = rules.length > 1;
+        handle.title = "Drag to reorder, or use the Move up and Move down buttons";
+        handle.setAttribute("aria-hidden", "true");
+        handle.innerHTML = '<svg class="icon-svg"><use href="img/icons.svg#drag-horizontal"></use></svg>';
+        handle.ondragstart = (event) => {
+          draggedIndex = index;
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("text/plain", "");
+          event.dataTransfer.setDragImage(row, 0, row.offsetHeight / 2);
+          row.classList.add("subtitle-rule-dragging");
+        };
+        handle.ondragend = endDrag;
+        row.appendChild(handle);
         ["OriginalSuffix", "FinalSuffix"].forEach((key) => {
           const input = document.createElement("input");
           input.type = "text";
@@ -167,12 +229,11 @@
           button.title = `${label}, rule ${index + 1}`;
           button.disabled = (direction === -1 && index === 0) || (direction === 1 && index === rules.length - 1);
           button.onclick = () => {
-            if (direction) [rules[index], rules[index + direction]] = [rules[index + direction], rules[index]];
-            else rules.splice(index, 1);
-            changed();
-            render();
-            list.querySelectorAll(".subtitle-rule-row")[Math.min(index + direction, rules.length - 1)]?.querySelector("input")?.focus();
-            void persistRules();
+            if (direction) moveRule(index, index + direction);
+            else {
+              rules.splice(index, 1);
+              updateRules(Math.min(index, rules.length - 1));
+            }
           };
           actions.appendChild(button);
         });

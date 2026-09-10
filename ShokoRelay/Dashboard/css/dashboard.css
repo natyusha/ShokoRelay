@@ -108,7 +108,7 @@
 .subtitle-rule-head,
 .subtitle-rule-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  grid-template-columns: 24px minmax(0, 1fr) minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   margin-bottom: 8px;
@@ -121,6 +121,24 @@
   margin: 0;
   width: 100%;
   min-width: 0;
+}
+.subtitle-rule-handle {
+  display: flex;
+  cursor: grab;
+  fill: currentColor;
+}
+.subtitle-rule-handle[draggable="false"] {
+  opacity: 0.5;
+  cursor: default;
+}
+.subtitle-rule-dragging {
+  opacity: 0.5;
+}
+.subtitle-rule-drop-before {
+  box-shadow: 0 -3px var(--highlight-color);
+}
+.subtitle-rule-drop-after {
+  box-shadow: 0 3px var(--highlight-color);
 }
 .subtitle-rule-actions {
   display: flex;
