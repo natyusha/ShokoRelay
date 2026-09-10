@@ -199,6 +199,7 @@ public class ConfigProvider
             NormalizePathMappings(s);
             NormalizeCsvFields(s);
             NormalizeSettings(s);
+            NormalizeSubtitleFormatPreference(s);
             try
             {
                 s.Advanced.SubtitleRenameRules = SubtitleRenameRule.Normalize(s.Advanced.SubtitleRenameRules);
@@ -293,6 +294,7 @@ public class ConfigProvider
     public void SaveSettings(RelayConfig settings)
     {
         settings.Advanced.SubtitleRenameRules = SubtitleRenameRule.Normalize(settings.Advanced.SubtitleRenameRules);
+        NormalizeSubtitleFormatPreference(settings);
         ApplyDefaultValues(settings);
         NormalizeVfsRoots(settings);
         if (!Validator.TryValidateObject(settings, new ValidationContext(settings), null, true))
@@ -538,6 +540,28 @@ public class ConfigProvider
             c = true;
         }
         return c;
+    }
+
+    /// <summary>Keeps up to ten distinct supported subtitle extensions, each containing at most ten ASCII letters or digits.</summary>
+    /// <param name="settings">The configuration to normalize.</param>
+    private static void NormalizeSubtitleFormatPreference(RelayConfig settings)
+    {
+        var formats = new List<string>();
+        foreach (var value in settings.Advanced.SubtitleFormatPreference ?? [])
+        {
+            string format = value?.Trim() ?? "";
+            if (format.StartsWith('.'))
+                format = format[1..];
+            if (format.Length is < 1 or > 10 || format.Any(c => !char.IsAsciiLetterOrDigit(c)))
+                continue;
+            format = format.ToLowerInvariant();
+            if (!PlexConstants.LocalMediaAssets.SubtitleExtensions.Contains("." + format, StringComparer.OrdinalIgnoreCase) || formats.Contains(format))
+                continue;
+            formats.Add(format);
+            if (formats.Count == 10)
+                break;
+        }
+        settings.Advanced.SubtitleFormatPreference = formats;
     }
 
     /// <summary>Applies default values to string properties on an object hierarchy where [DefaultValue] attributes exist.</summary>

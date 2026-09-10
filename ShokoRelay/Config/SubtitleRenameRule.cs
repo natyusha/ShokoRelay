@@ -12,7 +12,7 @@ public sealed class SubtitleRenameRule
     public string FinalSuffix { get; set; } = "";
 
     /// <summary>Trims and validates rules while preserving their order and repeated source or target suffixes.</summary>
-    /// <param name="rules">Rules supplied by configuration or the preview form.</param>
+    /// <param name="rules">Rules supplied by configuration.</param>
     /// <returns>A normalized copy of the rules.</returns>
     public static List<SubtitleRenameRule> Normalize(IEnumerable<SubtitleRenameRule>? rules)
     {

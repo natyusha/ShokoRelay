@@ -37,29 +37,6 @@ internal static class VfsShared
 
     #region Path Resolution
 
-    /// <summary>Determines whether a TV video belongs to at most one primary series, allowing sidecars to be linked without crossover ambiguity.</summary>
-    /// <param name="video">The source video.</param>
-    /// <param name="metadataService">Metadata service used to resolve consolidated series.</param>
-    /// <returns>True when TV sidecars may be linked.</returns>
-    public static bool CanLinkTvSidecars(IVideo? video, IMetadataService metadataService) =>
-        (video?.CrossReferences?.Where(cr => cr.ShokoEpisode != null).Select(cr => OverrideHelper.GetPrimary(cr.ShokoEpisode!.SeriesID, metadataService)).Distinct().Count() ?? 0) <= 1;
-
-    /// <summary>Finds the first existing video location in an enabled VFS managed folder.</summary>
-    /// <param name="video">The source video.</param>
-    /// <returns>The import root and source path, or null when no eligible location exists.</returns>
-    public static (string ImportRoot, string Src)? ResolveVideoLocation(IVideo? video)
-    {
-        foreach (var file in video?.Files ?? [])
-        {
-            if (!IsVfsEnabledFolder(file.ManagedFolder))
-                continue;
-            var importRoot = ResolveImportRootPath(file);
-            if (importRoot != null && ResolveSourcePath(file, importRoot) is { } source)
-                return (importRoot, source);
-        }
-        return null;
-    }
-
     /// <summary>Determines if a managed folder is eligible for VFS generation (i.e., not strictly a source folder and not excluded in settings).</summary>
     /// <param name="folder">The managed folder to evaluate.</param>
     /// <returns>True if the folder should have a VFS generated inside it; otherwise, false.</returns>

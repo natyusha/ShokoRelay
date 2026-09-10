@@ -70,7 +70,32 @@ public class SubtitleLinkingTests : IDisposable
             Assert.Equal(suffix, File.ReadAllText(Path.Combine(destDir, $"S01E01.{suffix}.ass")));
     }
 
-    private static void Refresh(string video, string destDir, IReadOnlyList<SubtitleRenameRule> rules)
+    [Fact]
+    public void ChangingFormatPreferenceReplacesLinksWithoutEnablingUnsupportedFormats()
+    {
+        string sourceDir = Directory.CreateDirectory(Path.Combine(_root, "source")).FullName;
+        string destDir = Directory.CreateDirectory(Path.Combine(_root, "vfs")).FullName;
+        string video = Path.Combine(sourceDir, "Episode.mkv");
+        File.WriteAllText(video, "video fixture");
+        string[] extensions = ["ass", "srt", "sub", "sup"];
+        foreach (string extension in extensions)
+            File.WriteAllText(Path.Combine(sourceDir, "Episode.chs." + extension), extension);
+        SubtitleRenameRule[] rules = [new() { OriginalSuffix = "chs", FinalSuffix = "zh-Hans" }];
+
+        foreach (string[] formats in new string[][] { [], ["srt"], [] })
+        {
+            Refresh(video, destDir, rules, formats);
+            string extension = formats.Length == 0 ? "ass" : "srt";
+            string name = Assert.Single(Names(destDir));
+            Assert.Equal("S01E01.zh-Hans." + extension, name);
+            Assert.Equal(Path.Combine(sourceDir, "Episode.chs." + extension), File.ResolveLinkTarget(Path.Combine(destDir, name), true)!.FullName);
+        }
+
+        foreach (string extension in extensions)
+            Assert.Equal(extension, File.ReadAllText(Path.Combine(sourceDir, "Episode.chs." + extension)));
+    }
+
+    private static void Refresh(string video, string destDir, IReadOnlyList<SubtitleRenameRule> rules, IReadOnlyList<string>? formats = null)
     {
         var linker = new VfsAssetLinker(null!); // Video service is only used by local-extra discovery.
         var cache = new ConcurrentDictionary<string, Lazy<string[]>>(StringComparer.Ordinal);
@@ -90,7 +115,8 @@ public class SubtitleLinkingTests : IDisposable
             errors,
             ref created,
             (name, _) => expected.Add(Path.Combine(destDir, name)),
-            subtitleRules: rules
+            subtitleRules: rules,
+            subtitleFormats: formats ?? []
         );
         VfsHelper.CleanupOrphanedFilesAndFolders([destDir], expected);
         Assert.Empty(errors);

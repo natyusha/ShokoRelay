@@ -91,6 +91,9 @@ public sealed class VfsBuildSession
     /// <summary>Snapshot of ordered subtitle rules, shared by every series and movie in this build.</summary>
     public IReadOnlyList<SubtitleRenameRule> SubtitleRenameRules { get; } = [.. Settings.Advanced.SubtitleRenameRules];
 
+    /// <summary>Snapshot of subtitle format preferences for this build.</summary>
+    public IReadOnlyList<string> SubtitleFormatPreference { get; } = [.. Settings.Advanced.SubtitleFormatPreference];
+
     /// <summary>Caches the resolved file data and Plex mappings for series to prevent redundant processing.</summary>
     public ConcurrentDictionary<int, MapHelper.SeriesFileData> SeriesFileDataCache { get; } = new();
 

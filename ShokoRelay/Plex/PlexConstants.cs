@@ -140,7 +140,7 @@ namespace ShokoRelay.Plex
             /// <summary>Series level metadata including: Audio extensions that Plex treats as theme songs and NFO Metadata files.</summary>
             public static readonly FrozenSet<string> SeriesMetadata = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".mp3", ".nfo" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
-            /// <summary>Supported subtitle extensions, ordered by preference when choosing a source for a renamed subtitle.</summary>
+            /// <summary>Supported subtitle extensions, in default preference order when choosing a source for a renamed subtitle.</summary>
             public static readonly IReadOnlyList<string> SubtitleExtensions = [".ass", ".ssa", ".srt", ".vtt", ".smi"];
 
             /// <summary>Episode level sidecar files including: Text-based subtitle extensions supported by Plex and NFO Metadata files.</summary>

@@ -487,7 +487,9 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
 
                     // Resolve Primary IDs to allow local asset linking for crossover files that have been consolidated via VFS Overrides.
                     LocalOnLink(locInfo.ImportRoot, seasonName, fileName, locInfo.Src, destFilePath);
-                    if (VfsShared.CanLinkTvSidecars(mapping.Video, metadataService))
+                    var distinctPrimarySeriesCount =
+                        mapping.Video?.CrossReferences?.Where(cr => cr.ShokoEpisode != null).Select(cr => OverrideHelper.GetPrimary(cr.ShokoEpisode!.SeriesID, metadataService)).Distinct().Count() ?? 0;
+                    if (distinctPrimarySeriesCount <= 1)
                     {
                         assetLinker.LinkSeriesMetadata(
                             Path.GetDirectoryName(locInfo.Src)!,
@@ -509,7 +511,8 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                             ref created,
                             (name, s) => LocalOnLink(locInfo.ImportRoot, seasonName, name, s, Path.Combine(seasonPath, name)),
                             skipCheck,
-                            session.SubtitleRenameRules
+                            session.SubtitleRenameRules,
+                            session.SubtitleFormatPreference
                         );
                     }
                 }
@@ -538,9 +541,26 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                 );
         }
 
+        (string ImportRoot, string Src)? ResolveLoc(MapHelper.FileMapping mapping)
+        {
+            foreach (var file in mapping.Video?.Files ?? [])
+            {
+                if (!VfsShared.IsVfsEnabledFolder(file.ManagedFolder))
+                    continue;
+                var importRoot = VfsShared.ResolveImportRootPath(file);
+                if (importRoot != null)
+                {
+                    var src = VfsShared.ResolveSourcePath(file, importRoot);
+                    if (src != null)
+                        return (importRoot, src);
+                }
+            }
+            return null;
+        }
+
         bool TryResolveAndValidate(MapHelper.FileMapping mapping, out (string ImportRoot, string Src) locInfoValue)
         {
-            var loc = VfsShared.ResolveVideoLocation(mapping.Video);
+            var loc = ResolveLoc(mapping);
             if (loc == null)
             {
                 skipped++;
@@ -633,7 +653,8 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                             onLink?.Invoke(locInfo.ImportRoot, $"Movie ❯ {folderName}", name, s);
                         },
                         skipCheck,
-                        session.SubtitleRenameRules
+                        session.SubtitleRenameRules,
+                        session.SubtitleFormatPreference
                     );
                 }
                 else

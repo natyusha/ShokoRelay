@@ -3,8 +3,7 @@ namespace ShokoRelay.Vfs;
 /// <summary>An episode sidecar destination and the original file that supplies it.</summary>
 /// <param name="Source">Original sidecar path.</param>
 /// <param name="Name">Destination filename in the VFS.</param>
-/// <param name="Reason">Explanation of the source selection, also used in previews.</param>
-public sealed record EpisodeSidecarLink(string Source, string Name, string Reason);
+public sealed record EpisodeSidecarLink(string Source, string Name);
 
 /// <summary>Plans literal subtitle suffix conversions without reading or changing the filesystem.</summary>
 public static class SubtitleRenamer
@@ -16,8 +15,9 @@ public static class SubtitleRenamer
     /// <param name="destBase">Video basename in the VFS.</param>
     /// <param name="files">The existing episode-sidecar candidates from the source directory.</param>
     /// <param name="rules">Validated rules in priority order.</param>
+    /// <param name="formatPreference">Normalized preferred extensions, without leading dots. Unlisted formats use the default order.</param>
     /// <returns>Deterministically ordered destinations, including unchanged metadata and subtitles.</returns>
-    public static List<EpisodeSidecarLink> Plan(string sourceFile, string destBase, IEnumerable<string> files, IReadOnlyList<SubtitleRenameRule> rules)
+    public static List<EpisodeSidecarLink> Plan(string sourceFile, string destBase, IEnumerable<string> files, IReadOnlyList<SubtitleRenameRule> rules, IReadOnlyList<string>? formatPreference = null)
     {
         string originalBase = Path.GetFileNameWithoutExtension(sourceFile);
         var links = new List<EpisodeSidecarLink>();
@@ -30,7 +30,7 @@ public static class SubtitleRenamer
             string extension = Path.GetExtension(name);
             if (!PlexConstants.LocalMediaAssets.SubtitleExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
             {
-                links.Add(new(source, destBase + name[originalBase.Length..], "Metadata sidecar"));
+                links.Add(new(source, destBase + name[originalBase.Length..]));
                 continue;
             }
 
@@ -39,7 +39,7 @@ public static class SubtitleRenamer
                 continue;
             string suffix = stem.Length == originalBase.Length ? "" : stem[(originalBase.Length + 1)..];
             if (suffix.Length == 0 || rules.Count == 0)
-                links.Add(new(source, destBase + name[originalBase.Length..], suffix.Length == 0 ? "No suffix; unchanged" : "No rules; unchanged"));
+                links.Add(new(source, destBase + name[originalBase.Length..]));
             else
                 subtitles.Add(new(source, suffix, extension));
         }
@@ -55,7 +55,7 @@ public static class SubtitleRenamer
             bool conflict = ambiguous.Contains(suffix);
             if (conflict || (!sources.Contains(suffix) && !targets.Contains(suffix, StringComparer.OrdinalIgnoreCase)))
                 foreach (var candidate in candidates)
-                    links.Add(new(candidate.Source, destBase + "." + candidate.Suffix + candidate.Extension, conflict ? "Case ambiguity; unchanged" : "Unmatched suffix; unchanged"));
+                    links.Add(new(candidate.Source, destBase + "." + candidate.Suffix + candidate.Extension));
         }
 
         foreach (var target in targets)
@@ -65,35 +65,38 @@ public static class SubtitleRenamer
                 continue;
             if (groups.TryGetValue(target, out var existing))
             {
-                AddPreferred(existing, target, "Existing final suffix");
+                AddPreferred(existing, target);
                 continue;
             }
 
-            for (int i = 0; i < rules.Count; i++)
+            foreach (var rule in rules)
             {
-                var rule = rules[i];
                 if (!rule.FinalSuffix.Equals(target, StringComparison.OrdinalIgnoreCase) || ambiguous.Contains(rule.OriginalSuffix) || !groups.TryGetValue(rule.OriginalSuffix, out var candidates))
                     continue;
-                AddPreferred(candidates, target, $"Rule {i + 1}");
+                AddPreferred(candidates, target);
                 break;
             }
         }
 
         return [.. links.OrderBy(l => l.Name, StringComparer.Ordinal).ThenBy(l => l.Source, StringComparer.Ordinal)];
 
-        void AddPreferred(List<Candidate> candidates, string suffix, string reason)
+        void AddPreferred(List<Candidate> candidates, string suffix)
         {
-            var selected = candidates.OrderBy(c => FormatPreference(c.Extension)).ThenBy(c => c.Source, StringComparer.Ordinal).First();
-            links.Add(new(selected.Source, destBase + "." + suffix + selected.Extension, reason));
+            var selected = candidates.OrderBy(c => FormatPreference(c.Extension, formatPreference)).ThenBy(c => c.Source, StringComparer.Ordinal).First();
+            links.Add(new(selected.Source, destBase + "." + suffix + selected.Extension));
         }
     }
 
-    private static int FormatPreference(string extension)
+    private static int FormatPreference(string extension, IReadOnlyList<string>? preferred)
     {
+        int preferredCount = preferred?.Count ?? 0;
+        for (int i = 0; i < preferredCount; i++)
+            if (preferred![i].Equals(extension[1..], StringComparison.OrdinalIgnoreCase))
+                return i;
         var formats = PlexConstants.LocalMediaAssets.SubtitleExtensions;
         for (int i = 0; i < formats.Count; i++)
             if (formats[i].Equals(extension, StringComparison.OrdinalIgnoreCase))
-                return i;
-        return formats.Count;
+                return preferredCount + i;
+        return preferredCount + formats.Count;
     }
 }

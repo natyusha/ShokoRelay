@@ -44,10 +44,27 @@ public class SubtitleRenamerTests
     [InlineData("ssa", "srt")]
     [InlineData("srt", "vtt")]
     [InlineData("vtt", "smi")]
-    public void AppliesTheInternalFormatPreference(string preferred, string other)
+    public void AppliesTheDefaultFormatPreference(string preferred, string other)
     {
         var links = SubtitleRenamer.Plan(VideoBase + ".mkv", VfsBase, [Source("chs." + other), Source("chs." + preferred)], Rules);
         Assert.Equal(["zh-Hans." + preferred + "=chs." + preferred], Describe(links));
+    }
+
+    [Theory]
+    [InlineData(new[] { "srt" }, new[] { "chs.ass", "chs.srt" }, new[] { "zh-Hans.srt=chs.srt" })]
+    [InlineData(new[] { "srt" }, new[] { "chs.ssa", "chs.ass", "chs.vtt" }, new[] { "zh-Hans.ass=chs.ass" })]
+    [InlineData(new[] { "smi", "srt" }, new[] { "chs.smi", "chs.srt", "chs.ass" }, new[] { "zh-Hans.smi=chs.smi" })]
+    [InlineData(new string[0], new[] { "chs.srt", "chs.ass" }, new[] { "zh-Hans.ass=chs.ass" })]
+    [InlineData(new[] { "srt" }, new[] { "scjp.ass", "chs.srt" }, new[] { "ja.ass=scjp.ass", "zh-Hans.ass=scjp.ass" })]
+    [InlineData(new[] { "srt" }, new[] { "scjp.srt", "zh-Hans.ass" }, new[] { "ja.srt=scjp.srt", "zh-Hans.ass=zh-Hans.ass" })]
+    [InlineData(new[] { "srt" }, new[] { "zh-Hans.ass", "zh-Hans.srt" }, new[] { "zh-Hans.srt=zh-Hans.srt" })]
+    [InlineData(new[] { "srt" }, new[] { "en.ass", "en.srt" }, new[] { "en.ass=en.ass", "en.srt=en.srt" })]
+    [InlineData(new[] { "srt" }, new[] { "SCJP.ass", "scjp.ass", "scjp.srt" }, new[] { "SCJP.ass=SCJP.ass", "scjp.ass=scjp.ass", "scjp.srt=scjp.srt" })]
+    public void AppliesConfiguredFormatsWithinTheChosenSuffix(string[] formats, string[] suffixes, string[] expected)
+    {
+        var files = suffixes.Select(Source).ToArray();
+        Assert.Equal(expected, Describe(SubtitleRenamer.Plan(VideoBase + ".mkv", VfsBase, files, Rules, formats)));
+        Assert.Equal(expected, Describe(SubtitleRenamer.Plan(VideoBase + ".mkv", VfsBase, files.Reverse(), Rules, formats)));
     }
 
     [Fact]
@@ -97,7 +114,7 @@ public class SubtitleRenamerTests
     [Fact]
     public void PreservesSuffixlessSubtitlesAndNonSubtitleSidecars()
     {
-        var links = SubtitleRenamer.Plan(VideoBase + ".mkv", VfsBase, [VideoBase + ".ass", VideoBase + ".srt", Source("chs.nfo"), Source("chs.jpg")], Rules);
+        var links = SubtitleRenamer.Plan(VideoBase + ".mkv", VfsBase, [VideoBase + ".ass", VideoBase + ".srt", Source("chs.nfo"), Source("chs.jpg")], Rules, ["srt"]);
         Assert.Equal([VfsBase + ".ass", VfsBase + ".chs.jpg", VfsBase + ".chs.nfo", VfsBase + ".srt"], links.Select(l => l.Name));
     }
 
@@ -105,7 +122,7 @@ public class SubtitleRenamerTests
     public void EmptyRulesPreserveEveryFormatAndOriginalSuffix()
     {
         var files = new[] { Source("scjp.ass"), Source("scjp.srt"), Source("chs.ass") };
-        Assert.Equal(["chs.ass=chs.ass", "scjp.ass=scjp.ass", "scjp.srt=scjp.srt"], Describe(SubtitleRenamer.Plan(VideoBase + ".mkv", VfsBase, files, [])));
+        Assert.Equal(["chs.ass=chs.ass", "scjp.ass=scjp.ass", "scjp.srt=scjp.srt"], Describe(SubtitleRenamer.Plan(VideoBase + ".mkv", VfsBase, files, [], ["srt"])));
     }
 
     [Fact]

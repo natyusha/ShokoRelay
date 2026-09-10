@@ -70,6 +70,7 @@ public class VfsAssetLinker(IVideoService videoService)
     /// <param name="onLink">Optional callback to record the created link for the VFS Browser blueprint.</param>
     /// <param name="skipExistenceCheck">If true, bypasses the filesystem check and writes the link directly.</param>
     /// <param name="subtitleRules">Snapshot of subtitle rules for this build, or the current configuration when omitted.</param>
+    /// <param name="subtitleFormats">Snapshot of subtitle format preferences for this build, or the current configuration when omitted.</param>
     public void LinkEpisodeMetadata(
         string sourceFile,
         string sourceDir,
@@ -82,13 +83,14 @@ public class VfsAssetLinker(IVideoService videoService)
         ref int created,
         Action<string, string?>? onLink = null,
         bool skipExistenceCheck = false,
-        IReadOnlyList<SubtitleRenameRule>? subtitleRules = null
+        IReadOnlyList<SubtitleRenameRule>? subtitleRules = null,
+        IReadOnlyList<string>? subtitleFormats = null
     )
     {
         if (string.IsNullOrWhiteSpace(sourceDir) || !Directory.Exists(sourceDir))
             return;
-        var candidates = GetEpisodeMetadataCandidates(sourceDir, cache);
-        var links = SubtitleRenamer.Plan(sourceFile, destBase, candidates, subtitleRules ?? Settings.Advanced.SubtitleRenameRules);
+        var candidates = cache.GetOrAdd(sourceDir, dir => new Lazy<string[]>(() => [.. Directory.EnumerateFiles(dir).Where(f => s_episodeMetadataExtensions.Contains(Path.GetExtension(f)))])).Value;
+        var links = SubtitleRenamer.Plan(sourceFile, destBase, candidates, subtitleRules ?? Settings.Advanced.SubtitleRenameRules, subtitleFormats ?? Settings.Advanced.SubtitleFormatPreference);
         foreach (var link in links)
         {
             if (VfsShared.TryCreateLink(link.Source, Path.Combine(destDir, link.Name), s_logger, skipExistenceCheck: skipExistenceCheck))
@@ -104,13 +106,6 @@ public class VfsAssetLinker(IVideoService videoService)
             }
         }
     }
-
-    /// <summary>Reuses build-session discovery for episode metadata and subtitle previews.</summary>
-    /// <param name="sourceDir">Directory containing the source video and sidecars.</param>
-    /// <param name="cache">Directory enumeration cache.</param>
-    /// <returns>Recognized episode sidecar paths.</returns>
-    public static string[] GetEpisodeMetadataCandidates(string sourceDir, ConcurrentDictionary<string, Lazy<string[]>> cache) =>
-        cache.GetOrAdd(sourceDir, dir => new Lazy<string[]>(() => [.. Directory.EnumerateFiles(dir).Where(f => s_episodeMetadataExtensions.Contains(Path.GetExtension(f)))])).Value;
 
     /// <summary>Discovers and links physical files matching Plex Local Extra conventions that are not managed by Shoko.</summary>
     /// <param name="fileData">Mapping data for the current series.</param>

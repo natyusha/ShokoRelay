@@ -196,28 +196,22 @@
     }
   }
 
-  let settingsSaveQueue = Promise.resolve();
-
   /**
-   * Persists configuration snapshots in order so rapid changes cannot overwrite newer settings.
+   * Persists the plugin configuration to the server.
    * @param {Object} config - The configuration object to save.
    * @returns {Promise<Object>} The server response.
    */
-  function saveSettings(config) {
+  async function saveSettings(config) {
     const cleanCfg = JSON.parse(JSON.stringify(config));
     delete cleanCfg.PlexLibrary;
     delete cleanCfg.PlexAuth;
-    const pending = settingsSaveQueue.then(async () => {
-      const res = await fetchJson(configUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(cleanCfg),
-      });
-      if (!res.ok) toastOperation(res, "Settings Save");
-      return res;
+    const res = await fetchJson(configUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(cleanCfg),
     });
-    settingsSaveQueue = pending.catch(() => {});
-    return pending;
+    if (!res.ok) toastOperation(res, "Settings Save");
+    return res;
   }
   // #endregion
 
