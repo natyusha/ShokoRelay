@@ -543,10 +543,6 @@ Due to this plugin relying on Plex's metadata provider feature (which is still u
 - Collections for TV Show libraries (currently implemented via Plex's HTTP API)
 - Custom or generic rating icons
 
-## Development
-
-See [Testing](./Docs/Testing.md) for the focused subtitle tests, local checks, and CI workflow.
-
 ## TODO
 
 - Once available in Plex metadata providers:

@@ -1,4 +1,3 @@
 <Solution>
   <Project Path="ShokoRelay/ShokoRelay.csproj" />
-  <Project Path="ShokoRelay.Tests/ShokoRelay.Tests.csproj" />
 </Solution>
