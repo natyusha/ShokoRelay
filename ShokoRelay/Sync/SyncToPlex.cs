@@ -56,7 +56,7 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
             shokoWatchedQuery = shokoWatchedQuery.Where(e => e.LastPlayedAt >= cutoff);
         }
 
-        var shokoWatched = shokoWatchedQuery.Select(sw => (UserData: sw, Episode: metadataService.GetShokoEpisodeByID(sw.EpisodeID))).Where(x => x.Episode != null).Select(x => (x.UserData, x.Episode)).ToList();
+        var shokoWatched = shokoWatchedQuery.Select(sw => (UserData: sw, Episode: metadataService.GetShokoEpisodeByID(sw.EpisodeID))).Where(x => x.Episode != null).ToList();
 
         result = result with { Processed = shokoWatched.Count };
         var extraEntries = configProvider.GetExtraPlexUserEntries();

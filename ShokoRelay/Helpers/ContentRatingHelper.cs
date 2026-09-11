@@ -119,7 +119,7 @@ public static class ContentRatingHelper
                 _ => (c_rating, false),
             };
         }
-        if (!string.IsNullOrEmpty(c_rating) && c_rating != "X")
+        if (c_rating != "X")
             c_rating += descriptor;
         return (c_rating, false);
     }

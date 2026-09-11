@@ -1,5 +1,7 @@
 using System.Buffers;
+using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Text.Json;
 using Shoko.Abstractions.Metadata.Enums;
 using Shoko.Abstractions.Video;
 using Shoko.Abstractions.Video.Enums;
@@ -99,6 +101,8 @@ internal static class VfsShared
         var (doTv, doMovie) = MapHelper.GetGenerationModes(MapHelper.IsMovie(series), Settings.Advanced.MovieGenerationMode);
 
         var fileData = MapHelper.GetConsolidatedSeriesFileData(series, metadataService);
+        var mainEpIds = doMovie ? fileData.Mappings.Where(m => m.PrimaryEpisode.Type == EpisodeType.Episode).Select(m => m.PrimaryEpisode.ID).Distinct().ToList() : [];
+
         foreach (var mapping in fileData.Mappings)
         {
             var location = mapping.Video.Files.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l.Path)) ?? mapping.Video.Files.FirstOrDefault();
@@ -113,11 +117,8 @@ internal static class VfsShared
                 roots.Add(Path.Combine(importRoot, rootName, folderId.ToString()));
 
             if (doMovie)
-            {
-                var mainEps = fileData.Mappings.Where(m => m.PrimaryEpisode.Type == EpisodeType.Episode).Select(m => m.PrimaryEpisode).DistinctBy(e => e.ID);
-                foreach (var ep in mainEps)
-                    roots.Add(Path.Combine(importRoot, movieRootName, ep.ID.ToString()));
-            }
+                foreach (var epId in mainEpIds)
+                    roots.Add(Path.Combine(importRoot, movieRootName, epId.ToString()));
         }
 
         return roots;
@@ -256,14 +257,11 @@ internal static class VfsShared
     /// <summary>Checks if a path is safe to delete by ensuring it is not a filesystem root.</summary>
     /// <param name="path">The absolute path to evaluate.</param>
     /// <returns><c>true</c> if the path is not a root directory and is safe for recursive deletion.</returns>
-    public static bool IsSafeToDelete(string path)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-            return false;
-        var full = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        var root = Path.GetPathRoot(full)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        return !string.Equals(full, root, StringComparison.OrdinalIgnoreCase);
-    }
+    public static bool IsSafeToDelete(string path) =>
+        !string.IsNullOrWhiteSpace(path)
+        && Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) is var full
+        && Path.GetPathRoot(full)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) is var root
+        && !string.Equals(full, root, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Determines if any segment of a path or the file itself should be ignored based on current settings.</summary>
     /// <param name="path">The absolute or relative path to evaluate.</param>
@@ -329,14 +327,15 @@ internal static class VfsShared
     #region Blueprint Cache
 
     /// <summary>Loads the VFS blueprint cache from disk.</summary>
-    public static System.Collections.Concurrent.ConcurrentDictionary<string, System.Collections.Concurrent.ConcurrentDictionary<int, VfsBlueprintSeries>> LoadBlueprint()
+    /// <returns>The deserialized concurrent dictionary representing the blueprint cache.</returns>
+    public static ConcurrentDictionary<string, ConcurrentDictionary<int, VfsBlueprintSeries>> LoadBlueprint()
     {
-        var blueprint = new System.Collections.Concurrent.ConcurrentDictionary<string, System.Collections.Concurrent.ConcurrentDictionary<int, VfsBlueprintSeries>>(PathComparer);
+        var blueprint = new ConcurrentDictionary<string, ConcurrentDictionary<int, VfsBlueprintSeries>>(PathComparer);
         if (File.Exists(BlueprintFilePath))
         {
             try
             {
-                var existing = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, Dictionary<int, VfsBlueprintSeries>>>(File.ReadAllText(BlueprintFilePath));
+                var existing = JsonSerializer.Deserialize<Dictionary<string, Dictionary<int, VfsBlueprintSeries>>>(File.ReadAllText(BlueprintFilePath));
                 if (existing != null)
                 {
                     foreach (var rKvp in existing)
@@ -353,13 +352,14 @@ internal static class VfsShared
     }
 
     /// <summary>Saves the VFS blueprint cache to disk atomically.</summary>
-    public static void SaveBlueprint(System.Collections.Concurrent.ConcurrentDictionary<string, System.Collections.Concurrent.ConcurrentDictionary<int, VfsBlueprintSeries>> blueprint)
+    /// <param name="blueprint">The blueprint data to persist.</param>
+    public static void SaveBlueprint(ConcurrentDictionary<string, ConcurrentDictionary<int, VfsBlueprintSeries>> blueprint)
     {
         try
         {
             string tmpPath = BlueprintFilePath + ".tmp";
             using (var fs = new FileStream(tmpPath, FileMode.Create, FileAccess.Write, FileShare.None))
-                System.Text.Json.JsonSerializer.Serialize(fs, blueprint);
+                JsonSerializer.Serialize(fs, blueprint);
             File.Move(tmpPath, BlueprintFilePath, overwrite: true);
         }
         catch { }

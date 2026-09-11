@@ -291,7 +291,7 @@ public static class PlexHelper
     /// <param name="value">The raw collection title.</param>
     /// <returns>The normalized collection key, or null if empty.</returns>
     private static string? NormalizeCollectionKey(string? value) =>
-        !string.IsNullOrWhiteSpace(value) && TextHelper.CondenseSpaces(new string([.. value.Where(c => !Path.GetInvalidFileNameChars().Contains(c))]).Trim()) is var cleaned && cleaned.Length > 0
+        !string.IsNullOrWhiteSpace(value) && TextHelper.CondenseSpaces(new string([.. value.Where(c => !VfsHelper.InvalidFileNameChars.Contains(c))]).Trim()) is var cleaned && cleaned.Length > 0
             ? cleaned.ToLowerInvariant()
             : null;
 

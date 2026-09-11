@@ -118,23 +118,26 @@ internal static class AnimeThemesHelper
     /// <summary>The raw URL to the curated AnimeThemes mapping CSV on GitHub.</summary>
     internal const string AtRawMapUrl = "https://gist.githubusercontent.com/natyusha/bb33a3b3bc95bc7a3869633e23d522bb/raw/";
 
-    /// <summary>Regex for matching known AnimeThemes slug formats.</summary>
-    internal static readonly Regex SlugRegex = new("^(?:op|ed)(?!0)[0-9]{0,2}(?:-(?:bd|web|tv|original))?$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-
-    /// <summary>Regex for extracting digits from a theme slug.</summary>
-    internal static readonly Regex NumberRegex = new(@"\d+", RegexOptions.Compiled);
-
     /// <summary>Regex for Plex Extra Credits which always start with a <c>C# ❯</c> prefix.</summary>
     internal static readonly Regex CreditsFileRegex = new(@"^C\d+\s❯", RegexOptions.Compiled);
 
     /// <summary>Regex for themes from secondary series in an override group which start with a <c>P# ❯</c> prefix.</summary>
     internal static readonly Regex OverrideThemeFileRegex = new(@"^P\d+\s❯", RegexOptions.Compiled);
 
-    /// <summary>Regex for inserting spaces into PascalCase strings accounting for numbers.</summary>
-    internal static readonly Regex PascalCaseRegex = new(@"(?<=[a-z])(?=[A-Z])|(?<=[a-z])(?=\d)|(?<=\d)(?=[A-Za-z])", RegexOptions.Compiled);
+    /// <summary>Regex for matching known AnimeThemes slug formats.</summary>
+    internal static readonly Regex SlugRegex = new("^(?:op|ed)(?!0)[0-9]{0,2}(?:-(?:bd|web|tv|original))?$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>Regex for extracting digits from a theme slug.</summary>
+    private static readonly Regex s_numberRegex = new(@"\d+", RegexOptions.Compiled);
 
     /// <summary>Regex for identifying default Opening 1 themes (including their alternate names and suffixes).</summary>
-    internal static readonly Regex Op1Regex = new(@"^(?:OP|Opening)\s*(?:1\b|-|\(|$)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex s_op1Regex = new(@"^(?:OP|Opening)\s*(?:1\b|-|\(|$)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>Regex for inserting spaces into PascalCase strings accounting for numbers.</summary>
+    private static readonly Regex s_pascalCaseRegex = new(@"(?<=[a-z])(?=[A-Z])|(?<=[a-z])(?=\d)|(?<=\d)(?=[A-Za-z])", RegexOptions.Compiled);
+
+    /// <summary>Regex for standardizing Opening and Ending slugs.</summary>
+    private static readonly Regex s_slugStandardizeRegex = new(@"^(Opening|Ending|OP|ED)\s*(\d*)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     /// <summary>Dictionary mapping slug suffixes to their formatted display strings.</summary>
     private static readonly Dictionary<string, string> s_slugFormatting = new(StringComparer.OrdinalIgnoreCase)
@@ -324,7 +327,7 @@ internal static class AnimeThemesHelper
     /// <summary>Extracts the numeric suffix from a theme slug, defaulting to 1 if unnumbered or unparseable.</summary>
     /// <param name="baseSlug">The base slug to extract numbers from.</param>
     /// <returns>The extracted number, or 1 if unnumbered.</returns>
-    internal static int ExtractSlugNumber(string baseSlug) => NumberRegex.Match(baseSlug) is { Success: true } match && int.TryParse(match.Value, out var n) ? n : 1;
+    internal static int ExtractSlugNumber(string baseSlug) => s_numberRegex.Match(baseSlug) is { Success: true } match && int.TryParse(match.Value, out var n) ? n : 1;
 
     /// <summary>Standardizes a raw or display theme slug into the canonical 'OP#' or 'ED#' format.</summary>
     /// <param name="slug">The slug string to parse.</param>
@@ -334,7 +337,7 @@ internal static class AnimeThemesHelper
         if (string.IsNullOrWhiteSpace(slug))
             return "";
         string s = slug.Trim();
-        var match = Regex.Match(s, @"^(Opening|Ending|OP|ED)\s*(\d*)", RegexOptions.IgnoreCase);
+        var match = s_slugStandardizeRegex.Match(s);
         if (match.Success)
         {
             string type = match.Groups[1].Value.StartsWith("O", StringComparison.OrdinalIgnoreCase) ? "OP" : "ED";
@@ -456,7 +459,7 @@ internal static class AnimeThemesHelper
     {
         string rawFileName = Path.GetFileNameWithoutExtension(filePath);
         int dashIndex = rawFileName.IndexOf('-');
-        return PascalCaseRegex.Replace(dashIndex > 0 ? rawFileName[..dashIndex] : rawFileName, " ");
+        return s_pascalCaseRegex.Replace(dashIndex > 0 ? rawFileName[..dashIndex] : rawFileName, " ");
     }
 
     /// <summary>Parses a theme slug into base and suffix components.</summary>

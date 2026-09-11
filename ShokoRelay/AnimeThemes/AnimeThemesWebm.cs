@@ -1,3 +1,4 @@
+using System.Net;
 using Shoko.Abstractions.Video.Services;
 using ShokoRelay.Vfs;
 
@@ -132,7 +133,7 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
                             existingFiles.Add(video.Basename); // Add to cache so it isn't downloaded again if it appears in another anime
                             downloaded++;
                         }
-                        catch (HttpRequestException ex) when (ex.StatusCode is System.Net.HttpStatusCode.ServiceUnavailable or System.Net.HttpStatusCode.TooManyRequests)
+                        catch (HttpRequestException ex) when (ex.StatusCode is HttpStatusCode.ServiceUnavailable or HttpStatusCode.TooManyRequests)
                         {
                             s_logger.Warn("AnimeThemes WebM: Rate limited (503/429) on theme ID -> {0}. Waiting 90 seconds before retrying...", theme.Id);
                             await Task.Delay(TimeSpan.FromSeconds(90), ct).ConfigureAwait(false);

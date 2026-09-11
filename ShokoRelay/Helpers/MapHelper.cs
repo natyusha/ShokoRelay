@@ -211,15 +211,7 @@ public static class MapHelper
             videoCoords[video.ID] = (coords, deduped);
         }
 
-        // Pass 2: Calculate versioning counts using pre-resolved coordinates and variation status
-        var coordCounts = videoCoords
-            .Select(kvp => (kvp.Value.Coords, allVideos.First(v => v.ID == kvp.Key).IsVariation))
-            .GroupBy(x => (x.Coords.Season, x.Coords.Episode, x.IsVariation))
-            .ToDictionary(g => g.Key, g => g.Count());
-
-        var versionCounters = coordCounts.Where(g => g.Value > 1).ToDictionary(g => g.Key, _ => 1);
-
-        // Pass 3: Build final mappings
+        // Pass 2: Build final mappings
         foreach (var video in allVideos)
         {
             if (!videoCoords.TryGetValue(video.ID, out var info))
@@ -231,10 +223,6 @@ public static class MapHelper
                 fCount = fileList?.Count ?? 1;
             string fileName = Path.GetFileName(video.Files?.FirstOrDefault()?.Path ?? "");
             bool allowPt = fCount > 1 && VfsHelper.HasPlexSplitTag(fileName) && deduped.Select(d => d.Episode.Type).Distinct().Count() <= 1;
-
-            // Versioning: Only calculate vIdx if there are multiple files within this specific variation status group
-            var vKey = (coords.Season, coords.Episode, video.IsVariation);
-            int? vIdx = (!allowPt && versionCounters.TryGetValue(vKey, out var v)) ? (versionCounters[vKey] = v + 1) - 1 : null;
 
             // TMDB Episode metadata override for multi-part files
             object? tmdbEp =

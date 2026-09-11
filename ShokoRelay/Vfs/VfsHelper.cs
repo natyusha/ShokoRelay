@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Collections.Frozen;
 using System.Text.RegularExpressions;
 
@@ -37,7 +38,7 @@ public static class VfsHelper
     };
 
     /// <summary>Hardware-accelerated search values for locating invalid characters rapidly.</summary>
-    private static readonly System.Buffers.SearchValues<char> s_invalidChars = System.Buffers.SearchValues.Create(Path.GetInvalidFileNameChars());
+    public static readonly SearchValues<char> InvalidFileNameChars = SearchValues.Create(Path.GetInvalidFileNameChars());
 
     /// <summary>Maps invalid Windows filename characters to visually similar Unicode replacements.</summary>
     public static readonly FrozenDictionary<char, char> ReplacementCharMap = new Dictionary<char, char>
@@ -53,7 +54,7 @@ public static class VfsHelper
     }.ToFrozenDictionary();
 
     /// <summary>Hardware-accelerated search values for locating characters that require visual replacements.</summary>
-    private static readonly System.Buffers.SearchValues<char> s_replacementChars = System.Buffers.SearchValues.Create([.. ReplacementCharMap.Keys]);
+    private static readonly SearchValues<char> s_replacementChars = SearchValues.Create([.. ReplacementCharMap.Keys]);
 
     #endregion
 
@@ -68,7 +69,7 @@ public static class VfsHelper
             return "Unknown";
 
         string processed = name;
-        if (name.AsSpan().IndexOfAny(s_invalidChars) >= 0)
+        if (name.AsSpan().IndexOfAny(InvalidFileNameChars) >= 0)
         {
             processed = string.Create(
                 name.Length,
@@ -76,7 +77,7 @@ public static class VfsHelper
                 (chars, state) =>
                 {
                     for (int i = 0; i < state.Length; i++)
-                        chars[i] = s_invalidChars.Contains(state[i]) ? ' ' : state[i];
+                        chars[i] = InvalidFileNameChars.Contains(state[i]) ? ' ' : state[i];
                 }
             );
         }
