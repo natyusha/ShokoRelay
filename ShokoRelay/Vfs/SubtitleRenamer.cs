@@ -35,8 +35,15 @@ public static class SubtitleRenamer
             }
 
             string stem = Path.GetFileNameWithoutExtension(name);
-            if (stem.Length < originalBase.Length || (stem.Length > originalBase.Length && stem[originalBase.Length] != '.'))
+            if (stem.Length < originalBase.Length)
                 continue;
+            if (stem.Length > originalBase.Length && stem[originalBase.Length] != '.')
+            {
+                // Keep legacy separators, while rejecting longer episode basenames such as Episode10 for Episode1.
+                if (!char.IsLetterOrDigit(stem[originalBase.Length]))
+                    links.Add(new(source, destBase + name[originalBase.Length..]));
+                continue;
+            }
             string suffix = stem.Length == originalBase.Length ? "" : stem[(originalBase.Length + 1)..];
             if (suffix.Length == 0)
                 links.Add(new(source, destBase + name[originalBase.Length..]));

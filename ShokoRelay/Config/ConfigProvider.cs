@@ -3,7 +3,6 @@ using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Reflection;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Http;
 using Shoko.Abstractions.Plugin;
 using ShokoRelay.Vfs;
@@ -188,7 +187,7 @@ public class ConfigProvider
             RelayConfig s;
             try
             {
-                s = File.Exists(_filePath) ? ReadSettings(File.ReadAllText(_filePath)) : new();
+                s = File.Exists(_filePath) ? JsonSerializer.Deserialize<RelayConfig>(File.ReadAllText(_filePath), s_options) ?? new() : new();
             }
             catch (Exception ex)
             {
@@ -212,34 +211,6 @@ public class ConfigProvider
             }
             return _settings = s;
         }
-    }
-
-    /// <summary>Isolates malformed subtitle options before deserializing the rest of the configuration.</summary>
-    /// <param name="json">Configuration file contents.</param>
-    /// <returns>The configuration with invalid subtitle entries removed.</returns>
-    private static RelayConfig ReadSettings(string json)
-    {
-        var document = JsonNode.Parse(json, documentOptions: new() { AllowTrailingCommas = s_options.AllowTrailingCommas });
-        if (document is JsonObject root && root[nameof(RelayConfig.Advanced)] is JsonObject advanced)
-        {
-            if (advanced.TryGetPropertyValue(nameof(AdvancedConfig.SubtitleFormatPreference), out var formats))
-                advanced[nameof(AdvancedConfig.SubtitleFormatPreference)] = new JsonArray(
-                    formats is JsonArray array ? [.. array.Where(n => n is JsonValue value && value.TryGetValue<string>(out _)).Select(n => n!.DeepClone())] : []
-                );
-            if (advanced.TryGetPropertyValue(nameof(AdvancedConfig.SubtitleRenameRules), out var rules))
-            {
-                try
-                {
-                    _ = rules?.Deserialize<List<SubtitleRenameRule>>(s_options);
-                }
-                catch (JsonException ex)
-                {
-                    s_logger.Warn(ex, "Config: Invalid subtitle rules -> Keeping original subtitle names");
-                    advanced[nameof(AdvancedConfig.SubtitleRenameRules)] = new JsonArray();
-                }
-            }
-        }
-        return document?.Deserialize<RelayConfig>(s_options) ?? new();
     }
 
     /// <summary>Return the current settings, applying any path or query overrides from the current HTTP request.</summary>

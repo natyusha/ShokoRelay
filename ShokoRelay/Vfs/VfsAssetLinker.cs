@@ -89,7 +89,9 @@ public class VfsAssetLinker(IVideoService videoService)
     {
         if (string.IsNullOrWhiteSpace(sourceDir) || !Directory.Exists(sourceDir))
             return;
-        var candidates = cache.GetOrAdd(sourceDir, dir => new Lazy<string[]>(() => [.. Directory.EnumerateFiles(dir).Where(f => s_episodeMetadataExtensions.Contains(Path.GetExtension(f)))])).Value;
+        var candidates = cache
+            .GetOrAdd(sourceDir, dir => new Lazy<string[]>(() => [.. Directory.EnumerateFiles(dir).Where(f => s_episodeMetadataExtensions.Contains(Path.GetExtension(f)) && HasSubtitleTarget(f))]))
+            .Value;
         var links = SubtitleRenamer.Plan(sourceFile, destBase, candidates, subtitleRules ?? Settings.Advanced.SubtitleRenameRules, subtitleFormats ?? Settings.Advanced.SubtitleFormatPreference);
         var linkedNames = new HashSet<string>(StringComparer.Ordinal);
         foreach (var link in links)
@@ -123,6 +125,24 @@ public class VfsAssetLinker(IVideoService videoService)
                 skipped++;
                 errors.Add($"Metadata sidecar link failed: {link.Source}");
             }
+        }
+    }
+
+    /// <summary>Excludes missing or cyclic subtitle sources before format and suffix selection; other metadata keeps its existing behavior.</summary>
+    /// <param name="source">A discovered sidecar path.</param>
+    /// <returns>Whether the sidecar can participate in subtitle selection.</returns>
+    private static bool HasSubtitleTarget(string source)
+    {
+        if (!PlexConstants.LocalMediaAssets.SubtitleExtensions.Contains(Path.GetExtension(source), StringComparer.OrdinalIgnoreCase))
+            return true;
+        try
+        {
+            return File.Exists(File.ResolveLinkTarget(source, true)?.FullName ?? source);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            s_logger.Debug(ex, "VFS: Skipping unavailable subtitle -> {Source}", source);
+            return false;
         }
     }
 

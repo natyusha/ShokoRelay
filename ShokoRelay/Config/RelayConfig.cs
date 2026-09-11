@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace ShokoRelay.Config;
 
@@ -385,10 +386,12 @@ public class AdvancedConfig
 
     /// <summary>Ordered literal suffix mappings applied to external subtitles in the VFS.</summary>
     [Browsable(false)]
+    [JsonConverter(typeof(SubtitleRenameRulesConverter))]
     public List<SubtitleRenameRule> SubtitleRenameRules { get; set; } = [];
 
     /// <summary>Preferred supported subtitle extensions, followed by unlisted formats in their default order.</summary>
     [Browsable(false)]
+    [JsonConverter(typeof(SubtitleFormatPreferenceConverter))]
     public List<string> SubtitleFormatPreference { get; set; } = [.. PlexConstants.LocalMediaAssets.SubtitleExtensions.Select(extension => extension[1..])];
 
     /// <summary>Folders to ignore when generating the VFS.</summary>
