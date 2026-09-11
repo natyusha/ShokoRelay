@@ -99,39 +99,39 @@ public class VfsAssetLinker(IVideoService videoService)
             .Select(sub =>
             {
                 string suffix = Path.GetFileName(sub)[originalBase.Length..];
-                var renamed =
+                (string mappedSuffix, int priority) =
                     mappings is { Count: > 0 } && suffix.StartsWith('.') && PlexConstants.LocalMediaAssets.SubtitleExtensions.Contains(Path.GetExtension(sub))
                         ? RenameSubtitleSuffix(suffix, mappings)
                         : (Suffix: suffix, Priority: -1);
-                return (Source: sub, Name: destBase + renamed.Suffix, renamed.Priority);
+                return (Source: sub, Name: destBase + mappedSuffix, Priority: priority);
             })
             .OrderBy(link => link.Priority)
             .ThenBy(link => link.Source, StringComparer.Ordinal);
         var linkedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var link in links)
+        foreach (var (source, name, priority) in links)
         {
             // Unchanged originals precede conversions; converted collisions follow mapping order.
-            if (link.Priority >= 0 && linkedNames.Contains(link.Name))
+            if (priority >= 0 && linkedNames.Contains(name))
                 continue;
-            string destName = link.Name;
-            bool linked = VfsShared.TryCreateLink(link.Source, Path.Combine(destDir, destName), s_logger, skipExistenceCheck: skipExistenceCheck);
-            if (!linked && link.Priority >= 0)
+            string destName = name;
+            bool linked = VfsShared.TryCreateLink(source, Path.Combine(destDir, destName), s_logger, skipExistenceCheck: skipExistenceCheck);
+            if (!linked && priority >= 0)
             {
-                destName = destBase + Path.GetFileName(link.Source)[originalBase.Length..];
-                s_logger.Warn("VFS: Subtitle conversion failed -> {Name}; keeping original suffix -> {OriginalName}", link.Name, destName);
-                linked = !linkedNames.Contains(destName) && VfsShared.TryCreateLink(link.Source, Path.Combine(destDir, destName), s_logger);
+                destName = destBase + Path.GetFileName(source)[originalBase.Length..];
+                s_logger.Warn("VFS: Subtitle conversion failed -> {Name}; keeping original suffix -> {OriginalName}", name, destName);
+                linked = !linkedNames.Contains(destName) && VfsShared.TryCreateLink(source, Path.Combine(destDir, destName), s_logger);
             }
             if (linked)
             {
                 linkedNames.Add(destName);
                 planned++;
                 created++;
-                onLink?.Invoke(destName, link.Source);
+                onLink?.Invoke(destName, source);
             }
             else
             {
                 skipped++;
-                errors.Add($"Metadata sidecar link failed: {link.Source}");
+                errors.Add($"Metadata sidecar link failed: {source}");
             }
         }
     }
