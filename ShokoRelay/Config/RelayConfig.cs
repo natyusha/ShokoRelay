@@ -384,15 +384,9 @@ public class AdvancedConfig
     [Display(Name = "Path Mappings", Description = "Mappings for working base paths to Shoko base paths. Enter one mapping per line")]
     public Dictionary<string, string> PathMappings { get; set; } = [];
 
-    /// <summary>Ordered literal suffix mappings applied to external subtitles in the VFS.</summary>
+    /// <summary>Subtitle language token replacements, in collision priority order.</summary>
     [Browsable(false)]
-    [JsonConverter(typeof(SubtitleRenameRulesConverter))]
-    public List<SubtitleRenameRule> SubtitleRenameRules { get; set; } = [];
-
-    /// <summary>Preferred supported subtitle extensions, followed by unlisted formats in their default order.</summary>
-    [Browsable(false)]
-    [JsonConverter(typeof(SubtitleFormatPreferenceConverter))]
-    public List<string> SubtitleFormatPreference { get; set; } = [.. PlexConstants.LocalMediaAssets.SubtitleExtensions.Select(extension => extension[1..])];
+    public OrderedDictionary<string, string> SubtitleLanguageMappings { get; set; } = [];
 
     /// <summary>Folders to ignore when generating the VFS.</summary>
     [Display(Name = "Folder Exclusions", Description = "Folders within Shoko destinations which you do not want VFS generation to consider. One per line")]

@@ -510,9 +510,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                             errors,
                             ref created,
                             (name, s) => LocalOnLink(locInfo.ImportRoot, seasonName, name, s, Path.Combine(seasonPath, name)),
-                            skipCheck,
-                            session.SubtitleRenameRules,
-                            session.SubtitleFormatPreference
+                            skipCheck
                         );
                     }
                 }
@@ -652,9 +650,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                             expectedFiles.Add(Path.Combine(moviePath, name));
                             onLink?.Invoke(locInfo.ImportRoot, $"Movie ❯ {folderName}", name, s);
                         },
-                        skipCheck,
-                        session.SubtitleRenameRules,
-                        session.SubtitleFormatPreference
+                        skipCheck
                     );
                 }
                 else

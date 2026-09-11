@@ -302,45 +302,36 @@ Shoko Relay has full support for all of Plex's features which involve local meta
   - _Requires the `Plex NFO Series` provider to be added to the Shoko Relay Agent in Plex_
 - Be sure to read each of the above Plex articles if you need help figuring out the format for any of the local metadata
 
-### Subtitle Suffix Rules
+### Subtitle Language Mappings
 
-Subtitle naming is configured only in ShokoRelay's `preferences.json`. Repository installations use Shoko's configuration directory under `2b0f5a7e-3d2b-4f3d-9e6b-7f0a6b2d8c9a`; an existing `config` directory beside the plugin takes precedence. Merge these fields into the existing `Advanced` object, keeping your other settings:
+Subtitle language tokens can be replaced in VFS filenames through ShokoRelay's `preferences.json`. Repository installations use Shoko's configuration directory under `2b0f5a7e-3d2b-4f3d-9e6b-7f0a6b2d8c9a`; an existing `config` directory beside the plugin takes precedence. Add this property to your existing `Advanced` object:
 
 ```json
 {
   "Advanced": {
-    "SubtitleRenameRules": [
-      { "OriginalSuffix": "scjp", "FinalSuffix": "zh-Hans" },
-      { "OriginalSuffix": "scjp", "FinalSuffix": "ja" },
-      { "OriginalSuffix": "chs", "FinalSuffix": "zh-Hans" },
-      { "OriginalSuffix": "cht", "FinalSuffix": "zh-Hant" }
-    ],
-    "SubtitleFormatPreference": ["ass", "ssa", "srt", "vtt", "smi"]
+    "SubtitleLanguageMappings": {
+      "chs": "zh-Hans",
+      "sc": "zh-Hans",
+      "cht": "zh-Hant",
+      "scjp": "zh-Hans"
+    }
   }
 }
 ```
 
-The suffix is the complete text between the video basename and the subtitle extension, without the surrounding dots. Matching is literal and case-insensitive. Rules are evaluated in array order; repeated original or final suffixes are allowed. `SubtitleRenameRules` defaults to an empty array, with no preset conversions. Existing rules saved by earlier versions work without changes.
+Matching is literal and case-insensitive, and applies only to dot-separated tokens between the original video basename and a supported subtitle extension (ASS, SSA, SRT, VTT, or SMI). For example, `.CHS.forced.ass` becomes `.zh-Hans.forced.ass`. The flags `forced`, `sdh`, and `cc` are preserved. Each original token is processed once: a replacement is never fed back through the mappings. Compound aliases such as `scjp` require their own key and produce only one link. Other sidecars, unmatched subtitles, and legacy suffixes with other separators retain their names after the normal VFS video-basename change.
 
-If an episode has both `.scjp.ass` and `.chs.ass`, its VFS subtitles will be `.zh-Hans.ass` and `.ja.ass`, both linking to the original `.scjp.ass`. If it also has `.cht.ass`, a third link, `.zh-Hant.ass`, is generated. Original subtitle files are never renamed, modified, or duplicated on disk.
+All subtitle formats are retained. Priority applies only when files would produce the same complete destination filename, compared case-insensitively:
 
-Selection happens separately for each final suffix:
+1. An unchanged original already using the destination name wins.
+2. Otherwise, the first available matching mapping in configuration order wins. In the example, `.chs.ass` beats `.sc.ass` for `.zh-Hans.ass`; `.sc.srt` can still supply `.zh-Hans.srt`.
+3. When a filename uses multiple mappings, its earliest mapping determines priority. Equal-priority sources use ordinal filename order, so directory enumeration order cannot change the winner.
 
-1. An original subtitle already using the final suffix wins automatically.
-2. Otherwise, the first matching rule supplies the subtitle. Reorder the array to change priority.
-3. For the chosen source suffix, one format is selected using `SubtitleFormatPreference`, followed by any unlisted formats in the default order: ASS, SSA, SRT, VTT, SMI. Format preference never overrides the first two steps.
+Losing conversions are omitted from the VFS. Unchanged case-only filename variants remain unchanged; a conversion cannot displace them. Missing or cyclic subtitle sources cannot win a collision. Original files are never renamed, edited, or duplicated. If a converted link cannot be created, the original suffix is used when possible.
 
-For example, `["srt"]` prefers SRT, then ASS, SSA, VTT, and SMI. Only these five supported formats can be ranked; adding another extension does not enable it. The preference list accepts up to ten distinct supported extensions of one to ten ASCII letters or digits each. Entries are case-insensitive; outer whitespace and one optional leading dot are removed (`" .SRT "` becomes `"srt"`). Invalid entries (including non-string JSON values), unsupported extensions, and duplicates are ignored. An empty list, `null`, a non-array value, or a list containing no qualifying entries uses the default order. Format preference does not discard formats from subtitles that are passed through unchanged.
+Mappings default to an empty object. Missing, empty, or `null` mappings disable replacement. Keys and values have outer whitespace trimmed for matching; replacements must be nonempty single filename-safe tokens. Invalid replacements are ignored. JSON parsing and loading errors follow the existing configuration loader: a warning is logged and default settings are used. There are no custom subtitle converters. Older experimental `SubtitleRenameRules` and `SubtitleFormatPreference` fields are no longer used; replace them with this mapping object.
 
-Subtitles without a suffix, subtitles unrelated to the configured rules, and other sidecars retain their existing names after the normal VFS video-basename change. Conversions require a dot before the suffix; legacy names using other punctuation or whitespace separators are passed through unchanged. Matched sources that lose priority are omitted from the VFS. Conversions always read original filenames; generated suffixes are never processed as new inputs. Subtitle symlinks with missing targets or cycles are excluded before selection, allowing an available format or lower-priority source to supply the output.
-
-Case-only duplicates with the same extension, such as `.SCJP.ass` and `.scjp.ass`, are all linked with their original suffix spelling and excluded from conversion. Other formats of that ambiguous source suffix are also preserved. Lower-priority unambiguous sources can still supply conversions. If the ambiguous suffix is itself a final suffix, its existing variants are preserved and no conversion replaces them.
-
-Compound suffixes require explicit rules: `chs` does not match `chs.forced`; use `chs.forced` → `zh-Hans.forced` to convert that filename. These are filename mappings, so the final suffix need not be a language code. Plex recognition still depends on the filename conventions supported by the server and client.
-
-Both rule suffixes must be nonempty and cannot contain surrounding dots, path separators, control characters, or `<>:"|?*`. If an externally edited configuration contains an invalid rule or a malformed rule list, conversion is disabled and a warning is logged; original subtitle names and unrelated settings are retained. If the filesystem rejects a converted filename (for example, because it is too long), the selected subtitle is linked with its original suffix instead and a warning is logged.
-
-Save valid JSON, reload any open dashboard before changing other settings, and refresh the VFS to apply the configuration. ShokoRelay uses its existing configuration file watcher to pick up edits. Set `SubtitleRenameRules` to `[]` and refresh to restore the original suffixes. Subtitle files added separately from their video may need a manual VFS refresh.
+Keep entries in the desired priority order when editing the file. Save valid JSON, reload any open dashboard before changing other settings, and refresh the VFS to apply changes. Clearing the mapping object and refreshing restores the original suffixes. Subtitle files added separately from their video may need a manual VFS refresh. Plex language recognition still depends on the filename conventions supported by the server and client.
 
 ### VFS Mapping
 

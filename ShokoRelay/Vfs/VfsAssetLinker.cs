@@ -69,8 +69,6 @@ public class VfsAssetLinker(IVideoService videoService)
     /// <param name="created">Reference to the successful links created counter.</param>
     /// <param name="onLink">Optional callback to record the created link for the VFS Browser blueprint.</param>
     /// <param name="skipExistenceCheck">If true, bypasses the filesystem check and writes the link directly.</param>
-    /// <param name="subtitleRules">Snapshot of subtitle rules for this build, or the current configuration when omitted.</param>
-    /// <param name="subtitleFormats">Snapshot of subtitle format preferences for this build, or the current configuration when omitted.</param>
     public void LinkEpisodeMetadata(
         string sourceFile,
         string sourceDir,
@@ -82,43 +80,53 @@ public class VfsAssetLinker(IVideoService videoService)
         List<string> errors,
         ref int created,
         Action<string, string?>? onLink = null,
-        bool skipExistenceCheck = false,
-        IReadOnlyList<SubtitleRenameRule>? subtitleRules = null,
-        IReadOnlyList<string>? subtitleFormats = null
+        bool skipExistenceCheck = false
     )
     {
         if (string.IsNullOrWhiteSpace(sourceDir) || !Directory.Exists(sourceDir))
             return;
-        var candidates = cache
-            .GetOrAdd(sourceDir, dir => new Lazy<string[]>(() => [.. Directory.EnumerateFiles(dir).Where(f => s_episodeMetadataExtensions.Contains(Path.GetExtension(f)) && HasSubtitleTarget(f))]))
-            .Value;
-        var links = SubtitleRenamer.Plan(sourceFile, destBase, candidates, subtitleRules ?? Settings.Advanced.SubtitleRenameRules, subtitleFormats ?? Settings.Advanced.SubtitleFormatPreference);
-        var linkedNames = new HashSet<string>(StringComparer.Ordinal);
+        string originalBase = Path.GetFileNameWithoutExtension(sourceFile);
+        var candidates = cache.GetOrAdd(sourceDir, dir => new Lazy<string[]>(() => [.. Directory.EnumerateFiles(dir).Where(f => s_episodeMetadataExtensions.Contains(Path.GetExtension(f)))])).Value;
+        var mappings = Settings.Advanced.SubtitleLanguageMappings;
+        var links = candidates
+            .Where(sub =>
+            {
+                string name = Path.GetFileName(sub);
+                return name.StartsWith(originalBase, StringComparison.OrdinalIgnoreCase)
+                    && (!PlexConstants.LocalMediaAssets.SubtitleExtensions.Contains(Path.GetExtension(sub)) || name.Length == originalBase.Length || !char.IsLetterOrDigit(name[originalBase.Length]))
+                    && HasSubtitleTarget(sub);
+            })
+            .Select(sub =>
+            {
+                string suffix = Path.GetFileName(sub)[originalBase.Length..];
+                var renamed =
+                    mappings is { Count: > 0 } && suffix.StartsWith('.') && PlexConstants.LocalMediaAssets.SubtitleExtensions.Contains(Path.GetExtension(sub))
+                        ? RenameSubtitleSuffix(suffix, mappings)
+                        : (Suffix: suffix, Priority: -1);
+                return (Source: sub, Name: destBase + renamed.Suffix, renamed.Priority);
+            })
+            .OrderBy(link => link.Priority)
+            .ThenBy(link => link.Source, StringComparer.Ordinal);
+        var linkedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var link in links)
         {
-            string name = link.Name;
-            if (linkedNames.Contains(name))
+            // Unchanged originals precede conversions; converted collisions follow mapping order.
+            if (link.Priority >= 0 && linkedNames.Contains(link.Name))
                 continue;
-            bool linked = VfsShared.TryCreateLink(link.Source, Path.Combine(destDir, name), s_logger, skipExistenceCheck: skipExistenceCheck);
-            if (!linked)
+            string destName = link.Name;
+            bool linked = VfsShared.TryCreateLink(link.Source, Path.Combine(destDir, destName), s_logger, skipExistenceCheck: skipExistenceCheck);
+            if (!linked && link.Priority >= 0)
             {
-                string originalName = destBase + Path.GetFileName(link.Source)[Path.GetFileNameWithoutExtension(sourceFile).Length..];
-                if (name != originalName)
-                {
-                    s_logger.Warn("VFS: Subtitle conversion failed -> {Name}; keeping original suffix -> {OriginalName}", name, originalName);
-                    name = originalName;
-                    if (linkedNames.Contains(name))
-                        continue;
-                    // Reuse existing fallback links even during a build that otherwise skips existence checks.
-                    linked = VfsShared.TryCreateLink(link.Source, Path.Combine(destDir, name), s_logger);
-                }
+                destName = destBase + Path.GetFileName(link.Source)[originalBase.Length..];
+                s_logger.Warn("VFS: Subtitle conversion failed -> {Name}; keeping original suffix -> {OriginalName}", link.Name, destName);
+                linked = !linkedNames.Contains(destName) && VfsShared.TryCreateLink(link.Source, Path.Combine(destDir, destName), s_logger);
             }
             if (linked)
             {
-                linkedNames.Add(name);
+                linkedNames.Add(destName);
                 planned++;
                 created++;
-                onLink?.Invoke(name, link.Source);
+                onLink?.Invoke(destName, link.Source);
             }
             else
             {
@@ -128,12 +136,38 @@ public class VfsAssetLinker(IVideoService videoService)
         }
     }
 
-    /// <summary>Excludes missing or cyclic subtitle sources before format and suffix selection; other metadata keeps its existing behavior.</summary>
-    /// <param name="source">A discovered sidecar path.</param>
-    /// <returns>Whether the sidecar can participate in subtitle selection.</returns>
+    /// <summary>Replaces language tokens once, preserving flags and ranking collisions by the earliest mapping used.</summary>
+    private static (string Suffix, int Priority) RenameSubtitleSuffix(string suffix, OrderedDictionary<string, string> mappings)
+    {
+        var parts = suffix.Split('.');
+        int priority = int.MaxValue;
+        for (int i = 1; i < parts.Length - 1; i++)
+        {
+            if (parts[i].ToLowerInvariant() is "forced" or "sdh" or "cc")
+                continue;
+            for (int j = 0; j < mappings.Count; j++)
+            {
+                var mapping = mappings.GetAt(j);
+                if (!parts[i].Equals(mapping.Key.Trim(), StringComparison.OrdinalIgnoreCase))
+                    continue;
+                string? replacement = mapping.Value?.Trim();
+                // Reuse the existing filename sanitizer to reject unsafe replacements, without changing other settings.
+                if (!string.IsNullOrEmpty(replacement) && !replacement.Contains('.') && VfsHelper.SanitizeName(replacement) == replacement)
+                {
+                    parts[i] = replacement;
+                    priority = Math.Min(priority, j);
+                }
+                break;
+            }
+        }
+        string renamed = string.Join('.', parts);
+        return renamed.Equals(suffix, StringComparison.OrdinalIgnoreCase) ? (suffix, -1) : (renamed, priority);
+    }
+
+    /// <summary>Excludes unavailable subtitle sources before they can win a destination collision.</summary>
     private static bool HasSubtitleTarget(string source)
     {
-        if (!PlexConstants.LocalMediaAssets.SubtitleExtensions.Contains(Path.GetExtension(source), StringComparer.OrdinalIgnoreCase))
+        if (!PlexConstants.LocalMediaAssets.SubtitleExtensions.Contains(Path.GetExtension(source)))
             return true;
         try
         {
