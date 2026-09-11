@@ -57,10 +57,10 @@
 #anidb {
   transition: all 0.3s ease-in-out;
   margin-top: 0.15em;
-  pointer-events: none;
+  text-decoration: none;
   color: color-mix(in srgb, var(--highlight-color) 80%, transparent);
   font-size: 0.9em;
-  text-decoration: none;
+  pointer-events: none;
 }
 #anidb {
   margin-top: 5px;
@@ -69,8 +69,8 @@
 }
 #anime:hover,
 #anidb:hover {
-  color: var(--highlight-color);
   text-decoration: dotted underline;
+  color: var(--highlight-color);
 }
 /* #endregion */
 
@@ -78,14 +78,14 @@
 */
 .video-container::after {
   position: absolute;
+  transition: opacity 0.3s ease-in-out;
   opacity: 0;
   z-index: 1;
-  transition: opacity 0.3s ease-in-out;
-  inset: 0;
   background: linear-gradient(to bottom, var(--black-t60), transparent 25%), linear-gradient(to top, var(--black-t60), transparent 25%);
-  pointer-events: none;
-  content: "";
   color: var(--text-color);
+  content: "";
+  inset: 0;
+  pointer-events: none;
 }
 .ui-left,
 #volume-text {
@@ -129,8 +129,8 @@
 .ui-left,
 #volume-text,
 #volume-icon {
-  opacity: 0;
   transition: all 0.3s ease-in-out;
+  opacity: 0;
 }
 .video-container:hover::after,
 .video-container:hover .ui-top-row,

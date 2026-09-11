@@ -54,9 +54,9 @@ body {
 #vfs-count {
   display: inline-block;
   overflow: hidden;
-  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 500;
 }
 /* #endregion */
 
@@ -65,11 +65,11 @@ body {
 .loading-spinner {
   display: inline-block;
   transform-origin: center center;
-  animation: spin 900ms linear infinite;
-  fill: var(--highlight-color);
   margin-bottom: 8px;
   width: 48px;
   height: 48px;
+  animation: spin 900ms linear infinite;
+  fill: var(--highlight-color);
 }
 /* #endregion */
 
@@ -105,12 +105,12 @@ body {
   left: 2.2em;
   transition: all 0.2s ease-in-out;
   overflow: hidden;
-  pointer-events: none;
-  color: color-mix(in srgb, var(--text-color) 40%, transparent);
-  font-size: 1em;
-  user-select: none;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: color-mix(in srgb, var(--text-color) 40%, transparent);
+  font-size: 1em;
+  pointer-events: none;
+  user-select: none;
 }
 #filter:focus ~ .filter-placeholder,
 #filter:not(:placeholder-shown) ~ .filter-placeholder {
@@ -122,12 +122,12 @@ body {
   position: absolute;
   top: 3px;
   right: 3px;
-  justify-content: center;
   align-items: center;
+  justify-content: center;
   z-index: 4;
-  cursor: pointer;
   border: none;
   background: none;
+  cursor: pointer;
   padding: 4px;
 }
 #filter-clear:hover {
@@ -153,8 +153,8 @@ body {
 }
 #tree .placeholder {
   padding: 40px 8px;
-  color: color-mix(in srgb, var(--text-color) 60%, transparent);
   text-align: center;
+  color: color-mix(in srgb, var(--text-color) 60%, transparent);
 }
 #tree ul {
   margin-top: 0;
@@ -193,13 +193,13 @@ body {
 #tree summary {
   display: flex;
   align-items: center;
-  cursor: pointer;
   border-radius: 3px;
+  cursor: pointer;
   padding: 3px 4px;
   overflow: hidden;
   list-style: none;
-  user-select: none;
   white-space: nowrap;
+  user-select: none;
 }
 .vfs-title {
   flex: 0 1 auto;
@@ -217,17 +217,17 @@ body {
   flex-shrink: 0;
 }
 .vfs-link.small {
-  font-size: 0.75em;
   white-space: nowrap;
+  font-size: 0.75em;
 }
 a.vfs-link {
   margin-left: 4px;
-  color: color-mix(in srgb, var(--highlight-color) 80%, transparent);
   text-decoration: none;
+  color: color-mix(in srgb, var(--highlight-color) 80%, transparent);
 }
 a.vfs-link:hover {
-  color: var(--highlight-color);
   text-decoration: dotted underline;
+  color: var(--highlight-color);
 }
 #tree summary::marker,
 #tree summary::-webkit-details-marker,
@@ -274,9 +274,9 @@ a.vfs-link:hover {
 #tree .leaf {
   display: flex;
   align-items: center;
-  cursor: pointer;
   margin-left: -11px;
   border-radius: 3px;
+  cursor: pointer;
   padding: 2px 4px;
   min-width: 0;
   font-variant-numeric: tabular-nums;

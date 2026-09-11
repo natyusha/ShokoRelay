@@ -16,9 +16,9 @@
   padding: 4px 12px;
   min-width: 75px;
   height: auto;
+  white-space: nowrap;
   color: var(--text-color);
   font-size: 0.85em;
-  white-space: nowrap;
 }
 .tab-btn.active {
   border-color: var(--button-color);
@@ -36,10 +36,10 @@
 .theme-btn {
   transition: all 0.3s ease-in-out;
   cursor: pointer;
-  color: var(--highlight-color);
-  font-weight: 700;
-  font-size: 1.4em;
   line-height: 0;
+  color: var(--highlight-color);
+  font-size: 1.4em;
+  font-weight: 700;
 }
 .refresh-btn {
   transform: translateY(-1.3px);
@@ -74,8 +74,8 @@
 .vfs-sep {
   margin: 0 10px;
   color: var(--highlight-color);
-  font-weight: 700;
   font-size: 0.9em;
+  font-weight: 700;
 }
 #tree .leaf span:first-child {
   flex-shrink: 0;
@@ -86,11 +86,11 @@
   margin-left: 8px;
   min-width: 0;
   overflow: hidden;
-  color: color-mix(in srgb, currentColor 50%, transparent);
-  font-size: 0.9em;
-  font-family: monospace;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: color-mix(in srgb, currentColor 50%, transparent);
+  font-family: monospace;
+  font-size: 0.9em;
 }
 /* #endregion */
 

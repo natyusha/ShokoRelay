@@ -16,19 +16,19 @@
   --logo-hair-gradient3: #ece1b8;
 }
 @font-face {
-  font-style: normal;
-  font-weight: 200;
-  src: url("../fonts/iosevka-nn-condensed-extralight.subset.woff2") format("woff2");
   font-family: "Iosevka NN Condensed Extralight";
+  font-weight: 200;
+  font-style: normal;
+  src: url("../fonts/iosevka-nn-condensed-extralight.subset.woff2") format("woff2");
   font-display: swap;
 }
 #brand-header {
   display: flex;
-  justify-content: center;
   align-items: center;
-  filter: drop-shadow(0 0 5px rgb(from var(--hover-color) r g b / 0.25));
+  justify-content: center;
   width: 100%;
   height: 6.25em;
+  filter: drop-shadow(0 0 5px rgb(from var(--hover-color) r g b / 0.25));
 }
 #header-logo {
   flex-shrink: 0;
@@ -49,13 +49,13 @@
   margin-left: 1.25rem;
   min-width: 0;
   overflow: hidden;
-  font-size: 6rem;
-  line-height: 1.1;
-  font-family: "Iosevka NN Condensed Extralight";
-  letter-spacing: -0.06em;
-  user-select: none;
   text-overflow: ellipsis;
+  line-height: 1.1;
+  letter-spacing: -0.06em;
   white-space: nowrap;
+  font-family: "Iosevka NN Condensed Extralight";
+  font-size: 6rem;
+  user-select: none;
 }
 /* #endregion */
 
@@ -93,8 +93,8 @@
 }
 #logs-list .log-link {
   padding-right: 6px;
-  font-weight: 500;
   font-size: 1.1em;
+  font-weight: 500;
 }
 .placeholder {
   padding: 0.5rem 0;
@@ -109,8 +109,8 @@
   border-radius: 0;
   width: 100%;
   height: 470px;
-  font-size: 1.1em;
   font-family: monospace;
+  font-size: 1.1em;
 }
 .modal.overrides {
   width: 870px;
@@ -123,22 +123,22 @@
 }
 #sync-direction-arrow {
   display: inline-flex;
-  justify-content: center;
   align-items: center;
+  justify-content: center;
   line-height: 1;
 }
 .direction-toggle {
-  appearance: none;
-  -webkit-appearance: none;
   display: inline-flex;
-  cursor: pointer;
   margin-bottom: 16px;
-  box-shadow: 0 0 4px 2px var(--glow);
   border: 1px solid var(--border-color);
+  box-shadow: 0 0 4px 2px var(--glow);
   background: var(--inset-color);
+  cursor: pointer;
   padding: 10px 6px;
   height: auto;
   color: var(--text-color);
+  -webkit-appearance: none;
+  appearance: none;
   user-select: none;
 }
 .direction-toggle:hover {
@@ -151,20 +151,20 @@
 }
 .dir-label {
   margin-top: 9px;
+  text-align: center;
   color: var(--text-color);
   font-size: 1.1em;
-  text-align: center;
 }
 .dir-icon {
   display: inline-block;
   position: absolute;
-  visibility: visible;
   transition:
     opacity 0.4s ease-out,
     visibility 0.4s steps(2, end);
-  fill: var(--highlight-color);
+  visibility: visible;
   width: 28px;
   height: 28px;
+  fill: var(--highlight-color);
 }
 .dir-icon.hidden {
   visibility: hidden;
@@ -217,22 +217,22 @@ h2 .plex-svg {
 }
 label > small::before {
   margin: 0 0.6rem;
-  content: "❯";
   color: var(--highlight-color);
   font-weight: 900;
+  content: "❯";
 }
 .vfs-rebuild label small::after,
 .modal-body small strong {
   display: inline-block;
   vertical-align: -0.06em;
+  line-height: 0;
   color: var(--highlight-color);
   font-size: 1.4em;
-  line-height: 0;
 }
 .vfs-rebuild label small::after {
   margin-left: 4px;
-  content: "⟳";
   font-weight: 700;
+  content: "⟳";
 }
 /* #endregion */
 
@@ -240,11 +240,11 @@ label > small::before {
 */
 .w46-button {
   display: inline-flex;
-  justify-content: center;
   align-items: center;
-  fill: var(--bg-color);
+  justify-content: center;
   padding: 12px 16px;
   max-width: 46px;
+  fill: var(--bg-color);
 }
 .w46-button .icon-svg {
   margin: -2em;
@@ -282,10 +282,10 @@ button.loading:hover {
 .button-spinner svg {
   display: block;
   transform-origin: center center;
-  animation: spin 900ms linear infinite;
-  fill: var(--bg-color);
   width: 100%;
   height: 100%;
+  animation: spin 900ms linear infinite;
+  fill: var(--bg-color);
 }
 .w46-button .button-spinner {
   margin: 24px 0 0 24px;
@@ -301,10 +301,10 @@ button.loading:hover {
 label.shoko-checkbox {
   display: inline-flex;
   align-items: flex-start;
-  gap: 0.6rem;
-  cursor: pointer;
   margin-left: 2px;
+  cursor: pointer;
   padding: 0.219rem 0;
+  gap: 0.6rem;
   user-select: none;
 }
 label.shoko-checkbox input[type="checkbox"] {
@@ -327,8 +327,8 @@ label.shoko-checkbox input[type="checkbox"] {
 }
 .shoko-checkbox-icon {
   display: inline-flex;
-  justify-content: center;
   align-items: center;
+  justify-content: center;
   transition: all 0.3s ease-in-out;
   fill: var(--highlight-color);
 }
@@ -405,19 +405,17 @@ label.shoko-checkbox:hover input:disabled + .shoko-checkbox-icon .checked {
 }
 .float-link {
   display: inline-flex;
-  justify-content: center;
   align-items: center;
+  justify-content: center;
   transition: all 0.3s ease-in-out;
   width: 40px;
   height: 40px;
   color: var(--text-color);
 }
 button.float-link {
-  appearance: none;
-  -webkit-appearance: none;
   display: inline-flex;
-  justify-content: center;
   align-items: center;
+  justify-content: center;
   margin: 0;
   border: none;
   background: transparent;
@@ -425,6 +423,8 @@ button.float-link {
   width: 40px;
   height: 40px;
   color: var(--text-color);
+  -webkit-appearance: none;
+  appearance: none;
 }
 .float-link:hover {
   color: var(--hover-color);
@@ -444,12 +444,12 @@ button.float-link {
 }
 .details-anim > summary {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   transition: all 0.3s ease-in-out;
-  cursor: pointer;
   margin: 6px 12px 6px 0;
   outline: none;
+  cursor: pointer;
   font-weight: 500;
   user-select: none;
 }
