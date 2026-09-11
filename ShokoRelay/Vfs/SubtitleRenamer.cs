@@ -28,7 +28,7 @@ public static class SubtitleRenamer
             if (!name.StartsWith(originalBase, StringComparison.OrdinalIgnoreCase))
                 continue;
             string extension = Path.GetExtension(name);
-            if (!PlexConstants.LocalMediaAssets.SubtitleExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
+            if (rules.Count == 0 || !PlexConstants.LocalMediaAssets.SubtitleExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
             {
                 links.Add(new(source, destBase + name[originalBase.Length..]));
                 continue;
@@ -38,7 +38,7 @@ public static class SubtitleRenamer
             if (stem.Length < originalBase.Length || (stem.Length > originalBase.Length && stem[originalBase.Length] != '.'))
                 continue;
             string suffix = stem.Length == originalBase.Length ? "" : stem[(originalBase.Length + 1)..];
-            if (suffix.Length == 0 || rules.Count == 0)
+            if (suffix.Length == 0)
                 links.Add(new(source, destBase + name[originalBase.Length..]));
             else
                 subtitles.Add(new(source, suffix, extension));

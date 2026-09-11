@@ -91,13 +91,32 @@ public class VfsAssetLinker(IVideoService videoService)
             return;
         var candidates = cache.GetOrAdd(sourceDir, dir => new Lazy<string[]>(() => [.. Directory.EnumerateFiles(dir).Where(f => s_episodeMetadataExtensions.Contains(Path.GetExtension(f)))])).Value;
         var links = SubtitleRenamer.Plan(sourceFile, destBase, candidates, subtitleRules ?? Settings.Advanced.SubtitleRenameRules, subtitleFormats ?? Settings.Advanced.SubtitleFormatPreference);
+        var linkedNames = new HashSet<string>(StringComparer.Ordinal);
         foreach (var link in links)
         {
-            if (VfsShared.TryCreateLink(link.Source, Path.Combine(destDir, link.Name), s_logger, skipExistenceCheck: skipExistenceCheck))
+            string name = link.Name;
+            if (linkedNames.Contains(name))
+                continue;
+            bool linked = VfsShared.TryCreateLink(link.Source, Path.Combine(destDir, name), s_logger, skipExistenceCheck: skipExistenceCheck);
+            if (!linked)
             {
+                string originalName = destBase + Path.GetFileName(link.Source)[Path.GetFileNameWithoutExtension(sourceFile).Length..];
+                if (name != originalName)
+                {
+                    s_logger.Warn("VFS: Subtitle conversion failed -> {Name}; keeping original suffix -> {OriginalName}", name, originalName);
+                    name = originalName;
+                    if (linkedNames.Contains(name))
+                        continue;
+                    // Reuse existing fallback links even during a build that otherwise skips existence checks.
+                    linked = VfsShared.TryCreateLink(link.Source, Path.Combine(destDir, name), s_logger);
+                }
+            }
+            if (linked)
+            {
+                linkedNames.Add(name);
                 planned++;
                 created++;
-                onLink?.Invoke(link.Name, link.Source);
+                onLink?.Invoke(name, link.Source);
             }
             else
             {
