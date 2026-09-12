@@ -613,6 +613,11 @@
             <small>This setting can be ignored unless you want to use a specific Shoko server URL or are having issues with the auto detection.</small>
             <h4>Path Mappings</h4>
             <small>Configure this if your Plex server has different mappings than Shoko and you want to bypass auto detection for a marginal performance improvement. Nothing else requires it.</small>
+            <h4>Subtitle Language Mappings</h4>
+            <small>
+              Configure this if your local subtitle files use language codes which Plex does not support. Matches are replaced exactly between dot separators, preserve modifiers like ".forced", and are
+              evaluated top-to-bottom for collision priority.
+            </small>
             <h4>Folder Exclusions</h4>
             <small>
               Allows specific folders within your Shoko managed destinations to be ignored during VFS generation. Any Shoko managed folders that are not marked as "Destination" or "None" as well as the: VFS

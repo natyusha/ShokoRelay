@@ -126,7 +126,7 @@ namespace ShokoRelay.Plex
 
         #region Local Media Assets
 
-        /// <summary>Extension-set lookup for recognized artwork file types.</summary>
+        /// <summary>Extension-set lookup for recognized local media file types.</summary>
         public static class LocalMediaAssets
         {
             // csharpier-ignore
@@ -140,10 +140,14 @@ namespace ShokoRelay.Plex
             /// <summary>Series level metadata including: Audio extensions that Plex treats as theme songs and NFO Metadata files.</summary>
             public static readonly FrozenSet<string> SeriesMetadata = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".mp3", ".nfo" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
-            /// <summary>Episode level sidecar files including: Text-based subtitle extensions supported by Plex and NFO Metadata files.</summary>
-            public static readonly FrozenSet<string> EpisodeMetadata = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".srt", ".smi", ".ssa", ".ass", ".vtt", ".nfo" }.ToFrozenSet(
-                StringComparer.OrdinalIgnoreCase
-            );
+            /// <summary>Supported subtitle file extensions.</summary>
+            public static readonly FrozenSet<string> SubtitleExtensions = ((string[])[".srt", ".smi", ".ssa", ".ass", ".vtt"]).ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+            /// <summary>Subtitle modifiers that are ignored during language remapping.</summary>
+            public static readonly FrozenSet<string> SubtitleModifiers = ((string[])["forced", "sdh", "cc"]).ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+            /// <summary>Episode level sidecar file extensions including subtitles and NFO metadata files.</summary>
+            public static readonly FrozenSet<string> EpisodeMetadata = ((string[])[.. SubtitleExtensions, ".nfo"]).ToFrozenSet(StringComparer.OrdinalIgnoreCase);
         }
 
         /// <summary>Represents a configuration for a specific collection artwork type.</summary>
