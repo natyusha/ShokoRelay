@@ -144,7 +144,7 @@ namespace ShokoRelay.Plex
             public static readonly FrozenSet<string> SubtitleExtensions = ((string[])[".srt", ".smi", ".ssa", ".ass", ".vtt"]).ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
             /// <summary>Subtitle modifiers that are ignored during language remapping.</summary>
-            public static readonly FrozenSet<string> SubtitleModifiers = ((string[])["forced", "sdh", "cc"]).ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+            public static readonly FrozenSet<string> SubtitleModifiers = ((string[])["default", "forced", "sdh", "cc"]).ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
             /// <summary>Episode level sidecar file extensions including subtitles and NFO metadata files.</summary>
             public static readonly FrozenSet<string> EpisodeMetadata = ((string[])[.. SubtitleExtensions, ".nfo"]).ToFrozenSet(StringComparer.OrdinalIgnoreCase);
