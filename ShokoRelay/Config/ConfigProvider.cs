@@ -197,6 +197,7 @@ public class ConfigProvider
             ApplyDefaultValues(s);
             NormalizeVfsRoots(s);
             NormalizePathMappings(s);
+            NormalizeSubtitleMappings(s);
             NormalizeCsvFields(s);
             NormalizeSettings(s);
             return _settings = s;
@@ -288,6 +289,7 @@ public class ConfigProvider
         if (!Validator.TryValidateObject(settings, new ValidationContext(settings), null, true))
             throw new ArgumentException("Config validation failed.");
         NormalizePathMappings(settings);
+        NormalizeSubtitleMappings(settings);
         NormalizeCsvFields(settings);
         lock (_settingsLock)
             File.WriteAllText(_filePath, JsonSerializer.Serialize(settings, s_options));
@@ -496,6 +498,14 @@ public class ConfigProvider
             },
             v => (TextHelper.NormalizePathForPlex(v.Value.Trim()) is var p && !p.StartsWith('/') && !p.Contains(':') && !p.StartsWith("//", StringComparison.Ordinal)) ? "/" + p : p
         );
+    }
+
+    /// <summary>Normalizes the subtitle language mappings to ensure they are case-insensitive while preserving priority order.</summary>
+    /// <param name="settings">The relay configuration instance to update.</param>
+    private static void NormalizeSubtitleMappings(RelayConfig settings)
+    {
+        if (settings.Advanced.SubtitleLanguageMappings.Count > 0)
+            settings.Advanced.SubtitleLanguageMappings = new OrderedDictionary<string, string>(settings.Advanced.SubtitleLanguageMappings, StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>Normalizes comma-separated and newline-separated settings fields by trimming and removing duplicates.</summary>

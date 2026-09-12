@@ -383,8 +383,9 @@ public class AdvancedConfig
     [Display(Name = "Path Mappings", Description = "Mappings for working base paths to Shoko base paths. Enter one mapping per line")]
     public Dictionary<string, string> PathMappings { get; set; } = [];
 
-    /// <summary>Subtitle language token replacements, in collision priority order.</summary>
-    [Browsable(false)]
+    /// <summary>Subtitle language mappings, in collision priority order.</summary>
+    [Display(Name = "Subtitle Language Mappings", Description = "Mappings for subtitle language codes. Enter one mapping per line")]
+    [VfsRebuild]
     public OrderedDictionary<string, string> SubtitleLanguageMappings { get; set; } = [];
 
     /// <summary>Folders to ignore when generating the VFS.</summary>

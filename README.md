@@ -302,37 +302,6 @@ Shoko Relay has full support for all of Plex's features which involve local meta
   - _Requires the `Plex NFO Series` provider to be added to the Shoko Relay Agent in Plex_
 - Be sure to read each of the above Plex articles if you need help figuring out the format for any of the local metadata
 
-### Subtitle Language Mappings
-
-Subtitle language tokens can be replaced in VFS filenames through ShokoRelay's `preferences.json`. Repository installations use Shoko's configuration directory under `2b0f5a7e-3d2b-4f3d-9e6b-7f0a6b2d8c9a`; an existing `config` directory beside the plugin takes precedence. Add this property to your existing `Advanced` object:
-
-```json
-{
-  "Advanced": {
-    "SubtitleLanguageMappings": {
-      "chs": "zh-Hans",
-      "sc": "zh-Hans",
-      "cht": "zh-Hant",
-      "scjp": "zh-Hans"
-    }
-  }
-}
-```
-
-Matching is literal and case-insensitive, and applies only to dot-separated tokens between the original video basename and a supported subtitle extension (ASS, SSA, SRT, VTT, or SMI). For example, `.CHS.forced.ass` becomes `.zh-Hans.forced.ass`. The flags `forced`, `sdh`, and `cc` are preserved. Each original token is processed once: a replacement is never fed back through the mappings. Compound aliases such as `scjp` require their own key and produce only one link. Other sidecars, unmatched subtitles, and legacy suffixes with other separators retain their names after the normal VFS video-basename change.
-
-All subtitle formats are retained. Priority applies only when files would produce the same complete destination filename, compared case-insensitively:
-
-1. An unchanged original already using the destination name wins.
-2. Otherwise, the first available matching mapping in configuration order wins. In the example, `.chs.ass` beats `.sc.ass` for `.zh-Hans.ass`; `.sc.srt` can still supply `.zh-Hans.srt`.
-3. When a filename uses multiple mappings, its earliest mapping determines priority. Equal-priority sources use ordinal filename order, so directory enumeration order cannot change the winner.
-
-Losing conversions are omitted from the VFS. Unchanged case-only filename variants remain unchanged; a conversion cannot displace them. Missing or cyclic subtitle sources cannot win a collision. Original files are never renamed, edited, or duplicated. If a converted link cannot be created, the original suffix is used when possible.
-
-Mappings default to an empty object. Missing, empty, or `null` mappings disable replacement. Keys and values have outer whitespace trimmed for matching; replacements must be nonempty single filename-safe tokens. Invalid replacements are ignored. JSON parsing and loading errors follow the existing configuration loader: a warning is logged and default settings are used. There are no custom subtitle converters. Older experimental `SubtitleRenameRules` and `SubtitleFormatPreference` fields are no longer used; replace them with this mapping object.
-
-Keep entries in the desired priority order when editing the file. Save valid JSON, reload any open dashboard before changing other settings, and refresh the VFS to apply changes. Clearing the mapping object and refreshing restores the original suffixes. Subtitle files added separately from their video may need a manual VFS refresh. Plex language recognition still depends on the filename conventions supported by the server and client.
-
 ### VFS Mapping
 
 > [!IMPORTANT]

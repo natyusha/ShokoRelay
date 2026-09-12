@@ -77,6 +77,46 @@
       }
     }
   };
+
+  /**
+   * Generates a dual-textarea UI for mapping dictionaries and binds it to the configuration state.
+   * @param {HTMLElement} wrap - The container element to append to.
+   * @param {Object} p - The property schema object.
+   * @param {Object} config - The active configuration object.
+   * @param {Object} value - The current dictionary value.
+   * @param {string} leftHeader - The label for the left textarea.
+   * @param {string} rightHeader - The label for the right textarea.
+   * @param {boolean} keyOnLeft - If true, dictionary keys are placed on the left; otherwise, they are on the right.
+   * @returns {void}
+   */
+  function createDualTextareaMapping(wrap, p, config, value, leftHeader, rightHeader, keyOnLeft) {
+    const label = document.createElement("label");
+    label.innerHTML = `<span>${p.Display || p.Path.split(".").pop()}</span>${p.Description ? `<small>${p.Description}</small>` : ""}`;
+    wrap.appendChild(label);
+
+    const mappingContainer = document.createElement("div");
+    mappingContainer.innerHTML = `<div class="full"><div><small>${leftHeader}</small><textarea class="mapping-left"></textarea></div><div><small>${rightHeader}</small><textarea class="mapping-right"></textarea></div></div>`;
+    wrap.appendChild(mappingContainer);
+
+    const l = mappingContainer.querySelector(".mapping-left");
+    const r = mappingContainer.querySelector(".mapping-right");
+    const m = value || {};
+    const keys = Object.keys(m); // Preserve user priority/order
+
+    l.value = keys.map((k) => (keyOnLeft ? k : m[k])).join("\n");
+    r.value = keys.map((k) => (keyOnLeft ? m[k] : k)).join("\n");
+
+    l.onchange = r.onchange = async () => {
+      const val = {};
+      const lLines = l.value.split("\n");
+      const rLines = r.value.split("\n");
+      lLines.forEach((lv, idx) => {
+        if (lv.trim() && rLines[idx]?.trim()) val[keyOnLeft ? lv.trim() : rLines[idx].trim()] = keyOnLeft ? rLines[idx].trim() : lv.trim();
+      });
+      setValueByPath(config, p.Path, val);
+      await saveSettings(config);
+    };
+  }
   // #endregion
 
   // #region Form Generation
@@ -143,27 +183,9 @@
         // Re-evaluate the overrides button state when either relevant setting is toggled.
         if (overridesBtn && ["Advanced.TmdbEpNumbering", "Advanced.MergeTmdbSeries"].includes(p.Path)) input.addEventListener("change", () => window._sr.updateControlStates(config));
       } else if (p.Path.endsWith("PathMappings")) {
-        label.innerHTML = `<span>${p.Display || p.Path.split(".").pop()}</span>${p.Description ? `<small>${p.Description}</small>` : ""}`;
-        wrap.appendChild(label);
-        const mappingContainer = document.createElement("div");
-        mappingContainer.innerHTML = `<div class="full"><div><small>Working Base Paths</small><textarea id="path-mappings-left"></textarea></div><div><small>Shoko Base Paths</small><textarea id="path-mappings-right"></textarea></div></div>`;
-        wrap.appendChild(mappingContainer);
-        const l = mappingContainer.querySelector("#path-mappings-left");
-        const r = mappingContainer.querySelector("#path-mappings-right");
-        const m = value || {};
-        const keys = Object.keys(m).sort();
-        l.value = keys.map((k) => m[k]).join("\n");
-        r.value = keys.join("\n");
-        l.onchange = r.onchange = async () => {
-          const val = {};
-          const lLines = l.value.split("\n");
-          const rLines = r.value.split("\n");
-          lLines.forEach((lv, idx) => {
-            if (lv.trim() && rLines[idx]?.trim()) val[rLines[idx].trim()] = lv.trim();
-          });
-          setValueByPath(config, p.Path, val);
-          await saveSettings(config);
-        };
+        createDualTextareaMapping(wrap, p, config, value, "Working Base Paths", "Shoko Base Paths", false);
+      } else if (p.Path.endsWith("SubtitleLanguageMappings")) {
+        createDualTextareaMapping(wrap, p, config, value, "Original Tags", "Mapped Tags", true);
       } else {
         label.innerHTML = `<span>${p.Display || p.Path.split(".").pop()}</span>${p.Description ? `<small>${p.Description}</small>` : ""}`;
         wrap.appendChild(label);
