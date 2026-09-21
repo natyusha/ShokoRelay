@@ -15,6 +15,34 @@
   "image_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-logo.png",
   "releases": [
     {
+      "version": "0.17.6",
+      "tag": "v0.17.6",
+      "source_revision": "640e552de8118444f624ae77cc66bd66add3c400",
+      "released_at": "2026-09-21T16:58:04Z",
+      "channel": "Dev",
+      "release_notes": "**Changes:**\r\n- Update BuildSimilarArray in PlexMetadata to use the new `Suggestions` property instead of `Similar`\r\n- Safeguard metadata endpoints against Shoko.Abstractions mismatches\r\n- Bump Shoko.Abstractions to v6.0.0-alpha.93\r\n\r\n**New Contributors:**\r\n* @Foowy made their first contribution in https://github.com/natyusha/ShokoRelay/pull/14\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.17.5...v0.17.6",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.17.6/ShokoRelay-v0.17.6-dev_linux-arm64.zip",
+          "checksum": "sha256:64207942789a4e6b895a3a7789726e5a3ea4dc7bc0d4c339b88b23d2da23ce59"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.17.6/ShokoRelay-v0.17.6-dev_linux-x64.zip",
+          "checksum": "sha256:feea814ea8f622d66d904496025e24dbf282cd66e59a638ba55b0f5aec173a13"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.17.6/ShokoRelay-v0.17.6-dev_win-x64.zip",
+          "checksum": "sha256:807232bd2dedcc21f598befba3921053b8a5a2b861204b8fd0f9bba37375c499"
+        }
+      ]
+    },
+    {
       "version": "0.17.5",
       "tag": "v0.17.5",
       "source_revision": "f10443fc3c5903eb93f9918785ccad6b36f0e450",
