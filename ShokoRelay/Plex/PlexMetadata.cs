@@ -488,8 +488,8 @@ public class PlexMetadata(IMetadataService metadataService)
     /// <param name="series">The Shoko series metadata.</param>
     /// <returns>An array of objects containing guid and tag (title), or null if no local matches found.</returns>
     private object[]? BuildSimilarArray(ISeries series) =>
-        series is IShokoSeries { AnidbAnime.Similar: { Count: > 0 } list }
-            ? list.Select(s => metadataService.GetShokoSeriesByAnidbID(s.SimilarID))
+        series is IShokoSeries { AnidbAnime.Suggestions: { Count: > 0 } list }
+            ? list.Select(s => metadataService.GetShokoSeriesByAnidbID(s.SuggestedID))
                 .OfType<IShokoSeries>()
                 .Select(ls => (object)new { guid = ls.GetPlexGuid(), tag = ls.PreferredTitle?.Value ?? ls.DefaultTitle?.Value })
                 .ToArray()
