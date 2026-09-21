@@ -25,45 +25,46 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     /// <summary>Announces the media provider capabilities to Plex based on the requested endpoint type (TV or Movie).</summary>
     /// <returns>A media provider descriptor object.</returns>
     [HttpGet]
-    public IActionResult GetMediaProvider()
-    {
-        bool isMovieEndpoint = Request.Path.Value?.Contains("/movie", StringComparison.OrdinalIgnoreCase) == true || string.Equals(Request.Query["type"], "1");
-
-        if (isMovieEndpoint)
+    public IActionResult GetMediaProvider() =>
+        SafeRequest(() =>
         {
+            bool isMovieEndpoint = Request.Path.Value?.Contains("/movie", StringComparison.OrdinalIgnoreCase) == true || string.Equals(Request.Query["type"], "1");
+
+            if (isMovieEndpoint)
+            {
+                return Ok(
+                    new
+                    {
+                        MediaProvider = new
+                        {
+                            identifier = ShokoRelayConstants.MovieAgentScheme,
+                            title = $"{ShokoRelayConstants.Name} Movie",
+                            version = ShokoRelayConstants.Version,
+                            Types = new[] { new { type = PlexConstants.TypeMovie, Scheme = new[] { new { scheme = ShokoRelayConstants.MovieAgentScheme } } } },
+                            Feature = new[] { new { type = "metadata", key = "/metadata" }, new { type = "match", key = "/matches" }, new { type = "collection", key = "/collections" } },
+                        },
+                    }
+                );
+            }
+
+            var supportedTypes = new[] { PlexConstants.TypeShow, PlexConstants.TypeSeason, PlexConstants.TypeEpisode };
+            var typePayload = supportedTypes.Select(t => new { type = t, Scheme = new[] { new { scheme = ShokoRelayConstants.AgentScheme } } });
+            var featurePayload = new[] { new { type = "metadata", key = "/metadata" }, new { type = "match", key = "/matches" }, new { type = "collection", key = "/collections" } };
+
             return Ok(
                 new
                 {
                     MediaProvider = new
                     {
-                        identifier = ShokoRelayConstants.MovieAgentScheme,
-                        title = $"{ShokoRelayConstants.Name} Movie",
+                        identifier = ShokoRelayConstants.AgentScheme,
+                        title = ShokoRelayConstants.Name,
                         version = ShokoRelayConstants.Version,
-                        Types = new[] { new { type = PlexConstants.TypeMovie, Scheme = new[] { new { scheme = ShokoRelayConstants.MovieAgentScheme } } } },
-                        Feature = new[] { new { type = "metadata", key = "/metadata" }, new { type = "match", key = "/matches" }, new { type = "collection", key = "/collections" } },
+                        Types = typePayload,
+                        Feature = featurePayload,
                     },
                 }
             );
-        }
-
-        var supportedTypes = new[] { PlexConstants.TypeShow, PlexConstants.TypeSeason, PlexConstants.TypeEpisode };
-        var typePayload = supportedTypes.Select(t => new { type = t, Scheme = new[] { new { scheme = ShokoRelayConstants.AgentScheme } } });
-        var featurePayload = new[] { new { type = "metadata", key = "/metadata" }, new { type = "match", key = "/matches" }, new { type = "collection", key = "/collections" } };
-
-        return Ok(
-            new
-            {
-                MediaProvider = new
-                {
-                    identifier = ShokoRelayConstants.AgentScheme,
-                    title = ShokoRelayConstants.Name,
-                    version = ShokoRelayConstants.Version,
-                    Types = typePayload,
-                    Feature = featurePayload,
-                },
-            }
-        );
-    }
+        });
 
     #endregion
 
@@ -75,96 +76,97 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     [Route("matches")]
     [HttpGet]
     [HttpPost]
-    public IActionResult Match([FromBody] PlexMatchBody? body = null)
-    {
-        string? rawPath = body?.Filename ?? Request.Query["filename"];
-        string? title = body?.Title ?? Request.Query["title"];
-        int? manual = body?.Manual ?? (int.TryParse(Request.Query["manual"], out var m) ? m : null);
-        int? id = string.IsNullOrWhiteSpace(rawPath) ? (manual == 1 && int.TryParse(title, out var manualId) ? manualId : null) : TextHelper.ExtractSeriesId(rawPath);
+    public IActionResult Match([FromBody] PlexMatchBody? body = null) =>
+        SafeRequest(() =>
+        {
+            string? rawPath = body?.Filename ?? Request.Query["filename"];
+            string? title = body?.Title ?? Request.Query["title"];
+            int? manual = body?.Manual ?? (int.TryParse(Request.Query["manual"], out var m) ? m : null);
+            int? id = string.IsNullOrWhiteSpace(rawPath) ? (manual == 1 && int.TryParse(title, out var manualId) ? manualId : null) : TextHelper.ExtractSeriesId(rawPath);
 
-        if (!id.HasValue)
+            if (!id.HasValue)
+                return EmptyMatch();
+
+            string? bodyType = body?.Type?.ToString();
+            bool isMovie =
+                (!string.IsNullOrWhiteSpace(rawPath) && rawPath.Contains(Settings.Advanced.MovieVfsRootPath, StringComparison.OrdinalIgnoreCase))
+                || string.Equals(Request.Query["type"], "1", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(Request.Query["type"], "movie", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(bodyType, "1", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(bodyType, "movie", StringComparison.OrdinalIgnoreCase)
+                || Request.Path.Value?.Contains("/movie", StringComparison.OrdinalIgnoreCase) == true;
+
+            IActionResult ReturnMovieMatch(IShokoEpisode ep)
+            {
+                var tmdbMovie = ep.TmdbMovies?.FirstOrDefault() ?? ep.Series?.TmdbMovies?.FirstOrDefault();
+                string movieTitle = TextHelper.ResolveMovieTitle(ep, ep.Series!, tmdbMovie);
+                var posterUrl =
+                    (ep.EpisodeNumber > 1 && tmdbMovie is IWithImages mi ? mi.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage) : null)
+                    ?? (ep.Series as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage)
+                    ?? (tmdbMovie as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage);
+                return Ok(
+                    new
+                    {
+                        MediaContainer = new
+                        {
+                            size = 1,
+                            identifier = ShokoRelayConstants.MovieAgentScheme,
+                            Metadata = new[]
+                            {
+                                new
+                                {
+                                    guid = ep.GetPlexMovieGuid(),
+                                    title = movieTitle,
+                                    year = ep.AirDate?.Year ?? tmdbMovie?.ReleaseDate?.Year ?? ep.Series?.AirDate?.Year,
+                                    score = 100,
+                                    thumb = posterUrl,
+                                },
+                            },
+                        },
+                    }
+                );
+            }
+
+            IActionResult ReturnSeriesMatch(IShokoSeries s)
+            {
+                var seriesPosterUrl = (s as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage);
+                return Ok(
+                    new
+                    {
+                        MediaContainer = new
+                        {
+                            size = 1,
+                            identifier = ShokoRelayConstants.AgentScheme,
+                            Metadata = new[]
+                            {
+                                new
+                                {
+                                    guid = s.GetPlexGuid(),
+                                    title = s.GetDisplayTitle(),
+                                    year = s.AirDate?.Year,
+                                    score = 100,
+                                    thumb = seriesPosterUrl,
+                                },
+                            },
+                        },
+                    }
+                );
+            }
+
+            var ep = MetadataService.GetShokoEpisodeByID(id.Value);
+            if (isMovie && ep?.Series != null)
+                return ReturnMovieMatch(ep);
+
+            var series = MetadataService.GetShokoSeriesByID(id.Value);
+            if (series != null)
+                return ReturnSeriesMatch(series);
+
+            if (ep?.Series != null)
+                return ReturnMovieMatch(ep);
+
+            Logger.Info("Metadata: No Shoko series or episode found for id {Id}", id.Value);
             return EmptyMatch();
-
-        string? bodyType = body?.Type?.ToString();
-        bool isMovie =
-            (!string.IsNullOrWhiteSpace(rawPath) && rawPath.Contains(Settings.Advanced.MovieVfsRootPath, StringComparison.OrdinalIgnoreCase))
-            || string.Equals(Request.Query["type"], "1", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(Request.Query["type"], "movie", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(bodyType, "1", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(bodyType, "movie", StringComparison.OrdinalIgnoreCase)
-            || Request.Path.Value?.Contains("/movie", StringComparison.OrdinalIgnoreCase) == true;
-
-        IActionResult ReturnMovieMatch(IShokoEpisode ep)
-        {
-            var tmdbMovie = ep.TmdbMovies?.FirstOrDefault() ?? ep.Series?.TmdbMovies?.FirstOrDefault();
-            string movieTitle = TextHelper.ResolveMovieTitle(ep, ep.Series!, tmdbMovie);
-            var posterUrl =
-                (ep.EpisodeNumber > 1 && tmdbMovie is IWithImages mi ? mi.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage) : null)
-                ?? (ep.Series as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage)
-                ?? (tmdbMovie as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage);
-            return Ok(
-                new
-                {
-                    MediaContainer = new
-                    {
-                        size = 1,
-                        identifier = ShokoRelayConstants.MovieAgentScheme,
-                        Metadata = new[]
-                        {
-                            new
-                            {
-                                guid = ep.GetPlexMovieGuid(),
-                                title = movieTitle,
-                                year = ep.AirDate?.Year ?? tmdbMovie?.ReleaseDate?.Year ?? ep.Series?.AirDate?.Year,
-                                score = 100,
-                                thumb = posterUrl,
-                            },
-                        },
-                    },
-                }
-            );
-        }
-
-        IActionResult ReturnSeriesMatch(IShokoSeries s)
-        {
-            var seriesPosterUrl = (s as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage);
-            return Ok(
-                new
-                {
-                    MediaContainer = new
-                    {
-                        size = 1,
-                        identifier = ShokoRelayConstants.AgentScheme,
-                        Metadata = new[]
-                        {
-                            new
-                            {
-                                guid = s.GetPlexGuid(),
-                                title = s.GetDisplayTitle(),
-                                year = s.AirDate?.Year,
-                                score = 100,
-                                thumb = seriesPosterUrl,
-                            },
-                        },
-                    },
-                }
-            );
-        }
-
-        var ep = MetadataService.GetShokoEpisodeByID(id.Value);
-        if (isMovie && ep?.Series != null)
-            return ReturnMovieMatch(ep);
-
-        var series = MetadataService.GetShokoSeriesByID(id.Value);
-        if (series != null)
-            return ReturnSeriesMatch(series);
-
-        if (ep?.Series != null)
-            return ReturnMovieMatch(ep);
-
-        Logger.Info("Metadata: No Shoko series or episode found for id {Id}", id.Value);
-        return EmptyMatch();
-    }
+        });
 
     /// <summary>Represents the JSON body of a Plex matching request.</summary>
     /// <param name="Filename">The filename of the media being matched.</param>
@@ -196,119 +198,158 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     /// <param name="includeChildren">Whether to embed immediate children (seasons/episodes).</param>
     /// <returns>Metadata MediaContainer.</returns>
     [HttpGet("metadata/{ratingKey}")]
-    public IActionResult GetMetadata(string ratingKey, [FromQuery] int includeChildren = 0)
-    {
-        if (PlexHelper.IsMovieKey(ratingKey))
+    public IActionResult GetMetadata(string ratingKey, [FromQuery] int includeChildren = 0) =>
+        SafeRequest(() =>
         {
-            var (ep, series, tmdbMovie) = TryResolveMovieContext(ratingKey);
-            if (ep == null || series == null)
-                return NotFound();
-            var titles = TextHelper.ResolveFullSeriesTitles(series);
-            return WrapInContainer(mapper.MapMovie(ep, series, tmdbMovie, titles), ShokoRelayConstants.MovieAgentScheme);
-        }
-
-        var ctx = mapper.GetSeriesContext(ratingKey);
-        if (ctx == null)
-        {
-            // Fallback for numeric rating keys passed for a standalone movie episode
-            if (int.TryParse(ratingKey, out int numId) && MetadataService.GetShokoEpisodeByID(numId) is { } movieEp && movieEp.Series != null)
+            if (PlexHelper.IsMovieKey(ratingKey))
             {
-                var tmdbMovie = movieEp.TmdbMovies?.FirstOrDefault() ?? movieEp.Series.TmdbMovies?.FirstOrDefault();
-                var titles = TextHelper.ResolveFullSeriesTitles(movieEp.Series);
-                return WrapInContainer(mapper.MapMovie(movieEp, movieEp.Series, tmdbMovie, titles), ShokoRelayConstants.MovieAgentScheme);
+                var (ep, series, tmdbMovie) = TryResolveMovieContext(ratingKey);
+                if (ep == null || series == null)
+                    return NotFound();
+                var titles = TextHelper.ResolveFullSeriesTitles(series);
+                return WrapInContainer(mapper.MapMovie(ep, series, tmdbMovie, titles), ShokoRelayConstants.MovieAgentScheme);
             }
-            return NotFound();
-        }
 
-        if (PlexHelper.IsEpisodeKey(ratingKey))
-        {
-            var (episode, partIdx, m) = TryResolveEpisodeContext(ctx, ratingKey);
-            return episode == null || m == null ? NotFound() : WrapInContainer(mapper.MapEpisode(episode, m.Coords, ctx.Series, ctx.Titles, partIdx, m.TmdbEpisode));
-        }
-        int seasonIdx = ratingKey.IndexOf(PlexConstants.SeasonPrefix, StringComparison.OrdinalIgnoreCase);
-        if (seasonIdx >= 0)
-        {
-            if (!int.TryParse(ratingKey[(seasonIdx + PlexConstants.SeasonPrefix.Length)..], out int sNum))
+            var ctx = mapper.GetSeriesContext(ratingKey);
+            if (ctx == null)
+            {
+                // Fallback for numeric rating keys passed for a standalone movie episode
+                if (int.TryParse(ratingKey, out int numId) && MetadataService.GetShokoEpisodeByID(numId) is { } movieEp && movieEp.Series != null)
+                {
+                    var tmdbMovie = movieEp.TmdbMovies?.FirstOrDefault() ?? movieEp.Series.TmdbMovies?.FirstOrDefault();
+                    var titles = TextHelper.ResolveFullSeriesTitles(movieEp.Series);
+                    return WrapInContainer(mapper.MapMovie(movieEp, movieEp.Series, tmdbMovie, titles), ShokoRelayConstants.MovieAgentScheme);
+                }
                 return NotFound();
-            var seasonMeta = mapper.MapSeason(ctx.Series, sNum, ctx.Titles.DisplayTitle);
+            }
+
+            if (PlexHelper.IsEpisodeKey(ratingKey))
+            {
+                var (episode, partIdx, m) = TryResolveEpisodeContext(ctx, ratingKey);
+                return episode == null || m == null ? NotFound() : WrapInContainer(mapper.MapEpisode(episode, m.Coords, ctx.Series, ctx.Titles, partIdx, m.TmdbEpisode));
+            }
+            int seasonIdx = ratingKey.IndexOf(PlexConstants.SeasonPrefix, StringComparison.OrdinalIgnoreCase);
+            if (seasonIdx >= 0)
+            {
+                if (!int.TryParse(ratingKey[(seasonIdx + PlexConstants.SeasonPrefix.Length)..], out int sNum))
+                    return NotFound();
+                var seasonMeta = mapper.MapSeason(ctx.Series, sNum, ctx.Titles.DisplayTitle);
+                if (includeChildren == 1)
+                {
+                    var episodes = mapper.BuildEpisodeList(ctx, sNum);
+                    ((IDictionary<string, object?>)seasonMeta)["Children"] = new { size = episodes.Count, Metadata = episodes };
+                }
+                return WrapInContainer(seasonMeta);
+            }
+            var showMeta = mapper.MapSeries(ctx.Series, ctx.Titles);
             if (includeChildren == 1)
             {
-                var episodes = mapper.BuildEpisodeList(ctx, sNum);
-                ((IDictionary<string, object?>)seasonMeta)["Children"] = new { size = episodes.Count, Metadata = episodes };
+                var seasons = ctx.FileData.Seasons.Select(s => mapper.MapSeason(ctx.Series, s, ctx.Titles.DisplayTitle)).ToList();
+                ((IDictionary<string, object?>)showMeta)["Children"] = new { size = seasons.Count, Metadata = seasons };
             }
-            return WrapInContainer(seasonMeta);
-        }
-        var showMeta = mapper.MapSeries(ctx.Series, ctx.Titles);
-        if (includeChildren == 1)
-        {
-            var seasons = ctx.FileData.Seasons.Select(s => mapper.MapSeason(ctx.Series, s, ctx.Titles.DisplayTitle)).ToList();
-            ((IDictionary<string, object?>)showMeta)["Children"] = new { size = seasons.Count, Metadata = seasons };
-        }
-        return WrapInContainer(showMeta);
-    }
+            return WrapInContainer(showMeta);
+        });
 
     /// <summary>Lists the immediate children for the provided ratingKey.</summary>
     /// <remarks>See <c>/metadata/{ratingKey}</c> for supported ratingKey formats and resolution behavior.</remarks>
     /// <param name="ratingKey">Custom Plex-style rating key.</param>
     /// <returns>Paged MediaContainer.</returns>
     [HttpGet("metadata/{ratingKey}/children")]
-    public IActionResult GetChildren(string ratingKey)
-    {
-        if (PlexHelper.IsMovieKey(ratingKey))
-            return EmptyMatch();
+    public IActionResult GetChildren(string ratingKey) =>
+        SafeRequest(() =>
+        {
+            if (PlexHelper.IsMovieKey(ratingKey))
+                return EmptyMatch();
 
-        var ctx = mapper.GetSeriesContext(ratingKey);
-        if (ctx == null)
-            return NotFound();
+            var ctx = mapper.GetSeriesContext(ratingKey);
+            if (ctx == null)
+                return NotFound();
 
-        int seasonIdx = ratingKey.IndexOf(PlexConstants.SeasonPrefix, StringComparison.OrdinalIgnoreCase);
-        if (seasonIdx >= 0)
-            return !int.TryParse(ratingKey[(seasonIdx + PlexConstants.SeasonPrefix.Length)..], out int sNum) ? NotFound() : WrapInPagedContainer(mapper.BuildEpisodeList(ctx, sNum));
+            int seasonIdx = ratingKey.IndexOf(PlexConstants.SeasonPrefix, StringComparison.OrdinalIgnoreCase);
+            if (seasonIdx >= 0)
+                return !int.TryParse(ratingKey[(seasonIdx + PlexConstants.SeasonPrefix.Length)..], out int sNum) ? NotFound() : WrapInPagedContainer(mapper.BuildEpisodeList(ctx, sNum));
 
-        var seasons = ctx.FileData.Seasons.Select(s => mapper.MapSeason(ctx.Series, s, ctx.Titles.DisplayTitle)).ToList();
-        return WrapInPagedContainer(seasons);
-    }
+            var seasons = ctx.FileData.Seasons.Select(s => mapper.MapSeason(ctx.Series, s, ctx.Titles.DisplayTitle)).ToList();
+            return WrapInPagedContainer(seasons);
+        });
 
     /// <summary>Lists the second-level children (episodes) for a show-level ratingKey.</summary>
     /// <remarks>See <c>/metadata/{ratingKey}</c> for supported ratingKey formats and resolution behavior.</remarks>
     /// <param name="ratingKey">Custom Plex-style rating key.</param>
     /// <returns>Paged MediaContainer.</returns>
     [HttpGet("metadata/{ratingKey}/grandchildren")]
-    public IActionResult GetGrandchildren(string ratingKey)
-    {
-        if (PlexHelper.IsMovieKey(ratingKey))
-            return EmptyMatch();
+    public IActionResult GetGrandchildren(string ratingKey) =>
+        SafeRequest(() =>
+        {
+            if (PlexHelper.IsMovieKey(ratingKey))
+                return EmptyMatch();
 
-        var ctx = mapper.GetSeriesContext(ratingKey);
-        if (ctx == null)
-            return NotFound();
-        var allEpisodes = ctx
-            .FileData.Mappings.OrderBy(m => m.Coords.Season)
-            .ThenBy(m => m.Coords.Episode)
-            .ThenBy(m => m.PartIndex ?? 0)
-            .Select(m => mapper.MapEpisode(m.PrimaryEpisode, m.Coords, ctx.Series, ctx.Titles, m.PartIndex, m.TmdbEpisode))
-            .ToList();
-        return WrapInPagedContainer(allEpisodes);
-    }
+            var ctx = mapper.GetSeriesContext(ratingKey);
+            if (ctx == null)
+                return NotFound();
+            var allEpisodes = ctx
+                .FileData.Mappings.OrderBy(m => m.Coords.Season)
+                .ThenBy(m => m.Coords.Episode)
+                .ThenBy(m => m.PartIndex ?? 0)
+                .Select(m => mapper.MapEpisode(m.PrimaryEpisode, m.Coords, ctx.Series, ctx.Titles, m.PartIndex, m.TmdbEpisode))
+                .ToList();
+            return WrapInPagedContainer(allEpisodes);
+        });
 
     /// <summary>Enumerates all available artwork for the specified ratingKey.</summary>
     /// <remarks>See <c>/metadata/{ratingKey}</c> for supported ratingKey formats and resolution behavior.</remarks>
     /// <param name="ratingKey">Custom Plex-style rating key.</param>
     /// <returns>Image MediaContainer.</returns>
     [HttpGet("metadata/{ratingKey}/images")]
-    public IActionResult GetMetadataImages(string ratingKey)
-    {
-        object[] images;
-        if (PlexHelper.IsMovieKey(ratingKey))
+    public IActionResult GetMetadataImages(string ratingKey) =>
+        SafeRequest(() =>
         {
-            var (ep, series, tmdbMovie) = TryResolveMovieContext(ratingKey);
-            if (ep != null && series != null)
+            object[] images;
+            if (PlexHelper.IsMovieKey(ratingKey))
             {
-                var titles = TextHelper.ResolveFullSeriesTitles(series);
-                images = ExtractImages(mapper.MapMovie(ep, series, tmdbMovie, titles));
+                var (ep, series, tmdbMovie) = TryResolveMovieContext(ratingKey);
+                if (ep != null && series != null)
+                {
+                    var titles = TextHelper.ResolveFullSeriesTitles(series);
+                    images = ExtractImages(mapper.MapMovie(ep, series, tmdbMovie, titles));
+                }
+                else
+                    images = [];
+                return Ok(
+                    new
+                    {
+                        MediaContainer = new
+                        {
+                            offset = 0,
+                            totalSize = images.Length,
+                            identifier = ShokoRelayConstants.MovieAgentScheme,
+                            size = images.Length,
+                            Image = images,
+                        },
+                    }
+                );
+            }
+
+            var ctx = mapper.GetSeriesContext(ratingKey);
+            if (ctx == null)
+                return NotFound();
+            if (PlexHelper.IsEpisodeKey(ratingKey))
+            {
+                var (episode, partIdx, m) = TryResolveEpisodeContext(ctx, ratingKey);
+                images = (episode != null && m != null) ? ExtractImages(mapper.MapEpisode(episode, m.Coords, ctx.Series, ctx.Titles, partIdx, m.TmdbEpisode)) : [];
             }
             else
-                images = [];
+            {
+                int seasonIdx = ratingKey.IndexOf(PlexConstants.SeasonPrefix, StringComparison.OrdinalIgnoreCase);
+                if (seasonIdx >= 0)
+                {
+                    if (!int.TryParse(ratingKey[(seasonIdx + PlexConstants.SeasonPrefix.Length)..], out int sNum))
+                        return NotFound();
+                    images = ExtractImages(mapper.MapSeason(ctx.Series, sNum, ctx.Titles.DisplayTitle));
+                }
+                else
+                    images = ExtractImages(mapper.MapSeries(ctx.Series, ctx.Titles));
+            }
             return Ok(
                 new
                 {
@@ -316,48 +357,13 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
                     {
                         offset = 0,
                         totalSize = images.Length,
-                        identifier = ShokoRelayConstants.MovieAgentScheme,
+                        identifier = ShokoRelayConstants.AgentScheme,
                         size = images.Length,
                         Image = images,
                     },
                 }
             );
-        }
-
-        var ctx = mapper.GetSeriesContext(ratingKey);
-        if (ctx == null)
-            return NotFound();
-        if (PlexHelper.IsEpisodeKey(ratingKey))
-        {
-            var (episode, partIdx, m) = TryResolveEpisodeContext(ctx, ratingKey);
-            images = (episode != null && m != null) ? ExtractImages(mapper.MapEpisode(episode, m.Coords, ctx.Series, ctx.Titles, partIdx, m.TmdbEpisode)) : [];
-        }
-        else
-        {
-            int seasonIdx = ratingKey.IndexOf(PlexConstants.SeasonPrefix, StringComparison.OrdinalIgnoreCase);
-            if (seasonIdx >= 0)
-            {
-                if (!int.TryParse(ratingKey[(seasonIdx + PlexConstants.SeasonPrefix.Length)..], out int sNum))
-                    return NotFound();
-                images = ExtractImages(mapper.MapSeason(ctx.Series, sNum, ctx.Titles.DisplayTitle));
-            }
-            else
-                images = ExtractImages(mapper.MapSeries(ctx.Series, ctx.Titles));
-        }
-        return Ok(
-            new
-            {
-                MediaContainer = new
-                {
-                    offset = 0,
-                    totalSize = images.Length,
-                    identifier = ShokoRelayConstants.AgentScheme,
-                    size = images.Length,
-                    Image = images,
-                },
-            }
-        );
-    }
+        });
 
     /// <summary>Returns an empty extras container to satisfy Plex's automated metadata queries.</summary>
     /// <returns>An empty MediaContainer.</returns>
@@ -372,14 +378,15 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     /// <param name="groupId">The Shoko group identifier.</param>
     /// <returns>Collection metadata.</returns>
     [HttpGet("collections/{groupId}")]
-    public IActionResult GetCollection(int groupId)
-    {
-        var group = MetadataService.GetShokoGroupByID(groupId);
-        if (group == null)
-            return NotFound();
-        var primarySeries = group.MainSeries ?? group.Series?.FirstOrDefault();
-        return primarySeries == null ? NotFound() : WrapInContainer(mapper.MapCollection(group, primarySeries));
-    }
+    public IActionResult GetCollection(int groupId) =>
+        SafeRequest(() =>
+        {
+            var group = MetadataService.GetShokoGroupByID(groupId);
+            if (group == null)
+                return NotFound();
+            var primarySeries = group.MainSeries ?? group.Series?.FirstOrDefault();
+            return primarySeries == null ? NotFound() : WrapInContainer(mapper.MapCollection(group, primarySeries));
+        });
 
     /// <summary>Serves the local image for a user-defined, automatically generated, or smart collection by matching its ID or name.</summary>
     /// <param name="groupId">The Shoko group ID (prefixed with 'sc' for smart collections) or Plex collection ID.</param>
@@ -387,27 +394,60 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     /// <param name="suffix">Optional image type suffix (e.g. -logo, -backdrop, -square).</param>
     /// <returns>Physical file result.</returns>
     [HttpGet("collections/user/{groupId}")]
-    public IActionResult GetCollectionImage(string groupId, [FromQuery] string? name = null, [FromQuery] string? suffix = null)
-    {
-        string? posterPath = null;
-        string actualSuffix = suffix ?? "";
-        List<string> globalRoots = [.. (videoService.GetAllManagedFolders() ?? []).Select(f => f.Path).Where(p => !string.IsNullOrEmpty(p)).Distinct()];
-
-        // If prefixed with 'sc', it's a Plex smart collection with a parsed ID (bypassing Shoko Group lookup)
-        if (groupId.StartsWith(PlexConstants.SmartCollectionPrefix, StringComparison.OrdinalIgnoreCase) && int.TryParse(groupId[2..], out int cid))
-            posterPath = PlexHelper.FindCollectionImagePath(null, name ?? string.Empty, cid, [actualSuffix], MetadataService, globalRoots);
-        else if (int.TryParse(groupId, out int gid))
+    public IActionResult GetCollectionImage(string groupId, [FromQuery] string? name = null, [FromQuery] string? suffix = null) =>
+        SafeRequest(() =>
         {
-            var group = MetadataService.GetShokoGroupByID(gid);
-            var primarySeries = group?.MainSeries ?? group?.Series?.FirstOrDefault();
-            if (primarySeries != null)
-                posterPath = PlexHelper.FindCollectionImagePathByGroup(primarySeries, gid, actualSuffix, MetadataService);
+            string? posterPath = null;
+            string actualSuffix = suffix ?? "";
+            List<string> globalRoots = [.. (videoService.GetAllManagedFolders() ?? []).Select(f => f.Path).Where(p => !string.IsNullOrEmpty(p)).Distinct()];
 
-            if (string.IsNullOrEmpty(posterPath) || !IoFile.Exists(posterPath))
-                posterPath = PlexHelper.FindCollectionImagePath(null, name ?? string.Empty, gid, [actualSuffix], MetadataService, globalRoots);
+            // If prefixed with 'sc', it's a Plex smart collection with a parsed ID (bypassing Shoko Group lookup)
+            if (groupId.StartsWith(PlexConstants.SmartCollectionPrefix, StringComparison.OrdinalIgnoreCase) && int.TryParse(groupId[2..], out int cid))
+                posterPath = PlexHelper.FindCollectionImagePath(null, name ?? string.Empty, cid, [actualSuffix], MetadataService, globalRoots);
+            else if (int.TryParse(groupId, out int gid))
+            {
+                var group = MetadataService.GetShokoGroupByID(gid);
+                var primarySeries = group?.MainSeries ?? group?.Series?.FirstOrDefault();
+                if (primarySeries != null)
+                    posterPath = PlexHelper.FindCollectionImagePathByGroup(primarySeries, gid, actualSuffix, MetadataService);
+
+                if (string.IsNullOrEmpty(posterPath) || !IoFile.Exists(posterPath))
+                    posterPath = PlexHelper.FindCollectionImagePath(null, name ?? string.Empty, gid, [actualSuffix], MetadataService, globalRoots);
+            }
+
+            return string.IsNullOrWhiteSpace(posterPath) || !IoFile.Exists(posterPath)
+                ? NotFound()
+                : PhysicalFile(posterPath, ImageHelper.GetMimeType(Path.GetExtension(posterPath)) ?? "application/octet-stream");
+        });
+
+    #endregion
+
+    #region Exception Handling
+
+    private static DateTime s_lastErrorLog = DateTime.MinValue;
+    private static readonly Lock s_errorLogLock = new();
+
+    /// <summary>Safely executes a metadata request, catching API abstraction mismatches to prevent Kestrel log spam.</summary>
+    /// <param name="action">The controller action to execute.</param>
+    /// <returns>The resulting IActionResult or a 500 error on failure.</returns>
+    private IActionResult SafeRequest(Func<IActionResult> action)
+    {
+        try
+        {
+            return action();
         }
-
-        return string.IsNullOrWhiteSpace(posterPath) || !IoFile.Exists(posterPath) ? NotFound() : PhysicalFile(posterPath, ImageHelper.GetMimeType(Path.GetExtension(posterPath)) ?? "application/octet-stream");
+        catch (Exception ex)
+        {
+            lock (s_errorLogLock)
+            {
+                if ((DateTime.UtcNow - s_lastErrorLog).TotalMinutes > 5)
+                {
+                    Logger.Error("Plex Metadata Request Failed: An API abstraction mismatch occurred. Please check for Shoko Relay plugin updates. ({0})", ex.Message);
+                    s_lastErrorLog = DateTime.UtcNow;
+                }
+            }
+            return StatusCode(500, new { error = "Plugin API Abstraction Mismatch", message = ex.Message });
+        }
     }
 
     #endregion

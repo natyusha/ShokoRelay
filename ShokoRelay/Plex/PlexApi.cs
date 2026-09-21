@@ -23,9 +23,21 @@ public static class PlexApi
     /// <returns>The parsed container, or null if deserialization fails.</returns>
     public static async Task<PlexMediaContainer?> ReadContainerAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        var wrapper = await JsonSerializer.DeserializeAsync<PlexMediaContainerWrapper>(stream, JsonOptions, cancellationToken).ConfigureAwait(false);
-        return wrapper?.MediaContainer;
+        if (!response.IsSuccessStatusCode)
+            return null;
+
+        try
+        {
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+            var wrapper = await JsonSerializer.DeserializeAsync<PlexMediaContainerWrapper>(stream, JsonOptions, cancellationToken).ConfigureAwait(false);
+            return wrapper?.MediaContainer;
+        }
+        catch (JsonException)
+        {
+            // Fail gracefully if Plex or a reverse proxy returns unexpected HTML/XML error pages instead of JSON.
+            // This commonly happens if the backend metadata provider crashes due to API abstraction mismatches.
+            return null;
+        }
     }
 
     #endregion
