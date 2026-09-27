@@ -42,7 +42,7 @@
 
   <ItemGroup>
     <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" Version="10.0.0" ExcludeAssets="runtime" />
-    <PackageReference Include="Shoko.Abstractions" Version="6.0.0-alpha.93" ExcludeAssets="runtime" />
+    <PackageReference Include="Shoko.Abstractions" Version="6.0.0-alpha.94" ExcludeAssets="runtime" />
     <PackageReference Include="NLog" Version="6.1.4" ExcludeAssets="runtime" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
@@ -58,9 +58,9 @@
     <Using Include="ShokoRelay.ShokoRelay" Static="true" />
   </ItemGroup>
 
-  <!-- Embed the plugin logo for Shoko's WebUI and preserve dashboard static assets in the output directory -->
+  <!-- Embed the plugin images for Shoko's WebUI and preserve dashboard static assets in the output directory -->
   <ItemGroup>
-    <EmbeddedResource Include="Assets\shoko-relay-logo.png">
+    <EmbeddedResource Include="Assets\shoko-relay-logo.png;Assets\shoko-relay-icon.png">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </EmbeddedResource>
     <Content Include="Dashboard\**\*">
