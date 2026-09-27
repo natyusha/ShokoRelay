@@ -631,6 +631,11 @@
               Allows specific Shoko Managed Folders to be excluded from VFS generation. You can enter the exact Name or ID of the managed folder. Unlike "Folder Exclusions", this will not hide the media files
               inside from Shoko Server.
             </small>
+            <h4>Defer VFS Creation Until Fixup</h4>
+            <small>
+              Delays the creation of VFS links until the configured "Plex Fixup Delay" has elapsed. This should ensure that Shoko has completely finished downloading all metadata before Plex ever sees the
+              files. This also skips the forced metadata refresh and it is intended for users who rely entirely on Plex's default file-system scanner.
+            </small>
             <h4>Plex Data Path</h4>
             <small>
               The path to the Metadata subfolder located in

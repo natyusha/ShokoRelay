@@ -323,6 +323,8 @@ public class VfsWatcher(
     {
         try
         {
+            bool isDeferred = Settings.Advanced.DeferVfsCreationUntilFixup;
+
             // Regenerate the VFS to account for cases where the episode/season numbering was updated in Shoko after the initial file event was processed
             var vfsResult = builder.Build(series.ID, cleanRoot: false);
             if (vfsResult.CreatedLinks > 0)
@@ -346,20 +348,52 @@ public class VfsWatcher(
 
             var targets = plexLibrary.GetConfiguredTargets();
             bool foundInAnyTarget = false;
+
+            // Wait for Plex to assign rating keys (primarily for users in deferred mode)
+            int maxRetries = isDeferred ? 18 : 2; // Up to 3 minutes for deferred, 20s for standard
+            int retryDelaySeconds = 10;
+
             foreach (var target in targets)
             {
-                var ratingKeys = await plexLibrary.FindRatingKeysForShokoSeriesInSectionAsync(series.ID, target, metadataService, token).ConfigureAwait(false);
+                var ratingKeys = new List<int>();
+                for (int i = 0; i < maxRetries; i++)
+                {
+                    ratingKeys = await plexLibrary.FindRatingKeysForShokoSeriesInSectionAsync(series.ID, target, metadataService, token).ConfigureAwait(false);
+                    if (ratingKeys.Count > 0)
+                        break;
+
+                    if (i < maxRetries - 1)
+                    {
+                        if (i == 0 && isDeferred)
+                            s_logger.Debug("VFS: Waiting for Plex to index series -> {0} [{1}] on {2}...", series.GetDisplayTitle(), series.ID, target.ServerName);
+                        await Task.Delay(TimeSpan.FromSeconds(retryDelaySeconds), token).ConfigureAwait(false);
+                    }
+                }
+
                 foreach (var ratingKey in ratingKeys)
                 {
                     foundInAnyTarget = true;
-                    s_logger.Info("VFS: Triggering debounced metadata fixup and analysis for series -> {0} [{1}] (RatingKey: {2}) on {3}", series.GetDisplayTitle(), series.ID, ratingKey, target.ServerName);
-                    await plexLibrary.RefreshMetadataAsync(ratingKey, target, token).ConfigureAwait(false);
-                    await plexLibrary.AnalyzeItemAsync(ratingKey, target, token).ConfigureAwait(false);
+                    if (!isDeferred)
+                    {
+                        // Shoko may have been missing data (e.g. TMDB IDs) when the VFS has been instantly generated necessitating a forced metadata refresh
+                        s_logger.Info("VFS: Triggering debounced metadata fixup and analysis for series -> {0} [{1}] (RatingKey: {2}) on {3}", series.GetDisplayTitle(), series.ID, ratingKey, target.ServerName);
+                        await plexLibrary.RefreshMetadataAsync(ratingKey, target, token).ConfigureAwait(false);
+                        await plexLibrary.AnalyzeItemAsync(ratingKey, target, token).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        s_logger.Info("VFS: Series -> {0} [{1}] (RatingKey: {2}) successfully indexed by Plex on {3}", series.GetDisplayTitle(), series.ID, ratingKey, target.ServerName);
+                    }
                 }
             }
 
             if (!foundInAnyTarget)
-                s_logger.Debug("VFS: Debounced metadata fixup for series -> {0} [{1}] skipped; rating key not found in Plex yet", series.GetDisplayTitle(), series.ID);
+            {
+                if (isDeferred)
+                    s_logger.Warn("VFS: Automations for series -> {0} [{1}] skipped; rating key not found in Plex after timeout", series.GetDisplayTitle(), series.ID);
+                else
+                    s_logger.Debug("VFS: Debounced metadata fixup for series -> {0} [{1}] skipped; rating key not found in Plex yet", series.GetDisplayTitle(), series.ID);
+            }
             else
             {
                 // Execute subsequent API actions sequentially to guarantee metadata framework exists
