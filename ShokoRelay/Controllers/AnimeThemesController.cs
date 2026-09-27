@@ -239,10 +239,10 @@ public class AnimeThemesController(
                         {
                             if (MetadataService.GetShokoSeriesByID(sid) is { } series)
                             {
-                                seriesId = series.ID;
+                                seriesId = series.LocalID;
                                 break;
                             }
-                            if (MetadataService.GetShokoEpisodeByID(sid) is { SeriesID: int epSeriesId })
+                            if (MetadataService.GetShokoEpisodeByID(sid) is { ShokoSeriesID: var epSeriesId })
                             {
                                 seriesId = epSeriesId;
                                 break;

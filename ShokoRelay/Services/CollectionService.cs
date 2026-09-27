@@ -73,7 +73,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
         {
             var (created, uploaded, alreadyUploaded, errs, uniqueSeries) = (0, 0, 0, 0, new HashSet<int>());
             var (createdList, uploadedDetails, errorsList) = (new List<CollectionAssignmentDetail>(), new List<CollectionUploadDetail>(), new List<string>());
-            var allowedIds = new HashSet<int>(seriesList?.Where(s => s != null).Select(s => OverrideHelper.GetPrimary(s!.ID, metadataService)) ?? []);
+            var allowedIds = new HashSet<int>(seriesList?.Where(s => s != null).Select(s => OverrideHelper.GetPrimary(s!.LocalID, metadataService)) ?? []);
             var targets = plexClient.GetConfiguredTargets();
 
             if (targets.Count == 0)
@@ -221,7 +221,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                     {
                         var epId = PlexHelper.ExtractShokoEpisodeIdFromGuid(item.Guid);
                         if (epId.HasValue)
-                            sid = metadataService.GetShokoEpisodeByID(epId.Value)?.SeriesID;
+                            sid = metadataService.GetShokoEpisodeByID(epId.Value)?.ShokoSeriesID;
                     }
                     else
                         sid = PlexHelper.ExtractShokoSeriesIdFromGuid(item.Guid);
@@ -283,7 +283,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                             if (posted.Add((cid, "metadata")))
                             {
                                 var desc = TextHelper.GetDescriptionByLanguage(series!, Settings.DescriptionLanguage);
-                                var tmdbDesc = series!.TmdbShows?.FirstOrDefault()?.PreferredDescription?.Value;
+                                var tmdbDesc = series!.TmdbShows?.FirstOrDefault()?.PreferredOverview?.Value;
                                 var summary = TextHelper.SanitizeSummaryWithFallback(desc, tmdbDesc, Settings.SummaryMode);
                                 await plexCollections.UpdateCollectionMetadataAsync(cid, collectionName, summary, target, cancellationToken).ConfigureAwait(false);
                             }

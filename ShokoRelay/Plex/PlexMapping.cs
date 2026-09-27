@@ -112,7 +112,7 @@ public static class PlexMapping
         if (EnforceTmdbNumbering && eps.Select(ep => ep.Type).Distinct().Count() == 1)
         {
             var tmdbEntriesRaw = eps.OfType<IShokoEpisode>().Where(se => se.TmdbEpisodes != null && se.TmdbEpisodes.Any()).SelectMany(se => se.TmdbEpisodes).ToList();
-            string? showPrefId = eps.OfType<IShokoEpisode>().Select(se => se.Series).FirstOrDefault()?.TmdbShows?.FirstOrDefault()?.PreferredOrdering?.OrderingID;
+            string? showPrefId = eps.OfType<IShokoEpisode>().Select(se => se.Series).FirstOrDefault()?.TmdbShows?.FirstOrDefault()?.PreferredOrdering?.ID.ID;
             var tmdbEntries = string.IsNullOrWhiteSpace(showPrefId)
                 ? [.. tmdbEntriesRaw.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber)]
                 : SelectPreferredTmdbOrdering(tmdbEntriesRaw, showPrefId);
@@ -168,8 +168,8 @@ public static class PlexMapping
                 .. list.Select(te =>
                         (
                             Episode: te,
-                            Priority: string.Equals(te.OrderingID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase) ? 0
-                            : te.AllOrderings?.Any(o => string.Equals(o.OrderingID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase)) == true ? 1
+                            Priority: string.Equals(te.TmdbOrderingID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase) ? 0
+                            : te.TmdbOrderings?.Any(o => string.Equals(o.OrderingID.ID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase)) == true ? 1
                             : 2
                         )
                     )
@@ -187,7 +187,7 @@ public static class PlexMapping
     public static (int? Season, int Episode) GetOrderingCoords(ITmdbEpisode ep, string? showPreferredOrderingId = null) =>
         ep == null ? (null, 0)
         : !string.IsNullOrWhiteSpace(showPreferredOrderingId)
-            ? ep.AllOrderings?.FirstOrDefault(o => string.Equals(o.OrderingID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase)) is { } byAll ? (byAll.SeasonNumber, byAll.EpisodeNumber)
+            ? ep.TmdbOrderings?.FirstOrDefault(o => string.Equals(o.OrderingID.ID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase)) is { } byAll ? (byAll.SeasonNumber, byAll.EpisodeNumber)
                 : (ep.SeasonNumber, ep.EpisodeNumber)
         : (ep.SeasonNumber, ep.EpisodeNumber);
 

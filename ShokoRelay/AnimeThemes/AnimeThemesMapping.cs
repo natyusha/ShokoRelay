@@ -296,7 +296,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
 
             var folderGroups = (seriesFilter?.Any() == true ? seriesFilter.Distinct().Select(metadataService.GetShokoSeriesByID) : metadataService.GetAllShokoSeries())
                 .Where(s => s?.AnidbAnimeID > 0)
-                .GroupBy(s => OverrideHelper.GetPrimary(s!.ID, metadataService))
+                .GroupBy(s => OverrideHelper.GetPrimary(s!.LocalID, metadataService))
                 .ToList();
 
             Parallel.ForEach(
@@ -321,7 +321,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
 
                     Interlocked.Increment(ref state.Matched);
                     var isFilteredRun = seriesFilter?.Any() == true;
-                    var myPrefixes = folderGroup.Select(s => overrideOrder.IndexOf(s!.ID) is var idx && idx > 0 ? $"P{idx + 1} ❯ " : null).ToHashSet();
+                    var myPrefixes = folderGroup.Select(s => overrideOrder.IndexOf(s!.LocalID) is var idx && idx > 0 ? $"P{idx + 1} ❯ " : null).ToHashSet();
 
                     foreach (var vfsPath in vfsPaths)
                     {
@@ -334,7 +334,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                             .OfType<IShokoSeries>()
                             .SelectMany(series =>
                             {
-                                int seriesIdx = overrideOrder.IndexOf(series.ID);
+                                int seriesIdx = overrideOrder.IndexOf(series.LocalID);
                                 return entries
                                     // Determine if a theme mapping's overlap level is allowed based on the configured overlap restriction
                                     .Where(e =>
@@ -361,7 +361,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                                             Extension = Path.GetExtension(src),
                                             RelativePath = relPath,
                                             SeriesIndex = seriesIdx,
-                                            OriginalId = series.ID,
+                                            OriginalId = series.LocalID,
                                         };
                                     });
                             })
@@ -384,7 +384,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                                 string destPath = VfsShared.NormalizeSeparators(Path.Combine(shortsDir, finalName));
                                 plannedFilenames.Add(finalName);
 
-                                if (!isFilteredRun || folderGroup.Any(s => s!.ID == item.OriginalId))
+                                if (!isFilteredRun || folderGroup.Any(s => s!.LocalID == item.OriginalId))
                                 {
                                     if (!Settings.Advanced.DisableVfsGeneration)
                                         Directory.CreateDirectory(shortsDir);
@@ -493,7 +493,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                                         if (endIdx > startIdx)
                                         {
                                             string epIdStr = parts[0][startIdx..endIdx];
-                                            if (int.TryParse(epIdStr, out int epId) && metadataService.GetShokoEpisodeByID(epId) is { SeriesID: int sid } && primaryIdsToPurge.Contains(sid.ToString()))
+                                            if (int.TryParse(epIdStr, out int epId) && metadataService.GetShokoEpisodeByID(epId) is { ShokoSeriesID: var sid } && primaryIdsToPurge.Contains(sid.ToString()))
                                                 continue;
                                         }
                                     }

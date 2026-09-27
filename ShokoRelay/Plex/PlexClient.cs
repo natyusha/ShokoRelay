@@ -375,7 +375,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
                 var keys = new List<int>();
                 foreach (var ep in series.Episodes.Where(e => e.Type == EpisodeType.Episode))
                 {
-                    string guid = $"{ShokoRelayConstants.MovieAgentScheme}://movie/{PlexConstants.MoviePrefix}{ep.ID}";
+                    string guid = $"{ShokoRelayConstants.MovieAgentScheme}://movie/{PlexConstants.MoviePrefix}{ep.LocalID}";
                     using var req = CreateRequest(
                         HttpMethod.Get,
                         $"/library/sections/{target.SectionId}/all?guid={Uri.EscapeDataString(guid)}&X-Plex-Container-Start=0&X-Plex-Container-Size=1",

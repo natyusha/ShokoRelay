@@ -108,11 +108,11 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                         episodeCache[item.Guid] = ep;
                     }
 
-                    if (ep == null || appliedIds.Contains(ep.ID))
+                    if (ep == null || appliedIds.Contains(ep.LocalID))
                         continue;
 
-                    if (!userDataCache.TryGetValue(ep.ID, out var epUserData))
-                        userDataCache[ep.ID] = epUserData = userDataService.GetEpisodeUserData(ep, defaultUser);
+                    if (!userDataCache.TryGetValue(ep.LocalID, out var epUserData))
+                        userDataCache[ep.LocalID] = epUserData = userDataService.GetEpisodeUserData(ep, defaultUser);
 
                     bool alreadyWatched = epUserData?.LastPlayedAt != null;
                     bool isWatchedInPlex = item.ViewCount > 0;
@@ -121,7 +121,7 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                         epsToMark.Add(ep);
                 }
 
-                var epsToMarkGrouped = epsToMark.GroupBy(e => e.SeriesID).ToDictionary(g => g.Key, g => g.ToList());
+                var epsToMarkGrouped = epsToMark.GroupBy(e => e.ShokoSeriesID).ToDictionary(g => g.Key, g => g.ToList());
                 var processedEpsToMarkCount = new Dictionary<int, int>();
 
                 foreach (var item in items)
@@ -145,14 +145,14 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                         episodeCache[item.Guid] = ep;
                     }
 
-                    if (ep == null || appliedIds.Contains(ep.ID))
+                    if (ep == null || appliedIds.Contains(ep.LocalID))
                     {
                         result = SyncHelper.IncSkipped(result, result.PerUser, uName);
                         continue;
                     }
 
-                    if (!userDataCache.TryGetValue(ep.ID, out var epUserData))
-                        userDataCache[ep.ID] = epUserData = userDataService.GetEpisodeUserData(ep, defaultUser);
+                    if (!userDataCache.TryGetValue(ep.LocalID, out var epUserData))
+                        userDataCache[ep.LocalID] = epUserData = userDataService.GetEpisodeUserData(ep, defaultUser);
 
                     bool alreadyWatched = epUserData?.LastPlayedAt != null;
 
@@ -183,16 +183,16 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                     {
                         if (!dryRun)
                         {
-                            int currentCount = processedEpsToMarkCount.TryGetValue(ep.SeriesID, out int count) ? count + 1 : 1;
-                            processedEpsToMarkCount[ep.SeriesID] = currentCount;
+                            int currentCount = processedEpsToMarkCount.TryGetValue(ep.ShokoSeriesID, out int count) ? count + 1 : 1;
+                            processedEpsToMarkCount[ep.ShokoSeriesID] = currentCount;
 
-                            bool isLastInSeries = epsToMarkGrouped.TryGetValue(ep.SeriesID, out var list) && currentCount == list.Count;
+                            bool isLastInSeries = epsToMarkGrouped.TryGetValue(ep.ShokoSeriesID, out var list) && currentCount == list.Count;
 
                             await userDataService
                                 .SetEpisodeWatchedStatus(ep, defaultUser, true, watchedAt, videoReason: VideoUserDataSaveReason.UserInteraction, noVideoPropagation: false, updateStatsNow: isLastInSeries)
                                 .ConfigureAwait(false);
                         }
-                        appliedIds.Add(ep.ID);
+                        appliedIds.Add(ep.LocalID);
                         result = SyncHelper.IncMarkedWatched(result, result.PerUser, uName);
                         s_logger.Info(
                             "WatchedSyncService: {0}Plex -> Shoko: {1} marked {2} -> {3} [{4}] - S{5:D2}E{6:D2} (RatingKey: {7})",
@@ -200,7 +200,7 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                             uName,
                             typeLabel,
                             ep.Series?.GetDisplayTitle(),
-                            ep.SeriesID,
+                            ep.ShokoSeriesID,
                             coords.Season,
                             coords.Episode,
                             item.RatingKey
@@ -219,7 +219,7 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                                 await userDataService.SaveVideoUserData(video, defaultUser, update).ConfigureAwait(false);
                             }
                         }
-                        appliedIds.Add(ep.ID);
+                        appliedIds.Add(ep.LocalID);
                         result = SyncHelper.IncProgressUpdated(result, result.PerUser, uName);
                         s_logger.Info(
                             "WatchedSyncService: {0}Plex -> Shoko: {1} updated progress for {2} -> {3} [{4}] - S{5:D2}E{6:D2} (RatingKey: {7}) to {8}",
@@ -227,7 +227,7 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                             uName,
                             typeLabel,
                             ep.Series?.GetDisplayTitle(),
-                            ep.SeriesID,
+                            ep.ShokoSeriesID,
                             coords.Season,
                             coords.Episode,
                             item.RatingKey,
@@ -243,8 +243,8 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                         SyncHelper.MakeChange(
                             uName,
                             libraryName: target.Title,
-                            ep.ID,
-                            $"{ep.Series?.GetDisplayTitle()} [{ep.SeriesID}]",
+                            ep.LocalID,
+                            $"{ep.Series?.GetDisplayTitle()} [{ep.ShokoSeriesID}]",
                             item.ParentIndex ?? 0,
                             item.Index ?? 0,
                             item.RatingKey,

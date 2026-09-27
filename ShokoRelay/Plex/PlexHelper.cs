@@ -74,7 +74,7 @@ public static class PlexHelper
             int partIdx = epIdPart.IndexOf(PlexConstants.PartPrefix, StringComparison.OrdinalIgnoreCase);
             if (partIdx >= 0)
                 epIdPart = epIdPart[..partIdx];
-            return int.TryParse(epIdPart, out var id) ? (isAniDb ? metadataService.GetShokoEpisodeByAnidbID(id) : metadataService.GetShokoEpisodeByID(id))?.Series?.ID ?? 0 : 0;
+            return int.TryParse(epIdPart, out var id) ? (isAniDb ? metadataService.GetShokoEpisodeByAnidbID(id) : metadataService.GetShokoEpisodeByID(id))?.Series?.LocalID ?? 0 : 0;
         }
 
         // Isolate the show component (supports {ID}, a{AniDB}, {ID}s{Season}, or a{AniDB}s{Season})
@@ -82,7 +82,7 @@ public static class PlexHelper
         var seriesPart = seasonIdx >= 0 ? ratingKey[..seasonIdx] : ratingKey;
         return seriesPart.StartsWith(PlexConstants.AniDbPrefix, StringComparison.OrdinalIgnoreCase)
             ? int.TryParse(seriesPart[PlexConstants.AniDbPrefix.Length..], out var anidb)
-                ? metadataService.GetShokoSeriesByAnidbID(anidb)?.ID ?? 0
+                ? metadataService.GetShokoSeriesByAnidbID(anidb)?.LocalID ?? 0
                 : 0
             : int.TryParse(seriesPart, out var sid)
                 ? sid

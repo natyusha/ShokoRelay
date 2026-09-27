@@ -90,7 +90,7 @@ public static class OverrideHelper
             var tmdbGroups =
                 metadataService
                     .GetAllShokoSeries()
-                    ?.Select(s => (s.AnidbAnimeID, s.AirDate, TmdbId: s.TmdbShows?.FirstOrDefault()?.ID))
+                    ?.Select(s => (s.AnidbAnimeID, s.AirDate, TmdbId: s.TmdbShows?.FirstOrDefault()?.TmdbID))
                     .Where(x => x.TmdbId.HasValue)
                     .GroupBy(x => x.TmdbId!.Value)
                     .Where(g => g.Count() > 1)
@@ -121,7 +121,7 @@ public static class OverrideHelper
     {
         EnsureLoaded(metadataService);
         return (!EnforceTmdbNumbering || metadataService == null || metadataService.GetShokoSeriesByID(shokoSeriesId) is not { AnidbAnimeID: > 0 } s) ? shokoSeriesId
-            : (s_groups.TryGetValue(s.AnidbAnimeID, out var grp) && grp.Count > 0 && metadataService.GetShokoSeriesByAnidbID(grp[0]) is { } ps) ? ps.ID
+            : (s_groups.TryGetValue(s.AnidbAnimeID, out var grp) && grp.Count > 0 && metadataService.GetShokoSeriesByAnidbID(grp[0]) is { } ps) ? ps.LocalID
             : shokoSeriesId;
     }
 
@@ -133,7 +133,7 @@ public static class OverrideHelper
     {
         EnsureLoaded(metadataService);
         return (!EnforceTmdbNumbering || metadataService == null || metadataService.GetShokoSeriesByID(shokoSeriesId) is not { AnidbAnimeID: > 0 } s) ? [shokoSeriesId]
-            : (s_groups.TryGetValue(s.AnidbAnimeID, out var grp) && grp.Count > 0) ? [.. grp.Select(metadataService.GetShokoSeriesByAnidbID).OfType<IShokoSeries>().Select(ss => ss.ID)]
+            : (s_groups.TryGetValue(s.AnidbAnimeID, out var grp) && grp.Count > 0) ? [.. grp.Select(metadataService.GetShokoSeriesByAnidbID).OfType<IShokoSeries>().Select(ss => ss.LocalID)]
             : [shokoSeriesId];
     }
 

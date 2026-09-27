@@ -107,11 +107,11 @@ public static class TextHelper
         );
 
     /// <summary>Return an item's description according to a comma-separated list of preferred language codes.</summary>
-    /// <param name="item">Object that exposes a Descriptions collection.</param>
+    /// <param name="item">Object that exposes an Overviews collection.</param>
     /// <param name="languageSetting">Comma-separated preferred language codes.</param>
     /// <returns>The best matching description string.</returns>
-    public static string GetDescriptionByLanguage(IWithDescriptions item, string languageSetting) =>
-        GetByLanguage(languageSetting, item.PreferredDescription?.Value, item.Descriptions, d => d.LanguageCode, d => d.Value);
+    public static string GetDescriptionByLanguage(IWithOverviews item, string languageSetting) =>
+        GetByLanguage(languageSetting, item.PreferredOverview?.Value, item.Overviews, d => d.LanguageCode, d => d.Value);
 
     /// <summary>Selects the first non-empty value from a collection matching a priority list of language codes.</summary>
     /// <typeparam name="T">The type of items in the collection.</typeparam>

@@ -102,7 +102,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
                 if (int.TryParse(raw[PlexConstants.AniDbPrefix.Length..], out int aid) && aid > 0)
                 {
                     if (MetadataService.GetShokoSeriesByAnidbID(aid) is { } series)
-                        ids.Add(series.ID);
+                        ids.Add(series.LocalID);
                     else
                         errors.Add($"No Shoko Series found for AniDB ID: {aid}");
                 }
