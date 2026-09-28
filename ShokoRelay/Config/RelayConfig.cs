@@ -401,7 +401,7 @@ public class AdvancedConfig
     public string ManagedFolderExclusions { get; set; } = "";
 
     /// <summary>Whether to defer initial VFS creation until the metadata fixup.</summary>
-    [Display(Name = "Defer VFS Creation Until Fixup", Description = "Enable to wait for the configured Plex Fixup Delay before generating VFS links")]
+    [Display(Name = "Defer VFS Creation", Description = "Enable to wait for the configured Plex Fixup Delay before generating VFS links")]
     [DefaultValue(false)]
     public bool DeferVfsCreationUntilFixup { get; set; } = false;
 
