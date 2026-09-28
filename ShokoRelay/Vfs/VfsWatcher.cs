@@ -338,15 +338,18 @@ public class VfsWatcher(
             await Task.Delay(TimeSpan.FromSeconds(Settings.Advanced.PlexScanDelay), token).ConfigureAwait(false);
 
             // If partial scans are enabled, trigger them now: In deferred mode this serves as the primary scan / In standard mode it acts as a fallback for the initial scan
+            var vfsPaths = VfsShared.ResolveSeriesVfsPaths(series, metadataService).ToList();
             if (plexLibrary.ScanOnVfsRefresh)
             {
-                foreach (var path in VfsShared.ResolveSeriesVfsPaths(series, metadataService))
+                foreach (var path in vfsPaths)
                     await plexLibrary.RefreshSectionPathAsync(path, token).ConfigureAwait(false);
             }
 
             var targets = plexLibrary.GetConfiguredTargets();
             bool foundInAnyTarget = false;
-            var (doTv, doMovie) = MapHelper.GetGenerationModes(MapHelper.IsMovie(series), Settings.Advanced.MovieGenerationMode);
+
+            // Pre-filter targets so we only poll libraries that physically contain the VFS paths for this series, eliminating timeouts on irrelevant libraries
+            var matchingTargetIds = vfsPaths.SelectMany(plexLibrary.GetMatchingTargetsForPath).Select(x => x.Target.SectionId).ToHashSet();
 
             // Wait for Plex to assign rating keys (primarily for users in deferred mode)
             int retryDelaySeconds = Settings.Advanced.PlexScanDelay;
@@ -354,8 +357,7 @@ public class VfsWatcher(
 
             foreach (var target in targets)
             {
-                bool isMovieTarget = target.LibraryType == PlexLibraryType.Movie;
-                if ((isMovieTarget && !doMovie) || (!isMovieTarget && !doTv))
+                if (!matchingTargetIds.Contains(target.SectionId))
                     continue;
 
                 var ratingKeys = new List<int>();
@@ -368,7 +370,7 @@ public class VfsWatcher(
                     if (i < maxRetries - 1)
                     {
                         if (i == 0 && isDeferred)
-                            s_logger.Debug("VFS: Waiting for Plex to index series -> {0} [{1}] on {2}...", series.GetDisplayTitle(), series.ID, target.ServerName);
+                            s_logger.Debug("VFS: Waiting for Plex to index series -> {0} [{1}] in library '{2}' on {3}...", series.GetDisplayTitle(), series.ID, target.Title, target.ServerName);
                         await Task.Delay(TimeSpan.FromSeconds(retryDelaySeconds), token).ConfigureAwait(false);
                     }
                 }
@@ -376,16 +378,30 @@ public class VfsWatcher(
                 foreach (var ratingKey in ratingKeys)
                 {
                     foundInAnyTarget = true;
-                    if (!isDeferred)
+                    if (!isDeferred || plexLibrary.ScanOnVfsRefresh)
                     {
-                        // Shoko may have been missing data (e.g. TMDB IDs) when the VFS has been instantly generated necessitating a forced metadata refresh
-                        s_logger.Info("VFS: Triggering debounced metadata fixup and analysis for series -> {0} [{1}] (RatingKey: {2}) on {3}", series.GetDisplayTitle(), series.ID, ratingKey, target.ServerName);
+                        // Shoko may have been missing data (e.g. TMDB IDs) when the VFS was instantly generated necessitating a forced metadata refresh
+                        s_logger.Info(
+                            "VFS: Triggering debounced metadata fixup and analysis for series -> {0} [{1}] (RatingKey: {2}) in library '{3}' on {4}",
+                            series.GetDisplayTitle(),
+                            series.ID,
+                            ratingKey,
+                            target.Title,
+                            target.ServerName
+                        );
                         await plexLibrary.RefreshMetadataAsync(ratingKey, target, token).ConfigureAwait(false);
                         await plexLibrary.AnalyzeItemAsync(ratingKey, target, token).ConfigureAwait(false);
                     }
                     else
                     {
-                        s_logger.Info("VFS: Series -> {0} [{1}] (RatingKey: {2}) successfully indexed by Plex on {3}", series.GetDisplayTitle(), series.ID, ratingKey, target.ServerName);
+                        s_logger.Info(
+                            "VFS: Series -> {0} [{1}] (RatingKey: {2}) successfully indexed by Plex in library '{3}' on {4}",
+                            series.GetDisplayTitle(),
+                            series.ID,
+                            ratingKey,
+                            target.Title,
+                            target.ServerName
+                        );
                     }
                 }
             }

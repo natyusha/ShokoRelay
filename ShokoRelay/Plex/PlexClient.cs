@@ -36,38 +36,25 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
 
     #region Library & Section
 
-    /// <summary>Request Plex to refresh a specific filesystem path, optimized to matching sections with an automatic path mapping fallback.</summary>
+    /// <summary>Finds Plex library targets that match the given Shoko VFS path, returning the target and the mapped path to refresh.</summary>
     /// <param name="path">The Shoko-side filesystem path.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>True if at least one refresh request was successful.</returns>
-    public async Task<bool> RefreshSectionPathAsync(string path, CancellationToken cancellationToken = default)
+    /// <returns>A list of matching targets and their localized paths.</returns>
+    public List<(PlexLibraryTarget Target, string PathToRefresh)> GetMatchingTargetsForPath(string path)
     {
-        if (!IsEnabled || string.IsNullOrWhiteSpace(path))
-            return false;
+        var results = new List<(PlexLibraryTarget Target, string PathToRefresh)>();
+        if (string.IsNullOrWhiteSpace(path))
+            return results;
 
         string mapped = MapShokoPathToPlexPath(path);
         string normMapped = TextHelper.NormalizePathForPlex(mapped);
-
         var allTargets = GetConfiguredTargets();
-        var matchingTargets = allTargets.Where(target => target.Locations.Any(loc => normMapped.StartsWith(TextHelper.NormalizePathForPlex(loc), StringComparison.OrdinalIgnoreCase)));
 
-        bool anyOk = false;
-
-        if (matchingTargets.Any())
+        var exactMatches = allTargets.Where(target => target.Locations.Any(loc => normMapped.StartsWith(TextHelper.NormalizePathForPlex(loc), StringComparison.OrdinalIgnoreCase)));
+        if (exactMatches.Any())
         {
-            foreach (var target in matchingTargets)
-            {
-                using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/refresh?path={Uri.EscapeDataString(mapped)}", target.ServerUrl);
-                using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
-                if (resp.IsSuccessStatusCode)
-                {
-                    anyOk = true;
-                    s_logger.Debug("PlexClient: refresh triggered for -> '{0}' on {1}:{2}", mapped, target.ServerUrl, target.SectionId);
-                }
-                else
-                    s_logger.Warn("PlexClient: refresh failed ({0}) for folder -> '{1}' in section {2}", resp.StatusCode, mapped, target.SectionId);
-            }
-            return anyOk;
+            foreach (var t in exactMatches)
+                results.Add((t, mapped));
+            return results;
         }
 
         // If Path Mappings aren't configured, safely infer the correct Plex path by matching the VFS root name to Plex's configured library locations.
@@ -147,21 +134,44 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
             {
                 if (hasParentMatch && !isParentMatch)
                     continue;
-
-                using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{tgt.SectionId}/refresh?path={Uri.EscapeDataString(guessedPath)}", tgt.ServerUrl);
-                using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
-                if (resp.IsSuccessStatusCode)
-                {
-                    anyOk = true;
-                    s_logger.Debug("PlexClient: auto-mapped fallback refresh triggered for -> '{0}' on {1}:{2}", guessedPath, tgt.ServerUrl, tgt.SectionId);
-                }
+                results.Add((tgt, guessedPath));
             }
         }
 
-        if (!anyOk)
+        return results;
+    }
+
+    /// <summary>Request Plex to refresh a specific filesystem path, optimized to matching sections with an automatic path mapping fallback.</summary>
+    /// <param name="path">The Shoko-side filesystem path.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>True if at least one refresh request was successful.</returns>
+    public async Task<bool> RefreshSectionPathAsync(string path, CancellationToken cancellationToken = default)
+    {
+        if (!IsEnabled || string.IsNullOrWhiteSpace(path))
+            return false;
+
+        var targets = GetMatchingTargetsForPath(path);
+        bool anyOk = false;
+
+        foreach (var (tgt, guessedPath) in targets)
+        {
+            using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{tgt.SectionId}/refresh?path={Uri.EscapeDataString(guessedPath)}", tgt.ServerUrl);
+            using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+            if (resp.IsSuccessStatusCode)
+            {
+                anyOk = true;
+                s_logger.Debug("PlexClient: refresh triggered for -> '{0}' on {1}:{2}", guessedPath, tgt.ServerUrl, tgt.SectionId);
+            }
+            else
+            {
+                s_logger.Warn("PlexClient: refresh failed ({0}) for folder -> '{1}' in section {2}", resp.StatusCode, guessedPath, tgt.SectionId);
+            }
+        }
+
+        if (!anyOk && targets.Count == 0)
             s_logger.Warn(
                 "PlexClient: Path '{0}' does not match any known Plex library locations! If Plex and Shoko run on different filesystems, please configure Path Mappings in the Shoko Relay dashboard.",
-                normMapped
+                TextHelper.NormalizePathForPlex(MapShokoPathToPlexPath(path))
             );
 
         return anyOk;
