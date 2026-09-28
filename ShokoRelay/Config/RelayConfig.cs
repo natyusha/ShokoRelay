@@ -497,11 +497,11 @@ public class AdvancedConfig
     [DefaultValue(2)]
     public int PlexFixupDelay { get; set; } = 2;
 
-    /// <summary>Plex partial scan delay.</summary>
+    /// <summary>Plex partial scan delay, and rating key polling interval for deferred mode.</summary>
     [Display(Name = "Plex Scan Delay", Description = "The delay (in seconds) after the VFS adds a file to trigger a partial scan in Plex *req. 'Force Partial Scans'")]
     [Range(1, 60, ErrorMessage = "Plex Scan Delay must be between 1 and 60")]
-    [DefaultValue(5)]
-    public int PlexScanDelay { get; set; } = 5;
+    [DefaultValue(10)]
+    public int PlexScanDelay { get; set; } = 10;
 
     /// <summary>Task parallelism limit.</summary>
     [Display(Name = "Parallelism", Description = "The maximum number of concurrent operations *used by VFS and AnimeThemes batch operations")]

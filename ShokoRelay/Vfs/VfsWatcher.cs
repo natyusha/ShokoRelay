@@ -335,9 +335,7 @@ public class VfsWatcher(
                 await atMapping.ApplyMappingAsync([series.ID], token).ConfigureAwait(false);
 
             // Wait to allow the filesystem to settle, or for Plex's native auto-scanner to index the newly generated VFS symlinks
-            int bufferSeconds = Settings.Advanced.PlexScanDelay;
-            if (bufferSeconds > 0)
-                await Task.Delay(TimeSpan.FromSeconds(bufferSeconds), token).ConfigureAwait(false);
+            await Task.Delay(TimeSpan.FromSeconds(Settings.Advanced.PlexScanDelay), token).ConfigureAwait(false);
 
             // If partial scans are enabled, trigger them now: In deferred mode this serves as the primary scan / In standard mode it acts as a fallback for the initial scan
             if (plexLibrary.ScanOnVfsRefresh)
@@ -348,13 +346,18 @@ public class VfsWatcher(
 
             var targets = plexLibrary.GetConfiguredTargets();
             bool foundInAnyTarget = false;
+            var (doTv, doMovie) = MapHelper.GetGenerationModes(MapHelper.IsMovie(series), Settings.Advanced.MovieGenerationMode);
 
             // Wait for Plex to assign rating keys (primarily for users in deferred mode)
-            int maxRetries = isDeferred ? 18 : 2; // Up to 3 minutes for deferred, 20s for standard
-            int retryDelaySeconds = 10;
+            int retryDelaySeconds = Settings.Advanced.PlexScanDelay;
+            int maxRetries = isDeferred ? Math.Max(1, 180 / retryDelaySeconds) : 2; // ~3 minutes for deferred, ~2 ticks for standard
 
             foreach (var target in targets)
             {
+                bool isMovieTarget = target.LibraryType == PlexLibraryType.Movie;
+                if ((isMovieTarget && !doMovie) || (!isMovieTarget && !doTv))
+                    continue;
+
                 var ratingKeys = new List<int>();
                 for (int i = 0; i < maxRetries; i++)
                 {
@@ -406,10 +409,10 @@ public class VfsWatcher(
                 if (Settings.Advanced.EnableImageSync)
                 {
                     // Give Plex's background workers a moment to extract the episode thumbnail before attempting to sync it
-                    if (isDeferred && !Settings.TmdbThumbnails && Settings.Advanced.PlexScanDelay > 0)
+                    if (isDeferred && !Settings.TmdbThumbnails)
                     {
                         s_logger.Debug("VFS: Pausing briefly to allow Plex thumbnail extraction for series -> {0} [{1}]", series.GetDisplayTitle(), series.ID);
-                        await Task.Delay(TimeSpan.FromSeconds(Settings.Advanced.PlexScanDelay), token).ConfigureAwait(false);
+                        await Task.Delay(TimeSpan.FromSeconds(retryDelaySeconds), token).ConfigureAwait(false);
                     }
 
                     s_logger.Info("VFS: Triggering debounced image sync for series -> {0} [{1}]", series.GetDisplayTitle(), series.ID);
