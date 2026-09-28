@@ -405,6 +405,13 @@ public class VfsWatcher(
 
                 if (Settings.Advanced.EnableImageSync)
                 {
+                    // Give Plex's background workers a moment to extract the episode thumbnail before attempting to sync it
+                    if (isDeferred && !Settings.TmdbThumbnails && Settings.Advanced.PlexScanDelay > 0)
+                    {
+                        s_logger.Debug("VFS: Pausing briefly to allow Plex thumbnail extraction for series -> {0} [{1}]", series.GetDisplayTitle(), series.ID);
+                        await Task.Delay(TimeSpan.FromSeconds(Settings.Advanced.PlexScanDelay), token).ConfigureAwait(false);
+                    }
+
                     s_logger.Info("VFS: Triggering debounced image sync for series -> {0} [{1}]", series.GetDisplayTitle(), series.ID);
                     await imageSyncService.SyncImagesAsync([series.ID], token).ConfigureAwait(false);
                 }
