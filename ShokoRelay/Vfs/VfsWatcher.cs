@@ -334,12 +334,12 @@ public class VfsWatcher(
             if (File.Exists(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileAtMapping)))
                 await atMapping.ApplyMappingAsync([series.ID], token).ConfigureAwait(false);
 
-            // Wait to allow the filesystem or Plex's native auto-scanner to index the newly generated VFS symlinks
+            // Wait to allow the filesystem to settle, or for Plex's native auto-scanner to index the newly generated VFS symlinks
             int bufferSeconds = Settings.Advanced.PlexScanDelay;
             if (bufferSeconds > 0)
                 await Task.Delay(TimeSpan.FromSeconds(bufferSeconds), token).ConfigureAwait(false);
 
-            // Fallback in case the files were not scanned into Plex by the initial scan
+            // If partial scans are enabled, trigger them now: In deferred mode this serves as the primary scan / In standard mode it acts as a fallback for the initial scan
             if (plexLibrary.ScanOnVfsRefresh)
             {
                 foreach (var path in VfsShared.ResolveSeriesVfsPaths(series, metadataService))
