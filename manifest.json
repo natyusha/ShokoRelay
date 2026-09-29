@@ -16,6 +16,34 @@
   "icon_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-icon.png",
   "releases": [
     {
+      "version": "0.18.1",
+      "tag": "v0.18.1",
+      "source_revision": "935618de356ce013344c2672ae02d864089abf0d",
+      "released_at": "2026-09-29T19:00:39Z",
+      "channel": "Dev",
+      "release_notes": "This should be the last release before a fairly large update to Shoko.Abstractions on the server side.\r\n\r\n**Changes:**\r\n* Implemented a rating key polling loop in `RunMetadataFixupAsync` for the deferred VFS mode to ensure automations wait for Plex indexing to complete.\r\n* Bypassed redundant forced metadata refreshes when `Defer VFS Creation` is enabled, unless `Force Partial Scans` is active.\r\n* Buffered image synchronization in deferred mode using `PlexScanDelay` to prevent missing thumbnail errors during Plex's native extraction.\r\n* Optimized rating key polling to skip irrelevant library targets (e.g., checking Movie libraries for TV shows).\r\n* Extracted `GetMatchingTargetsForPath` to dry up path resolution and accurately target specific Plex library sections.\r\n* Increased the default `PlexScanDelay` to 10 seconds and implemented dynamic polling retry scaling to maintain a fixed timeout window.\r\n* Enhanced `VfsWatcher` logs to include `target.Title` for clearer diagnostics on multi-library servers.\r\n* Embedded a plugin icon for the Shoko WebUI via `EmbeddedIconResourceName` and migrated the plugin manifest to use `thumbnail_url`.\r\n* Updated dashboard help documentation and simplified the \"Defer VFS Creation\" setting name.\r\n* Updated `Shoko.Abstractions` to `6.0.0-alpha.94`.\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.18.0...v0.18.1",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.18.1/ShokoRelay-v0.18.1-dev_linux-arm64.zip",
+          "checksum": "sha256:321d129acaa7d5d232298566cfcfeed99deaead8962c132a49da4a53b0309853"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.18.1/ShokoRelay-v0.18.1-dev_linux-x64.zip",
+          "checksum": "sha256:102588f1b4dfdbdc8045f2d294b3589db9d6f74897210ea34d58cc977dc14628"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.18.1/ShokoRelay-v0.18.1-dev_win-x64.zip",
+          "checksum": "sha256:0b227f41910b369980ba08aa1d33bbb7dbe62c809b9d15a0f7c73336502904ee"
+        }
+      ]
+    },
+    {
       "version": "0.18.0",
       "tag": "v0.18.0",
       "source_revision": "0d510ef6fe2e0b7ef04fcafd8c5497d3c81b58e1",
