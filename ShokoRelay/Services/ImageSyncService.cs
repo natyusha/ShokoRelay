@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Security.Cryptography;
+using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Enums;
 using Shoko.Abstractions.Metadata.Image.CrossReferences;
@@ -186,7 +187,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                     if (episode == null)
                         return;
 
-                    int primarySeriesId = OverrideHelper.GetPrimary(episode.SeriesID, metadataService);
+                    int primarySeriesId = OverrideHelper.GetPrimary(episode.ShokoSeriesID, metadataService);
                     if (allowedSet != null && !allowedSet.Contains(primarySeriesId))
                         return;
 
@@ -195,15 +196,15 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                     bool isMovie = target.LibraryType == PlexLibraryType.Movie;
                     string labelType = isMovie ? "Movie" : "Episode";
                     string coordsStr = $"S{coords.Season:D2}E{coords.Episode:D2}";
-                    var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] - {(isMovie ? $"Movie [{episode.ID}]" : coordsStr)}";
+                    var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - {(isMovie ? $"Movie [{episode.LocalID}]" : coordsStr)}";
 
                     // File-Anchor Verification: An episode cannot receive a Plex video thumbnail if it possesses no active physical video files
                     var hasPhysicalFiles = (episode.Videos ?? []).Any(v => v.Files != null && v.Files.Any(f => !string.IsNullOrWhiteSpace(f.Path) && File.Exists(f.Path)));
                     if (!hasPhysicalFiles)
                     {
-                        if (cache.TryRemove(episode.ID.ToString(), out _))
+                        if (cache.TryRemove(episode.LocalID.ToString(), out _))
                         {
-                            await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, x => x.Source == DataSource.LocallyGenerated).ConfigureAwait(false);
+                            await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, x => x.Source == MetadataSource.Generated).ConfigureAwait(false);
                             addStats(false, false, false, false, true);
                         }
                         return;
@@ -236,9 +237,9 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                     {
                         addStats(true, false, false, true, false);
                         errsBag.Add($"[Missing Plex Thumbnail] {epLogName} (No thumbnail generated or available in Plex)");
-                        if (cache.TryRemove(episode.ID.ToString(), out _))
+                        if (cache.TryRemove(episode.LocalID.ToString(), out _))
                         {
-                            await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, x => x.Source == DataSource.LocallyGenerated).ConfigureAwait(false);
+                            await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, x => x.Source == MetadataSource.Generated).ConfigureAwait(false);
                             addStats(false, false, false, false, true);
                         }
                         return;
@@ -263,7 +264,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                             localThumb,
                             episode,
                             ImageEntityType.Backdrop,
-                            episode.ID.ToString(),
+                            episode.LocalID.ToString(),
                             "local thumbnail",
                             epLogName,
                             false,
@@ -348,10 +349,10 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                     var prefId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series) : null;
                     var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
                     string coordsStr = $"S{coords.Season:D2}E{coords.Episode:D2}";
-                    var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] - {coordsStr}";
+                    var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - {coordsStr}";
 
                     s_logger.Info("ImageSyncService: Episode thumbnail for -> {0} is no longer present in Plex ... Purging from Shoko", epLogName);
-                    await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, x => x.Source == DataSource.LocallyGenerated).ConfigureAwait(false);
+                    await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, x => x.Source == MetadataSource.Generated).ConfigureAwait(false);
                     addStats(false, false, false, false, true);
                 }
             }
@@ -374,22 +375,22 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
         CancellationToken ct
     )
     {
-        var groups = allSeries.Where(s => s.TopLevelGroupID > 0).Select(s => s.TopLevelGroup).OfType<IShokoGroup>().DistinctBy(g => g.ID).ToList();
+        var groups = allSeries.Where(s => s.TopLevelGroupID > 0).Select(s => s.TopLevelGroup).OfType<IShokoGroup>().DistinctBy(g => g.LocalID).ToList();
         foreach (var group in groups)
         {
             ct.ThrowIfCancellationRequested();
-            var seriesInGroup = allSeries.FirstOrDefault(s => s.TopLevelGroupID == group.ID);
+            var seriesInGroup = allSeries.FirstOrDefault(s => s.TopLevelGroupID == group.LocalID);
             if (seriesInGroup == null)
                 continue;
 
-            string? groupPosterFile = PlexHelper.FindCollectionImagePathByGroup(seriesInGroup, group.ID, "", metadataService);
+            string? groupPosterFile = PlexHelper.FindCollectionImagePathByGroup(seriesInGroup, group.LocalID, "", metadataService);
             var (h, u, s, e, cu) = await ProcessLocalAssetAsync(
                     groupPosterFile,
                     group,
                     ImageEntityType.Primary,
-                    "c" + group.ID,
+                    "c" + group.LocalID,
                     "collection poster",
-                    $"group {group.PreferredTitle?.Value} [{group.ID}]",
+                    $"group {group.PreferredTitle?.Value} [{group.LocalID}]",
                     true,
                     $"[Collection Poster] {group.PreferredTitle?.Value}",
                     cache,
@@ -427,12 +428,12 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                 {
                     foreach (var config in s_seriesImageConfigs)
                     {
-                        var cacheKey = config.Prefix + series.ID;
-                        if (OverrideHelper.GetPrimary(series.ID, metadataService) != series.ID)
+                        var cacheKey = config.Prefix + series.LocalID;
+                        if (OverrideHelper.GetPrimary(series.LocalID, metadataService) != series.LocalID)
                         {
                             if (cache.TryRemove(cacheKey, out _))
                             {
-                                await PurgeEntityImagesAsync(series, config.Type, x => x.Source == DataSource.User && x.IsPreferred).ConfigureAwait(false);
+                                await PurgeEntityImagesAsync(series, config.Type, x => x.Source == MetadataSource.User && x.IsPreferred).ConfigureAwait(false);
                                 addStats(false, false, false, false, true);
                             }
                             continue;
@@ -456,7 +457,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                                 config.Type,
                                 cacheKey,
                                 config.Label,
-                                $"series {series.GetDisplayTitle()} [{series.ID}]",
+                                $"series {series.GetDisplayTitle()} [{series.LocalID}]",
                                 true,
                                 $"[Local {config.Label}] {series.GetDisplayTitle()}",
                                 cache,
@@ -517,7 +518,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
             {
                 cache.TryRemove(cacheKey, out _);
                 s_logger.Info("ImageSyncService: Local {0} for -> {1} no longer present on disk ... Purging from Shoko", label, entityName);
-                await PurgeEntityImagesAsync(entity, imageType, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
+                await PurgeEntityImagesAsync(entity, imageType, x => x.Source != MetadataSource.TMDB && x.Source != MetadataSource.AniDB).ConfigureAwait(false);
                 return (true, false, false, false, true);
             }
             return (false, false, false, false, false);
@@ -559,7 +560,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
         else
             s_logger.Debug("ImageSyncService: Local {0} changed for -> {1} ... Purging stale image and uploading", label, entityName);
 
-        await PurgeEntityImagesAsync(entity, imageType, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
+        await PurgeEntityImagesAsync(entity, imageType, x => x.Source != MetadataSource.TMDB && x.Source != MetadataSource.AniDB).ConfigureAwait(false);
         s_logger.Trace("ImageSyncService: Uploading local {0} for -> {1}", label, entityName);
 
         try
@@ -597,15 +598,15 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
         CancellationToken ct
     )
     {
-        var cacheKey = episode.ID.ToString();
+        var cacheKey = episode.LocalID.ToString();
         var preferredBackdrop = episode.GetAvailableImages(ImageEntityType.Backdrop).FirstOrDefault(i => i.IsPreferred);
 
         // Strict User Preference Protection: Non-locally-generated preferred images (User, TMDB, AniDB) must never be overwritten
-        if (preferredBackdrop != null && preferredBackdrop.Source != DataSource.LocallyGenerated)
+        if (preferredBackdrop != null && preferredBackdrop.Source != MetadataSource.Generated)
             return (true, false, true, false, false);
 
         string? cacheVal = cache.GetValueOrDefault(cacheKey);
-        string coordsToken = isMovie ? $"M{episode.ID}" : $"S{coords.Season:D2}E{coords.Episode:D2}";
+        string coordsToken = isMovie ? $"M{episode.LocalID}" : $"S{coords.Season:D2}E{coords.Episode:D2}";
 
         bool isStale = false;
         if (cacheVal != null)
@@ -650,8 +651,8 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
             var md5Hex = Convert.ToHexString(MD5.HashData(bytes));
 
             // Safely unlink stale local image cross-references before uploading replacement artwork
-            if (isStale && preferredBackdrop != null && preferredBackdrop.Source == DataSource.LocallyGenerated)
-                await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, x => x.Source is not DataSource.TMDB and not DataSource.AniDB).ConfigureAwait(false);
+            if (isStale && preferredBackdrop != null && preferredBackdrop.Source == MetadataSource.Generated)
+                await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, x => x.Source != MetadataSource.TMDB && x.Source != MetadataSource.AniDB).ConfigureAwait(false);
 
             // Stream through imageManager.UploadImage to guarantee cross-reference creation for both new and existing images
             using var stream = new MemoryStream(bytes);

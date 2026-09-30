@@ -213,7 +213,7 @@ public class PlexController(
             {
                 try
                 {
-                    var ratingKeys = await PlexLibrary.FindRatingKeysForShokoSeriesInSectionAsync(series.ID, target, MetadataService, HttpContext.RequestAborted).ConfigureAwait(false);
+                    var ratingKeys = await PlexLibrary.FindRatingKeysForShokoSeriesInSectionAsync(series.LocalID, target, MetadataService, HttpContext.RequestAborted).ConfigureAwait(false);
                     if (ratingKeys.Count > 0)
                     {
                         foreach (var ratingKey in ratingKeys)
@@ -221,18 +221,18 @@ public class PlexController(
                             if (await PlexLibrary.RefreshMetadataAsync(ratingKey, target, HttpContext.RequestAborted).ConfigureAwait(false))
                             {
                                 refreshedCount++;
-                                Logger.Info("Plex: Triggered manual metadata refresh for series -> {0} [{1}] (RatingKey: {2}) on {3}", series.GetDisplayTitle(), series.ID, ratingKey, target.ServerName);
+                                Logger.Info("Plex: Triggered manual metadata refresh for series -> {0} [{1}] (RatingKey: {2}) on {3}", series.GetDisplayTitle(), series.LocalID, ratingKey, target.ServerName);
                             }
                             else
-                                errors.Add($"Failed to refresh metadata for series -> {series.GetDisplayTitle()} [{series.ID}] (RatingKey: {ratingKey}) on {target.ServerName}");
+                                errors.Add($"Failed to refresh metadata for series -> {series.GetDisplayTitle()} [{series.LocalID}] (RatingKey: {ratingKey}) on {target.ServerName}");
                         }
                     }
                     else
-                        errors.Add($"Rating keys not found in Plex for series -> {series.GetDisplayTitle()} [{series.ID}] on {target.ServerName}");
+                        errors.Add($"Rating keys not found in Plex for series -> {series.GetDisplayTitle()} [{series.LocalID}] on {target.ServerName}");
                 }
                 catch (Exception ex)
                 {
-                    errors.Add($"Error refreshing metadata for series -> {series.GetDisplayTitle()} [{series.ID}] on {target.ServerName}: {ex.Message}");
+                    errors.Add($"Error refreshing metadata for series -> {series.GetDisplayTitle()} [{series.LocalID}] on {target.ServerName}: {ex.Message}");
                 }
             }
         }
@@ -268,7 +268,7 @@ public class PlexController(
             : ExecuteTrackedTaskAsync(
                 ShokoRelayConstants.TaskPlexRatingsApply,
                 LogHelper.BuildRatingsReport,
-                () => criticRatingService.ApplyRatingsAsync(seriesList.Where(s => s != null).Select(s => s!.ID), CancellationToken.None),
+                () => criticRatingService.ApplyRatingsAsync(seriesList.Where(s => s != null).Select(s => s!.LocalID), CancellationToken.None),
                 SyncHelper.SyncLock
             );
 

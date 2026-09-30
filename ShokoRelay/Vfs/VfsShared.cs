@@ -101,7 +101,7 @@ internal static class VfsShared
         var (doTv, doMovie) = MapHelper.GetGenerationModes(MapHelper.IsMovie(series), Settings.Advanced.MovieGenerationMode);
 
         var fileData = MapHelper.GetConsolidatedSeriesFileData(series, metadataService);
-        var mainEpIds = doMovie ? fileData.Mappings.Where(m => m.PrimaryEpisode.Type == EpisodeType.Episode).Select(m => m.PrimaryEpisode.ID).Distinct().ToList() : [];
+        var mainEpIds = doMovie ? fileData.Mappings.Where(m => m.PrimaryEpisode.Type == EpisodeType.Episode).Select(m => m.PrimaryEpisode.ID.ID).Distinct().ToList() : [];
 
         foreach (var mapping in fileData.Mappings)
         {

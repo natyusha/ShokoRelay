@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
+using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Enums;
 using Shoko.Abstractions.Metadata.Image.Options;
 using Shoko.Abstractions.Video.Services;
@@ -370,7 +371,7 @@ public class ShokoController(
     {
         Logger.Info("Shoko: Starting a manual purge of all user and locally-generated images...");
         int purgedCount = 0;
-        foreach (var img in imageManager.GetAllImages().Where(img => img.Source is DataSource.LocallyGenerated or DataSource.User).ToList())
+        foreach (var img in imageManager.GetAllImages().Where(img => img.Source == MetadataSource.Generated || img.Source == MetadataSource.User).ToList())
             if (await imageManager.PurgeImage(img).ConfigureAwait(false))
                 purgedCount++;
 
@@ -386,7 +387,7 @@ public class ShokoController(
         Logger.Info("Shoko: Starting a manual purge of all default (non-LocallyGenerated) episode backdrops...");
         var xrefs = imageManager
             .GetAllImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = ImageEntityType.Backdrop })
-            .Where(x => x.EntityType == DataEntityType.Episode && x.ImageSource != DataSource.LocallyGenerated);
+            .Where(x => x.EntityID.EntityType == MetadataEntityType.Episode && x.ImageSource != MetadataSource.Generated);
 
         var distinctImageIds = xrefs.Select(x => x.ImageID).Distinct().ToList();
         int purgedCount = 0;

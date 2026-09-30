@@ -39,7 +39,7 @@ public static class ImageHelper
     /// <returns>A full URL string.</returns>
     public static string GetImageUrl(IImage image, bool forceRemote = false)
     {
-        if (forceRemote && image.Source == DataSource.TMDB && !string.IsNullOrEmpty(image.ResourceID))
+        if (forceRemote && image.Source == MetadataSource.TMDB && !string.IsNullOrEmpty(image.ResourceID))
         {
             string path = image.ResourceID.Replace('\\', '/');
             if (!path.StartsWith('/'))
@@ -81,11 +81,11 @@ public static class ImageHelper
         if (entity is ISeries)
         {
             // Push TMDB Season type posters to the end of the array to prioritize TMDB Series posters
-            imgs = [.. imgs.OrderBy(i => i.CrossReference?.EntityType == DataEntityType.Season ? 1 : 0)];
+            imgs = [.. imgs.OrderBy(i => i.CrossReference?.EntityID.EntityType == MetadataEntityType.Season ? 1 : 0)];
 
             // Reverse AniDB images to prioritize the newest posters in their original positions
-            var aniDbRev = new Queue<IImage>(imgs.Where(i => i.Source == DataSource.AniDB).Reverse());
-            imgs = [.. imgs.Select(i => i.Source == DataSource.AniDB ? aniDbRev.Dequeue() : i)];
+            var aniDbRev = new Queue<IImage>(imgs.Where(i => i.Source == MetadataSource.AniDB).Reverse());
+            imgs = [.. imgs.Select(i => i.Source == MetadataSource.AniDB ? aniDbRev.Dequeue() : i)];
         }
 
         return imgs;

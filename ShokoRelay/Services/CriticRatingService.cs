@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
+using Shoko.Abstractions.Metadata;
+using Shoko.Abstractions.Metadata.Tmdb;
 
 namespace ShokoRelay.Services;
 
@@ -95,7 +97,7 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                 // Resolve the critic rating for a series based on user configuration
                 double? rating = Settings.CriticRatingMode switch
                 {
-                    CriticRatingMode.TMDB => series.TmdbShows?.FirstOrDefault()?.Rating > 0 ? series.TmdbShows.First().Rating : null,
+                    CriticRatingMode.TMDB => series.GetLinkedSeries<ITmdbShow>(MetadataSource.TMDB)?.FirstOrDefault() is { Rating: > 0 } ts ? ts.Rating : null,
                     CriticRatingMode.AniDB => series.Rating > 0 ? series.Rating : null,
                     _ => null,
                 };
@@ -105,7 +107,7 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                     s_logger.Trace(
                         "CriticRatingService: Skipped series -> {0} [{1}] (RatingKey: {2}) because rating {3} matches Plex",
                         series.GetDisplayTitle(),
-                        series.ID,
+                        series.LocalID,
                         item.RatingKey,
                         item.Rating?.ToString("F2") ?? "n/a"
                     );
@@ -115,8 +117,8 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                 if (await ApplyRatingAsync(item.RatingKey!, rating, target, cancellationToken))
                 {
                     uS++;
-                    appliedChanges.Add(new RatingChange($"{series.GetDisplayTitle() ?? "Unknown"} [{series.ID}]", "Series", item.RatingKey!, item.Rating, rating));
-                    s_logger.Info("CriticRatingService: Updated series -> {0} [{1}] to {2}", series.GetDisplayTitle(), series.ID, rating?.ToString("F2") ?? "n/a");
+                    appliedChanges.Add(new RatingChange($"{series.GetDisplayTitle() ?? "Unknown"} [{series.LocalID}]", "Series", item.RatingKey!, item.Rating, rating));
+                    s_logger.Info("CriticRatingService: Updated series -> {0} [{1}] to {2}", series.GetDisplayTitle(), series.LocalID, rating?.ToString("F2") ?? "n/a");
                 }
                 else
                 {
@@ -134,21 +136,21 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                     return;
 
                 var episode = metadataService.GetShokoEpisodeByID(epId.Value);
-                if (episode == null || (allowedSet != null && !allowedSet.Contains(episode.SeriesID)))
+                if (episode == null || (allowedSet != null && !allowedSet.Contains(episode.ShokoSeriesID)))
                     return;
 
                 pE++;
                 // Resolve the critic rating for an episode based on user configuration
                 double? rating = Settings.CriticRatingMode switch
                 {
-                    CriticRatingMode.TMDB => episode.TmdbEpisodes?.FirstOrDefault()?.Rating > 0 ? episode.TmdbEpisodes.First().Rating : null,
+                    CriticRatingMode.TMDB => episode.GetLinkedEpisodes<ITmdbEpisode>(MetadataSource.TMDB)?.FirstOrDefault() is { Rating: > 0 } te ? te.Rating : null,
                     CriticRatingMode.AniDB => episode.Rating > 0 ? episode.Rating : null,
                     _ => null,
                 };
 
                 var prefId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series) : null;
                 var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
-                var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] - S{coords.Season:D2}E{coords.Episode:D2} (RatingKey: {item.RatingKey})";
+                var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - S{coords.Season:D2}E{coords.Episode:D2} (RatingKey: {item.RatingKey})";
 
                 if (!NeedsRatingUpdate(item.Rating, rating))
                 {
@@ -159,7 +161,9 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                 if (await ApplyRatingAsync(item.RatingKey!, rating, target, cancellationToken))
                 {
                     uE++;
-                    appliedChanges.Add(new RatingChange($"{episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] - S{coords.Season:D2}E{coords.Episode:D2}", "Episode", item.RatingKey!, item.Rating, rating));
+                    appliedChanges.Add(
+                        new RatingChange($"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - S{coords.Season:D2}E{coords.Episode:D2}", "Episode", item.RatingKey!, item.Rating, rating)
+                    );
                     s_logger.Trace("CriticRatingService: Updated episode -> {0} to {1}", epLogName, rating?.ToString("F2") ?? "n/a");
                 }
                 else
@@ -178,22 +182,24 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                     return;
 
                 var episode = metadataService.GetShokoEpisodeByID(epId.Value);
-                if (episode == null || (allowedSet != null && !allowedSet.Contains(episode.SeriesID)))
+                if (episode == null || (allowedSet != null && !allowedSet.Contains(episode.ShokoSeriesID)))
                     return;
 
                 pE++;
                 // Resolve the critic rating for a movie based on user configuration
-                var tmdbCandidate = episode.TmdbMovies?.FirstOrDefault() ?? episode.Series?.TmdbMovies?.FirstOrDefault();
+                var tmdbCandidate = episode.GetLinkedMovies<ITmdbMovie>(MetadataSource.TMDB)?.FirstOrDefault() ?? episode.Series?.GetLinkedMovies<ITmdbMovie>(MetadataSource.TMDB)?.FirstOrDefault();
                 double? rating = Settings.CriticRatingMode switch
                 {
-                    CriticRatingMode.TMDB => tmdbCandidate?.Rating > 0 ? tmdbCandidate.Rating : (episode.TmdbEpisodes?.FirstOrDefault()?.Rating > 0 ? episode.TmdbEpisodes.First().Rating : null),
+                    CriticRatingMode.TMDB => tmdbCandidate is { Rating: > 0 } tm
+                        ? tm.Rating
+                        : (episode.GetLinkedEpisodes<ITmdbEpisode>(MetadataSource.TMDB)?.FirstOrDefault() is { Rating: > 0 } te ? te.Rating : null),
                     CriticRatingMode.AniDB => episode.Rating > 0 ? episode.Rating : (episode.Series?.Rating > 0 ? episode.Series.Rating : null),
                     _ => null,
                 };
 
                 var prefId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series) : null;
                 var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
-                var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] - S{coords.Season:D2}E{coords.Episode:D2} (RatingKey: {item.RatingKey})";
+                var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - S{coords.Season:D2}E{coords.Episode:D2} (RatingKey: {item.RatingKey})";
 
                 if (!NeedsRatingUpdate(item.Rating, rating))
                 {
@@ -204,7 +210,9 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                 if (await ApplyRatingAsync(item.RatingKey!, rating, target, cancellationToken))
                 {
                     uE++;
-                    appliedChanges.Add(new RatingChange($"{episode.Series?.GetDisplayTitle()} [{episode.SeriesID}] - S{coords.Season:D2}E{coords.Episode:D2}", "Movie", item.RatingKey!, item.Rating, rating));
+                    appliedChanges.Add(
+                        new RatingChange($"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - S{coords.Season:D2}E{coords.Episode:D2}", "Movie", item.RatingKey!, item.Rating, rating)
+                    );
                     s_logger.Trace("CriticRatingService: Updated movie -> {0} to {1}", epLogName, rating?.ToString("F2") ?? "n/a");
                 }
                 else

@@ -327,7 +327,7 @@ public class VfsAssetLinker(IVideoService videoService)
                 foreach (var m in fileData.Mappings.Where(m => Path.GetFileNameWithoutExtension(m.FileName).Equals(parentBase, StringComparison.OrdinalIgnoreCase)))
                 {
                     string seasonFolder = VfsHelper.SanitizeName(PlexMapping.GetSeasonFolder(m.Coords.Season));
-                    string destName = Path.GetFileNameWithoutExtension(VfsHelper.BuildStandardFileName(m, epPad, "", m.Video.ID)) + name[parentBase.Length..] + Path.GetExtension(file);
+                    string destName = Path.GetFileNameWithoutExtension(VfsHelper.BuildStandardFileName(m, epPad, "", m.Video.LocalID)) + name[parentBase.Length..] + Path.GetExtension(file);
 
                     foreach (var vfsSeriesPath in vfsSeriesPaths)
                     {

@@ -74,7 +74,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
 
                 if (doMovie)
                     foreach (var ep in s.Episodes.Where(e => e.Type == EpisodeType.Episode))
-                        validMovieFolders.Add(ep.ID.ToString());
+                        validMovieFolders.Add(ep.LocalID.ToString());
             }
         }
 
@@ -242,8 +242,8 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         if (EnforceTmdbNumbering)
         {
             // Group by primary ID and count how many secondary series are being merged
-            var grouped = seriesList.GroupBy(s => OverrideHelper.GetPrimary(s.ID, metadataService)).ToList();
-            seriesList = [.. grouped.Select(g => g.FirstOrDefault(s => s.ID == g.Key) ?? g.First())];
+            var grouped = seriesList.GroupBy(s => OverrideHelper.GetPrimary(s.LocalID, metadataService)).ToList();
+            seriesList = [.. grouped.Select(g => g.FirstOrDefault(s => s.LocalID == g.Key) ?? g.First())];
             consolidatedCount = totalInScope - seriesList.Count();
         }
 
@@ -308,10 +308,17 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                     // Capture individual series details for the log report
                     bool isMovie = MapHelper.IsMovie(series);
                     bool doMovie = isMovie && Settings.Advanced.MovieGenerationMode != MovieGenerationMode.Disabled;
-                    seriesDetailsBag.Add(new SeriesProcessDetails($"{series.GetDisplayTitle() ?? series.ID.ToString()} [{series.ID}]", seriesSw.ElapsedMilliseconds, sCreated, doMovie));
+                    seriesDetailsBag.Add(new SeriesProcessDetails($"{series.GetDisplayTitle() ?? series.LocalID.ToString()} [{series.LocalID}]", seriesSw.ElapsedMilliseconds, sCreated, doMovie));
 
                     if (sCreated > 0 || sErrors.Count > 0)
-                        s_logger.Info("VFS: Processed {0} -> {1} [{2}] ({3} links created) in {4}ms", doMovie ? "movie" : "series", series.GetDisplayTitle(), series.ID, sCreated, seriesSw.ElapsedMilliseconds);
+                        s_logger.Info(
+                            "VFS: Processed {0} -> {1} [{2}] ({3} links created) in {4}ms",
+                            doMovie ? "movie" : "series",
+                            series.GetDisplayTitle(),
+                            series.LocalID,
+                            sCreated,
+                            seriesSw.ElapsedMilliseconds
+                        );
 
                     Interlocked.Add(ref created, sCreated);
                     Interlocked.Add(ref skipped, sSkipped);
@@ -324,8 +331,8 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                 }
                 catch (Exception ex)
                 {
-                    errorsBag.Add($"Failed series {series.GetDisplayTitle()} [{series.ID}]: {ex.Message}");
-                    s_logger.Error(ex, "VFS: Build failed for series -> {0} [{1}]", series.GetDisplayTitle(), series.ID);
+                    errorsBag.Add($"Failed series {series.GetDisplayTitle()} [{series.LocalID}]: {ex.Message}");
+                    s_logger.Error(ex, "VFS: Build failed for series -> {0} [{1}]", series.GetDisplayTitle(), series.LocalID);
                 }
             }
         );
@@ -386,7 +393,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
 
         // Retrieve the files and episode mappings for a series, leveraging the build-session cache
         var fileData = !EnforceTmdbNumbering
-            ? session.SeriesFileDataCache.GetOrAdd(series.ID, _ => MapHelper.GetSeriesFileData(series, metadataService))
+            ? session.SeriesFileDataCache.GetOrAdd(series.LocalID, _ => MapHelper.GetSeriesFileData(series, metadataService))
             : session.SeriesFileDataCache.GetOrAdd(
                 folderId,
                 _ =>
@@ -469,7 +476,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                             mapping,
                             epPad,
                             Path.GetExtension(locInfo.Src),
-                            mapping.Video!.ID,
+                            mapping.Video!.LocalID,
                             mapping.PartCount > 1 && mapping.PartIndex.HasValue,
                             hasPeer ? mapping.PartIndex : null,
                             hasPeer ? mapping.PartCount : 1,
@@ -488,7 +495,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                     // Resolve Primary IDs to allow local asset linking for crossover files that have been consolidated via VFS Overrides.
                     LocalOnLink(locInfo.ImportRoot, seasonName, fileName, locInfo.Src, destFilePath);
                     var distinctPrimarySeriesCount =
-                        mapping.Video?.CrossReferences?.Where(cr => cr.ShokoEpisode != null).Select(cr => OverrideHelper.GetPrimary(cr.ShokoEpisode!.SeriesID, metadataService)).Distinct().Count() ?? 0;
+                        mapping.Video?.CrossReferences?.Where(cr => cr.ShokoEpisode != null).Select(cr => OverrideHelper.GetPrimary(cr.ShokoEpisode!.ShokoSeriesID, metadataService)).Distinct().Count() ?? 0;
                     if (distinctPrimarySeriesCount <= 1)
                     {
                         assetLinker.LinkSeriesMetadata(
@@ -563,14 +570,14 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
             if (loc == null)
             {
                 skipped++;
-                skippedDetails.Add($"[Missing/Source-Only] {series.GetDisplayTitle()} [{series.ID}] S{mapping.Coords.Season}E{mapping.Coords.Episode} - {mapping.FileName}");
+                skippedDetails.Add($"[Missing/Source-Only] {series.GetDisplayTitle()} [{series.LocalID}] S{mapping.Coords.Season}E{mapping.Coords.Episode} - {mapping.FileName}");
                 locInfoValue = default;
                 return false;
             }
             if (VfsShared.IsPathIgnored(loc.Value.Src, videoService, Settings, ignoredFolders))
             {
                 skipped++;
-                skippedDetails.Add($"[Excluded Path] {series.GetDisplayTitle()} [{series.ID}] S{mapping.Coords.Season}E{mapping.Coords.Episode} - {mapping.FileName}");
+                skippedDetails.Add($"[Excluded Path] {series.GetDisplayTitle()} [{series.LocalID}] S{mapping.Coords.Season}E{mapping.Coords.Episode} - {mapping.FileName}");
                 locInfoValue = default;
                 return false;
             }
@@ -590,7 +597,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                 if (!TryResolveAndValidate(mapping, out var locInfo))
                     continue;
 
-                string folderName = mapping.PrimaryEpisode.ID.ToString();
+                string folderName = mapping.PrimaryEpisode.ID.ID;
                 string rootPath = Path.Combine(locInfo.ImportRoot, movieRootName);
                 string moviePath = Path.Combine(rootPath, folderName);
 
@@ -608,7 +615,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                     VfsHelper.BuildMovieFileName(
                         mapping,
                         Path.GetExtension(locInfo.Src),
-                        mapping.Video!.ID,
+                        mapping.Video!.LocalID,
                         mapping.PartCount > 1 && mapping.PartIndex.HasValue,
                         hasPeer ? mapping.PartIndex : null,
                         hasPeer ? mapping.PartCount : 1,
