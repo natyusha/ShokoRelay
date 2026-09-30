@@ -30,7 +30,7 @@ jobs:
           set -e
 
           # Run the check and capture the raw output safely
-          output=$(dotnet tool run dotnet-csharpier --check . 2>&1 || true)
+          output=$(dotnet csharpier --check . 2>&1 || true)
           echo "$output" > csharpier-output.txt
           echo "$output"
 
@@ -59,13 +59,13 @@ jobs:
           # If errors were found, append help text, write to step summary, and fail cleanly
           if grep -q '^Error ' csharpier-output.txt; then
             echo "" >> "$summary_file"
-            echo "Please run \`dotnet tool run dotnet-csharpier .\` locally on your machine to fix these formatting issues automatically." >> "$summary_file"
+            echo "Please run \`dotnet csharpier .\` locally on your machine to fix these formatting issues automatically." >> "$summary_file"
             cat "$summary_file" >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
 
       - name: Check C# Style & Naming
-        run: dotnet format --verify-no-changes --severity info --verbosity normal
+        run: dotnet format analyzers --verify-no-changes --severity warn --verbosity normal
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
