@@ -227,7 +227,9 @@ public static class MapHelper
 
             // TMDB Episode metadata override for multi-part files
             object? tmdbEp =
-                (allowPt && EnforceTmdbNumbering && firstEp is IShokoEpisode se && se.GetLinkedEpisodes<ITmdbEpisode>(MetadataSource.TMDB)?.Any() == true) ? SelectPreferredTmdbOrdering(se.GetLinkedEpisodes<ITmdbEpisode>(MetadataSource.TMDB), prefId).ElementAtOrDefault(fIdx) : null;
+                (allowPt && EnforceTmdbNumbering && firstEp is IShokoEpisode se && se.GetLinkedEpisodes<ITmdbEpisode>(MetadataSource.TMDB) is { Count: > 0 } tmdbEps)
+                    ? SelectPreferredTmdbOrdering(tmdbEps, prefId).ElementAtOrDefault(fIdx)
+                    : null;
             result.Add(new FileMapping(video, [.. deduped.Select(x => x.Episode)], firstEp, coords, fileName, allowPt ? fIdx + 1 : null, allowPt ? fCount : 1, tmdbEp, video.IsVariation));
         }
         // Deduplicate mappings by Video ID and Coordinates. This prevents duplicate VFS entries (v1/v2) for crossover series that have been consolidated into a single folder via VFS Overrides.

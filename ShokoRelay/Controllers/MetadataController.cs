@@ -485,10 +485,10 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             return (episode, partIdx, null);
 
         // Handle Episode Groups (One Shoko ID mapped to multiple TMDB IDs)
-        if (EnforceTmdbNumbering && episode.GetLinkedEpisodes<ITmdbEpisode>(MetadataSource.TMDB)?.Count > 1 && int.TryParse(Request.Query["index"], out int reqIndex))
+        if (EnforceTmdbNumbering && episode.GetLinkedEpisodes<ITmdbEpisode>(MetadataSource.TMDB) is { Count: > 1 } tmdbEps && int.TryParse(Request.Query["index"], out int reqIndex))
         {
             string? prefId = MapHelper.GetPreferredTmdbOrderingId(ctx.Series);
-            var matchedTmdbEp = SelectPreferredTmdbOrdering(episode.GetLinkedEpisodes<ITmdbEpisode>(MetadataSource.TMDB), prefId).FirstOrDefault(te => GetOrderingCoords(te, prefId).Episode == reqIndex);
+            var matchedTmdbEp = SelectPreferredTmdbOrdering(tmdbEps, prefId).FirstOrDefault(te => GetOrderingCoords(te, prefId).Episode == reqIndex);
             if (matchedTmdbEp != null)
                 mapping = mapping with { TmdbEpisode = matchedTmdbEp };
         }

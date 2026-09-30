@@ -221,7 +221,12 @@ public class PlexMetadata(IMetadataService metadataService)
 
         // When using VFS overrides find a Shoko series in the group which contains the TMDB metadata for the requisite season number.
         var groupIds = OverrideHelper.GetGroup(ps.LocalID, metadataService);
-        var sourceSeries = groupIds.Select(id => metadataService.GetShokoSeriesByID(id)).OfType<IShokoSeries>().FirstOrDefault(s => s.GetLinkedSeasons<ITmdbSeason>(MetadataSource.TMDB)?.Any(ts => ts.SeasonNumber == seasonNum) == true) ?? ps;
+        var sourceSeries =
+            groupIds
+                .Select(id => metadataService.GetShokoSeriesByID(id))
+                .OfType<IShokoSeries>()
+                .FirstOrDefault(s => s.GetLinkedSeasons<ITmdbSeason>(MetadataSource.TMDB)?.Any(ts => ts.SeasonNumber == seasonNum) == true)
+            ?? ps;
 
         bool ignoreTmdb = !string.IsNullOrEmpty(MapHelper.GetPreferredTmdbOrderingId(ps));
         var tmdbSeason = ignoreTmdb ? null : sourceSeries.GetLinkedSeasons<ITmdbSeason>(MetadataSource.TMDB)?.FirstOrDefault(ts => ts.SeasonNumber == seasonNum);
@@ -303,7 +308,10 @@ public class PlexMetadata(IMetadataService metadataService)
         if (Settings.TmdbSeasonPosters && mapped.Season >= 0 && string.IsNullOrEmpty(MapHelper.GetPreferredTmdbOrderingId(series)))
         {
             var s = metadataService.GetShokoSeriesByID(series.GetPrimaryId(metadataService));
-            parentThumb = s?.GetLinkedSeasons<ITmdbSeason>(MetadataSource.TMDB)?.FirstOrDefault(ts => ts.SeasonNumber == mapped.Season)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage);
+            parentThumb = s
+                ?.GetLinkedSeasons<ITmdbSeason>(MetadataSource.TMDB)
+                ?.FirstOrDefault(ts => ts.SeasonNumber == mapped.Season)
+                ?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage);
         }
         // csharpier-ignore
         return new()
@@ -372,9 +380,9 @@ public class PlexMetadata(IMetadataService metadataService)
         foreach (var m in ctx.FileData.GetForSeason(seasonNum))
         {
             // TMDB Episode Groups: One Shoko episode maps to multiple TMDB entries.
-            if (enforceTmdb && m.Episodes.Count == 1 && m.PrimaryEpisode is IShokoEpisode se && se.GetLinkedEpisodes<ITmdbEpisode>(MetadataSource.TMDB).Count > 1)
+            if (enforceTmdb && m.Episodes.Count == 1 && m.PrimaryEpisode is IShokoEpisode se && se.GetLinkedEpisodes<ITmdbEpisode>(MetadataSource.TMDB) is { Count: > 1 } tmdbEps)
             {
-                var tmdbEpisodes = SelectPreferredTmdbOrdering(se.GetLinkedEpisodes<ITmdbEpisode>(MetadataSource.TMDB), prefId);
+                var tmdbEpisodes = SelectPreferredTmdbOrdering(tmdbEps, prefId);
                 for (int i = 0; i < tmdbEpisodes.Count; i++)
                 {
                     var tmdbEp = tmdbEpisodes[i];
@@ -437,7 +445,8 @@ public class PlexMetadata(IMetadataService metadataService)
     {
         var tm = tmdbMovie ?? (series as IShokoSeries)?.GetLinkedMovies<ITmdbMovie>(MetadataSource.TMDB)?.FirstOrDefault();
         return tm != null ? CreateXrefGuids($"tmdb://{tm.TmdbID}", !string.IsNullOrWhiteSpace(tm.ImdbMovieID) && tm.ImdbMovieID != "0" ? $"imdb://{tm.ImdbMovieID}" : null)
-            : series is IShokoSeries ss && ss.GetLinkedSeries<ITmdbShow>(MetadataSource.TMDB)?.FirstOrDefault() is { } ts ? CreateXrefGuids($"tmdb://{ts.TmdbID}", ts.TvdbShowID > 0 ? $"tvdb://{ts.TvdbShowID}" : null)
+            : series is IShokoSeries ss && ss.GetLinkedSeries<ITmdbShow>(MetadataSource.TMDB)?.FirstOrDefault() is { } ts
+                ? CreateXrefGuids($"tmdb://{ts.TmdbID}", ts.TvdbShowID > 0 ? $"tvdb://{ts.TvdbShowID}" : null)
             : series is ITmdbShow s ? CreateXrefGuids(s.TmdbID > 0 ? $"tmdb://{s.TmdbID}" : null, s.TvdbShowID > 0 ? $"tvdb://{s.TvdbShowID}" : null)
             : [];
     }
@@ -466,7 +475,11 @@ public class PlexMetadata(IMetadataService metadataService)
     /// <param name="series">The Shoko series metadata.</param>
     /// <returns>An array of objects containing country tags, or null if none found.</returns>
     private object[]? BuildCountryArray(ISeries series) =>
-        ((series as IShokoSeries)?.GetLinkedSeries<ITmdbShow>(MetadataSource.TMDB)?.FirstOrDefault()?.ProductionCountries ?? (series as IShokoSeries)?.GetLinkedMovies<ITmdbMovie>(MetadataSource.TMDB)?.FirstOrDefault()?.ProductionCountries ?? (series as ITmdbShow)?.ProductionCountries)
+        (
+            (series as IShokoSeries)?.GetLinkedSeries<ITmdbShow>(MetadataSource.TMDB)?.FirstOrDefault()?.ProductionCountries
+            ?? (series as IShokoSeries)?.GetLinkedMovies<ITmdbMovie>(MetadataSource.TMDB)?.FirstOrDefault()?.ProductionCountries
+            ?? (series as ITmdbShow)?.ProductionCountries
+        )
             is { } codes
             ? CreateTagArray(
                 codes
@@ -504,7 +517,8 @@ public class PlexMetadata(IMetadataService metadataService)
     /// <param name="series">The Shoko series metadata.</param>
     /// <returns>An array of objects containing network tags, or null if none found.</returns>
     private object[]? BuildNetworkArray(ISeries series) =>
-        ((series as IShokoSeries)?.GetLinkedSeries<ITmdbShow>(MetadataSource.TMDB)?.FirstOrDefault() ?? (series as ITmdbShow)) is { } src && src.GetType().GetProperty("TmdbNetworks")?.GetValue(src) is IEnumerable list
+        ((series as IShokoSeries)?.GetLinkedSeries<ITmdbShow>(MetadataSource.TMDB)?.FirstOrDefault() ?? (series as ITmdbShow)) is { } src
+        && src.GetType().GetProperty("TmdbNetworks")?.GetValue(src) is IEnumerable list
             ? CreateTagArray(list.Cast<object>().Select(n => (n as ITmdbNetwork)?.Name ?? n.GetType().GetProperty("Name")?.GetValue(n) as string).OfType<string>())
             : null;
 

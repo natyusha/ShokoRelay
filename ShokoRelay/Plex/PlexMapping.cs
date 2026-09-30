@@ -54,11 +54,9 @@ public static class PlexMapping
             return new PlexCoords { Season = PlexConstants.SeasonStandard, Episode = 1 };
         string? showPrefId = seriesPreferredOrderingId;
 
-        if (EnforceTmdbNumbering && e is IShokoEpisode shokoEpisode && shokoEpisode.GetLinkedEpisodes<ITmdbEpisode>(MetadataSource.TMDB) != null && shokoEpisode.GetLinkedEpisodes<ITmdbEpisode>(MetadataSource.TMDB).Any())
+        if (EnforceTmdbNumbering && e is IShokoEpisode shokoEpisode && shokoEpisode.GetLinkedEpisodes<ITmdbEpisode>(MetadataSource.TMDB) is { Count: > 0 } tmdbEps)
         {
-            var tmdbEpisodes = string.IsNullOrWhiteSpace(showPrefId)
-                ? [.. shokoEpisode.GetLinkedEpisodes<ITmdbEpisode>(MetadataSource.TMDB).OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber)]
-                : SelectPreferredTmdbOrdering(shokoEpisode.GetLinkedEpisodes<ITmdbEpisode>(MetadataSource.TMDB), showPrefId);
+            var tmdbEpisodes = string.IsNullOrWhiteSpace(showPrefId) ? [.. tmdbEps.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber)] : SelectPreferredTmdbOrdering(tmdbEps, showPrefId);
             if (tmdbEpisodes.Count > 0)
             {
                 var first = tmdbEpisodes.First();
@@ -111,7 +109,7 @@ public static class PlexMapping
 
         if (EnforceTmdbNumbering && eps.Select(ep => ep.Type).Distinct().Count() == 1)
         {
-            var tmdbEntriesRaw = eps.OfType<IShokoEpisode>().Where(se => se.GetLinkedEpisodes<ITmdbEpisode>(MetadataSource.TMDB) != null && se.GetLinkedEpisodes<ITmdbEpisode>(MetadataSource.TMDB).Any()).SelectMany(se => se.GetLinkedEpisodes<ITmdbEpisode>(MetadataSource.TMDB)).ToList();
+            var tmdbEntriesRaw = eps.OfType<IShokoEpisode>().SelectMany(se => se.GetLinkedEpisodes<ITmdbEpisode>(MetadataSource.TMDB) ?? []).ToList();
             string? showPrefId = eps.OfType<IShokoEpisode>().Select(se => se.Series).FirstOrDefault()?.GetLinkedSeries<ITmdbShow>(MetadataSource.TMDB)?.FirstOrDefault()?.PreferredOrdering?.ID.ID;
             var tmdbEntries = string.IsNullOrWhiteSpace(showPrefId)
                 ? [.. tmdbEntriesRaw.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber)]
