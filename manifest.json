@@ -16,6 +16,34 @@
   "icon_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-icon.png",
   "releases": [
     {
+      "version": "0.19.0",
+      "tag": "v0.19.0",
+      "source_revision": "741be330ba026901514340b7de364ef6ea3b5c54",
+      "released_at": "2026-09-30T20:55:30Z",
+      "channel": "Dev",
+      "release_notes": "A lot has changed in the abstractions this time around but core functionality for the plugin should remain the same.\r\n\r\n**Changes:**\r\n- Bump `Shoko.Abstractions` to `6.0.0-alpha.95`\r\n- Update `lint-format.yml` to prevent it from always failing\r\n\r\n**Contributions:**\r\n* @revam in https://github.com/natyusha/ShokoRelay/pull/15\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.18.1...v0.19.0",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.19.0/ShokoRelay-v0.19.0-dev_linux-arm64.zip",
+          "checksum": "sha256:b67873cf6d39eafab6a1b8a95ffc1b7618a7146bf50a5bc03f3fcc624c5123c8"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.19.0/ShokoRelay-v0.19.0-dev_linux-x64.zip",
+          "checksum": "sha256:93dc699c9011ff1a6de0bc0a2a4fc1f33950e2646928bdded61291cbdb9db80c"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.19.0/ShokoRelay-v0.19.0-dev_win-x64.zip",
+          "checksum": "sha256:56f0b92d160b45509a7f659eb1e16476b4a226531cc4b04a0cca1feb35717a12"
+        }
+      ]
+    },
+    {
       "version": "0.18.1",
       "tag": "v0.18.1",
       "source_revision": "935618de356ce013344c2672ae02d864089abf0d",
