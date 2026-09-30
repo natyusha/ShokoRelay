@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Enums;
+using Shoko.Abstractions.Metadata.Tmdb;
 using Shoko.Abstractions.Video;
 using ShokoRelay.Vfs;
 using static ShokoRelay.Plex.PlexMapping;
@@ -73,7 +74,7 @@ public static class MapHelper
     public static string? GetPreferredTmdbOrderingId(ISeries series) =>
         !EnforceTmdbNumbering ? null
         : (
-            series.Episodes.OfType<IShokoEpisode>().FirstOrDefault()?.Series?.TmdbShows?.FirstOrDefault() is { } tmdbShow
+            series.Episodes.OfType<IShokoEpisode>().FirstOrDefault()?.Series?.GetLinkedSeries<ITmdbShow>(MetadataSource.TMDB)?.FirstOrDefault() is { } tmdbShow
             && tmdbShow.PreferredOrdering?.ID.ID is var pref
             && !string.IsNullOrWhiteSpace(pref)
             && !string.Equals(pref, tmdbShow.TmdbID.ToString(), StringComparison.OrdinalIgnoreCase)
@@ -106,7 +107,7 @@ public static class MapHelper
     /// <summary>Indicates whether a series is considered a movie.</summary>
     /// <param name="series">The Shoko series to check.</param>
     /// <returns>True if the series is categorized as a movie.</returns>
-    public static bool IsMovie(IShokoSeries series) => EnforceTmdbNumbering ? series.TmdbMovies?.Any() == true : series.Type == AnimeType.Movie;
+    public static bool IsMovie(IShokoSeries series) => EnforceTmdbNumbering ? series.GetLinkedMovies<ITmdbMovie>(MetadataSource.TMDB)?.Any() == true : series.Type == AnimeType.Movie;
 
     /// <summary>Resolves all unique active physical video files associated with a series, accounting for consolidated override groups and filtering out hidden entries.</summary>
     /// <param name="series">The primary series to resolve videos for.</param>
@@ -226,7 +227,7 @@ public static class MapHelper
 
             // TMDB Episode metadata override for multi-part files
             object? tmdbEp =
-                (allowPt && EnforceTmdbNumbering && firstEp is IShokoEpisode se && se.TmdbEpisodes?.Any() == true) ? SelectPreferredTmdbOrdering(se.TmdbEpisodes, prefId).ElementAtOrDefault(fIdx) : null;
+                (allowPt && EnforceTmdbNumbering && firstEp is IShokoEpisode se && se.GetLinkedEpisodes<ITmdbEpisode>(MetadataSource.TMDB)?.Any() == true) ? SelectPreferredTmdbOrdering(se.GetLinkedEpisodes<ITmdbEpisode>(MetadataSource.TMDB), prefId).ElementAtOrDefault(fIdx) : null;
             result.Add(new FileMapping(video, [.. deduped.Select(x => x.Episode)], firstEp, coords, fileName, allowPt ? fIdx + 1 : null, allowPt ? fCount : 1, tmdbEp, video.IsVariation));
         }
         // Deduplicate mappings by Video ID and Coordinates. This prevents duplicate VFS entries (v1/v2) for crossover series that have been consolidated into a single folder via VFS Overrides.

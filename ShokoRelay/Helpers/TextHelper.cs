@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Enums;
+using Shoko.Abstractions.Metadata.Tmdb;
 
 namespace ShokoRelay.Helpers;
 
@@ -174,7 +175,7 @@ public static class TextHelper
     public static string ResolveEpisodeTitle(IEpisode ep, string displaySeriesTitle)
     {
         string raw = GetTitleByLanguage(ep, Settings.EpisodeTitleLanguage);
-        string? tmdbTitle = (ep as IShokoEpisode)?.TmdbEpisodes.FirstOrDefault()?.PreferredTitle?.Value;
+        string? tmdbTitle = (ep as IShokoEpisode)?.GetLinkedEpisodes<ITmdbEpisode>(MetadataSource.TMDB).FirstOrDefault()?.PreferredTitle?.Value;
 
         // Replace ambiguous single entry titles (like "OVA") with the series title
         if (ep.EpisodeNumber == 1 && s_ambiguousTitles.Contains(raw))
@@ -196,7 +197,7 @@ public static class TextHelper
         }
 
         // If TMDB episode group names enabled and multiple links exist, prefer TMDB titles
-        if (Settings.TmdbEpGroupNames && ep is IShokoEpisode { TmdbEpisodes.Count: > 1 } && !string.IsNullOrEmpty(tmdbTitle))
+        if (Settings.TmdbEpGroupNames && ep is IShokoEpisode tmdbGrouped && tmdbGrouped.GetLinkedEpisodes<ITmdbEpisode>(MetadataSource.TMDB).Count > 1 && !string.IsNullOrEmpty(tmdbTitle))
             return tmdbTitle;
 
         // Standard enumeration override (e.g. "Episode 1" -> "Actual Title")

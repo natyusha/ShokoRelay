@@ -1,7 +1,9 @@
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Enums;
+using Shoko.Abstractions.Metadata.Tmdb;
 using ShokoRelay.Vfs;
 
 namespace ShokoRelay.Plex;
@@ -251,7 +253,7 @@ public static class PlexHelper
 
             var posterUrl =
                 (primarySeries as IWithImages)?.GetPreferredImageUrl(imgType, Settings.TmdbImageLanguage)
-                ?? (primarySeries.TmdbMovies?.FirstOrDefault() as IWithImages)?.GetPreferredImageUrl(imgType, Settings.TmdbImageLanguage);
+                ?? (primarySeries.GetLinkedMovies<ITmdbMovie>(MetadataSource.TMDB)?.FirstOrDefault() as IWithImages)?.GetPreferredImageUrl(imgType, Settings.TmdbImageLanguage);
             if (posterUrl != null)
                 return posterUrl;
         }

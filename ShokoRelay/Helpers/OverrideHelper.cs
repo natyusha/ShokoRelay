@@ -1,5 +1,6 @@
 using System.Globalization;
 using Shoko.Abstractions.Metadata;
+using Shoko.Abstractions.Metadata.Tmdb;
 
 namespace ShokoRelay.Helpers;
 
@@ -90,7 +91,7 @@ public static class OverrideHelper
             var tmdbGroups =
                 metadataService
                     .GetAllShokoSeries()
-                    ?.Select(s => (s.AnidbAnimeID, s.AirDate, TmdbId: s.TmdbShows?.FirstOrDefault()?.TmdbID))
+                    ?.Select(s => (s.AnidbAnimeID, s.AirDate, TmdbId: s.GetLinkedSeries<ITmdbShow>(MetadataSource.TMDB)?.FirstOrDefault()?.TmdbID))
                     .Where(x => x.TmdbId.HasValue)
                     .GroupBy(x => x.TmdbId!.Value)
                     .Where(g => g.Count() > 1)
