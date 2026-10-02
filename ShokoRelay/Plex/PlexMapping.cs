@@ -1,6 +1,5 @@
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Enums;
-using Shoko.Abstractions.Metadata.Tmdb;
 
 namespace ShokoRelay.Plex;
 
@@ -54,7 +53,7 @@ public static class PlexMapping
             return new PlexCoords { Season = PlexConstants.SeasonStandard, Episode = 1 };
         string? showPrefId = seriesPreferredOrderingId;
 
-        if (EnforceTmdbNumbering && e is IShokoEpisode shokoEpisode && shokoEpisode.GetLinkedEpisodes<ITmdbEpisode>(MetadataSource.TMDB) is { Count: > 0 } tmdbEps)
+        if (EnforceTmdbNumbering && e is IShokoEpisode shokoEpisode && shokoEpisode.GetLinkedEpisodes(MetadataSource.TMDB) is { Count: > 0 } tmdbEps)
         {
             var tmdbEpisodes = string.IsNullOrWhiteSpace(showPrefId) ? [.. tmdbEps.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber)] : SelectPreferredTmdbOrdering(tmdbEps, showPrefId);
             if (tmdbEpisodes.Count > 0)
@@ -109,8 +108,8 @@ public static class PlexMapping
 
         if (EnforceTmdbNumbering && eps.Select(ep => ep.Type).Distinct().Count() == 1)
         {
-            var tmdbEntriesRaw = eps.OfType<IShokoEpisode>().SelectMany(se => se.GetLinkedEpisodes<ITmdbEpisode>(MetadataSource.TMDB) ?? []).ToList();
-            string? showPrefId = eps.OfType<IShokoEpisode>().Select(se => se.Series).FirstOrDefault()?.GetLinkedSeries<ITmdbShow>(MetadataSource.TMDB)?.FirstOrDefault()?.PreferredOrdering?.ID.ID;
+            var tmdbEntriesRaw = eps.OfType<IShokoEpisode>().SelectMany(se => se.GetLinkedEpisodes(MetadataSource.TMDB) ?? []).ToList();
+            string? showPrefId = eps.OfType<IShokoEpisode>().Select(se => se.Series).FirstOrDefault() is { } series ? MapHelper.GetPreferredTmdbOrderingId(series) : null;
             var tmdbEntries = string.IsNullOrWhiteSpace(showPrefId)
                 ? [.. tmdbEntriesRaw.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber)]
                 : SelectPreferredTmdbOrdering(tmdbEntriesRaw, showPrefId);
@@ -154,7 +153,7 @@ public static class PlexMapping
     /// <param name="entries">The collection of TMDB episodes to filter.</param>
     /// <param name="showPreferredOrderingId">The preferred TMDB ordering identifier.</param>
     /// <returns>A reordered and filtered list of TMDB episodes.</returns>
-    public static List<ITmdbEpisode> SelectPreferredTmdbOrdering(IEnumerable<ITmdbEpisode>? entries, string? showPreferredOrderingId = null)
+    public static List<IEpisode> SelectPreferredTmdbOrdering(IEnumerable<IEpisode>? entries, string? showPreferredOrderingId = null)
     {
         if (entries == null)
             return [];
@@ -166,8 +165,8 @@ public static class PlexMapping
                 .. list.Select(te =>
                         (
                             Episode: te,
-                            Priority: string.Equals(te.TmdbOrderingID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase) ? 0
-                            : te.TmdbOrderings?.Any(o => string.Equals(o.OrderingID.ID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase)) == true ? 1
+                            Priority: string.Equals(IOrdering.DefaultOrderingID(te.SeriesID).ID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase) ? 0
+                            : te.Orderings.Any(o => IsInTmdbOrdering(o, showPreferredOrderingId)) ? 1
                             : 2
                         )
                     )
@@ -182,12 +181,19 @@ public static class PlexMapping
     /// <param name="ep">The TMDB episode to inspect.</param>
     /// <param name="showPreferredOrderingId">The preferred TMDB ordering identifier.</param>
     /// <returns>A tuple containing the resolved season and episode numbers.</returns>
-    public static (int? Season, int Episode) GetOrderingCoords(ITmdbEpisode ep, string? showPreferredOrderingId = null) =>
+    public static (int? Season, int Episode) GetOrderingCoords(IEpisode ep, string? showPreferredOrderingId = null) =>
         ep == null ? (null, 0)
         : !string.IsNullOrWhiteSpace(showPreferredOrderingId)
-            ? ep.TmdbOrderings?.FirstOrDefault(o => string.Equals(o.OrderingID.ID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase)) is { } byAll ? (byAll.SeasonNumber, byAll.EpisodeNumber)
+            ? ep.Orderings.FirstOrDefault(o => IsInTmdbOrdering(o, showPreferredOrderingId)) is { } byAll ? (byAll.SeasonNumber, byAll.EpisodeNumber)
                 : (ep.SeasonNumber, ep.EpisodeNumber)
         : (ep.SeasonNumber, ep.EpisodeNumber);
+
+    /// <summary>Indicates whether an episode's place is in the given TMDB ordering.</summary>
+    /// <param name="place">The episode's place in one of its show's orderings.</param>
+    /// <param name="orderingId">The TMDB ordering identifier.</param>
+    /// <returns>True if the place belongs to that TMDB ordering.</returns>
+    private static bool IsInTmdbOrdering(IEpisodeOrderingInformation place, string? orderingId) =>
+        place.OrderingID.Source == MetadataSource.TMDB && string.Equals(place.OrderingID.ID, orderingId, StringComparison.OrdinalIgnoreCase);
 
     #endregion
 }

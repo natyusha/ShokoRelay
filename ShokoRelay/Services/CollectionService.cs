@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using Shoko.Abstractions.Metadata;
-using Shoko.Abstractions.Metadata.Tmdb;
 using Shoko.Abstractions.Video.Services;
 
 namespace ShokoRelay.Services;
@@ -285,7 +284,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                             if (posted.Add((cid, "metadata")))
                             {
                                 var desc = TextHelper.GetDescriptionByLanguage(series!, Settings.DescriptionLanguage);
-                                var tmdbDesc = series!.GetLinkedSeries<ITmdbShow>(MetadataSource.TMDB)?.FirstOrDefault()?.PreferredOverview?.Value;
+                                var tmdbDesc = series!.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault()?.PreferredOverview?.Value;
                                 var summary = TextHelper.SanitizeSummaryWithFallback(desc, tmdbDesc, Settings.SummaryMode);
                                 await plexCollections.UpdateCollectionMetadataAsync(cid, collectionName, summary, target, cancellationToken).ConfigureAwait(false);
                             }

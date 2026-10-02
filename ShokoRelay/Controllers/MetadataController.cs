@@ -4,7 +4,6 @@ using Newtonsoft.Json;
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Enums;
-using Shoko.Abstractions.Metadata.Tmdb;
 using Shoko.Abstractions.Video.Services;
 using static ShokoRelay.Plex.PlexMapping;
 using IoFile = System.IO.File;
@@ -179,7 +178,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             if (ep == null)
                 return EmptyMatch();
 
-            var tmdbMovie = ep.GetLinkedMovies<ITmdbMovie>(MetadataSource.TMDB)?.FirstOrDefault() ?? series.GetLinkedMovies<ITmdbMovie>(MetadataSource.TMDB)?.FirstOrDefault();
+            var tmdbMovie = ep.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault() ?? series.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault();
             string movieTitle = TextHelper.ResolveMovieTitle(ep, series, tmdbMovie);
             var posterUrl =
                 (ep.EpisodeNumber > 1 && tmdbMovie is IWithImages mi ? mi.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage) : null)
@@ -264,7 +263,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
                 // Fallback for numeric rating keys passed for a standalone movie episode
                 if (int.TryParse(ratingKey, out int numId) && MetadataService.GetShokoEpisodeByID(numId) is { } movieEp && movieEp.Series != null)
                 {
-                    var tmdbMovie = movieEp.GetLinkedMovies<ITmdbMovie>(MetadataSource.TMDB)?.FirstOrDefault() ?? movieEp.Series.GetLinkedMovies<ITmdbMovie>(MetadataSource.TMDB)?.FirstOrDefault();
+                    var tmdbMovie = movieEp.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault() ?? movieEp.Series.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault();
                     var titles = TextHelper.ResolveFullSeriesTitles(movieEp.Series);
                     return WrapInContainer(mapper.MapMovie(movieEp, movieEp.Series, tmdbMovie, titles), ShokoRelayConstants.MovieAgentScheme);
                 }
@@ -532,7 +531,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             return (episode, partIdx, null);
 
         // Handle Episode Groups (One Shoko ID mapped to multiple TMDB IDs)
-        if (EnforceTmdbNumbering && episode.GetLinkedEpisodes<ITmdbEpisode>(MetadataSource.TMDB) is { Count: > 1 } tmdbEps && int.TryParse(Request.Query["index"], out int reqIndex))
+        if (EnforceTmdbNumbering && episode.GetLinkedEpisodes(MetadataSource.TMDB) is { Count: > 1 } tmdbEps && int.TryParse(Request.Query["index"], out int reqIndex))
         {
             string? prefId = MapHelper.GetPreferredTmdbOrderingId(ctx.Series);
             var matchedTmdbEp = SelectPreferredTmdbOrdering(tmdbEps, prefId).FirstOrDefault(te => GetOrderingCoords(te, prefId).Episode == reqIndex);
@@ -545,7 +544,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     /// <summary>Parses the ratingKey and resolves the corresponding episode, series, and TMDB movie metadata for a standalone movie.</summary>
     /// <param name="ratingKey">The custom Plex rating key for the movie.</param>
     /// <returns>A tuple containing the resolved episode, series, and TMDB movie metadata.</returns>
-    private (IShokoEpisode? Episode, IShokoSeries? Series, ITmdbMovie? TmdbMovie) TryResolveMovieContext(string ratingKey)
+    private (IShokoEpisode? Episode, IShokoSeries? Series, IMovie? TmdbMovie) TryResolveMovieContext(string ratingKey)
     {
         if (!PlexHelper.IsMovieKey(ratingKey))
             return (null, null, null);
@@ -559,7 +558,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
 
         var ep = MetadataService.GetShokoEpisodeByID(id);
         var series = ep?.Series;
-        var tmdbMovie = ep?.GetLinkedMovies<ITmdbMovie>(MetadataSource.TMDB)?.FirstOrDefault() ?? series?.GetLinkedMovies<ITmdbMovie>(MetadataSource.TMDB)?.FirstOrDefault();
+        var tmdbMovie = ep?.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault() ?? series?.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault();
 
         return (ep, series, tmdbMovie);
     }

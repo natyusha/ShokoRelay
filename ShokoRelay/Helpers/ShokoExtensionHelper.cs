@@ -1,4 +1,5 @@
 using Shoko.Abstractions.Metadata;
+using Shoko.Abstractions.Metadata.Containers;
 
 namespace ShokoRelay.Helpers;
 
@@ -89,6 +90,29 @@ public static class ShokoExtensionHelper
     /// <param name="g">The Shoko group metadata.</param>
     /// <returns>A Plex-compatible collection rating key string.</returns>
     public static string GetPlexRatingKey(this IShokoGroup g) => $"{PlexConstants.CollectionPrefix}{g.LocalID}";
+
+    #endregion
+
+    #region Cross-Source IDs
+
+    /// <summary>Gets the first ID another source gave the entry, such as the TVDB ID of a TMDB show.</summary>
+    /// <param name="entry">The series, movie or episode metadata.</param>
+    /// <param name="source">The other source's name (e.g. "tvdb" or "imdb").</param>
+    /// <param name="entityType">The kind of entry the ID names in that source.</param>
+    /// <returns>The ID, or null if the entry carries none.</returns>
+    public static string? GetCrossSourceID(this IWithCrossSources entry, string source, MetadataEntityType entityType) =>
+        MetadataSource.TryParse(source, out var metadataSource) ? entry.GetCrossSourceIDs(metadataSource).FirstOrDefault(id => id.EntityType == entityType)?.ID : null;
+
+    #endregion
+
+    #region TMDB
+
+    /// <summary>Returns the entry if it comes from TMDB, otherwise null.</summary>
+    /// <typeparam name="T">The kind of metadata entry.</typeparam>
+    /// <param name="entry">The series, season, episode or movie metadata.</param>
+    /// <returns>The entry when its source is TMDB, or null.</returns>
+    public static T? AsTmdb<T>(this T? entry)
+        where T : class, IMetadata => entry?.ID.Source == MetadataSource.TMDB ? entry : null;
 
     #endregion
 }

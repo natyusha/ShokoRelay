@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
 using Shoko.Abstractions.Metadata;
-using Shoko.Abstractions.Metadata.Tmdb;
 
 namespace ShokoRelay.Services;
 
@@ -97,7 +96,7 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                 // Resolve the critic rating for a series based on user configuration
                 double? rating = Settings.CriticRatingMode switch
                 {
-                    CriticRatingMode.TMDB => series.GetLinkedSeries<ITmdbShow>(MetadataSource.TMDB)?.FirstOrDefault() is { Rating: > 0 } ts ? ts.Rating : null,
+                    CriticRatingMode.TMDB => series.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() is { Rating: > 0 } ts ? ts.Rating : null,
                     CriticRatingMode.AniDB => series.Rating > 0 ? series.Rating : null,
                     _ => null,
                 };
@@ -143,7 +142,7 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                 // Resolve the critic rating for an episode based on user configuration
                 double? rating = Settings.CriticRatingMode switch
                 {
-                    CriticRatingMode.TMDB => episode.GetLinkedEpisodes<ITmdbEpisode>(MetadataSource.TMDB)?.FirstOrDefault() is { Rating: > 0 } te ? te.Rating : null,
+                    CriticRatingMode.TMDB => episode.GetLinkedEpisodes(MetadataSource.TMDB)?.FirstOrDefault() is { Rating: > 0 } te ? te.Rating : null,
                     CriticRatingMode.AniDB => episode.Rating > 0 ? episode.Rating : null,
                     _ => null,
                 };
@@ -187,12 +186,10 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
 
                 pE++;
                 // Resolve the critic rating for a movie based on user configuration
-                var tmdbCandidate = episode.GetLinkedMovies<ITmdbMovie>(MetadataSource.TMDB)?.FirstOrDefault() ?? episode.Series?.GetLinkedMovies<ITmdbMovie>(MetadataSource.TMDB)?.FirstOrDefault();
+                var tmdbCandidate = episode.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault() ?? episode.Series?.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault();
                 double? rating = Settings.CriticRatingMode switch
                 {
-                    CriticRatingMode.TMDB => tmdbCandidate is { Rating: > 0 } tm
-                        ? tm.Rating
-                        : (episode.GetLinkedEpisodes<ITmdbEpisode>(MetadataSource.TMDB)?.FirstOrDefault() is { Rating: > 0 } te ? te.Rating : null),
+                    CriticRatingMode.TMDB => tmdbCandidate is { Rating: > 0 } tm ? tm.Rating : (episode.GetLinkedEpisodes(MetadataSource.TMDB)?.FirstOrDefault() is { Rating: > 0 } te ? te.Rating : null),
                     CriticRatingMode.AniDB => episode.Rating > 0 ? episode.Rating : (episode.Series?.Rating > 0 ? episode.Series.Rating : null),
                     _ => null,
                 };
