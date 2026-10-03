@@ -16,6 +16,34 @@
   "icon_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-icon.png",
   "releases": [
     {
+      "version": "0.20.0",
+      "tag": "v0.20.0",
+      "source_revision": "619d021e9ddb44b95c50769548b84c30a1276dbb",
+      "released_at": "2026-10-03T19:52:17Z",
+      "channel": "Dev",
+      "release_notes": "Another set of significant changes has been made in the abstractions, but just like last time core functionality for the plugin should remain the same.\r\n\r\n**Changes:**\r\n- Added `ShokoRelay.Vfs` to global using directives in `.csproj`\r\n- Added memory caching for `plex.token` as well as various other tweaks and adjustments\r\n- Replaced deprecated stylelint-config-concentric step with prettier-plugin-css-order in lint-format.yml\r\n- Bumped `Shoko.Abstractions` to `6.0.0-alpha.98`\r\n\r\n**Contributions:**\r\n* @revam in https://github.com/natyusha/ShokoRelay/pull/16\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.19.1...v0.20.0",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.20.0/ShokoRelay-v0.20.0-dev_linux-arm64.zip",
+          "checksum": "sha256:12025c295ba02e3912a48214944c6d243f914a043e3902470f85f652b320b15f"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.20.0/ShokoRelay-v0.20.0-dev_linux-x64.zip",
+          "checksum": "sha256:6ff57f2bde21d6f722ed287877eb861f48b1f9af8a895d0ff49593fbcac22285"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.20.0/ShokoRelay-v0.20.0-dev_win-x64.zip",
+          "checksum": "sha256:8713a96c2e7d6fde08e1670232cf3dc72f21b8683c2229bd9f09241d27a04f70"
+        }
+      ]
+    },
+    {
       "version": "0.19.1",
       "tag": "v0.19.1",
       "source_revision": "d836eb407d4ccb985b70138197bc9a76855b760e",
