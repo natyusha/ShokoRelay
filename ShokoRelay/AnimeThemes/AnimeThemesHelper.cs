@@ -470,9 +470,7 @@ internal static class AnimeThemesHelper
             return ("", null);
         int dash = slug.IndexOf('-');
         string b = dash < 0 ? slug : slug[..dash];
-        if (b.Equals("OP1", StringComparison.OrdinalIgnoreCase) || b.Equals("ED1", StringComparison.OrdinalIgnoreCase))
-            b = b[..2];
-        return (b, dash < 0 ? null : slug[(dash + 1)..]);
+        return (b.Equals("OP1", StringComparison.OrdinalIgnoreCase) || b.Equals("ED1", StringComparison.OrdinalIgnoreCase) ? b[..2] : b, dash < 0 ? null : slug[(dash + 1)..]);
     }
 
     /// <summary>Formats a slug variant suffix into a human-readable tag.</summary>

@@ -57,8 +57,8 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         string movieRootName = VfsShared.ResolveMovieRootFolderName();
         var allRoots = videoService.GetAllManagedFolders()?.Where(VfsShared.IsVfsEnabledFolder).Select(f => f.Path).Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(VfsShared.PathComparer).ToList() ?? [];
 
-        var validFolderIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var validMovieFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var validFolderIds = new HashSet<int>();
+        var validMovieFolders = new HashSet<int>();
         var allSeries = metadataService.GetAllShokoSeries();
         var mode = Settings.Advanced.MovieGenerationMode;
 
@@ -70,17 +70,17 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                 var (doTv, doMovie) = MapHelper.GetGenerationModes(MapHelper.IsMovie(s), mode);
 
                 if (doTv)
-                    validFolderIds.Add(folderId.ToString());
+                    validFolderIds.Add(folderId);
 
                 if (doMovie)
                     foreach (var ep in s.Episodes.Where(e => e.Type == EpisodeType.Episode))
-                        validMovieFolders.Add(ep.LocalID.ToString());
+                        validMovieFolders.Add(ep.LocalID);
             }
         }
 
         var blueprint = VfsShared.LoadBlueprint();
 
-        void AuditRoot(string rName, HashSet<string> validNames)
+        void AuditRoot(string rName, HashSet<int> validIds)
         {
             foreach (var root in allRoots)
             {
@@ -100,7 +100,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                         if (folderName.StartsWith('.'))
                             return;
 
-                        if (!validNames.Contains(folderName))
+                        if (!int.TryParse(folderName, out int parsedFolderId) || !validIds.Contains(parsedFolderId))
                         {
                             try
                             {
@@ -108,7 +108,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                                 Interlocked.Increment(ref orphanedFolders);
                                 removed.Add($"[Orphaned Series] {seriesFolder}");
 
-                                if (int.TryParse(folderName, out int parsedFolderId))
+                                if (parsedFolderId > 0)
                                 {
                                     foreach (var rootDict in blueprint.Values)
                                         if (rootDict.TryRemove(parsedFolderId, out _))

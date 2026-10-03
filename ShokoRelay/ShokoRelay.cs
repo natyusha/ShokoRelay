@@ -252,7 +252,7 @@ public class ShokoRelay : BackgroundService
     /// <returns>A tuple containing the LastScheduled and NextRun timestamps.</returns>
     private static (DateTime LastScheduled, DateTime NextRun) ComputeSchedule(DateTime now, int offsetHours, int frequencyHours)
     {
-        DateTime anchor = new DateTime(now.Year, now.Month, now.Day, 0, 0, 0, DateTimeKind.Utc).AddHours(offsetHours);
+        DateTime anchor = now.Date.AddHours(offsetHours);
         if (anchor > now)
             anchor = anchor.AddDays(-1);
         double periods = Math.Floor((now - anchor).TotalHours / frequencyHours);

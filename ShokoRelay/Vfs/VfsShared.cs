@@ -215,9 +215,9 @@ internal static class VfsShared
                 {
                     if (fi.Attributes.HasFlag(FileAttributes.ReparsePoint))
                     {
-                        string currentTarget = fi.LinkTarget?.Replace('\\', '/') ?? string.Empty;
-                        string expectedTarget = relativeTarget.Replace('\\', '/');
-                        if (string.Equals(currentTarget, expectedTarget, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                        string currentTarget = NormalizeSeparators(fi.LinkTarget ?? string.Empty);
+                        string expectedTarget = NormalizeSeparators(relativeTarget);
+                        if (string.Equals(currentTarget, expectedTarget, PathComparison))
                             return true;
                     }
 
