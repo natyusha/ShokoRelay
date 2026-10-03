@@ -196,9 +196,9 @@ Applying a hyphenated suffix to the image that matches Plex's naming conventions
 
 ### Critic Rating Application
 
-- The Provider Framework supports TMDB ratings but they are not visible outside of the "New Plex Experience"
+- The Provider Framework fully supports TMDB ratings but there is no support for custom rating sources like AniDB
 - To mitigate this the `Apply Critic Ratings` button in the "Quick Actions" section of the dashboard is available
-  - This makes Plex for Web/Desktop show the ratings next to a generic grey star in the UI
+  - This will add generic ratings to every series/episode (when available) in Plex which are what is used when sorting by "Critic Rating" in the UI
 - The rating source for this can be configured (or disabled) under `Critic Rating Mode` in the Provider Settings
 - _Requires Plex authentication_
 
