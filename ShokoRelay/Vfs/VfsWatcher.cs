@@ -165,7 +165,7 @@ public class VfsWatcher(
 
             try
             {
-                if (Settings.Advanced.DeferVfsCreationUntilFixup && plexLibrary.IsEnabled)
+                if (Settings.Advanced.DeferVfsCreationUntilFixup)
                 {
                     s_logger.Info("VFS: Deferring VFS creation for {0} series until fixup ({1}m delay)", seriesIds.Count, Settings.Advanced.PlexFixupDelay);
                     foreach (var seriesId in seriesIds)
@@ -222,9 +222,6 @@ public class VfsWatcher(
     /// <param name="deferScan">Whether to suppress the immediate library scan and only run the deferred fixup.</param>
     public void TriggerPlexUpdates(int seriesId, bool deferScan = false)
     {
-        if (!plexLibrary.IsEnabled)
-            return;
-
         int primaryId = OverrideHelper.GetPrimary(seriesId, metadataService);
         var series = metadataService.GetShokoSeriesByID(primaryId);
         if (series == null)
@@ -237,12 +234,16 @@ public class VfsWatcher(
             return;
         }
 
-        if (!deferScan)
+        if (!deferScan && plexLibrary.IsEnabled)
             ScheduleLibraryScan(series);
 
-        // Schedules or resets the timer for a full Plex metadata refresh for the given series
-        s_logger.Debug("VFS: Scheduling metadata fixup for series -> {0} [{1}] in {2} minute(s)", series.GetDisplayTitle(), series.LocalID, Settings.Advanced.PlexFixupDelay);
-        ScheduleDebouncedAction(series.LocalID, Settings.Advanced.PlexFixupDelay * 60, _pendingMetadataFixups, token => RunMetadataFixupAsync(series, token));
+        // Schedules or resets the timer for deferred VFS creation or Plex metadata fixup
+        if (plexLibrary.IsEnabled || Settings.Advanced.DeferVfsCreationUntilFixup)
+        {
+            string actionName = Settings.Advanced.DeferVfsCreationUntilFixup ? "deferred VFS creation" : "metadata fixup";
+            s_logger.Debug("VFS: Scheduling {0} for series -> {1} [{2}] in {3} minute(s)", actionName, series.GetDisplayTitle(), series.LocalID, Settings.Advanced.PlexFixupDelay);
+            ScheduleDebouncedAction(series.LocalID, Settings.Advanced.PlexFixupDelay * 60, _pendingMetadataFixups, token => RunMetadataFixupAsync(series, token));
+        }
     }
 
     /// <summary>Generic debouncer wrapper to handle delaying tasks and managing cancellations efficiently.</summary>
@@ -328,11 +329,15 @@ public class VfsWatcher(
             // Regenerate the VFS to account for cases where the episode/season numbering was updated in Shoko after the initial file event was processed
             var vfsResult = builder.Build(series.LocalID, cleanRoot: false);
             if (vfsResult.CreatedLinks > 0)
-                s_logger.Info("VFS: Re-generated links -> {0} [{1}] during fixup phase", series.GetDisplayTitle(), series.LocalID);
+                s_logger.Info("VFS: {0} links -> {1} [{2}] during fixup phase", isDeferred ? "Created" : "Re-generated", series.GetDisplayTitle(), series.LocalID);
 
             // Restore AnimeThemes links for this specific series if a mapping file exists to prevent the pruned folder from losing them
             if (File.Exists(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileAtMapping)))
                 await atMapping.ApplyMappingAsync([series.LocalID], token).ConfigureAwait(false);
+
+            // If Plex is not linked exit since VFS creation is complete and the Plex APIs called below cannot be used
+            if (!plexLibrary.IsEnabled)
+                return;
 
             // Wait to allow the filesystem to settle, or for Plex's native auto-scanner to index the newly generated VFS symlinks
             await Task.Delay(TimeSpan.FromSeconds(Settings.Advanced.PlexScanDelay), token).ConfigureAwait(false);
