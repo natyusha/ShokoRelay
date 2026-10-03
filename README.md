@@ -96,7 +96,8 @@ Enable the following options in Shoko to ensure that Plex has at least one sourc
   - `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay`
 - Click `Add Agent` in the Metadata Agents header, name it `Shoko Relay` and select it as the primary provider
 - Optional: Under `additional providers` select `Plex NFO Series` then click the `+`
-- Under `additional providers` select `Plex Local Media` then click the `+` and `Save`
+- Under `additional providers` select `Plex Local Media` then click the `+`
+- Ensure that the additional provider(s) are above the `Shoko Relay` primary entry and `Save`
 
 > [!TIP]
 > You can override the provider's settings by appending them as a URL path parameter segment separated by semicolons (e.g. `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/options/SeriesTitleLanguage=EN;TmdbImageLanguage=EN`).
@@ -107,7 +108,7 @@ Enable the following options in Shoko to ensure that Plex has at least one sourc
 > If you previously used the legacy `ShokoRelay.bundle` you can simply convert your existing libraries to the new agent. This allows you to maintain watched states and video preview thumbnails. Files that end up with different episode assignments will _not_ migrate correctly and will have to be handled manually (this is guaranteed for "Other" type episodes that were in Season -4).\
 > _Running "Refresh All Metadata" for the converted libraries is required after the first scan completes._
 
-- The Shoko Relay agent requires a `TV Shows` type library to be created (or an existing one to be used)
+- The standard Shoko Relay agent setup requires a `TV Shows` type library to be created (or an existing one to be used)
 - Under `Add Folders` be sure to only enter the path to `!ShokoRelayVFS` (or the configured `VFS Root Path`) as the directory
 - Under `Advanced` simply change the Scanner of the library to `Plex TV Series` and the Agent to `Shoko Relay`
   - You can override Provider Settings on a per-library basis by configuring an additional Metadata Provider matching the format described in the Metadata Agent TIP above
@@ -377,7 +378,8 @@ If you prefer separate movie libraries (which is not recommended), Shoko Relay p
   - `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/movie`
 - Click `Add Agent` in the Metadata Agents header, name it `Shoko Relay Movie` and select it as the primary provider
 - Optional: Under `additional providers` select `Plex NFO Movie` then click the `+`
-- Under `additional providers` select `Plex Local Media` then click the `+` and `Save`
+- Under `additional providers` select `Plex Local Media` then click the `+`
+- Ensure that the additional provider(s) are above the `Shoko Relay Movie` primary entry and `Save`
 - Create a Plex "Movies" library and point it to a `!ShokoRelayMovieVFS` folder
 - Be sure to set the Scanner to `Plex Movie` and the agent to `Shoko Relay Movie`
 
