@@ -70,16 +70,10 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
 
-      - name: Check Dashboard Layout (Prettier)
+      - name: Check Dashboard Layout & CSS Property Order (Prettier)
         run: |
-          npm install --save-dev prettier
-          npx prettier --check "ShokoRelay/Dashboard/**/*.js" "ShokoRelay/Dashboard/**/*.css"
+          npm install --save-dev prettier prettier-plugin-css-order
+          npx prettier --check "ShokoRelay/Dashboard/**/*.js" "ShokoRelay/Dashboard/**/*.css" --plugin prettier-plugin-css-order
           npx prettier --check "ShokoRelay/Dashboard/**/*.cshtml" --parser html
-
-      - name: Check CSS Property Order (Stylelint Concentric)
-        run: |
-          npm install --save-dev stylelint stylelint-config-concentric
-          echo '{ "extends": ["stylelint-config-concentric"] }' > .stylelintrc.json
-          npx stylelint "ShokoRelay/Dashboard/**/*.css"
