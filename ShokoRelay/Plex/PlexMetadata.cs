@@ -218,13 +218,17 @@ public class PlexMetadata(IMetadataService metadataService)
         string? seasonSummary = null;
 
         // When using VFS overrides find a Shoko series in the group which contains the TMDB metadata for the requisite season number.
-        var groupIds = OverrideHelper.GetGroup(ps.LocalID, metadataService);
-        var sourceSeries =
-            groupIds.Select(id => metadataService.GetShokoSeriesByID(id)).OfType<IShokoSeries>().FirstOrDefault(s => s.GetLinkedSeasons(MetadataSource.TMDB)?.Any(ts => ts.SeasonNumber == seasonNum) == true)
-            ?? ps;
-
         bool ignoreTmdb = !string.IsNullOrEmpty(MapHelper.GetPreferredTmdbOrderingId(ps));
-        var tmdbSeason = ignoreTmdb ? null : sourceSeries.GetLinkedSeasons(MetadataSource.TMDB)?.FirstOrDefault(ts => ts.SeasonNumber == seasonNum);
+        ISeason? tmdbSeason = null;
+        if (!ignoreTmdb)
+        {
+            var groupIds = OverrideHelper.GetGroup(ps.LocalID, metadataService);
+            tmdbSeason = groupIds
+                .Select(metadataService.GetShokoSeriesByID)
+                .OfType<IShokoSeries>()
+                .SelectMany(s => s.GetLinkedSeasons(MetadataSource.TMDB) ?? [])
+                .FirstOrDefault(ts => ts.SeasonNumber == seasonNum);
+        }
 
         if (tmdbSeason != null)
         {
@@ -453,13 +457,14 @@ public class PlexMetadata(IMetadataService metadataService)
     /// <param name="ep">The base episode metadata.</param>
     /// <param name="tmdbEpisodeOverride">An optional TMDB episode object (used for groups/parts).</param>
     /// <returns>An array of objects containing external IDs.</returns>
-    private object[] BuildEpisodeXrefGuidArray(IEpisode ep, IEpisode? tmdbEpisodeOverride)
+    private object[] BuildEpisodeXrefGuidArray(IEpisode ep, object? tmdbEpisodeOverride)
     {
-        var te = tmdbEpisodeOverride.AsTmdb();
+        var te = (tmdbEpisodeOverride as IEpisode).AsTmdb();
         return CreateXrefGuids([
-            te is not null ? $"tmdb://{te.ID.ID}" : null,
+            te != null ? $"tmdb://{te.ID.ID}" : null,
             te?.GetCrossSourceID("tvdb", MetadataEntityType.Episode) is { } teTvdb ? $"tvdb://{teTvdb}" : null,
-            .. ep is IShokoEpisode se
+            tmdbEpisodeOverride is IEpisodeOrderingInformation oi && oi.Episode.AsTmdb() is { } oiEp ? $"tmdb://{oiEp.ID.ID}" : null,
+            .. ep is IShokoEpisode se && se.GetLinkedEpisodes(MetadataSource.TMDB) != null
                 ? se.GetLinkedEpisodes(MetadataSource.TMDB)
                     .SelectMany(t => t.GetCrossSourceID("tvdb", MetadataEntityType.Episode) is { } tTvdb ? [$"tmdb://{t.ID.ID}", $"tvdb://{tTvdb}"] : new[] { $"tmdb://{t.ID.ID}" })
                 : [],

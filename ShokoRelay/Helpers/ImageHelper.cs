@@ -72,7 +72,7 @@ public static class ImageHelper
         };
 
         // Strictly prevent inherited series-level images from being returned for TMDB seasons
-        if ((entity as ISeason).AsTmdb() is not null)
+        if (entity is ISeason season && season.ID.Source == MetadataSource.TMDB)
             options.LinkedEntityImages = false;
 
         var imgs = entity.GetImages(options).ToList();

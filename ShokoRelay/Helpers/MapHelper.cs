@@ -81,14 +81,10 @@ public static class MapHelper
     /// <returns>Ordering ID or null.</returns>
     public static string? GetPreferredTmdbOrderingId(ISeries series) =>
         !EnforceTmdbNumbering ? null
-        : (
-            series.Episodes.OfType<IShokoEpisode>().FirstOrDefault()?.Series?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() is { } tmdbShow
-            && tmdbShow.PreferredOrdering is { IsDefault: false } preferred
-            && preferred.ID.Source == MetadataSource.TMDB
-            && preferred.ID.ID is var pref
-            && !string.IsNullOrWhiteSpace(pref)
-        )
-            ? pref
+        : (series as IShokoSeries ?? series.Episodes.OfType<IShokoEpisode>().FirstOrDefault()?.Series)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault()
+            is { PreferredOrdering: { IsDefault: false } preferred }
+        && !string.IsNullOrWhiteSpace(preferred.ID.ID)
+            ? preferred.ID.ID
         : null;
 
     /// <summary>Return merged file data for a primary series and any additional series in the group.</summary>
@@ -116,7 +112,7 @@ public static class MapHelper
     /// <summary>Indicates whether a series is considered a movie.</summary>
     /// <param name="series">The Shoko series to check.</param>
     /// <returns>True if the series is categorized as a movie.</returns>
-    public static bool IsMovie(IShokoSeries series) => EnforceTmdbNumbering ? series.GetLinkedMovies(MetadataSource.TMDB)?.Any() == true : series.Type == AnimeType.Movie;
+    public static bool IsMovie(IShokoSeries series) => EnforceTmdbNumbering ? series.GetLinkedMovies(MetadataSource.TMDB) is { Count: > 0 } : series.Type == AnimeType.Movie;
 
     /// <summary>Resolves all unique active physical video files associated with a series, accounting for consolidated override groups and filtering out hidden entries.</summary>
     /// <param name="series">The primary series to resolve videos for.</param>

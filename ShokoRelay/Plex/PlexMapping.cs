@@ -158,18 +158,15 @@ public static class PlexMapping
         if (entries == null)
             return [];
         var list = entries.ToList();
-        return list.Count == 0 ? list
-            : string.IsNullOrWhiteSpace(showPreferredOrderingId) ? [.. list.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber)]
+        if (list.Count == 0)
+            return list;
+
+        var defaultOrderingId = IOrdering.DefaultOrderingID(list[0].SeriesID).ID;
+        return string.IsNullOrWhiteSpace(showPreferredOrderingId) || string.Equals(defaultOrderingId, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase)
+            ? [.. list.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber)]
             :
             [
-                .. list.Select(te =>
-                        (
-                            Episode: te,
-                            Priority: string.Equals(IOrdering.DefaultOrderingID(te.SeriesID).ID, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase) ? 0
-                            : te.Orderings.Any(o => IsInTmdbOrdering(o, showPreferredOrderingId)) ? 1
-                            : 2
-                        )
-                    )
+                .. list.Select(te => (Episode: te, Priority: te.Orderings.Any(o => IsTmdbOrdering(o, showPreferredOrderingId)) ? 0 : 1))
                     .OrderBy(x => x.Priority)
                     .ThenBy(x => x.Episode.SeasonNumber ?? 0)
                     .ThenBy(x => x.Episode.EpisodeNumber)
@@ -183,16 +180,14 @@ public static class PlexMapping
     /// <returns>A tuple containing the resolved season and episode numbers.</returns>
     public static (int? Season, int Episode) GetOrderingCoords(IEpisode ep, string? showPreferredOrderingId = null) =>
         ep == null ? (null, 0)
-        : !string.IsNullOrWhiteSpace(showPreferredOrderingId)
-            ? ep.Orderings.FirstOrDefault(o => IsInTmdbOrdering(o, showPreferredOrderingId)) is { } byAll ? (byAll.SeasonNumber, byAll.EpisodeNumber)
-                : (ep.SeasonNumber, ep.EpisodeNumber)
+        : !string.IsNullOrWhiteSpace(showPreferredOrderingId) && ep.Orderings.FirstOrDefault(o => IsTmdbOrdering(o, showPreferredOrderingId)) is { } byAll ? (byAll.SeasonNumber, byAll.EpisodeNumber)
         : (ep.SeasonNumber, ep.EpisodeNumber);
 
     /// <summary>Indicates whether an episode's place is in the given TMDB ordering.</summary>
     /// <param name="place">The episode's place in one of its show's orderings.</param>
     /// <param name="orderingId">The TMDB ordering identifier.</param>
     /// <returns>True if the place belongs to that TMDB ordering.</returns>
-    private static bool IsInTmdbOrdering(IEpisodeOrderingInformation place, string? orderingId) =>
+    private static bool IsTmdbOrdering(IEpisodeOrderingInformation place, string? orderingId) =>
         place.OrderingID.Source == MetadataSource.TMDB && string.Equals(place.OrderingID.ID, orderingId, StringComparison.OrdinalIgnoreCase);
 
     #endregion
