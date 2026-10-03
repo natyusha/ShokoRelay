@@ -128,9 +128,9 @@
   line-height: 1;
 }
 .direction-toggle {
+  display: inline-flex;
   appearance: none;
   -webkit-appearance: none;
-  display: inline-flex;
   cursor: pointer;
   margin-bottom: 16px;
   box-shadow: 0 0 4px 2px var(--glow);
@@ -413,11 +413,11 @@ label.shoko-checkbox:hover input:disabled + .shoko-checkbox-icon .checked {
   color: var(--text-color);
 }
 button.float-link {
-  appearance: none;
-  -webkit-appearance: none;
   display: inline-flex;
   justify-content: center;
   align-items: center;
+  appearance: none;
+  -webkit-appearance: none;
   margin: 0;
   border: none;
   background: transparent;
