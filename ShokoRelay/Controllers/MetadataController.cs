@@ -71,8 +71,8 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
 
     #region Matching
 
-    /// <summary>Attempts to match a Plex media lookup request to a Shoko series or standalone movie.</summary>
-    /// <param name="body">Match parameters including filename, title, and media type.</param>
+    /// <summary>Attempts to match a Plex media lookup request to a Shoko series, season, episode, or movie.</summary>
+    /// <param name="body">Match parameters including filename, title, media type, and indices.</param>
     /// <returns>A match result MediaContainer.</returns>
     [Route("matches")]
     [HttpGet]
@@ -88,97 +88,144 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             if (!id.HasValue)
                 return EmptyMatch();
 
-            string? bodyType = body?.Type?.ToString();
+            int typeInt = PlexConstants.TypeShow;
+            string? bodyType = body?.Type?.ToString() ?? Request.Query["type"];
+            if (int.TryParse(bodyType, out int t))
+                typeInt = t;
+            else if (string.Equals(bodyType, "movie", StringComparison.OrdinalIgnoreCase))
+                typeInt = PlexConstants.TypeMovie;
+            else if (string.Equals(bodyType, "show", StringComparison.OrdinalIgnoreCase))
+                typeInt = PlexConstants.TypeShow;
+            else if (string.Equals(bodyType, "season", StringComparison.OrdinalIgnoreCase))
+                typeInt = PlexConstants.TypeSeason;
+            else if (string.Equals(bodyType, "episode", StringComparison.OrdinalIgnoreCase))
+                typeInt = PlexConstants.TypeEpisode;
+
             bool isMovie =
-                (!string.IsNullOrWhiteSpace(rawPath) && rawPath.Contains(Settings.Advanced.MovieVfsRootPath, StringComparison.OrdinalIgnoreCase))
-                || string.Equals(Request.Query["type"], "1", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(Request.Query["type"], "movie", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(bodyType, "1", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(bodyType, "movie", StringComparison.OrdinalIgnoreCase)
+                typeInt == PlexConstants.TypeMovie
+                || (!string.IsNullOrWhiteSpace(rawPath) && rawPath.Contains(Settings.Advanced.MovieVfsRootPath, StringComparison.OrdinalIgnoreCase))
                 || Request.Path.Value?.Contains("/movie", StringComparison.OrdinalIgnoreCase) == true;
 
-            IActionResult ReturnMovieMatch(IShokoEpisode ep)
-            {
-                var tmdbMovie = ep.GetLinkedMovies<ITmdbMovie>(MetadataSource.TMDB)?.FirstOrDefault() ?? ep.Series?.GetLinkedMovies<ITmdbMovie>(MetadataSource.TMDB)?.FirstOrDefault();
-                string movieTitle = TextHelper.ResolveMovieTitle(ep, ep.Series!, tmdbMovie);
-                var posterUrl =
-                    (ep.EpisodeNumber > 1 && tmdbMovie is IWithImages mi ? mi.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage) : null)
-                    ?? (ep.Series as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage)
-                    ?? (tmdbMovie as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage);
-                return Ok(
-                    new
-                    {
-                        MediaContainer = new
-                        {
-                            size = 1,
-                            identifier = ShokoRelayConstants.MovieAgentScheme,
-                            Metadata = new[]
-                            {
-                                new
-                                {
-                                    guid = ep.GetPlexMovieGuid(),
-                                    title = movieTitle,
-                                    year = ep.AirDate?.Year ?? tmdbMovie?.ReleaseDate?.Year ?? ep.Series?.AirDate?.Year,
-                                    score = 100,
-                                    thumb = posterUrl,
-                                },
-                            },
-                        },
-                    }
-                );
-            }
-
-            IActionResult ReturnSeriesMatch(IShokoSeries s)
-            {
-                var seriesPosterUrl = (s as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage);
-                return Ok(
-                    new
-                    {
-                        MediaContainer = new
-                        {
-                            size = 1,
-                            identifier = ShokoRelayConstants.AgentScheme,
-                            Metadata = new[]
-                            {
-                                new
-                                {
-                                    guid = s.GetPlexGuid(),
-                                    title = s.GetDisplayTitle(),
-                                    year = s.AirDate?.Year,
-                                    score = 100,
-                                    thumb = seriesPosterUrl,
-                                },
-                            },
-                        },
-                    }
-                );
-            }
-
-            var ep = MetadataService.GetShokoEpisodeByID(id.Value);
-            if (isMovie && ep?.Series != null)
-                return ReturnMovieMatch(ep);
+            if (isMovie)
+                typeInt = PlexConstants.TypeMovie;
 
             var series = MetadataService.GetShokoSeriesByID(id.Value);
-            if (series != null)
-                return ReturnSeriesMatch(series);
+            var ep = MetadataService.GetShokoEpisodeByID(id.Value); // In case the extracted ID was a movie episode ID
 
-            if (ep?.Series != null)
-                return ReturnMovieMatch(ep);
+            if (series == null && ep?.Series != null)
+            {
+                series = ep.Series;
+                typeInt = PlexConstants.TypeMovie;
+            }
 
-            Logger.Info("Metadata: No Shoko series or episode found for id {Id}", id.Value);
-            return EmptyMatch();
+            if (series == null)
+            {
+                Logger.Info("Metadata: No Shoko series or episode found for id {Id}", id.Value);
+                return EmptyMatch();
+            }
+
+            if (typeInt is PlexConstants.TypeShow or PlexConstants.TypeSeason or PlexConstants.TypeEpisode)
+            {
+                var ctx = mapper.GetSeriesContext(series.ID.ID);
+                if (ctx == null)
+                    return EmptyMatch();
+
+                int includeChildren = body?.IncludeChildren ?? (int.TryParse(Request.Query["includeChildren"], out var ic) ? ic : 0);
+
+                if (typeInt == PlexConstants.TypeSeason)
+                {
+                    int seasonNum = body?.Index ?? 1;
+                    var seasonMeta = mapper.MapSeason(ctx.Series, seasonNum, ctx.Titles.DisplayTitle);
+                    ((IDictionary<string, object?>)seasonMeta)["score"] = 100;
+
+                    if (includeChildren == 1)
+                    {
+                        var episodes = mapper.BuildEpisodeList(ctx, seasonNum);
+                        ((IDictionary<string, object?>)seasonMeta)["Children"] = new { size = episodes.Count, Metadata = episodes };
+                    }
+                    return WrapInContainer(seasonMeta);
+                }
+
+                if (typeInt == PlexConstants.TypeEpisode)
+                {
+                    int seasonNum = body?.ParentIndex ?? 1;
+                    int epNum = body?.Index ?? 1;
+
+                    var mapping = ctx.FileData.GetForSeason(seasonNum).FirstOrDefault(m => m.Coords.Episode == epNum);
+                    if (mapping != null)
+                    {
+                        var epMeta = mapper.MapEpisode(mapping.PrimaryEpisode, mapping.Coords, ctx.Series, ctx.Titles, mapping.PartIndex, mapping.TmdbEpisode);
+                        ((IDictionary<string, object?>)epMeta)["score"] = 100;
+                        return WrapInContainer(epMeta);
+                    }
+                    return EmptyMatch();
+                }
+
+                // Show (type 2)
+                var showMeta = mapper.MapSeries(ctx.Series, ctx.Titles);
+                ((IDictionary<string, object?>)showMeta)["score"] = 100;
+
+                if (includeChildren == 1)
+                {
+                    var seasons = ctx.FileData.Seasons.Select(s => mapper.MapSeason(ctx.Series, s, ctx.Titles.DisplayTitle)).ToList();
+                    ((IDictionary<string, object?>)showMeta)["Children"] = new { size = seasons.Count, Metadata = seasons };
+                }
+
+                return WrapInContainer(showMeta);
+            }
+
+            // Fallback to Movie (type 1)
+            ep ??= series.Episodes.FirstOrDefault(e => e.Type == EpisodeType.Episode);
+            if (ep == null)
+                return EmptyMatch();
+
+            var tmdbMovie = ep.GetLinkedMovies<ITmdbMovie>(MetadataSource.TMDB)?.FirstOrDefault() ?? series.GetLinkedMovies<ITmdbMovie>(MetadataSource.TMDB)?.FirstOrDefault();
+            string movieTitle = TextHelper.ResolveMovieTitle(ep, series, tmdbMovie);
+            var posterUrl =
+                (ep.EpisodeNumber > 1 && tmdbMovie is IWithImages mi ? mi.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage) : null)
+                ?? (series as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage)
+                ?? (tmdbMovie as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage);
+
+            return Ok(
+                new
+                {
+                    MediaContainer = new
+                    {
+                        size = 1,
+                        identifier = ShokoRelayConstants.MovieAgentScheme,
+                        Metadata = new[]
+                        {
+                            new
+                            {
+                                guid = ep.GetPlexMovieGuid(),
+                                type = "movie",
+                                title = movieTitle,
+                                year = ep.AirDate?.Year ?? tmdbMovie?.ReleaseDate?.Year ?? series.AirDate?.Year,
+                                score = 100,
+                                thumb = posterUrl,
+                            },
+                        },
+                    },
+                }
+            );
         });
 
     /// <summary>Represents the JSON body of a Plex matching request.</summary>
     /// <param name="Filename">The filename of the media being matched.</param>
     /// <param name="Title">The title string, often used for manual Shoko ID entry in Plex.</param>
     /// <param name="Manual">Flag indicating if the match was triggered manually (1 for true).</param>
-    /// <param name="Type">The media type indicator (1 or "movie" for standalone movies).</param>
+    /// <param name="Type">The media type indicator (1 or "movie" for standalone movies, 2 for shows, 3 for seasons, 4 for episodes).</param>
+    /// <param name="Index">The index of the item (e.g., episode or season number).</param>
+    /// <param name="ParentIndex">The index of the parent item (e.g., season number for an episode).</param>
+    /// <param name="IncludeChildren">Flag indicating if child metadata should be embedded.</param>
     public record PlexMatchBody(
         [property: JsonProperty("filename")] string? Filename,
         [property: JsonProperty("title")] string? Title = null,
         [property: JsonProperty("manual")] int? Manual = null,
-        [property: JsonProperty("type")] object? Type = null
+        [property: JsonProperty("type")] object? Type = null,
+        [property: JsonProperty("index")] int? Index = null,
+        [property: JsonProperty("parentIndex")] int? ParentIndex = null,
+        [property: JsonProperty("includeChildren")] int? IncludeChildren = null
     );
 
     #endregion
