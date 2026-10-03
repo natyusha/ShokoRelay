@@ -2,7 +2,7 @@ using System.Collections.Frozen;
 using System.Text.RegularExpressions;
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Anidb;
-using Shoko.Abstractions.Metadata.Tmdb;
+using Shoko.Abstractions.Metadata.Enums;
 
 namespace ShokoRelay.Helpers;
 
@@ -72,8 +72,8 @@ public static class TagHelper
             anidbNames = anidbTags.Where(t => !string.IsNullOrWhiteSpace(t.Name) && (minWeight <= 0 || t.Weight >= minWeight)).Select(t => t.Name);
 
         IEnumerable<string> tmdbNames = [];
-        if ((sourceSetting == TagSources.Combined || sourceSetting == TagSources.TMDB) && shokoSeries?.GetLinkedSeries<ITmdbShow>(MetadataSource.TMDB)?.FirstOrDefault() is { } tmdb)
-            tmdbNames = (tmdb.Keywords ?? []).Concat(tmdb.Genres ?? []).Where(k => !string.IsNullOrWhiteSpace(k));
+        if ((sourceSetting == TagSources.Combined || sourceSetting == TagSources.TMDB) && shokoSeries?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() is { } tmdb)
+            tmdbNames = tmdb.Tags.Where(t => t.Kind is TagKind.Keyword or TagKind.Genre).OrderBy(t => t.Kind == TagKind.Keyword ? 0 : 1).Select(t => t.Name).Where(k => !string.IsNullOrWhiteSpace(k));
 
         return [.. FilterAndFormat(anidbNames.Concat(tmdbNames).Concat(shokoNames), userBlacklist)];
     }

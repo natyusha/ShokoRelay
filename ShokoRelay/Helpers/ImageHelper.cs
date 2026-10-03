@@ -4,7 +4,6 @@ using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Enums;
 using Shoko.Abstractions.Metadata.Image;
 using Shoko.Abstractions.Metadata.Image.Options;
-using Shoko.Abstractions.Metadata.Tmdb;
 
 namespace ShokoRelay.Helpers;
 
@@ -73,7 +72,7 @@ public static class ImageHelper
         };
 
         // Strictly prevent inherited series-level images from being returned for TMDB seasons
-        if (entity is ITmdbSeason)
+        if ((entity as ISeason).AsTmdb() is not null)
             options.LinkedEntityImages = false;
 
         var imgs = entity.GetImages(options).ToList();

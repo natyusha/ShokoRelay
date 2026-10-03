@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Enums;
-using Shoko.Abstractions.Metadata.Tmdb;
 using Shoko.Abstractions.Video;
 using static ShokoRelay.Plex.PlexMapping;
 
@@ -22,7 +21,17 @@ public static class MapHelper
     /// <param name="PartCount">Total parts for split files.</param>
     /// <param name="TmdbEpisode">Optional TMDB metadata override.</param>
     /// <param name="IsVariation">Indicates if this file is marked as a variation in Shoko.</param>
-    public record FileMapping(IVideo Video, IReadOnlyList<IEpisode> Episodes, IEpisode PrimaryEpisode, PlexCoords Coords, string FileName, int? PartIndex, int PartCount, object? TmdbEpisode, bool IsVariation);
+    public record FileMapping(
+        IVideo Video,
+        IReadOnlyList<IEpisode> Episodes,
+        IEpisode PrimaryEpisode,
+        PlexCoords Coords,
+        string FileName,
+        int? PartIndex,
+        int PartCount,
+        IEpisode? TmdbEpisode,
+        bool IsVariation
+    );
 
     /// <summary>Aggregates file mapping information and available seasons for a series.</summary>
     /// <param name="Mappings">List of individual file mappings.</param>
@@ -73,10 +82,11 @@ public static class MapHelper
     public static string? GetPreferredTmdbOrderingId(ISeries series) =>
         !EnforceTmdbNumbering ? null
         : (
-            series.Episodes.OfType<IShokoEpisode>().FirstOrDefault()?.Series?.GetLinkedSeries<ITmdbShow>(MetadataSource.TMDB)?.FirstOrDefault() is { } tmdbShow
-            && tmdbShow.PreferredOrdering?.ID.ID is var pref
+            series.Episodes.OfType<IShokoEpisode>().FirstOrDefault()?.Series?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() is { } tmdbShow
+            && tmdbShow.PreferredOrdering is { IsDefault: false } preferred
+            && preferred.ID.Source == MetadataSource.TMDB
+            && preferred.ID.ID is var pref
             && !string.IsNullOrWhiteSpace(pref)
-            && !string.Equals(pref, tmdbShow.TmdbID.ToString(), StringComparison.OrdinalIgnoreCase)
         )
             ? pref
         : null;
@@ -106,7 +116,7 @@ public static class MapHelper
     /// <summary>Indicates whether a series is considered a movie.</summary>
     /// <param name="series">The Shoko series to check.</param>
     /// <returns>True if the series is categorized as a movie.</returns>
-    public static bool IsMovie(IShokoSeries series) => EnforceTmdbNumbering ? series.GetLinkedMovies<ITmdbMovie>(MetadataSource.TMDB)?.Any() == true : series.Type == AnimeType.Movie;
+    public static bool IsMovie(IShokoSeries series) => EnforceTmdbNumbering ? series.GetLinkedMovies(MetadataSource.TMDB)?.Any() == true : series.Type == AnimeType.Movie;
 
     /// <summary>Resolves all unique active physical video files associated with a series, accounting for consolidated override groups and filtering out hidden entries.</summary>
     /// <param name="series">The primary series to resolve videos for.</param>
@@ -225,8 +235,8 @@ public static class MapHelper
             bool allowPt = fCount > 1 && VfsHelper.HasPlexSplitTag(fileName) && deduped.Select(d => d.Episode.Type).Distinct().Count() <= 1;
 
             // TMDB Episode metadata override for multi-part files
-            object? tmdbEp =
-                (allowPt && EnforceTmdbNumbering && firstEp is IShokoEpisode se && se.GetLinkedEpisodes<ITmdbEpisode>(MetadataSource.TMDB) is { Count: > 0 } tmdbEps)
+            IEpisode? tmdbEp =
+                (allowPt && EnforceTmdbNumbering && firstEp is IShokoEpisode se && se.GetLinkedEpisodes(MetadataSource.TMDB) is { Count: > 0 } tmdbEps)
                     ? SelectPreferredTmdbOrdering(tmdbEps, prefId).ElementAtOrDefault(fIdx)
                     : null;
             result.Add(new FileMapping(video, [.. deduped.Select(x => x.Episode)], firstEp, coords, fileName, allowPt ? fIdx + 1 : null, allowPt ? fCount : 1, tmdbEp, video.IsVariation));
