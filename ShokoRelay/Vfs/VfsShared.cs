@@ -338,7 +338,8 @@ internal static class VfsShared
         {
             try
             {
-                var existing = JsonSerializer.Deserialize<Dictionary<string, Dictionary<int, VfsBlueprintSeries>>>(File.ReadAllText(BlueprintFilePath));
+                using var fs = new FileStream(BlueprintFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                var existing = JsonSerializer.Deserialize<Dictionary<string, Dictionary<int, VfsBlueprintSeries>>>(fs);
                 if (existing != null)
                 {
                     foreach (var rKvp in existing)

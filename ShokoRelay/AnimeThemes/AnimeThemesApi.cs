@@ -24,42 +24,36 @@ public class AnimeThemesApi(HttpClient? httpClient = null)
     /// <param name="videoBaseName">The base name of the video file to query.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>A <see cref="VideoWithAudioResponse"/> containing metadata, or null if not found.</returns>
-    public async Task<VideoWithAudioResponse?> FetchVideoWithArtistsAsync(string videoBaseName, CancellationToken ct)
-    {
-        string url = $"{AnimeThemesHelper.AtApiBase}/video/{Uri.EscapeDataString(videoBaseName)}?include=animethemeentries.animetheme.anime,animethemeentries.animetheme.song.artists";
-        return await GetJsonAsync<VideoWithAudioResponse>(url, ct);
-    }
+    public Task<VideoWithAudioResponse?> FetchVideoWithArtistsAsync(string videoBaseName, CancellationToken ct) =>
+        GetJsonAsync<VideoWithAudioResponse>(
+            $"{AnimeThemesHelper.AtApiBase}/video/{Uri.EscapeDataString(videoBaseName)}?include=animethemeentries.animetheme.anime,animethemeentries.animetheme.song.artists",
+            ct
+        );
 
     /// <summary>Fetch anime with AniDB resources to extract the AniDB ID for a given video ID.</summary>
     /// <param name="videoId">The internal AnimeThemes video ID.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>A <see cref="AnimeResourceResponse"/> containing resource links, or null if not found.</returns>
-    public async Task<AnimeResourceResponse?> FetchAnimeResourcesAsync(int videoId, CancellationToken ct)
-    {
-        string url = $"{AnimeThemesHelper.AtApiBase}/anime?filter[has]=animethemes.animethemeentries.videos,animethemes&include=resources&filter[resource][site]=AniDB&filter[video][id]={videoId}";
-        return await GetJsonAsync<AnimeResourceResponse>(url, ct);
-    }
+    public Task<AnimeResourceResponse?> FetchAnimeResourcesAsync(int videoId, CancellationToken ct) =>
+        GetJsonAsync<AnimeResourceResponse>(
+            $"{AnimeThemesHelper.AtApiBase}/anime?filter[has]=animethemes.animethemeentries.videos,animethemes&include=resources&filter[resource][site]=AniDB&filter[video][id]={videoId}",
+            ct
+        );
 
     /// <summary>Fetch anime and available themes for mp3 generation with a given AniDB ID and optional slug filter.</summary>
     /// <param name="anidbId">The AniDB ID of the series.</param>
     /// <param name="slugFilter">Optional URL filter for specific slugs (e.g. OP/ED).</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>A <see cref="AnimeThemesResponse"/> containing theme metadata, or null if not found.</returns>
-    public async Task<AnimeThemesResponse?> FetchAnimeThemesAsync(int anidbId, string? slugFilter, CancellationToken ct)
-    {
-        string url = $"{AnimeThemesHelper.AtApiBase}/anime?filter[has]=resources&filter[site]=AniDB&filter[external_id]={anidbId}&include=animethemes{slugFilter ?? ""}";
-        return await GetJsonAsync<AnimeThemesResponse>(url, ct);
-    }
+    public Task<AnimeThemesResponse?> FetchAnimeThemesAsync(int anidbId, string? slugFilter, CancellationToken ct) =>
+        GetJsonAsync<AnimeThemesResponse>($"{AnimeThemesHelper.AtApiBase}/anime?filter[has]=resources&filter[site]=AniDB&filter[external_id]={anidbId}&include=animethemes{slugFilter ?? ""}", ct);
 
     /// <summary>Fetch animetheme details for mp3 generation, including artists.</summary>
     /// <param name="themeId">The internal AnimeThemes theme ID.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>A <see cref="ThemeWithAudioResponse"/> containing audio and artist info, or null if not found.</returns>
-    public async Task<ThemeWithAudioResponse?> FetchAnimeThemeWithArtistsAsync(int themeId, CancellationToken ct)
-    {
-        string url = $"{AnimeThemesHelper.AtApiBase}/animetheme/{themeId}?include=animethemeentries.videos.audio,song.artists";
-        return await GetJsonAsync<ThemeWithAudioResponse>(url, ct);
-    }
+    public Task<ThemeWithAudioResponse?> FetchAnimeThemeWithArtistsAsync(int themeId, CancellationToken ct) =>
+        GetJsonAsync<ThemeWithAudioResponse>($"{AnimeThemesHelper.AtApiBase}/animetheme/{themeId}?include=animethemeentries.videos.audio,song.artists", ct);
 
     /// <summary>Fetch a paginated list of anime matching specific filters for bulk WebM downloads.</summary>
     /// <param name="year">Optional broadcast year filter.</param>

@@ -132,16 +132,11 @@ public static class VfsHelper
         (name.StartsWith("Season ", StringComparison.OrdinalIgnoreCase) && int.TryParse(name[7..], out int num)) ? (true, num, string.Empty) : (false, 0, name);
 
     /// <summary>Resolves the Plex-compatible season number for any given VFS folder name.</summary>
-    public static int? GetSeasonId(string name)
-    {
-        if (name.StartsWith("Season ", StringComparison.OrdinalIgnoreCase) && int.TryParse(name[7..], out int num))
-            return num;
-        if (string.Equals(name, "Specials", StringComparison.OrdinalIgnoreCase))
-            return PlexConstants.SeasonSpecials;
-
-        var match = PlexConstants.ExtraSeasons.FirstOrDefault(kvp => string.Equals(kvp.Value.Folder, name, StringComparison.OrdinalIgnoreCase));
-        return match.Value.Folder != null ? match.Key : null;
-    }
+    public static int? GetSeasonId(string name) =>
+        name.StartsWith("Season ", StringComparison.OrdinalIgnoreCase) && int.TryParse(name[7..], out int num) ? num
+        : string.Equals(name, "Specials", StringComparison.OrdinalIgnoreCase) ? PlexConstants.SeasonSpecials
+        : PlexConstants.ExtraSeasons.FirstOrDefault(kvp => string.Equals(kvp.Value.Folder, name, StringComparison.OrdinalIgnoreCase)) is var match && match.Value.Folder != null ? match.Key
+        : null;
 
     /// <summary>Builds a standard episode filename based on coordinates, versioning, and variation status.</summary>
     /// <param name="mapping">The mapping containing coordinates and video data.</param>

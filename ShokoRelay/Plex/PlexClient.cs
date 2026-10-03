@@ -61,23 +61,13 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         string movieRootName = VfsShared.ResolveMovieRootFolderName();
 
         string? activeRootName = null;
-        int vfsIdx = normMapped.IndexOf($"/{movieRootName}/", StringComparison.OrdinalIgnoreCase);
-        if (vfsIdx >= 0 || normMapped.StartsWith(movieRootName + "/", StringComparison.OrdinalIgnoreCase))
-        {
+        int GetRootIndex(string rootName) => normMapped.StartsWith(rootName + "/", StringComparison.OrdinalIgnoreCase) ? 0 : normMapped.IndexOf($"/{rootName}/", StringComparison.OrdinalIgnoreCase);
+
+        int vfsIdx = GetRootIndex(movieRootName);
+        if (vfsIdx >= 0)
             activeRootName = movieRootName;
-            if (vfsIdx < 0)
-                vfsIdx = 0;
-        }
-        else
-        {
-            vfsIdx = normMapped.IndexOf($"/{vfsRootName}/", StringComparison.OrdinalIgnoreCase);
-            if (vfsIdx >= 0 || normMapped.StartsWith(vfsRootName + "/", StringComparison.OrdinalIgnoreCase))
-            {
-                activeRootName = vfsRootName;
-                if (vfsIdx < 0)
-                    vfsIdx = 0;
-            }
-        }
+        else if ((vfsIdx = GetRootIndex(vfsRootName)) >= 0)
+            activeRootName = vfsRootName;
 
         if (vfsIdx >= 0 && activeRootName != null)
         {

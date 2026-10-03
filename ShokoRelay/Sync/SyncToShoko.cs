@@ -59,6 +59,22 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
         var episodeCache = new Dictionary<string, IShokoEpisode?>(StringComparer.OrdinalIgnoreCase);
         var userDataCache = new Dictionary<int, IEpisodeUserData?>();
 
+        IShokoEpisode? GetCachedEpisode(string? guid)
+        {
+            if (string.IsNullOrWhiteSpace(guid))
+                return null;
+            if (!episodeCache.TryGetValue(guid, out var ep))
+                episodeCache[guid] = ep = PlexHelper.ExtractShokoEpisodeIdFromGuid(guid) is { } epId ? metadataService.GetShokoEpisodeByID(epId) : null;
+            return ep;
+        }
+
+        IEpisodeUserData? GetCachedUserData(IShokoEpisode ep)
+        {
+            if (!userDataCache.TryGetValue(ep.LocalID, out var epUserData))
+                userDataCache[ep.LocalID] = epUserData = userDataService.GetEpisodeUserData(ep, defaultUser);
+            return epUserData;
+        }
+
         foreach (var target in targets)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -98,22 +114,11 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                 {
                     if (item.LibrarySectionId.HasValue && item.LibrarySectionId != target.SectionId)
                         continue;
-                    if (string.IsNullOrWhiteSpace(item.Guid))
+
+                    if (GetCachedEpisode(item.Guid) is not { } ep || appliedIds.Contains(ep.LocalID))
                         continue;
 
-                    if (!episodeCache.TryGetValue(item.Guid, out var ep))
-                    {
-                        var epId = PlexHelper.ExtractShokoEpisodeIdFromGuid(item.Guid);
-                        ep = epId.HasValue ? metadataService.GetShokoEpisodeByID(epId.Value) : null;
-                        episodeCache[item.Guid] = ep;
-                    }
-
-                    if (ep == null || appliedIds.Contains(ep.LocalID))
-                        continue;
-
-                    if (!userDataCache.TryGetValue(ep.LocalID, out var epUserData))
-                        userDataCache[ep.LocalID] = epUserData = userDataService.GetEpisodeUserData(ep, defaultUser);
-
+                    var epUserData = GetCachedUserData(ep);
                     bool alreadyWatched = epUserData?.LastPlayedAt != null;
                     bool isWatchedInPlex = item.ViewCount > 0;
 
@@ -138,22 +143,13 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                     result = SyncHelper.IncProcessed(result, result.PerUser, uName);
 
                     // Check the session cache before hitting the database.
-                    if (!episodeCache.TryGetValue(item.Guid, out var ep))
-                    {
-                        var epId = PlexHelper.ExtractShokoEpisodeIdFromGuid(item.Guid);
-                        ep = epId.HasValue ? metadataService.GetShokoEpisodeByID(epId.Value) : null;
-                        episodeCache[item.Guid] = ep;
-                    }
-
-                    if (ep == null || appliedIds.Contains(ep.LocalID))
+                    if (GetCachedEpisode(item.Guid) is not { } ep || appliedIds.Contains(ep.LocalID))
                     {
                         result = SyncHelper.IncSkipped(result, result.PerUser, uName);
                         continue;
                     }
 
-                    if (!userDataCache.TryGetValue(ep.LocalID, out var epUserData))
-                        userDataCache[ep.LocalID] = epUserData = userDataService.GetEpisodeUserData(ep, defaultUser);
-
+                    var epUserData = GetCachedUserData(ep);
                     bool alreadyWatched = epUserData?.LastPlayedAt != null;
 
                     bool isWatchedInPlex = item.ViewCount > 0;

@@ -156,7 +156,7 @@ public class AnimeThemesMp3Generator(HttpClient httpClient, IMetadataService met
         {
             try
             {
-                var lines = File.ReadAllLines(ThemeCacheFilePath).Where(l => !string.IsNullOrWhiteSpace(l));
+                var lines = File.ReadLines(ThemeCacheFilePath).Where(l => !string.IsNullOrWhiteSpace(l));
                 var dict = new ConcurrentDictionary<string, string>(VfsShared.PathComparer);
                 foreach (var line in lines)
                 {
