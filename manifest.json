@@ -16,6 +16,34 @@
   "icon_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-icon.png",
   "releases": [
     {
+      "version": "0.19.1",
+      "tag": "v0.19.1",
+      "source_revision": "d836eb407d4ccb985b70138197bc9a76855b760e",
+      "released_at": "2026-10-03T13:46:01Z",
+      "channel": "Dev",
+      "release_notes": "**Changes:**\r\n- Parse the requested 'type', 'index', and 'parentIndex' properties from Plex match requests\r\n- Dynamically return Show, Season, or Episode metadata objects from the /matches endpoint to satisfy Plex's native scanner\r\n- Allow DeferVfsCreationUntilFixup to delay VFS symlink creation even when Plex is not authenticated\r\n- Extract plugin identity metadata from constants in project file\r\n- Bump Shoko.Abstractions to v6.0.0-alpha.97\r\n- Minor README.md Tweaks\r\n- Update plugin icon\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.19.0...v0.19.1",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.19.1/ShokoRelay-v0.19.1-dev_linux-arm64.zip",
+          "checksum": "sha256:2d2b898b98f01a72f7e86c138b22689e41a76e7b627e44ad7065c0bf7838d087"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.19.1/ShokoRelay-v0.19.1-dev_linux-x64.zip",
+          "checksum": "sha256:3e898d63da056b11529862d0ac38db68792766fd809ce066029dcbc90ebe1a84"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.19.1/ShokoRelay-v0.19.1-dev_win-x64.zip",
+          "checksum": "sha256:c48744dd9dd26da1ea5c2be6aa8b9e5e350c84c7e80310d72144fe407dfc21f5"
+        }
+      ]
+    },
+    {
       "version": "0.19.0",
       "tag": "v0.19.0",
       "source_revision": "741be330ba026901514340b7de364ef6ea3b5c54",
