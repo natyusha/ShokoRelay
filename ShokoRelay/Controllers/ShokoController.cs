@@ -8,7 +8,6 @@ using Shoko.Abstractions.Video.Services;
 using ShokoRelay.AnimeThemes;
 using ShokoRelay.Services;
 using ShokoRelay.Sync;
-using ShokoRelay.Vfs;
 using IoFile = System.IO.File;
 
 namespace ShokoRelay.Controllers;
@@ -209,9 +208,7 @@ public class ShokoController(
             (sb, r) => LogHelper.BuildPurgeMissingReport(sb, r.DryRun, r.Removed, r.PlexRemoved, r.PlexMessages),
             async () =>
             {
-                List<string> removed = [];
-                if (!trashOnly)
-                    removed = [.. await shokoImportService.PurgeMissingFilesAsync(dryRun).ConfigureAwait(false)];
+                List<string> removed = trashOnly ? [] : [.. await shokoImportService.PurgeMissingFilesAsync(dryRun).ConfigureAwait(false)];
 
                 var plexRemoved = new List<string>();
                 var plexMessages = new List<string>();

@@ -165,13 +165,8 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                     if (!isWatchedInPlex && hasProgressInPlex && !alreadyWatched && (ep.Videos?.Count > 0))
                     {
                         wouldUpdateProgress = true;
-                        var existingData = userDataService.GetVideoUserData(ep.Videos.First(), defaultUser);
-                        if (existingData != null)
-                        {
-                            var diff = Math.Abs(existingData.ProgressPosition.TotalMilliseconds - item.ViewOffset!.Value);
-                            if (diff < 5000)
-                                wouldUpdateProgress = false;
-                        }
+                        if (userDataService.GetVideoUserData(ep.Videos.First(), defaultUser) is { } existingData && Math.Abs(existingData.ProgressPosition.TotalMilliseconds - item.ViewOffset!.Value) < 5000)
+                            wouldUpdateProgress = false;
                     }
 
                     DateTime? watchedAt = SyncHelper.UnixSecondsToDateTime(item.LastViewedAt);

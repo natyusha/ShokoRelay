@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using Shoko.Abstractions.Video.Services;
-using ShokoRelay.Vfs;
 
 namespace ShokoRelay.AnimeThemes;
 
@@ -294,7 +293,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
             string themeRootName = VfsShared.ResolveAnimeThemesFolderName();
             string vfsRoot = VfsShared.ResolveRootFolderName();
 
-            var folderGroups = (seriesFilter?.Any() == true ? seriesFilter.Distinct().Select(metadataService.GetShokoSeriesByID) : metadataService.GetAllShokoSeries())
+            var folderGroups = (seriesFilter?.Count > 0 ? seriesFilter.Distinct().Select(metadataService.GetShokoSeriesByID) : metadataService.GetAllShokoSeries())
                 .Where(s => s?.AnidbAnimeID > 0)
                 .GroupBy(s => OverrideHelper.GetPrimary(s!.LocalID, metadataService))
                 .ToList();

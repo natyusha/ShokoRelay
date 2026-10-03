@@ -9,7 +9,6 @@ using Shoko.Abstractions.Video;
 using ShokoRelay.AnimeThemes;
 using ShokoRelay.Services;
 using ShokoRelay.Sync;
-using ShokoRelay.Vfs;
 
 namespace ShokoRelay;
 

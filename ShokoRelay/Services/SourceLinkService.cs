@@ -1,5 +1,4 @@
 using Shoko.Abstractions.Video.Services;
-using ShokoRelay.Vfs;
 
 namespace ShokoRelay.Services;
 
@@ -106,7 +105,7 @@ public class SourceLinkService(IVideoService videoService)
                         bool isAttachDir = isDir && name.StartsWith(srcBase, cmp) && PlexConstants.LocalMediaAssets.AttachmentFolderSuffixes.Contains(name[srcBase.Length..]);
 
                         // Logic: Filter for the primary video, any file starting with the base name, or the designated attachments folder
-                        if (!name.Equals(Path.GetFileName(fullSrc), cmp) && !(!isDir && name.StartsWith(srcBase, cmp)) && !isAttachDir)
+                        if (!name.Equals(Path.GetFileName(fullSrc), cmp) && (isDir || !name.StartsWith(srcBase, cmp)) && !isAttachDir)
                             continue;
 
                         string suffix = isDir ? "_attach" : name[srcBase.Length..];
@@ -214,7 +213,7 @@ public class SourceLinkService(IVideoService videoService)
     private static (string Path, List<string> Tags) ExtractPathAndTags(string rawSegment)
     {
         var parts = rawSegment.Split(';');
-        string path = parts[0].Trim().Trim('"').Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar).TrimStart(Path.DirectorySeparatorChar);
+        string path = VfsShared.NormalizeSeparators(parts[0].Trim().Trim('"')).TrimStart(Path.DirectorySeparatorChar);
         var tags = parts.Length > 2 ? [.. parts[2].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)] : (List<string>)[];
         return (path, tags);
     }

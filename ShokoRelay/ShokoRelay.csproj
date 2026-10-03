@@ -52,7 +52,7 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
-  <!-- Global using directives for things that are used in 20 files or more across the project -->
+  <!-- Global using directives for things that are used in 17 files or more across the project -->
   <ItemGroup>
     <Using Include="NLog" />
     <Using Include="Shoko.Abstractions.Metadata.Shoko" />
@@ -60,6 +60,7 @@
     <Using Include="ShokoRelay.Config" />
     <Using Include="ShokoRelay.Helpers" />
     <Using Include="ShokoRelay.Plex" />
+    <Using Include="ShokoRelay.Vfs" />
     <Using Include="ShokoRelay.ShokoRelay" Static="true" />
   </ItemGroup>
 

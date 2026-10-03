@@ -23,6 +23,9 @@ internal static class VfsShared
     /// <summary>OS-aware path comparer.</summary>
     public static StringComparer PathComparer => OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
+    /// <summary>OS-aware string comparison type for paths.</summary>
+    public static StringComparison PathComparison => OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+
     /// <summary>The absolute path to the VFS blueprint cache file.</summary>
     public static string BlueprintFilePath => Path.Combine(ConfigDirectory, ShokoRelayConstants.FileVfsBlueprintCache);
 
@@ -60,7 +63,7 @@ internal static class VfsShared
         if (!string.IsNullOrWhiteSpace(relative))
         {
             string normalizedRel = NormalizeSeparators(relative);
-            if (normalizedPath.EndsWith(normalizedRel, PathComparer == StringComparer.OrdinalIgnoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+            if (normalizedPath.EndsWith(normalizedRel, PathComparison))
             {
                 string root = normalizedPath[..^normalizedRel.Length].TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
                 if (!string.IsNullOrWhiteSpace(root))

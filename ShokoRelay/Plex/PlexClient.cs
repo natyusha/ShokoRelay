@@ -1,5 +1,4 @@
 using Shoko.Abstractions.Metadata.Enums;
-using ShokoRelay.Vfs;
 
 namespace ShokoRelay.Plex;
 

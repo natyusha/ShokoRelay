@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Mvc;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Video.Services;
 using ShokoRelay.AnimeThemes;
-using ShokoRelay.Vfs;
 using IoFile = System.IO.File;
 
 namespace ShokoRelay.Controllers;

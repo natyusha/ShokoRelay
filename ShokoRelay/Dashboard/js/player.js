@@ -85,11 +85,11 @@
    */
   function toggleVideo() {
     if (!playerVideo) return;
-    const currentState = playerVideoBtn.getAttribute("data-state") || "on";
-    const newState = currentState === "on" ? "off" : "on";
+    const isOff = playerVideoBtn.getAttribute("data-state") === "on";
+    const newState = isOff ? "off" : "on";
     playerVideoBtn.setAttribute("data-state", newState);
-    playerVideoBtn.title = newState === "on" ? "Turn Video Off" : "Turn Video On";
-    playerContainer.classList.toggle("video-off", newState === "off");
+    playerVideoBtn.title = `Turn Video ${isOff ? "On" : "Off"}`;
+    playerContainer.classList.toggle("video-off", isOff);
     localStorage.setItem("player-video-state", newState);
   }
 

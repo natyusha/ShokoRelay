@@ -38,13 +38,8 @@ public static class ContentRatingHelper
                 var name = t.Name?.Trim();
                 if (string.IsNullOrWhiteSpace(name))
                     continue;
-                var srcProp = t.GetType().GetProperty("Source");
-                if (srcProp != null)
-                {
-                    var srcVal = srcProp.GetValue(t) as string;
-                    if (!string.IsNullOrEmpty(srcVal) && srcVal.Equals("User", StringComparison.OrdinalIgnoreCase))
-                        continue;
-                }
+                if (t.GetType().GetProperty("Source")?.GetValue(t) is string srcVal && srcVal.Equals("User", StringComparison.OrdinalIgnoreCase))
+                    continue;
                 if (!s_ratingTags.Contains(name))
                     continue;
                 tagSet.Add(name);

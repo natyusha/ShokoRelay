@@ -1,6 +1,5 @@
 using System.Text;
 using System.Text.RegularExpressions;
-using ShokoRelay.Vfs;
 
 namespace ShokoRelay.AnimeThemes;
 
@@ -487,16 +486,14 @@ internal static class AnimeThemesHelper
     /// <param name="themeRootFolder">The AnimeThemes folder name.</param>
     /// <returns>The full path or null if missing.</returns>
     internal static string? ResolveThemeSourcePath(string relativeFilePath, string importRoot, string themeRootFolder) =>
-        Path.Combine(importRoot, themeRootFolder, relativeFilePath.TrimStart('/', '\\').Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar)) is var path && File.Exists(path)
-            ? Path.GetFullPath(path)
-            : null;
+        Path.Combine(importRoot, themeRootFolder, VfsShared.NormalizeSeparators(relativeFilePath.TrimStart('/', '\\'))) is var path && File.Exists(path) ? Path.GetFullPath(path) : null;
 
     /// <summary>Builds the relative target path for a symlink to point back to the theme root.</summary>
     /// <param name="relativeFilePath">Relative path to the theme file.</param>
     /// <param name="themeRootFolder">The name of the AnimeThemes folder.</param>
     /// <returns>A relative path string.</returns>
     internal static string BuildThemeRelativeTarget(string relativeFilePath, string themeRootFolder) =>
-        Path.Combine("..", "..", "..", themeRootFolder, relativeFilePath.TrimStart('/', '\\')).Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
+        VfsShared.NormalizeSeparators(Path.Combine("..", "..", "..", themeRootFolder, relativeFilePath.TrimStart('/', '\\')));
 
     #endregion
 }

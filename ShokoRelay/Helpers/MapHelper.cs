@@ -3,7 +3,6 @@ using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Enums;
 using Shoko.Abstractions.Metadata.Tmdb;
 using Shoko.Abstractions.Video;
-using ShokoRelay.Vfs;
 using static ShokoRelay.Plex.PlexMapping;
 
 namespace ShokoRelay.Helpers;

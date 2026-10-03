@@ -53,7 +53,7 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
             return NotFound();
 
         string dashboardDir = Path.Combine(ConfigProvider.PluginDirectory, "dashboard");
-        string safePath = path.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
+        string safePath = VfsShared.NormalizeSeparators(path);
         string requested = Path.GetFullPath(Path.Combine(dashboardDir, safePath));
 
         // Resolve the MIME content type for a given file path, prioritizing .cshtml templates

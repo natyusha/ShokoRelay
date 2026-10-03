@@ -6,7 +6,6 @@ using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Enums;
 using Shoko.Abstractions.Metadata.Image.CrossReferences;
 using Shoko.Abstractions.Metadata.Image.Options;
-using ShokoRelay.Vfs;
 
 namespace ShokoRelay.Services;
 
@@ -199,7 +198,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                     var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - {(isMovie ? $"Movie [{episode.LocalID}]" : coordsStr)}";
 
                     // File-Anchor Verification: An episode cannot receive a Plex video thumbnail if it possesses no active physical video files
-                    var hasPhysicalFiles = (episode.Videos ?? []).Any(v => v.Files != null && v.Files.Any(f => !string.IsNullOrWhiteSpace(f.Path) && File.Exists(f.Path)));
+                    var hasPhysicalFiles = (episode.Videos ?? []).Any(v => v.Files?.Any(f => !string.IsNullOrWhiteSpace(f.Path) && File.Exists(f.Path)) == true);
                     if (!hasPhysicalFiles)
                     {
                         if (cache.TryRemove(episode.LocalID.ToString(), out _))

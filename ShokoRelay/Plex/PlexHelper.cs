@@ -4,7 +4,6 @@ using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Enums;
 using Shoko.Abstractions.Metadata.Tmdb;
-using ShokoRelay.Vfs;
 
 namespace ShokoRelay.Plex;
 
@@ -29,13 +28,12 @@ public static class PlexHelper
     /// <returns>Extracted ID or null.</returns>
     public static int? ExtractShokoEpisodeIdFromGuid(string? guid) => ExtractIdFromGuid(guid, s_episodeIdRegex);
 
-    private static int? ExtractIdFromGuid(string? guid, Regex regex)
-    {
-        if (string.IsNullOrWhiteSpace(guid))
-            return null;
-        var match = regex.Match(guid);
-        return match.Success && int.TryParse(match.Groups[1].Value, out var id) ? id : null;
-    }
+    /// <summary>Extracts a numeric ID from a Plex GUID string using the provided regex.</summary>
+    /// <param name="guid">The Plex GUID string.</param>
+    /// <param name="regex">The Regex used to match the ID.</param>
+    /// <returns>Extracted ID or null.</returns>
+    private static int? ExtractIdFromGuid(string? guid, Regex regex) =>
+        !string.IsNullOrWhiteSpace(guid) && regex.Match(guid) is { Success: true } match && int.TryParse(match.Groups[1].Value, out var id) ? id : null;
 
     /// <summary>Determines if a rating key represents an episode.</summary>
     /// <param name="ratingKey">The rating key to check.</param>

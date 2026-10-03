@@ -5,7 +5,6 @@ using System.Reflection;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Shoko.Abstractions.Plugin;
-using ShokoRelay.Vfs;
 
 namespace ShokoRelay.Config;
 
@@ -51,6 +50,9 @@ public class ConfigProvider
 
     /// <summary>Cached admin username retrieved from the Plex account.</summary>
     private string? _cachedAdminUsername;
+
+    /// <summary>Cached contents of the Plex token file to prevent continuous disk I/O.</summary>
+    private TokenFile? _cachedTokenFile;
 
     /// <summary>The absolute path to the plugin's base directory.</summary>
     public string PluginDirectory { get; }
@@ -131,6 +133,7 @@ public class ConfigProvider
             _cachedExtraUsers = null;
             _cachedServers = null;
             _cachedAdminUsername = null;
+            _cachedTokenFile = null;
         }
         s_logger.Info("Config: Settings invalidated due to external file change");
     }
@@ -325,8 +328,14 @@ public class ConfigProvider
     {
         try
         {
-            if (File.Exists(_tokenPath))
-                File.Delete(_tokenPath);
+            lock (_settingsLock)
+            {
+                if (File.Exists(_tokenPath))
+                    File.Delete(_tokenPath);
+                _cachedTokenFile = null;
+                _cachedServers = null;
+                _cachedAdminUsername = null;
+            }
         }
         catch (Exception ex)
         {
@@ -338,13 +347,20 @@ public class ConfigProvider
     /// <returns>A populated <see cref="TokenFile"/> instance or a new empty structure on failure.</returns>
     private TokenFile ReadTokenFile()
     {
-        try
+        lock (_settingsLock)
         {
-            return File.Exists(_tokenPath) ? JsonSerializer.Deserialize<TokenFile>(File.ReadAllText(_tokenPath), new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new() : new();
-        }
-        catch
-        {
-            return new();
+            if (_cachedTokenFile != null)
+                return _cachedTokenFile;
+            try
+            {
+                return _cachedTokenFile = File.Exists(_tokenPath)
+                    ? JsonSerializer.Deserialize<TokenFile>(File.ReadAllText(_tokenPath), new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new()
+                    : new();
+            }
+            catch
+            {
+                return _cachedTokenFile = new();
+            }
         }
     }
 
@@ -354,21 +370,24 @@ public class ConfigProvider
     /// <param name="a">Admin username.</param>
     /// <param name="s">Discovered servers list.</param>
     /// <param name="l">Discovered libraries list.</param>
-    private void WriteTokenFile(string? t, string? c, string? a, List<PlexAvailableServer>? s = null, List<PlexAvailableLibrary>? l = null) =>
-        File.WriteAllText(
-            _tokenPath,
-            JsonSerializer.Serialize(
-                new TokenFile
-                {
-                    Token = t ?? "",
-                    ClientIdentifier = c ?? "",
-                    AdminUsername = a ?? "",
-                    Servers = s ?? [],
-                    Libraries = l ?? [],
-                },
-                s_options
-            )
-        );
+    private void WriteTokenFile(string? t, string? c, string? a, List<PlexAvailableServer>? s = null, List<PlexAvailableLibrary>? l = null)
+    {
+        var tf = new TokenFile
+        {
+            Token = t ?? "",
+            ClientIdentifier = c ?? "",
+            AdminUsername = a ?? "",
+            Servers = s ?? [],
+            Libraries = l ?? [],
+        };
+        lock (_settingsLock)
+        {
+            File.WriteAllText(_tokenPath, JsonSerializer.Serialize(tf, s_options));
+            _cachedTokenFile = tf;
+            _cachedServers = tf.Servers;
+            _cachedAdminUsername = tf.AdminUsername;
+        }
+    }
 
     /// <summary>Retrieves the saved Plex authentication token.</summary>
     /// <returns>The Plex authentication token string.</returns>
@@ -486,7 +505,7 @@ public class ConfigProvider
         settings.Advanced.PathMappings = settings.Advanced.PathMappings.ToDictionary(
             k =>
             {
-                string n = k.Key.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar).Trim();
+                string n = VfsShared.NormalizeSeparators(k.Key).Trim();
                 try
                 {
                     return Path.IsPathRooted(n) ? Path.GetFullPath(n).TrimEnd(Path.DirectorySeparatorChar) : n.TrimEnd(Path.DirectorySeparatorChar);

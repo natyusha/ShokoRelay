@@ -5,7 +5,6 @@ using ShokoRelay.AnimeThemes;
 using ShokoRelay.Controllers;
 using ShokoRelay.Services;
 using ShokoRelay.Sync;
-using ShokoRelay.Vfs;
 
 namespace ShokoRelay.Helpers;
 

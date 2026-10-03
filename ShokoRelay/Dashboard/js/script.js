@@ -56,8 +56,7 @@
    * @returns {*} The actual result data.
    */
   function getData(res) {
-    const d = res?.data;
-    return d?.Data !== undefined ? d.Data : d?.data !== undefined ? d.data : d;
+    return res?.data?.Data ?? res?.data?.data ?? res?.data;
   }
 
   /**

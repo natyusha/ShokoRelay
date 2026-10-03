@@ -232,11 +232,8 @@ public static class TextHelper
     /// <param name="tmdbSummary">Fallback summary.</param>
     /// <param name="mode">Sanitization level.</param>
     /// <returns>The cleanest available summary string.</returns>
-    public static string SanitizeSummaryWithFallback(string? summary, string? tmdbSummary, SummaryMode mode)
-    {
-        var result = SummarySanitizer(summary, mode);
-        return string.IsNullOrWhiteSpace(result) ? SummarySanitizer(tmdbSummary, mode) : result;
-    }
+    public static string SanitizeSummaryWithFallback(string? summary, string? tmdbSummary, SummaryMode mode) =>
+        SummarySanitizer(summary, mode) is var result && !string.IsNullOrWhiteSpace(result) ? result : SummarySanitizer(tmdbSummary, mode);
 
     /// <summary>Clean up a summary string according to the configured sanitization mode (stripping notes, indicators, etc).</summary>
     /// <param name="s">The string to sanitize.</param>

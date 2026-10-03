@@ -31,11 +31,7 @@
    * Dynamically calculates the current anime season parameters for WebM downloads.
    * @returns {URLSearchParams} The compiled parameters.
    */
-  window._sr.getWebmSeasonParams = () => {
-    const month = new Date().getMonth(); // 0-11
-    const season = ["Winter", "Spring", "Summer", "Fall"][Math.floor(month / 3)];
-    return new URLSearchParams({ season });
-  };
+  window._sr.getWebmSeasonParams = () => new URLSearchParams({ season: ["Winter", "Spring", "Summer", "Fall"][Math.floor(new Date().getMonth() / 3)] });
   // #endregion
 
   // #region Actions Registry

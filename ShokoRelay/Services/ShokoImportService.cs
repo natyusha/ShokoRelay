@@ -1,5 +1,4 @@
 using Shoko.Abstractions.Video.Services;
-using ShokoRelay.Vfs;
 
 namespace ShokoRelay.Services;
 

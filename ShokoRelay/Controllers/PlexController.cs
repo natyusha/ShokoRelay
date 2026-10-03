@@ -7,7 +7,6 @@ using Shoko.Abstractions.User.Services;
 using Shoko.Abstractions.User.Update;
 using ShokoRelay.Services;
 using ShokoRelay.Sync;
-using ShokoRelay.Vfs;
 
 namespace ShokoRelay.Controllers;
 
