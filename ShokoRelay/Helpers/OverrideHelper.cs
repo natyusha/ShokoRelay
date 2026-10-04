@@ -91,7 +91,7 @@ public static class OverrideHelper
                 metadataService
                     .GetAllShokoSeries()
                     ?.Select(s => (s.AnidbAnimeID, s.AirDate, TmdbId: s.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault()?.ID.ID))
-                    .Where(x => x.TmdbId != null)
+                    .Where(x => !string.IsNullOrWhiteSpace(x.TmdbId))
                     .GroupBy(x => x.TmdbId)
                     .Where(g => g.Count() > 1)
                 ?? [];

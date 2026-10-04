@@ -300,8 +300,8 @@ public class PlexMetadata(IMetadataService metadataService)
     {
         var images = (IWithImages)ep;
         var seriesImages = (IWithImages)series;
-        string epTitle = tmdbEpisode is { PreferredTitle.Value: { Length: > 0 } pt } ? pt : TextHelper.ResolveEpisodeTitle(ep, titles.DisplayTitle);
-        string epDescription = tmdbEpisode is { PreferredOverview.Value: { Length: > 0 } pd } ? pd : TextHelper.GetDescriptionByLanguage(ep, Settings.DescriptionLanguage);
+        string epTitle = tmdbEpisode is IWithTitles { PreferredTitle.Value: { Length: > 0 } pt } ? pt : TextHelper.ResolveEpisodeTitle(ep, titles.DisplayTitle);
+        string epDescription = tmdbEpisode is IWithOverviews { PreferredOverview.Value: { Length: > 0 } pd } ? pd : TextHelper.GetDescriptionByLanguage(ep, Settings.DescriptionLanguage);
 
         string? parentThumb = null;
         if (Settings.TmdbSeasonPosters && mapped.Season >= 0 && string.IsNullOrEmpty(MapHelper.GetPreferredTmdbOrderingId(series)))
@@ -457,19 +457,14 @@ public class PlexMetadata(IMetadataService metadataService)
     /// <param name="ep">The base episode metadata.</param>
     /// <param name="tmdbEpisodeOverride">An optional TMDB episode object (used for groups/parts).</param>
     /// <returns>An array of objects containing external IDs.</returns>
-    private object[] BuildEpisodeXrefGuidArray(IEpisode ep, object? tmdbEpisodeOverride)
-    {
-        var te = (tmdbEpisodeOverride as IEpisode).AsTmdb();
-        return CreateXrefGuids([
-            te != null ? $"tmdb://{te.ID.ID}" : null,
-            te?.GetCrossSourceID("tvdb", MetadataEntityType.Episode) is { } teTvdb ? $"tvdb://{teTvdb}" : null,
-            tmdbEpisodeOverride is IEpisodeOrderingInformation oi && oi.Episode.AsTmdb() is { } oiEp ? $"tmdb://{oiEp.ID.ID}" : null,
-            .. ep is IShokoEpisode se && se.GetLinkedEpisodes(MetadataSource.TMDB) != null
-                ? se.GetLinkedEpisodes(MetadataSource.TMDB)
-                    .SelectMany(t => t.GetCrossSourceID("tvdb", MetadataEntityType.Episode) is { } tTvdb ? [$"tmdb://{t.ID.ID}", $"tvdb://{tTvdb}"] : new[] { $"tmdb://{t.ID.ID}" })
+    private object[] BuildEpisodeXrefGuidArray(IEpisode ep, IEpisode? tmdbEpisodeOverride) =>
+        CreateXrefGuids([
+            tmdbEpisodeOverride?.AsTmdb() is { } te ? $"tmdb://{te.ID.ID}" : null,
+            tmdbEpisodeOverride?.AsTmdb()?.GetCrossSourceID("tvdb", MetadataEntityType.Episode) is { } teTvdb ? $"tvdb://{teTvdb}" : null,
+            .. ep is IShokoEpisode se && se.GetLinkedEpisodes(MetadataSource.TMDB) is { Count: > 0 } tmdbEps
+                ? tmdbEps.SelectMany(t => t.GetCrossSourceID("tvdb", MetadataEntityType.Episode) is { } tTvdb ? [$"tmdb://{t.ID.ID}", $"tvdb://{tTvdb}"] : new[] { $"tmdb://{t.ID.ID}" })
                 : [],
         ]);
-    }
 
     /// <summary>Resolves production country codes to English names for a series.</summary>
     /// <param name="series">The Shoko series metadata.</param>

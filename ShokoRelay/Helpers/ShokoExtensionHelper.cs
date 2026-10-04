@@ -100,8 +100,8 @@ public static class ShokoExtensionHelper
     /// <param name="source">The other source's name (e.g. "tvdb" or "imdb").</param>
     /// <param name="entityType">The kind of entry the ID names in that source.</param>
     /// <returns>The ID, or null if the entry carries none.</returns>
-    public static string? GetCrossSourceID(this IWithCrossSources entry, string source, MetadataEntityType entityType) =>
-        MetadataSource.TryParse(source, out var metadataSource) ? entry.GetCrossSourceIDs(metadataSource).FirstOrDefault(id => id.EntityType == entityType)?.ID : null;
+    public static string? GetCrossSourceID(this IWithCrossSources? entry, string source, MetadataEntityType entityType) =>
+        entry != null && MetadataSource.TryParse(source, out var metadataSource) ? entry.GetCrossSourceIDs(metadataSource).FirstOrDefault(id => id.EntityType == entityType)?.ID : null;
 
     #endregion
 
