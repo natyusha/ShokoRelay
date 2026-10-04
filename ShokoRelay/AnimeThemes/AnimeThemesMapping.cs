@@ -146,8 +146,8 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
             s_logger.Info("AnimeThemes Map: Found {0} total files ({1} cached, {2} pending mapping resolution)...", filesBag.Count, existing.Count, toProcess.Count);
 
             int reusedCount = entries.Count;
-            var errorsList = new ConcurrentBag<string>();
-            var newMappingsList = new ConcurrentBag<string>();
+            var errorsBag = new ConcurrentBag<(int Year, string FilePath, string Message)>();
+            var newMappingsBag = new ConcurrentBag<(int Year, string FilePath, string Message)>();
             int errors = 0;
             await Parallel
                 .ForEachAsync(
@@ -157,11 +157,12 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                     {
                         try
                         {
+                            int year = AnimeThemesHelper.GetYearForSort(item.Rel);
                             var (lookup, idMissing) = await FetchMetadataAsync(Path.GetFileName(item.File), token).ConfigureAwait(false);
                             if (lookup == null)
                             {
                                 string errMsg = idMissing ? $"AniDB ID missing for {item.Rel}" : $"Missing metadata for {item.Rel}";
-                                errorsList.Add(errMsg);
+                                errorsBag.Add((year, item.Rel, errMsg));
                                 s_logger.Warn("AnimeThemes Map: Failed to map '{0}' -> {1}", item.Rel, idMissing ? "AniDB ID missing" : "Metadata missing");
                                 Interlocked.Increment(ref errors);
                                 return;
@@ -169,13 +170,14 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                             lock (entries)
                                 entries.Add(new AnimeThemesMappingEntry(item.Rel, lookup));
                             string mapMsg = $"Mapped: {item.Rel} -> VideoID: {lookup.VideoId}, AniDB ID: {lookup.AniDbId}";
-                            newMappingsList.Add(mapMsg);
+                            newMappingsBag.Add((year, item.Rel, mapMsg));
                             s_logger.Info("AnimeThemes Map: Mapped '{0}' -> VideoID: {1}, AniDB ID: {2}", item.Rel, lookup.VideoId, lookup.AniDbId);
                         }
                         catch (Exception ex)
                         {
+                            int year = AnimeThemesHelper.GetYearForSort(item.Rel);
                             string errMsg = $"{item.Rel}: {ex.Message}";
-                            errorsList.Add(errMsg);
+                            errorsBag.Add((year, item.Rel, errMsg));
                             s_logger.Warn(ex, "AnimeThemes Map: Exception mapping '{0}' -> {1}", item.Rel, ex.Message);
                             Interlocked.Increment(ref errors);
                         }
@@ -187,7 +189,11 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
 
             await File.WriteAllTextAsync(mapPath, AnimeThemesHelper.SerializeMapping(existingComments, finalEntries), ct).ConfigureAwait(false);
             s_logger.Info("AnimeThemes Map: Finished mapping task -> {0} entries written.", finalEntries.Count);
-            List<string> finalMessages = [.. errorsList.OrderBy(m => m), .. newMappingsList.OrderBy(m => m)];
+            List<string> finalMessages =
+            [
+                .. errorsBag.OrderBy(x => x.Year).ThenBy(x => x.FilePath).Select(x => x.Message),
+                .. newMappingsBag.OrderBy(x => x.Year).ThenBy(x => x.FilePath).Select(x => x.Message),
+            ];
             return new AnimeThemesMappingBuildResult(mapPath, finalEntries.Count, reusedCount, errors, finalMessages);
         }
         finally
