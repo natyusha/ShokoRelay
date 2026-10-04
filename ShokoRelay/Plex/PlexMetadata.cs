@@ -119,7 +119,7 @@ public class PlexMetadata(IMetadataService metadataService)
 
             ["Image"]                 = ImageHelper.GenerateImageArray(images, titles.DisplayTitle, Settings.AddEveryImage, Settings.TmdbImageLanguage),
             //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
-            ["Genre"]                 = TagHelper.GetFilteredTags(series),
+            ["Genre"]                 = TagHelper.GetFilteredTags(series, tmdbSeries),
             ["Guid"]                  = BuildXrefGuidArray(series, tmdbSeries),
             ["Country"]               = BuildCountryArray(series, tmdbSeries),
             ["Role"]                  = CastHelper.GetCastAndCrew(series),
@@ -185,7 +185,7 @@ public class PlexMetadata(IMetadataService metadataService)
 
             ["Image"]                 = imagesArray,
             //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
-            ["Genre"]                 = TagHelper.GetFilteredTags(series),
+            ["Genre"]                 = TagHelper.GetFilteredTags(series, tmdbSeries),
             ["Guid"]                  = BuildXrefGuidArray(series, tmdbSeries, tmdbMovie),
             ["Country"]               = BuildCountryArray(series, tmdbSeries),
             ["Role"]                  = CastHelper.GetCastAndCrew(series),

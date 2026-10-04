@@ -218,6 +218,7 @@ public static class MapHelper
         }
 
         // Pass 2: Build final mappings
+        var tmdbEpsCache = new Dictionary<int, List<IEpisode>>();
         foreach (var video in allVideos)
         {
             if (!videoCoords.TryGetValue(video.LocalID, out var info))
@@ -231,10 +232,16 @@ public static class MapHelper
             bool allowPt = fCount > 1 && VfsHelper.HasPlexSplitTag(fileName) && deduped.Select(d => d.Episode.Type).Distinct().Count() <= 1;
 
             // TMDB Episode metadata override for multi-part files
-            IEpisode? tmdbEp =
-                (allowPt && EnforceTmdbNumbering && firstEp is IShokoEpisode se && se.GetLinkedEpisodes(MetadataSource.TMDB) is { Count: > 0 } tmdbEps)
-                    ? SelectPreferredTmdbOrdering(tmdbEps, prefId).ElementAtOrDefault(fIdx)
-                    : null;
+            IEpisode? tmdbEp = null;
+            if (allowPt && EnforceTmdbNumbering && firstEp is IShokoEpisode se)
+            {
+                if (!tmdbEpsCache.TryGetValue(se.LocalID, out var tmdbEps))
+                {
+                    var rawEps = se.GetLinkedEpisodes(MetadataSource.TMDB);
+                    tmdbEpsCache[se.LocalID] = tmdbEps = rawEps is { Count: > 0 } ? SelectPreferredTmdbOrdering(rawEps, prefId) : [];
+                }
+                tmdbEp = tmdbEps.ElementAtOrDefault(fIdx);
+            }
             result.Add(new FileMapping(video, [.. deduped.Select(x => x.Episode)], firstEp, coords, fileName, allowPt ? fIdx + 1 : null, allowPt ? fCount : 1, tmdbEp, video.IsVariation));
         }
         // Deduplicate mappings by Video ID and Coordinates. This prevents duplicate VFS entries (v1/v2) for crossover series that have been consolidated into a single folder via VFS Overrides.

@@ -52,8 +52,9 @@ public static class TagHelper
 
     /// <summary>Return an array of tag objects derived from a series, applying filters and sources.</summary>
     /// <param name="series">The Shoko series metadata.</param>
+    /// <param name="tmdbSeries">Optional pre-resolved TMDB series metadata object.</param>
     /// <returns>An array of tag metadata objects.</returns>
-    public static object[] GetFilteredTags(ISeries series)
+    public static object[] GetFilteredTags(ISeries series, ISeries? tmdbSeries = null)
     {
         var shokoSeries = series as IShokoSeries;
         var shokoTags = shokoSeries?.Tags;
@@ -72,8 +73,8 @@ public static class TagHelper
             anidbNames = anidbTags.Where(t => !string.IsNullOrWhiteSpace(t.Name) && (minWeight <= 0 || t.Weight >= minWeight)).Select(t => t.Name);
 
         IEnumerable<string> tmdbNames = [];
-        if ((sourceSetting == TagSources.Combined || sourceSetting == TagSources.TMDB) && shokoSeries?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() is { } tmdb)
-            tmdbNames = tmdb.Tags.Where(t => t.Kind is TagKind.Keyword or TagKind.Genre).OrderBy(t => t.Kind == TagKind.Keyword ? 0 : 1).Select(t => t.Name).Where(k => !string.IsNullOrWhiteSpace(k));
+        if ((sourceSetting == TagSources.Combined || sourceSetting == TagSources.TMDB) && (tmdbSeries ?? shokoSeries?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault()) is { } tmdb)
+            tmdbNames = tmdb.Tags.Where(t => t.Kind == TagKind.Keyword).Concat(tmdb.Tags.Where(t => t.Kind == TagKind.Genre)).Select(t => t.Name).Where(k => !string.IsNullOrWhiteSpace(k));
 
         return [.. FilterAndFormat(anidbNames.Concat(tmdbNames).Concat(shokoNames), userBlacklist)];
     }

@@ -63,6 +63,7 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
         result = result with { PerUser = SyncHelper.CreatePerUserBuckets(extraEntries.Select(e => e.Name)) };
 
         var matchedGlobal = new HashSet<int>();
+        var prefIdCache = new Dictionary<int, string?>();
         foreach (var target in targets)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -114,7 +115,10 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
                                 continue;
                         }
 
-                        var prefId = episode!.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series) : null;
+                        var prefId =
+                            episode!.Series != null
+                                ? (prefIdCache.TryGetValue(episode.ShokoSeriesID, out var pId) ? pId : prefIdCache[episode.ShokoSeriesID] = MapHelper.GetPreferredTmdbOrderingId(episode.Series))
+                                : null;
                         var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
                         string typeLabel = PlexHelper.IsMovieKey(plexItem.RatingKey!) ? "movie" : "episode";
 

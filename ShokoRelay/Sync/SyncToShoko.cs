@@ -58,6 +58,7 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
         // Session-level cache to prevent redundant database lookups and GUID parsing when the same episode exists in multiple libraries or is watched by multiple users.
         var episodeCache = new Dictionary<string, IShokoEpisode?>(StringComparer.OrdinalIgnoreCase);
         var userDataCache = new Dictionary<int, IEpisodeUserData?>();
+        var prefIdCache = new Dictionary<int, string?>();
 
         IShokoEpisode? GetCachedEpisode(string? guid)
         {
@@ -166,7 +167,7 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                     }
 
                     DateTime? watchedAt = SyncHelper.UnixSecondsToDateTime(item.LastViewedAt);
-                    var prefId = ep.Series != null ? MapHelper.GetPreferredTmdbOrderingId(ep.Series) : null;
+                    var prefId = ep.Series != null ? (prefIdCache.TryGetValue(ep.ShokoSeriesID, out var pId) ? pId : prefIdCache[ep.ShokoSeriesID] = MapHelper.GetPreferredTmdbOrderingId(ep.Series)) : null;
                     var coords = PlexMapping.GetPlexCoordinates(ep, prefId);
                     string typeLabel = PlexHelper.IsMovieKey(item.RatingKey!) ? "movie" : "episode";
 

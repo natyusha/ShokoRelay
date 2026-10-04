@@ -73,6 +73,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
 
             // Load the local image synchronization cache from disk into a thread-safe concurrent dictionary
             var cache = new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var prefIdCache = new ConcurrentDictionary<int, string?>();
             if (File.Exists(CacheFilePath))
             {
                 try
@@ -111,7 +112,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
 
             // Sync Episode Thumbnails (Local & Plex)
             if (targets.Count > 0)
-                await SyncEpisodeThumbnailsAsync(targets, allowedSet, cache, errsBag, uploadedBag, AddStats, cancellationToken).ConfigureAwait(false);
+                await SyncEpisodeThumbnailsAsync(targets, allowedSet, cache, prefIdCache, errsBag, uploadedBag, AddStats, cancellationToken).ConfigureAwait(false);
 
             // Sync Collection Posters
             await SyncCollectionPostersAsync(allSeries, cache, errsBag, uploadedBag, AddStats, cancellationToken).ConfigureAwait(false);
@@ -147,6 +148,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
     /// <param name="targets">Configured Plex library targets.</param>
     /// <param name="allowedSet">Optional filtered series IDs.</param>
     /// <param name="cache">Cache dictionary for image synchronization state.</param>
+    /// <param name="prefIdCache">Cache dictionary for preferred TMDB ordering IDs.</param>
     /// <param name="errsBag">Bag to collect error messages and missing thumbnail diagnostics.</param>
     /// <param name="uploadedBag">Bag to collect uploaded item names.</param>
     /// <param name="addStats">Action callback to record execution metrics.</param>
@@ -155,6 +157,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
         IReadOnlyList<PlexLibraryTarget> targets,
         HashSet<int>? allowedSet,
         ConcurrentDictionary<string, string> cache,
+        ConcurrentDictionary<int, string?> prefIdCache,
         ConcurrentBag<string> errsBag,
         ConcurrentBag<string> uploadedBag,
         Action<bool, bool, bool, bool, bool> addStats,
@@ -190,7 +193,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                     if (allowedSet != null && !allowedSet.Contains(primarySeriesId))
                         return;
 
-                    var prefId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series) : null;
+                    string? prefId = episode.Series != null ? prefIdCache.GetOrAdd(episode.ShokoSeriesID, _ => MapHelper.GetPreferredTmdbOrderingId(episode.Series)) : null;
                     var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
                     bool isMovie = target.LibraryType == PlexLibraryType.Movie;
                     string labelType = isMovie ? "Movie" : "Episode";
@@ -345,7 +348,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
 
                 if (cache.TryRemove(key, out _))
                 {
-                    var prefId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series) : null;
+                    string? prefId = episode.Series != null ? prefIdCache.GetOrAdd(episode.ShokoSeriesID, _ => MapHelper.GetPreferredTmdbOrderingId(episode.Series)) : null;
                     var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
                     string coordsStr = $"S{coords.Season:D2}E{coords.Episode:D2}";
                     var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - {coordsStr}";

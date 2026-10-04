@@ -70,6 +70,7 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
             var (pS, uS, pE, uE, errs) = (0, 0, 0, 0, 0);
             var errorsList = new List<string>();
             var appliedChanges = new List<RatingChange>();
+            var prefIdCache = new Dictionary<int, string?>();
 
             if (!plexClient.IsEnabled)
                 return new ApplyRatingsResult(0, 0, 0, 0, 0, errorsList, appliedChanges, sw.Elapsed);
@@ -147,7 +148,10 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                     _ => null,
                 };
 
-                var prefId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series) : null;
+                var prefId =
+                    episode.Series != null
+                        ? (prefIdCache.TryGetValue(episode.ShokoSeriesID, out var pId) ? pId : prefIdCache[episode.ShokoSeriesID] = MapHelper.GetPreferredTmdbOrderingId(episode.Series))
+                        : null;
                 var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
                 var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - S{coords.Season:D2}E{coords.Episode:D2} (RatingKey: {item.RatingKey})";
 
@@ -195,7 +199,10 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                     _ => null,
                 };
 
-                var prefId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series) : null;
+                var prefId =
+                    episode.Series != null
+                        ? (prefIdCache.TryGetValue(episode.ShokoSeriesID, out var pId) ? pId : prefIdCache[episode.ShokoSeriesID] = MapHelper.GetPreferredTmdbOrderingId(episode.Series))
+                        : null;
                 var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
                 var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - S{coords.Season:D2}E{coords.Episode:D2} (RatingKey: {item.RatingKey})";
 
