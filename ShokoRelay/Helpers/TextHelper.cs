@@ -170,11 +170,12 @@ public static class TextHelper
     /// <summary>Compute the best title to display for an episode, handling ambiguous names and TMDB reassignments.</summary>
     /// <param name="ep">Episode metadata.</param>
     /// <param name="displaySeriesTitle">Resolved series title for fallback.</param>
+    /// <param name="tmdbEp">Optional pre-resolved TMDB episode override.</param>
     /// <returns>The resolved episode title string.</returns>
-    public static string ResolveEpisodeTitle(IEpisode ep, string displaySeriesTitle)
+    public static string ResolveEpisodeTitle(IEpisode ep, string displaySeriesTitle, IEpisode? tmdbEp = null)
     {
         string raw = GetTitleByLanguage(ep, Settings.EpisodeTitleLanguage);
-        string? tmdbTitle = (ep as IShokoEpisode)?.GetLinkedEpisodes(MetadataSource.TMDB)?.FirstOrDefault()?.PreferredTitle?.Value;
+        string? tmdbTitle = tmdbEp?.PreferredTitle?.Value ?? (ep as IShokoEpisode)?.GetLinkedEpisodes(MetadataSource.TMDB)?.FirstOrDefault()?.PreferredTitle?.Value;
 
         // Replace ambiguous single entry titles (like "OVA") with the series title
         if (ep.EpisodeNumber == 1 && s_ambiguousTitles.Contains(raw))

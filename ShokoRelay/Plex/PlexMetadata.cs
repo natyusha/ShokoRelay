@@ -44,8 +44,9 @@ public class PlexMetadata(IMetadataService metadataService)
     /// <returns>A dictionary of Plex metadata properties.</returns>
     public Dictionary<string, object?> MapCollection(IShokoGroup group, ISeries primarySeries)
     {
+        var tmdbSeries = (primarySeries as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() ?? primarySeries.AsTmdb();
         var desc = TextHelper.GetDescriptionByLanguage(primarySeries, Settings.DescriptionLanguage);
-        var tmdbDesc = (primarySeries as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault()?.PreferredOverview?.Value;
+        var tmdbDesc = tmdbSeries?.PreferredOverview?.Value;
         var summary = TextHelper.SanitizeSummaryWithFallback(desc, tmdbDesc, Settings.SummaryMode);
         // csharpier-ignore
         return new()
@@ -89,8 +90,9 @@ public class PlexMetadata(IMetadataService metadataService)
     public Dictionary<string, object?> MapSeries(ISeries series, (string DisplayTitle, string SortTitle, string? OriginalTitle) titles)
     {
         var images = (IWithImages)series;
+        var tmdbSeries = (series as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() ?? series.AsTmdb();
         var description = TextHelper.GetDescriptionByLanguage(series, Settings.DescriptionLanguage);
-        var tmdbDescription = ((series as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() ?? series.AsTmdb())?.PreferredOverview?.Value;
+        var tmdbDescription = tmdbSeries?.PreferredOverview?.Value;
         var studios = CastHelper.GetStudioTags(series);
         var (rating, isAdult) = ContentRatingHelper.GetContentRatingAndAdult(series);
         // csharpier-ignore
@@ -113,13 +115,13 @@ public class PlexMetadata(IMetadataService metadataService)
             ["duration"]              = series.Episodes.Any() ? (int)series.Episodes.Sum(e => e.Runtime.TotalMilliseconds) : (int?)null,
             //["tagline"]             = TMDB has this but it is not exposed
             ["studio"]                = studios.FirstOrDefault()?.Tag,
-            ["theme"]                 = Settings.PlexThemeMusic && ((series as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() ?? series.AsTmdb())?.GetCrossSourceID("tvdb", MetadataEntityType.Series) is { } tvdb ? $"https://tvthemes.plexapp.com/{tvdb}.mp3" : null,
+            ["theme"]                 = Settings.PlexThemeMusic && tmdbSeries?.GetCrossSourceID("tvdb", MetadataEntityType.Series) is { } tvdb ? $"https://tvthemes.plexapp.com/{tvdb}.mp3" : null,
 
             ["Image"]                 = ImageHelper.GenerateImageArray(images, titles.DisplayTitle, Settings.AddEveryImage, Settings.TmdbImageLanguage),
             //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
             ["Genre"]                 = TagHelper.GetFilteredTags(series),
-            ["Guid"]                  = BuildXrefGuidArray(series),
-            ["Country"]               = BuildCountryArray(series),
+            ["Guid"]                  = BuildXrefGuidArray(series, tmdbSeries),
+            ["Country"]               = BuildCountryArray(series, tmdbSeries),
             ["Role"]                  = CastHelper.GetCastAndCrew(series),
             ["Director"]              = CastHelper.GetDirectors(series),
             ["Producer"]              = CastHelper.GetProducers(series),
@@ -127,8 +129,8 @@ public class PlexMetadata(IMetadataService metadataService)
             ["Similar"]               = BuildSimilarArray(series),
             ["Studio"]                = studios,
             ["Collection"]            = GetCollectionName(series) is string c ? new[] { new { tag = c } } : null,
-            ["Network"]               = BuildNetworkArray(series),
-            ["Rating"]                = BuildRatingArray(series),
+            ["Network"]               = BuildNetworkArray(tmdbSeries),
+            ["Rating"]                = BuildRatingArray(tmdbSeries?.Rating ?? series.Rating),
             //[SeasonType]            = Not relevant
         };
     }
@@ -147,12 +149,13 @@ public class PlexMetadata(IMetadataService metadataService)
     {
         var seriesImages = (IWithImages)series;
         var movieImages = tmdbMovie as IWithImages;
+        var tmdbSeries = (series as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() ?? series.AsTmdb();
         string title = TextHelper.ResolveMovieTitle(ep, series, tmdbMovie);
         string description = TextHelper.GetDescriptionByLanguage(ep, Settings.DescriptionLanguage);
         if (string.IsNullOrWhiteSpace(description))
             description = TextHelper.GetDescriptionByLanguage(series, Settings.DescriptionLanguage);
 
-        string? tmdbDescription = tmdbMovie?.PreferredOverview?.Value ?? ((series as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() ?? series.AsTmdb())?.PreferredOverview?.Value;
+        string? tmdbDescription = tmdbMovie?.PreferredOverview?.Value ?? tmdbSeries?.PreferredOverview?.Value;
         var (rating, isAdult) = ContentRatingHelper.GetContentRatingAndAdult(series);
         var studios = CastHelper.GetStudioTags(series);
 
@@ -178,13 +181,13 @@ public class PlexMetadata(IMetadataService metadataService)
             ["duration"]              = (int)ep.Runtime.TotalMilliseconds,
             //["tagline"]             = TMDB has this but it is not exposed
             ["studio"]                = studios.FirstOrDefault()?.Tag,
-            ["theme"]                 = Settings.PlexThemeMusic && ((series as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() ?? series.AsTmdb())?.GetCrossSourceID("tvdb", MetadataEntityType.Series) is { } tvdb ? $"https://tvthemes.plexapp.com/{tvdb}.mp3" : null,
+            ["theme"]                 = Settings.PlexThemeMusic && tmdbSeries?.GetCrossSourceID("tvdb", MetadataEntityType.Series) is { } tvdb ? $"https://tvthemes.plexapp.com/{tvdb}.mp3" : null,
 
             ["Image"]                 = imagesArray,
             //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
             ["Genre"]                 = TagHelper.GetFilteredTags(series),
-            ["Guid"]                  = BuildXrefGuidArray(series, tmdbMovie),
-            ["Country"]               = BuildCountryArray(series),
+            ["Guid"]                  = BuildXrefGuidArray(series, tmdbSeries, tmdbMovie),
+            ["Country"]               = BuildCountryArray(series, tmdbSeries),
             ["Role"]                  = CastHelper.GetCastAndCrew(series),
             ["Director"]              = CastHelper.GetDirectors(series),
             ["Producer"]              = CastHelper.GetProducers(series),
@@ -192,7 +195,7 @@ public class PlexMetadata(IMetadataService metadataService)
             ["Similar"]               = BuildSimilarArray(series),
             ["Studio"]                = studios,
             ["Collection"]            = GetCollectionName(series) is string c ? new[] { new { tag = c } } : null,
-            ["Rating"]                = BuildRatingArray(tmdbMovie?.Rating ?? (ep as IShokoEpisode)?.GetLinkedEpisodes(MetadataSource.TMDB)?.FirstOrDefault()?.Rating ?? (series as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault()?.Rating ?? series.Rating)
+            ["Rating"]                = BuildRatingArray(tmdbMovie?.Rating ?? (ep as IShokoEpisode)?.GetLinkedEpisodes(MetadataSource.TMDB)?.FirstOrDefault()?.Rating ?? tmdbSeries?.Rating ?? series.Rating)
         };
     }
 
@@ -298,10 +301,13 @@ public class PlexMetadata(IMetadataService metadataService)
         IEpisode? tmdbEpisode = null
     )
     {
+        var tmdbEps = (ep as IShokoEpisode)?.GetLinkedEpisodes(MetadataSource.TMDB);
+        var tmdbEp = tmdbEpisode ?? tmdbEps?.FirstOrDefault() ?? ep.AsTmdb();
         var images = (IWithImages)ep;
         var seriesImages = (IWithImages)series;
-        string epTitle = tmdbEpisode is IWithTitles { PreferredTitle.Value: { Length: > 0 } pt } ? pt : TextHelper.ResolveEpisodeTitle(ep, titles.DisplayTitle);
-        string epDescription = tmdbEpisode is IWithOverviews { PreferredOverview.Value: { Length: > 0 } pd } ? pd : TextHelper.GetDescriptionByLanguage(ep, Settings.DescriptionLanguage);
+
+        string epTitle = tmdbEp is IWithTitles { PreferredTitle.Value: { Length: > 0 } pt } ? pt : TextHelper.ResolveEpisodeTitle(ep, titles.DisplayTitle, tmdbEp);
+        string epDescription = tmdbEp is IWithOverviews { PreferredOverview.Value: { Length: > 0 } pd } ? pd : TextHelper.GetDescriptionByLanguage(ep, Settings.DescriptionLanguage);
 
         string? parentThumb = null;
         if (Settings.TmdbSeasonPosters && mapped.Season >= 0 && string.IsNullOrEmpty(MapHelper.GetPreferredTmdbOrderingId(series)))
@@ -325,7 +331,7 @@ public class PlexMetadata(IMetadataService metadataService)
             //["originalTitle"]       = No source for original episode titles
             ["titleSort"]             = epTitle,
             ["year"]                  = ep.AirDate?.Year,
-            ["summary"]               = TextHelper.SanitizeSummaryWithFallback(epDescription, (ep as IShokoEpisode)?.GetLinkedEpisodes(MetadataSource.TMDB)?.FirstOrDefault()?.PreferredOverview?.Value, Settings.SummaryMode),
+            ["summary"]               = TextHelper.SanitizeSummaryWithFallback(epDescription, tmdbEp?.PreferredOverview?.Value, Settings.SummaryMode),
             ["isAdult"]               = ContentRatingHelper.GetContentRatingAndAdult(series).IsAdult,
             ["duration"]              = (int)ep.Runtime.TotalMilliseconds,
 
@@ -348,13 +354,13 @@ public class PlexMetadata(IMetadataService metadataService)
             ["parentIndex"]           = mapped.Season,
 
             ["Image"]                 = Settings.TmdbThumbnails ? ImageHelper.BuildSnapshotArray(images, epTitle, Settings.AddEveryImage, Settings.TmdbImageLanguage) : [],
-            ["Guid"]                  = BuildEpisodeXrefGuidArray(ep, tmdbEpisode),
+            ["Guid"]                  = BuildEpisodeXrefGuidArray(tmdbEp, tmdbEps),
             //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
             //["Role"]                = CastHelper.GetCastAndCrew(ep), // Large array not used by Plex clients and present in grandparent series metadata
             ["Director"]              = CastHelper.GetDirectors(ep),
             ["Producer"]              = CastHelper.GetProducers(ep),
             ["Writer"]                = CastHelper.GetWriters(ep),
-            ["Rating"]                = BuildRatingArray(ep)
+            ["Rating"]                = BuildRatingArray(tmdbEp?.Rating ?? ep.Rating)
         };
     }
 
@@ -435,15 +441,14 @@ public class PlexMetadata(IMetadataService metadataService)
 
     /// <summary>Builds an array of external cross-reference GUIDs (TMDB/TVDB/IMDB) for a series or movie.</summary>
     /// <param name="series">The Shoko series metadata.</param>
+    /// <param name="tmdbSeries">The TMDB series metadata object.</param>
     /// <param name="tmdbMovie">The optional TMDB movie metadata override.</param>
     /// <returns>An array of objects containing external IDs.</returns>
-    private object[] BuildXrefGuidArray(ISeries series, IMovie? tmdbMovie = null)
+    private object[] BuildXrefGuidArray(ISeries series, ISeries? tmdbSeries = null, IMovie? tmdbMovie = null)
     {
         var tm = tmdbMovie ?? (series as IShokoSeries)?.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault();
         return tm != null ? CreateXrefGuids($"tmdb://{tm.ID.ID}", tm.GetCrossSourceID("imdb", MetadataEntityType.Movie) is { } imdb ? $"imdb://{imdb}" : null)
-            : series is IShokoSeries ss && ss.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() is { } ts
-                ? CreateXrefGuids($"tmdb://{ts.ID.ID}", ts.GetCrossSourceID("tvdb", MetadataEntityType.Series) is { } tsTvdb ? $"tvdb://{tsTvdb}" : null)
-            : series.AsTmdb() is { } s ? CreateXrefGuids($"tmdb://{s.ID.ID}", s.GetCrossSourceID("tvdb", MetadataEntityType.Series) is { } sTvdb ? $"tvdb://{sTvdb}" : null)
+            : tmdbSeries != null ? CreateXrefGuids($"tmdb://{tmdbSeries.ID.ID}", tmdbSeries.GetCrossSourceID("tvdb", MetadataEntityType.Series) is { } tsTvdb ? $"tvdb://{tsTvdb}" : null)
             : [];
     }
 
@@ -453,29 +458,24 @@ public class PlexMetadata(IMetadataService metadataService)
     private object[] BuildSeasonXrefGuidArray(ISeason? tmdbSeason) => CreateXrefGuids(tmdbSeason?.ID.ID is { Length: > 0 } id ? $"tmdb://{id}" : null);
 
     /// <summary>Builds an array of external cross-reference GUIDs (TMDB/TVDB) for an episode.</summary>
-    /// <remarks>Prefer explicit TMDB overrides (from Episode Groups or Multi-part files) then fallback to standard Shoko metadata.</remarks>
-    /// <param name="ep">The base episode metadata.</param>
-    /// <param name="tmdbEpisodeOverride">An optional TMDB episode object (used for groups/parts).</param>
+    /// <param name="tmdbEp">The pre-resolved TMDB episode metadata object.</param>
+    /// <param name="tmdbEps">The pre-resolved collection of TMDB episodes mapped to the Shoko episode.</param>
     /// <returns>An array of objects containing external IDs.</returns>
-    private object[] BuildEpisodeXrefGuidArray(IEpisode ep, IEpisode? tmdbEpisodeOverride) =>
+    private object[] BuildEpisodeXrefGuidArray(IEpisode? tmdbEp, IReadOnlyList<IEpisode>? tmdbEps) =>
         CreateXrefGuids([
-            tmdbEpisodeOverride?.AsTmdb() is { } te ? $"tmdb://{te.ID.ID}" : null,
-            tmdbEpisodeOverride?.AsTmdb()?.GetCrossSourceID("tvdb", MetadataEntityType.Episode) is { } teTvdb ? $"tvdb://{teTvdb}" : null,
-            .. ep is IShokoEpisode se && se.GetLinkedEpisodes(MetadataSource.TMDB) is { Count: > 0 } tmdbEps
-                ? tmdbEps.SelectMany(t => t.GetCrossSourceID("tvdb", MetadataEntityType.Episode) is { } tTvdb ? [$"tmdb://{t.ID.ID}", $"tvdb://{tTvdb}"] : new[] { $"tmdb://{t.ID.ID}" })
+            tmdbEp != null ? $"tmdb://{tmdbEp.ID.ID}" : null,
+            tmdbEp?.GetCrossSourceID("tvdb", MetadataEntityType.Episode) is { } teTvdb ? $"tvdb://{teTvdb}" : null,
+            .. tmdbEps is { Count: > 0 } list
+                ? list.SelectMany(t => t.GetCrossSourceID("tvdb", MetadataEntityType.Episode) is { } tTvdb ? [$"tmdb://{t.ID.ID}", $"tvdb://{tTvdb}"] : new[] { $"tmdb://{t.ID.ID}" })
                 : [],
         ]);
 
     /// <summary>Resolves production country codes to English names for a series.</summary>
     /// <param name="series">The Shoko series metadata.</param>
+    /// <param name="tmdbSeries">The TMDB series metadata object.</param>
     /// <returns>An array of objects containing country tags, or null if none found.</returns>
-    private object[]? BuildCountryArray(ISeries series) =>
-        (
-            (series as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault()?.ProductionCountries
-            ?? (series as IShokoSeries)?.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault()?.ProductionCountries
-            ?? series.AsTmdb()?.ProductionCountries
-        )
-            is { } codes
+    private object[]? BuildCountryArray(ISeries series, ISeries? tmdbSeries = null) =>
+        (tmdbSeries?.ProductionCountries ?? (series as IShokoSeries)?.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault()?.ProductionCountries) is { } codes
             ? CreateTagArray(
                 codes
                     .Where(c => !string.IsNullOrWhiteSpace(c))
@@ -509,10 +509,9 @@ public class PlexMetadata(IMetadataService metadataService)
             : null;
 
     /// <summary>Extracts the broadcasting network information for a series.</summary>
-    /// <param name="series">The Shoko series metadata.</param>
+    /// <param name="tmdbSeries">The TMDB series metadata object.</param>
     /// <returns>An array of objects containing network tags, or null if none found.</returns>
-    private object[]? BuildNetworkArray(ISeries series) =>
-        ((series as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() ?? series.AsTmdb()) is { } src ? CreateTagArray(src.Networks.Select(n => n.Name)) : null;
+    private object[]? BuildNetworkArray(ISeries? tmdbSeries) => tmdbSeries is { } src ? CreateTagArray(src.Networks.Select(n => n.Name)) : null;
 
     /// <summary>Formats a numeric rating into a Plex-compatible audience rating object.</summary>
     /// <param name="r">The raw rating value (0-10).</param>
@@ -529,16 +528,6 @@ public class PlexMetadata(IMetadataService metadataService)
                 },
             }
             : null;
-
-    /// <summary>Resolves and formats the audience rating for a series.</summary>
-    /// <param name="s">The series metadata.</param>
-    /// <returns>A formatted rating array, or null.</returns>
-    private object? BuildRatingArray(ISeries s) => BuildRatingArray((s as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault()?.Rating ?? s.AsTmdb()?.Rating);
-
-    /// <summary>Resolves and formats the audience rating for an episode.</summary>
-    /// <param name="e">The episode metadata.</param>
-    /// <returns>A formatted rating array, or null.</returns>
-    private object? BuildRatingArray(IEpisode e) => BuildRatingArray((e as IShokoEpisode)?.GetLinkedEpisodes(MetadataSource.TMDB)?.FirstOrDefault()?.Rating ?? e.AsTmdb()?.Rating);
 
     #endregion
 }
