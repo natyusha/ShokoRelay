@@ -90,7 +90,7 @@ public class PlexMetadata(IMetadataService metadataService)
     {
         var images = (IWithImages)series;
         var description = TextHelper.GetDescriptionByLanguage(series, Settings.DescriptionLanguage);
-        var tmdbDescription = (series as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault()?.PreferredOverview?.Value;
+        var tmdbDescription = ((series as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() ?? series.AsTmdb())?.PreferredOverview?.Value;
         var studios = CastHelper.GetStudioTags(series);
         var (rating, isAdult) = ContentRatingHelper.GetContentRatingAndAdult(series);
         // csharpier-ignore
@@ -113,7 +113,7 @@ public class PlexMetadata(IMetadataService metadataService)
             ["duration"]              = series.Episodes.Any() ? (int)series.Episodes.Sum(e => e.Runtime.TotalMilliseconds) : (int?)null,
             //["tagline"]             = TMDB has this but it is not exposed
             ["studio"]                = studios.FirstOrDefault()?.Tag,
-            ["theme"]                 = Settings.PlexThemeMusic && series is IShokoSeries ss && ss.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault()?.GetCrossSourceID("tvdb", MetadataEntityType.Series) is { } tvdb ? $"https://tvthemes.plexapp.com/{tvdb}.mp3" : null,
+            ["theme"]                 = Settings.PlexThemeMusic && ((series as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() ?? series.AsTmdb())?.GetCrossSourceID("tvdb", MetadataEntityType.Series) is { } tvdb ? $"https://tvthemes.plexapp.com/{tvdb}.mp3" : null,
 
             ["Image"]                 = ImageHelper.GenerateImageArray(images, titles.DisplayTitle, Settings.AddEveryImage, Settings.TmdbImageLanguage),
             //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
@@ -152,7 +152,7 @@ public class PlexMetadata(IMetadataService metadataService)
         if (string.IsNullOrWhiteSpace(description))
             description = TextHelper.GetDescriptionByLanguage(series, Settings.DescriptionLanguage);
 
-        string? tmdbDescription = tmdbMovie?.PreferredOverview?.Value ?? (series as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault()?.PreferredOverview?.Value;
+        string? tmdbDescription = tmdbMovie?.PreferredOverview?.Value ?? ((series as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() ?? series.AsTmdb())?.PreferredOverview?.Value;
         var (rating, isAdult) = ContentRatingHelper.GetContentRatingAndAdult(series);
         var studios = CastHelper.GetStudioTags(series);
 
@@ -178,7 +178,7 @@ public class PlexMetadata(IMetadataService metadataService)
             ["duration"]              = (int)ep.Runtime.TotalMilliseconds,
             //["tagline"]             = TMDB has this but it is not exposed
             ["studio"]                = studios.FirstOrDefault()?.Tag,
-            ["theme"]                 = Settings.PlexThemeMusic && series is IShokoSeries ss && ss.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault()?.GetCrossSourceID("tvdb", MetadataEntityType.Series) is { } tvdb ? $"https://tvthemes.plexapp.com/{tvdb}.mp3" : null,
+            ["theme"]                 = Settings.PlexThemeMusic && ((series as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() ?? series.AsTmdb())?.GetCrossSourceID("tvdb", MetadataEntityType.Series) is { } tvdb ? $"https://tvthemes.plexapp.com/{tvdb}.mp3" : null,
 
             ["Image"]                 = imagesArray,
             //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko

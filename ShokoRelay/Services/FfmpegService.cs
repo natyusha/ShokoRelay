@@ -54,7 +54,7 @@ public sealed class FfmpegService(string pluginDirectory, string applicationPath
         EnsureFfmpegConfigured();
         var args = new List<string> { "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", inputPath };
 
-        string output = await RunProcessCaptureAsync(_ffprobePath, args, ct);
+        string output = await RunProcessCaptureAsync(_ffprobePath, args, ct).ConfigureAwait(false);
         return double.TryParse(output.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out double seconds)
             ? TimeSpan.FromSeconds(seconds)
             : throw new InvalidOperationException("Unable to parse duration from ffprobe output.");

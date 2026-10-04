@@ -87,30 +87,30 @@ public class AnimeThemesApi(HttpClient? httpClient = null)
     /// <returns>The deserialized object of type T, or default on error.</returns>
     private async Task<T?> GetJsonAsync<T>(string url, CancellationToken ct)
     {
-        await RateLimitAsync(ct);
+        await RateLimitAsync(ct).ConfigureAwait(false);
 
-        using var response = await _http.GetAsync(url, ct);
+        using var response = await _http.GetAsync(url, ct).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {
             s_logger.Warn("AnimeThemes: API returned {Status} for {Url}", response.StatusCode, url);
             return default;
         }
 
-        await using var stream = await response.Content.ReadAsStreamAsync(ct);
-        return await JsonSerializer.DeserializeAsync<T>(stream, _jsonOptions, ct);
+        await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+        return await JsonSerializer.DeserializeAsync<T>(stream, _jsonOptions, ct).ConfigureAwait(false);
     }
 
     /// <summary>Enforces the API rate limit by delaying requests if they occur too rapidly.</summary>
     /// <param name="ct">Cancellation token.</param>
     private async Task RateLimitAsync(CancellationToken ct)
     {
-        await _rateLock.WaitAsync(ct);
+        await _rateLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             var now = DateTimeOffset.UtcNow;
             var wait = _lastRequest + s_rateLimitDelay - now;
             if (wait > TimeSpan.Zero)
-                await Task.Delay(wait, ct);
+                await Task.Delay(wait, ct).ConfigureAwait(false);
             _lastRequest = DateTimeOffset.UtcNow;
         }
         finally

@@ -56,7 +56,7 @@ public class SourceLinkService(IVideoService videoService)
                 continue;
 
             string mappingFileDir = Path.GetDirectoryName(txtPath)!;
-            string[] lines = await File.ReadAllLinesAsync(txtPath);
+            string[] lines = await File.ReadAllLinesAsync(txtPath).ConfigureAwait(false);
             bool modified = false;
 
             for (int i = 0; i < lines.Length; i++)
@@ -139,7 +139,7 @@ public class SourceLinkService(IVideoService videoService)
                 }
             }
             if (modified)
-                await File.WriteAllLinesAsync(txtPath, lines);
+                await File.WriteAllLinesAsync(txtPath, lines).ConfigureAwait(false);
         }
 
         s_logger.Info("SourceLinkService: Finished mapping operation -> {0} links created.", count);
