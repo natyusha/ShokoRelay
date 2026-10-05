@@ -53,7 +53,7 @@ Installation can be completed via Shoko's WebUI (Recommended) or Manually. Both 
     - Once clicked it will change to a `Login` link which will redirect you to `app.plex.tv/auth`
     - From there you can login to Plex as normal using your credentials and then close the tab
     - This will enable: Auto Scanning, Scrobbling (via sync or webhook) and enhanced collection/ratings support
-  - Configure the `Sync Users` under the `Quick Actions > Sync Menu` (Sync Watched States Menu) to enable webhooks and syncing
+  - Configure the `Sync Users` under the `Quick Actions > Watch Sync Menu` (Sync Watched States Menu) to enable webhooks and syncing
 - There are additional options at the bottom under "Provider Settings" which also contains a "Help" button in the top right.
 
 > [!TIP]
@@ -161,7 +161,7 @@ com.plexapp.agents.shokorelay
   - This will also safely empty any trash in the managed Plex libraries if `Empty Plex Trash Threshold` is configured
   - _Requires Plex authentication_
 - `Sync Int.` An input which will schedule watched state syncing from Plex to Shoko every `N` hours
-  - This includes ratings (votes) and progress if `Include Ratings` or `Include Progress` are enabled respectively in the `Quick Actions > Sync Menu` (Sync Watched States Menu)
+  - This includes ratings (votes) and progress if `Include Ratings` or `Include Progress` are enabled respectively in the `Quick Actions > Watch Sync Menu` (Sync Watched States Menu)
     - Currently progress will only sync from Plex to Shoko and not the other way around
   - To speed up the process the scheduled watched sync only considers things watched during the scheduled interval +1 hour
     - A full sync may need to be run if Shoko or Plex downtime exceeds the considered time period
@@ -218,7 +218,7 @@ Applying a hyphenated suffix to the image that matches Plex's naming conventions
 ### Shoko Actions
 
 - `Run Import` A button which will make shoko rescan all managed folders for new or unrecognized files
-- `Sync Menu` A button which opens a modal (Sync Watched States Menu) allowing for watched state syncing from Plex to Shoko or Shoko to Plex
+- `Watch Sync Menu` A button which opens a modal (Sync Watched States Menu) allowing for watched state syncing from Plex to Shoko or Shoko to Plex
   - This includes any users configured under `Extra Plex Users` in the "Plex Authentication" section unless the `Sync Users` setting excludes them
   - _Requires Plex authentication_
 - `Purge Missing` A button which will remove files that are no longer present from Shoko

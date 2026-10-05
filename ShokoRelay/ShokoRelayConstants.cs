@@ -76,14 +76,18 @@ public static class ShokoRelayConstants
     /// <summary>Filename for the Plex collection artwork upload cache.</summary>
     public const string FilePlexCollectionsCache = "collections_shokorelay.cache";
 
-    /// <summary>Filename for the Plex-generated episode image sync cache.</summary>
-    public const string FilePlexImagesCache = "images_shokorelay.cache";
-
     /// <summary>Filename for the VFS series overrides CSV.</summary>
     public const string FileVfsOverrides = "anidb_vfs_overrides.csv";
 
     /// <summary>Filename for the VFS structure blueprint cache.</summary>
     public const string FileVfsBlueprintCache = "vfs_blueprint.cache";
+
+    #endregion
+
+    #region Metadata Sources
+
+    /// <summary>The registered metadata source identifier string used to claim ownership of images uploaded by this plugin.</summary>
+    public const string RelaySourceId = "shoko-relay";
 
     #endregion
 

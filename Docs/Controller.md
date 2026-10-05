@@ -309,13 +309,15 @@ GET  /sync-watched/start                                       -> StartWatchedSy
 ```
 POST /map-symlinks?mapFile={path}&purgeLinks={true|false}      -> ProcessSourceLinks
 
-POST /shoko/purge-custom-images                                -> PurgeLocalImages
-POST /shoko/purge-episode-images                               -> PurgeEpisodeImages
+POST /shoko/purge-relay-custom-images                          -> PurgeLocalImages
+POST /shoko/purge-all-custom-images                            -> PurgeAllLocalImages
 ```
 
 - `ProcessSourceLinks` manages relative symlinks from protected source folders to the library based on a text-based mapping file, or purges existing links.
   - `mapFile`: (required if not purging) path to the `.txt` file relative to the Import Root (e.g., `!Source/symlinks.txt`).
   - `purgeLinks`: (default false) set to true to recursively remove all symlinks and `_attach` folders in the import roots.
+- `PurgeLocalImages` removes and purges all Shoko Relay uploaded custom user-submitted posters and Plex-generated episode screenshots from Shoko.
+- `PurgeAllLocalImages` removes and purges all custom user-submitted posters and Plex-generated episode screenshots from Shoko.
 
 **Notes:**
 
@@ -327,8 +329,6 @@ POST /shoko/purge-episode-images                               -> PurgeEpisodeIm
   - Destination paths are resolved relative to the Import Root.
   - Sidecar files (any file starting with `{baseName}`) and attachment folders (directories named `{baseName}_attachments`) are automatically identified and renamed to match the destination.
     - The `_attachments` folders are renamed to `_attach` at the destination to allow the `purgeLinks` operation to delete them without touching the originals.
-- `PurgeLocalImages` removes and purges all custom user-submitted posters and Plex-generated episode screenshots from Shoko.
-- `PurgeEpisodeImages` removes and purges all default non-locally-generated episode backdrops from Shoko.
 
 ---
 
@@ -358,7 +358,7 @@ The mapping file uses a pipe-delimited (`|`) and semicolon-delimited (`;`) struc
   - This distinction ensures the `purgeLinks` command can safely remove generated links without touching original source files.
 - Relative Pathing: Links are created with relative targets. They remain valid as long as the relative depth between the source and destination remains consistent.
 - Bookkeeping: Lines that are successfully processed are automatically prefixed with `#` to prevent redundant processing in future runs.
-- `PurgeLocalImages` / `PurgeEpisodeImages` will be removed once Shoko's v3 API has similar functionality
+- `PurgeAllLocalImages` will be removed once Shoko's v3 API has similar functionality
 
 ## AnimeThemes
 
