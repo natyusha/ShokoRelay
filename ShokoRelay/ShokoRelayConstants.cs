@@ -86,8 +86,11 @@ public static class ShokoRelayConstants
 
     #region Metadata Sources
 
-    /// <summary>The registered metadata source identifier string used to claim ownership of images uploaded by this plugin.</summary>
+    /// <summary>The registered metadata source identifier string used to claim ownership of local images uploaded by this plugin.</summary>
     public const string RelaySourceId = "shoko-relay";
+
+    /// <summary>The registered metadata source identifier string used to claim ownership of Plex thumbnails uploaded by this plugin.</summary>
+    public const string RelayPlexSourceId = "shoko-relay-plex";
 
     #endregion
 

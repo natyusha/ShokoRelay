@@ -18,15 +18,19 @@ namespace ShokoRelay;
 /// <summary>Registers plugin services and background workers into the DI container.</summary>
 public class ServiceRegistration : IPluginServiceRegistration
 {
-    /// <summary>The explicitly registered metadata source used to claim ownership of images uploaded by this plugin.</summary>
+    /// <summary>The explicitly registered metadata source used to claim ownership of local images uploaded by this plugin.</summary>
     public static MetadataSource RelaySource { get; private set; } = null!;
+
+    /// <summary>The explicitly registered metadata source used to claim ownership of Plex thumbnails uploaded by this plugin.</summary>
+    public static MetadataSource RelayPlexSource { get; private set; } = null!;
 
     /// <summary>Configures all services required by ShokoRelay.</summary>
     /// <param name="serviceCollection">DI collection.</param>
     /// <param name="applicationPaths">Host provided paths.</param>
     public static void RegisterServices(IServiceCollection serviceCollection, IApplicationPaths applicationPaths)
     {
-        RelaySource = MetadataSource.Register("Shoko Relay", ShokoRelayConstants.RelaySourceId, description: "Images uploaded and managed by Shoko Relay.");
+        RelaySource = MetadataSource.Register("Shoko Relay (Local)", ShokoRelayConstants.RelaySourceId, description: "Local images uploaded and managed by Shoko Relay.");
+        RelayPlexSource = MetadataSource.Register("Shoko Relay (Plex)", ShokoRelayConstants.RelayPlexSourceId, description: "Plex thumbnails uploaded and managed by Shoko Relay.");
 
         serviceCollection.AddHttpContextAccessor();
 

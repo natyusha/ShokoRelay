@@ -366,7 +366,7 @@ public class ShokoController(
     public async Task<IActionResult> PurgeLocalImages()
     {
         Logger.Info("Shoko: Starting a manual purge of all Relay-owned images...");
-        var xrefs = imageManager.GetAllImageCrossReferences(new ImageCrossReferenceFilteringOptions()).Where(x => x.Source == ServiceRegistration.RelaySource);
+        var xrefs = imageManager.GetAllImageCrossReferences(new ImageCrossReferenceFilteringOptions()).Where(x => x.Source == ServiceRegistration.RelaySource || x.Source == ServiceRegistration.RelayPlexSource);
         var distinctImageIds = xrefs.Select(x => x.ImageID).Distinct().ToList();
         int purgedCount = 0;
 
