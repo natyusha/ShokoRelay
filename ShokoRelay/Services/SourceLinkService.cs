@@ -25,7 +25,8 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
     /// <returns>A result object detailing the operation's outcome.</returns>
     public async Task<SourceLinkResult> ProcessLinksAsync(string mapFile, bool purgeLinks = false)
     {
-        var roots = (videoService.GetAllManagedFolders() ?? []).Select(mf => mf.Path).Where(p => !string.IsNullOrWhiteSpace(p) && Directory.Exists(p)).Distinct(VfsShared.PathComparer).ToList();
+        var managedFolders = videoService.GetAllManagedFolders() ?? [];
+        var roots = managedFolders.Select(mf => mf.Path).Where(p => !string.IsNullOrWhiteSpace(p) && Directory.Exists(p)).Distinct(VfsShared.PathComparer).ToList();
         int count = 0;
         var details = new List<string>();
 
@@ -44,15 +45,20 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
             return new SourceLinkResult(0, false, details);
         string normMapFile = mapFile.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
 
-        foreach (var root in roots)
+        foreach (var mf in managedFolders)
         {
-            string txtPath = Path.Combine(root!, normMapFile);
+            string root = mf.Path;
+            if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
+                continue;
+
+            string txtPath = Path.Combine(root, normMapFile);
             if (!File.Exists(txtPath))
                 continue;
 
             string mappingFileDir = Path.GetDirectoryName(txtPath)!;
             string[] lines = await File.ReadAllLinesAsync(txtPath).ConfigureAwait(false);
             bool modified = false;
+            var dirsToScan = new HashSet<string>(VfsShared.PathComparer);
 
             for (int i = 0; i < lines.Length; i++)
             {
@@ -71,7 +77,7 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
                 try
                 {
                     string fullSrc = Path.Combine(mappingFileDir, srcInfo.Path);
-                    string fullDest = Path.Combine(root!, destInfo.Path);
+                    string fullDest = Path.Combine(root, destInfo.Path);
                     if (!File.Exists(fullSrc))
                     {
                         logger.LogWarning("SourceLinkService: Source file not found -> {Path}", fullSrc);
@@ -114,8 +120,14 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
                             foreach (var subFile in Directory.EnumerateFiles(entry))
                                 VfsShared.TryCreateLink(subFile, Path.Combine(targetPath, Path.GetFileName(subFile)), logger);
                         }
-                        else if (VfsShared.TryCreateLink(entry, targetPath, logger) && name.Equals(Path.GetFileName(fullSrc), cmp))
-                            mainLinked = true;
+                        else if (VfsShared.TryCreateLink(entry, targetPath, logger))
+                        {
+                            if (videoService.IsAllowedVideoExtension(targetPath))
+                                dirsToScan.Add(destDir);
+
+                            if (name.Equals(Path.GetFileName(fullSrc), cmp))
+                                mainLinked = true;
+                        }
                     }
 
                     if (mainLinked)
@@ -133,8 +145,21 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
                     logger.LogError(ex, "SourceLinkService: SourceLink failed for source -> {Path}", srcInfo.Path);
                 }
             }
+
             if (modified)
                 await File.WriteAllLinesAsync(txtPath, lines).ConfigureAwait(false);
+
+            foreach (var dir in dirsToScan)
+            {
+                try
+                {
+                    await videoService.NotifyVideoFileChangeDetected(dir).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "SourceLinkService: Failed to notify directory change for {Dir}", dir);
+                }
+            }
         }
 
         logger.LogInformation("SourceLinkService: Finished mapping operation -> {Count} links created.", count);
