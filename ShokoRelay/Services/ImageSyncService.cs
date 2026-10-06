@@ -496,6 +496,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                     ImageType = imageType,
                     Source = ServiceRegistration.RelaySource,
                     IsPreferred = true,
+                    IsDesired = true,
                 }
             );
 
@@ -555,6 +556,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                     ImageType = ImageEntityType.Backdrop,
                     Source = ServiceRegistration.RelayPlexSource,
                     IsPreferred = true,
+                    IsDesired = true,
                 }
             );
 
