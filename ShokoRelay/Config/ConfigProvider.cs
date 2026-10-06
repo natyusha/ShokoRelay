@@ -8,10 +8,8 @@ using Shoko.Abstractions.Plugin;
 
 namespace ShokoRelay.Config;
 
-/// <summary>
-/// Manages loading, saving, validation and normalization of the plugin configuration and Plex token/secrets file.
-/// Watches for external config changes to auto-invalidate the cache.
-/// </summary>
+/// <summary>Manages loading, saving, validation and normalization of the plugin configuration and Plex token/secrets file.</summary>
+/// <remarks>Watches for external config changes to auto-invalidate the cache.</remarks>
 public class ConfigProvider
 {
     #region Setup & State
