@@ -148,6 +148,13 @@ public class ShokoRelay : BackgroundService
     public static bool EnforceTmdbNumbering => Settings.Advanced.TmdbEpNumbering || Settings.Advanced.MergeTmdbSeries;
 
     /// <summary>Initializes the Relay hosted service.</summary>
+    /// <param name="watcher">VFS filesystem event watcher.</param>
+    /// <param name="configProvider">Configuration and secrets management service.</param>
+    /// <param name="httpContextAccessor">Access to the current HTTP request context.</param>
+    /// <param name="systemService">Shoko system state service.</param>
+    /// <param name="metadataService">Shoko metadata query service.</param>
+    /// <param name="scheduledActionService">Shoko scheduled action service.</param>
+    /// <param name="logger">Logging service.</param>
     public ShokoRelay(
         VfsWatcher watcher,
         ConfigProvider configProvider,
