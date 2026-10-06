@@ -6,6 +6,8 @@ using Shoko.Abstractions.Core.Services;
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Plugin;
 using Shoko.Abstractions.Plugin.Models;
+using Shoko.Abstractions.ScheduledActions.Services;
+using ShokoRelay.Actions;
 using ShokoRelay.AnimeThemes;
 using ShokoRelay.Services;
 using ShokoRelay.Sync;
@@ -134,17 +136,8 @@ public class ShokoRelay : BackgroundService
 
     private readonly VfsWatcher _watcher;
     private readonly ISystemService _systemService;
-    private readonly SyncToShoko? _watchedSyncService;
-    private readonly IShokoImportService? _shokoImportService;
-    private readonly ICollectionService? _collectionService;
-    private readonly ICriticRatingService? _criticRatingService;
     private readonly IMetadataService _metadataService;
-    private readonly IImageSyncService? _imageSyncService;
-    private readonly PlexClient? _plexClient;
-
-    private static DateTime? s_lastImportRunUtc;
-    private static DateTime? s_lastPlexAutomationUtc;
-    private static DateTime? s_lastSyncWatchedUtc;
+    private readonly IScheduledActionService _scheduledActionService;
 
     /// <summary>Generates ParallelOptions pre-configured with the maximum degree of parallelism (clamped to at least 1) and an optional cancellation token.</summary>
     /// <param name="token">Optional cancellation token.</param>
@@ -155,31 +148,14 @@ public class ShokoRelay : BackgroundService
     public static bool EnforceTmdbNumbering => Settings.Advanced.TmdbEpNumbering || Settings.Advanced.MergeTmdbSeries;
 
     /// <summary>Initializes the Relay hosted service.</summary>
-    /// <param name="watcher">VFS filesystem event watcher.</param>
-    /// <param name="configProvider">Configuration and secrets management service.</param>
-    /// <param name="httpContextAccessor">Access to the current HTTP request context.</param>
-    /// <param name="systemService">Shoko system state service.</param>
-    /// <param name="metadataService">Shoko metadata query service.</param>
-    /// <param name="logger">Logging service.</param>
-    /// <param name="watchedSyncService">Service for syncing watched states to Shoko.</param>
-    /// <param name="shokoImportService">Service for triggering server-side imports.</param>
-    /// <param name="collectionService">Service for managing Plex collections.</param>
-    /// <param name="criticRatingService">Service for applying audience ratings to Plex.</param>
-    /// <param name="imageSyncService">Service for syncing thumbnails from Plex to Shoko.</param>
-    /// <param name="plexClient">Client used for interacting with configured Plex server instances.</param>
     public ShokoRelay(
         VfsWatcher watcher,
         ConfigProvider configProvider,
         IHttpContextAccessor httpContextAccessor,
         ISystemService systemService,
         IMetadataService metadataService,
-        ILogger<ShokoRelay> logger,
-        SyncToShoko? watchedSyncService = null,
-        IShokoImportService? shokoImportService = null,
-        ICollectionService? collectionService = null,
-        ICriticRatingService? criticRatingService = null,
-        IImageSyncService? imageSyncService = null,
-        PlexClient? plexClient = null
+        IScheduledActionService scheduledActionService,
+        ILogger<ShokoRelay> logger
     )
     {
         _watcher = watcher;
@@ -187,13 +163,8 @@ public class ShokoRelay : BackgroundService
         s_configProvider.HttpContextAccessor = httpContextAccessor;
         _systemService = systemService;
         _metadataService = metadataService ?? throw new ArgumentNullException(nameof(metadataService));
+        _scheduledActionService = scheduledActionService;
         _logger = logger;
-        _watchedSyncService = watchedSyncService;
-        _shokoImportService = shokoImportService;
-        _collectionService = collectionService;
-        _criticRatingService = criticRatingService;
-        _imageSyncService = imageSyncService;
-        _plexClient = plexClient;
         _logger.LogInformation("ShokoRelay v{Version} initialized", ShokoRelayConstants.Version);
     }
 
@@ -211,20 +182,17 @@ public class ShokoRelay : BackgroundService
                 await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken);
             if (stoppingToken.IsCancellationRequested)
                 return;
-            _logger.LogInformation("Shoko Server started -> Caching overrides & initializing scheduling anchors...");
+
+            _logger.LogInformation("Shoko Server started -> Caching overrides & initializing native scheduled actions...");
             OverrideHelper.Reload(_metadataService); // Warm up the VFS override cache.
-            var now = DateTime.UtcNow;
-            int offset = Math.Clamp(Settings.Automation.UtcOffsetHours, -12, 14);
-            if (Settings.Automation.ShokoImportFrequencyHours > 0)
-                s_lastImportRunUtc = ComputeSchedule(now, offset, Settings.Automation.ShokoImportFrequencyHours).LastScheduled;
-            if (Settings.Automation.ShokoSyncWatchedFrequencyHours > 0)
-                s_lastSyncWatchedUtc = ComputeSchedule(now, offset, Settings.Automation.ShokoSyncWatchedFrequencyHours).LastScheduled;
-            if (Settings.Automation.PlexAutomationFrequencyHours > 0)
-                s_lastPlexAutomationUtc = ComputeSchedule(now, offset, Settings.Automation.PlexAutomationFrequencyHours).LastScheduled;
+
+            // Sync triggers from current configuration
+            ActionScheduleHelper.SyncTriggers(Settings, _scheduledActionService);
 
             _watcher.Start();
-            _logger.LogInformation("Relay started -> Entering automation loop");
-            await AutomationLoop(stoppingToken).ConfigureAwait(false);
+
+            // Keep the BackgroundService alive to hold VfsWatcher
+            await Task.Delay(Timeout.InfiniteTimeSpan, stoppingToken).ConfigureAwait(false);
         }
         finally
         {
@@ -242,131 +210,6 @@ public class ShokoRelay : BackgroundService
         _logger.LogInformation("Relay stopping...");
         _watcher.Stop();
         await base.StopAsync(cancellationToken).ConfigureAwait(false);
-    }
-
-    #endregion
-
-    #region Automation Schedule
-
-    /// <summary>Manually mark import as run.</summary>
-    public static void MarkImportRunNow() => s_lastImportRunUtc = DateTime.UtcNow;
-
-    /// <summary>Manually mark automation as run.</summary>
-    public static void MarkPlexAutomationRunNow() => s_lastPlexAutomationUtc = DateTime.UtcNow;
-
-    /// <summary>Manually mark sync as run.</summary>
-    public static void MarkSyncRunNow() => s_lastSyncWatchedUtc = DateTime.UtcNow;
-
-    /// <summary>Computes the last scheduled time and the next scheduled time for a task based on UTC offsets.</summary>
-    /// <param name="now">Current time context.</param>
-    /// <param name="offsetHours">The anchor offset from UTC midnight.</param>
-    /// <param name="frequencyHours">How often the task should run.</param>
-    /// <returns>A tuple containing the LastScheduled and NextRun timestamps.</returns>
-    private static (DateTime LastScheduled, DateTime NextRun) ComputeSchedule(DateTime now, int offsetHours, int frequencyHours)
-    {
-        DateTime anchor = now.Date.AddHours(offsetHours);
-        if (anchor > now)
-            anchor = anchor.AddDays(-1);
-        double periods = Math.Floor((now - anchor).TotalHours / frequencyHours);
-        DateTime lastScheduled = anchor.AddHours(Math.Max(0, periods) * frequencyHours);
-        return (lastScheduled, lastScheduled.AddHours(frequencyHours));
-    }
-
-    /// <summary>The main automation loop that evaluates schedules and triggers background tasks.</summary>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>A task representing the long-running loop.</returns>
-    private async Task AutomationLoop(CancellationToken ct)
-    {
-        while (!ct.IsCancellationRequested)
-        {
-            try
-            {
-                var settings = Settings;
-                var now = DateTime.UtcNow;
-                int offset = Math.Clamp(settings.Automation.UtcOffsetHours, -12, 14);
-                List<DateTime> nextRuns = [];
-                int importFreq = settings.Automation.ShokoImportFrequencyHours;
-                if (importFreq > 0 && _shokoImportService != null)
-                {
-                    var (lastSched, next) = ComputeSchedule(now, offset, importFreq);
-                    nextRuns.Add(next);
-                    if (s_lastImportRunUtc == null || s_lastImportRunUtc < lastSched)
-                    {
-                        _logger.LogInformation("Automation: triggering scheduled Shoko import ({Frequency}h)", importFreq);
-                        await _shokoImportService.TriggerImportAsync().ConfigureAwait(false);
-                        s_lastImportRunUtc = lastSched;
-                    }
-                }
-                int syncFreq = settings.Automation.ShokoSyncWatchedFrequencyHours;
-                if (syncFreq > 0 && _watchedSyncService != null)
-                {
-                    var (lastSched, next) = ComputeSchedule(now, offset, syncFreq);
-                    nextRuns.Add(next);
-                    if (s_lastSyncWatchedUtc == null || s_lastSyncWatchedUtc < lastSched)
-                    {
-                        _logger.LogInformation("Automation: triggering scheduled Plex->Shoko sync ({Frequency}h)", syncFreq);
-
-                        // Background tasks should wait for the lock to become available
-                        await SyncHelper.SyncLock.WaitAsync(ct).ConfigureAwait(false);
-                        try
-                        {
-                            await _watchedSyncService.SyncWatchedAsync(false, syncFreq + 1, cancellationToken: ct).ConfigureAwait(false);
-                        }
-                        finally
-                        {
-                            SyncHelper.SyncLock.Release();
-                        }
-                        s_lastSyncWatchedUtc = lastSched;
-                    }
-                }
-                int plexFreq = settings.Automation.PlexAutomationFrequencyHours;
-                if (plexFreq > 0 && (_collectionService != null || _criticRatingService != null))
-                {
-                    var (lastSched, next) = ComputeSchedule(now, offset, plexFreq);
-                    nextRuns.Add(next);
-                    if (s_lastPlexAutomationUtc == null || s_lastPlexAutomationUtc < lastSched)
-                    {
-                        _logger.LogInformation("Automation: triggering scheduled Plex Collection/Rating update ({Frequency}h)", plexFreq);
-                        var allSeries = _metadataService.GetAllShokoSeries()?.Cast<IShokoSeries?>().ToList();
-                        if (allSeries?.Count > 0)
-                        {
-                            await SyncHelper.SyncLock.WaitAsync(ct).ConfigureAwait(false);
-                            try
-                            {
-                                if (_collectionService != null)
-                                    await _collectionService.BuildCollectionsAsync(allSeries, cancellationToken: ct).ConfigureAwait(false);
-                                if (_criticRatingService != null)
-                                    await _criticRatingService.ApplyRatingsAsync(null, ct).ConfigureAwait(false);
-                                if (settings.Advanced.EnableImageSync && _imageSyncService != null)
-                                    await _imageSyncService.SyncImagesAsync(cancellationToken: ct).ConfigureAwait(false);
-                                int threshold = settings.Advanced.EmptyPlexTrashThreshold;
-                                if (threshold > 0 && _plexClient != null)
-                                {
-                                    foreach (var target in _plexClient.GetConfiguredTargets())
-                                        await _plexClient.EmptyTrashWithSafetyAsync(target, threshold, false, ct).ConfigureAwait(false);
-                                }
-                            }
-                            finally
-                            {
-                                SyncHelper.SyncLock.Release();
-                            }
-                        }
-                        s_lastPlexAutomationUtc = lastSched;
-                    }
-                }
-                double delayMs = nextRuns.Any() ? (nextRuns.Min() - DateTime.UtcNow).TotalMilliseconds : 60000;
-                await Task.Delay(TimeSpan.FromMilliseconds(Math.Clamp(delayMs, 1000, 300000)), ct).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Automation: loop error");
-                await Task.Delay(TimeSpan.FromMinutes(1), ct).ConfigureAwait(false);
-            }
-        }
     }
 
     #endregion

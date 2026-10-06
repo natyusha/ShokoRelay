@@ -340,7 +340,6 @@ public class PlexController(
                     }
 
                     sw.Stop();
-                    MarkPlexAutomationRunNow();
 
                     return new PlexAutomationRunResult(sw.Elapsed, swCollections.Elapsed, collectionRes, swRatings.Elapsed, ratingRes, imageSyncElapsed, imageSyncRes, trashElapsed, trashMessages);
                 },

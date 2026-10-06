@@ -3,7 +3,9 @@ using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Image.Options;
+using Shoko.Abstractions.ScheduledActions.Services;
 using Shoko.Abstractions.Video.Services;
+using ShokoRelay.Actions;
 using ShokoRelay.AnimeThemes;
 using ShokoRelay.Services;
 using ShokoRelay.Sync;
@@ -28,6 +30,7 @@ public class ShokoController(
     IVideoService videoService,
     IImageManager imageManager,
     VfsWatcher vfsWatcher,
+    IScheduledActionService scheduledActionService,
     ILogger<ShokoController> logger
 ) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary, logger)
 {
@@ -248,15 +251,14 @@ public class ShokoController(
     public async Task<IActionResult> StartShokoImportNow()
     {
         var scanned = await shokoImportService.TriggerImportAsync().ConfigureAwait(false);
-        MarkImportRunNow();
-        var freqHours = Settings.Automation.ShokoImportFrequencyHours;
+        var actionInfo = scheduledActionService.GetScheduledAction<ShokoImportAction>();
         return Ok(
             new RelayResponse<object>(
                 Data: new
                 {
                     triggered = true,
-                    scheduled = freqHours > 0,
-                    nextRunInHours = freqHours,
+                    scheduled = actionInfo?.Triggers.Count > 0,
+                    nextRun = actionInfo?.NextRunAt,
                     scanned,
                 }
             )
@@ -308,18 +310,19 @@ public class ShokoController(
     [HttpGet("sync-watched/start")]
     public async Task<IActionResult> StartWatchedSyncNow()
     {
-        int freqHours = Settings.Automation.ShokoSyncWatchedFrequencyHours;
         try
         {
-            var result = await watchedSyncService.SyncWatchedAsync(false, freqHours, cancellationToken: CancellationToken.None).ConfigureAwait(false);
-            MarkSyncRunNow();
+            var settings = ConfigProvider.GetSettings();
+            int freqHours = settings.Automation.ShokoSyncWatchedFrequencyHours;
+            var result = await watchedSyncService.SyncWatchedAsync(false, freqHours > 0 ? freqHours + 1 : null, cancellationToken: CancellationToken.None).ConfigureAwait(false);
+            var actionInfo = scheduledActionService.GetScheduledAction<PlexWatchedSyncAction>();
             return Ok(
                 new RelayResponse<object>(
                     Data: new
                     {
                         triggered = true,
-                        scheduled = freqHours > 0,
-                        nextRunInHours = freqHours,
+                        scheduled = actionInfo?.Triggers.Count > 0,
+                        nextRun = actionInfo?.NextRunAt,
                         result,
                     }
                 )

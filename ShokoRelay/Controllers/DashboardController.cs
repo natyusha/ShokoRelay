@@ -8,7 +8,9 @@ using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.StaticFiles;
 using Shoko.Abstractions.Plugin;
+using Shoko.Abstractions.ScheduledActions.Services;
 using Shoko.Abstractions.Web.Services;
+using ShokoRelay.Actions;
 using IoFile = System.IO.File;
 
 namespace ShokoRelay.Controllers;
@@ -23,6 +25,7 @@ public class DashboardController(
     PlexClient plexLibrary,
     IWebThemeService webThemeService,
     IApplicationPaths applicationPaths,
+    IScheduledActionService scheduledActionService,
     ILogger<DashboardController> logger
 ) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary, logger)
 {
@@ -100,6 +103,7 @@ public class DashboardController(
             return BadRequest(new { status = "error", message = "Config payload is required." });
         Logger.LogInformation("Dashboard: Saving updated provider settings...");
         ConfigProvider.SaveSettings(config);
+        ActionScheduleHelper.SyncTriggers(config, scheduledActionService);
         return Ok(new { status = "ok" });
     }
 
