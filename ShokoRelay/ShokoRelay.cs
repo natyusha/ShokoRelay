@@ -6,7 +6,6 @@ using Shoko.Abstractions.Core.Services;
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Plugin;
 using Shoko.Abstractions.Plugin.Models;
-using Shoko.Abstractions.Video;
 using ShokoRelay.AnimeThemes;
 using ShokoRelay.Services;
 using ShokoRelay.Sync;
@@ -69,7 +68,6 @@ public class ServiceRegistration : IPluginServiceRegistration
         });
         serviceCollection.AddSingleton<SyncToShoko>();
         serviceCollection.AddSingleton<SyncToPlex>();
-        serviceCollection.AddSingleton<IManagedFolderIgnoreRule, VfsIgnoreRule>();
         serviceCollection.AddSingleton(provider =>
         {
             var cp = provider.GetRequiredService<ConfigProvider>();
