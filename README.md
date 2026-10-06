@@ -15,7 +15,11 @@ Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File Sy
 ## Installation
 
 > [!WARNING]
-> The VFS is created inside each of Shoko's managed folders under a subfolder named `!ShokoRelayVFS` (configurable under `Advanced Settings > VFS Root Path`). To stop Shoko Server from scanning the generated links and spawning duplicate file entries, it is highly recommended to add a manual exclusion as a safety net. This covers cases where Shoko Relay isn't loaded, or plugins have otherwise failed. To achieve this, navigate to Shoko's installation directory and add the following regex entry (or one matching your configured VFS folder name) to `settings-server.json` under `Exclude`:
+> The VFS is created inside each of Shoko's managed folders (that aren't marked exclusively as a "Source") under a subfolder named `!ShokoRelayVFS` (configurable under `Advanced Settings > VFS Root Path`).
+> While Shoko Relay includes an internal ignore rule to block scans of VFS folders during manual and scheduled imports, **Shoko's live file watcher ("Watch For New Files") bypasses plugin ignore rules entirely**.
+> To stop Shoko Server from scanning the generated links and spawning duplicate file entries, it is highly recommended to add a manual exclusion as a safety net. This covers cases where Shoko Relay isn't loaded or a managed "Destination" folder has "Watch for New Files" enabled.
+>
+> To achieve this, navigate to Shoko's installation directory and add the following regex entry (or one matching your configured VFS folder name) to `settings-server.json` under `Exclude`:
 >
 > ```json
 > "Exclude": [
