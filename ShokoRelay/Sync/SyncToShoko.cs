@@ -6,14 +6,16 @@ using Shoko.Abstractions.User.Update;
 namespace ShokoRelay.Sync;
 
 /// <summary>Synchronizes watched-state from Plex into Shoko.</summary>
-public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService, IUserDataService userDataService, IUserService userService, ConfigProvider configProvider, PlexAuth plexAuth)
+public class SyncToShoko(
+    PlexClient plexClient,
+    IMetadataService metadataService,
+    IUserDataService userDataService,
+    IUserService userService,
+    ConfigProvider configProvider,
+    PlexAuth plexAuth,
+    ILogger<SyncToShoko> logger
+)
 {
-    #region Setup
-
-    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
-
-    #endregion
-
     #region Synchronization Logic
 
     /// <summary>Sync watched-state from Plex into Shoko database.</summary>
@@ -86,14 +88,14 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
 
             // Fetch user item buckets and automatically handle managed token resolution and user filtering.
             var (userBuckets, newResult) = await SyncHelper
-                .FetchUserBucketsAsync(plexAuth, plexClient, configProvider, target, userType, extraEntries, false, null, sinceHours, result, cancellationToken)
+                .FetchUserBucketsAsync(plexAuth, plexClient, configProvider, target, userType, extraEntries, false, null, sinceHours, result, logger, cancellationToken)
                 .ConfigureAwait(false);
             result = newResult;
 
             if (actualProgress)
             {
                 var (progressBuckets, prResult) = await SyncHelper
-                    .FetchUserBucketsAsync(plexAuth, plexClient, configProvider, target, userType, extraEntries, true, true, sinceHours, result, cancellationToken)
+                    .FetchUserBucketsAsync(plexAuth, plexClient, configProvider, target, userType, extraEntries, true, true, sinceHours, result, logger, cancellationToken)
                     .ConfigureAwait(false);
                 result = prResult;
 
@@ -186,8 +188,8 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                         }
                         appliedIds.Add(ep.LocalID);
                         result = SyncHelper.IncMarkedWatched(result, result.PerUser, uName);
-                        s_logger.Info(
-                            "WatchedSyncService: {0}Plex -> Shoko: {1} marked {2} -> {3} [{4}] - S{5:D2}E{6:D2} (RatingKey: {7})",
+                        logger.LogInformation(
+                            "WatchedSyncService: {Prefix}Plex -> Shoko: {User} marked {Type} -> {Title} [{SeriesId}] - S{Season:D2}E{Episode:D2} (RatingKey: {RatingKey})",
                             logPrefix,
                             uName,
                             typeLabel,
@@ -213,8 +215,8 @@ public class SyncToShoko(PlexClient plexClient, IMetadataService metadataService
                         }
                         appliedIds.Add(ep.LocalID);
                         result = SyncHelper.IncProgressUpdated(result, result.PerUser, uName);
-                        s_logger.Info(
-                            "WatchedSyncService: {0}Plex -> Shoko: {1} updated progress for {2} -> {3} [{4}] - S{5:D2}E{6:D2} (RatingKey: {7}) to {8}",
+                        logger.LogInformation(
+                            "WatchedSyncService: {Prefix}Plex -> Shoko: {User} updated progress for {Type} -> {Title} [{SeriesId}] - S{Season:D2}E{Episode:D2} (RatingKey: {RatingKey}) to {Offset}",
                             logPrefix,
                             uName,
                             typeLabel,

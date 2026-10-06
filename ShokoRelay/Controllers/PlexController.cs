@@ -49,8 +49,9 @@ public class PlexController(
     ICriticRatingService criticRatingService,
     IUserService userService,
     IUserDataService userDataService,
-    IImageSyncService imageSyncService
-) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
+    IImageSyncService imageSyncService,
+    ILogger<PlexController> logger
+) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary, logger)
 {
     #region Authentication
 
@@ -100,7 +101,7 @@ public class PlexController(
             if (string.IsNullOrWhiteSpace(pin.AuthToken))
                 return Ok(new RelayResponse<object>(Status: "pending"));
 
-            Logger.Info("Plex: Authentication successful -> Saving token and discovering libraries...");
+            Logger.LogInformation("Plex: Authentication successful -> Saving token and discovering libraries...");
             ConfigProvider.UpdatePlexTokenInfo(token: pin.AuthToken);
 
             try
@@ -109,7 +110,7 @@ public class PlexController(
             }
             catch (Exception ex)
             {
-                Logger.Warn($"Plex: Failed to fetch admin name {ex.Message}");
+                Logger.LogWarning(ex, "Plex: Failed to fetch admin name");
             }
 
             try
@@ -119,7 +120,7 @@ public class PlexController(
             }
             catch (Exception ex)
             {
-                Logger.Warn($"Plex: Discovery failed {ex.Message}");
+                Logger.LogWarning(ex, "Plex: Discovery failed");
             }
 
             return Ok(new RelayResponse<object>(Data: new { tokenSaved = true }));
@@ -140,7 +141,7 @@ public class PlexController(
                 LogHelper.BuildDiscoveryReport,
                 async () =>
                 {
-                    Logger.Info("Plex: Refreshing servers and libraries...");
+                    Logger.LogInformation("Plex: Refreshing servers and libraries...");
                     await ConfigProvider.RefreshAdminUsername(plexAuth, HttpContext.RequestAborted).ConfigureAwait(false);
                     var discovery = await plexAuth.DiscoverShokoLibrariesAsync(ConfigProvider.GetPlexToken(), ConfigProvider.GetPlexClientIdentifier(), HttpContext.RequestAborted).ConfigureAwait(false);
                     PersistDiscoveryResults(discovery);
@@ -159,7 +160,7 @@ public class PlexController(
         if (string.IsNullOrWhiteSpace(token))
             return Ok(new RelayResponse<object>());
 
-        Logger.Info("Plex: Unlinking account and revoking token...");
+        Logger.LogInformation("Plex: Unlinking account and revoking token...");
         await plexAuth.RevokePlexTokenAsync(token, ConfigProvider.GetPlexClientIdentifier(), cancellationToken).ConfigureAwait(false);
         ConfigProvider.DeleteTokenFile();
 
@@ -220,7 +221,13 @@ public class PlexController(
                             if (await PlexLibrary.RefreshMetadataAsync(ratingKey, target, HttpContext.RequestAborted).ConfigureAwait(false))
                             {
                                 refreshedCount++;
-                                Logger.Info("Plex: Triggered manual metadata refresh for series -> {0} [{1}] (RatingKey: {2}) on {3}", series.GetDisplayTitle(), series.LocalID, ratingKey, target.ServerName);
+                                Logger.LogInformation(
+                                    "Plex: Triggered manual metadata refresh for series -> {Title} [{LocalId}] (RatingKey: {RatingKey}) on {ServerName}",
+                                    series.GetDisplayTitle(),
+                                    series.LocalID,
+                                    ratingKey,
+                                    target.ServerName
+                                );
                             }
                             else
                                 errors.Add($"Failed to refresh metadata for series -> {series.GetDisplayTitle()} [{series.LocalID}] (RatingKey: {ratingKey}) on {target.ServerName}");
@@ -373,7 +380,7 @@ public class PlexController(
         }
         catch (Exception ex)
         {
-            Logger.Warn(ex, "Plex: Failed to deserialize webhook payload. Raw JSON: {Json}", payloadJson);
+            Logger.LogWarning(ex, "Plex: Failed to deserialize webhook payload. Raw JSON: {Json}", payloadJson);
         }
 
         if (evt?.Metadata == null)
@@ -434,7 +441,7 @@ public class PlexController(
 
         if (!allowed)
         {
-            Logger.Info("Plex: Webhook ignored -> {Reason} | User: {User} | Event: {Event}", reason, evt.Account?.Title, evt.Event);
+            Logger.LogInformation("Plex: Webhook ignored -> {Reason} | User: {User} | Event: {Event}", reason, evt.Account?.Title, evt.Event);
             return Ok(new { status = "ignored", reason });
         }
 
@@ -460,7 +467,14 @@ public class PlexController(
             if (evt.Metadata.UserRating.HasValue)
             {
                 await userDataService.RateEpisode(shokoEpisode, user, evt.Metadata.UserRating.Value).ConfigureAwait(false);
-                Logger.Info("Plex: Rating applied -> user='{User}', series='{Series}', {Type}='{Item}', rating={Rating}", evt.Account?.Title, seriesName, typeLabel, itemTitle, evt.Metadata.UserRating.Value);
+                Logger.LogInformation(
+                    "Plex: Rating applied -> user='{User}', series='{Series}', {Type}='{Item}', rating={Rating}",
+                    evt.Account?.Title,
+                    seriesName,
+                    typeLabel,
+                    itemTitle,
+                    evt.Metadata.UserRating.Value
+                );
             }
             return Ok(new { status = "ok", rated = true });
         }
@@ -482,7 +496,7 @@ public class PlexController(
                     update.LastUpdatedAt = DateTime.UtcNow;
                     await userDataService.SaveVideoUserData(video, user, update).ConfigureAwait(false);
                 }
-                Logger.Info(
+                Logger.LogInformation(
                     "Plex: Progress updated -> user='{User}', series='{Series}', {Type}='{Item}', offset={Offset}",
                     evt.Account?.Title,
                     seriesName,
@@ -497,7 +511,7 @@ public class PlexController(
 
         var saved = await userDataService.SetEpisodeWatchedStatus(shokoEpisode, user, true, watchedAt, videoReason: VideoUserDataSaveReason.PlaybackEnd).ConfigureAwait(false);
         if (saved != null)
-            Logger.Info("Plex: Scrobble applied -> user='{User}', series='{Series}', {Type}='{Item}'", evt.Account?.Title, seriesName, typeLabel, itemTitle);
+            Logger.LogInformation("Plex: Scrobble applied -> user='{User}', series='{Series}', {Type}='{Item}'", evt.Account?.Title, seriesName, typeLabel, itemTitle);
         return Ok(new { status = "ok", marked = saved != null });
     }
 

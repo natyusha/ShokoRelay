@@ -34,11 +34,9 @@ public sealed record ImageSyncResult(int Processed, int Uploaded, int Skipped, i
 #endregion
 
 /// <summary>Default implementation of <see cref="IImageSyncService"/>.</summary>
-public class ImageSyncService(PlexClient plexClient, IMetadataService metadataService, IImageManager imageManager) : IImageSyncService
+public class ImageSyncService(PlexClient plexClient, IMetadataService metadataService, IImageManager imageManager, ILogger<ImageSyncService> logger) : IImageSyncService
 {
     #region Setup
-
-    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
 
     /// <summary>Static configurations for local series artwork types.</summary>
     private static readonly (string[] Names, string Prefix, ImageEntityType Type, string Label)[] s_seriesImageConfigs =
@@ -68,7 +66,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
             HashSet<int>? allowedSet = allowedPrimaryIds != null ? [.. allowedPrimaryIds] : null;
 
             var syncDetails = Settings.TmdbThumbnails ? "" : " + Plex episode thumbnails";
-            s_logger.Info("ImageSyncService: Starting image synchronization (local collection/series artwork{0})...", syncDetails);
+            logger.LogInformation("ImageSyncService: Starting image synchronization (local collection/series artwork{Details})...", syncDetails);
 
             var prefIdCache = new ConcurrentDictionary<int, string?>();
             var errsBag = new ConcurrentBag<string>();
@@ -101,7 +99,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
             await SyncLocalSeriesImagesAsync(allSeries, errsBag, uploadedBag, AddStats, cancellationToken).ConfigureAwait(false);
 
             sw.Stop();
-            s_logger.Info("ImageSyncService: Finished synchronization -> uploaded {0} new images to Shoko in {1}ms", u, sw.ElapsedMilliseconds);
+            logger.LogInformation("ImageSyncService: Finished synchronization -> uploaded {UploadedCount} new images to Shoko in {Elapsed}ms", u, sw.ElapsedMilliseconds);
             return new ImageSyncResult(p, u, s, e, [.. uploadedBag.OrderBy(x => x)], [.. errsBag.OrderBy(x => x)], sw.Elapsed);
         }
         finally
@@ -240,7 +238,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                     {
                         if (episode.GetImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = ImageEntityType.Backdrop }).Any(x => x.Source == ServiceRegistration.RelayPlexSource))
                         {
-                            s_logger.Info("ImageSyncService: {0} ... Purging Plex thumbnail for -> {1}", fileExists ? "Local thumbnail found" : "TMDB Thumbnails enabled", epLogName);
+                            logger.LogInformation("ImageSyncService: {Reason} ... Purging Plex thumbnail for -> {LogName}", fileExists ? "Local thumbnail found" : "TMDB Thumbnails enabled", epLogName);
                             await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, x => x.Source == ServiceRegistration.RelayPlexSource).ConfigureAwait(false);
                         }
                     }
@@ -296,7 +294,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
             {
                 addStats(true, false, false, true);
                 errsBag.Add($"Failed to scan Plex section {target.SectionId}: {ex.Message}");
-                s_logger.Warn(ex, "ImageSyncService: Failed to scan library section {0}", target.SectionId);
+                logger.LogWarning(ex, "ImageSyncService: Failed to scan library section {SectionId}", target.SectionId);
             }
         }
 
@@ -327,7 +325,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                 string coordsStr = $"S{coords.Season:D2}E{coords.Episode:D2}";
                 var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - {coordsStr}";
 
-                s_logger.Info("ImageSyncService: Episode thumbnail for -> {0} is no longer present in Plex ... Purging from Shoko", epLogName);
+                logger.LogDebug("ImageSyncService: Episode thumbnail for -> {LogName} is no longer present in Plex ... Purging from Shoko", epLogName);
                 await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, x => x.Source == ServiceRegistration.RelayPlexSource).ConfigureAwait(false);
                 addStats(false, false, false, false);
             }
@@ -464,7 +462,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
         {
             if (existingXrefs.Count > 0)
             {
-                s_logger.Info("ImageSyncService: Local {0} for -> {1} no longer present on disk ... Purging from Shoko", label, entityName);
+                logger.LogDebug("ImageSyncService: Local {Label} for -> {Entity} no longer present on disk ... Purging from Shoko", label, entityName);
                 await PurgeEntityImagesAsync(entity, imageType, x => x.Source == ServiceRegistration.RelaySource).ConfigureAwait(false);
             }
             return (false, false, false, false);
@@ -478,7 +476,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
         if (matchingXref != null)
             return (true, false, true, false); // Skipped: We already own this exact image for this entity. Shoko handles the IsPreferred exclusivity natively.
 
-        s_logger.Debug("ImageSyncService: Local {0} changed or new for -> {1} ... Uploading", label, entityName);
+        logger.LogDebug("ImageSyncService: Local {Label} changed or new for -> {Entity} ... Uploading", label, entityName);
         await PurgeEntityImagesAsync(entity, imageType, x => x.Source == ServiceRegistration.RelaySource).ConfigureAwait(false);
 
         try
@@ -501,13 +499,13 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
             );
 
             if (uploadDetail != null)
-                s_logger.Info("ImageSyncService: Successfully uploaded and preferred {0} for -> {1}", label, entityName);
+                logger.LogDebug("ImageSyncService: Successfully uploaded and preferred {Label} for -> {Entity}", label, entityName);
             return (true, true, false, false);
         }
         catch (Exception ex)
         {
             errorsBag.Add($"Failed to process {label} for -> {entityName}: {ex.Message}");
-            s_logger.Warn(ex, "ImageSyncService: Failed to upload {0} for -> {1}", label, entityName);
+            logger.LogWarning(ex, "ImageSyncService: Failed to upload {Label} for -> {Entity}", label, entityName);
             return (true, false, false, true);
         }
     }
@@ -531,7 +529,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
         if (existingXrefs.Count > 0)
             return (true, false, true, false); // Skipped: We already own a downloaded Plex thumbnail for this episode.
 
-        s_logger.Trace("ImageSyncService: Fetching Plex thumbnail for episode -> {0}", epLogName);
+        logger.LogTrace("ImageSyncService: Fetching Plex thumbnail for episode -> {LogName}", epLogName);
         try
         {
             using var req = plexClient.CreateRequest(HttpMethod.Get, thumbUrl, target.ServerUrl);
@@ -561,13 +559,13 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
             );
 
             uploadedBag.Add($"[Plex Thumb] {epLogName}");
-            s_logger.Info("ImageSyncService: Successfully uploaded and preferred thumbnail for episode -> {0}", epLogName);
+            logger.LogDebug("ImageSyncService: Successfully uploaded and preferred thumbnail for episode -> {LogName}", epLogName);
             return (true, true, false, false);
         }
         catch (Exception ex)
         {
             errorsBag.Add($"[Plex Thumbnail Exception] {epLogName}: {ex.Message}");
-            s_logger.Warn(ex, "ImageSyncService: Failed to process Plex thumbnail for {0}", epLogName);
+            logger.LogWarning(ex, "ImageSyncService: Failed to process Plex thumbnail for {LogName}", epLogName);
             return (true, false, false, true);
         }
     }
@@ -596,7 +594,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
         }
         catch (Exception ex)
         {
-            s_logger.Warn(ex, "ImageSyncService: Failed to purge stale images for entity of type {0}", entity.GetType().Name);
+            logger.LogWarning(ex, "ImageSyncService: Failed to purge stale images for entity of type {Type}", entity.GetType().Name);
         }
     }
 

@@ -17,8 +17,14 @@ namespace ShokoRelay.Controllers;
 [ApiController]
 [ApiVersion(ShokoRelayConstants.ApiVersion)]
 [Route(ShokoRelayConstants.BasePath)]
-public class DashboardController(ConfigProvider configProvider, IMetadataService metadataService, PlexClient plexLibrary, IWebThemeService webThemeService, IApplicationPaths applicationPaths)
-    : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
+public class DashboardController(
+    ConfigProvider configProvider,
+    IMetadataService metadataService,
+    PlexClient plexLibrary,
+    IWebThemeService webThemeService,
+    IApplicationPaths applicationPaths,
+    ILogger<DashboardController> logger
+) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary, logger)
 {
     #region Setup
 
@@ -92,7 +98,7 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
     {
         if (config == null)
             return BadRequest(new { status = "error", message = "Config payload is required." });
-        Logger.Info("Dashboard: Saving updated provider settings...");
+        Logger.LogInformation("Dashboard: Saving updated provider settings...");
         ConfigProvider.SaveSettings(config);
         return Ok(new { status = "ok" });
     }
@@ -173,7 +179,7 @@ public class DashboardController(ConfigProvider configProvider, IMetadataService
         }
         catch (Exception ex)
         {
-            Logger.Warn(ex, "Dashboard: Failed to generate dynamic mapped CSS for theme {0}", themeId);
+            Logger.LogWarning(ex, "Dashboard: Failed to generate dynamic mapped CSS for theme {ThemeId}", themeId);
             return Content(string.Empty, "text/css");
         }
     }

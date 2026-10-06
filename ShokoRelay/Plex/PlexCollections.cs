@@ -29,11 +29,9 @@ public sealed record CollectionDeletionDetail(string TargetTitle, bool IsMovie, 
 #endregion
 
 /// <summary>Provides utilities for working with Plex collections.</summary>
-public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
+public class PlexCollections(HttpClient httpClient, PlexClient plexClient, ILogger<PlexCollections> logger)
 {
-    #region Setup & State
-
-    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
+    #region State
 
     /// <summary>Whether Plex integration is enabled.</summary>
     public bool IsEnabled => plexClient.IsEnabled;
@@ -66,8 +64,8 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
         if (!resp2.IsSuccessStatusCode)
         {
             var body = await resp2.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-            s_logger.Warn(
-                "PlexCollections: Create collection failed with status {0} for title {1} on {2}/{3}. Response: {4}",
+            logger.LogWarning(
+                "PlexCollections: Create collection failed with status {StatusCode} for title {Title} on {ServerUrl}/{SectionId}. Response: {Response}",
                 resp2.StatusCode,
                 collectionName,
                 target.ServerUrl,
@@ -175,7 +173,7 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
                     && await ExecuteActionAsync(HttpMethod.Delete, $"/library/collections/{id}", target, $"Delete collection {id}", cancellationToken).ConfigureAwait(false)
                 )
                 {
-                    s_logger.Info("PlexCollections: Deleted empty collection '{0}' (RatingKey: {1}) in section {2}", m.Title ?? "Unknown", id, target.SectionId);
+                    logger.LogInformation("PlexCollections: Deleted empty collection '{Title}' (RatingKey: {RatingKey}) in section {SectionId}", m.Title ?? "Unknown", id, target.SectionId);
                     deleted.Add(new CollectionDeletionDetail(target.Title, isMovie, m.Title ?? "Unknown", id));
                 }
             }
@@ -224,8 +222,8 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
                 return true;
 
             var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            s_logger.Warn(
-                "PlexCollections: {0} failed with status {1} on {2}/{3} -> Response {4}",
+            logger.LogWarning(
+                "PlexCollections: {Action} failed with status {StatusCode} on {ServerUrl}/{SectionId} -> Response {Response}",
                 actionName,
                 response.StatusCode,
                 target.ServerUrl,
@@ -235,7 +233,7 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient)
         }
         catch (Exception ex)
         {
-            s_logger.Warn(ex, "PlexCollections: {0} failed for {1}:{2}", actionName, target.ServerUrl, target.SectionId);
+            logger.LogWarning(ex, "PlexCollections: {Action} failed for {ServerUrl}:{SectionId}", actionName, target.ServerUrl, target.SectionId);
         }
         return false;
     }

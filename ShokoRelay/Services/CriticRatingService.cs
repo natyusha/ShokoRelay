@@ -47,14 +47,8 @@ public sealed record ApplyRatingsResult(
 #endregion
 
 /// <summary>Default implementation of <see cref="ICriticRatingService"/>.</summary>
-public class CriticRatingService(PlexClient plexClient, IMetadataService metadataService) : ICriticRatingService
+public class CriticRatingService(PlexClient plexClient, IMetadataService metadataService, ILogger<CriticRatingService> logger) : ICriticRatingService
 {
-    #region Setup
-
-    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
-
-    #endregion
-
     #region Public API
 
     /// <inheritdoc/>
@@ -62,7 +56,7 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
     {
         const string TaskName = ShokoRelayConstants.TaskPlexRatingsApply;
         TaskHelper.StartTask(TaskName);
-        s_logger.Info("CriticRatingService: Starting task...");
+        logger.LogInformation("CriticRatingService: Starting task...");
         var sw = Stopwatch.StartNew();
 
         try
@@ -104,8 +98,8 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
 
                 if (!NeedsRatingUpdate(item.Rating, rating))
                 {
-                    s_logger.Trace(
-                        "CriticRatingService: Skipped series -> {0} [{1}] (RatingKey: {2}) because rating {3} matches Plex",
+                    logger.LogTrace(
+                        "CriticRatingService: Skipped series -> {Title} [{LocalId}] (RatingKey: {RatingKey}) because rating {Rating} matches Plex",
                         series.GetDisplayTitle(),
                         series.LocalID,
                         item.RatingKey,
@@ -118,7 +112,7 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                 {
                     uS++;
                     appliedChanges.Add(new RatingChange($"{series.GetDisplayTitle() ?? "Unknown"} [{series.LocalID}]", "Series", item.RatingKey!, item.Rating, rating));
-                    s_logger.Info("CriticRatingService: Updated series -> {0} [{1}] to {2}", series.GetDisplayTitle(), series.LocalID, rating?.ToString("F2") ?? "n/a");
+                    logger.LogInformation("CriticRatingService: Updated series -> {Title} [{LocalId}] to {Rating}", series.GetDisplayTitle(), series.LocalID, rating?.ToString("F2") ?? "n/a");
                 }
                 else
                 {
@@ -157,7 +151,7 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
 
                 if (!NeedsRatingUpdate(item.Rating, rating))
                 {
-                    s_logger.Trace("CriticRatingService: Skipped episode -> {0} because rating {1} matches Plex", epLogName, item.Rating?.ToString("F2") ?? "n/a");
+                    logger.LogTrace("CriticRatingService: Skipped episode -> {LogName} because rating {Rating} matches Plex", epLogName, item.Rating?.ToString("F2") ?? "n/a");
                     return;
                 }
 
@@ -167,7 +161,7 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                     appliedChanges.Add(
                         new RatingChange($"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - S{coords.Season:D2}E{coords.Episode:D2}", "Episode", item.RatingKey!, item.Rating, rating)
                     );
-                    s_logger.Trace("CriticRatingService: Updated episode -> {0} to {1}", epLogName, rating?.ToString("F2") ?? "n/a");
+                    logger.LogTrace("CriticRatingService: Updated episode -> {LogName} to {Rating}", epLogName, rating?.ToString("F2") ?? "n/a");
                 }
                 else
                 {
@@ -208,7 +202,7 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
 
                 if (!NeedsRatingUpdate(item.Rating, rating))
                 {
-                    s_logger.Trace("CriticRatingService: Skipped movie -> {0} because rating {1} matches Plex", epLogName, item.Rating?.ToString("F2") ?? "n/a");
+                    logger.LogTrace("CriticRatingService: Skipped movie -> {LogName} because rating {Rating} matches Plex", epLogName, item.Rating?.ToString("F2") ?? "n/a");
                     return;
                 }
 
@@ -218,7 +212,7 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                     appliedChanges.Add(
                         new RatingChange($"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - S{coords.Season:D2}E{coords.Episode:D2}", "Movie", item.RatingKey!, item.Rating, rating)
                     );
-                    s_logger.Trace("CriticRatingService: Updated movie -> {0} to {1}", epLogName, rating?.ToString("F2") ?? "n/a");
+                    logger.LogTrace("CriticRatingService: Updated movie -> {LogName} to {Rating}", epLogName, rating?.ToString("F2") ?? "n/a");
                 }
                 else
                 {
@@ -278,7 +272,7 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                 }
             }
             sw.Stop();
-            s_logger.Info("CriticRatingService: Task finished -> Updated {0} series and {1} episodes in {2}ms", uS, uE, sw.ElapsedMilliseconds);
+            logger.LogInformation("CriticRatingService: Task finished -> Updated {SeriesCount} series and {EpisodeCount} episodes in {Elapsed}ms", uS, uE, sw.ElapsedMilliseconds);
             return new ApplyRatingsResult(pS, uS, pE, uE, errs, errorsList, appliedChanges, sw.Elapsed);
         }
         finally

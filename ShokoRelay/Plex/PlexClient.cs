@@ -3,11 +3,9 @@ using Shoko.Abstractions.Metadata.Enums;
 namespace ShokoRelay.Plex;
 
 /// <summary>HTTP client wrapper that communicates with one or more Plex servers.</summary>
-public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
+public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, ILogger<PlexClient> logger)
 {
     #region Setup & Properties
-
-    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
 
     private string Token => configProvider.GetPlexToken();
     private string ClientIdentifier => configProvider.GetPlexClientIdentifier();
@@ -149,17 +147,17 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
             if (resp.IsSuccessStatusCode)
             {
                 anyOk = true;
-                s_logger.Debug("PlexClient: refresh triggered for -> '{0}' on {1}:{2}", guessedPath, tgt.ServerUrl, tgt.SectionId);
+                logger.LogDebug("PlexClient: refresh triggered for -> '{Path}' on {ServerUrl}:{SectionId}", guessedPath, tgt.ServerUrl, tgt.SectionId);
             }
             else
             {
-                s_logger.Warn("PlexClient: refresh failed ({0}) for folder -> '{1}' in section {2}", resp.StatusCode, guessedPath, tgt.SectionId);
+                logger.LogWarning("PlexClient: refresh failed ({StatusCode}) for folder -> '{Path}' in section {SectionId}", resp.StatusCode, guessedPath, tgt.SectionId);
             }
         }
 
         if (!anyOk && targets.Count == 0)
-            s_logger.Warn(
-                "PlexClient: Path '{0}' does not match any known Plex library locations! If Plex and Shoko run on different filesystems, please configure Path Mappings in the Shoko Relay dashboard.",
+            logger.LogWarning(
+                "PlexClient: Path '{Path}' does not match any known Plex library locations! If Plex and Shoko run on different filesystems, please configure Path Mappings in the Shoko Relay dashboard.",
                 TextHelper.NormalizePathForPlex(MapShokoPathToPlexPath(path))
             );
 
@@ -180,9 +178,9 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
 
         if (resp.IsSuccessStatusCode)
-            s_logger.Debug("PlexClient: Metadata refresh triggered for RatingKey {0} on {1}", ratingKey, target.ServerName);
+            logger.LogDebug("PlexClient: Metadata refresh triggered for RatingKey {RatingKey} on {ServerName}", ratingKey, target.ServerName);
         else
-            s_logger.Warn("PlexClient: Metadata refresh failed ({0}) for RatingKey {1} on {2}", resp.StatusCode, ratingKey, target.ServerName);
+            logger.LogWarning("PlexClient: Metadata refresh failed ({StatusCode}) for RatingKey {RatingKey} on {ServerName}", resp.StatusCode, ratingKey, target.ServerName);
 
         return resp.IsSuccessStatusCode;
     }
@@ -201,9 +199,9 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
 
         if (resp.IsSuccessStatusCode)
-            s_logger.Debug("PlexClient: Media analysis triggered for RatingKey {0} on {1}", ratingKey, target.ServerName);
+            logger.LogDebug("PlexClient: Media analysis triggered for RatingKey {RatingKey} on {ServerName}", ratingKey, target.ServerName);
         else
-            s_logger.Warn("PlexClient: Media analysis failed ({0}) for RatingKey {1} on {2}", resp.StatusCode, ratingKey, target.ServerName);
+            logger.LogWarning("PlexClient: Media analysis failed ({StatusCode}) for RatingKey {RatingKey} on {ServerName}", resp.StatusCode, ratingKey, target.ServerName);
 
         return resp.IsSuccessStatusCode;
     }
@@ -277,7 +275,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         }
         catch (Exception ex)
         {
-            s_logger.Warn(ex, "PlexClient: Failed to process empty trash for section {0}", target.SectionId);
+            logger.LogWarning(ex, "PlexClient: Failed to process empty trash for section {SectionId}", target.SectionId);
             return (false, [], $"Exception during trash processing: {ex.Message}");
         }
     }
@@ -388,7 +386,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider)
         }
         catch (Exception ex)
         {
-            s_logger.Trace(ex, "PlexClient: Failed to find rating key for Shoko series {0} in section {1}", shokoSeriesId, target.SectionId);
+            logger.LogTrace(ex, "PlexClient: Failed to find rating key for Shoko series {SeriesId} in section {SectionId}", shokoSeriesId, target.SectionId);
             return [];
         }
     }

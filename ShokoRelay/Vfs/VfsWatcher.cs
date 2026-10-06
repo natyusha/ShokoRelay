@@ -17,12 +17,11 @@ public class VfsWatcher(
     ICollectionService collectionService,
     AnimeThemesMapping atMapping,
     ICriticRatingService criticRatingService,
-    IImageSyncService imageSyncService
+    IImageSyncService imageSyncService,
+    ILogger<VfsWatcher> logger
 )
 {
     #region Setup
-
-    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
 
     /// <summary>Tracks series IDs pending VFS rebuild.</summary>
     private readonly ConcurrentDictionary<int, byte> _pending = new();
@@ -50,7 +49,7 @@ public class VfsWatcher(
         videoService.VideoFileDeleted += OnVideoFileDeleted;
         releaseService.ReleaseSaved += OnVideoReleaseSaved;
 
-        s_logger.Info("VFS: VfsWatcher -> Started (listening for relocation, matching and deletion events)");
+        logger.LogInformation("VFS: VfsWatcher -> Started (listening for relocation, matching and deletion events)");
     }
 
     /// <summary>Unsubscribe from Shoko video-file events and stop watching.</summary>
@@ -69,7 +68,7 @@ public class VfsWatcher(
         }
         catch { }
 
-        s_logger.Info("VFS: VfsWatcher -> Stopped");
+        logger.LogInformation("VFS: VfsWatcher -> Stopped");
     }
 
     #endregion
@@ -81,7 +80,7 @@ public class VfsWatcher(
     /// <param name="e">Event parameters containing file information.</param>
     private void OnVideoFileRelocated(object? sender, VideoFileRelocatedEventArgs e)
     {
-        s_logger.Info("VFS: File relocated/renamed -> {0}", Path.GetFileName(e.RelativePath));
+        logger.LogDebug("VFS: File relocated/renamed -> {FileName}", Path.GetFileName(e.RelativePath));
         HandleFileEvent(e);
     }
 
@@ -90,7 +89,7 @@ public class VfsWatcher(
     /// <param name="e">Event parameters containing file information.</param>
     private void OnVideoFileDeleted(object? sender, VideoFileEventArgs e)
     {
-        s_logger.Info("VFS: File deleted -> {0}", Path.GetFileName(e.RelativePath));
+        logger.LogDebug("VFS: File deleted -> {FileName}", Path.GetFileName(e.RelativePath));
         HandleFileEvent(e);
     }
 
@@ -101,12 +100,12 @@ public class VfsWatcher(
     {
         if (e.Video?.Series == null || e.Video.Series.Count == 0)
             return;
-        s_logger.Info("VFS: Release saved for video '{0}'", Path.GetFileName(e.Video.EarliestKnownName ?? "Unknown File"));
+        logger.LogDebug("VFS: Release saved for video '{FileName}'", Path.GetFileName(e.Video.EarliestKnownName ?? "Unknown File"));
 
         foreach (var series in e.Video.Series)
         {
             int primaryId = series.GetPrimaryId(metadataService);
-            s_logger.Debug("VFS: Adding series -> {0} [{1}] (Primary: {2}) to pending queue due to release save", series.GetDisplayTitle(), series.LocalID, primaryId);
+            logger.LogDebug("VFS: Adding series -> {Title} [{LocalId}] (Primary: {PrimaryId}) to pending queue due to release save", series.GetDisplayTitle(), series.LocalID, primaryId);
             _pending[primaryId] = 1;
         }
 
@@ -167,7 +166,7 @@ public class VfsWatcher(
             {
                 if (Settings.Advanced.DeferVfsCreationUntilFixup)
                 {
-                    s_logger.Info("VFS: Deferring VFS creation for {0} series until fixup ({1}m delay)", seriesIds.Count, Settings.Advanced.PlexFixupDelay);
+                    logger.LogInformation("VFS: Deferring VFS creation for {Count} series until fixup ({Delay}m delay)", seriesIds.Count, Settings.Advanced.PlexFixupDelay);
                     foreach (var seriesId in seriesIds)
                         TriggerPlexUpdates(seriesId, deferScan: true);
                 }
@@ -184,8 +183,8 @@ public class VfsWatcher(
                             await atMapping.ApplyMappingAsync(seriesIds, CancellationToken.None).ConfigureAwait(false);
 
                         sw.Stop();
-                        s_logger.Info(
-                            "VFS: Batch refreshed for {0} series in {1}ms -> created={2} planned={3} skipped={4} seriesProcessed={5} errors={6}",
+                        logger.LogInformation(
+                            "VFS: Batch refreshed for {Count} series in {Elapsed}ms -> created={Created} planned={Planned} skipped={Skipped} seriesProcessed={Processed} errors={Errors}",
                             seriesIds.Count,
                             sw.ElapsedMilliseconds,
                             result.CreatedLinks,
@@ -206,7 +205,7 @@ public class VfsWatcher(
             }
             catch (Exception ex)
             {
-                s_logger.Warn(ex, "VFS: Batch refresh failed");
+                logger.LogWarning(ex, "VFS: Batch refresh failed");
             }
 
             await Task.Delay(400).ConfigureAwait(false);
@@ -230,7 +229,7 @@ public class VfsWatcher(
         // If the series has no valid VFS paths (e.g., all files reside in excluded folders), bypass Plex updates entirely.
         if (!VfsShared.ResolveSeriesVfsPaths(series, metadataService).Any())
         {
-            s_logger.Debug("VFS: Skipping Plex updates for series -> {0} [{1}] ... No valid VFS paths found (series may be fully excluded or empty)", series.GetDisplayTitle(), series.LocalID);
+            logger.LogDebug("VFS: Skipping Plex updates for series -> {Title} [{LocalId}] ... No valid VFS paths found (series may be fully excluded or empty)", series.GetDisplayTitle(), series.LocalID);
             return;
         }
 
@@ -241,7 +240,7 @@ public class VfsWatcher(
         if (plexLibrary.IsEnabled || Settings.Advanced.DeferVfsCreationUntilFixup)
         {
             string actionName = Settings.Advanced.DeferVfsCreationUntilFixup ? "deferred VFS creation" : "metadata fixup";
-            s_logger.Debug("VFS: Scheduling {0} for series -> {1} [{2}] in {3} minute(s)", actionName, series.GetDisplayTitle(), series.LocalID, Settings.Advanced.PlexFixupDelay);
+            logger.LogDebug("VFS: Scheduling {Action} for series -> {Title} [{LocalId}] in {Delay} minute(s)", actionName, series.GetDisplayTitle(), series.LocalID, Settings.Advanced.PlexFixupDelay);
             ScheduleDebouncedAction(series.LocalID, Settings.Advanced.PlexFixupDelay * 60, _pendingMetadataFixups, token => RunMetadataFixupAsync(series, token));
         }
     }
@@ -282,7 +281,7 @@ public class VfsWatcher(
             catch (Exception ex)
             {
                 var title = metadataService.GetShokoSeriesByID(seriesId)?.GetDisplayTitle() ?? "Series";
-                s_logger.Error(ex, "VFS: Scheduled action failed for series -> {0} [{1}]", title, seriesId);
+                logger.LogError(ex, "VFS: Scheduled action failed for series -> {Title} [{SeriesId}]", title, seriesId);
             }
             finally
             {
@@ -310,7 +309,7 @@ public class VfsWatcher(
                     if (Directory.Exists(path) && Directory.EnumerateFileSystemEntries(path).Any())
                         await plexLibrary.RefreshSectionPathAsync(path, token).ConfigureAwait(false);
                     else
-                        s_logger.Debug("VFS: Library scan for series -> {0} [{1}] skipped; path '{2}' not ready or empty", series.GetDisplayTitle(), series.LocalID, path);
+                        logger.LogDebug("VFS: Library scan for series -> {Title} [{LocalId}] skipped; path '{Path}' not ready or empty", series.GetDisplayTitle(), series.LocalID, path);
                 }
             }
         );
@@ -329,7 +328,7 @@ public class VfsWatcher(
             // Regenerate the VFS to account for cases where the episode/season numbering was updated in Shoko after the initial file event was processed
             var vfsResult = builder.Build(series.LocalID, cleanRoot: false);
             if (vfsResult.CreatedLinks > 0)
-                s_logger.Info("VFS: {0} links -> {1} [{2}] during fixup phase", isDeferred ? "Created" : "Re-generated", series.GetDisplayTitle(), series.LocalID);
+                logger.LogInformation("VFS: {Action} links -> {Title} [{LocalId}] during fixup phase", isDeferred ? "Created" : "Re-generated", series.GetDisplayTitle(), series.LocalID);
 
             // Restore AnimeThemes links for this specific series if a mapping file exists to prevent the pruned folder from losing them
             if (File.Exists(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileAtMapping)))
@@ -375,7 +374,13 @@ public class VfsWatcher(
                     if (i < maxRetries - 1)
                     {
                         if (i == 0 && isDeferred)
-                            s_logger.Debug("VFS: Waiting for Plex to index series -> {0} [{1}] in library '{2}' on {3}...", series.GetDisplayTitle(), series.LocalID, target.Title, target.ServerName);
+                            logger.LogDebug(
+                                "VFS: Waiting for Plex to index series -> {Title} [{LocalId}] in library '{Library}' on {Server}...",
+                                series.GetDisplayTitle(),
+                                series.LocalID,
+                                target.Title,
+                                target.ServerName
+                            );
                         await Task.Delay(TimeSpan.FromSeconds(retryDelaySeconds), token).ConfigureAwait(false);
                     }
                 }
@@ -386,8 +391,8 @@ public class VfsWatcher(
                     if (!isDeferred || plexLibrary.ScanOnVfsRefresh)
                     {
                         // Shoko may have been missing data (e.g. TMDB IDs) when the VFS was instantly generated necessitating a forced metadata refresh
-                        s_logger.Info(
-                            "VFS: Triggering debounced metadata fixup and analysis for series -> {0} [{1}] (RatingKey: {2}) in library '{3}' on {4}",
+                        logger.LogInformation(
+                            "VFS: Triggering debounced metadata fixup and analysis for series -> {Title} [{LocalId}] (RatingKey: {RatingKey}) in library '{Library}' on {Server}",
                             series.GetDisplayTitle(),
                             series.LocalID,
                             ratingKey,
@@ -399,8 +404,8 @@ public class VfsWatcher(
                     }
                     else
                     {
-                        s_logger.Info(
-                            "VFS: Series -> {0} [{1}] (RatingKey: {2}) successfully indexed by Plex in library '{3}' on {4}",
+                        logger.LogInformation(
+                            "VFS: Series -> {Title} [{LocalId}] (RatingKey: {RatingKey}) successfully indexed by Plex in library '{Library}' on {Server}",
                             series.GetDisplayTitle(),
                             series.LocalID,
                             ratingKey,
@@ -414,17 +419,17 @@ public class VfsWatcher(
             if (!foundInAnyTarget)
             {
                 if (isDeferred)
-                    s_logger.Warn("VFS: Automations for series -> {0} [{1}] skipped; rating key not found in Plex after timeout", series.GetDisplayTitle(), series.LocalID);
+                    logger.LogWarning("VFS: Automations for series -> {Title} [{LocalId}] skipped; rating key not found in Plex after timeout", series.GetDisplayTitle(), series.LocalID);
                 else
-                    s_logger.Debug("VFS: Debounced metadata fixup for series -> {0} [{1}] skipped; rating key not found in Plex yet", series.GetDisplayTitle(), series.LocalID);
+                    logger.LogDebug("VFS: Debounced metadata fixup for series -> {Title} [{LocalId}] skipped; rating key not found in Plex yet", series.GetDisplayTitle(), series.LocalID);
             }
             else
             {
                 // Execute subsequent API actions sequentially to guarantee metadata framework exists
-                s_logger.Info("VFS: Triggering debounced collection update for series -> {0} [{1}]", series.GetDisplayTitle(), series.LocalID);
+                logger.LogInformation("VFS: Triggering debounced collection update for series -> {Title} [{LocalId}]", series.GetDisplayTitle(), series.LocalID);
                 await collectionService.BuildCollectionsAsync([series], clean: false, cancellationToken: token).ConfigureAwait(false);
 
-                s_logger.Info("VFS: Triggering debounced critic rating application for series -> {0} [{1}]", series.GetDisplayTitle(), series.LocalID);
+                logger.LogInformation("VFS: Triggering debounced critic rating application for series -> {Title} [{LocalId}]", series.GetDisplayTitle(), series.LocalID);
                 await criticRatingService.ApplyRatingsAsync([series.LocalID], token).ConfigureAwait(false);
 
                 if (Settings.Advanced.EnableImageSync)
@@ -432,11 +437,11 @@ public class VfsWatcher(
                     // Give Plex's background workers a moment to extract the episode thumbnail before attempting to sync it
                     if (isDeferred && !Settings.TmdbThumbnails)
                     {
-                        s_logger.Debug("VFS: Pausing briefly to allow Plex thumbnail extraction for series -> {0} [{1}]", series.GetDisplayTitle(), series.LocalID);
+                        logger.LogDebug("VFS: Pausing briefly to allow Plex thumbnail extraction for series -> {Title} [{LocalId}]", series.GetDisplayTitle(), series.LocalID);
                         await Task.Delay(TimeSpan.FromSeconds(retryDelaySeconds), token).ConfigureAwait(false);
                     }
 
-                    s_logger.Info("VFS: Triggering debounced image sync for series -> {0} [{1}]", series.GetDisplayTitle(), series.LocalID);
+                    logger.LogInformation("VFS: Triggering debounced image sync for series -> {Title} [{LocalId}]", series.GetDisplayTitle(), series.LocalID);
                     await imageSyncService.SyncImagesAsync([series.LocalID], token).ConfigureAwait(false);
                 }
             }
@@ -444,7 +449,7 @@ public class VfsWatcher(
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            s_logger.Error(ex, "VFS: Metadata fixup failed for series -> {0} [{1}]", series.GetDisplayTitle(), series.LocalID);
+            logger.LogError(ex, "VFS: Metadata fixup failed for series -> {Title} [{LocalId}]", series.GetDisplayTitle(), series.LocalID);
         }
     }
 

@@ -4,14 +4,16 @@ using Shoko.Abstractions.User.Services;
 namespace ShokoRelay.Sync;
 
 /// <summary>Synchronizes watched-state (and optional votes) from Shoko -> Plex.</summary>
-public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService, IUserDataService userDataService, IUserService userService, ConfigProvider configProvider, PlexAuth plexAuth)
+public class SyncToPlex(
+    PlexClient plexClient,
+    IMetadataService metadataService,
+    IUserDataService userDataService,
+    IUserService userService,
+    ConfigProvider configProvider,
+    PlexAuth plexAuth,
+    ILogger<SyncToPlex> logger
+)
 {
-    #region Setup
-
-    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
-
-    #endregion
-
     #region Synchronization Logic
 
     /// <summary>Sync watched-state from Shoko into configured Plex libraries.</summary>
@@ -75,7 +77,7 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
             // Fetch user item buckets and automatically handle managed token resolution and user filtering.
             // Pass sinceHours: null here to return ALL unwatched items in Plex. The Shoko list is already filtered by sinceHours.
             var (userBuckets, newResult) = await SyncHelper
-                .FetchUserBucketsAsync(plexAuth, plexClient, configProvider, target, userType, extraEntries, true, null, null, result, cancellationToken)
+                .FetchUserBucketsAsync(plexAuth, plexClient, configProvider, target, userType, extraEntries, true, null, null, result, logger, cancellationToken)
                 .ConfigureAwait(false);
             result = newResult;
 
@@ -123,8 +125,8 @@ public class SyncToPlex(PlexClient plexClient, IMetadataService metadataService,
                         string typeLabel = PlexHelper.IsMovieKey(plexItem.RatingKey!) ? "movie" : "episode";
 
                         result = SyncHelper.IncMarkedWatched(result, result.PerUser, uName);
-                        s_logger.Info(
-                            "WatchedSyncService: {0}Plex <- Shoko: {1} marked {2} -> {3} [{4}] - S{5:D2}E{6:D2} (RatingKey: {7}) on {8}",
+                        logger.LogInformation(
+                            "WatchedSyncService: {Prefix}Plex <- Shoko: {User} marked {Type} -> {Title} [{SeriesId}] - S{Season:D2}E{Episode:D2} (RatingKey: {RatingKey}) on {Server}",
                             logPrefix,
                             uName,
                             typeLabel,

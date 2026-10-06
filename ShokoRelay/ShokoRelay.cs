@@ -48,7 +48,8 @@ public class ServiceRegistration : IPluginServiceRegistration
             );
 
         serviceCollection.AddSingleton(provider => provider.GetRequiredService<IHttpClientFactory>().CreateClient(clientName));
-        serviceCollection.AddSingleton(new ConfigProvider(applicationPaths));
+        serviceCollection.AddSingleton(provider => new ConfigProvider(applicationPaths, provider.GetRequiredService<ILogger<ConfigProvider>>()));
+        serviceCollection.AddSingleton(provider => new AnimeThemesApi(provider.GetRequiredService<HttpClient>(), provider.GetRequiredService<ILogger<AnimeThemesApi>>()));
         serviceCollection.AddSingleton<AnimeThemesMp3Generator>();
         serviceCollection.AddSingleton<AnimeThemesMapping>();
         serviceCollection.AddSingleton<AnimeThemesWebmDownloader>();
@@ -64,7 +65,7 @@ public class ServiceRegistration : IPluginServiceRegistration
         serviceCollection.AddSingleton(provider =>
         {
             var cp = provider.GetRequiredService<ConfigProvider>();
-            return new FfmpegService(cp.PluginDirectory, applicationPaths.ApplicationPath, applicationPaths.DataPath);
+            return new FfmpegService(cp.PluginDirectory, applicationPaths.ApplicationPath, applicationPaths.DataPath, provider.GetRequiredService<ILogger<FfmpegService>>());
         });
         serviceCollection.AddSingleton<SyncToShoko>();
         serviceCollection.AddSingleton<SyncToPlex>();
@@ -72,7 +73,7 @@ public class ServiceRegistration : IPluginServiceRegistration
         {
             var cp = provider.GetRequiredService<ConfigProvider>();
             var plexAuthConfig = new PlexAuthConfig { ClientIdentifier = cp.GetPlexClientIdentifier() };
-            return new PlexAuth(provider.GetRequiredService<HttpClient>(), plexAuthConfig);
+            return new PlexAuth(provider.GetRequiredService<HttpClient>(), plexAuthConfig, provider.GetRequiredService<ILogger<PlexAuth>>());
         });
         serviceCollection.AddSingleton<PlexClient>();
         serviceCollection.AddSingleton<PlexCollections>();
@@ -119,7 +120,7 @@ public class ShokoRelay : BackgroundService
 {
     #region Setup & State
 
-    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
+    private readonly ILogger<ShokoRelay> _logger;
     private static ConfigProvider? s_configProvider;
 
     /// <summary>Access current plugin settings.</summary>
@@ -159,6 +160,7 @@ public class ShokoRelay : BackgroundService
     /// <param name="httpContextAccessor">Access to the current HTTP request context.</param>
     /// <param name="systemService">Shoko system state service.</param>
     /// <param name="metadataService">Shoko metadata query service.</param>
+    /// <param name="logger">Logging service.</param>
     /// <param name="watchedSyncService">Service for syncing watched states to Shoko.</param>
     /// <param name="shokoImportService">Service for triggering server-side imports.</param>
     /// <param name="collectionService">Service for managing Plex collections.</param>
@@ -171,6 +173,7 @@ public class ShokoRelay : BackgroundService
         IHttpContextAccessor httpContextAccessor,
         ISystemService systemService,
         IMetadataService metadataService,
+        ILogger<ShokoRelay> logger,
         SyncToShoko? watchedSyncService = null,
         IShokoImportService? shokoImportService = null,
         ICollectionService? collectionService = null,
@@ -184,13 +187,14 @@ public class ShokoRelay : BackgroundService
         s_configProvider.HttpContextAccessor = httpContextAccessor;
         _systemService = systemService;
         _metadataService = metadataService ?? throw new ArgumentNullException(nameof(metadataService));
+        _logger = logger;
         _watchedSyncService = watchedSyncService;
         _shokoImportService = shokoImportService;
         _collectionService = collectionService;
         _criticRatingService = criticRatingService;
         _imageSyncService = imageSyncService;
         _plexClient = plexClient;
-        s_logger.Info($"ShokoRelay v{ShokoRelayConstants.Version} initialized");
+        _logger.LogInformation("ShokoRelay v{Version} initialized", ShokoRelayConstants.Version);
     }
 
     #endregion
@@ -202,12 +206,12 @@ public class ShokoRelay : BackgroundService
     {
         try
         {
-            s_logger.Info("Relay waiting for Shoko Server to reach 'Started' state...");
+            _logger.LogInformation("Relay waiting for Shoko Server to reach 'Started' state...");
             while (!_systemService.IsStarted && !stoppingToken.IsCancellationRequested)
                 await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken);
             if (stoppingToken.IsCancellationRequested)
                 return;
-            s_logger.Info("Shoko Server started -> Caching overrides & initializing scheduling anchors...");
+            _logger.LogInformation("Shoko Server started -> Caching overrides & initializing scheduling anchors...");
             OverrideHelper.Reload(_metadataService); // Warm up the VFS override cache.
             var now = DateTime.UtcNow;
             int offset = Math.Clamp(Settings.Automation.UtcOffsetHours, -12, 14);
@@ -219,7 +223,7 @@ public class ShokoRelay : BackgroundService
                 s_lastPlexAutomationUtc = ComputeSchedule(now, offset, Settings.Automation.PlexAutomationFrequencyHours).LastScheduled;
 
             _watcher.Start();
-            s_logger.Info("Relay started -> Entering automation loop");
+            _logger.LogInformation("Relay started -> Entering automation loop");
             await AutomationLoop(stoppingToken).ConfigureAwait(false);
         }
         finally
@@ -235,7 +239,7 @@ public class ShokoRelay : BackgroundService
     /// <inheritdoc/>
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        s_logger.Info("Relay stopping...");
+        _logger.LogInformation("Relay stopping...");
         _watcher.Stop();
         await base.StopAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -288,7 +292,7 @@ public class ShokoRelay : BackgroundService
                     nextRuns.Add(next);
                     if (s_lastImportRunUtc == null || s_lastImportRunUtc < lastSched)
                     {
-                        s_logger.Info("Automation: triggering scheduled Shoko import ({0}h)", importFreq);
+                        _logger.LogInformation("Automation: triggering scheduled Shoko import ({Frequency}h)", importFreq);
                         await _shokoImportService.TriggerImportAsync().ConfigureAwait(false);
                         s_lastImportRunUtc = lastSched;
                     }
@@ -300,7 +304,7 @@ public class ShokoRelay : BackgroundService
                     nextRuns.Add(next);
                     if (s_lastSyncWatchedUtc == null || s_lastSyncWatchedUtc < lastSched)
                     {
-                        s_logger.Info("Automation: triggering scheduled Plex->Shoko sync ({0}h)", syncFreq);
+                        _logger.LogInformation("Automation: triggering scheduled Plex->Shoko sync ({Frequency}h)", syncFreq);
 
                         // Background tasks should wait for the lock to become available
                         await SyncHelper.SyncLock.WaitAsync(ct).ConfigureAwait(false);
@@ -322,7 +326,7 @@ public class ShokoRelay : BackgroundService
                     nextRuns.Add(next);
                     if (s_lastPlexAutomationUtc == null || s_lastPlexAutomationUtc < lastSched)
                     {
-                        s_logger.Info("Automation: triggering scheduled Plex Collection/Rating update ({0}h)", plexFreq);
+                        _logger.LogInformation("Automation: triggering scheduled Plex Collection/Rating update ({Frequency}h)", plexFreq);
                         var allSeries = _metadataService.GetAllShokoSeries()?.Cast<IShokoSeries?>().ToList();
                         if (allSeries?.Count > 0)
                         {
@@ -359,7 +363,7 @@ public class ShokoRelay : BackgroundService
             }
             catch (Exception ex)
             {
-                s_logger.Warn(ex, "Automation: loop error");
+                _logger.LogWarning(ex, "Automation: loop error");
                 await Task.Delay(TimeSpan.FromMinutes(1), ct).ConfigureAwait(false);
             }
         }

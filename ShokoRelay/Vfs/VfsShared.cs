@@ -196,7 +196,7 @@ internal static class VfsShared
     /// <param name="useRelativeTarget">Whether to resolve the target path relatively.</param>
     /// <param name="skipExistenceCheck">If true, bypasses the filesystem check and writes the link directly.</param>
     /// <returns>True if the link exists and is correct, or was successfully created.</returns>
-    public static bool TryCreateLink(string source, string dest, Logger logger, string? targetOverride = null, bool useRelativeTarget = true, bool skipExistenceCheck = false)
+    public static bool TryCreateLink(string source, string dest, ILogger logger, string? targetOverride = null, bool useRelativeTarget = true, bool skipExistenceCheck = false)
     {
         if (Settings.Advanced.DisableVfsGeneration)
             return true;
@@ -226,7 +226,7 @@ internal static class VfsShared
             }
             catch (Exception ex)
             {
-                logger.Warn(ex, "VFS: Unable to remove existing link at -> {Dest}", dest);
+                logger.LogWarning(ex, "VFS: Unable to remove existing link at -> {Dest}", dest);
                 return false;
             }
         }
@@ -238,12 +238,12 @@ internal static class VfsShared
             var info = File.CreateSymbolicLink(dest, relativeTarget);
             sw.Stop();
             if (sw.ElapsedMilliseconds > 20)
-                logger.Debug("VFS: Symlink created -> '{Link}' in {Elapsed}ms", dest, sw.ElapsedMilliseconds); // only log slow operations, to avoid spamming the logs
+                logger.LogDebug("VFS: Symlink created -> '{Link}' in {Elapsed}ms", dest, sw.ElapsedMilliseconds); // only log slow operations, to avoid spamming the logs
             return info.Exists;
         }
         catch (Exception ex)
         {
-            logger.Debug(ex, "VFS: Symlink creation failed -> {Link}", dest);
+            logger.LogDebug(ex, "VFS: Symlink creation failed -> {Link}", dest);
             return false;
         }
     }

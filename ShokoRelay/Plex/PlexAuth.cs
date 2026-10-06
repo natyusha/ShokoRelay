@@ -56,12 +56,11 @@ public sealed record PlexHomeUser(
 #endregion
 
 /// <summary>Handles authentication with Plex.tv, utilizing modern v2 JSON endpoints and legacy XML for user switching.</summary>
-public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
+public class PlexAuth(HttpClient httpClient, PlexAuthConfig config, ILogger<PlexAuth> logger)
 {
     #region Setup
 
     private const string BaseUrl = "https://plex.tv";
-    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
     private static readonly JsonSerializerOptions s_jsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -213,7 +212,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
                         list.Add((l, srv with { PreferredUri = uri }));
 
                     if (matched.Count > 0)
-                        s_logger.Info("Plex Discovery: Connected to server -> {Name} ... {Uri} (Type: {Type}, Libraries: {Count})", srv.Name, uri, isFallback ? "Fallback" : "Preferred", matched.Count);
+                        logger.LogInformation("Plex Discovery: Connected to server -> {Name} ... {Uri} (Type: {Type}, Libraries: {Count})", srv.Name, uri, isFallback ? "Fallback" : "Preferred", matched.Count);
                     return true;
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -222,7 +221,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
                 }
                 catch (Exception ex)
                 {
-                    s_logger.Debug("Plex Discovery: Connection to {0} failed for server -> {1} ... {2}", uri, srv.Name, ex.GetBaseException().Message);
+                    logger.LogDebug("Plex Discovery: Connection to {Uri} failed for server -> {Name} ... {Error}", uri, srv.Name, ex.GetBaseException().Message);
                     return false;
                 }
             }
@@ -252,7 +251,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
                 }
 
                 if (!ok)
-                    s_logger.Warn("Plex Discovery: Failed to establish any connection to server -> {0} ... check for DNS rebinding protection, firewall rules, or docker network isolation", srv.Name);
+                    logger.LogWarning("Plex Discovery: Failed to establish any connection to server -> {Name} ... check for DNS rebinding protection, firewall rules, or docker network isolation", srv.Name);
             }
         }
         return (tokenValid, servers, list);
@@ -300,7 +299,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
         }
         catch (Exception ex)
         {
-            s_logger.Warn(ex, "PlexAuth: Failed to parse Switch User XML response");
+            logger.LogWarning(ex, "PlexAuth: Failed to parse Switch User XML response");
             return null;
         }
     }
@@ -337,7 +336,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
         }
         catch
         {
-            s_logger.Warn("PlexAuth: Failed to revoke Plex token");
+            logger.LogWarning("PlexAuth: Failed to revoke Plex token");
         }
     }
 
@@ -371,7 +370,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
     /// <param name="resp">The HTTP response message to read from.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>A task representing the async operation containing the deserialized object, or default on failure.</returns>
-    private static async Task<T?> ReadJsonAsync<T>(HttpResponseMessage resp, CancellationToken ct)
+    private async Task<T?> ReadJsonAsync<T>(HttpResponseMessage resp, CancellationToken ct)
     {
         if (!resp.IsSuccessStatusCode)
             return default;
@@ -383,7 +382,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config)
         catch (JsonException ex)
         {
             string snippet = content.Length > 512 ? content[..512] : content;
-            s_logger.Warn(ex, "PlexAuth: Failed to parse JSON -> Body starts with {0}", snippet);
+            logger.LogWarning(ex, "PlexAuth: Failed to parse JSON -> Body starts with {Snippet}", snippet);
             return default;
         }
     }

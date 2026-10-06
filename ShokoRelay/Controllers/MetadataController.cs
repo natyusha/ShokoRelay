@@ -17,8 +17,8 @@ namespace ShokoRelay.Controllers;
 [Route(ShokoRelayConstants.BasePath + "/options/{overrides}")]
 [Route(ShokoRelayConstants.BasePath + "/movie")]
 [Route(ShokoRelayConstants.BasePath + "/movie/options/{overrides}")]
-public class MetadataController(IMetadataService metadataService, PlexMetadata mapper, ConfigProvider configProvider, PlexClient plexLibrary, IVideoService videoService)
-    : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
+public class MetadataController(IMetadataService metadataService, PlexMetadata mapper, ConfigProvider configProvider, PlexClient plexLibrary, IVideoService videoService, ILogger<MetadataController> logger)
+    : ShokoRelayBaseController(configProvider, metadataService, plexLibrary, logger)
 {
     #region Provider Descriptor
 
@@ -119,7 +119,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
 
             if (series == null)
             {
-                Logger.Info("Metadata: No Shoko series or episode found for id {Id}", id.Value);
+                Logger.LogInformation("Metadata: No Shoko series or episode found for id {Id}", id.Value);
                 return EmptyMatch();
             }
 
@@ -489,7 +489,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             {
                 if ((DateTime.UtcNow - s_lastErrorLog).TotalMinutes > 5)
                 {
-                    Logger.Error("Plex Metadata Request Failed: An API abstraction mismatch occurred. Please check for Shoko Relay plugin updates. ({0})", ex.Message);
+                    Logger.LogError(ex, "Plex Metadata Request Failed: An API abstraction mismatch occurred. Please check for Shoko Relay plugin updates");
                     s_lastErrorLog = DateTime.UtcNow;
                 }
             }

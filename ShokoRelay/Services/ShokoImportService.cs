@@ -20,14 +20,8 @@ public interface IShokoImportService
 #endregion
 
 /// <summary>Default implementation of <see cref="IShokoImportService"/>.</summary>
-public class ShokoImportService(IVideoService videoService, IVideoReleaseService releaseService) : IShokoImportService
+public class ShokoImportService(IVideoService videoService, IVideoReleaseService releaseService, ILogger<ShokoImportService> logger) : IShokoImportService
 {
-    #region Setup
-
-    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
-
-    #endregion
-
     #region Import Logic
 
     /// <inheritdoc/>
@@ -41,7 +35,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
         }
         catch (Exception ex)
         {
-            s_logger.Warn(ex, "ShokoImportService: failed to query managed folders");
+            logger.LogWarning(ex, "ShokoImportService: failed to query managed folders");
         }
 
         try
@@ -50,7 +44,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
         }
         catch (Exception ex)
         {
-            s_logger.Warn(ex, "ShokoImportService: failed to schedule folder scan");
+            logger.LogWarning(ex, "ShokoImportService: failed to schedule folder scan");
         }
 
         return folders;
@@ -67,7 +61,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
         if (!dryRun)
             TaskHelper.StartTask(TaskName);
 
-        s_logger.Info("ShokoImportService: Starting purge missing files task (Mode: {0})", dryRun ? "Dry Run" : "Live");
+        logger.LogInformation("ShokoImportService: Starting purge missing files task (Mode: {Mode})", dryRun ? "Dry Run" : "Live");
 
         try
         {
@@ -79,7 +73,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
 
             if (!dryRun && toDelete.Count > 0)
             {
-                s_logger.Info("ShokoImportService: Removing {0} missing files from database...", toDelete.Count);
+                logger.LogInformation("ShokoImportService: Removing {Count} missing files from database...", toDelete.Count);
 
                 // Remove the file records from Shoko
                 await videoService.DeleteVideoFiles(toDelete, removeFiles: false, removeFolders: false).ConfigureAwait(false);
@@ -87,7 +81,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
                 // Purge unused releases from DB and remove from AniDB MyList
                 await releaseService.PurgeUnusedReleases(providerNames: null).ConfigureAwait(false);
 
-                s_logger.Info("ShokoImportService: Database and MyList cleanup complete");
+                logger.LogInformation("ShokoImportService: Database and MyList cleanup complete");
             }
 
             return [.. toDelete.Select(f => f.Path)];

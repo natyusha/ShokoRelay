@@ -27,8 +27,9 @@ public class ShokoController(
     AnimeThemesMapping atMapping,
     IVideoService videoService,
     IImageManager imageManager,
-    VfsWatcher vfsWatcher
-) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
+    VfsWatcher vfsWatcher,
+    ILogger<ShokoController> logger
+) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary, logger)
 {
     #region Virtual File System
 
@@ -78,7 +79,7 @@ public class ShokoController(
     {
         try
         {
-            Logger.Info("Shoko: Updating VFS overrides file...");
+            Logger.LogInformation("Shoko: Updating VFS overrides file...");
             IoFile.WriteAllText(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileVfsOverrides), content ?? string.Empty);
             OverrideHelper.Reload(MetadataService); // Pass the service to trigger TMDB discovery
             return Ok(new RelayResponse<object>());
@@ -175,7 +176,7 @@ public class ShokoController(
         }
         catch (Exception ex)
         {
-            Logger.Warn(ex, "Shoko: Failed to parse VFS blueprint cache");
+            Logger.LogWarning(ex, "Shoko: Failed to parse VFS blueprint cache");
             return EmptyTree();
         }
     }
@@ -236,7 +237,7 @@ public class ShokoController(
     [HttpPost("shoko/import")]
     public async Task<IActionResult> RunShokoImport()
     {
-        Logger.Info("Shoko: Import scan triggered manually");
+        Logger.LogInformation("Shoko: Import scan triggered manually");
         var scanned = await shokoImportService.TriggerImportAsync().ConfigureAwait(false);
         return Ok(new RelayResponse<object>(Data: new { scanned, scannedCount = scanned?.Count ?? 0 }));
     }
@@ -348,9 +349,9 @@ public class ShokoController(
                 async () =>
                 {
                     if (purgeLinks)
-                        Logger.Info("Shoko: Starting manual purge of library symlinks...");
+                        Logger.LogInformation("Shoko: Starting manual purge of library symlinks...");
                     else
-                        Logger.Info("Shoko: Starting source link processing using map {0}", mapFile);
+                        Logger.LogInformation("Shoko: Starting source link processing using map {MapFile}", mapFile);
                     return await sourceLinkService.ProcessLinksAsync(mapFile ?? string.Empty, purgeLinks).ConfigureAwait(false);
                 },
                 VfsShared.VfsLock
@@ -365,7 +366,7 @@ public class ShokoController(
     [HttpPost("shoko/purge-relay-custom-images")]
     public async Task<IActionResult> PurgeLocalImages()
     {
-        Logger.Info("Shoko: Starting a manual purge of all Relay-owned images...");
+        Logger.LogInformation("Shoko: Starting a manual purge of all Relay-owned images...");
         var xrefs = imageManager.GetAllImageCrossReferences(new ImageCrossReferenceFilteringOptions()).Where(x => x.Source == ServiceRegistration.RelaySource || x.Source == ServiceRegistration.RelayPlexSource);
         var distinctImageIds = xrefs.Select(x => x.ImageID).Distinct().ToList();
         int purgedCount = 0;
@@ -374,7 +375,7 @@ public class ShokoController(
             if (imageManager.GetImageByID(imageId) is { } img && await imageManager.PurgeImage(img).ConfigureAwait(false))
                 purgedCount++;
 
-        Logger.Info("Shoko: Purging complete. Purged {0} images.", purgedCount);
+        Logger.LogInformation("Shoko: Purging complete. Purged {Count} images.", purgedCount);
         return Ok(new RelayResponse<object>(Data: new { purged = purgedCount }));
     }
 
@@ -383,13 +384,13 @@ public class ShokoController(
     [HttpPost("shoko/purge-all-custom-images")]
     public async Task<IActionResult> PurgeAllLocalImages()
     {
-        Logger.Warn("Shoko: Starting a legacy manual purge of ALL user and locally-generated images. This will remove images not uploaded by Shoko Relay!");
+        Logger.LogWarning("Shoko: Starting a legacy manual purge of ALL user and locally-generated images. This will remove images not uploaded by Shoko Relay!");
         int purgedCount = 0;
         foreach (var img in imageManager.GetAllImages().Where(img => img.Source == MetadataSource.Generated || img.Source == MetadataSource.User).ToList())
             if (await imageManager.PurgeImage(img).ConfigureAwait(false))
                 purgedCount++;
 
-        Logger.Info("Shoko: Legacy purging complete. Purged {0} images.", purgedCount);
+        Logger.LogInformation("Shoko: Legacy purging complete. Purged {Count} images.", purgedCount);
         return Ok(new RelayResponse<object>(Data: new { purged = purgedCount }));
     }
 

@@ -5,11 +5,9 @@ using Shoko.Abstractions.Video.Services;
 namespace ShokoRelay.AnimeThemes;
 
 /// <summary>Provides operations for building and applying mappings between anime theme files and AniDB/video identifiers.</summary>
-public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadataService, IVideoService videoService, ConfigProvider configProvider)
+public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadataService, IVideoService videoService, ConfigProvider configProvider, ILogger<AnimeThemesMapping> logger)
 {
-    #region Setup & State
-
-    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
+    #region Setup
     private readonly AnimeThemesApi _apiClient = new(httpClient);
 
     #endregion
@@ -65,7 +63,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
         }
         catch (Exception ex)
         {
-            s_logger.Warn(ex, "AnimeThemes Map: Failed to import mapping from URL");
+            logger.LogWarning(ex, "AnimeThemes Map: Failed to import mapping from URL");
             return (0, "Import failed: " + ex.Message);
         }
     }
@@ -76,7 +74,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
     public async Task<AnimeThemesMappingBuildResult> BuildMappingFileAsync(CancellationToken ct = default)
     {
         TaskHelper.StartTask(ShokoRelayConstants.TaskAtMapBuild);
-        s_logger.Info("AnimeThemes Map: Starting mapping task...");
+        logger.LogInformation("AnimeThemes Map: Starting mapping task...");
 
         try
         {
@@ -143,7 +141,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                     toProcess.Add((file, rel));
             }
 
-            s_logger.Info("AnimeThemes Map: Found {0} total files ({1} cached, {2} pending mapping resolution)...", filesBag.Count, existing.Count, toProcess.Count);
+            logger.LogInformation("AnimeThemes Map: Found {TotalCount} total files ({CachedCount} cached, {PendingCount} pending mapping resolution)...", filesBag.Count, existing.Count, toProcess.Count);
 
             int reusedCount = entries.Count;
             var errorsBag = new ConcurrentBag<(int Year, string FilePath, string Message)>();
@@ -163,7 +161,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                             {
                                 string errMsg = idMissing ? $"AniDB ID missing for {item.Rel}" : $"Missing metadata for {item.Rel}";
                                 errorsBag.Add((year, item.Rel, errMsg));
-                                s_logger.Warn("AnimeThemes Map: Failed to map '{0}' -> {1}", item.Rel, idMissing ? "AniDB ID missing" : "Metadata missing");
+                                logger.LogWarning("AnimeThemes Map: Failed to map '{Path}' -> {Reason}", item.Rel, idMissing ? "AniDB ID missing" : "Metadata missing");
                                 Interlocked.Increment(ref errors);
                                 return;
                             }
@@ -171,14 +169,14 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                                 entries.Add(new AnimeThemesMappingEntry(item.Rel, lookup));
                             string mapMsg = $"Mapped: {item.Rel} -> VideoID: {lookup.VideoId}, AniDB ID: {lookup.AniDbId}";
                             newMappingsBag.Add((year, item.Rel, mapMsg));
-                            s_logger.Info("AnimeThemes Map: Mapped '{0}' -> VideoID: {1}, AniDB ID: {2}", item.Rel, lookup.VideoId, lookup.AniDbId);
+                            logger.LogDebug("AnimeThemes Map: Mapped '{Path}' -> VideoID: {VideoId}, AniDB ID: {AnidbId}", item.Rel, lookup.VideoId, lookup.AniDbId);
                         }
                         catch (Exception ex)
                         {
                             int year = AnimeThemesHelper.GetYearForSort(item.Rel);
                             string errMsg = $"{item.Rel}: {ex.Message}";
                             errorsBag.Add((year, item.Rel, errMsg));
-                            s_logger.Warn(ex, "AnimeThemes Map: Exception mapping '{0}' -> {1}", item.Rel, ex.Message);
+                            logger.LogWarning(ex, "AnimeThemes Map: Exception mapping '{Path}' -> {Error}", item.Rel, ex.Message);
                             Interlocked.Increment(ref errors);
                         }
                     }
@@ -188,7 +186,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
             var finalEntries = entries.DistinctBy(e => e.FilePath).OrderBy(e => AnimeThemesHelper.GetYearForSort(e.FilePath)).ThenBy(e => e.FilePath).ToList();
 
             await File.WriteAllTextAsync(mapPath, AnimeThemesHelper.SerializeMapping(existingComments, finalEntries), ct).ConfigureAwait(false);
-            s_logger.Info("AnimeThemes Map: Finished mapping task -> {0} entries written.", finalEntries.Count);
+            logger.LogInformation("AnimeThemes Map: Finished mapping task -> {Count} entries written.", finalEntries.Count);
             List<string> finalMessages =
             [
                 .. errorsBag.OrderBy(x => x.Year).ThenBy(x => x.FilePath).Select(x => x.Message),
@@ -242,14 +240,14 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                     entries.Add(entry);
                     existing[relPath] = entry;
                     addedCount++;
-                    s_logger.Info("AnimeThemes Map: Auto-mapped '{0}' -> VideoID: {1}, AniDB ID: {2}", relPath, lookup.VideoId, lookup.AniDbId);
+                    logger.LogInformation("AnimeThemes Map: Auto-mapped '{Path}' -> VideoID: {VideoId}, AniDB ID: {AnidbId}", relPath, lookup.VideoId, lookup.AniDbId);
                 }
                 else
-                    s_logger.Warn("AnimeThemes Map: Failed to auto-map '{0}' -> {1}", relPath, idMissing ? "AniDB ID missing" : "Metadata missing");
+                    logger.LogWarning("AnimeThemes Map: Failed to auto-map '{Path}' -> {Reason}", relPath, idMissing ? "AniDB ID missing" : "Metadata missing");
             }
             catch (Exception ex)
             {
-                s_logger.Warn(ex, "AnimeThemes Map: Exception auto-mapping '{0}'", relPath);
+                logger.LogWarning(ex, "AnimeThemes Map: Exception auto-mapping '{Path}'", relPath);
             }
         }
 
@@ -257,7 +255,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
         {
             var finalEntries = entries.DistinctBy(e => e.FilePath).OrderBy(e => AnimeThemesHelper.GetYearForSort(e.FilePath)).ThenBy(e => e.FilePath).ToList();
             await File.WriteAllTextAsync(mapPath, AnimeThemesHelper.SerializeMapping(existingComments, finalEntries), ct).ConfigureAwait(false);
-            s_logger.Info("AnimeThemes Map: Appended {0} new entries to mapping file.", addedCount);
+            logger.LogInformation("AnimeThemes Map: Appended {Count} new entries to mapping file.", addedCount);
         }
 
         return addedCount;
@@ -289,7 +287,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
         try
         {
             TaskHelper.StartTask(ShokoRelayConstants.TaskAtVfsBuild);
-            s_logger.Info("AnimeThemes VFS: Starting task...");
+            logger.LogInformation("AnimeThemes VFS: Starting task...");
             string mapPath = Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FileAtMapping);
             if (!File.Exists(mapPath))
                 throw new FileNotFoundException("Mapping file not found");
@@ -393,7 +391,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                                 {
                                     if (!Settings.Advanced.DisableVfsGeneration)
                                         Directory.CreateDirectory(shortsDir);
-                                    if (VfsShared.TryCreateLink(item.SourcePath, destPath, s_logger, targetOverride: AnimeThemesHelper.BuildThemeRelativeTarget(item.RelativePath, themeRootName)))
+                                    if (VfsShared.TryCreateLink(item.SourcePath, destPath, logger, targetOverride: AnimeThemesHelper.BuildThemeRelativeTarget(item.RelativePath, themeRootName)))
                                     {
                                         Interlocked.Increment(ref state.Created);
                                         state.CacheEntries.Add(new WebmCacheEntry(destPath, item.Entry.VideoId, AnimeThemesHelper.CalculateBitmask(item.Entry)));
@@ -514,10 +512,10 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
             }
             catch (Exception ex)
             {
-                s_logger.Warn(ex, "AnimeThemes VFS: Failed to save webm cache");
+                logger.LogWarning(ex, "AnimeThemes VFS: Failed to save webm cache");
             }
 
-            s_logger.Info("AnimeThemes VFS: Task finished -> {0} links created in {1}ms.", state.Created, sw.ElapsedMilliseconds);
+            logger.LogInformation("AnimeThemes VFS: Task finished -> {Count} links created in {Elapsed}ms.", state.Created, sw.ElapsedMilliseconds);
             return new AnimeThemesMappingApplyResult(state.Created, state.Skipped, state.Matched, [.. state.Errors], [.. state.CacheEntries], sw.Elapsed);
         }
         finally

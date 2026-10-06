@@ -6,11 +6,10 @@ namespace ShokoRelay.Vfs;
 
 /// <summary>Handles the discovery and linking of local media assets (posters, themes) and non-Shoko Plex extras.</summary>
 /// <param name="videoService">Shoko video service used to verify if files are managed by the database.</param>
-public class VfsAssetLinker(IVideoService videoService)
+/// <param name="logger">Logger instance.</param>
+public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> logger)
 {
     #region Setup
-
-    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
 
     /// <summary>Combined set of recognized file extensions for series-level local metadata and artwork.</summary>
     private static readonly FrozenSet<string> s_seriesMetadataExtensions = PlexConstants
@@ -52,7 +51,7 @@ public class VfsAssetLinker(IVideoService videoService)
             if (videoBaseNames.Contains(baseName))
                 continue;
             string destName = baseName.Equals("Specials", StringComparison.OrdinalIgnoreCase) ? "Season-Specials-Poster" + Path.GetExtension(name) : name;
-            if (VfsShared.TryCreateLink(file, Path.Combine(destDir, destName), s_logger, skipExistenceCheck: skipExistenceCheck))
+            if (VfsShared.TryCreateLink(file, Path.Combine(destDir, destName), logger, skipExistenceCheck: skipExistenceCheck))
                 onLink?.Invoke(destName, file);
         }
     }
@@ -102,7 +101,7 @@ public class VfsAssetLinker(IVideoService videoService)
                     continue;
 
                 string destName = destBase + name[originalBase.Length..];
-                if (VfsShared.TryCreateLink(sub, Path.Combine(destDir, destName), s_logger, skipExistenceCheck: skipExistenceCheck))
+                if (VfsShared.TryCreateLink(sub, Path.Combine(destDir, destName), logger, skipExistenceCheck: skipExistenceCheck))
                 {
                     planned++;
                     created++;
@@ -114,7 +113,7 @@ public class VfsAssetLinker(IVideoService videoService)
                     errors.Add($"Metadata sidecar link failed: {sub}");
                 }
             }
-            LinkAttachmentFolder(sourceDir, originalBase, destDir, destBase, dirCache, ref planned, ref skipped, errors, ref created, onLink, skipExistenceCheck);
+            LinkAttachmentFolder(sourceDir, originalBase, destDir, destBase, dirCache, ref planned, ref skipped, errors, ref created, logger, onLink, skipExistenceCheck);
             return;
         }
 
@@ -145,13 +144,13 @@ public class VfsAssetLinker(IVideoService videoService)
                 continue;
 
             string destName = name;
-            bool linked = VfsShared.TryCreateLink(source, Path.Combine(destDir, destName), s_logger, skipExistenceCheck: skipExistenceCheck);
+            bool linked = VfsShared.TryCreateLink(source, Path.Combine(destDir, destName), logger, skipExistenceCheck: skipExistenceCheck);
 
             if (!linked && priority >= 0)
             {
                 destName = destBase + Path.GetFileName(source)[originalBase.Length..];
-                s_logger.Warn("VFS: Subtitle conversion failed -> {Name}; keeping original suffix -> {OriginalName}", name, destName);
-                linked = !linkedNames.Contains(destName) && VfsShared.TryCreateLink(source, Path.Combine(destDir, destName), s_logger);
+                logger.LogWarning("VFS: Subtitle conversion failed -> {Name}; keeping original suffix -> {OriginalName}", name, destName);
+                linked = !linkedNames.Contains(destName) && VfsShared.TryCreateLink(source, Path.Combine(destDir, destName), logger);
             }
 
             if (linked)
@@ -168,7 +167,7 @@ public class VfsAssetLinker(IVideoService videoService)
             }
         }
 
-        LinkAttachmentFolder(sourceDir, originalBase, destDir, destBase, dirCache, ref planned, ref skipped, errors, ref created, onLink, skipExistenceCheck);
+        LinkAttachmentFolder(sourceDir, originalBase, destDir, destBase, dirCache, ref planned, ref skipped, errors, ref created, logger, onLink, skipExistenceCheck);
     }
 
     /// <summary>Links episode-level attachment directories into the VFS.</summary>
@@ -181,6 +180,7 @@ public class VfsAssetLinker(IVideoService videoService)
     /// <param name="skipped">Reference to the skipped links counter.</param>
     /// <param name="errors">List of encountered error messages.</param>
     /// <param name="created">Reference to the successful links created counter.</param>
+    /// <param name="logger">The logger to use for logging messages.</param>
     /// <param name="onLink">Optional callback to record the created link for the VFS Browser blueprint.</param>
     /// <param name="skipExistenceCheck">If true, bypasses the filesystem check and writes the link directly.</param>
     private static void LinkAttachmentFolder(
@@ -193,6 +193,7 @@ public class VfsAssetLinker(IVideoService videoService)
         ref int skipped,
         List<string> errors,
         ref int created,
+        ILogger logger,
         Action<string, string?>? onLink = null,
         bool skipExistenceCheck = false
     )
@@ -218,7 +219,7 @@ public class VfsAssetLinker(IVideoService videoService)
             if (!Settings.Advanced.DisableVfsGeneration && !string.IsNullOrEmpty(subDir))
                 Directory.CreateDirectory(subDir);
 
-            if (VfsShared.TryCreateLink(file, destFile, s_logger, skipExistenceCheck: skipExistenceCheck))
+            if (VfsShared.TryCreateLink(file, destFile, logger, skipExistenceCheck: skipExistenceCheck))
             {
                 planned++;
                 created++;
@@ -308,7 +309,7 @@ public class VfsAssetLinker(IVideoService videoService)
                         string destDir = string.IsNullOrEmpty(seasonFolder) ? Path.Combine(vfsSeriesPath, plexDirName) : Path.Combine(vfsSeriesPath, seasonFolder, plexDirName);
                         if (!Settings.Advanced.DisableVfsGeneration)
                             Directory.CreateDirectory(destDir);
-                        if (VfsShared.TryCreateLink(file, Path.Combine(destDir, Path.GetFileName(file)), s_logger, skipExistenceCheck: skipExistenceCheck))
+                        if (VfsShared.TryCreateLink(file, Path.Combine(destDir, Path.GetFileName(file)), logger, skipExistenceCheck: skipExistenceCheck))
                             onLink?.Invoke(Path.GetDirectoryName(Path.GetDirectoryName(vfsSeriesPath))!, seasonFolder, Path.Combine(plexDirName, Path.GetFileName(file)), file);
                     }
                 }
@@ -332,7 +333,7 @@ public class VfsAssetLinker(IVideoService videoService)
                     foreach (var vfsSeriesPath in vfsSeriesPaths)
                     {
                         string vfsSeasonDir = Path.Combine(vfsSeriesPath, seasonFolder);
-                        if (VfsShared.TryCreateLink(file, Path.Combine(vfsSeasonDir, destName), s_logger, skipExistenceCheck: skipExistenceCheck))
+                        if (VfsShared.TryCreateLink(file, Path.Combine(vfsSeasonDir, destName), logger, skipExistenceCheck: skipExistenceCheck))
                             onLink?.Invoke(Path.GetDirectoryName(Path.GetDirectoryName(vfsSeriesPath))!, seasonFolder, destName, file);
                     }
                 }

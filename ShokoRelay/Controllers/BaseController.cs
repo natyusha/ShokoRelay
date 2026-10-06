@@ -4,19 +4,17 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace ShokoRelay.Controllers;
 
-/// <summary>
-/// Provides the foundational infrastructure for all Shoko Relay controllers.
-/// Contains shared logic for logging, validation, response formatting, and Plex discovery.
-/// </summary>
+/// <summary>Provides the foundational infrastructure for all Shoko Relay controllers.</summary>
+/// <remarks>Contains shared logic for logging, validation, response formatting, and Plex discovery.</remarks>
 [ApiController]
 [ApiVersion(ShokoRelayConstants.ApiVersion)]
 [Route(ShokoRelayConstants.BasePath)]
-public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IMetadataService metadataService, PlexClient plexLibrary) : ControllerBase
+public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IMetadataService metadataService, PlexClient plexLibrary, ILogger logger) : ControllerBase
 {
     #region Setup
 
-    /// <summary>Shared logger instance for ShokoRelay controllers.</summary>
-    protected static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+    /// <summary>Logger instance for controller operations.</summary>
+    protected readonly ILogger Logger = logger;
 
     /// <summary>Service used for reading and persisting plugin settings and secrets.</summary>
     protected readonly ConfigProvider ConfigProvider = configProvider;
@@ -62,7 +60,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
         try
         {
             T result = await action().ConfigureAwait(false);
-            LogHelper.WriteReport(ConfigProvider.PluginDirectory, $"{taskName}-report.log", result, reportBuilder);
+            LogHelper.WriteReport(ConfigProvider.PluginDirectory, $"{taskName}-report.log", result, reportBuilder, Logger);
             IActionResult actionResult = Ok(new RelayResponse<T>(Data: result, LogUrl: $"{ApiBase}/logs/{taskName}-report.log"));
             TaskHelper.CompleteTask(taskName, (actionResult as OkObjectResult)?.Value!);
             return actionResult;

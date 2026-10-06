@@ -24,11 +24,9 @@ public record WebmDownloadResult(int Downloaded, int Skipped, int Errors, List<s
 #endregion
 
 /// <summary>Provides functionality for bulk downloading and organizing AnimeThemes WebM files.</summary>
-public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService videoService, AnimeThemesMapping mappingService)
+public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService videoService, AnimeThemesMapping mappingService, ILogger<AnimeThemesWebmDownloader> logger)
 {
     #region Setup
-
-    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
     private readonly AnimeThemesApi _api = new(httpClient);
 
     #endregion
@@ -66,7 +64,7 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
         }
 
         string baseThemePath = Path.Combine(targetRoot, themeRootName);
-        s_logger.Info("AnimeThemes WebM: Starting download operation to -> {0}", baseThemePath);
+        logger.LogInformation("AnimeThemes WebM: Starting download operation to -> {Path}", baseThemePath);
 
         // Build a cache of existing files to prevent downloading duplicates already organized in different folders
         var existingFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -109,7 +107,7 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
 
                         if (!query.Force && existingFiles.Contains(video.Basename))
                         {
-                            s_logger.Info("AnimeThemes WebM: Skipping Downloaded Theme -> {0}...", video.Basename);
+                            logger.LogDebug("AnimeThemes WebM: Skipping Downloaded Theme -> {Basename}...", video.Basename);
                             skipped++;
                             continue;
                         }
@@ -117,7 +115,7 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
                         string targetPath = Path.Combine(baseThemePath, yearFolder, seasonFolder, video.Basename);
                         string relPath = $"/{yearFolder}/{seasonFolder}/{video.Basename}";
                         Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
-                        s_logger.Info("AnimeThemes WebM: Downloading -> {0}...", video.Basename);
+                        logger.LogDebug("AnimeThemes WebM: Downloading -> {Basename}...", video.Basename);
 
                         try
                         {
@@ -134,7 +132,7 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
                         }
                         catch (HttpRequestException ex) when (ex.StatusCode is HttpStatusCode.ServiceUnavailable or HttpStatusCode.TooManyRequests)
                         {
-                            s_logger.Warn("AnimeThemes WebM: Rate limited (503/429) on theme ID -> {0}. Waiting 90 seconds before retrying...", theme.Id);
+                            logger.LogWarning("AnimeThemes WebM: Rate limited (503/429) on theme ID -> {ThemeId}. Waiting 90 seconds before retrying...", theme.Id);
                             await Task.Delay(TimeSpan.FromSeconds(90), ct).ConfigureAwait(false);
 
                             try
@@ -152,7 +150,7 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
                             }
                             catch (Exception retryEx)
                             {
-                                s_logger.Warn(retryEx, "AnimeThemes WebM: Failed to download theme ID -> {0}", theme.Id);
+                                logger.LogWarning(retryEx, "AnimeThemes WebM: Failed to download theme ID -> {ThemeId}", theme.Id);
                                 throw new InvalidOperationException($"Task aborted. Rate limit retry failed for theme ID {theme.Id}: {retryEx.Message}");
                             }
                         }
@@ -160,14 +158,14 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
                         {
                             errors++;
                             messages.Add($"Failed to download theme ID {theme.Id}: {ex.Message}");
-                            s_logger.Warn(ex, "AnimeThemes WebM: Failed to download theme ID -> {0}", theme.Id);
+                            logger.LogWarning(ex, "AnimeThemes WebM: Failed to download theme ID -> {ThemeId}", theme.Id);
                         }
                     }
                     catch (Exception ex)
                     {
                         errors++;
                         messages.Add($"Failed to process theme ID {theme.Id}: {ex.Message}");
-                        s_logger.Warn(ex, "AnimeThemes WebM: Failed to process theme ID -> {0}", theme.Id);
+                        logger.LogWarning(ex, "AnimeThemes WebM: Failed to process theme ID -> {ThemeId}", theme.Id);
                     }
                 }
             }
@@ -183,7 +181,7 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
                 messages.Add($"Auto-mapped {mapped} new entries into {ShokoRelayConstants.FileAtMapping}");
         }
 
-        s_logger.Info("AnimeThemes WebM: Download operation finished -> {0} downloaded, {1} skipped, {2} errors", downloaded, skipped, errors);
+        logger.LogInformation("AnimeThemes WebM: Download operation finished -> {Downloaded} downloaded, {Skipped} skipped, {Errors} errors", downloaded, skipped, errors);
         return new WebmDownloadResult(downloaded, skipped, errors, downloads, messages);
     }
 

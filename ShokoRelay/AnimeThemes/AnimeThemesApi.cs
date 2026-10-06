@@ -4,11 +4,10 @@ using System.Text.Json.Serialization;
 namespace ShokoRelay.AnimeThemes;
 
 /// <summary>HTTP client for AnimeThemes API interactions with rate limiting and JSON deserialization.</summary>
-public class AnimeThemesApi(HttpClient? httpClient = null)
+public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesApi>? logger = null)
 {
     #region Setup & State
 
-    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
     private static readonly TimeSpan s_rateLimitDelay = TimeSpan.FromSeconds(0.7);
 
     private readonly HttpClient _http = httpClient ?? new HttpClient();
@@ -92,7 +91,7 @@ public class AnimeThemesApi(HttpClient? httpClient = null)
         using var response = await _http.GetAsync(url, ct).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {
-            s_logger.Warn("AnimeThemes: API returned {Status} for {Url}", response.StatusCode, url);
+            logger?.LogWarning("AnimeThemes: API returned {StatusCode} for {Url}", response.StatusCode, url);
             return default;
         }
 

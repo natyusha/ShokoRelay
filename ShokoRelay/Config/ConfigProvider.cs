@@ -17,7 +17,7 @@ public class ConfigProvider
     #region Setup & State
 
     /// <summary>Logger instance for configuration management operations.</summary>
-    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
+    private readonly ILogger<ConfigProvider>? _logger;
 
     /// <summary>Shared JSON serializer options for reading and writing configuration files.</summary>
     private static readonly JsonSerializerOptions s_options = new() { AllowTrailingCommas = true, WriteIndented = true };
@@ -93,8 +93,10 @@ public class ConfigProvider
 
     /// <summary>Creates a new ConfigProvider using the specified paths provided by the host application.</summary>
     /// <param name="applicationPaths">Paths provided by the host application.</param>
-    public ConfigProvider(IApplicationPaths applicationPaths)
+    /// <param name="logger">Optional logger instance.</param>
+    public ConfigProvider(IApplicationPaths applicationPaths, ILogger<ConfigProvider>? logger = null)
     {
+        _logger = logger;
         PluginDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? string.Empty;
 
         var legacyConfig = Path.Combine(PluginDirectory, ShokoRelayConstants.FolderConfigSubfolder);
@@ -135,7 +137,7 @@ public class ConfigProvider
             _cachedAdminUsername = null;
             _cachedTokenFile = null;
         }
-        s_logger.Info("Config: Settings invalidated due to external file change");
+        _logger?.LogInformation("Config: Settings invalidated due to external file change");
     }
 
     #endregion
@@ -194,7 +196,7 @@ public class ConfigProvider
             }
             catch (Exception ex)
             {
-                s_logger.Warn(ex, "Config: Invalid settings -> Using defaults");
+                _logger?.LogWarning(ex, "Config: Invalid settings -> Using defaults");
                 s = new();
             }
             ApplyDefaultValues(s);
@@ -202,7 +204,7 @@ public class ConfigProvider
             NormalizePathMappings(s);
             NormalizeSubtitleMappings(s);
             NormalizeCsvFields(s);
-            NormalizeSettings(s);
+            NormalizeSettings(s, _logger);
             return _settings = s;
         }
     }
@@ -339,7 +341,7 @@ public class ConfigProvider
         }
         catch (Exception ex)
         {
-            s_logger.Warn(ex, "Config: Failed to delete token file");
+            _logger?.LogWarning(ex, "Config: Failed to delete token file");
         }
     }
 
@@ -557,7 +559,8 @@ public class ConfigProvider
 
     /// <summary>Recursively scans an object for properties with [Range] attributes and clamps their values accordingly.</summary>
     /// <param name="obj">The configuration object to normalize.</param>
-    private static void NormalizeSettings(object obj)
+    /// <param name="logger">Optional logger instance for trace reporting.</param>
+    private static void NormalizeSettings(object obj, ILogger? logger = null)
     {
         if (obj == null)
             return;
@@ -581,7 +584,7 @@ public class ConfigProvider
                 if (currentVal != clampedVal)
                 {
                     prop.SetValue(obj, clampedVal);
-                    s_logger.Trace("Config: Clamped {0} from {1} to {2}", prop.Name, currentVal, clampedVal);
+                    logger?.LogTrace("Config: Clamped {Property} from {Original} to {Clamped}", prop.Name, currentVal, clampedVal);
                 }
             }
             // Recurse into nested config classes (AutomationConfig, AdvancedConfig, etc.)
@@ -589,7 +592,7 @@ public class ConfigProvider
             {
                 var subObj = prop.GetValue(obj);
                 if (subObj != null)
-                    NormalizeSettings(subObj);
+                    NormalizeSettings(subObj, logger);
             }
         }
     }

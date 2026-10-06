@@ -18,8 +18,9 @@ public class AnimeThemesController(
     AnimeThemesMp3Generator animeThemesMp3Generator,
     AnimeThemesMapping animeThemesMapping,
     AnimeThemesWebmDownloader webmDownloader,
-    IVideoService videoService
-) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary)
+    IVideoService videoService,
+    ILogger<AnimeThemesController> logger
+) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary, logger)
 {
     #region Setup
 
@@ -78,9 +79,9 @@ public class AnimeThemesController(
     [HttpPost("animethemes/vfs/import")]
     public async Task<IActionResult> ImportAnimeThemesMapping(CancellationToken cancellationToken = default)
     {
-        Logger.Info("AnimeThemes Map: Fetching curated mapping file from GitHub...");
+        Logger.LogInformation("AnimeThemes Map: Fetching curated mapping file from GitHub...");
         var (count, _) = await animeThemesMapping.ImportMappingFromUrlAsync(AnimeThemesHelper.AtRawMapUrl + ShokoRelayConstants.FileAtMapping, cancellationToken).ConfigureAwait(false);
-        Logger.Info("AnimeThemes Map: Import successful. {0} entries updated.", count);
+        Logger.LogInformation("AnimeThemes Map: Import successful. {Count} entries updated.", count);
         return Ok(new RelayResponse<object>(Data: new { count }));
     }
 
@@ -212,7 +213,7 @@ public class AnimeThemesController(
             }
             catch (Exception ex)
             {
-                Logger.Warn(ex, "AnimeThemes Player: Failed to parse mapping CSV for webm tree");
+                Logger.LogWarning(ex, "AnimeThemes Player: Failed to parse mapping CSV for webm tree");
             }
         }
 
@@ -290,7 +291,7 @@ public class AnimeThemesController(
             }
             catch (Exception ex)
             {
-                Logger.Warn(ex, "AnimeThemes Player: Failed to parse webm cache");
+                Logger.LogWarning(ex, "AnimeThemes Player: Failed to parse webm cache");
             }
         }
 
@@ -357,7 +358,7 @@ public class AnimeThemesController(
             }
             catch (Exception ex)
             {
-                Logger.Warn(ex, "AnimeThemes Player: Failed to append missing themes to tree");
+                Logger.LogWarning(ex, "AnimeThemes Player: Failed to append missing themes to tree");
             }
         }
 

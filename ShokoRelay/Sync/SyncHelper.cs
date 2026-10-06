@@ -103,9 +103,7 @@ public record PlexWatchedSyncResult(
 /// <summary>Shared helpers used by sync services.</summary>
 public static class SyncHelper
 {
-    #region Setup & Concurrency
-
-    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
+    #region Concurrency
 
     /// <summary>Global semaphore to prevent concurrent watched-state synchronization tasks.</summary>
     public static readonly SemaphoreSlim SyncLock = new(1, 1);
@@ -233,6 +231,7 @@ public static class SyncHelper
     /// <param name="userName">Managed username.</param>
     /// <param name="pin">Optional user PIN.</param>
     /// <param name="sinceHours">Optional lookback window.</param>
+    /// <param name="logger">Optional logger.</param>
     /// <param name="onlyUnwatched">If true, only returns unwatched items. If false, watched. If null, returns both.</param>
     /// <param name="hasProgress">Filter for items actively in progress.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -245,6 +244,7 @@ public static class SyncHelper
         string userName,
         string? pin,
         int? sinceHours,
+        ILogger? logger = null,
         bool? onlyUnwatched = false,
         bool? hasProgress = null,
         CancellationToken cancellationToken = default
@@ -273,21 +273,21 @@ public static class SyncHelper
                         if (!string.IsNullOrWhiteSpace(fetched))
                         {
                             userToken = fetched;
-                            s_logger.Debug("WatchedSyncService: fetched transient token for managed Plex user '{User}' (id={Id}) not persisted", userName, matched.Id);
+                            logger?.LogDebug("WatchedSyncService: fetched transient token for managed Plex user '{User}' (id={Id}) not persisted", userName, matched.Id);
                         }
                         else
-                            s_logger.Info("WatchedSyncService: SwitchHomeUser returned no token for managed user '{User}' (id={Id})", userName, matched.Id);
+                            logger?.LogInformation("WatchedSyncService: SwitchHomeUser returned no token for managed user '{User}' (id={Id})", userName, matched.Id);
                     }
                     else
-                        s_logger.Debug("WatchedSyncService: no matching managed/home user found for '{User}'", userName);
+                        logger?.LogDebug("WatchedSyncService: no matching managed/home user found for '{User}'", userName);
                 }
                 catch (Exception ex)
                 {
-                    s_logger.Warn(ex, "WatchedSyncService: failed to auto-fetch token for managed Plex user '{User}'", userName);
+                    logger?.LogWarning(ex, "WatchedSyncService: failed to auto-fetch token for managed Plex user '{User}'", userName);
                 }
             }
             else
-                s_logger.Info("WatchedSyncService: admin Plex token missing; cannot auto-fetch managed-user token for '{User}'", userName);
+                logger?.LogInformation("WatchedSyncService: admin Plex token missing; cannot auto-fetch managed-user token for '{User}'", userName);
 
             if (string.IsNullOrWhiteSpace(userToken))
                 return ([], null, null);
@@ -332,7 +332,7 @@ public static class SyncHelper
             }
             catch (Exception ex)
             {
-                s_logger.Debug(ex, "WatchedSyncService: failed to resolve server access token for managed user; falling back to user token");
+                logger?.LogDebug(ex, "WatchedSyncService: failed to resolve server access token for managed user; falling back to user token");
             }
 
             var effectiveToken = !string.IsNullOrWhiteSpace(serverAccessToken) ? serverAccessToken : userToken;
@@ -343,7 +343,7 @@ public static class SyncHelper
                     ? await plexClient.GetSectionMoviesAsync(target, effectiveToken, cancellationToken, onlyUnwatched, hasProgress, null, minLast).ConfigureAwait(false) ?? []
                     : await plexClient.GetSectionEpisodesAsync(target, effectiveToken, cancellationToken, onlyUnwatched, hasProgress, null, minLast).ConfigureAwait(false) ?? [];
 
-            s_logger.Info(
+            logger?.LogInformation(
                 "WatchedSyncService: fetched {Count} {TypeLabel} for user {User} in library '{Library}' on {Server} (since={Since})",
                 list.Count,
                 typeLabel,
@@ -357,7 +357,7 @@ public static class SyncHelper
         catch (Exception ex)
         {
             string msg = $"Failed to fetch {typeLabel} for Plex user '{userName}' from {target.ServerUrl}:{target.SectionId}";
-            s_logger.Warn(ex, "WatchedSyncService: {Message}", msg);
+            logger?.LogWarning(ex, "WatchedSyncService: {Message}", msg);
             return ([], null, $"{msg} -> {ex.Message}");
         }
     }
@@ -373,6 +373,7 @@ public static class SyncHelper
     /// <param name="hasProgress">Filter for items actively in progress.</param>
     /// <param name="sinceHours">Optional lookback window.</param>
     /// <param name="result">Current sync results state.</param>
+    /// <param name="logger">Optional logger.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A tuple containing the mapped user buckets and the updated sync result.</returns>
     public static async Task<(List<(string Name, List<PlexMetadataItem> Items, string? Token)> Buckets, PlexWatchedSyncResult Result)> FetchUserBucketsAsync(
@@ -386,6 +387,7 @@ public static class SyncHelper
         bool? hasProgress,
         int? sinceHours,
         PlexWatchedSyncResult result,
+        ILogger? logger,
         CancellationToken cancellationToken
     )
     {
@@ -406,7 +408,19 @@ public static class SyncHelper
         {
             foreach (var (name, pin) in extraEntries)
             {
-                var (items, resolvedToken, err) = await FetchManagedUserSectionItemsAsync(plexAuth, plexClient, configProvider, target, name, pin, sinceHours, onlyUnwatched, hasProgress, cancellationToken)
+                var (items, resolvedToken, err) = await FetchManagedUserSectionItemsAsync(
+                        plexAuth,
+                        plexClient,
+                        configProvider,
+                        target,
+                        name,
+                        pin,
+                        sinceHours,
+                        logger,
+                        onlyUnwatched,
+                        hasProgress,
+                        cancellationToken
+                    )
                     .ConfigureAwait(false);
                 if (!string.IsNullOrEmpty(err))
                     result = RecordError(result, result.PerUser, name, err);

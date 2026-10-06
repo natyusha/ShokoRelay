@@ -51,15 +51,16 @@ public sealed record BuildCollectionsResult(
 #endregion
 
 /// <summary>Default implementation of <see cref="ICollectionService"/>.</summary>
-public class CollectionService(PlexClient plexClient, PlexCollections plexCollections, IMetadataService metadataService, PlexMetadata mapper, IVideoService videoService, ConfigProvider configProvider)
-    : ICollectionService
+public class CollectionService(
+    PlexClient plexClient,
+    PlexCollections plexCollections,
+    IMetadataService metadataService,
+    PlexMetadata mapper,
+    IVideoService videoService,
+    ConfigProvider configProvider,
+    ILogger<CollectionService> logger
+) : ICollectionService
 {
-    #region Setup
-
-    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
-
-    #endregion
-
     #region Collection Building
 
     /// <inheritdoc/>
@@ -67,7 +68,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
     {
         const string TaskName = ShokoRelayConstants.TaskPlexCollectionsBuild;
         TaskHelper.StartTask(TaskName);
-        s_logger.Info("CollectionService: Starting task...");
+        logger.LogInformation("CollectionService: Starting task...");
         var sw = Stopwatch.StartNew();
 
         try
@@ -112,7 +113,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
             // Execute pre-cleanup pruning of old posters, arts, logos, and square images if configured and enabled
             if (clean && !string.IsNullOrWhiteSpace(Settings.Advanced.PlexMetadataPath) && Directory.Exists(Settings.Advanced.PlexMetadataPath))
             {
-                s_logger.Info("CollectionService: Scanning Plex data directory for old collection images to prune...");
+                logger.LogInformation("CollectionService: Scanning Plex data directory for old collection images to prune...");
                 int deletedCount = 0;
                 var subFolders = new[] { "posters", "art", "clearLogos", "squareArt" }; // 'Art' / 'squareArt' are NOT plural like the upload endpoints
 
@@ -145,12 +146,12 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                             }
                             catch (Exception ex)
                             {
-                                s_logger.Warn(ex, "CollectionService: Failed to prune {0} for collection '{1}'", folder, col.Title);
+                                logger.LogWarning(ex, "CollectionService: Failed to prune {Folder} for collection '{Title}'", folder, col.Title);
                             }
                         }
                     }
                 }
-                s_logger.Info("CollectionService: Finished pruning. Deleted {0} stale collection images.", deletedCount);
+                logger.LogInformation("CollectionService: Finished pruning. Deleted {DeletedCount} stale collection images.", deletedCount);
             }
 
             foreach (var target in targets)
@@ -234,7 +235,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                     var series = metadataService.GetShokoSeriesByID(sid.Value);
                     var collectionName = series != null ? mapper.GetCollectionName(series) : null;
 
-                    s_logger.Trace("CollectionService: Processing series -> {0} [{1}] (RatingKey: {2})", series?.GetDisplayTitle() ?? "Unknown", sid.Value, item.RatingKey);
+                    logger.LogTrace("CollectionService: Processing series -> {Title} [{SeriesId}] (RatingKey: {RatingKey})", series?.GetDisplayTitle() ?? "Unknown", sid.Value, item.RatingKey);
 
                     // Skip standard metadata assignment if only refreshing poster assets
                     if (applyAssignment)
@@ -248,7 +249,12 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                             if (collectionName == null || !string.Equals(staleName, collectionName, StringComparison.OrdinalIgnoreCase))
                             {
                                 if (await plexCollections.RemoveCollectionFromItemAsync(plexKey, staleName!, target, cancellationToken).ConfigureAwait(false))
-                                    s_logger.Info("CollectionService: Removed incorrect collection '{0}' from -> {1} [{2}]", staleName, series?.GetDisplayTitle() ?? item.Title, sid.Value);
+                                    logger.LogInformation(
+                                        "CollectionService: Removed incorrect collection '{Collection}' from -> {Title} [{SeriesId}]",
+                                        staleName,
+                                        series?.GetDisplayTitle() ?? item.Title,
+                                        sid.Value
+                                    );
                             }
                         }
 
@@ -258,7 +264,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                             if (assignmentOk)
                             {
                                 created++;
-                                s_logger.Info("CollectionService: Assigned '{0}' to -> {1} [{2}]", collectionName, series?.GetDisplayTitle() ?? item.Title, sid.Value);
+                                logger.LogInformation("CollectionService: Assigned '{Collection}' to -> {Title} [{SeriesId}]", collectionName, series?.GetDisplayTitle() ?? item.Title, sid.Value);
                                 createdList.Add(new CollectionAssignmentDetail(target.Title, target.SectionId, collectionName, sid.Value, plexKey, isMovieTarget));
                             }
                             else
@@ -319,7 +325,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                                             cacheModified = true;
                                             uploaded++;
                                             uploadedDetails.Add(new CollectionUploadDetail(target.Title, isMovieTarget, label, collectionName, cid));
-                                            s_logger.Debug("CollectionService: Applied {0} for collection -> {1}", label, collectionName);
+                                            logger.LogDebug("CollectionService: Applied {Label} for collection -> {Collection}", label, collectionName);
                                         }
                                     }
                                 }
@@ -358,7 +364,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
                                     cacheModified = true;
                                     uploaded++;
                                     uploadedDetails.Add(new CollectionUploadDetail(target.Title, isMovieTarget, $"custom {label}", col.Title, cid));
-                                    s_logger.Info("CollectionService: Applied custom {0} to smart collection -> {1} (RatingKey: {2})", label, col.Title, cid);
+                                    logger.LogInformation("CollectionService: Applied custom {Label} to smart collection -> {Title} (RatingKey: {RatingKey})", label, col.Title, cid);
                                 }
                             }
                         }
@@ -393,7 +399,7 @@ public class CollectionService(PlexClient plexClient, PlexCollections plexCollec
             }
 
             sw.Stop();
-            s_logger.Info("CollectionService: Task finished -> {0} collections assigned in {1}ms", created, sw.ElapsedMilliseconds);
+            logger.LogInformation("CollectionService: Task finished -> {Count} collections assigned in {Elapsed}ms", created, sw.ElapsedMilliseconds);
             return new BuildCollectionsResult(
                 uniqueSeries.Count,
                 created,

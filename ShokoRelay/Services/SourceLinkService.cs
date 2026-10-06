@@ -14,14 +14,9 @@ public record SourceLinkResult(int Count, bool IsPurge, List<string> Details);
 
 /// <summary>Automates the creation of relative symlinks from source folders to library locations based on a mapping file provided via API.</summary>
 /// <param name="videoService">Shoko video service for import root discovery.</param>
-public class SourceLinkService(IVideoService videoService)
+/// <param name="logger">Logger instance.</param>
+public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkService> logger)
 {
-    #region Setup
-
-    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
-
-    #endregion
-
     #region Public API
 
     /// <summary>Scans all import roots for the specified mapping file and processes pending entries, or purges existing links.</summary>
@@ -39,9 +34,9 @@ public class SourceLinkService(IVideoService videoService)
             // Use the centralized ignored folder set for purge safety
             var protectedFolders = VfsShared.GetIgnoredFolderNames(Settings);
             foreach (var root in roots)
-                count += PurgeDirectoryLinks(root!, protectedFolders, details);
+                count += PurgeDirectoryLinks(root!, protectedFolders, details, logger);
 
-            s_logger.Info("SourceLinkService: Finished purge operation -> {0} links removed.", count);
+            logger.LogInformation("SourceLinkService: Finished purge operation -> {Count} links removed.", count);
             return new SourceLinkResult(count, true, details);
         }
 
@@ -79,7 +74,7 @@ public class SourceLinkService(IVideoService videoService)
                     string fullDest = Path.Combine(root!, destInfo.Path);
                     if (!File.Exists(fullSrc))
                     {
-                        s_logger.Warn("SourceLinkService: Source file not found -> {0}", fullSrc);
+                        logger.LogWarning("SourceLinkService: Source file not found -> {Path}", fullSrc);
                         continue;
                     }
 
@@ -117,9 +112,9 @@ public class SourceLinkService(IVideoService videoService)
                                 File.Delete(targetPath);
                             Directory.CreateDirectory(targetPath);
                             foreach (var subFile in Directory.EnumerateFiles(entry))
-                                VfsShared.TryCreateLink(subFile, Path.Combine(targetPath, Path.GetFileName(subFile)), s_logger);
+                                VfsShared.TryCreateLink(subFile, Path.Combine(targetPath, Path.GetFileName(subFile)), logger);
                         }
-                        else if (VfsShared.TryCreateLink(entry, targetPath, s_logger) && name.Equals(Path.GetFileName(fullSrc), cmp))
+                        else if (VfsShared.TryCreateLink(entry, targetPath, logger) && name.Equals(Path.GetFileName(fullSrc), cmp))
                             mainLinked = true;
                     }
 
@@ -130,19 +125,19 @@ public class SourceLinkService(IVideoService videoService)
                         count++;
                         string logMsg = $"{srcInfo.Path} -> {destInfo.Path}";
                         details.Add(logMsg);
-                        s_logger.Info("SourceLinkService: Created link -> {0}", logMsg);
+                        logger.LogDebug("SourceLinkService: Created link -> {Link}", logMsg);
                     }
                 }
                 catch (Exception ex)
                 {
-                    s_logger.Error(ex, "SourceLinkService: SourceLink failed for source -> {0}", srcInfo.Path);
+                    logger.LogError(ex, "SourceLinkService: SourceLink failed for source -> {Path}", srcInfo.Path);
                 }
             }
             if (modified)
                 await File.WriteAllLinesAsync(txtPath, lines).ConfigureAwait(false);
         }
 
-        s_logger.Info("SourceLinkService: Finished mapping operation -> {0} links created.", count);
+        logger.LogInformation("SourceLinkService: Finished mapping operation -> {Count} links created.", count);
         return new SourceLinkResult(count, false, details);
     }
 
@@ -154,8 +149,9 @@ public class SourceLinkService(IVideoService videoService)
     /// <param name="path">The directory path to scan.</param>
     /// <param name="protectedFolders">A set of folder names to exclude from the purge.</param>
     /// <param name="details">A list to record the paths of purged items.</param>
+    /// <param name="logger">Logger instance for tracing and warnings.</param>
     /// <returns>The number of items deleted.</returns>
-    private static int PurgeDirectoryLinks(string path, HashSet<string> protectedFolders, List<string> details)
+    private static int PurgeDirectoryLinks(string path, HashSet<string> protectedFolders, List<string> details, ILogger logger)
     {
         int deleted = 0;
         try
@@ -177,7 +173,7 @@ public class SourceLinkService(IVideoService videoService)
                             File.Delete(entry);
 
                         details.Add(entry);
-                        s_logger.Info("SourceLinkService: Purged link -> {0}", entry);
+                        logger.LogDebug("SourceLinkService: Purged link -> {Entry}", entry);
                         deleted++;
                     }
                     else if (Directory.Exists(entry))
@@ -187,22 +183,22 @@ public class SourceLinkService(IVideoService videoService)
                         {
                             Directory.Delete(entry, true);
                             details.Add(entry);
-                            s_logger.Info("SourceLinkService: Purged attachment folder -> {0}", entry);
+                            logger.LogDebug("SourceLinkService: Purged attachment folder -> {Entry}", entry);
                             deleted++;
                         }
                         else
-                            deleted += PurgeDirectoryLinks(entry, protectedFolders, details);
+                            deleted += PurgeDirectoryLinks(entry, protectedFolders, details, logger);
                     }
                 }
                 catch (Exception ex)
                 {
-                    s_logger.Warn(ex, "SourceLinkService: Failed to purge entry -> {0}", entry);
+                    logger.LogWarning(ex, "SourceLinkService: Failed to purge entry -> {Entry}", entry);
                 }
             }
         }
         catch (Exception ex)
         {
-            s_logger.Trace(ex, "SourceLinkService: Purge failed for -> {0}", path);
+            logger.LogTrace(ex, "SourceLinkService: Purge failed for -> {Path}", path);
         }
         return deleted;
     }

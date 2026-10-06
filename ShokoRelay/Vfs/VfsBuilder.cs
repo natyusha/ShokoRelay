@@ -10,14 +10,9 @@ namespace ShokoRelay.Vfs;
 /// <param name="metadataService">Metadata service used for series and episode resolution.</param>
 /// <param name="assetLinker">Service for linking local media assets and Plex extras.</param>
 /// <param name="videoService">Shoko video and managed folder service.</param>
-public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLinker, IVideoService videoService)
+/// <param name="logger">Logger instance.</param>
+public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLinker, IVideoService videoService, ILogger<VfsBuilder> logger)
 {
-    #region Setup & State
-
-    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
-
-    #endregion
-
     #region Public Interface
 
     /// <summary>Build or clean VFS for a single series ID.</summary>
@@ -39,11 +34,11 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
     {
         if (Settings.Advanced.DisableVfsGeneration)
         {
-            s_logger.Info("VFS Audit: Skipped -> VFS generation is disabled.");
+            logger.LogInformation("VFS Audit: Skipped -> VFS generation is disabled.");
             return new VfsAuditResult(0, 0, 0, [], []);
         }
 
-        s_logger.Info("VFS Audit: Starting task...");
+        logger.LogInformation("VFS Audit: Starting task...");
         var sw = Stopwatch.StartNew();
 
         var removed = new ConcurrentBag<string>();
@@ -167,7 +162,13 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
             VfsShared.SaveBlueprint(blueprint);
 
         sw.Stop();
-        s_logger.Info("VFS Audit: Task finished -> seriesChecked={0}, brokenLinksRemoved={1}, orphanedFoldersRemoved={2} in {3}ms.", seriesChecked, brokenLinks, orphanedFolders, sw.ElapsedMilliseconds);
+        logger.LogInformation(
+            "VFS Audit: Task finished -> seriesChecked={Checked}, brokenLinksRemoved={Broken}, orphanedFoldersRemoved={Orphaned} in {Elapsed}ms.",
+            seriesChecked,
+            brokenLinks,
+            orphanedFolders,
+            sw.ElapsedMilliseconds
+        );
         return new VfsAuditResult(seriesChecked, brokenLinks, orphanedFolders, [.. removed.OrderBy(x => x)], [.. errors.OrderBy(x => x)]);
     }
 
@@ -206,13 +207,13 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         // Delete the entire VFS root folder across all managed locations
         if (cleanRoot && !isFiltered)
         {
-            s_logger.Info("VFS: Performing global root cleanup...");
+            logger.LogInformation("VFS: Performing global root cleanup...");
             var allRoots = videoService.GetAllManagedFolders()?.Select(f => f.Path).Where(p => !string.IsNullOrEmpty(p)).Distinct(VfsShared.PathComparer) ?? [];
             foreach (var root in allRoots)
             {
-                CleanVfsRoot(Path.Combine(root, rootName), cleanupDetails);
+                CleanVfsRoot(Path.Combine(root, rootName), cleanupDetails, logger);
                 bool doMovie = Settings.Advanced.MovieGenerationMode != MovieGenerationMode.Disabled;
-                CleanVfsRoot(Path.Combine(root, VfsShared.ResolveMovieRootFolderName()), cleanupDetails, true, doMovie);
+                CleanVfsRoot(Path.Combine(root, VfsShared.ResolveMovieRootFolderName()), cleanupDetails, logger, true, doMovie);
             }
             cleanRoot = false;
         }
@@ -311,8 +312,8 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                     seriesDetailsBag.Add(new SeriesProcessDetails($"{series.GetDisplayTitle() ?? series.LocalID.ToString()} [{series.LocalID}]", seriesSw.ElapsedMilliseconds, sCreated, doMovie));
 
                     if (sCreated > 0 || sErrors.Count > 0)
-                        s_logger.Info(
-                            "VFS: Processed {0} -> {1} [{2}] ({3} links created) in {4}ms",
+                        logger.LogDebug(
+                            "VFS: Processed {Type} -> {DisplayTitle} [{LocalId}] ({CreatedCount} links created) in {ElapsedMs}ms",
                             doMovie ? "movie" : "series",
                             series.GetDisplayTitle(),
                             series.LocalID,
@@ -332,7 +333,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                 catch (Exception ex)
                 {
                     errorsBag.Add($"Failed series {series.GetDisplayTitle()} [{series.LocalID}]: {ex.Message}");
-                    s_logger.Error(ex, "VFS: Build failed for series -> {0} [{1}]", series.GetDisplayTitle(), series.LocalID);
+                    logger.LogError(ex, "VFS: Build failed for series -> {DisplayTitle} [{LocalId}]", series.GetDisplayTitle(), series.LocalID);
                 }
             }
         );
@@ -340,7 +341,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         sw.Stop(); // Capture total elapsed time here
         var errors = errorsBag.ToList();
 
-        s_logger.Info(
+        logger.LogInformation(
             "VFS: Build completed in {Elapsed}ms -> processed={Processed}, consolidated={Consolidated}, created={Created}, skipped={Skipped}, errors={Errors}",
             sw.ElapsedMilliseconds,
             seriesProcessed,
@@ -487,7 +488,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
 
                 var destFilePath = Path.Combine(seasonPath, fileName);
 
-                if (VfsShared.TryCreateLink(locInfo.Src, destFilePath, s_logger, skipExistenceCheck: skipCheck))
+                if (VfsShared.TryCreateLink(locInfo.Src, destFilePath, logger, skipExistenceCheck: skipCheck))
                 {
                     created++;
                     planned++;
@@ -625,7 +626,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                 );
                 string destFilePath = Path.Combine(moviePath, fileName);
 
-                if (VfsShared.TryCreateLink(locInfo.Src, destFilePath, s_logger, skipExistenceCheck: skipCheck))
+                if (VfsShared.TryCreateLink(locInfo.Src, destFilePath, logger, skipExistenceCheck: skipCheck))
                 {
                     created++;
                     planned++;
@@ -696,7 +697,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                             Directory.CreateDirectory(extraPath);
                         string destFilePath = Path.Combine(extraPath, fileName);
 
-                        if (VfsShared.TryCreateLink(locInfo.Src, destFilePath, s_logger, skipExistenceCheck: skipCheck))
+                        if (VfsShared.TryCreateLink(locInfo.Src, destFilePath, logger, skipExistenceCheck: skipCheck))
                         {
                             created++;
                             planned++;
@@ -752,15 +753,16 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
     /// <param name="path">The absolute path of the root directory to clean.</param>
     /// <param name="cleanupDetails">The tracking list for cleanups.</param>
     /// <param name="isMovieRoot">Whether this root is the standalone movies directory.</param>
+    /// <param name="logger">The logger to use for logging messages.</param>
     /// <param name="recreate">Whether to recreate the empty directory and .ignore file after cleanup.</param>
-    private static void CleanVfsRoot(string path, List<RootCleanupDetails> cleanupDetails, bool isMovieRoot = false, bool recreate = true)
+    private static void CleanVfsRoot(string path, List<RootCleanupDetails> cleanupDetails, ILogger logger, bool isMovieRoot = false, bool recreate = true)
     {
         if (Settings.Advanced.DisableVfsGeneration || !Directory.Exists(path))
             return;
 
         if (!VfsShared.IsSafeToDelete(path))
         {
-            s_logger.Warn("VFS: Refusing to delete unsafe path -> {0}", path);
+            logger.LogWarning("VFS: Refusing to delete unsafe path -> {Path}", path);
             return;
         }
 
@@ -781,7 +783,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
             );
             Directory.Delete(path, true);
             cleanupDetails.Add(new RootCleanupDetails(path, cleanSw.ElapsedMilliseconds));
-            s_logger.Info("VFS: Cleaned {0}root folder -> '{1}' in {2}ms", isMovieRoot ? "movie " : "", path, cleanSw.ElapsedMilliseconds);
+            logger.LogInformation("VFS: Cleaned {Type}root folder -> '{Path}' in {Elapsed}ms", isMovieRoot ? "movie " : "", path, cleanSw.ElapsedMilliseconds);
             if (recreate)
             {
                 Directory.CreateDirectory(path);
@@ -794,7 +796,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         }
         catch (Exception ex)
         {
-            s_logger.Warn(ex, "VFS: Failed to clean {0}root -> {1}", isMovieRoot ? "movie " : "", path);
+            logger.LogWarning(ex, "VFS: Failed to clean {Type}root -> {Path}", isMovieRoot ? "movie " : "", path);
         }
     }
 
@@ -837,13 +839,13 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                 if (Directory.Exists(path))
                 {
                     Directory.Delete(path, true);
-                    s_logger.Info("VFS: Pruned empty/orphaned series folder -> {0}", path);
+                    logger.LogInformation("VFS: Pruned empty/orphaned series folder -> {Path}", path);
                 }
             }
             catch (Exception ex)
             {
                 onError($"Prune failed {path}: {ex.Message}");
-                s_logger.Warn(ex, "VFS: Failed to prune series path -> {Path}", path);
+                logger.LogWarning(ex, "VFS: Failed to prune series path -> {Path}", path);
             }
         }
     }
