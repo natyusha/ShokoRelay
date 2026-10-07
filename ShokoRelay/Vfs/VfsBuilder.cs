@@ -259,8 +259,8 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                     var seriesSw = Stopwatch.StartNew();
 
                     // SeriesNode structure: { id, anidbId, title, seasons: { "Season 1": [ { name, source } ] }, rootFiles: [ { name, source } ] }
-                    var seasons = new ConcurrentDictionary<string, ConcurrentDictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
-                    var rootFiles = new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    var seasons = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+                    var rootFiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                     int folderId = series.GetPrimaryId(metadataService);
 
                     // Ensure stale entries for this series are removed across all roots before rebuilding its node.
@@ -279,7 +279,11 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                             if (string.IsNullOrEmpty(season))
                                 rootFiles.TryAdd(fileName, source ?? "Local Metadata");
                             else
-                                seasons.GetOrAdd(season, _ => new(StringComparer.OrdinalIgnoreCase)).TryAdd(fileName, source ?? "Local Metadata");
+                            {
+                                if (!seasons.TryGetValue(season, out var sDict))
+                                    seasons[season] = sDict = new(StringComparer.OrdinalIgnoreCase);
+                                sDict.TryAdd(fileName, source ?? "Local Metadata");
+                            }
                         }
                     );
 

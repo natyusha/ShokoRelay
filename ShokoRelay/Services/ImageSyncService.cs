@@ -306,13 +306,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                 .Where(x => x.Source == ServiceRegistration.RelayPlexSource && x.EntityID.EntityType == MetadataEntityType.Episode)
                 .ToList();
 
-            var orphanedEpIds = allEpisodeXrefs
-                .Select(x => x.EntityID.ID)
-                .Where(idStr => !Guid.TryParse(idStr, out _) && int.TryParse(idStr, out _))
-                .Select(int.Parse)
-                .Where(epId => !processedInRun.Contains(epId))
-                .Distinct()
-                .ToList();
+            var orphanedEpIds = allEpisodeXrefs.Select(x => int.TryParse(x.EntityID.ID, out int id) ? id : 0).Where(id => id > 0 && !processedInRun.Contains(id)).Distinct().ToList();
 
             foreach (var epId in orphanedEpIds)
             {

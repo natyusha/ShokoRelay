@@ -314,7 +314,7 @@ public class AnimeThemesMp3Generator(
             if (!query.Batch)
                 logger.LogInformation("AnimeThemes MP3: Generating Theme.mp3 for series -> {Title} [{LocalId}] in {Folder}", series.GetDisplayTitle() ?? series.LocalID.ToString(), series.LocalID, folder);
 
-            if (!string.IsNullOrWhiteSpace(query.Slug) && !AnimeThemesHelper.SlugRegex.IsMatch(query.Slug))
+            if (!string.IsNullOrWhiteSpace(query.Slug) && !AnimeThemesHelper.SlugRegex().IsMatch(query.Slug))
                 throw new ArgumentException("Invalid slug format.");
 
             logger.LogDebug("AnimeThemes MP3: Fetching metadata for AniDB ID -> {AnidbId} (Slug: {Slug}, Offset: {Offset})", series.AnidbAnimeID, query.Slug ?? "Auto", query.Offset);

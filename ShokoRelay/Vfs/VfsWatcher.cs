@@ -150,16 +150,26 @@ public class VfsWatcher(
     {
         while (true)
         {
-            List<int> seriesIds;
-            lock (_gate)
+            var seriesIds = new List<int>();
+
+            // Iteratively extract pending items without clearing the dictionary blindly. This prevents losing events that are added simultaneously by other threads.
+            foreach (var key in _pending.Keys)
             {
-                if (_pending.IsEmpty)
+                if (_pending.TryRemove(key, out _))
+                    seriesIds.Add(key);
+            }
+
+            if (seriesIds.Count == 0)
+            {
+                lock (_gate)
                 {
-                    _processing = false;
-                    return;
+                    if (_pending.IsEmpty)
+                    {
+                        _processing = false;
+                        return;
+                    }
                 }
-                seriesIds = [.. _pending.Keys];
-                _pending.Clear();
+                continue;
             }
 
             try

@@ -307,23 +307,19 @@ public static class SyncHelper
                     {
                         if (string.IsNullOrWhiteSpace(c?.Uri) || targetServerUrlNorm == null)
                             continue;
-                        try
+
+                        if (Uri.TryCreate(c.Uri.TrimEnd('/'), UriKind.Absolute, out var connUri) && Uri.TryCreate(targetServerUrlNorm, UriKind.Absolute, out var tgtUri))
                         {
-                            var connUri = new Uri(c.Uri.TrimEnd('/'));
-                            var tgtUri = new Uri(targetServerUrlNorm);
                             if (string.Equals(connUri.Host, tgtUri.Host, StringComparison.OrdinalIgnoreCase) && connUri.Port == tgtUri.Port)
                             {
                                 serverAccessToken = dev.AccessToken;
                                 break;
                             }
                         }
-                        catch
+                        else if (string.Equals(c.Uri.TrimEnd('/'), targetServerUrlNorm, StringComparison.OrdinalIgnoreCase))
                         {
-                            if (c.Uri.TrimEnd('/').Equals(targetServerUrlNorm, StringComparison.OrdinalIgnoreCase))
-                            {
-                                serverAccessToken = dev.AccessToken;
-                                break;
-                            }
+                            serverAccessToken = dev.AccessToken;
+                            break;
                         }
                     }
                     if (!string.IsNullOrWhiteSpace(serverAccessToken))

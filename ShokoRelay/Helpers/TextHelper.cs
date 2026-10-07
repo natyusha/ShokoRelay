@@ -6,48 +6,53 @@ using Shoko.Abstractions.Metadata.Enums;
 namespace ShokoRelay.Helpers;
 
 /// <summary>Provides a centralized collection of text processing utilities including Regex-based cleaning, language-based title resolution, and summary sanitization.</summary>
-public static class TextHelper
+public static partial class TextHelper
 {
     #region Compiled Regex
 
     /// <summary>Regex for isolating common prefixes from series titles.</summary>
-    private static readonly Regex s_seriesPrefixRegex = new(@"^(Gekijou ?(?:ban(?: 3D)?|Tanpen|Remix Ban|Henshuuban|Soushuuhen)|Eiga|OVA) (.*$)", RegexOptions.Compiled);
+    [GeneratedRegex(@"^(Gekijou ?(?:ban(?: 3D)?|Tanpen|Remix Ban|Henshuuban|Soushuuhen)|Eiga|OVA) (.*$)")]
+    private static partial Regex SeriesPrefixRegex();
 
     /// <summary>Regex for removing redundant movie descriptors from titles.</summary>
-    private static readonly Regex s_movieDescriptorRegex = new(@"(?i)(:? The)?( Movie| Motion Picture)", RegexOptions.Compiled);
+    [GeneratedRegex(@"(?i)(:? The)?( Movie| Motion Picture)")]
+    private static partial Regex MovieDescriptorRegex();
 
     /// <summary>Regex for identifying default or ambiguous episode titles.</summary>
-    private static readonly Regex s_defaultTitleRegex = new(@"^(Episode|Volume|Special|Short|(Short )?Movie) [S0]?[1-9][0-9]*$", RegexOptions.Compiled);
+    [GeneratedRegex(@"^(Episode|Volume|Special|Short|(Short )?Movie) [S0]?[1-9][0-9]*$")]
+    private static partial Regex DefaultTitleRegex();
 
     /// <summary>Regex for isolating and removing source notes from summaries.</summary>
-    private static readonly Regex s_sourceNoteSummaryRegex = new(
-        @"(?m)^\(?\b((Modified )?Sour?ces?|Note( [1-9])?|Summ?ary|From|See Also):(?!$| a daikon)([^\r\n]+|$)",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase
-    );
+    [GeneratedRegex(@"(?m)^\(?\b((Modified )?Sour?ces?|Note( [1-9])?|Summ?ary|From|See Also):(?!$| a daikon)([^\r\n]+|$)", RegexOptions.IgnoreCase)]
+    private static partial Regex SourceNoteSummaryRegex();
 
     /// <summary>Regex for isolating and removing list indicators from summaries.</summary>
-    private static readonly Regex s_listIndicatorRegex = new(@"(?m)^(\*|[\u2014~-] (adapted|source|description|summary|translated|written):?) ([^\r\n]+|$)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    [GeneratedRegex(@"(?m)^(\*|[\u2014~-] (adapted|source|description|summary|translated|written):?) ([^\r\n]+|$)", RegexOptions.IgnoreCase)]
+    private static partial Regex ListIndicatorRegex();
 
     /// <summary>Regex for cleaning up AniDB links in summaries.</summary>
-    private static readonly Regex s_aniDBLinkRegex = new(@"(?:http:\/\/anidb\.net\/(?:ch|co|cr|[feast]|(?:character|creator|file|episode|anime|tag)\/)(?:\d+)) \[([^\]]+)]", RegexOptions.Compiled);
+    [GeneratedRegex(@"(?:http:\/\/anidb\.net\/(?:ch|co|cr|[feast]|(?:character|creator|file|episode|anime|tag)\/)(?:\d+)) \[([^\]]+)]")]
+    private static partial Regex AniDBLinkRegex();
 
     /// <summary>Regex for stripping broken BBCode italic tags from specific AniDB summaries.</summary>
-    private static readonly Regex s_bbCodeItalicBugRegex = new(
-        @"(?is)\[i\](?!" + Regex.Escape("\"The Sasami") + @"|" + Regex.Escape("\"Stellar") + @"|In the distant| occurred in)(.*?)\[\/i\]",
-        RegexOptions.Compiled
-    );
+    [GeneratedRegex(@"(?is)\[i\](?!""The Sasami|""Stellar|In the distant| occurred in)(.*?)\[\/i\]")]
+    private static partial Regex BbCodeItalicBugRegex();
 
     /// <summary>Regex for removing solitary BBCode italic tags.</summary>
-    private static readonly Regex s_bbCodeSolitaryRegex = new(@"\[\/?i\]", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    [GeneratedRegex(@"\[\/?i\]", RegexOptions.IgnoreCase)]
+    private static partial Regex BbCodeSolitaryRegex();
 
     /// <summary>Regex for condensing multiple newlines into a single line break.</summary>
-    private static readonly Regex s_condenseLinesRegex = new(@"(\r?\n\s*){2,}", RegexOptions.Compiled);
+    [GeneratedRegex(@"(\r?\n\s*){2,}")]
+    private static partial Regex CondenseLinesRegex();
 
     /// <summary>Regex for condensing multiple spaces into a single space.</summary>
-    private static readonly Regex s_condenseSpacesRegex = new(@"\s{2,}", RegexOptions.Compiled);
+    [GeneratedRegex(@"\s{2,}")]
+    private static partial Regex CondenseSpacesRegex();
 
     /// <summary>Regex for decoding Unicode escape sequences.</summary>
-    private static readonly Regex s_unicodeEscapeRegex = new(@"\\u([0-9a-fA-F]{4})", RegexOptions.Compiled);
+    [GeneratedRegex(@"\\u([0-9a-fA-F]{4})")]
+    private static partial Regex UnicodeEscapeRegex();
 
     #endregion
 
@@ -56,7 +61,7 @@ public static class TextHelper
     /// <summary>Replace runs of two or more whitespace characters with a single space.</summary>
     /// <param name="input">The string to process.</param>
     /// <returns>The condensed string.</returns>
-    public static string CondenseSpaces(string input) => s_condenseSpacesRegex.Replace(input, " ");
+    public static string CondenseSpaces(string input) => CondenseSpacesRegex().Replace(input, " ");
 
     /// <summary>Replace literal commas with the unicode escape \u002C.</summary>
     /// <param name="value">The string to escape.</param>
@@ -67,7 +72,7 @@ public static class TextHelper
     /// <param name="value">The string containing escape sequences.</param>
     /// <returns>A decoded string.</returns>
     public static string UnescapeUnicode(string value) =>
-        string.IsNullOrEmpty(value) || !value.Contains(@"\u", StringComparison.Ordinal) ? value : s_unicodeEscapeRegex.Replace(value, m => ((char)Convert.ToInt32(m.Groups[1].Value, 16)).ToString());
+        string.IsNullOrEmpty(value) || !value.Contains(@"\u", StringComparison.Ordinal) ? value : UnicodeEscapeRegex().Replace(value, m => ((char)Convert.ToInt32(m.Groups[1].Value, 16)).ToString());
 
     /// <summary>Splits a CSV line on commas.</summary>
     /// <param name="line">The raw CSV line.</param>
@@ -148,7 +153,7 @@ public static class TextHelper
         string raw = GetTitleByLanguage(series, Settings.SeriesTitleLanguage);
 
         // Move common title prefixes to the end of the title (e.g. OVA, Eiga)
-        string display = (Settings.MoveCommonSeriesTitlePrefixes && !string.IsNullOrWhiteSpace(raw)) ? s_seriesPrefixRegex.Replace(raw, "$2 — $1") : raw;
+        string display = (Settings.MoveCommonSeriesTitlePrefixes && !string.IsNullOrWhiteSpace(raw)) ? SeriesPrefixRegex().Replace(raw, "$2 — $1") : raw;
 
         // Get Alternate Title according to the language preference
         string? alt = GetTitleByLanguage(series, Settings.SeriesAltTitleLanguage);
@@ -190,7 +195,7 @@ public static class TextHelper
             if (title != raw && !title.Contains(raw))
             {
                 // Reduce redundant movie descriptors for cleaner Plex display
-                string result = (raw == "Complete Movie") ? s_movieDescriptorRegex.Replace(title, "").Trim() : title;
+                string result = (raw == "Complete Movie") ? MovieDescriptorRegex().Replace(title, "").Trim() : title;
                 return $"{result} — {raw}";
             }
             return title;
@@ -201,7 +206,7 @@ public static class TextHelper
             return tmdbTitle;
 
         // Standard enumeration override (e.g. "Episode 1" -> "Actual Title")
-        return (!string.IsNullOrEmpty(tmdbTitle) && s_defaultTitleRegex.IsMatch(raw) && !s_defaultTitleRegex.IsMatch(tmdbTitle)) ? tmdbTitle : raw;
+        return (!string.IsNullOrEmpty(tmdbTitle) && DefaultTitleRegex().IsMatch(raw) && !DefaultTitleRegex().IsMatch(tmdbTitle)) ? tmdbTitle : raw;
     }
 
     /// <summary>Compute the best title to display for a standalone movie, omitting the episode title if the series only contains one main episode or if the episode title is ambiguous.</summary>
@@ -245,18 +250,18 @@ public static class TextHelper
             return "";
         s = mode switch
         {
-            SummaryMode.FullySanitize => s_listIndicatorRegex.Replace(s_sourceNoteSummaryRegex.Replace(s, ""), ""),
-            SummaryMode.AllowInfoLines => s_listIndicatorRegex.Replace(s, ""),
-            SummaryMode.AllowMiscLines => s_sourceNoteSummaryRegex.Replace(s, ""),
+            SummaryMode.FullySanitize => ListIndicatorRegex().Replace(SourceNoteSummaryRegex().Replace(s, ""), ""),
+            SummaryMode.AllowInfoLines => ListIndicatorRegex().Replace(s, ""),
+            SummaryMode.AllowMiscLines => SourceNoteSummaryRegex().Replace(s, ""),
             _ => s,
         };
 
         // Remove AniDB-specific artifacts and bugs
-        s = s_aniDBLinkRegex.Replace(s, "$1"); // Resolve [Link] tags
-        s = s_bbCodeItalicBugRegex.Replace(s, ""); // Cleanup known AniDB API italic bug content
-        s = s_bbCodeSolitaryRegex.Replace(s, ""); // Strip leftover BBCode tags
+        s = AniDBLinkRegex().Replace(s, "$1"); // Resolve [Link] tags
+        s = BbCodeItalicBugRegex().Replace(s, ""); // Cleanup known AniDB API italic bug content
+        s = BbCodeSolitaryRegex().Replace(s, ""); // Strip leftover BBCode tags
 
-        return s_condenseSpacesRegex.Replace(s_condenseLinesRegex.Replace(s, Environment.NewLine), " ").Trim(' ', '\r', '\n');
+        return CondenseSpacesRegex().Replace(CondenseLinesRegex().Replace(s, Environment.NewLine), " ").Trim(' ', '\r', '\n');
     }
 
     #endregion

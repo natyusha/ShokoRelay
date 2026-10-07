@@ -7,15 +7,17 @@ using Shoko.Abstractions.Metadata.Enums;
 namespace ShokoRelay.Helpers;
 
 /// <summary>Utilities for filtering and formatting tag strings from Shoko metadata.</summary>
-public static class TagHelper
+public static partial class TagHelper
 {
     #region Static Configuration
 
     /// <summary>Regex which matches alphanumeric text including single quotes and hyphens until a space or other special character.</summary>
-    private static readonly Regex s_wordRegex = new(@"[\'\w\d-]+\b", RegexOptions.Compiled);
+    [GeneratedRegex(@"[\'\w\d-]+\b")]
+    private static partial Regex WordRegex();
 
     /// <summary>Regex which strips moderator notes and trailing comments starting with double hyphens from AniDB tags.</summary>
-    private static readonly Regex s_tagCleanupRegex = new(@"\s*--.*$", RegexOptions.Compiled);
+    [GeneratedRegex(@"\s*--.*$")]
+    private static partial Regex TagCleanupRegex();
 
     // csharpier-ignore
     /// <summary><c>TagBlacklistAniDBHelpers</c>: https://github.com/ShokoAnime/ShokoServer/blob/master/Shoko.Server/Utilities/TagFilter.cs#L37</summary>
@@ -85,7 +87,7 @@ public static class TagHelper
     /// <returns>An enumerable collection of formatted anonymous objects containing the sanitized tags.</returns>
     private static IEnumerable<object> FilterAndFormat(IEnumerable<string> tags, string[] userBlacklist) =>
         tags.Where(tagName => !string.IsNullOrWhiteSpace(tagName))
-            .Select(tagName => s_tagCleanupRegex.Replace(tagName, "").Trim())
+            .Select(tagName => TagCleanupRegex().Replace(tagName, "").Trim())
             .Where(tagName =>
                 !string.IsNullOrWhiteSpace(tagName) && !s_tagBlacklistAniDBHelpers.Contains(tagName) && (userBlacklist.Length == 0 || !userBlacklist.Contains(tagName, StringComparer.OrdinalIgnoreCase))
             )
@@ -105,14 +107,15 @@ public static class TagHelper
             return text;
 
         // Primary Pass: Capitalize words and apply Upper/Lower lists
-        string result = s_wordRegex.Replace(
-            text.ToLower(),
-            m =>
-                s_forceLower.Contains(m.Value) ? m.Value.ToLower()
-                : s_forceUpper.Contains(m.Value) ? m.Value.ToUpper()
-                // Capitalise all words accounting for apostrophes first
-                : char.ToUpper(m.Value[0]) + m.Value[1..]
-        );
+        string result = WordRegex()
+            .Replace(
+                text.ToLower(),
+                m =>
+                    s_forceLower.Contains(m.Value) ? m.Value.ToLower()
+                    : s_forceUpper.Contains(m.Value) ? m.Value.ToUpper()
+                    // Capitalise all words accounting for apostrophes first
+                    : char.ToUpper(m.Value[0]) + m.Value[1..]
+            );
 
         // Force capitalise the first character no matter what
         result = char.ToUpper(result[0]) + result[1..];
@@ -121,7 +124,7 @@ public static class TagHelper
         int lastSpaceIndex = result.LastIndexOf(' ');
         if (lastSpaceIndex >= 0 && lastSpaceIndex < result.Length - 1)
             result = result[..(lastSpaceIndex + 1)] + char.ToUpper(result[lastSpaceIndex + 1]) + result[(lastSpaceIndex + 2)..];
-        result = s_wordRegex.Replace(result, m => s_forceSpecial.TryGetValue(m.Value, out var special) ? special : m.Value);
+        result = WordRegex().Replace(result, m => s_forceSpecial.TryGetValue(m.Value, out var special) ? special : m.Value);
         return result;
     }
 

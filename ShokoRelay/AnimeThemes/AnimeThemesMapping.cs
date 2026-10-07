@@ -408,7 +408,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                             foreach (var file in Directory.EnumerateFiles(shortsDir))
                             {
                                 string fileName = Path.GetFileName(file);
-                                if (AnimeThemesHelper.CreditsFileRegex.IsMatch(fileName) || plannedFilenames.Contains(fileName))
+                                if (AnimeThemesHelper.CreditsFileRegex().IsMatch(fileName) || plannedFilenames.Contains(fileName))
                                     continue;
 
                                 // Protection for Plex Local Extras: Only delete the file if it's a symlink pointing to the AnimeThemes repository.
@@ -419,7 +419,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                                 if (isFilteredRun)
                                 {
                                     bool isMyFile = false;
-                                    if (AnimeThemesHelper.OverrideThemeFileRegex.IsMatch(fileName))
+                                    if (AnimeThemesHelper.OverrideThemeFileRegex().IsMatch(fileName))
                                     {
                                         foreach (var p in myPrefixes)
                                             if (p != null && fileName.StartsWith(p))
