@@ -164,6 +164,9 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
                 var showMeta = mapper.MapSeries(ctx.Series, ctx.Titles);
                 ((IDictionary<string, object?>)showMeta)["score"] = 100;
 
+                // Force remote URLs for Fix Match UI to bypass browser Mixed Content blocks
+                ((IDictionary<string, object?>)showMeta)["thumb"] = ctx.Series.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, forceRemote: true);
+
                 if (includeChildren == 1)
                 {
                     var seasons = ctx.FileData.Seasons.Select(s => mapper.MapSeason(ctx.Series, s, ctx.Titles.DisplayTitle)).ToList();
@@ -181,9 +184,9 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             var tmdbMovie = ep.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault() ?? series.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault();
             string movieTitle = TextHelper.ResolveMovieTitle(ep, series, tmdbMovie);
             var posterUrl =
-                (ep.EpisodeNumber > 1 && tmdbMovie is IWithImages mi ? mi.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage) : null)
-                ?? (series as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage)
-                ?? (tmdbMovie as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage);
+                (ep.EpisodeNumber > 1 && tmdbMovie is IWithImages mi ? mi.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, forceRemote: true) : null)
+                ?? (series as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, forceRemote: true)
+                ?? (tmdbMovie as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, forceRemote: true);
 
             return Ok(
                 new

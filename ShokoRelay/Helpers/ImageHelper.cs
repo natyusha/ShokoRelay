@@ -34,16 +34,21 @@ public static class ImageHelper
 
     /// <summary>Construct a full URL for the given image.</summary>
     /// <param name="image">Image metadata object.</param>
-    /// <param name="forceRemote">If true, forces the returned URL to point to the remote TMDB CDN, bypassing the local Shoko Server API.</param>
+    /// <param name="forceRemote">If true, forces the returned URL to point to the remote CDN (TMDB/AniDB), bypassing the local Shoko Server API.</param>
     /// <returns>A full URL string.</returns>
     public static string GetImageUrl(IImage image, bool forceRemote = false)
     {
-        if (forceRemote && image.Source == MetadataSource.TMDB && !string.IsNullOrEmpty(image.ResourceID))
+        if (forceRemote && !string.IsNullOrEmpty(image.ResourceID))
         {
-            string path = image.ResourceID.Replace('\\', '/');
-            if (!path.StartsWith('/'))
-                path = "/" + path;
-            return $"https://image.tmdb.org/t/p/original{path}";
+            if (image.Source == MetadataSource.TMDB)
+            {
+                string path = image.ResourceID.Replace('\\', '/');
+                if (!path.StartsWith('/'))
+                    path = "/" + path;
+                return $"https://image.tmdb.org/t/p/original{path}";
+            }
+            if (image.Source == MetadataSource.AniDB)
+                return $"https://cdn.anidb.net/images/main/{image.ResourceID}";
         }
         return $"{ServerBaseUrl}/api/v3/Image/{image.ID}";
     }
@@ -94,9 +99,10 @@ public static class ImageHelper
     /// <param name="entity">The Shoko metadata entity.</param>
     /// <param name="type">The specific image type to retrieve.</param>
     /// <param name="languageSetting">The prioritized language setting string.</param>
+    /// <param name="forceRemote">If true, forces the returned URL to point to the remote CDN.</param>
     /// <returns>The URL of the preferred image, or null if none exists.</returns>
-    public static string? GetPreferredImageUrl(this IWithImages entity, ImageEntityType type, string languageSetting) =>
-        FilterImagesByLanguage(entity.GetAvailableImages(type), languageSetting, false).FirstOrDefault() is { } img ? GetImageUrl(img) : null;
+    public static string? GetPreferredImageUrl(this IWithImages entity, ImageEntityType type, string languageSetting, bool forceRemote = false) =>
+        FilterImagesByLanguage(entity.GetAvailableImages(type), languageSetting, false).FirstOrDefault() is { } img ? GetImageUrl(img, forceRemote) : null;
 
     /// <summary>Filters and orders images based on a prioritized list of language codes.</summary>
     /// <param name="images">The collection of images to filter.</param>
