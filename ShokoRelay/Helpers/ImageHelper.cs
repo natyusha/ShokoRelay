@@ -64,7 +64,7 @@ public static class ImageHelper
 
     /// <summary>Filters and returns only enabled, desired, and locally available images from the supplied entity.</summary>
     /// <param name="entity">The Shoko metadata entity.</param>
-    /// <param name="type">The specific image type to retrieve.</param>
+    /// <param name="type">The image type to retrieve.</param>
     /// <returns>A collection of available images.</returns>
     public static IEnumerable<IImage> GetAvailableImages(this IWithImages entity, ImageEntityType type)
     {
@@ -97,7 +97,7 @@ public static class ImageHelper
 
     /// <summary>Gets the URL of the preferred image for the entity based on the language setting.</summary>
     /// <param name="entity">The Shoko metadata entity.</param>
-    /// <param name="type">The specific image type to retrieve.</param>
+    /// <param name="type">The image type to retrieve.</param>
     /// <param name="languageSetting">The prioritized language setting string.</param>
     /// <param name="forceRemote">If true, forces the returned URL to point to the remote CDN.</param>
     /// <returns>The URL of the preferred image, or null if none exists.</returns>
@@ -107,7 +107,7 @@ public static class ImageHelper
     /// <summary>Filters and orders images based on a prioritized list of language codes.</summary>
     /// <param name="images">The collection of images to filter.</param>
     /// <param name="imageLanguage">The prioritized language setting string.</param>
-    /// <param name="addEveryImage">Whether to return all images ordered by priority or just the first matching one.</param>
+    /// <param name="addEveryImage">Whether to include all images or only preferred ones.</param>
     /// <returns>A filtered and ordered collection of images.</returns>
     public static IEnumerable<IImage> FilterImagesByLanguage(IEnumerable<IImage> images, string imageLanguage, bool addEveryImage)
     {

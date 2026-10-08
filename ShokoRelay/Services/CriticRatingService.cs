@@ -47,6 +47,9 @@ public sealed record ApplyRatingsResult(
 #endregion
 
 /// <summary>Default implementation of <see cref="ICriticRatingService"/>.</summary>
+/// <param name="plexClient">Plex client.</param>
+/// <param name="metadataService">Shoko metadata service.</param>
+/// <param name="logger">Logger instance.</param>
 public class CriticRatingService(PlexClient plexClient, IMetadataService metadataService, ILogger<CriticRatingService> logger) : ICriticRatingService
 {
     #region Public API
@@ -289,9 +292,9 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
     /// <param name="key">The Plex rating key.</param>
     /// <param name="val">The rating value to apply.</param>
     /// <param name="target">The target Plex library.</param>
-    /// <param name="ct">Cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>True if the rating was successfully applied.</returns>
-    private async Task<bool> ApplyRatingAsync(string key, double? val, PlexLibraryTarget target, CancellationToken ct)
+    private async Task<bool> ApplyRatingAsync(string key, double? val, PlexLibraryTarget target, CancellationToken cancellationToken)
     {
         string path =
             (val == null || Settings.CriticRatingMode == CriticRatingMode.None)
@@ -301,7 +304,7 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
         try
         {
             using var req = plexClient.CreateRequest(HttpMethod.Put, path, target.ServerUrl);
-            using var resp = await plexClient.SendAsync(req, ct);
+            using var resp = await plexClient.SendAsync(req, cancellationToken);
             return resp.IsSuccessStatusCode;
         }
         catch

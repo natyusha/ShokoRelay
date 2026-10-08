@@ -16,6 +16,13 @@ using IoFile = System.IO.File;
 namespace ShokoRelay.Controllers;
 
 /// <summary>Provides operations for serving the dashboard pages, static assets, and dynamic theme stylesheets.</summary>
+/// <param name="configProvider">Configuration provider.</param>
+/// <param name="metadataService">Shoko metadata service.</param>
+/// <param name="plexLibrary">Plex client.</param>
+/// <param name="webThemeService">Shoko web theme service.</param>
+/// <param name="applicationPaths">Shoko application paths.</param>
+/// <param name="scheduledActionService">Shoko scheduled action service.</param>
+/// <param name="logger">Logger instance.</param>
 [ApiController]
 [ApiVersion(ShokoRelayConstants.ApiVersion)]
 [Route(ShokoRelayConstants.BasePath)]

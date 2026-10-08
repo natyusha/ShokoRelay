@@ -20,6 +20,9 @@ public interface IShokoImportService
 #endregion
 
 /// <summary>Default implementation of <see cref="IShokoImportService"/>.</summary>
+/// <param name="videoService">Shoko video service.</param>
+/// <param name="releaseService">Shoko video release service.</param>
+/// <param name="logger">Logger instance.</param>
 public class ShokoImportService(IVideoService videoService, IVideoReleaseService releaseService, ILogger<ShokoImportService> logger) : IShokoImportService
 {
     #region Import Logic

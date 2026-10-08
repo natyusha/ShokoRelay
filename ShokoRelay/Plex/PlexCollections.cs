@@ -42,8 +42,8 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient, ILogg
 
     /// <summary>Looks up or creates a collection in a specific library target.</summary>
     /// <param name="collectionName">The collection name.</param>
-    /// <param name="target">The target library.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="target">The target Plex library.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The collection ID or null.</returns>
     public async Task<int?> GetOrCreateCollectionIdAsync(string collectionName, PlexLibraryTarget target, CancellationToken cancellationToken = default)
     {
@@ -87,7 +87,7 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient, ILogg
     /// <param name="imageUrl">The dynamic callback URL to fetch the image bytes.</param>
     /// <param name="subEndpoint">Plex metadata sub-endpoint (e.g. posters, arts, clearLogos, squareArts).</param>
     /// <param name="target">The target Plex library.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>True if the upload was successful; otherwise, false.</returns>
     public Task<bool> UploadCollectionImageByUrlAsync(int collectionId, string imageUrl, string subEndpoint, PlexLibraryTarget target, CancellationToken cancellationToken = default) =>
         ExecuteActionAsync(HttpMethod.Post, $"/library/metadata/{collectionId}/{subEndpoint}?url={Uri.EscapeDataString(imageUrl)}", target, $"Upload {subEndpoint} for {collectionId}", cancellationToken);
@@ -97,10 +97,10 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient, ILogg
     #region Item Assignment
 
     /// <summary>Assigns an item to a collection by updating metadata.</summary>
-    /// <param name="ratingKey">Plex rating key.</param>
+    /// <param name="ratingKey">The Plex rating key.</param>
     /// <param name="collectionName">Collection name.</param>
-    /// <param name="target">Target library.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="target">The target Plex library.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>True on success.</returns>
     public async Task<bool> AssignCollectionToItemByMetadataAsync(int ratingKey, string collectionName, PlexLibraryTarget target, CancellationToken cancellationToken = default)
     {
@@ -125,10 +125,10 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient, ILogg
     }
 
     /// <summary>Removes a collection tag from an item by updating metadata.</summary>
-    /// <param name="ratingKey">Plex rating key.</param>
+    /// <param name="ratingKey">The Plex rating key.</param>
     /// <param name="collectionName">Collection name to remove.</param>
-    /// <param name="target">Target library.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="target">The target Plex library.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>True on success.</returns>
     public Task<bool> RemoveCollectionFromItemAsync(int ratingKey, string collectionName, PlexLibraryTarget target, CancellationToken cancellationToken = default) =>
         ExecuteActionAsync(
@@ -144,7 +144,7 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient, ILogg
     #region Cleanup Operations
 
     /// <summary>Scans Plex libraries and deletes empty collections.</summary>
-    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A list of deleted collection details.</returns>
     public async Task<List<CollectionDeletionDetail>> DeleteEmptyCollectionsAsync(CancellationToken cancellationToken = default)
     {
@@ -189,8 +189,8 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient, ILogg
     /// <param name="collectionId">Collection ID.</param>
     /// <param name="title">New sort title.</param>
     /// <param name="summary">New summary.</param>
-    /// <param name="target">Target library.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="target">The target Plex library.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>True on success.</returns>
     public Task<bool> UpdateCollectionMetadataAsync(int collectionId, string title, string summary, PlexLibraryTarget target, CancellationToken cancellationToken = default) =>
         ExecuteActionAsync(
@@ -208,20 +208,20 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient, ILogg
     /// <summary>Executes a generic Plex API action and handles response logging.</summary>
     /// <param name="method">HTTP method.</param>
     /// <param name="path">API path.</param>
-    /// <param name="target">Target server.</param>
+    /// <param name="target">The target Plex library.</param>
     /// <param name="actionName">Display name for logging.</param>
-    /// <param name="ct">Cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>True if the request returned a success status code.</returns>
-    private async Task<bool> ExecuteActionAsync(HttpMethod method, string path, PlexLibraryTarget target, string actionName, CancellationToken ct)
+    private async Task<bool> ExecuteActionAsync(HttpMethod method, string path, PlexLibraryTarget target, string actionName, CancellationToken cancellationToken)
     {
         try
         {
             using var request = plexClient.CreateRequest(method, path, target.ServerUrl);
-            using var response = await httpClient.SendAsync(request, ct).ConfigureAwait(false);
+            using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
             if (response.IsSuccessStatusCode)
                 return true;
 
-            var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             logger.LogWarning(
                 "PlexCollections: {Action} failed with status {StatusCode} on {ServerUrl}/{SectionId} -> Response {Response}",
                 actionName,

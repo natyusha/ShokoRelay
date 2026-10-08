@@ -7,9 +7,9 @@ using Shoko.Abstractions.Video.Services;
 namespace ShokoRelay.Vfs;
 
 /// <summary>Builds a virtual filesystem tree for Plex mapping metadata to conventions.</summary>
-/// <param name="metadataService">Metadata service used for series and episode resolution.</param>
-/// <param name="assetLinker">Service for linking local media assets and Plex extras.</param>
-/// <param name="videoService">Shoko video and managed folder service.</param>
+/// <param name="metadataService">Shoko metadata service.</param>
+/// <param name="assetLinker">VFS asset linker.</param>
+/// <param name="videoService">Shoko video service.</param>
 /// <param name="logger">Logger instance.</param>
 public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLinker, IVideoService videoService, ILogger<VfsBuilder> logger)
 {
@@ -28,9 +28,9 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
     public VfsBuildResult Build(IReadOnlyCollection<int> seriesIds, bool cleanRoot = true) => BuildInternal(seriesIds, cleanRoot);
 
     /// <summary>Audits the VFS to find and remove orphaned series folders and broken symlinks.</summary>
-    /// <param name="ct">Cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A result object containing audit statistics.</returns>
-    public VfsAuditResult Audit(CancellationToken ct = default)
+    public VfsAuditResult Audit(CancellationToken cancellationToken = default)
     {
         if (Settings.Advanced.DisableVfsGeneration)
         {
@@ -79,14 +79,14 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         {
             foreach (var root in allRoots)
             {
-                ct.ThrowIfCancellationRequested();
+                cancellationToken.ThrowIfCancellationRequested();
                 string vfsRoot = Path.Combine(root, rName);
                 if (!Directory.Exists(vfsRoot))
                     continue;
 
                 Parallel.ForEach(
                     Directory.GetDirectories(vfsRoot),
-                    DefaultParallelOptions(ct),
+                    DefaultParallelOptions(cancellationToken),
                     seriesFolder =>
                     {
                         string folderName = Path.GetFileName(seriesFolder);

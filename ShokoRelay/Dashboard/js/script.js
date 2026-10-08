@@ -33,7 +33,7 @@
    * Fetch a URL and parse the response as JSON, returning a normalized result object.
    * @param {string} url - The URL to fetch.
    * @param {RequestInit} [opts] - Optional fetch options.
-   * @returns {Promise<{ok: boolean, data: *}>} Normalized response.
+   * @returns {Promise<{ok: boolean, data: *}>} The normalized fetch response object.
    */
   async function fetchJson(url, opts) {
     try {
@@ -52,7 +52,7 @@
 
   /**
    * Extracts the inner data object from a standardized server response envelope.
-   * @param {Object} res - The normalized fetch response.
+   * @param {Object} res - The normalized fetch response object.
    * @returns {*} The actual result data.
    */
   function getData(res) {
@@ -61,7 +61,7 @@
 
   /**
    * Build a human-readable summary string and error count from common API response fields.
-   * @param {Object} res - The response object.
+   * @param {Object} res - The normalized fetch response object.
    * @returns {{text: string, errorCount: number}} Summarized details.
    */
   function summarizeResult(res) {
@@ -132,7 +132,7 @@
 
   /**
    * Show success/error toasts for HTTP responses with log-link injection and summary.
-   * @param {Object} res - The fetchJson response object.
+   * @param {Object} res - The normalized fetch response object.
    * @param {string} label - Identifies the operation.
    * @param {Object} [opts] - Display options.
    * @returns {void}

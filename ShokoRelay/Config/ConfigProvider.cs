@@ -90,8 +90,8 @@ public class ConfigProvider
     }
 
     /// <summary>Creates a new ConfigProvider using the specified paths provided by the host application.</summary>
-    /// <param name="applicationPaths">Paths provided by the host application.</param>
-    /// <param name="logger">Optional logger instance.</param>
+    /// <param name="applicationPaths">Shoko application paths.</param>
+    /// <param name="logger">Logger instance.</param>
     public ConfigProvider(IApplicationPaths applicationPaths, ILogger<ConfigProvider>? logger = null)
     {
         _logger = logger;
@@ -427,12 +427,12 @@ public class ConfigProvider
     }
 
     /// <summary>Refreshes the admin username from the Plex API and updates the local storage.</summary>
-    /// <param name="auth">The <see cref="PlexAuth"/> service to use.</param>
-    /// <param name="ct">Cancellation token.</param>
+    /// <param name="auth">Plex authentication service.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task representing the refresh operation.</returns>
-    public async Task RefreshAdminUsername(PlexAuth auth, CancellationToken ct)
+    public async Task RefreshAdminUsername(PlexAuth auth, CancellationToken cancellationToken)
     {
-        if (await auth.GetAccountInfoAsync(GetPlexToken(), ct) is { } info)
+        if (await auth.GetAccountInfoAsync(GetPlexToken(), cancellationToken) is { } info)
         {
             _cachedAdminUsername = info.Title ?? info.Username;
             UpdatePlexTokenInfo(adminName: _cachedAdminUsername);

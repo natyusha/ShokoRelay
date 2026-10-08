@@ -8,6 +8,16 @@ using ShokoRelay.Services;
 namespace ShokoRelay.Vfs;
 
 /// <summary>Watches for Shoko video-file events and triggers incremental VFS rebuilds plus debounced Plex refreshes.</summary>
+/// <param name="videoService">Shoko video service.</param>
+/// <param name="releaseService">Shoko video release service.</param>
+/// <param name="builder">VFS builder.</param>
+/// <param name="metadataService">Shoko metadata service.</param>
+/// <param name="plexLibrary">Plex client.</param>
+/// <param name="collectionService">Plex collection service.</param>
+/// <param name="atMapping">AnimeThemes mapping service.</param>
+/// <param name="criticRatingService">Plex critic rating service.</param>
+/// <param name="imageSyncService">Shoko image sync service.</param>
+/// <param name="logger">Logger instance.</param>
 public class VfsWatcher(
     IVideoService videoService,
     IVideoReleaseService releaseService,

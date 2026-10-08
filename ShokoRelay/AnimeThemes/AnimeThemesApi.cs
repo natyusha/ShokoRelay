@@ -4,6 +4,8 @@ using System.Text.Json.Serialization;
 namespace ShokoRelay.AnimeThemes;
 
 /// <summary>HTTP client for AnimeThemes API interactions with rate limiting and JSON deserialization.</summary>
+/// <param name="httpClient">HTTP client.</param>
+/// <param name="logger">Logger instance.</param>
 public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesApi>? logger = null)
 {
     #region Setup & State
@@ -21,47 +23,47 @@ public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesAp
 
     /// <summary>Fetch video metadata with included audio, theme info, anime data, and song artists in a single optimized call.</summary>
     /// <param name="videoBaseName">The base name of the video file to query.</param>
-    /// <param name="ct">Cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A <see cref="VideoWithAudioResponse"/> containing metadata, or null if not found.</returns>
-    public Task<VideoWithAudioResponse?> FetchVideoWithArtistsAsync(string videoBaseName, CancellationToken ct) =>
+    public Task<VideoWithAudioResponse?> FetchVideoWithArtistsAsync(string videoBaseName, CancellationToken cancellationToken) =>
         GetJsonAsync<VideoWithAudioResponse>(
             $"{AnimeThemesHelper.AtApiBase}/video/{Uri.EscapeDataString(videoBaseName)}?include=animethemeentries.animetheme.anime,animethemeentries.animetheme.song.artists",
-            ct
+            cancellationToken
         );
 
     /// <summary>Fetch anime with AniDB resources to extract the AniDB ID for a given video ID.</summary>
     /// <param name="videoId">The internal AnimeThemes video ID.</param>
-    /// <param name="ct">Cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A <see cref="AnimeResourceResponse"/> containing resource links, or null if not found.</returns>
-    public Task<AnimeResourceResponse?> FetchAnimeResourcesAsync(int videoId, CancellationToken ct) =>
+    public Task<AnimeResourceResponse?> FetchAnimeResourcesAsync(int videoId, CancellationToken cancellationToken) =>
         GetJsonAsync<AnimeResourceResponse>(
             $"{AnimeThemesHelper.AtApiBase}/anime?filter[has]=animethemes.animethemeentries.videos,animethemes&include=resources&filter[resource][site]=AniDB&filter[video][id]={videoId}",
-            ct
+            cancellationToken
         );
 
     /// <summary>Fetch anime and available themes for mp3 generation with a given AniDB ID and optional slug filter.</summary>
     /// <param name="anidbId">The AniDB ID of the series.</param>
     /// <param name="slugFilter">Optional URL filter for specific slugs (e.g. OP/ED).</param>
-    /// <param name="ct">Cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A <see cref="AnimeThemesResponse"/> containing theme metadata, or null if not found.</returns>
-    public Task<AnimeThemesResponse?> FetchAnimeThemesAsync(int anidbId, string? slugFilter, CancellationToken ct) =>
-        GetJsonAsync<AnimeThemesResponse>($"{AnimeThemesHelper.AtApiBase}/anime?filter[has]=resources&filter[site]=AniDB&filter[external_id]={anidbId}&include=animethemes{slugFilter ?? ""}", ct);
+    public Task<AnimeThemesResponse?> FetchAnimeThemesAsync(int anidbId, string? slugFilter, CancellationToken cancellationToken) =>
+        GetJsonAsync<AnimeThemesResponse>($"{AnimeThemesHelper.AtApiBase}/anime?filter[has]=resources&filter[site]=AniDB&filter[external_id]={anidbId}&include=animethemes{slugFilter ?? ""}", cancellationToken);
 
     /// <summary>Fetch animetheme details for mp3 generation, including artists.</summary>
     /// <param name="themeId">The internal AnimeThemes theme ID.</param>
-    /// <param name="ct">Cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A <see cref="ThemeWithAudioResponse"/> containing audio and artist info, or null if not found.</returns>
-    public Task<ThemeWithAudioResponse?> FetchAnimeThemeWithArtistsAsync(int themeId, CancellationToken ct) =>
-        GetJsonAsync<ThemeWithAudioResponse>($"{AnimeThemesHelper.AtApiBase}/animetheme/{themeId}?include=animethemeentries.videos.audio,song.artists", ct);
+    public Task<ThemeWithAudioResponse?> FetchAnimeThemeWithArtistsAsync(int themeId, CancellationToken cancellationToken) =>
+        GetJsonAsync<ThemeWithAudioResponse>($"{AnimeThemesHelper.AtApiBase}/animetheme/{themeId}?include=animethemeentries.videos.audio,song.artists", cancellationToken);
 
     /// <summary>Fetch a paginated list of anime matching specific filters for bulk WebM downloads.</summary>
     /// <param name="year">Optional broadcast year filter.</param>
     /// <param name="season">Optional broadcast season filter.</param>
     /// <param name="name">Optional anime name filter.</param>
     /// <param name="page">The current pagination page.</param>
-    /// <param name="ct">Cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A <see cref="PagedAnimeResponse"/> containing a page of anime results.</returns>
-    public async Task<PagedAnimeResponse?> FetchAnimePageAsync(int? year, string? season, string? name, int page, CancellationToken ct)
+    public async Task<PagedAnimeResponse?> FetchAnimePageAsync(int? year, string? season, string? name, int page, CancellationToken cancellationToken)
     {
         var query = new List<string> { $"page[number]={page}", "include=animethemes.song" };
         if (year.HasValue)
@@ -72,7 +74,7 @@ public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesAp
             query.Add($"filter[anime][name]={Uri.EscapeDataString(name)}");
 
         string url = $"{AnimeThemesHelper.AtApiBase}/anime?{string.Join("&", query)}";
-        return await GetJsonAsync<PagedAnimeResponse>(url, ct);
+        return await GetJsonAsync<PagedAnimeResponse>(url, cancellationToken);
     }
 
     #endregion
@@ -82,34 +84,34 @@ public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesAp
     /// <summary>Generic JSON deserialization with automatic rate limiting and error handling.</summary>
     /// <typeparam name="T">The type to deserialize into.</typeparam>
     /// <param name="url">The target API URL.</param>
-    /// <param name="ct">Cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The deserialized object of type T, or default on error.</returns>
-    private async Task<T?> GetJsonAsync<T>(string url, CancellationToken ct)
+    private async Task<T?> GetJsonAsync<T>(string url, CancellationToken cancellationToken)
     {
-        await RateLimitAsync(ct).ConfigureAwait(false);
+        await RateLimitAsync(cancellationToken).ConfigureAwait(false);
 
-        using var response = await _http.GetAsync(url, ct).ConfigureAwait(false);
+        using var response = await _http.GetAsync(url, cancellationToken).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {
             logger?.LogWarning("AnimeThemes: API returned {StatusCode} for {Url}", response.StatusCode, url);
             return default;
         }
 
-        await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-        return await JsonSerializer.DeserializeAsync<T>(stream, _jsonOptions, ct).ConfigureAwait(false);
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        return await JsonSerializer.DeserializeAsync<T>(stream, _jsonOptions, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>Enforces the API rate limit by delaying requests if they occur too rapidly.</summary>
-    /// <param name="ct">Cancellation token.</param>
-    private async Task RateLimitAsync(CancellationToken ct)
+    /// <param name="cancellationToken">The cancellation token.</param>
+    private async Task RateLimitAsync(CancellationToken cancellationToken)
     {
-        await _rateLock.WaitAsync(ct).ConfigureAwait(false);
+        await _rateLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var now = DateTimeOffset.UtcNow;
             var wait = _lastRequest + s_rateLimitDelay - now;
             if (wait > TimeSpan.Zero)
-                await Task.Delay(wait, ct).ConfigureAwait(false);
+                await Task.Delay(wait, cancellationToken).ConfigureAwait(false);
             _lastRequest = DateTimeOffset.UtcNow;
         }
         finally

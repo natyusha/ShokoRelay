@@ -8,6 +8,14 @@ using IoFile = System.IO.File;
 namespace ShokoRelay.Controllers;
 
 /// <summary>Provides operations for building AnimeThemes VFS mappings, generating MP3 series themes, and handling the standalone video player endpoints.</summary>
+/// <param name="configProvider">Configuration provider.</param>
+/// <param name="metadataService">Shoko metadata service.</param>
+/// <param name="plexLibrary">Plex client.</param>
+/// <param name="animeThemesMp3Generator">AnimeThemes MP3 generator.</param>
+/// <param name="animeThemesMapping">AnimeThemes mapping service.</param>
+/// <param name="webmDownloader">AnimeThemes WebM downloader.</param>
+/// <param name="videoService">Shoko video service.</param>
+/// <param name="logger">Logger instance.</param>
 [ApiController]
 [ApiVersion(ShokoRelayConstants.ApiVersion)]
 [Route(ShokoRelayConstants.BasePath)]

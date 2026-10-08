@@ -51,6 +51,13 @@ public sealed record BuildCollectionsResult(
 #endregion
 
 /// <summary>Default implementation of <see cref="ICollectionService"/>.</summary>
+/// <param name="plexClient">Plex client.</param>
+/// <param name="plexCollections">Plex collection service.</param>
+/// <param name="metadataService">Shoko metadata service.</param>
+/// <param name="mapper">Plex metadata mapper.</param>
+/// <param name="videoService">Shoko video service.</param>
+/// <param name="configProvider">Configuration provider.</param>
+/// <param name="logger">Logger instance.</param>
 public class CollectionService(
     PlexClient plexClient,
     PlexCollections plexCollections,

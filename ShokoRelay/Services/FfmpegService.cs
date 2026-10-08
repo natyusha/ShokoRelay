@@ -44,15 +44,15 @@ public sealed class FfmpegService(string pluginDirectory, string applicationPath
 
     /// <summary>Probe a media file's duration using ffprobe and return the result as a TimeSpan.</summary>
     /// <param name="inputPath">Path to the media file.</param>
-    /// <param name="ct">Cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The duration of the media.</returns>
     /// <exception cref="InvalidOperationException">Thrown if ffprobe output is unparseable.</exception>
-    public async Task<TimeSpan> ProbeDurationAsync(string inputPath, CancellationToken ct)
+    public async Task<TimeSpan> ProbeDurationAsync(string inputPath, CancellationToken cancellationToken)
     {
         EnsureFfmpegConfigured();
         var args = new List<string> { "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", inputPath };
 
-        string output = await RunProcessCaptureAsync(_ffprobePath, args, ct).ConfigureAwait(false);
+        string output = await RunProcessCaptureAsync(_ffprobePath, args, cancellationToken).ConfigureAwait(false);
         return double.TryParse(output.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out double seconds)
             ? TimeSpan.FromSeconds(seconds)
             : throw new InvalidOperationException("Unable to parse duration from ffprobe output.");
@@ -65,9 +65,9 @@ public sealed class FfmpegService(string pluginDirectory, string applicationPath
     /// <param name="slugDisplay">Display slug metadata tag (TIT3).</param>
     /// <param name="artist">Artist metadata tag.</param>
     /// <param name="album">Album metadata tag.</param>
-    /// <param name="ct">Cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <param name="workingDir">Optional working directory for the process.</param>
-    public async Task ConvertToMp3FileAsync(string inputPath, string outputPath, string title, string slugDisplay, string artist, string album, CancellationToken ct, string? workingDir = null)
+    public async Task ConvertToMp3FileAsync(string inputPath, string outputPath, string title, string slugDisplay, string artist, string album, CancellationToken cancellationToken, string? workingDir = null)
     {
         EnsureFfmpegConfigured();
         // csharpier-ignore
@@ -81,7 +81,7 @@ public sealed class FfmpegService(string pluginDirectory, string applicationPath
             outputPath,
         };
 
-        await RunProcessAsync(_ffmpegPath, args, null, null, ct, workingDir).ConfigureAwait(false);
+        await RunProcessAsync(_ffmpegPath, args, null, null, cancellationToken, workingDir).ConfigureAwait(false);
     }
 
     #endregion
@@ -203,9 +203,9 @@ public sealed class FfmpegService(string pluginDirectory, string applicationPath
     /// <param name="args">The list of command line arguments.</param>
     /// <param name="stdIn">Optional input stream to pipe into the process.</param>
     /// <param name="stdOut">Optional output stream to capture process output.</param>
-    /// <param name="ct">Cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <param name="workingDir">Optional working directory for the process.</param>
-    private async Task RunProcessAsync(string fileName, IReadOnlyList<string> args, Stream? stdIn, Stream? stdOut, CancellationToken ct, string? workingDir = null)
+    private async Task RunProcessAsync(string fileName, IReadOnlyList<string> args, Stream? stdIn, Stream? stdOut, CancellationToken cancellationToken, string? workingDir = null)
     {
         var psi = CreateProcessStartInfo(fileName, args, workingDir);
         psi.RedirectStandardInput = stdIn != null;
@@ -233,23 +233,23 @@ public sealed class FfmpegService(string pluginDirectory, string applicationPath
                         {
                             try
                             {
-                                await stdIn.CopyToAsync(process.StandardInput.BaseStream, ct).ConfigureAwait(false);
-                                await process.StandardInput.FlushAsync().ConfigureAwait(false);
+                                await stdIn.CopyToAsync(process.StandardInput.BaseStream, cancellationToken).ConfigureAwait(false);
+                                await process.StandardInput.FlushAsync(cancellationToken).ConfigureAwait(false);
                             }
                             finally
                             {
                                 process.StandardInput.Close();
                             }
                         },
-                        ct
+                        cancellationToken
                     )
                 );
             }
 
             if (stdOut != null)
-                tasks.Add(process.StandardOutput.BaseStream.CopyToAsync(stdOut, ct));
+                tasks.Add(process.StandardOutput.BaseStream.CopyToAsync(stdOut, cancellationToken));
 
-            tasks.Add(process.WaitForExitAsync(ct));
+            tasks.Add(process.WaitForExitAsync(cancellationToken));
             await Task.WhenAll(tasks).ConfigureAwait(false);
 
             if (process.ExitCode != 0)
@@ -270,9 +270,9 @@ public sealed class FfmpegService(string pluginDirectory, string applicationPath
     /// <summary>Executes a process and captures its standard output stream as a string.</summary>
     /// <param name="fileName">The path to the executable.</param>
     /// <param name="args">The list of command line arguments.</param>
-    /// <param name="ct">Cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The full string content of the process's standard output.</returns>
-    private async Task<string> RunProcessCaptureAsync(string fileName, IReadOnlyList<string> args, CancellationToken ct)
+    private async Task<string> RunProcessCaptureAsync(string fileName, IReadOnlyList<string> args, CancellationToken cancellationToken)
     {
         var psi = CreateProcessStartInfo(fileName, args);
         psi.RedirectStandardOutput = true;
@@ -290,8 +290,8 @@ public sealed class FfmpegService(string pluginDirectory, string applicationPath
             process.Start();
             process.BeginErrorReadLine();
 
-            string output = await process.StandardOutput.ReadToEndAsync(ct).ConfigureAwait(false);
-            await process.WaitForExitAsync(ct).ConfigureAwait(false);
+            string output = await process.StandardOutput.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
 
             return process.ExitCode != 0 ? throw new InvalidOperationException($"{fileName} exited with code {process.ExitCode}: {stderr.ToString().Trim()}") : output;
         }

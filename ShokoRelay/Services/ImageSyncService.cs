@@ -34,6 +34,10 @@ public sealed record ImageSyncResult(int Processed, int Uploaded, int Skipped, i
 #endregion
 
 /// <summary>Default implementation of <see cref="IImageSyncService"/>.</summary>
+/// <param name="plexClient">Plex client.</param>
+/// <param name="metadataService">Shoko metadata service.</param>
+/// <param name="imageManager">Shoko image manager.</param>
+/// <param name="logger">Logger instance.</param>
 public class ImageSyncService(PlexClient plexClient, IMetadataService metadataService, IImageManager imageManager, ILogger<ImageSyncService> logger) : IImageSyncService
 {
     #region Setup
@@ -119,7 +123,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
     /// <param name="errsBag">Bag to collect error messages and missing thumbnail diagnostics.</param>
     /// <param name="uploadedBag">Bag to collect uploaded item names.</param>
     /// <param name="addStats">Action callback to record execution metrics.</param>
-    /// <param name="ct">Cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     private async Task SyncEpisodeThumbnailsAsync(
         IReadOnlyList<PlexLibraryTarget> targets,
         HashSet<int>? allowedSet,
@@ -127,7 +131,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
         ConcurrentBag<string> errsBag,
         ConcurrentBag<string> uploadedBag,
         Action<bool, bool, bool, bool> addStats,
-        CancellationToken ct
+        CancellationToken cancellationToken
     )
     {
         var processedInRun = new HashSet<int>();
@@ -135,12 +139,12 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
 
         foreach (var target in orderedTargets)
         {
-            ct.ThrowIfCancellationRequested();
+            cancellationToken.ThrowIfCancellationRequested();
             try
             {
                 async Task ProcessThumbnailItem(PlexMetadataItem item)
                 {
-                    ct.ThrowIfCancellationRequested();
+                    cancellationToken.ThrowIfCancellationRequested();
                     if (string.IsNullOrWhiteSpace(item.Guid))
                         return;
 
@@ -253,7 +257,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                         }
                         else
                         {
-                            var (ph, pu, ps, pe) = await ProcessPlexThumbnailAsync(item.Thumb, episode, epLogName, target, errsBag, uploadedBag, ct).ConfigureAwait(false);
+                            var (ph, pu, ps, pe) = await ProcessPlexThumbnailAsync(item.Thumb, episode, epLogName, target, errsBag, uploadedBag, cancellationToken).ConfigureAwait(false);
                             addStats(ph, pu, ps, pe);
                         }
                     }
@@ -264,7 +268,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                     // Targeted fast-path for filtered series
                     foreach (var seriesId in allowedSet)
                     {
-                        var ratingKeys = await plexClient.FindRatingKeysForShokoSeriesInSectionAsync(seriesId, target, metadataService, ct).ConfigureAwait(false);
+                        var ratingKeys = await plexClient.FindRatingKeysForShokoSeriesInSectionAsync(seriesId, target, metadataService, cancellationToken).ConfigureAwait(false);
                         foreach (var ratingKey in ratingKeys)
                         {
                             string path =
@@ -272,8 +276,8 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                                     ? $"/library/metadata/{ratingKey}?X-Plex-Container-Start=0&X-Plex-Container-Size=1"
                                     : $"/library/metadata/{ratingKey}/allLeaves?X-Plex-Container-Start=0&X-Plex-Container-Size=5000";
                             using var req = plexClient.CreateRequest(HttpMethod.Get, path, target.ServerUrl);
-                            using var resp = await plexClient.SendAsync(req, ct).ConfigureAwait(false);
-                            foreach (var item in (await PlexApi.ReadContainerAsync(resp, ct).ConfigureAwait(false))?.Metadata ?? [])
+                            using var resp = await plexClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+                            foreach (var item in (await PlexApi.ReadContainerAsync(resp, cancellationToken).ConfigureAwait(false))?.Metadata ?? [])
                                 await ProcessThumbnailItem(item).ConfigureAwait(false);
                         }
                     }
@@ -283,8 +287,8 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                     // Bulk path: query all items in library section
                     var items =
                         target.LibraryType == PlexLibraryType.Movie
-                            ? await plexClient.GetSectionMoviesAsync(target, null, ct).ConfigureAwait(false) ?? []
-                            : await plexClient.GetSectionEpisodesAsync(target, null, ct).ConfigureAwait(false) ?? [];
+                            ? await plexClient.GetSectionMoviesAsync(target, null, cancellationToken).ConfigureAwait(false) ?? []
+                            : await plexClient.GetSectionEpisodesAsync(target, null, cancellationToken).ConfigureAwait(false) ?? [];
 
                     foreach (var item in items)
                         await ProcessThumbnailItem(item).ConfigureAwait(false);
@@ -331,13 +335,19 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
     /// <param name="errsBag">Bag to collect error messages.</param>
     /// <param name="uploadedBag">Bag to collect uploaded item names.</param>
     /// <param name="addStats">Action callback to record execution metrics.</param>
-    /// <param name="ct">Cancellation token.</param>
-    private async Task SyncCollectionPostersAsync(List<IShokoSeries> allSeries, ConcurrentBag<string> errsBag, ConcurrentBag<string> uploadedBag, Action<bool, bool, bool, bool> addStats, CancellationToken ct)
+    /// <param name="cancellationToken">The cancellation token.</param>
+    private async Task SyncCollectionPostersAsync(
+        List<IShokoSeries> allSeries,
+        ConcurrentBag<string> errsBag,
+        ConcurrentBag<string> uploadedBag,
+        Action<bool, bool, bool, bool> addStats,
+        CancellationToken cancellationToken
+    )
     {
         var groups = allSeries.Where(s => s.TopLevelGroupID > 0).Select(s => s.TopLevelGroup).OfType<IShokoGroup>().DistinctBy(g => g.LocalID).ToList();
         foreach (var group in groups)
         {
-            ct.ThrowIfCancellationRequested();
+            cancellationToken.ThrowIfCancellationRequested();
             var seriesInGroup = allSeries.FirstOrDefault(s => s.TopLevelGroupID == group.LocalID);
             if (seriesInGroup == null)
                 continue;
@@ -366,13 +376,19 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
     /// <param name="errsBag">Bag to collect error messages.</param>
     /// <param name="uploadedBag">Bag to collect uploaded item names.</param>
     /// <param name="addStats">Action callback to record execution metrics.</param>
-    /// <param name="ct">Cancellation token.</param>
-    private async Task SyncLocalSeriesImagesAsync(List<IShokoSeries> allSeries, ConcurrentBag<string> errsBag, ConcurrentBag<string> uploadedBag, Action<bool, bool, bool, bool> addStats, CancellationToken ct)
+    /// <param name="cancellationToken">The cancellation token.</param>
+    private async Task SyncLocalSeriesImagesAsync(
+        List<IShokoSeries> allSeries,
+        ConcurrentBag<string> errsBag,
+        ConcurrentBag<string> uploadedBag,
+        Action<bool, bool, bool, bool> addStats,
+        CancellationToken cancellationToken
+    )
     {
         await Parallel
             .ForEachAsync(
                 allSeries,
-                DefaultParallelOptions(ct),
+                DefaultParallelOptions(cancellationToken),
                 async (series, token) =>
                 {
                     foreach (var config in s_seriesImageConfigs)
@@ -512,7 +528,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
         PlexLibraryTarget target,
         ConcurrentBag<string> errorsBag,
         ConcurrentBag<string> uploadedBag,
-        CancellationToken ct
+        CancellationToken cancellationToken
     )
     {
         var existingXrefs = episode
@@ -527,14 +543,14 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
         try
         {
             using var req = plexClient.CreateRequest(HttpMethod.Get, thumbUrl, target.ServerUrl);
-            using var resp = await plexClient.SendAsync(req, ct).ConfigureAwait(false);
+            using var resp = await plexClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
             if (!resp.IsSuccessStatusCode)
             {
                 errorsBag.Add($"[Failed Plex Download] {epLogName} (HTTP {resp.StatusCode})");
                 return (true, false, false, true);
             }
 
-            var bytes = await resp.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
+            var bytes = await resp.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
 
             // Stream through imageManager.UploadImage to guarantee cross-reference creation for both new and existing images
             using var stream = new MemoryStream(bytes);

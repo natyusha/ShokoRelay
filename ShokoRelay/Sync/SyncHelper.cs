@@ -234,7 +234,7 @@ public static class SyncHelper
     /// <param name="logger">Optional logger.</param>
     /// <param name="onlyUnwatched">If true, only returns unwatched items. If false, watched. If null, returns both.</param>
     /// <param name="hasProgress">Filter for items actively in progress.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A tuple containing the list of items, the resolved token, and an optional error message.</returns>
     public static async Task<(List<PlexMetadataItem> Items, string? ResolvedToken, string? ErrorMessage)> FetchManagedUserSectionItemsAsync(
         PlexAuth plexAuth,
@@ -370,7 +370,7 @@ public static class SyncHelper
     /// <param name="sinceHours">Optional lookback window.</param>
     /// <param name="result">Current sync results state.</param>
     /// <param name="logger">Optional logger.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A tuple containing the mapped user buckets and the updated sync result.</returns>
     public static async Task<(List<(string Name, List<PlexMetadataItem> Items, string? Token)> Buckets, PlexWatchedSyncResult Result)> FetchUserBucketsAsync(
         PlexAuth plexAuth,

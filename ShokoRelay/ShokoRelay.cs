@@ -25,9 +25,7 @@ public class ServiceRegistration : IPluginServiceRegistration
     /// <summary>The explicitly registered metadata source used to claim ownership of Plex thumbnails uploaded by this plugin.</summary>
     public static MetadataSource RelayPlexSource { get; private set; } = null!;
 
-    /// <summary>Configures all services required by ShokoRelay.</summary>
-    /// <param name="serviceCollection">DI collection.</param>
-    /// <param name="applicationPaths">Host provided paths.</param>
+    /// <inheritdoc/>
     public static void RegisterServices(IServiceCollection serviceCollection, IApplicationPaths applicationPaths)
     {
         RelaySource = MetadataSource.Register("Shoko Relay (Local)", ShokoRelayConstants.RelaySourceId, description: "Local images uploaded and managed by Shoko Relay.");
@@ -149,12 +147,12 @@ public class ShokoRelay : BackgroundService
 
     /// <summary>Initializes the Relay hosted service.</summary>
     /// <param name="watcher">VFS filesystem event watcher.</param>
-    /// <param name="configProvider">Configuration and secrets management service.</param>
+    /// <param name="configProvider">Configuration provider.</param>
     /// <param name="httpContextAccessor">Access to the current HTTP request context.</param>
     /// <param name="systemService">Shoko system state service.</param>
-    /// <param name="metadataService">Shoko metadata query service.</param>
+    /// <param name="metadataService">Shoko metadata service.</param>
     /// <param name="scheduledActionService">Shoko scheduled action service.</param>
-    /// <param name="logger">Logging service.</param>
+    /// <param name="logger">Logger instance.</param>
     public ShokoRelay(
         VfsWatcher watcher,
         ConfigProvider configProvider,
@@ -199,7 +197,11 @@ public class ShokoRelay : BackgroundService
             _watcher.Start();
 
             // Keep the BackgroundService alive to hold VfsWatcher
-            await Task.Delay(Timeout.InfiniteTimeSpan, stoppingToken).ConfigureAwait(false);
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, stoppingToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) { }
         }
         finally
         {

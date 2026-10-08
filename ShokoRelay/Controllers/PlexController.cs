@@ -37,6 +37,16 @@ public sealed record PlexAutomationRunResult(
 #endregion
 
 /// <summary>Manages Plex-specific integrations including authentication, metadata automation, and image sync.</summary>
+/// <param name="configProvider">Configuration provider.</param>
+/// <param name="metadataService">Shoko metadata service.</param>
+/// <param name="plexLibrary">Plex client.</param>
+/// <param name="plexAuth">Plex authentication service.</param>
+/// <param name="collectionService">Plex collection service.</param>
+/// <param name="criticRatingService">Plex critic rating service.</param>
+/// <param name="userService">Shoko user service.</param>
+/// <param name="userDataService">Shoko user data service.</param>
+/// <param name="imageSyncService">Shoko image sync service.</param>
+/// <param name="logger">Logger instance.</param>
 [ApiController]
 [ApiVersion(ShokoRelayConstants.ApiVersion)]
 [Route(ShokoRelayConstants.BasePath)]

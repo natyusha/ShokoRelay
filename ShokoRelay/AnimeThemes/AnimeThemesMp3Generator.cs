@@ -60,6 +60,13 @@ public record ThemeMp3AuditResult(int Processed, int UpgradesFound, int MissingS
 #endregion
 
 /// <summary>Provides functionality for fetching, converting and previewing anime theme audio from the AnimeThemes API.</summary>
+/// <param name="httpClient">HTTP client.</param>
+/// <param name="metadataService">Shoko metadata service.</param>
+/// <param name="videoService">Shoko video service.</param>
+/// <param name="configProvider">Configuration provider.</param>
+/// <param name="ffmpegService">FFmpeg service.</param>
+/// <param name="plexClient">Plex client.</param>
+/// <param name="logger">Logger instance.</param>
 public class AnimeThemesMp3Generator(
     HttpClient httpClient,
     IMetadataService metadataService,
@@ -205,9 +212,9 @@ public class AnimeThemesMp3Generator(
 
     /// <summary>Processes a folder (and optionally subfolders) to generate MP3s for anime themes.</summary>
     /// <param name="query">Query parameters.</param>
-    /// <param name="ct">Cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A batch result object.</returns>
-    public async Task<ThemeMp3BatchResult> ProcessBatchAsync(AnimeThemesMp3Query query, CancellationToken ct)
+    public async Task<ThemeMp3BatchResult> ProcessBatchAsync(AnimeThemesMp3Query query, CancellationToken cancellationToken)
     {
         string root = query.Path ?? "";
         if (!Directory.Exists(root))
@@ -233,7 +240,7 @@ public class AnimeThemesMp3Generator(
 
         await Parallel.ForEachAsync(
             folders,
-            DefaultParallelOptions(ct),
+            DefaultParallelOptions(cancellationToken),
             async (folder, token) =>
             {
                 var res = await ProcessSingleAsync(query with { Path = folder, Batch = true }, processedSeries, token).ConfigureAwait(false);
@@ -257,9 +264,9 @@ public class AnimeThemesMp3Generator(
     /// <summary>Handles a single folder request, downloading and converting the selected theme to an MP3.</summary>
     /// <param name="query">Query parameters.</param>
     /// <param name="batchProcessedSeries">Active batch-processed series tracker dictionary.</param>
-    /// <param name="ct">Cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>An operation result object.</returns>
-    public async Task<ThemeMp3OperationResult> ProcessSingleAsync(AnimeThemesMp3Query query, ConcurrentDictionary<int, byte>? batchProcessedSeries, CancellationToken ct)
+    public async Task<ThemeMp3OperationResult> ProcessSingleAsync(AnimeThemesMp3Query query, ConcurrentDictionary<int, byte>? batchProcessedSeries, CancellationToken cancellationToken)
     {
         string folder = query.Path ?? "";
         if (string.IsNullOrWhiteSpace(folder))
@@ -323,7 +330,7 @@ public class AnimeThemesMp3Generator(
                 ? "&filter[animetheme][type]=OP,ED"
                 : $"&filter[animetheme][slug]={Uri.EscapeDataString(parsedBase is "OP" or "ED" ? $"{parsedBase},{parsedBase}1" : parsedBase)}";
 
-            var anime = await _apiClient.FetchAnimeThemesAsync(series.AnidbAnimeID, filter, ct).ConfigureAwait(false);
+            var anime = await _apiClient.FetchAnimeThemesAsync(series.AnidbAnimeID, filter, cancellationToken).ConfigureAwait(false);
             var entry = anime?.Anime?.ElementAtOrDefault(query.Offset);
 
             string? audioUrl = null;
@@ -365,7 +372,7 @@ public class AnimeThemesMp3Generator(
                         idx = bestIndex;
                 }
 
-                var themeDetail = await _apiClient.FetchAnimeThemeWithArtistsAsync(entry.Animethemes[idx].Id, ct).ConfigureAwait(false);
+                var themeDetail = await _apiClient.FetchAnimeThemeWithArtistsAsync(entry.Animethemes[idx].Id, cancellationToken).ConfigureAwait(false);
                 audioUrl = themeDetail?.Animetheme?.Animethemeentries?.FirstOrDefault()?.Videos?.FirstOrDefault()?.Audio?.Link;
 
                 if (!string.IsNullOrEmpty(audioUrl))
@@ -396,20 +403,20 @@ public class AnimeThemesMp3Generator(
 
             // Download an audio file to a temporary location on disk
             logger.LogDebug("AnimeThemes MP3: Downloading audio from {Url}", audioUrl);
-            using (var resp = await httpClient.GetAsync(audioUrl, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false))
+            using (var resp = await httpClient.GetAsync(audioUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false))
             {
                 resp.EnsureSuccessStatusCode();
                 temp = Path.Combine(Path.GetTempPath(), $"at-{Guid.NewGuid():N}{Path.GetExtension(audioUrl)}");
-                using var i = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+                using var i = await resp.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
                 using var o = File.Create(temp);
-                await i.CopyToAsync(o, ct).ConfigureAwait(false);
+                await i.CopyToAsync(o, cancellationToken).ConfigureAwait(false);
             }
 
-            var dur = await ffmpegService.ProbeDurationAsync(temp, ct).ConfigureAwait(false);
+            var dur = await ffmpegService.ProbeDurationAsync(temp, cancellationToken).ConfigureAwait(false);
             string title = dur.TotalSeconds < 100 && !string.IsNullOrEmpty(songTitle) ? songTitle + " (TV Size)" : songTitle;
 
             logger.LogDebug("AnimeThemes MP3: Converting audio for -> {Title} [{LocalId}] ({Slug})", series.GetDisplayTitle(), series.LocalID, slugDisplay);
-            await ffmpegService.ConvertToMp3FileAsync(temp, "Theme.mp3", title, slugDisplay, artist, animeTitle, ct, folder).ConfigureAwait(false);
+            await ffmpegService.ConvertToMp3FileAsync(temp, "Theme.mp3", title, slugDisplay, artist, animeTitle, cancellationToken, folder).ConfigureAwait(false);
 
             // Create a relative symbolic link for the Theme.mp3 in the Shoko VFS directories
             string? vfsLink = null;
@@ -482,9 +489,9 @@ public class AnimeThemesMp3Generator(
     }
 
     /// <summary>Audits the cache for non-OP themes, querying the AnimeThemes API to identify available OP upgrades, and rectifying missing local slugs via ID3 tags.</summary>
-    /// <param name="ct">Cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>An audit result summary.</returns>
-    public async Task<ThemeMp3AuditResult> AuditAsync(CancellationToken ct)
+    public async Task<ThemeMp3AuditResult> AuditAsync(CancellationToken cancellationToken)
     {
         var upgrades = new ConcurrentBag<string>();
         var overriddenOps = new ConcurrentBag<string>();
@@ -500,7 +507,7 @@ public class AnimeThemesMp3Generator(
 
         await Parallel.ForEachAsync(
             cache,
-            DefaultParallelOptions(ct),
+            DefaultParallelOptions(cancellationToken),
             async (kvp, token) =>
             {
                 string folder = kvp.Key;

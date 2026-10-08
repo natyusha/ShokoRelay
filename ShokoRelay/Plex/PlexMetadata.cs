@@ -140,18 +140,18 @@ public class PlexMetadata(IMetadataService metadataService)
     #region Movies
 
     /// <summary>Builds a Plex-compatible metadata dictionary for a standalone movie mapped from an episode.</summary>
-    /// <param name="ep">The episode metadata acting as the movie.</param>
+    /// <param name="episode">The episode metadata acting as the movie.</param>
     /// <param name="series">The parent Shoko series metadata.</param>
     /// <param name="tmdbMovie">The optional TMDB movie metadata override.</param>
     /// <param name="titles">The resolved title tuple.</param>
     /// <returns>A dictionary of Plex metadata properties.</returns>
-    public Dictionary<string, object?> MapMovie(IEpisode ep, ISeries series, IMovie? tmdbMovie, (string DisplayTitle, string SortTitle, string? OriginalTitle) titles)
+    public Dictionary<string, object?> MapMovie(IEpisode episode, ISeries series, IMovie? tmdbMovie, (string DisplayTitle, string SortTitle, string? OriginalTitle) titles)
     {
         var seriesImages = (IWithImages)series;
         var movieImages = tmdbMovie as IWithImages;
         var tmdbSeries = (series as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() ?? series.AsTmdb();
-        string title = TextHelper.ResolveMovieTitle(ep, series, tmdbMovie);
-        string description = TextHelper.GetDescriptionByLanguage(ep, Settings.DescriptionLanguage);
+        string title = TextHelper.ResolveMovieTitle(episode, series, tmdbMovie);
+        string description = TextHelper.GetDescriptionByLanguage(episode, Settings.DescriptionLanguage);
         if (string.IsNullOrWhiteSpace(description))
             description = TextHelper.GetDescriptionByLanguage(series, Settings.DescriptionLanguage);
 
@@ -159,26 +159,26 @@ public class PlexMetadata(IMetadataService metadataService)
         var (rating, isAdult) = ContentRatingHelper.GetContentRatingAndAdult(series);
         var studios = CastHelper.GetStudioTags(series);
 
-        var imagesArray = ImageHelper.GenerateMovieImageArray(seriesImages, movieImages, ep.EpisodeNumber, title, Settings.AddEveryImage, Settings.TmdbImageLanguage, out string? thumbUrl);
+        var imagesArray = ImageHelper.GenerateMovieImageArray(seriesImages, movieImages, episode.EpisodeNumber, title, Settings.AddEveryImage, Settings.TmdbImageLanguage, out string? thumbUrl);
         string? artUrl = seriesImages.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage) ?? movieImages?.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage);
         // csharpier-ignore
         return new()
         {
-            ["ratingKey"]             = ep.GetPlexMovieRatingKey(),
-            ["key"]                   = $"/metadata/{ep.GetPlexMovieRatingKey()}",
-            ["guid"]                  = ep.GetPlexMovieGuid(),
+            ["ratingKey"]             = episode.GetPlexMovieRatingKey(),
+            ["key"]                   = $"/metadata/{episode.GetPlexMovieRatingKey()}",
+            ["guid"]                  = episode.GetPlexMovieGuid(),
             ["type"]                  = "movie",
             ["title"]                 = title,
-            ["originallyAvailableAt"] = ep.AirDate?.ToString("yyyy-MM-dd", null) ?? tmdbMovie?.ReleaseDate?.ToString("yyyy-MM-dd", null) ?? series.AirDate?.ToDateOnly().ToString("yyyy-MM-dd", null),
+            ["originallyAvailableAt"] = episode.AirDate?.ToString("yyyy-MM-dd", null) ?? tmdbMovie?.ReleaseDate?.ToString("yyyy-MM-dd", null) ?? series.AirDate?.ToDateOnly().ToString("yyyy-MM-dd", null),
             ["thumb"]                 = thumbUrl,
             ["art"]                   = artUrl,
             ["contentRating"]         = rating,
             ["originalTitle"]         = titles.OriginalTitle,
             ["titleSort"]             = string.IsNullOrWhiteSpace(titles.OriginalTitle) ? title : $"{title} – {titles.OriginalTitle}",
-            ["year"]                  = ep.AirDate?.Year ?? tmdbMovie?.ReleaseDate?.Year ?? series.AirDate?.Year,
+            ["year"]                  = episode.AirDate?.Year ?? tmdbMovie?.ReleaseDate?.Year ?? series.AirDate?.Year,
             ["summary"]               = TextHelper.SanitizeSummaryWithFallback(description, tmdbDescription, Settings.SummaryMode),
             ["isAdult"]               = isAdult,
-            ["duration"]              = (int)ep.Runtime.TotalMilliseconds,
+            ["duration"]              = (int)episode.Runtime.TotalMilliseconds,
             //["tagline"]             = TMDB has this but it is not exposed
             ["studio"]                = studios.FirstOrDefault()?.Tag,
             ["theme"]                 = Settings.PlexThemeMusic && tmdbSeries?.GetCrossSourceID("tvdb", MetadataEntityType.Series) is { } tvdb ? $"https://tvthemes.plexapp.com/{tvdb}.mp3" : null,
@@ -195,7 +195,7 @@ public class PlexMetadata(IMetadataService metadataService)
             ["Similar"]               = BuildSimilarArray(series),
             ["Studio"]                = studios,
             ["Collection"]            = GetCollectionName(series) is string c ? new[] { new { tag = c } } : null,
-            ["Rating"]                = BuildRatingArray(tmdbMovie?.Rating ?? (ep as IShokoEpisode)?.GetLinkedEpisodes(MetadataSource.TMDB)?.FirstOrDefault()?.Rating ?? tmdbSeries?.Rating ?? series.Rating)
+            ["Rating"]                = BuildRatingArray(tmdbMovie?.Rating ?? (episode as IShokoEpisode)?.GetLinkedEpisodes(MetadataSource.TMDB)?.FirstOrDefault()?.Rating ?? tmdbSeries?.Rating ?? series.Rating)
         };
     }
 
@@ -285,7 +285,7 @@ public class PlexMetadata(IMetadataService metadataService)
     #region Episodes
 
     /// <summary>Builds a Plex-compatible metadata dictionary for a single episode.</summary>
-    /// <param name="ep">The episode metadata.</param>
+    /// <param name="episode">The episode metadata.</param>
     /// <param name="mapped">The resolved Plex coordinates.</param>
     /// <param name="series">The Shoko series metadata.</param>
     /// <param name="titles">The resolved title tuple.</param>
@@ -293,7 +293,7 @@ public class PlexMetadata(IMetadataService metadataService)
     /// <param name="tmdbEpisode">Optional TMDB episode metadata override.</param>
     /// <returns>A dictionary of Plex metadata properties.</returns>
     public Dictionary<string, object?> MapEpisode(
-        IEpisode ep,
+        IEpisode episode,
         PlexCoords mapped,
         ISeries series,
         (string DisplayTitle, string SortTitle, string? OriginalTitle) titles,
@@ -301,13 +301,13 @@ public class PlexMetadata(IMetadataService metadataService)
         IEpisode? tmdbEpisode = null
     )
     {
-        var tmdbEps = (ep as IShokoEpisode)?.GetLinkedEpisodes(MetadataSource.TMDB);
-        var tmdbEp = tmdbEpisode ?? tmdbEps?.FirstOrDefault() ?? ep.AsTmdb();
-        var images = (IWithImages)ep;
+        var tmdbEps = (episode as IShokoEpisode)?.GetLinkedEpisodes(MetadataSource.TMDB);
+        var tmdbEp = tmdbEpisode ?? tmdbEps?.FirstOrDefault() ?? episode.AsTmdb();
+        var images = (IWithImages)episode;
         var seriesImages = (IWithImages)series;
 
-        string epTitle = tmdbEp is IWithTitles { PreferredTitle.Value: { Length: > 0 } pt } ? pt : TextHelper.ResolveEpisodeTitle(ep, titles.DisplayTitle, tmdbEp);
-        string epDescription = tmdbEp is IWithOverviews { PreferredOverview.Value: { Length: > 0 } pd } ? pd : TextHelper.GetDescriptionByLanguage(ep, Settings.DescriptionLanguage);
+        string epTitle = tmdbEp is IWithTitles { PreferredTitle.Value: { Length: > 0 } pt } ? pt : TextHelper.ResolveEpisodeTitle(episode, titles.DisplayTitle, tmdbEp);
+        string epDescription = tmdbEp is IWithOverviews { PreferredOverview.Value: { Length: > 0 } pd } ? pd : TextHelper.GetDescriptionByLanguage(episode, Settings.DescriptionLanguage);
 
         string? parentThumb = null;
         if (Settings.TmdbSeasonPosters && mapped.Season >= 0 && string.IsNullOrEmpty(MapHelper.GetPreferredTmdbOrderingId(series)))
@@ -318,22 +318,22 @@ public class PlexMetadata(IMetadataService metadataService)
         // csharpier-ignore
         return new()
         {
-            ["ratingKey"]             = ep.GetPlexRatingKey(partIndex),
-            ["key"]                   = $"/metadata/{ep.GetPlexRatingKey(partIndex)}",
-            ["guid"]                  = ep.GetPlexGuid(partIndex),
+            ["ratingKey"]             = episode.GetPlexRatingKey(partIndex),
+            ["key"]                   = $"/metadata/{episode.GetPlexRatingKey(partIndex)}",
+            ["guid"]                  = episode.GetPlexGuid(partIndex),
             ["type"]                  = "episode",
             ["subtype"]               = (mapped.Season < 0 && TryGetExtraSeason(mapped.Season, out var ex)) ? ex.Subtype : null,
             ["title"]                 = epTitle,
-            ["originallyAvailableAt"] = ep.AirDate?.ToString("yyyy-MM-dd", null),
+            ["originallyAvailableAt"] = episode.AirDate?.ToString("yyyy-MM-dd", null),
             ["thumb"]                 = Settings.TmdbThumbnails ? images.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage) : null,
             //["art"]                 = No source for episode level background images
             ["contentRating"]         = ContentRatingHelper.GetContentRatingAndAdult(series).Rating,
             //["originalTitle"]       = No source for original episode titles
             ["titleSort"]             = epTitle,
-            ["year"]                  = ep.AirDate?.Year,
+            ["year"]                  = episode.AirDate?.Year,
             ["summary"]               = TextHelper.SanitizeSummaryWithFallback(epDescription, tmdbEp?.PreferredOverview?.Value, Settings.SummaryMode),
             ["isAdult"]               = ContentRatingHelper.GetContentRatingAndAdult(series).IsAdult,
-            ["duration"]              = (int)ep.Runtime.TotalMilliseconds,
+            ["duration"]              = (int)episode.Runtime.TotalMilliseconds,
 
             ["parentRatingKey"]       = series.GetPlexRatingKey(mapped.Season),
             ["parentKey"]             = $"/metadata/{series.GetPlexRatingKey(mapped.Season)}",
@@ -356,11 +356,11 @@ public class PlexMetadata(IMetadataService metadataService)
             ["Image"]                 = Settings.TmdbThumbnails ? ImageHelper.BuildSnapshotArray(images, epTitle, Settings.AddEveryImage, Settings.TmdbImageLanguage) : [],
             ["Guid"]                  = BuildEpisodeXrefGuidArray(tmdbEp, tmdbEps),
             //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
-            //["Role"]                = CastHelper.GetCastAndCrew(ep), // Large array not used by Plex clients and present in grandparent series metadata
-            ["Director"]              = CastHelper.GetDirectors(ep),
-            ["Producer"]              = CastHelper.GetProducers(ep),
-            ["Writer"]                = CastHelper.GetWriters(ep),
-            ["Rating"]                = BuildRatingArray(tmdbEp?.Rating ?? ep.Rating)
+            //["Role"]                = CastHelper.GetCastAndCrew(episode), // Large array not used by Plex clients and present in grandparent series metadata
+            ["Director"]              = CastHelper.GetDirectors(episode),
+            ["Producer"]              = CastHelper.GetProducers(episode),
+            ["Writer"]                = CastHelper.GetWriters(episode),
+            ["Rating"]                = BuildRatingArray(tmdbEp?.Rating ?? episode.Rating)
         };
     }
 

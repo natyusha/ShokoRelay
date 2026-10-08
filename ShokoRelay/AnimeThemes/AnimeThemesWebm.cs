@@ -24,6 +24,10 @@ public record WebmDownloadResult(int Downloaded, int Skipped, int Errors, List<s
 #endregion
 
 /// <summary>Provides functionality for bulk downloading and organizing AnimeThemes WebM files.</summary>
+/// <param name="httpClient">HTTP client.</param>
+/// <param name="videoService">Shoko video service.</param>
+/// <param name="mappingService">AnimeThemes mapping service.</param>
+/// <param name="logger">Logger instance.</param>
 public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService videoService, AnimeThemesMapping mappingService, ILogger<AnimeThemesWebmDownloader> logger)
 {
     #region Setup
@@ -35,9 +39,9 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
 
     /// <summary>Downloads AnimeThemes WebM files based on specific filters and organizes them by Year/Season.</summary>
     /// <param name="query">The search filters.</param>
-    /// <param name="ct">Cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A download result summary.</returns>
-    public async Task<WebmDownloadResult> DownloadAsync(AnimeThemesWebmQuery query, CancellationToken ct)
+    public async Task<WebmDownloadResult> DownloadAsync(AnimeThemesWebmQuery query, CancellationToken cancellationToken)
     {
         var messages = new List<string>();
         var downloads = new List<string>();
@@ -81,9 +85,9 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
         int page = 1;
         bool hasNext = true;
 
-        while (hasNext && !ct.IsCancellationRequested)
+        while (hasNext && !cancellationToken.IsCancellationRequested)
         {
-            var resp = await _api.FetchAnimePageAsync(query.Year, query.Season, query.Name, page, ct).ConfigureAwait(false);
+            var resp = await _api.FetchAnimePageAsync(query.Year, query.Season, query.Name, page, cancellationToken).ConfigureAwait(false);
             if (resp?.Anime == null || resp.Anime.Count == 0)
                 break;
 
@@ -99,7 +103,7 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
                 {
                     try
                     {
-                        var details = await _api.FetchAnimeThemeWithArtistsAsync(theme.Id, ct).ConfigureAwait(false);
+                        var details = await _api.FetchAnimeThemeWithArtistsAsync(theme.Id, cancellationToken).ConfigureAwait(false);
                         var video = details?.Animetheme?.Animethemeentries?.FirstOrDefault()?.Videos?.FirstOrDefault();
 
                         if (video == null || string.IsNullOrWhiteSpace(video.Link) || string.IsNullOrWhiteSpace(video.Basename))
@@ -119,11 +123,11 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
 
                         try
                         {
-                            using var videoResp = await httpClient.GetAsync(video.Link, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+                            using var videoResp = await httpClient.GetAsync(video.Link, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
                             videoResp.EnsureSuccessStatusCode();
 
                             using var fs = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
-                            await videoResp.Content.CopyToAsync(fs, ct).ConfigureAwait(false);
+                            await videoResp.Content.CopyToAsync(fs, cancellationToken).ConfigureAwait(false);
 
                             downloads.Add(video.Basename);
                             downloadedItems.Add((relPath, video.Basename));
@@ -133,15 +137,15 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
                         catch (HttpRequestException ex) when (ex.StatusCode is HttpStatusCode.ServiceUnavailable or HttpStatusCode.TooManyRequests)
                         {
                             logger.LogWarning("AnimeThemes WebM: Rate limited (503/429) on theme ID -> {ThemeId}. Waiting 90 seconds before retrying...", theme.Id);
-                            await Task.Delay(TimeSpan.FromSeconds(90), ct).ConfigureAwait(false);
+                            await Task.Delay(TimeSpan.FromSeconds(90), cancellationToken).ConfigureAwait(false);
 
                             try
                             {
-                                using var retryResp = await httpClient.GetAsync(video.Link, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+                                using var retryResp = await httpClient.GetAsync(video.Link, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
                                 retryResp.EnsureSuccessStatusCode();
 
                                 using var fs = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
-                                await retryResp.Content.CopyToAsync(fs, ct).ConfigureAwait(false);
+                                await retryResp.Content.CopyToAsync(fs, cancellationToken).ConfigureAwait(false);
 
                                 downloads.Add(video.Basename);
                                 downloadedItems.Add((relPath, video.Basename));

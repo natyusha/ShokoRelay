@@ -13,7 +13,7 @@ public record SourceLinkResult(int Count, bool IsPurge, List<string> Details);
 #endregion
 
 /// <summary>Automates the creation of relative symlinks from source folders to library locations based on a mapping file provided via API.</summary>
-/// <param name="videoService">Shoko video service for import root discovery.</param>
+/// <param name="videoService">Shoko video service.</param>
 /// <param name="logger">Logger instance.</param>
 public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkService> logger)
 {

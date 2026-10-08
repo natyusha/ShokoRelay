@@ -3,6 +3,9 @@ using Shoko.Abstractions.Metadata.Enums;
 namespace ShokoRelay.Plex;
 
 /// <summary>HTTP client wrapper that communicates with one or more Plex servers.</summary>
+/// <param name="httpClient">HTTP client.</param>
+/// <param name="configProvider">Configuration provider.</param>
+/// <param name="logger">Logger instance.</param>
 public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, ILogger<PlexClient> logger)
 {
     #region Setup & Properties
@@ -165,9 +168,9 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
     }
 
     /// <summary>Request Plex to re-run the metadata agent for a specific item (e.g., to fix missing initial metadata).</summary>
-    /// <param name="ratingKey">Plex unique rating key.</param>
-    /// <param name="target">Target server/section.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="ratingKey">The Plex rating key.</param>
+    /// <param name="target">The target Plex library.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>True if the refresh request was successful.</returns>
     public async Task<bool> RefreshMetadataAsync(int ratingKey, PlexLibraryTarget target, CancellationToken cancellationToken = default)
     {
@@ -186,9 +189,9 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
     }
 
     /// <summary>Request Plex to analyze the media for a specific item (e.g., to regenerate thumbnails or detect stream changes after a file replacement).</summary>
-    /// <param name="ratingKey">Plex unique rating key.</param>
-    /// <param name="target">Target server/section.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="ratingKey">The Plex rating key.</param>
+    /// <param name="target">The target Plex library.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>True if the analyze request was successful.</returns>
     public async Task<bool> AnalyzeItemAsync(int ratingKey, PlexLibraryTarget target, CancellationToken cancellationToken = default)
     {
@@ -207,12 +210,12 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
     }
 
     /// <summary>Evaluates and safely empties the trash for a given Plex library section based on a percentage threshold of items.</summary>
-    /// <param name="target">The Plex library target.</param>
+    /// <param name="target">The target Plex library.</param>
     /// <param name="threshold">The maximum allowed percentage of trashed items (1-100).</param>
     /// <param name="dryRun">If true, prevents the actual empty trash command from being sent.</param>
-    /// <param name="ct">Cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A tuple containing success status, the list of trashed item display names, and a status message.</returns>
-    public async Task<(bool Success, List<string> TrashedItems, string Message)> EmptyTrashWithSafetyAsync(PlexLibraryTarget target, int threshold, bool dryRun, CancellationToken ct = default)
+    public async Task<(bool Success, List<string> TrashedItems, string Message)> EmptyTrashWithSafetyAsync(PlexLibraryTarget target, int threshold, bool dryRun, CancellationToken cancellationToken = default)
     {
         if (!IsEnabled || target == null || threshold <= 0)
             return (false, [], "Threshold is 0 or Plex is disabled.");
@@ -223,8 +226,8 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
 
             // Get Total Library Size at the episode/movie level
             using var totalReq = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?type={typeId}&X-Plex-Container-Start=0&X-Plex-Container-Size=0", target.ServerUrl);
-            using var totalResp = await httpClient.SendAsync(totalReq, ct).ConfigureAwait(false);
-            var totalContainer = await PlexApi.ReadContainerAsync(totalResp, ct).ConfigureAwait(false);
+            using var totalResp = await httpClient.SendAsync(totalReq, cancellationToken).ConfigureAwait(false);
+            var totalContainer = await PlexApi.ReadContainerAsync(totalResp, cancellationToken).ConfigureAwait(false);
             int totalSize = totalContainer?.TotalSize ?? totalContainer?.Size ?? 0;
 
             if (totalSize == 0)
@@ -237,8 +240,8 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
             while (true)
             {
                 using var trashReq = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?type={typeId}&trash=1&X-Plex-Container-Start={start}&X-Plex-Container-Size=200", target.ServerUrl);
-                using var trashResp = await httpClient.SendAsync(trashReq, ct).ConfigureAwait(false);
-                var trashContainer = await PlexApi.ReadContainerAsync(trashResp, ct).ConfigureAwait(false);
+                using var trashResp = await httpClient.SendAsync(trashReq, cancellationToken).ConfigureAwait(false);
+                var trashContainer = await PlexApi.ReadContainerAsync(trashResp, cancellationToken).ConfigureAwait(false);
 
                 trashedSize = trashContainer?.TotalSize ?? trashContainer?.Size ?? trashedSize;
 
@@ -266,7 +269,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
             if (!dryRun)
             {
                 using var emptyReq = CreateRequest(HttpMethod.Put, $"/library/sections/{target.SectionId}/emptyTrash", target.ServerUrl);
-                using var emptyResp = await httpClient.SendAsync(emptyReq, ct).ConfigureAwait(false);
+                using var emptyResp = await httpClient.SendAsync(emptyReq, cancellationToken).ConfigureAwait(false);
                 if (!emptyResp.IsSuccessStatusCode)
                     return (false, trashedItems, $"Plex API rejected the empty trash request: {emptyResp.StatusCode}");
             }
@@ -342,9 +345,9 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
 
     /// <summary>Finds the Plex rating keys for a Shoko series within the given Plex section using its metadata GUID.</summary>
     /// <param name="shokoSeriesId">Shoko series ID.</param>
-    /// <param name="target">Target server/section.</param>
-    /// <param name="metadataService">Metadata service used to resolve episodes for movies.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="target">The target Plex library.</param>
+    /// <param name="metadataService">Shoko metadata service.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A list of numeric rating keys if found, otherwise empty.</returns>
     public async Task<List<int>> FindRatingKeysForShokoSeriesInSectionAsync(int shokoSeriesId, PlexLibraryTarget target, IMetadataService metadataService, CancellationToken cancellationToken = default)
     {
@@ -392,9 +395,9 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
     }
 
     /// <summary>List items in the given section with optional filters.</summary>
-    /// <param name="target">Target server/section.</param>
+    /// <param name="target">The target Plex library.</param>
     /// <param name="token">Optional token override.</param>
-    /// <param name="ct">Cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <param name="onlyUnwatched">Filter for unwatched.</param>
     /// <param name="hasProgress">Filter for items actively in progress.</param>
     /// <param name="guidFilter">Filter for specific GUID.</param>
@@ -404,7 +407,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
     public async Task<List<PlexMetadataItem>> GetSectionItemsAsync(
         PlexLibraryTarget target,
         string? token = null,
-        CancellationToken ct = default,
+        CancellationToken cancellationToken = default,
         bool? onlyUnwatched = null,
         bool? hasProgress = null,
         string? guidFilter = null,
@@ -431,8 +434,8 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
                 q.Add($"lastViewedAt>={minLastViewed.Value}");
 
             using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?{string.Join("&", q)}", target.ServerUrl, token);
-            using var resp = await httpClient.SendAsync(req, ct).ConfigureAwait(false);
-            var cont = resp.IsSuccessStatusCode ? await PlexApi.ReadContainerAsync(resp, ct).ConfigureAwait(false) : null;
+            using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+            var cont = resp.IsSuccessStatusCode ? await PlexApi.ReadContainerAsync(resp, cancellationToken).ConfigureAwait(false) : null;
             if (cont?.Metadata == null || cont.Metadata.Count == 0)
                 break;
             results.AddRange(cont.Metadata);
@@ -444,21 +447,23 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
     }
 
     /// <summary>List all collections in the given section.</summary>
-    /// <param name="target">Target library.</param>
-    /// <param name="ct">Cancellation token.</param>
+    /// <param name="target">The target Plex library.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A list of metadata items representing collections.</returns>
-    public Task<List<PlexMetadataItem>> GetSectionCollectionsAsync(PlexLibraryTarget target, CancellationToken ct = default) => GetSectionItemsAsync(target, null, ct, type: PlexConstants.TypeCollection);
+    public Task<List<PlexMetadataItem>> GetSectionCollectionsAsync(PlexLibraryTarget target, CancellationToken cancellationToken = default) =>
+        GetSectionItemsAsync(target, null, cancellationToken, type: PlexConstants.TypeCollection);
 
     /// <summary>List all shows in the given section.</summary>
-    /// <param name="target">Target library.</param>
-    /// <param name="ct">Cancellation token.</param>
+    /// <param name="target">The target Plex library.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A list of metadata items.</returns>
-    public Task<List<PlexMetadataItem>> GetSectionShowsAsync(PlexLibraryTarget target, CancellationToken ct = default) => GetSectionItemsAsync(target, null, ct, type: PlexConstants.TypeShow);
+    public Task<List<PlexMetadataItem>> GetSectionShowsAsync(PlexLibraryTarget target, CancellationToken cancellationToken = default) =>
+        GetSectionItemsAsync(target, null, cancellationToken, type: PlexConstants.TypeShow);
 
     /// <summary>List all episodes in the given section with optional filters.</summary>
-    /// <param name="target">Target library.</param>
+    /// <param name="target">The target Plex library.</param>
     /// <param name="token">Token override.</param>
-    /// <param name="ct">Cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <param name="onlyUnwatched">Filter for unwatched.</param>
     /// <param name="hasProgress">Filter for items actively in progress.</param>
     /// <param name="guidFilter">Filter for specific GUID.</param>
@@ -467,17 +472,17 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
     public Task<List<PlexMetadataItem>> GetSectionEpisodesAsync(
         PlexLibraryTarget target,
         string? token = null,
-        CancellationToken ct = default,
+        CancellationToken cancellationToken = default,
         bool? onlyUnwatched = null,
         bool? hasProgress = null,
         string? guidFilter = null,
         long? minLastViewed = null
-    ) => GetSectionItemsAsync(target, token, ct, onlyUnwatched, hasProgress, guidFilter, minLastViewed, PlexConstants.TypeEpisode);
+    ) => GetSectionItemsAsync(target, token, cancellationToken, onlyUnwatched, hasProgress, guidFilter, minLastViewed, PlexConstants.TypeEpisode);
 
     /// <summary>List all movies in the given section with optional filters.</summary>
-    /// <param name="target">Target library.</param>
+    /// <param name="target">The target Plex library.</param>
     /// <param name="token">Token override.</param>
-    /// <param name="ct">Cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <param name="onlyUnwatched">Filter for unwatched.</param>
     /// <param name="hasProgress">Filter for items actively in progress.</param>
     /// <param name="guidFilter">Filter for specific GUID.</param>
@@ -486,12 +491,12 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
     public Task<List<PlexMetadataItem>> GetSectionMoviesAsync(
         PlexLibraryTarget target,
         string? token = null,
-        CancellationToken ct = default,
+        CancellationToken cancellationToken = default,
         bool? onlyUnwatched = null,
         bool? hasProgress = null,
         string? guidFilter = null,
         long? minLastViewed = null
-    ) => GetSectionItemsAsync(target, token, ct, onlyUnwatched, hasProgress, guidFilter, minLastViewed, PlexConstants.TypeMovie);
+    ) => GetSectionItemsAsync(target, token, cancellationToken, onlyUnwatched, hasProgress, guidFilter, minLastViewed, PlexConstants.TypeMovie);
 
     #endregion
 

@@ -6,6 +6,13 @@ using Shoko.Abstractions.User.Update;
 namespace ShokoRelay.Sync;
 
 /// <summary>Synchronizes watched-state from Plex into Shoko.</summary>
+/// <param name="plexClient">Plex client.</param>
+/// <param name="metadataService">Shoko metadata service.</param>
+/// <param name="userDataService">Shoko user data service.</param>
+/// <param name="userService">Shoko user service.</param>
+/// <param name="configProvider">Configuration provider.</param>
+/// <param name="plexAuth">Plex authentication service.</param>
+/// <param name="logger">Logger instance.</param>
 public class SyncToShoko(
     PlexClient plexClient,
     IMetadataService metadataService,
@@ -25,7 +32,7 @@ public class SyncToShoko(
     /// <param name="includeProgress">Include playback progress.</param>
     /// <param name="userTypeOverride">Optional override for the sync users configuration.</param>
     /// <param name="libraryName">Optional filter to restrict sync to a specific Plex library.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>Execution result.</returns>
     public async Task<PlexWatchedSyncResult> SyncWatchedAsync(
         bool dryRun,

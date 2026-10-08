@@ -5,6 +5,11 @@ using Shoko.Abstractions.Video.Services;
 namespace ShokoRelay.AnimeThemes;
 
 /// <summary>Provides operations for building and applying mappings between anime theme files and AniDB/video identifiers.</summary>
+/// <param name="httpClient">HTTP client.</param>
+/// <param name="metadataService">Shoko metadata service.</param>
+/// <param name="videoService">Shoko video service.</param>
+/// <param name="configProvider">Configuration provider.</param>
+/// <param name="logger">Logger instance.</param>
 public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadataService, IVideoService videoService, ConfigProvider configProvider, ILogger<AnimeThemesMapping> logger)
 {
     #region Setup
@@ -47,17 +52,17 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
 
     /// <summary>Download the mapping file from a direct raw URL and save it.</summary>
     /// <param name="rawUrl">Raw URL to download from.</param>
-    /// <param name="ct">Cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A tuple of entry count and a log message.</returns>
-    public async Task<(int Count, string Log)> ImportMappingFromUrlAsync(string rawUrl, CancellationToken ct = default)
+    public async Task<(int Count, string Log)> ImportMappingFromUrlAsync(string rawUrl, CancellationToken cancellationToken = default)
     {
         try
         {
-            var content = await httpClient.GetStringAsync(rawUrl, ct).ConfigureAwait(false);
+            var content = await httpClient.GetStringAsync(rawUrl, cancellationToken).ConfigureAwait(false);
             if (string.IsNullOrWhiteSpace(content))
                 return (0, "Downloaded content empty");
 
-            await File.WriteAllTextAsync(Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FileAtMapping), content, ct).ConfigureAwait(false);
+            await File.WriteAllTextAsync(Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FileAtMapping), content, cancellationToken).ConfigureAwait(false);
             int count = AnimeThemesHelper.ParseMappingContentWithComments(content).Entries.Count;
             return (count, $"AnimeThemes mapping import - {DateTime.Now:yyyy-MM-dd HH:mm:ss}\nUrl: {rawUrl}\nEntries: {count}");
         }
@@ -69,9 +74,9 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
     }
 
     /// <summary>Scan configured import roots for AnimeThemes files and write a mapping CSV.</summary>
-    /// <param name="ct">Cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A build result with statistics.</returns>
-    public async Task<AnimeThemesMappingBuildResult> BuildMappingFileAsync(CancellationToken ct = default)
+    public async Task<AnimeThemesMappingBuildResult> BuildMappingFileAsync(CancellationToken cancellationToken = default)
     {
         TaskHelper.StartTask(ShokoRelayConstants.TaskAtMapBuild);
         logger.LogInformation("AnimeThemes Map: Starting mapping task...");
@@ -101,7 +106,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
             {
                 try
                 {
-                    (existingComments, var parsedEntries) = AnimeThemesHelper.ParseMappingContentWithComments(await File.ReadAllTextAsync(mapPath, ct).ConfigureAwait(false));
+                    (existingComments, var parsedEntries) = AnimeThemesHelper.ParseMappingContentWithComments(await File.ReadAllTextAsync(mapPath, cancellationToken).ConfigureAwait(false));
                     foreach (var e in parsedEntries)
                     {
                         existing.TryAdd(e.FilePath, e);
@@ -116,7 +121,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
 
             Parallel.ForEach(
                 roots,
-                DefaultParallelOptions(ct),
+                DefaultParallelOptions(cancellationToken),
                 root =>
                 {
                     foreach (var file in Directory.EnumerateFiles(root, "*.webm", SearchOption.AllDirectories))
@@ -150,7 +155,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
             await Parallel
                 .ForEachAsync(
                     toProcess,
-                    DefaultParallelOptions(ct),
+                    DefaultParallelOptions(cancellationToken),
                     async (item, token) =>
                     {
                         try
@@ -185,7 +190,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
 
             var finalEntries = entries.DistinctBy(e => e.FilePath).OrderBy(e => AnimeThemesHelper.GetYearForSort(e.FilePath)).ThenBy(e => e.FilePath).ToList();
 
-            await File.WriteAllTextAsync(mapPath, AnimeThemesHelper.SerializeMapping(existingComments, finalEntries), ct).ConfigureAwait(false);
+            await File.WriteAllTextAsync(mapPath, AnimeThemesHelper.SerializeMapping(existingComments, finalEntries), cancellationToken).ConfigureAwait(false);
             logger.LogInformation("AnimeThemes Map: Finished mapping task -> {Count} entries written.", finalEntries.Count);
             List<string> finalMessages =
             [
@@ -202,9 +207,9 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
 
     /// <summary>Resolves metadata and appends newly downloaded theme entries to the mapping CSV file.</summary>
     /// <param name="newFiles">Collection of relative file paths and filenames to map.</param>
-    /// <param name="ct">Cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>Count of new mapping entries successfully written.</returns>
-    public async Task<int> AppendEntriesToMappingFileAsync(IReadOnlyCollection<(string FilePath, string FileName)> newFiles, CancellationToken ct = default)
+    public async Task<int> AppendEntriesToMappingFileAsync(IReadOnlyCollection<(string FilePath, string FileName)> newFiles, CancellationToken cancellationToken = default)
     {
         if (newFiles.Count == 0)
             return 0;
@@ -218,7 +223,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
         {
             try
             {
-                (existingComments, entries) = AnimeThemesHelper.ParseMappingContentWithComments(await File.ReadAllTextAsync(mapPath, ct).ConfigureAwait(false));
+                (existingComments, entries) = AnimeThemesHelper.ParseMappingContentWithComments(await File.ReadAllTextAsync(mapPath, cancellationToken).ConfigureAwait(false));
                 foreach (var e in entries)
                     existing.TryAdd(e.FilePath, e);
             }
@@ -233,7 +238,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
 
             try
             {
-                var (lookup, idMissing) = await FetchMetadataAsync(fileName, ct).ConfigureAwait(false);
+                var (lookup, idMissing) = await FetchMetadataAsync(fileName, cancellationToken).ConfigureAwait(false);
                 if (lookup != null)
                 {
                     var entry = new AnimeThemesMappingEntry(relPath, lookup);
@@ -254,7 +259,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
         if (addedCount > 0)
         {
             var finalEntries = entries.DistinctBy(e => e.FilePath).OrderBy(e => AnimeThemesHelper.GetYearForSort(e.FilePath)).ThenBy(e => e.FilePath).ToList();
-            await File.WriteAllTextAsync(mapPath, AnimeThemesHelper.SerializeMapping(existingComments, finalEntries), ct).ConfigureAwait(false);
+            await File.WriteAllTextAsync(mapPath, AnimeThemesHelper.SerializeMapping(existingComments, finalEntries), cancellationToken).ConfigureAwait(false);
             logger.LogInformation("AnimeThemes Map: Appended {Count} new entries to mapping file.", addedCount);
         }
 
@@ -263,11 +268,11 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
 
     /// <summary>Test the mapping process for a single webm filename without adding it to the CSV.</summary>
     /// <param name="webmFileName">The webm filename to test.</param>
-    /// <param name="ct">Cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A result containing the entry, error, and generated filename.</returns>
-    public async Task<(AnimeThemesMappingEntry? entry, string? error, string filename)> TestMappingEntryAsync(string webmFileName, CancellationToken ct = default)
+    public async Task<(AnimeThemesMappingEntry? entry, string? error, string filename)> TestMappingEntryAsync(string webmFileName, CancellationToken cancellationToken = default)
     {
-        var (lookup, idMissing) = await FetchMetadataAsync(webmFileName, ct).ConfigureAwait(false);
+        var (lookup, idMissing) = await FetchMetadataAsync(webmFileName, cancellationToken).ConfigureAwait(false);
         if (lookup == null)
             return (null, idMissing ? "AniDB ID missing" : "Missing metadata", webmFileName);
         var entry = new AnimeThemesMappingEntry("/test/" + webmFileName, lookup);
@@ -280,9 +285,9 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
     /// If multiple BD sources collide (or no BD sources exist), they are de-duplicated with (2), (3), etc.
     /// </remarks>
     /// <param name="seriesFilter">Optional collection of series IDs to limit processing to.</param>
-    /// <param name="ct">Cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>An <see cref="AnimeThemesMappingApplyResult"/> with counts and results.</returns>
-    public async Task<AnimeThemesMappingApplyResult> ApplyMappingAsync(IReadOnlyCollection<int>? seriesFilter = null, CancellationToken ct = default)
+    public async Task<AnimeThemesMappingApplyResult> ApplyMappingAsync(IReadOnlyCollection<int>? seriesFilter = null, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -292,7 +297,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
             if (!File.Exists(mapPath))
                 throw new FileNotFoundException("Mapping file not found");
 
-            var entries = AnimeThemesHelper.ParseMappingContentWithComments(await File.ReadAllTextAsync(mapPath, ct).ConfigureAwait(false)).Entries;
+            var entries = AnimeThemesHelper.ParseMappingContentWithComments(await File.ReadAllTextAsync(mapPath, cancellationToken).ConfigureAwait(false)).Entries;
             var (sw, state) = (Stopwatch.StartNew(), new MappingState());
             string themeRootName = VfsShared.ResolveAnimeThemesFolderName();
             string vfsRoot = VfsShared.ResolveRootFolderName();
@@ -304,10 +309,10 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
 
             Parallel.ForEach(
                 folderGroups,
-                DefaultParallelOptions(ct),
+                DefaultParallelOptions(cancellationToken),
                 folderGroup =>
                 {
-                    ct.ThrowIfCancellationRequested();
+                    cancellationToken.ThrowIfCancellationRequested();
                     int primaryId = folderGroup.Key;
                     var overrideOrder = OverrideHelper.GetGroup(primaryId, metadataService).ToList();
 
@@ -453,7 +458,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                 if (seriesFilter == null || seriesFilter.Count == 0)
                 {
                     var cacheLines = state.CacheEntries.Select(ce => $"{ce.VfsPath.Replace('\\', '/')}|{ce.VideoId}|{ce.Bitmask}");
-                    await File.WriteAllLinesAsync(cachePath, cacheLines, ct).ConfigureAwait(false);
+                    await File.WriteAllLinesAsync(cachePath, cacheLines, cancellationToken).ConfigureAwait(false);
                 }
                 else
                 {
@@ -464,7 +469,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
 
                     if (File.Exists(cachePath))
                     {
-                        foreach (var line in await File.ReadAllLinesAsync(cachePath, ct).ConfigureAwait(false))
+                        foreach (var line in await File.ReadAllLinesAsync(cachePath, cancellationToken).ConfigureAwait(false))
                         {
                             if (string.IsNullOrWhiteSpace(line))
                                 continue;
@@ -507,7 +512,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                     }
 
                     newCacheLines.AddRange(state.CacheEntries.Select(ce => $"{ce.VfsPath.Replace('\\', '/')}|{ce.VideoId}|{ce.Bitmask}"));
-                    await File.WriteAllLinesAsync(cachePath, newCacheLines, ct).ConfigureAwait(false);
+                    await File.WriteAllLinesAsync(cachePath, newCacheLines, cancellationToken).ConfigureAwait(false);
                 }
             }
             catch (Exception ex)
@@ -528,16 +533,16 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
 
     #region Metadata Fetching
 
-    private async Task<(AnimeThemesVideoLookup? lookup, bool idMissing)> FetchMetadataAsync(string fileName, CancellationToken ct)
+    private async Task<(AnimeThemesVideoLookup? lookup, bool idMissing)> FetchMetadataAsync(string fileName, CancellationToken cancellationToken)
     {
-        var v = await _apiClient.FetchVideoWithArtistsAsync(fileName, ct).ConfigureAwait(false);
+        var v = await _apiClient.FetchVideoWithArtistsAsync(fileName, cancellationToken).ConfigureAwait(false);
         if (v?.Video == null)
             return (null, false);
         var first = v.Video.Animethemeentries?.FirstOrDefault();
         if (first?.Animetheme == null)
             return (null, false);
 
-        var anime = await _apiClient.FetchAnimeResourcesAsync(v.Video.Id, ct).ConfigureAwait(false);
+        var anime = await _apiClient.FetchAnimeResourcesAsync(v.Video.Id, cancellationToken).ConfigureAwait(false);
         string[] seasonOrder = ["Winter", "Spring", "Summer", "Fall"];
         var best = anime
             ?.Anime?.Select(e => new

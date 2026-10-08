@@ -6,6 +6,10 @@ namespace ShokoRelay.Controllers;
 
 /// <summary>Provides the foundational infrastructure for all Shoko Relay controllers.</summary>
 /// <remarks>Contains shared logic for logging, validation, response formatting, and Plex discovery.</remarks>
+/// <param name="configProvider">Configuration provider.</param>
+/// <param name="metadataService">Shoko metadata service.</param>
+/// <param name="plexLibrary">Plex client.</param>
+/// <param name="logger">Logger instance.</param>
 [ApiController]
 [ApiVersion(ShokoRelayConstants.ApiVersion)]
 [Route(ShokoRelayConstants.BasePath)]

@@ -5,7 +5,7 @@ using Shoko.Abstractions.Video.Services;
 namespace ShokoRelay.Vfs;
 
 /// <summary>Handles the discovery and linking of local media assets (posters, themes) and non-Shoko Plex extras.</summary>
-/// <param name="videoService">Shoko video service used to verify if files are managed by the database.</param>
+/// <param name="videoService">Shoko video service.</param>
 /// <param name="logger">Logger instance.</param>
 public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> logger)
 {

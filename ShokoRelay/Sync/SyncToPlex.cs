@@ -4,6 +4,13 @@ using Shoko.Abstractions.User.Services;
 namespace ShokoRelay.Sync;
 
 /// <summary>Synchronizes watched-state (and optional votes) from Shoko -> Plex.</summary>
+/// <param name="plexClient">Plex client.</param>
+/// <param name="metadataService">Shoko metadata service.</param>
+/// <param name="userDataService">Shoko user data service.</param>
+/// <param name="userService">Shoko user service.</param>
+/// <param name="configProvider">Configuration provider.</param>
+/// <param name="plexAuth">Plex authentication service.</param>
+/// <param name="logger">Logger instance.</param>
 public class SyncToPlex(
     PlexClient plexClient,
     IMetadataService metadataService,
@@ -22,7 +29,7 @@ public class SyncToPlex(
     /// <param name="includeVotes">Include user ratings.</param>
     /// <param name="userTypeOverride">Optional override for the sync users configuration.</param>
     /// <param name="libraryName">Optional filter to restrict sync to a specific Plex library.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>Execution result.</returns>
     public async Task<PlexWatchedSyncResult> SyncWatchedAsync(
         bool dryRun,
@@ -143,7 +150,7 @@ public class SyncToPlex(
                             SyncHelper.MakeChange(
                                 uName,
                                 libraryName: target.Title,
-                                userData.EpisodeID,
+                                episode.LocalID,
                                 $"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}]",
                                 plexItem.ParentIndex ?? episode.SeasonNumber,
                                 plexItem.Index ?? episode.EpisodeNumber,

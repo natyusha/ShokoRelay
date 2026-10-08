@@ -14,6 +14,20 @@ using IoFile = System.IO.File;
 namespace ShokoRelay.Controllers;
 
 /// <summary>Handles Shoko-specific automation tasks including VFS construction and housekeeping.</summary>
+/// <param name="configProvider">Configuration provider.</param>
+/// <param name="metadataService">Shoko metadata service.</param>
+/// <param name="plexLibrary">Plex client.</param>
+/// <param name="vfsBuilder">VFS builder.</param>
+/// <param name="shokoImportService">Shoko import service.</param>
+/// <param name="watchedSyncService">Watched state sync service (Plex to Shoko).</param>
+/// <param name="syncToPlexService">Watched state sync service (Shoko to Plex).</param>
+/// <param name="sourceLinkService">Source link service.</param>
+/// <param name="atMapping">AnimeThemes mapping service.</param>
+/// <param name="videoService">Shoko video service.</param>
+/// <param name="imageManager">Shoko image manager.</param>
+/// <param name="vfsWatcher">VFS filesystem event watcher.</param>
+/// <param name="scheduledActionService">Shoko scheduled action service.</param>
+/// <param name="logger">Logger instance.</param>
 [ApiController]
 [ApiVersion(ShokoRelayConstants.ApiVersion)]
 [Route(ShokoRelayConstants.BasePath)]

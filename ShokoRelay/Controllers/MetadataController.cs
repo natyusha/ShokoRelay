@@ -10,6 +10,12 @@ using IoFile = System.IO.File;
 namespace ShokoRelay.Controllers;
 
 /// <summary>Provides the core Metadata Provider endpoints for the Plex Agent.</summary>
+/// <param name="metadataService">Shoko metadata service.</param>
+/// <param name="mapper">Plex metadata mapper.</param>
+/// <param name="configProvider">Configuration provider.</param>
+/// <param name="plexLibrary">Plex client.</param>
+/// <param name="videoService">Shoko video service.</param>
+/// <param name="logger">Logger instance.</param>
 [ApiController]
 [ApiVersion(ShokoRelayConstants.ApiVersion)]
 [Route(ShokoRelayConstants.BasePath)]
