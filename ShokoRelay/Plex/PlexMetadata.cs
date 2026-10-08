@@ -112,7 +112,7 @@ public class PlexMetadata(IMetadataService metadataService)
             ["year"]                  = series.AirDate?.Year,
             ["summary"]               = TextHelper.SanitizeSummaryWithFallback(description, tmdbDescription, Settings.SummaryMode),
             ["isAdult"]               = isAdult,
-            ["duration"]              = series.Episodes.Any() ? (int)series.Episodes.Sum(e => e.Runtime.TotalMilliseconds) : (int?)null,
+            ["duration"]              = series.Episodes is { Count: > 0 } eps ? (int)eps.Sum(e => e.Runtime.TotalMilliseconds) : null,
             //["tagline"]             = TMDB has this but it is not exposed
             ["studio"]                = studios.FirstOrDefault()?.Tag,
             ["theme"]                 = Settings.PlexThemeMusic && tmdbSeries?.GetCrossSourceID("tvdb", MetadataEntityType.Series) is { } tvdb ? $"https://tvthemes.plexapp.com/{tvdb}.mp3" : null,

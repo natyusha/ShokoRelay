@@ -214,7 +214,7 @@ public static partial class TextHelper
     /// <param name="series">The parent series metadata.</param>
     /// <param name="tmdbMovie">The optional TMDB movie metadata.</param>
     /// <returns>The resolved movie title string.</returns>
-    public static string ResolveMovieTitle(IEpisode ep, ISeries series, object? tmdbMovie)
+    public static string ResolveMovieTitle(IEpisode ep, ISeries series, IMovie? tmdbMovie)
     {
         var (sTitle, _, _) = ResolveFullSeriesTitles(series);
         if (string.IsNullOrWhiteSpace(sTitle) && tmdbMovie is IWithTitles mt)
@@ -222,8 +222,9 @@ public static partial class TextHelper
         if (string.IsNullOrWhiteSpace(sTitle))
             sTitle = "Unknown";
 
-        int mainEpCount = series.Episodes.Count(e => e.Type == EpisodeType.Episode);
-        if (mainEpCount <= 1)
+        // Fast-path: Check if there is more than 1 main episode by skipping the first match. This avoids iterating over the entire episode list.
+        bool hasMultipleMainEpisodes = series.Episodes.Where(e => e.Type == EpisodeType.Episode).Skip(1).Any();
+        if (!hasMultipleMainEpisodes)
             return sTitle;
 
         string raw = GetTitleByLanguage(ep, Settings.EpisodeTitleLanguage);
