@@ -101,10 +101,8 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
                 if (!name.StartsWith(originalBase, StringComparison.OrdinalIgnoreCase) || (name.Length > originalBase.Length && char.IsLetterOrDigit(name[originalBase.Length])))
                     continue;
 
-                string ext = Path.GetExtension(sub);
                 string suffix = name[originalBase.Length..];
-
-                if (requireLangCode && PlexConstants.LocalMediaAssets.SubtitleExtensions.Contains(ext) && !HasSubtitleLanguageCode(suffix))
+                if (requireLangCode && PlexConstants.LocalMediaAssets.SubtitleExtensions.Contains(Path.GetExtension(sub)) && !HasSubtitleLanguageCode(suffix))
                     continue;
 
                 string destName = destBase + suffix;
@@ -329,10 +327,8 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
     {
         var parts = suffix.Split('.', StringSplitOptions.RemoveEmptyEntries);
         for (int i = 0; i < parts.Length - 1; i++)
-        {
             if (!PlexConstants.LocalMediaAssets.SubtitleModifiers.Contains(parts[i]))
                 return true;
-        }
         return false;
     }
 
