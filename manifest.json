@@ -16,6 +16,34 @@
   "icon_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-icon.png",
   "releases": [
     {
+      "version": "0.21.1",
+      "tag": "v0.21.1",
+      "source_revision": "0bfb7022a7ab0abcca4a28d99f097e10123eb59c",
+      "released_at": "2026-10-17T17:06:21Z",
+      "channel": "Dev",
+      "release_notes": "Further fixes related to Plex Server changes from [CVE-2026-96655](https://github.com/advisories/GHSA-9x88-w2p7-56vh)\r\n\r\n**Changes:**\r\n- Modified the image upload method in PlexCollections.cs to utilise direct file stream uploads preventing DNS/networking errors on restricted networks\r\n- Updated CollectionService.cs to supply raw file paths to the Plex API and remove the legacy NormalizeCacheUrl helper\r\n- Added hidden RequireSubtitleLanguageCodes advanced setting\r\n\r\n**Contributions:**\r\n* @Foowy in https://github.com/natyusha/ShokoRelay/pull/21\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.21.0...v0.21.1",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.21.1/ShokoRelay-v0.21.1-dev_linux-arm64.zip",
+          "checksum": "sha256:7562d32bd22d349cf883ceff2a8e8db83ddd722e90c252762f977b3f20164fc2"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.21.1/ShokoRelay-v0.21.1-dev_linux-x64.zip",
+          "checksum": "sha256:613b7712dc39de72b4cb1266c8c1ec1fbb5667ba37be840a6c02e9afd7106ae5"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.21.1/ShokoRelay-v0.21.1-dev_win-x64.zip",
+          "checksum": "sha256:1e1d63028fb1cab19654337fbc746443e12e599b0b8fb018c0ce6431ffd4b6d0"
+        }
+      ]
+    },
+    {
       "version": "0.21.0",
       "tag": "v0.21.0",
       "source_revision": "0ea8f1e4413692a92f8bc8839544f11907fb0f6c",
