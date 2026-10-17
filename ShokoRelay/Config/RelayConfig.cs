@@ -524,6 +524,12 @@ public class AdvancedConfig
     [Browsable(false)]
     [DefaultValue(false)]
     public bool DisableVfsGeneration { get; set; } = false;
+
+    /// <summary>Whether to require language codes on subtitle files for them to be copied to the VFS.</summary>
+    [Display(Name = "Require Subtitle Language Codes", Description = "Enable to require language codes on subtitle files for them to be copied to the VFS")]
+    [Browsable(false)]
+    [DefaultValue(false)]
+    public bool RequireSubtitleLanguageCodes { get; set; } = false;
 }
 
 #endregion

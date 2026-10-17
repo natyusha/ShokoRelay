@@ -90,6 +90,7 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
         string originalBase = Path.GetFileNameWithoutExtension(sourceFile);
         var candidates = cache.GetOrAdd(sourceDir, dir => new Lazy<string[]>(() => [.. Directory.EnumerateFiles(dir).Where(f => s_episodeMetadataExtensions.Contains(Path.GetExtension(f)))])).Value;
         var mappings = Settings.Advanced.SubtitleLanguageMappings;
+        bool requireLangCode = Settings.Advanced.RequireSubtitleLanguageCodes;
 
         // Fast-path for unmapped sidecars: bypasses target checks, sorting, and tuple allocations
         if (mappings is not { Count: > 0 })
@@ -100,7 +101,13 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
                 if (!name.StartsWith(originalBase, StringComparison.OrdinalIgnoreCase) || (name.Length > originalBase.Length && char.IsLetterOrDigit(name[originalBase.Length])))
                     continue;
 
-                string destName = destBase + name[originalBase.Length..];
+                string ext = Path.GetExtension(sub);
+                string suffix = name[originalBase.Length..];
+
+                if (requireLangCode && PlexConstants.LocalMediaAssets.SubtitleExtensions.Contains(ext) && !HasSubtitleLanguageCode(suffix))
+                    continue;
+
+                string destName = destBase + suffix;
                 if (VfsShared.TryCreateLink(sub, Path.Combine(destDir, destName), logger, skipExistenceCheck: skipExistenceCheck))
                 {
                     planned++;
@@ -125,12 +132,17 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
                 continue;
 
             string ext = Path.GetExtension(sub);
+            string suffix = name[originalBase.Length..];
 
             // Exclude unavailable subtitle sources before they can win a destination collision
-            if (PlexConstants.LocalMediaAssets.SubtitleExtensions.Contains(ext) && !File.Exists(sub))
-                continue;
+            if (PlexConstants.LocalMediaAssets.SubtitleExtensions.Contains(ext))
+            {
+                if (!File.Exists(sub))
+                    continue;
+                if (requireLangCode && !HasSubtitleLanguageCode(suffix))
+                    continue;
+            }
 
-            string suffix = name[originalBase.Length..];
             var (mappedSuffix, priority) = PlexConstants.LocalMediaAssets.SubtitleExtensions.Contains(ext) ? RenameSubtitleSuffix(suffix, mappings) : (suffix, -1);
 
             pendingLinks.Add((sub, destBase + mappedSuffix, priority));
@@ -233,41 +245,6 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
         }
     }
 
-    /// <summary>Replaces language tokens once, preserving flags and ranking collisions by the earliest mapping used.</summary>
-    /// <param name="suffix">Original subtitle suffix including leading dot and extension.</param>
-    /// <param name="mappings">Ordered dictionary of token replacements.</param>
-    /// <returns>A tuple of the renamed suffix and the priority rank.</returns>
-    private static (string Suffix, int Priority) RenameSubtitleSuffix(string suffix, OrderedDictionary<string, string> mappings)
-    {
-        var parts = suffix.Split('.');
-        int priority = int.MaxValue;
-        bool modified = false;
-
-        for (int i = 1; i < parts.Length - 1; i++)
-        {
-            if (PlexConstants.LocalMediaAssets.SubtitleModifiers.Contains(parts[i]))
-                continue;
-
-            for (int j = 0; j < mappings.Count; j++)
-            {
-                var mapping = mappings.GetAt(j);
-                if (!parts[i].Equals(mapping.Key.Trim(), StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                string? replacement = mapping.Value?.Trim();
-                // Reuse the existing filename sanitizer to reject unsafe replacements, without changing other settings.
-                if (!string.IsNullOrEmpty(replacement) && !replacement.Contains('.') && VfsHelper.SanitizeName(replacement) == replacement)
-                {
-                    parts[i] = replacement;
-                    priority = Math.Min(priority, j);
-                    modified = true;
-                }
-                break;
-            }
-        }
-        return modified ? (string.Join('.', parts), priority) : (suffix, -1);
-    }
-
     /// <summary>Discovers and links physical files matching Plex Local Extra conventions that are not managed by Shoko.</summary>
     /// <param name="fileData">Mapping data for the current series.</param>
     /// <param name="vfsSeriesPaths">The target VFS series root paths to link the discovered files into.</param>
@@ -339,6 +316,59 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
                 }
             }
         }
+    }
+
+    #endregion
+
+    #region Internal Helpers
+
+    /// <summary>Checks if a subtitle suffix contains a valid language code token.</summary>
+    /// <param name="suffix">The filename suffix (e.g. .en.forced.srt).</param>
+    /// <returns>True if a non-modifier language token is present.</returns>
+    private static bool HasSubtitleLanguageCode(string suffix)
+    {
+        var parts = suffix.Split('.', StringSplitOptions.RemoveEmptyEntries);
+        for (int i = 0; i < parts.Length - 1; i++)
+        {
+            if (!PlexConstants.LocalMediaAssets.SubtitleModifiers.Contains(parts[i]))
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>Replaces language tokens once, preserving flags and ranking collisions by the earliest mapping used.</summary>
+    /// <param name="suffix">Original subtitle suffix including leading dot and extension.</param>
+    /// <param name="mappings">Ordered dictionary of token replacements.</param>
+    /// <returns>A tuple of the renamed suffix and the priority rank.</returns>
+    private static (string Suffix, int Priority) RenameSubtitleSuffix(string suffix, OrderedDictionary<string, string> mappings)
+    {
+        var parts = suffix.Split('.');
+        int priority = int.MaxValue;
+        bool modified = false;
+
+        for (int i = 1; i < parts.Length - 1; i++)
+        {
+            if (PlexConstants.LocalMediaAssets.SubtitleModifiers.Contains(parts[i]))
+                continue;
+
+            for (int j = 0; j < mappings.Count; j++)
+            {
+                var mapping = mappings.GetAt(j);
+                if (!parts[i].Equals(mapping.Key.Trim(), StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                string? replacement = mapping.Value?.Trim();
+                // Reuse the existing filename sanitizer to reject unsafe replacements, without changing other settings.
+                if (!string.IsNullOrEmpty(replacement) && !replacement.Contains('.') && VfsHelper.SanitizeName(replacement) == replacement)
+                {
+                    parts[i] = replacement;
+                    priority = Math.Min(priority, j);
+                    modified = true;
+                }
+                break;
+            }
+        }
+        return modified ? (string.Join('.', parts), priority) : (suffix, -1);
     }
 
     #endregion
