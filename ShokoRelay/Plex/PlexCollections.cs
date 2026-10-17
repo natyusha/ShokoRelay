@@ -82,15 +82,52 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient, ILogg
 
     #region Poster Operations
 
-    /// <summary>Uploads a custom collection image (poster, backdrop, logo, or square art) to Plex by URL.</summary>
+    /// <summary>Uploads a custom collection image (poster, backdrop, logo, or square art) to Plex.</summary>
+    /// <remarks>The image is streamed from the local disk and sent as the request body, avoiding loopback networking issues.</remarks>
     /// <param name="collectionId">Plex collection ID.</param>
-    /// <param name="imageUrl">The dynamic callback URL to fetch the image bytes.</param>
+    /// <param name="imagePath">The local filesystem path to the image.</param>
     /// <param name="subEndpoint">Plex metadata sub-endpoint (e.g. posters, arts, clearLogos, squareArts).</param>
     /// <param name="target">The target Plex library.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>True if the upload was successful; otherwise, false.</returns>
-    public Task<bool> UploadCollectionImageByUrlAsync(int collectionId, string imageUrl, string subEndpoint, PlexLibraryTarget target, CancellationToken cancellationToken = default) =>
-        ExecuteActionAsync(HttpMethod.Post, $"/library/metadata/{collectionId}/{subEndpoint}?url={Uri.EscapeDataString(imageUrl)}", target, $"Upload {subEndpoint} for {collectionId}", cancellationToken);
+    public async Task<bool> UploadCollectionImageAsync(int collectionId, string imagePath, string subEndpoint, PlexLibraryTarget target, CancellationToken cancellationToken = default)
+    {
+        string action = $"Upload {subEndpoint} for {collectionId}";
+        try
+        {
+            if (!File.Exists(imagePath))
+            {
+                logger.LogWarning("PlexCollections: {Action} failed because the file does not exist at {ImagePath}", action, imagePath);
+                return false;
+            }
+
+            using var fs = new FileStream(imagePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var request = plexClient.CreateRequest(HttpMethod.Post, $"/library/metadata/{collectionId}/{subEndpoint}", target.ServerUrl);
+
+            var content = new StreamContent(fs);
+            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(ImageHelper.GetMimeType(Path.GetExtension(imagePath)) ?? "image/jpeg");
+            request.Content = content;
+
+            using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            if (response.IsSuccessStatusCode)
+                return true;
+
+            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            logger.LogWarning(
+                "PlexCollections: {Action} failed with status {StatusCode} on {ServerUrl}/{SectionId} -> Response {Response}",
+                action,
+                response.StatusCode,
+                target.ServerUrl,
+                target.SectionId,
+                body?.Length > 1024 ? body[..1024] + "..." : body
+            );
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "PlexCollections: {Action} failed for {ServerUrl}:{SectionId}", action, target.ServerUrl, target.SectionId);
+        }
+        return false;
+    }
 
     #endregion
 

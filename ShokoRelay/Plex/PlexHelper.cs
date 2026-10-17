@@ -202,11 +202,7 @@ public static partial class PlexHelper
         return roots;
     }
 
-    #endregion
-
-    #region URL Building
-
-    /// <summary>Build a URL for serving a collection image (poster, logo, or backdrop).</summary>
+    /// <summary>Build a filesystem path for a collection image (poster, logo, or backdrop).</summary>
     /// <param name="series">The Shoko series metadata.</param>
     /// <param name="collectionName">Collection name.</param>
     /// <param name="collectionId">Collection ID.</param>
@@ -214,33 +210,23 @@ public static partial class PlexHelper
     /// <param name="suffixes">The prioritized array of all allowed local filename suffixes.</param>
     /// <param name="metadataService">Metadata service used for root and override resolution.</param>
     /// <param name="allowPrimarySeriesFallback">Whether to use primary series poster as fallback.</param>
-    /// <param name="baseUrl">Base URL override.</param>
-    /// <returns>URL string or null.</returns>
-    public static string? GetCollectionImageUrl(
+    /// <returns>Local filesystem path string or null.</returns>
+    public static string? GetCollectionImage(
         IShokoSeries series,
         string collectionName,
         int collectionId,
         string suffix,
         string[] suffixes,
         IMetadataService metadataService,
-        bool allowPrimarySeriesFallback = true,
-        string? baseUrl = null
+        bool allowPrimarySeriesFallback = true
     )
     {
         if (series == null || metadataService == null)
             return null;
         var posterPath = FindCollectionImagePath(series, collectionName, collectionId, suffixes, metadataService);
         if (!string.IsNullOrWhiteSpace(posterPath))
-        {
-            long ticks = 0;
-            try
-            {
-                ticks = new FileInfo(posterPath).LastWriteTimeUtc.Ticks;
-            }
-            catch { }
-            string b = string.IsNullOrWhiteSpace(baseUrl) ? ServerBaseUrl : baseUrl?.TrimEnd('/') ?? string.Empty;
-            return $"{b}{ShokoRelayConstants.BasePath}/collections/user/{series.TopLevelGroupID}?suffix={suffix}&t={ticks}";
-        }
+            return posterPath;
+
         if (allowPrimarySeriesFallback)
         {
             var group = metadataService.GetShokoGroupByID(series.TopLevelGroupID);
@@ -250,11 +236,14 @@ public static partial class PlexHelper
                 : suffix is "-art" or "-backdrop" or "-background" or "-fanart" ? ImageEntityType.Backdrop
                 : ImageEntityType.Primary;
 
-            var posterUrl =
-                (primarySeries as IWithImages)?.GetPreferredImageUrl(imgType, Settings.TmdbImageLanguage)
-                ?? (primarySeries.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault() as IWithImages)?.GetPreferredImageUrl(imgType, Settings.TmdbImageLanguage);
-            if (posterUrl != null)
-                return posterUrl;
+            var img =
+                ImageHelper.FilterImagesByLanguage((primarySeries as IWithImages)?.GetAvailableImages(imgType) ?? [], Settings.TmdbImageLanguage, false).FirstOrDefault()
+                ?? ImageHelper
+                    .FilterImagesByLanguage((primarySeries.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault() as IWithImages)?.GetAvailableImages(imgType) ?? [], Settings.TmdbImageLanguage, false)
+                    .FirstOrDefault();
+
+            if (img != null && !string.IsNullOrWhiteSpace(img.LocalPath))
+                return img.LocalPath;
         }
         return null;
     }

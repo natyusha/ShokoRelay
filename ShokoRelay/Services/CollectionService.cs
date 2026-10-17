@@ -307,10 +307,16 @@ public class CollectionService(
                                 if (posted.Add((cid, prefix)))
                                 {
                                     var fallback = defaultFallback && Settings.CollectionImages;
-                                    var url = PlexHelper.GetCollectionImageUrl(series!, collectionName, cid, suffix, suffixes, metadataService, fallback);
-                                    if (!string.IsNullOrEmpty(url))
+                                    var imagePath = PlexHelper.GetCollectionImage(series!, collectionName, cid, suffix, suffixes, metadataService, fallback);
+                                    if (!string.IsNullOrEmpty(imagePath))
                                     {
-                                        string cacheVal = NormalizeCacheUrl(url);
+                                        long ticks = 0;
+                                        try
+                                        {
+                                            ticks = new FileInfo(imagePath).LastWriteTimeUtc.Ticks;
+                                        }
+                                        catch { }
+                                        string cacheVal = $"{imagePath}?t={ticks}";
                                         string cacheKey = $"{target.SectionId}|{cid}|{prefix}";
 
                                         // If checking poster, verify that the collection in Plex actually has a custom poster set (not empty or composite)
@@ -326,7 +332,7 @@ public class CollectionService(
                                             continue;
                                         }
 
-                                        if (await plexCollections.UploadCollectionImageByUrlAsync(cid, url, prefix, target, cancellationToken).ConfigureAwait(false))
+                                        if (await plexCollections.UploadCollectionImageAsync(cid, imagePath, prefix, target, cancellationToken).ConfigureAwait(false))
                                         {
                                             cache[cacheKey] = cacheVal;
                                             cacheModified = true;
@@ -351,10 +357,14 @@ public class CollectionService(
                             var posterPath = PlexHelper.FindCollectionImagePath(null, col.Title, cid, suffixes, metadataService, globalRoots);
                             if (!string.IsNullOrEmpty(posterPath) && File.Exists(posterPath))
                             {
-                                var url =
-                                    $"{ServerBaseUrl}{ShokoRelayConstants.BasePath}/collections/user/sc{cid}?name={Uri.EscapeDataString(col.Title)}&suffix={suffix}&t={new FileInfo(posterPath).LastWriteTimeUtc.Ticks}";
+                                long ticks = 0;
+                                try
+                                {
+                                    ticks = new FileInfo(posterPath).LastWriteTimeUtc.Ticks;
+                                }
+                                catch { }
 
-                                string cacheVal = NormalizeCacheUrl(url);
+                                string cacheVal = $"{posterPath}?t={ticks}";
                                 string cacheKey = $"{target.SectionId}|sc{cid}|{prefix}";
 
                                 bool plexHasPoster = prefix != "posters" || (col.Thumb != null && !col.Thumb.Contains("/composite/", StringComparison.OrdinalIgnoreCase));
@@ -365,7 +375,7 @@ public class CollectionService(
                                     continue;
                                 }
 
-                                if (await plexCollections.UploadCollectionImageByUrlAsync(cid, url, prefix, target, cancellationToken).ConfigureAwait(false))
+                                if (await plexCollections.UploadCollectionImageAsync(cid, posterPath, prefix, target, cancellationToken).ConfigureAwait(false))
                                 {
                                     cache[cacheKey] = cacheVal;
                                     cacheModified = true;
@@ -428,15 +438,6 @@ public class CollectionService(
             TaskHelper.FinishTask(TaskName);
         }
     }
-
-    #endregion
-
-    #region Internal Helpers
-
-    /// <summary>Normalizes an artwork URL for caching by stripping the host and port if it targets a local API endpoint.</summary>
-    /// <param name="url">The full image URL.</param>
-    /// <returns>A normalized relative or external URL string.</returns>
-    private static string NormalizeCacheUrl(string url) => url.IndexOf("/api/", StringComparison.OrdinalIgnoreCase) is int idx && idx >= 0 ? url[idx..] : url;
 
     #endregion
 }
