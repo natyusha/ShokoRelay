@@ -16,6 +16,34 @@
   "icon_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-icon.png",
   "releases": [
     {
+      "version": "0.21.2",
+      "tag": "v0.21.2",
+      "source_revision": "46de7977e644ea17fbea920e2c9d6f20d47487fe",
+      "released_at": "2026-10-27T12:39:41Z",
+      "channel": "Dev",
+      "release_notes": "**Changes:**\r\n- Updated PlexMetadataItem to include Media and Part properties to support physical file path extraction\r\n- Added GetFallbackLibraryTargetAsync to PlexClient to allow querying Plex for libraries not using the Shoko Relay provider\r\n- Updated SyncToShoko to intercept specific library filters and engage a legacy fallback mode if the library is not a recognized Relay target\r\n- Implemented filename-based matching fallback within SyncToShoko to map Plex's physical paths against Shoko's VideoFiles\r\n- Added missing diagnostic logging for the admin user fetch in SyncHelper.cs to ensure transparency for all processed users\r\n- Updated README/Controller.md to document the fallback migration feature\r\n- Bumped Shoko.Abstractions to v6.0.0-alpha.115\r\n- Bumped plugin to v0.21.2\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.21.1...v0.21.2",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.21.2/ShokoRelay-v0.21.2-dev_linux-arm64.zip",
+          "checksum": "sha256:5cc4a4314f2f27420a3e314a8bcfe53c35b19de659cc795ebc2efdfcefea2dbe"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.21.2/ShokoRelay-v0.21.2-dev_linux-x64.zip",
+          "checksum": "sha256:2b3ae9264ce5272e5eb34bf5b91c4f7f494bae20b1be13bc99796e97fd5d3a87"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.21.2/ShokoRelay-v0.21.2-dev_win-x64.zip",
+          "checksum": "sha256:ea4bb8cc468f16eb59e7d2b1d21c0575a756bb6a54e790cbbc94dfb35e9e6253"
+        }
+      ]
+    },
+    {
       "version": "0.21.1",
       "tag": "v0.21.1",
       "source_revision": "0bfb7022a7ab0abcca4a28d99f097e10123eb59c",
