@@ -2,12 +2,14 @@ using Shoko.Abstractions.User;
 using Shoko.Abstractions.User.Enums;
 using Shoko.Abstractions.User.Services;
 using Shoko.Abstractions.User.Update;
+using Shoko.Abstractions.Video.Services;
 
 namespace ShokoRelay.Sync;
 
 /// <summary>Synchronizes watched-state from Plex into Shoko.</summary>
 /// <param name="plexClient">Plex client.</param>
 /// <param name="metadataService">Shoko metadata service.</param>
+/// <param name="videoService">Shoko video service.</param>
 /// <param name="userDataService">Shoko user data service.</param>
 /// <param name="userService">Shoko user service.</param>
 /// <param name="configProvider">Configuration provider.</param>
@@ -16,6 +18,7 @@ namespace ShokoRelay.Sync;
 public class SyncToShoko(
     PlexClient plexClient,
     IMetadataService metadataService,
+    IVideoService videoService,
     IUserDataService userDataService,
     IUserService userService,
     ConfigProvider configProvider,
@@ -62,19 +65,77 @@ public class SyncToShoko(
         var extraEntries = configProvider.GetExtraPlexUserEntries();
         result = result with { PerUser = SyncHelper.CreatePerUserBuckets(extraEntries.Select(e => e.Name)) };
         var appliedIds = new HashSet<int>();
-        var targets = plexClient.GetConfiguredTargets();
+
+        var targets = plexClient.GetConfiguredTargets().ToList();
+        bool isLegacyFallback = false;
+
+        // Apply Library Name Filter and Legacy Fallback
+        if (!string.IsNullOrWhiteSpace(libraryName))
+        {
+            var matchedTarget = targets.FirstOrDefault(t => string.Equals(t.Title, libraryName, StringComparison.OrdinalIgnoreCase));
+            if (matchedTarget != null)
+                targets = [matchedTarget];
+            else
+            {
+                var fallbackTarget = await plexClient.GetFallbackLibraryTargetAsync(libraryName, cancellationToken).ConfigureAwait(false);
+                if (fallbackTarget != null)
+                {
+                    targets = [fallbackTarget];
+                    isLegacyFallback = true;
+                    logger.LogInformation("WatchedSyncService: Target library '{LibraryName}' not found in Shoko Relay targets. Initiating legacy filename matching fallback.", libraryName);
+                }
+                else
+                {
+                    logger.LogWarning("WatchedSyncService: Target library '{LibraryName}' could not be found on the Plex server.", libraryName);
+                    return result;
+                }
+            }
+        }
 
         // Session-level cache to prevent redundant database lookups and GUID parsing when the same episode exists in multiple libraries or is watched by multiple users.
         var episodeCache = new Dictionary<string, IShokoEpisode?>(StringComparer.OrdinalIgnoreCase);
         var userDataCache = new Dictionary<int, IEpisodeUserData?>();
         var prefIdCache = new Dictionary<int, string?>();
 
-        IShokoEpisode? GetCachedEpisode(string? guid)
+        IShokoEpisode? GetCachedEpisode(PlexMetadataItem item)
         {
-            if (string.IsNullOrWhiteSpace(guid))
+            string cacheKey = isLegacyFallback ? (item.Media?.FirstOrDefault()?.Part?.FirstOrDefault()?.File ?? item.RatingKey!) : (item.Guid ?? item.RatingKey!);
+            if (string.IsNullOrWhiteSpace(cacheKey))
                 return null;
-            if (!episodeCache.TryGetValue(guid, out var ep))
-                episodeCache[guid] = ep = PlexHelper.ExtractShokoEpisodeIdFromGuid(guid) is { } epId ? metadataService.GetShokoEpisodeByID(epId) : null;
+
+            if (!episodeCache.TryGetValue(cacheKey, out var ep))
+            {
+                if (isLegacyFallback)
+                {
+                    string? filePath = item.Media?.FirstOrDefault()?.Part?.FirstOrDefault()?.File;
+                    if (!string.IsNullOrWhiteSpace(filePath))
+                    {
+                        string mapped = plexClient.MapPlexPathToShokoPath(filePath);
+                        var vid = videoService.GetVideoFileByAbsolutePath(mapped);
+                        if (vid == null)
+                        {
+                            string normPath = VfsShared.NormalizeSeparators(filePath);
+                            string fName = Path.GetFileName(normPath);
+                            string? parent = Path.GetFileName(Path.GetDirectoryName(normPath));
+                            string suffix = !string.IsNullOrEmpty(parent) ? $"{Path.DirectorySeparatorChar}{parent}{Path.DirectorySeparatorChar}{fName}" : $"{Path.DirectorySeparatorChar}{fName}";
+
+                            vid = videoService
+                                .GetAllVideoFiles()
+                                ?.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v.Path) && VfsShared.NormalizeSeparators(v.Path).EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
+                        }
+                        ep = vid?.Video?.Episodes?.FirstOrDefault();
+
+                        if (ep == null)
+                            logger.LogDebug("WatchedSyncService: Legacy fallback failed to resolve Shoko episode for file '{FilePath}'", filePath);
+                    }
+                    else
+                        logger.LogDebug("WatchedSyncService: Legacy fallback failed because Plex returned no file path for RatingKey {RatingKey}", item.RatingKey);
+                }
+                else
+                    ep = PlexHelper.ExtractShokoEpisodeIdFromGuid(item.Guid) is { } epId ? metadataService.GetShokoEpisodeByID(epId) : null;
+
+                episodeCache[cacheKey] = ep;
+            }
             return ep;
         }
 
@@ -88,10 +149,6 @@ public class SyncToShoko(
         foreach (var target in targets)
         {
             cancellationToken.ThrowIfCancellationRequested();
-
-            // Apply Library Name Filter
-            if (!string.IsNullOrWhiteSpace(libraryName) && !string.Equals(target.Title, libraryName, StringComparison.OrdinalIgnoreCase))
-                continue;
 
             // Fetch user item buckets and automatically handle managed token resolution and user filtering.
             var (userBuckets, newResult) = await SyncHelper
@@ -125,7 +182,7 @@ public class SyncToShoko(
                     if (item.LibrarySectionId.HasValue && item.LibrarySectionId != target.SectionId)
                         continue;
 
-                    if (GetCachedEpisode(item.Guid) is not { } ep || appliedIds.Contains(ep.LocalID))
+                    if (GetCachedEpisode(item) is not { } ep || appliedIds.Contains(ep.LocalID))
                         continue;
 
                     var epUserData = GetCachedUserData(ep);
@@ -147,13 +204,13 @@ public class SyncToShoko(
                         continue;
                     }
 
-                    if (string.IsNullOrWhiteSpace(item.Guid))
+                    if (!isLegacyFallback && string.IsNullOrWhiteSpace(item.Guid))
                         continue;
 
                     result = SyncHelper.IncProcessed(result, result.PerUser, uName);
 
                     // Check the session cache before hitting the database.
-                    if (GetCachedEpisode(item.Guid) is not { } ep || appliedIds.Contains(ep.LocalID))
+                    if (GetCachedEpisode(item) is not { } ep || appliedIds.Contains(ep.LocalID))
                     {
                         result = SyncHelper.IncSkipped(result, result.PerUser, uName);
                         continue;

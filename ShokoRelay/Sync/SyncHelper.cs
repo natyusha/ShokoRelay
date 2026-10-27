@@ -397,6 +397,15 @@ public static class SyncHelper
                     ? await plexClient.GetSectionMoviesAsync(target, null, cancellationToken, onlyUnwatched, hasProgress, null, minLast).ConfigureAwait(false) ?? []
                     : await plexClient.GetSectionEpisodesAsync(target, null, cancellationToken, onlyUnwatched, hasProgress, null, minLast).ConfigureAwait(false) ?? [];
 
+            logger?.LogInformation(
+                "WatchedSyncService: fetched {Count} {TypeLabel} for user admin in library '{Library}' on {Server} (since={Since})",
+                adminItems.Count,
+                target.LibraryType == PlexLibraryType.Movie ? "movies" : "episodes",
+                target.Title,
+                target.ServerName,
+                minLast?.ToString() ?? "NULL"
+            );
+
             userBuckets.Add(("admin", adminItems, null));
         }
 

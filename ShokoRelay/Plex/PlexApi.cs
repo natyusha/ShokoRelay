@@ -136,6 +136,10 @@ public class PlexMetadataItem
     [JsonPropertyName("Collection")]
     public List<PlexTag>? Collection { get; set; }
 
+    /// <summary>List of media elements containing physical file part information.</summary>
+    [JsonPropertyName("Media")]
+    public List<PlexMedia>? Media { get; set; }
+
     /// <summary>Grandparent (Show) title.</summary>
     [JsonPropertyName("grandparentTitle")]
     public string? GrandparentTitle { get; set; }

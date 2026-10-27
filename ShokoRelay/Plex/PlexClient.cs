@@ -339,6 +339,69 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
             }),
         ];
 
+    /// <summary>Retrieves a library target by name directly from the Plex server, bypassing the Shoko Relay agent filter.</summary>
+    /// <param name="libraryName">The exact name of the Plex library.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A configured library target or null if not found.</returns>
+    public async Task<PlexLibraryTarget?> GetFallbackLibraryTargetAsync(string libraryName, CancellationToken cancellationToken = default)
+    {
+        if (!IsEnabled || string.IsNullOrWhiteSpace(libraryName))
+            return null;
+
+        var server = configProvider.GetPlexDiscoveredServers().FirstOrDefault(s => !string.IsNullOrWhiteSpace(s.PreferredUri));
+        if (server == null)
+            return null;
+
+        using var req = CreateRequest(HttpMethod.Get, "/library/sections", server.PreferredUri);
+        using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+        if (!resp.IsSuccessStatusCode)
+            return null;
+
+        var content = await resp.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(content);
+            if (!doc.RootElement.TryGetProperty("MediaContainer", out var mc) || !mc.TryGetProperty("Directory", out var dirs))
+                return null;
+
+            foreach (var dir in dirs.EnumerateArray())
+            {
+                if (dir.TryGetProperty("title", out var titleProp) && string.Equals(titleProp.GetString(), libraryName, StringComparison.OrdinalIgnoreCase))
+                {
+                    int id = dir.TryGetProperty("key", out var keyProp) && int.TryParse(keyProp.GetString(), out int k) ? k : 0;
+                    if (id == 0)
+                        continue;
+
+                    string type = dir.TryGetProperty("type", out var typeProp) ? typeProp.GetString() ?? "" : "";
+                    var locations = new List<string>();
+                    if (dir.TryGetProperty("Location", out var locs))
+                        foreach (var loc in locs.EnumerateArray())
+                            if (loc.TryGetProperty("path", out var pathProp) && pathProp.GetString() is { } p)
+                                locations.Add(p);
+
+                    return new PlexLibraryTarget
+                    {
+                        SectionId = id,
+                        Title = titleProp.GetString() ?? libraryName,
+                        Type = type,
+                        Uuid = dir.TryGetProperty("uuid", out var uuidProp) ? uuidProp.GetString() ?? "" : "",
+                        ServerId = server.Id,
+                        ServerName = server.Name,
+                        ServerUrl = server.PreferredUri,
+                        LibraryType = type.Equals("movie", StringComparison.OrdinalIgnoreCase) ? PlexLibraryType.Movie : PlexLibraryType.Show,
+                        Locations = locations,
+                    };
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "PlexClient: Failed to parse sections for fallback library target '{LibraryName}'", libraryName);
+        }
+
+        return null;
+    }
+
     #endregion
 
     #region Metadata Queries
