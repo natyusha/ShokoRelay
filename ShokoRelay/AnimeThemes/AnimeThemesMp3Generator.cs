@@ -78,10 +78,17 @@ public class AnimeThemesMp3Generator(
 )
 {
     #region Setup & Cache
+
+    /// <summary>HTTP client for interacting with the AnimeThemes API.</summary>
     private readonly AnimeThemesApi _apiClient = new(httpClient);
+
+    /// <summary>In-memory cache mapping physical folder paths to their associated theme slugs.</summary>
     private ConcurrentDictionary<string, string>? _themeMp3Cache;
+
+    /// <summary>Lock object used to synchronize access to the MP3 cache.</summary>
     private readonly Lock _cacheLock = new();
 
+    /// <summary>Gets the absolute file path to the persistent Theme.mp3 cache on disk.</summary>
     private string ThemeCacheFilePath => Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FileAtMp3Cache);
 
     #endregion

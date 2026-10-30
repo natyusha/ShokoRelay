@@ -325,13 +325,33 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             var ctx = mapper.GetSeriesContext(ratingKey);
             if (ctx == null)
                 return NotFound();
-            var allEpisodes = ctx
-                .FileData.Mappings.OrderBy(m => m.Coords.Season)
-                .ThenBy(m => m.Coords.Episode)
-                .ThenBy(m => m.PartIndex ?? 0)
-                .Select(m => mapper.MapEpisode(m.PrimaryEpisode, m.Coords, ctx.Series, ctx.Titles, m.PartIndex, m.TmdbEpisode))
-                .ToList();
-            return WrapInPagedContainer(allEpisodes);
+
+            int start =
+                int.TryParse(Request.Headers["X-Plex-Container-Start"], out var s) ? s
+                : int.TryParse(Request.Query["X-Plex-Container-Start"], out var sq) ? sq
+                : 0;
+            int size =
+                int.TryParse(Request.Headers["X-Plex-Container-Size"], out var z) ? z
+                : int.TryParse(Request.Query["X-Plex-Container-Size"], out var zq) ? zq
+                : 50;
+
+            var sortedMappings = ctx.FileData.Mappings.OrderBy(m => m.Coords.Season).ThenBy(m => m.Coords.Episode).ThenBy(m => m.PartIndex ?? 0).ToList();
+
+            var pagedData = sortedMappings.Skip(start).Take(size).Select(m => (object)mapper.MapEpisode(m.PrimaryEpisode, m.Coords, ctx.Series, ctx.Titles, m.PartIndex, m.TmdbEpisode)).ToArray();
+
+            return Ok(
+                new
+                {
+                    MediaContainer = new
+                    {
+                        offset = start,
+                        totalSize = sortedMappings.Count,
+                        identifier = ShokoRelayConstants.AgentScheme,
+                        size = pagedData.Length,
+                        Metadata = pagedData,
+                    },
+                }
+            );
         });
 
     /// <summary>Enumerates all available artwork for the specified ratingKey.</summary>

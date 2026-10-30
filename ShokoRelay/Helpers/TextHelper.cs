@@ -15,7 +15,7 @@ public static partial class TextHelper
     private static partial Regex SeriesPrefixRegex();
 
     /// <summary>Regex for removing redundant movie descriptors from titles.</summary>
-    [GeneratedRegex(@"(?i)(:? The)?( Movie| Motion Picture)")]
+    [GeneratedRegex(@"(:? The)?( Movie| Motion Picture)", RegexOptions.IgnoreCase)]
     private static partial Regex MovieDescriptorRegex();
 
     /// <summary>Regex for identifying default or ambiguous episode titles.</summary>
@@ -23,11 +23,11 @@ public static partial class TextHelper
     private static partial Regex DefaultTitleRegex();
 
     /// <summary>Regex for isolating and removing source notes from summaries.</summary>
-    [GeneratedRegex(@"(?m)^\(?\b((Modified )?Sour?ces?|Note( [1-9])?|Summ?ary|From|See Also):(?!$| a daikon)([^\r\n]+|$)", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^\(?\b((Modified )?Sour?ces?|Note( [1-9])?|Summ?ary|From|See Also):(?!$| a daikon)([^\r\n]+|$)", RegexOptions.IgnoreCase | RegexOptions.Multiline)]
     private static partial Regex SourceNoteSummaryRegex();
 
     /// <summary>Regex for isolating and removing list indicators from summaries.</summary>
-    [GeneratedRegex(@"(?m)^(\*|[\u2014~-] (adapted|source|description|summary|translated|written):?) ([^\r\n]+|$)", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^(\*|[\u2014~-] (adapted|source|description|summary|translated|written):?) ([^\r\n]+|$)", RegexOptions.IgnoreCase | RegexOptions.Multiline)]
     private static partial Regex ListIndicatorRegex();
 
     /// <summary>Regex for cleaning up AniDB links in summaries.</summary>
@@ -35,7 +35,7 @@ public static partial class TextHelper
     private static partial Regex AniDBLinkRegex();
 
     /// <summary>Regex for stripping broken BBCode italic tags from specific AniDB summaries.</summary>
-    [GeneratedRegex(@"(?is)\[i\](?!""The Sasami|""Stellar|In the distant| occurred in)(.*?)\[\/i\]")]
+    [GeneratedRegex(@"\[i\](?!""The Sasami|""Stellar|In the distant| occurred in)(.*?)\[\/i\]", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
     private static partial Regex BbCodeItalicBugRegex();
 
     /// <summary>Regex for removing solitary BBCode italic tags.</summary>
@@ -43,7 +43,7 @@ public static partial class TextHelper
     private static partial Regex BbCodeSolitaryRegex();
 
     /// <summary>Regex for condensing multiple newlines into a single line break.</summary>
-    [GeneratedRegex(@"(\r?\n\s*){2,}")]
+    [GeneratedRegex(@"(?:\r?\n[^\S\r\n]*){2,}")]
     private static partial Regex CondenseLinesRegex();
 
     /// <summary>Regex for condensing multiple spaces into a single space.</summary>

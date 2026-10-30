@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Containers;
@@ -10,6 +11,12 @@ namespace ShokoRelay.Plex;
 public class PlexMetadata(IMetadataService metadataService)
 {
     #region Series Context
+
+    /// <summary>Thread-safe cache for parsed series contexts to prevent thread-pool starvation during heavy concurrent Plex API requests.</summary>
+    private readonly ConcurrentDictionary<int, (Lazy<SeriesContext> LazyContext, long ExpirationTicks)> _contextCache = new();
+
+    /// <summary>Lock object used to prevent cache stampedes when cache entries expire during high-traffic bursts.</summary>
+    private readonly Lock _cacheLock = new();
 
     /// <summary>Aggregates relevant information about a Shoko series for controller responses.</summary>
     /// <param name="Series">The primary series metadata.</param>
@@ -28,10 +35,50 @@ public class PlexMetadata(IMetadataService metadataService)
             return null;
 
         int primaryId = OverrideHelper.GetPrimary(series.LocalID, metadataService);
-        var primarySeries = metadataService.GetShokoSeriesByID(primaryId) ?? series;
-        var fileData = MapHelper.GetConsolidatedSeriesFileData(primarySeries, metadataService);
+        long now = DateTime.UtcNow.Ticks;
 
-        return new SeriesContext(primarySeries, TextHelper.ResolveFullSeriesTitles(primarySeries), ContentRatingHelper.GetContentRatingAndAdult(primarySeries).Rating ?? "", fileData);
+        // Purge stale cache entries to prevent unbounded growth during extended uptime
+        if (_contextCache.Count > 50)
+            foreach (var kvp in _contextCache)
+                if (kvp.Value.ExpirationTicks < now)
+                    _contextCache.TryRemove(kvp.Key, out _);
+
+        var cached = _contextCache.GetOrAdd(
+            primaryId,
+            _ =>
+                (
+                    new Lazy<SeriesContext>(() =>
+                    {
+                        var primarySeries = metadataService.GetShokoSeriesByID(primaryId) ?? series;
+                        var fileData = MapHelper.GetConsolidatedSeriesFileData(primarySeries, metadataService);
+                        return new SeriesContext(primarySeries, TextHelper.ResolveFullSeriesTitles(primarySeries), ContentRatingHelper.GetContentRatingAndAdult(primarySeries).Rating ?? "", fileData);
+                    }),
+                    now + TimeSpan.FromSeconds(30).Ticks
+                )
+        );
+
+        if (cached.ExpirationTicks < now)
+        {
+            lock (_cacheLock)
+            {
+                // Fetch the latest entry inside the lock to ensure we don't overwrite a newly updated cache entry from another thread
+                if (_contextCache.TryGetValue(primaryId, out cached) && cached.ExpirationTicks < now)
+                {
+                    cached = (
+                        new Lazy<SeriesContext>(() =>
+                        {
+                            var primarySeries = metadataService.GetShokoSeriesByID(primaryId) ?? series;
+                            var fileData = MapHelper.GetConsolidatedSeriesFileData(primarySeries, metadataService);
+                            return new SeriesContext(primarySeries, TextHelper.ResolveFullSeriesTitles(primarySeries), ContentRatingHelper.GetContentRatingAndAdult(primarySeries).Rating ?? "", fileData);
+                        }),
+                        DateTime.UtcNow.Ticks + TimeSpan.FromSeconds(30).Ticks
+                    );
+                    _contextCache[primaryId] = cached;
+                }
+            }
+        }
+
+        return cached.LazyContext.Value;
     }
 
     #endregion

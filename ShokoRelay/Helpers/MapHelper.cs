@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Enums;
 using Shoko.Abstractions.Video;
@@ -152,23 +151,24 @@ public static class MapHelper
             return result;
 
         string? prefId = GetPreferredTmdbOrderingId(series);
-        var videoToEps = new ConcurrentDictionary<int, ConcurrentBag<(IEpisode Episode, PlexCoords Coords)>>();
-        var seasonsSet = new ConcurrentDictionary<int, byte>();
-        var seriesToPrimary = new ConcurrentDictionary<int, int>();
+        var videoToEps = new Dictionary<int, List<(IEpisode Episode, PlexCoords Coords)>>();
+        var seasonsSet = new HashSet<int>();
+        var seriesToPrimary = new Dictionary<int, int>();
 
-        Parallel.ForEach(
-            seriesEpisodes,
-            p =>
+        foreach (var (episode, videos) in seriesEpisodes)
+        {
+            var coords = GetPlexCoordinates(episode, prefId);
+            seasonsSet.Add(coords.Season);
+            foreach (var v in videos)
             {
-                var coords = GetPlexCoordinates(p.Episode, prefId);
-                seasonsSet.TryAdd(coords.Season, 0);
-                foreach (var v in p.Videos)
-                    videoToEps.GetOrAdd(v.LocalID, _ => []).Add((p.Episode, coords));
+                if (!videoToEps.TryGetValue(v.LocalID, out var list))
+                    videoToEps[v.LocalID] = list = [];
+                list.Add((episode, coords));
             }
-        );
+        }
 
-        bool s1 = seasonsSet.ContainsKey(PlexConstants.SeasonStandard),
-            s0 = seasonsSet.ContainsKey(PlexConstants.SeasonSpecials);
+        bool s1 = seasonsSet.Contains(PlexConstants.SeasonStandard),
+            s0 = seasonsSet.Contains(PlexConstants.SeasonSpecials);
 
         var videoFileNameCache = seriesEpisodes.SelectMany(x => x.Videos).DistinctBy(v => v.LocalID).ToDictionary(v => v.LocalID, v => Path.GetFileName(v.Files.FirstOrDefault()?.Path ?? string.Empty));
 
@@ -187,7 +187,12 @@ public static class MapHelper
             // Resolve Primary IDs to handle consolidated crossover series (e.g. Akahori Gedou Hour Rabuge).
             var distinctPrimarySeriesCount = (video.CrossReferences ?? [])
                 .Where(cr => cr.ShokoEpisode != null)
-                .Select(cr => seriesToPrimary.GetOrAdd(cr.ShokoEpisode!.ShokoSeriesID, id => OverrideHelper.GetPrimary(id, metadataService)))
+                .Select(cr =>
+                {
+                    if (!seriesToPrimary.TryGetValue(cr.ShokoEpisode!.ShokoSeriesID, out var primaryId))
+                        seriesToPrimary[cr.ShokoEpisode.ShokoSeriesID] = primaryId = OverrideHelper.GetPrimary(cr.ShokoEpisode.ShokoSeriesID, metadataService);
+                    return primaryId;
+                })
                 .Distinct()
                 .Count();
 
