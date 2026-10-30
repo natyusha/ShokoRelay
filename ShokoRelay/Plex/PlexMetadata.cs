@@ -8,14 +8,26 @@ using static ShokoRelay.Plex.PlexMapping;
 namespace ShokoRelay.Plex;
 
 /// <summary>Converts Shoko series/episode/season/movie metadata into Plex-compatible property dictionaries.</summary>
-public class PlexMetadata(IMetadataService metadataService)
+public class PlexMetadata(IMetadataService metadataService, ILogger<PlexMetadata> logger)
 {
     #region Series Context
 
-    /// <summary>Thread-safe cache for parsed series contexts to prevent thread-pool starvation during heavy concurrent Plex API requests.</summary>
-    private readonly ConcurrentDictionary<int, (Lazy<SeriesContext> LazyContext, long ExpirationTicks)> _contextCache = new();
+    /// <summary>Cache container storing a lazily-evaluated context alongside its post-build expiration timestamp.</summary>
+    private sealed class ContextCacheEntry(Func<SeriesContext> factory)
+    {
+        public long ExpirationTicks { get; set; } = DateTime.UtcNow.Ticks + TimeSpan.FromMinutes(5).Ticks;
+        public Lazy<SeriesContext> LazyContext { get; } =
+            new(() =>
+            {
+                var res = factory();
+                return res;
+            });
+    }
 
-    /// <summary>Lock object used to prevent cache stampedes when cache entries expire during high-traffic bursts.</summary>
+    /// <summary>Thread-safe cache for parsed series contexts to prevent thread-pool starvation during heavy concurrent Plex API requests.</summary>
+    private readonly ConcurrentDictionary<int, ContextCacheEntry> _contextCache = new();
+
+    /// <summary>Lock object used to prevent cache stampedes (thundering herd) when cache entries expire during high-traffic bursts.</summary>
     private readonly Lock _cacheLock = new();
 
     /// <summary>Aggregates relevant information about a Shoko series for controller responses.</summary>
@@ -23,7 +35,8 @@ public class PlexMetadata(IMetadataService metadataService)
     /// <param name="Titles">A tuple containing Display, Sort, and Original titles.</param>
     /// <param name="ContentRating">The resolved content rating string.</param>
     /// <param name="FileData">The mapping data for the series' files.</param>
-    public record SeriesContext(IShokoSeries Series, (string DisplayTitle, string SortTitle, string? OriginalTitle) Titles, string ContentRating, MapHelper.SeriesFileData FileData);
+    /// <param name="PreferredOrderingId">The preferred TMDB alternate ordering identifier, if configured.</param>
+    public record SeriesContext(IShokoSeries Series, (string DisplayTitle, string SortTitle, string? OriginalTitle) Titles, string ContentRating, MapHelper.SeriesFileData FileData, string? PreferredOrderingId);
 
     /// <summary>Resolves a Plex-style ratingKey into a <see cref="SeriesContext"/>.</summary>
     /// <param name="ratingKey">Plex rating key representing a show, season or episode.</param>
@@ -43,42 +56,40 @@ public class PlexMetadata(IMetadataService metadataService)
                 if (kvp.Value.ExpirationTicks < now)
                     _contextCache.TryRemove(kvp.Key, out _);
 
-        var cached = _contextCache.GetOrAdd(
-            primaryId,
-            _ =>
-                (
-                    new Lazy<SeriesContext>(() =>
-                    {
-                        var primarySeries = metadataService.GetShokoSeriesByID(primaryId) ?? series;
-                        var fileData = MapHelper.GetConsolidatedSeriesFileData(primarySeries, metadataService);
-                        return new SeriesContext(primarySeries, TextHelper.ResolveFullSeriesTitles(primarySeries), ContentRatingHelper.GetContentRatingAndAdult(primarySeries).Rating ?? "", fileData);
-                    }),
-                    now + TimeSpan.FromSeconds(30).Ticks
-                )
-        );
+        ContextCacheEntry CreateEntry() =>
+            new(() =>
+            {
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                var primarySeries = metadataService.GetShokoSeriesByID(primaryId) ?? series;
+                var fileData = MapHelper.GetConsolidatedSeriesFileData(primarySeries, metadataService);
+                var prefId = MapHelper.GetPreferredTmdbOrderingId(primarySeries);
+
+                sw.Stop();
+                if (sw.ElapsedMilliseconds > 250)
+                    logger.LogWarning("PlexMetadata: Built SeriesContext for -> {Title} [{Id}] in {Elapsed}ms", primarySeries.GetDisplayTitle(), primarySeries.LocalID, sw.ElapsedMilliseconds);
+
+                return new SeriesContext(primarySeries, TextHelper.ResolveFullSeriesTitles(primarySeries), ContentRatingHelper.GetContentRatingAndAdult(primarySeries).Rating ?? "", fileData, prefId);
+            });
+
+        var cached = _contextCache.GetOrAdd(primaryId, _ => CreateEntry());
 
         if (cached.ExpirationTicks < now)
         {
             lock (_cacheLock)
             {
-                // Fetch the latest entry inside the lock to ensure we don't overwrite a newly updated cache entry from another thread
-                if (_contextCache.TryGetValue(primaryId, out cached) && cached.ExpirationTicks < now)
+                if (_contextCache.TryGetValue(primaryId, out var fresh) && fresh.ExpirationTicks >= now)
+                    cached = fresh;
+                else
                 {
-                    cached = (
-                        new Lazy<SeriesContext>(() =>
-                        {
-                            var primarySeries = metadataService.GetShokoSeriesByID(primaryId) ?? series;
-                            var fileData = MapHelper.GetConsolidatedSeriesFileData(primarySeries, metadataService);
-                            return new SeriesContext(primarySeries, TextHelper.ResolveFullSeriesTitles(primarySeries), ContentRatingHelper.GetContentRatingAndAdult(primarySeries).Rating ?? "", fileData);
-                        }),
-                        DateTime.UtcNow.Ticks + TimeSpan.FromSeconds(30).Ticks
-                    );
+                    cached = CreateEntry();
                     _contextCache[primaryId] = cached;
                 }
             }
         }
 
-        return cached.LazyContext.Value;
+        var ctx = cached.LazyContext.Value;
+        cached.ExpirationTicks = DateTime.UtcNow.Ticks + TimeSpan.FromMinutes(5).Ticks;
+        return ctx;
     }
 
     #endregion
@@ -251,16 +262,11 @@ public class PlexMetadata(IMetadataService metadataService)
     #region Seasons
 
     /// <summary>Builds a Plex-compatible metadata dictionary for a single season.</summary>
-    /// <param name="series">The Shoko series metadata.</param>
+    /// <param name="ctx">The resolved series context.</param>
     /// <param name="seasonNum">The season index.</param>
-    /// <param name="seriesTitle">The title of the parent series.</param>
     /// <returns>A dictionary of Plex metadata properties.</returns>
-    public Dictionary<string, object?> MapSeason(ISeries series, int seasonNum, string seriesTitle)
+    public Dictionary<string, object?> MapSeason(SeriesContext ctx, int seasonNum)
     {
-        var ctx = GetSeriesContext(series.ID.ID);
-        if (ctx == null)
-            return [];
-
         var ps = ctx.Series;
         var images = ps;
         var seasonTitle = GetSeasonFolder(seasonNum);
@@ -268,7 +274,7 @@ public class PlexMetadata(IMetadataService metadataService)
         string? seasonSummary = null;
 
         // When using VFS overrides find a Shoko series in the group which contains the TMDB metadata for the requisite season number.
-        bool ignoreTmdb = !string.IsNullOrEmpty(MapHelper.GetPreferredTmdbOrderingId(ps));
+        bool ignoreTmdb = !string.IsNullOrEmpty(ctx.PreferredOrderingId);
         ISeason? tmdbSeason = null;
         if (!ignoreTmdb)
         {
@@ -297,9 +303,9 @@ public class PlexMetadata(IMetadataService metadataService)
         // csharpier-ignore
         return new()
         {
-            ["ratingKey"]             = series.GetPlexRatingKey(seasonNum),
-            ["key"]                   = $"/metadata/{series.GetPlexRatingKey(seasonNum)}/children",
-            ["guid"]                  = series.GetPlexGuid(seasonNum),
+            ["ratingKey"]             = ps.GetPlexRatingKey(seasonNum),
+            ["key"]                   = $"/metadata/{ps.GetPlexRatingKey(seasonNum)}/children",
+            ["guid"]                  = ps.GetPlexGuid(seasonNum),
             ["type"]                  = "season",
             ["title"]                 = seasonTitle,
             ["originallyAvailableAt"] = seasonDate?.ToString("yyyy-MM-dd", null),
@@ -309,13 +315,13 @@ public class PlexMetadata(IMetadataService metadataService)
             ["titleSort"]             = seasonTitle,
             ["year"]                  = seasonDate?.Year,
             ["summary"]               = seasonSummary ?? string.Empty,
-            ["isAdult"]               = ContentRatingHelper.GetContentRatingAndAdult(series).IsAdult,
+            ["isAdult"]               = ContentRatingHelper.GetContentRatingAndAdult(ps).IsAdult,
 
-            ["parentRatingKey"]       = series.GetPlexRatingKey(),
-            ["parentKey"]             = $"/metadata/{series.ID.ID}",
-            ["parentGuid"]            = series.GetPlexGuid(),
+            ["parentRatingKey"]       = ps.GetPlexRatingKey(),
+            ["parentKey"]             = $"/metadata/{ps.ID.ID}",
+            ["parentGuid"]            = ps.GetPlexGuid(),
             ["parentType"]            = "show",
-            ["parentTitle"]           = seriesTitle,
+            ["parentTitle"]           = ctx.Titles.DisplayTitle,
             ["parentThumb"]           = images.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage),
             ["parentArt"]             = images.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage),
             ["index"]                 = seasonNum,

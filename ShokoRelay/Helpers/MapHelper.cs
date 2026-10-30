@@ -181,28 +181,44 @@ public static class MapHelper
         {
             if (!videoToEps.TryGetValue(video.LocalID, out var epList))
                 continue;
+
+            // Fast path: If the video has only 1 episode link, skip all crossover and deduplication checks
+            if (epList.Count == 1)
+            {
+                var fastCoords = epList[0].Coords;
+                if (fastCoords.Season == PlexConstants.SeasonOther)
+                    fastCoords.Season =
+                        !s1 ? PlexConstants.SeasonStandard
+                        : !s0 ? PlexConstants.SeasonSpecials
+                        : fastCoords.Season;
+                videoCoords[video.LocalID] = (fastCoords, epList);
+                continue;
+            }
+
             // Handle multi-type tiebreaks using cross-reference ordering
             var sortedEps = epList.OrderBy(x => x.Coords.Season).ThenBy(x => x.Coords.Episode).ToList();
 
-            // Resolve Primary IDs to handle consolidated crossover series (e.g. Akahori Gedou Hour Rabuge).
-            var distinctPrimarySeriesCount = (video.CrossReferences ?? [])
-                .Where(cr => cr.ShokoEpisode != null)
-                .Select(cr =>
-                {
-                    if (!seriesToPrimary.TryGetValue(cr.ShokoEpisode!.ShokoSeriesID, out var primaryId))
-                        seriesToPrimary[cr.ShokoEpisode.ShokoSeriesID] = primaryId = OverrideHelper.GetPrimary(cr.ShokoEpisode.ShokoSeriesID, metadataService);
-                    return primaryId;
-                })
-                .Distinct()
-                .Count();
-
-            if (sortedEps.Count > 1 && sortedEps.Select(x => x.Episode.Type).Distinct().Count() > 1 && distinctPrimarySeriesCount > 1)
+            if (sortedEps.Select(x => x.Episode.Type).Distinct().Count() > 1)
             {
-                var firstXrefId = (video.CrossReferences ?? []).FirstOrDefault(cr => cr.ShokoEpisode != null && sortedEps.Any(e => e.Episode.ID == cr.ShokoEpisode.ID))?.ShokoEpisode?.ID;
-                if (firstXrefId is not null)
+                var distinctPrimarySeriesCount = (video.CrossReferences ?? [])
+                    .Where(cr => cr.ShokoEpisode != null)
+                    .Select(cr =>
+                    {
+                        if (!seriesToPrimary.TryGetValue(cr.ShokoEpisode!.ShokoSeriesID, out var primaryId))
+                            seriesToPrimary[cr.ShokoEpisode.ShokoSeriesID] = primaryId = OverrideHelper.GetPrimary(cr.ShokoEpisode.ShokoSeriesID, metadataService);
+                        return primaryId;
+                    })
+                    .Distinct()
+                    .Count();
+
+                if (distinctPrimarySeriesCount > 1)
                 {
-                    var primaryType = sortedEps.First(x => x.Episode.ID == firstXrefId).Episode.Type;
-                    sortedEps = [.. sortedEps.Where(x => x.Episode.Type == primaryType)];
+                    var firstXrefId = (video.CrossReferences ?? []).FirstOrDefault(cr => cr.ShokoEpisode != null && sortedEps.Any(e => e.Episode.ID == cr.ShokoEpisode.ID))?.ShokoEpisode?.ID;
+                    if (firstXrefId is not null)
+                    {
+                        var primaryType = sortedEps.First(x => x.Episode.ID == firstXrefId).Episode.Type;
+                        sortedEps = [.. sortedEps.Where(x => x.Episode.Type == primaryType)];
+                    }
                 }
             }
 
@@ -259,6 +275,9 @@ public static class MapHelper
     /// <returns>A prioritized list of unique episode-coordinate pairs.</returns>
     private static List<(IEpisode Episode, PlexCoords Coords)> DeduplicateByCoords(List<(IEpisode Episode, PlexCoords Coords)> eps, IVideo video)
     {
+        if (eps.Count <= 1)
+            return eps;
+
         var deduped = new List<(IEpisode Episode, PlexCoords Coords)>();
         var index = new Dictionary<(int, int), int>();
         var xrefPos = video.CrossReferences?.Where(cr => cr.ShokoEpisode != null).Select((cr, i) => (id: cr.ShokoEpisode!.ID, i)).ToDictionary(t => t.id, t => t.i);

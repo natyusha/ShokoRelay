@@ -158,15 +158,11 @@ public static class PlexMapping
         if (entries == null)
             return [];
         var list = entries.ToList();
-        if (list.Count == 0)
-            return list;
-
-        var defaultOrderingId = IOrdering.DefaultOrderingID(list[0].SeriesID).ID;
-        return string.IsNullOrWhiteSpace(showPreferredOrderingId) || string.Equals(defaultOrderingId, showPreferredOrderingId, StringComparison.OrdinalIgnoreCase)
-            ? [.. list.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber)]
+        return list.Count <= 1 ? list
+            : string.IsNullOrWhiteSpace(showPreferredOrderingId) ? [.. list.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber)]
             :
             [
-                .. list.Select(te => (Episode: te, Priority: te.Orderings.Any(o => IsTmdbOrdering(o, showPreferredOrderingId)) ? 0 : 1))
+                .. list.Select(te => (Episode: te, Priority: te.PreferredOrdering is { } pref && IsTmdbOrdering(pref, showPreferredOrderingId) ? 0 : 1))
                     .OrderBy(x => x.Priority)
                     .ThenBy(x => x.Episode.SeasonNumber ?? 0)
                     .ThenBy(x => x.Episode.EpisodeNumber)
@@ -180,7 +176,7 @@ public static class PlexMapping
     /// <returns>A tuple containing the resolved season and episode numbers.</returns>
     public static (int? Season, int Episode) GetOrderingCoords(IEpisode episode, string? showPreferredOrderingId = null) =>
         episode == null ? (null, 0)
-        : !string.IsNullOrWhiteSpace(showPreferredOrderingId) && episode.Orderings.FirstOrDefault(o => IsTmdbOrdering(o, showPreferredOrderingId)) is { } byAll ? (byAll.SeasonNumber, byAll.EpisodeNumber)
+        : !string.IsNullOrWhiteSpace(showPreferredOrderingId) && episode.PreferredOrdering is { } pref && IsTmdbOrdering(pref, showPreferredOrderingId) ? (pref.SeasonNumber, pref.EpisodeNumber)
         : (episode.SeasonNumber, episode.EpisodeNumber);
 
     /// <summary>Indicates whether an episode's place is in the given TMDB ordering.</summary>

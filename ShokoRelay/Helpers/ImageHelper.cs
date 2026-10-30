@@ -259,7 +259,16 @@ public static class ImageHelper
                         Url = seasonPosters.First(),
                     },
                 ]
-            : [.. GenerateImageArray(seriesImages, alt, addEveryImage, imageLanguage).Where(i => i.Type == "coverPoster")];
+            :
+            [
+                .. FilterImagesByLanguage(seriesImages.GetAvailableImages(ImageEntityType.Primary), imageLanguage, addEveryImage)
+                    .Select(i => new ImageInfo
+                    {
+                        Alt = alt,
+                        Type = "coverPoster",
+                        Url = GetImageUrl(i, forceRemote: addEveryImage),
+                    }),
+            ];
     }
 
     /// <summary>Create a set of snapshot images specifically for an episode entry.</summary>

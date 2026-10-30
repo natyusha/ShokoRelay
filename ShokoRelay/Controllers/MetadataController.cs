@@ -135,7 +135,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
                 if (typeInt == PlexConstants.TypeSeason)
                 {
                     int seasonNum = body?.Index ?? 1;
-                    meta = mapper.MapSeason(ctx.Series, seasonNum, ctx.Titles.DisplayTitle);
+                    meta = mapper.MapSeason(ctx, seasonNum);
                     if (includeChildren)
                     {
                         var episodes = mapper.BuildEpisodeList(ctx, seasonNum);
@@ -158,7 +158,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
 
                     if (includeChildren)
                     {
-                        var seasons = ctx.FileData.Seasons.Select(s => mapper.MapSeason(ctx.Series, s, ctx.Titles.DisplayTitle)).ToList();
+                        var seasons = ctx.FileData.Seasons.Select(s => mapper.MapSeason(ctx, s)).ToList();
                         meta["Children"] = new { size = seasons.Count, Metadata = seasons };
                     }
                 }
@@ -271,7 +271,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             {
                 if (!int.TryParse(ratingKey[(seasonIdx + PlexConstants.SeasonPrefix.Length)..], out int sNum))
                     return NotFound();
-                var seasonMeta = mapper.MapSeason(ctx.Series, sNum, ctx.Titles.DisplayTitle);
+                var seasonMeta = mapper.MapSeason(ctx, sNum);
                 if (includeChildren == 1)
                 {
                     var episodes = mapper.BuildEpisodeList(ctx, sNum);
@@ -282,7 +282,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             var showMeta = mapper.MapSeries(ctx.Series, ctx.Titles);
             if (includeChildren == 1)
             {
-                var seasons = ctx.FileData.Seasons.Select(s => mapper.MapSeason(ctx.Series, s, ctx.Titles.DisplayTitle)).ToList();
+                var seasons = ctx.FileData.Seasons.Select(s => mapper.MapSeason(ctx, s)).ToList();
                 ((IDictionary<string, object?>)showMeta)["Children"] = new { size = seasons.Count, Metadata = seasons };
             }
             return WrapInContainer(showMeta);
@@ -307,7 +307,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             if (seasonIdx >= 0)
                 return !int.TryParse(ratingKey[(seasonIdx + PlexConstants.SeasonPrefix.Length)..], out int sNum) ? NotFound() : WrapInPagedContainer(mapper.BuildEpisodeList(ctx, sNum));
 
-            var seasons = ctx.FileData.Seasons.Select(s => mapper.MapSeason(ctx.Series, s, ctx.Titles.DisplayTitle)).ToList();
+            var seasons = ctx.FileData.Seasons.Select(s => mapper.MapSeason(ctx, s)).ToList();
             return WrapInPagedContainer(seasons);
         });
 
@@ -403,7 +403,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
                 {
                     if (!int.TryParse(ratingKey[(seasonIdx + PlexConstants.SeasonPrefix.Length)..], out int sNum))
                         return NotFound();
-                    images = ExtractImages(mapper.MapSeason(ctx.Series, sNum, ctx.Titles.DisplayTitle));
+                    images = ExtractImages(mapper.MapSeason(ctx, sNum));
                 }
                 else
                     images = ExtractImages(mapper.MapSeries(ctx.Series, ctx.Titles));
