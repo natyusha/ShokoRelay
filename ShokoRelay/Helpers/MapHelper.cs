@@ -153,7 +153,7 @@ public static class MapHelper
         string? prefId = GetPreferredTmdbOrderingId(series);
         Dictionary<MetadataGuid, (int Season, int Episode)>? tmdbOrderingLookup = null;
 
-        // If an alternate TMDB ordering is active, pre-index its placed episodes to resolve coordinates in O(1) without touching episode.Orderings
+        // If an alternate TMDB ordering is active, pre-index its placed episodes without touching episode.Orderings
         if (EnforceTmdbNumbering)
         {
             var tmdbSeries = (series as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault();
@@ -167,7 +167,7 @@ public static class MapHelper
 
         foreach (var (episode, videos) in seriesEpisodes)
         {
-            var coords = GetPlexCoordinatesWithLookup(episode, prefId, tmdbOrderingLookup);
+            var coords = GetPlexCoordinates(episode, prefId, tmdbOrderingLookup);
             seasonsSet.Add(coords.Season);
             foreach (var v in videos)
             {

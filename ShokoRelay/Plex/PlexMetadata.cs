@@ -8,20 +8,19 @@ using static ShokoRelay.Plex.PlexMapping;
 namespace ShokoRelay.Plex;
 
 /// <summary>Converts Shoko series/episode/season/movie metadata into Plex-compatible property dictionaries.</summary>
-public class PlexMetadata(IMetadataService metadataService, ILogger<PlexMetadata> logger)
+public class PlexMetadata(IMetadataService metadataService)
 {
     #region Series Context
 
     /// <summary>Cache container storing a lazily-evaluated context alongside its post-build expiration timestamp.</summary>
+    /// <param name="factory">The factory delegate used to generate the series context.</param>
     private sealed class ContextCacheEntry(Func<SeriesContext> factory)
     {
+        /// <summary>Expiration timestamp in UTC ticks after which the cached entry is considered stale.</summary>
         public long ExpirationTicks { get; set; } = DateTime.UtcNow.Ticks + TimeSpan.FromMinutes(5).Ticks;
-        public Lazy<SeriesContext> LazyContext { get; } =
-            new(() =>
-            {
-                var res = factory();
-                return res;
-            });
+
+        /// <summary>Lazily-evaluated series context instance.</summary>
+        public Lazy<SeriesContext> LazyContext { get; } = new(factory);
     }
 
     /// <summary>Thread-safe cache for parsed series contexts to prevent thread-pool starvation during heavy concurrent Plex API requests.</summary>
@@ -59,15 +58,9 @@ public class PlexMetadata(IMetadataService metadataService, ILogger<PlexMetadata
         ContextCacheEntry CreateEntry() =>
             new(() =>
             {
-                var sw = System.Diagnostics.Stopwatch.StartNew();
                 var primarySeries = metadataService.GetShokoSeriesByID(primaryId) ?? series;
                 var fileData = MapHelper.GetConsolidatedSeriesFileData(primarySeries, metadataService);
                 var prefId = MapHelper.GetPreferredTmdbOrderingId(primarySeries);
-
-                sw.Stop();
-                if (sw.ElapsedMilliseconds > 250)
-                    logger.LogWarning("PlexMetadata: Built SeriesContext for -> {Title} [{Id}] in {Elapsed}ms", primarySeries.GetDisplayTitle(), primarySeries.LocalID, sw.ElapsedMilliseconds);
-
                 return new SeriesContext(primarySeries, TextHelper.ResolveFullSeriesTitles(primarySeries), ContentRatingHelper.GetContentRatingAndAdult(primarySeries).Rating ?? "", fileData, prefId);
             });
 

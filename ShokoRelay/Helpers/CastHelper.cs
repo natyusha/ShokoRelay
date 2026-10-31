@@ -44,16 +44,16 @@ public static class CastHelper
         void ProcessRoleGroup<T>(IEnumerable<T> roles, Func<T, ICreator?> getCreator, Func<T, string?> getName, Func<T, string?> getRole)
             where T : class
         {
-            var all = roles.ToList();
-            if (all.Count == 0)
+            var allRoles = roles.ToList();
+            if (allRoles.Count == 0)
                 return;
 
-            var tmdb = all.Where(c => getCreator(c)?.ID.Source == MetadataSource.TMDB).ToList();
-            var anidb = all.Where(c => getCreator(c) == null || getCreator(c)!.ID.Source != MetadataSource.TMDB).ToList();
+            var tmdbRoles = allRoles.Where(c => getCreator(c)?.ID.Source == MetadataSource.TMDB).ToList();
+            var anidbRoles = allRoles.Where(c => getCreator(c) == null || getCreator(c)!.ID.Source != MetadataSource.TMDB).ToList();
 
-            if (tmdb.Count == 0)
+            if (tmdbRoles.Count == 0)
             {
-                foreach (var c in anidb)
+                foreach (var c in anidbRoles)
                 {
                     string? tag = GetName(getCreator(c), getName(c));
                     string? role = getRole(c);
@@ -74,10 +74,10 @@ public static class CastHelper
                 return;
             }
 
-            var index = new TmdbRoleIndex<T>(tmdb, getCreator, getName);
+            var index = new TmdbRoleIndex<T>(tmdbRoles, getCreator, getName);
             var matchedTmdb = new HashSet<T>();
 
-            foreach (var c in anidb)
+            foreach (var c in anidbRoles)
             {
                 string? tag = GetName(getCreator(c), getName(c));
                 string? role = getRole(c);
@@ -107,7 +107,7 @@ public static class CastHelper
                 );
             }
 
-            foreach (var c in tmdb)
+            foreach (var c in tmdbRoles)
             {
                 if (matchedTmdb.Contains(c))
                     continue;
@@ -264,11 +264,22 @@ public static class CastHelper
     private sealed class TmdbRoleIndex<T>
         where T : class
     {
+        /// <summary>Lookup index matching exact TMDB creator original titles without whitespace.</summary>
         private readonly Dictionary<string, T> _exactOriginal = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>Lookup index matching TMDB creator alternative titles without whitespace.</summary>
         private readonly Dictionary<string, T> _altOriginal = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>Lookup index matching TMDB creator primary and flipped names.</summary>
         private readonly Dictionary<string, T> _names = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>Lookup index matching TMDB creator alternative names and their flipped variants.</summary>
         private readonly Dictionary<string, T> _altNames = new(StringComparer.OrdinalIgnoreCase);
 
+        /// <summary>Initializes a new lookup index by indexing all provided TMDB cast or crew entries.</summary>
+        /// <param name="tmdbItems">Collection of TMDB role entries to index.</param>
+        /// <param name="getCreator">Accessor function to retrieve the creator from a role entry.</param>
+        /// <param name="getName">Accessor function to retrieve the fallback name from a role entry.</param>
         public TmdbRoleIndex(IEnumerable<T> tmdbItems, Func<T, ICreator?> getCreator, Func<T, string?> getName)
         {
             foreach (var item in tmdbItems)
@@ -298,7 +309,8 @@ public static class CastHelper
                             continue;
 
                         string alt = title.Value.Trim();
-                        _altOriginal.TryAdd(alt.Contains(' ') ? alt.Replace(" ", "", StringComparison.Ordinal) : alt, item);
+                        string altNoSpace = alt.Replace(" ", "", StringComparison.Ordinal);
+                        _altOriginal.TryAdd(altNoSpace, item);
 
                         _altNames.TryAdd(alt, item);
                         if (GetFlippedName(alt) is { } altFlipped)
@@ -308,6 +320,10 @@ public static class CastHelper
             }
         }
 
+        /// <summary>Finds the best matching TMDB role entry for a given AniDB creator and name.</summary>
+        /// <param name="anidbCreator">The AniDB creator entity, if available.</param>
+        /// <param name="anidbName">The fallback AniDB creator or character name.</param>
+        /// <returns>The matching TMDB entry, or null if no match is found.</returns>
         public T? FindMatch(ICreator? anidbCreator, string anidbName)
         {
             string? orig = anidbCreator?.OriginalTitle?.Value;
@@ -315,27 +331,27 @@ public static class CastHelper
             string name = anidbCreator?.Title ?? anidbName;
             string? flippedName = GetFlippedName(name);
 
-            // Pass 1: OriginalName matches OriginalName
+            // OriginalName matches OriginalName (whitespace stripped)
             if (!string.IsNullOrEmpty(origNoSpace) && _exactOriginal.TryGetValue(origNoSpace, out var m1))
                 return m1;
 
-            // Pass 2: OriginalName matches TMDB AlternativeNames
+            // OriginalName matches TMDB AlternativeNames (whitespace stripped)
             if (!string.IsNullOrEmpty(origNoSpace) && _altOriginal.TryGetValue(origNoSpace, out var m2))
                 return m2;
 
-            // Pass 3: Name matches Name
+            // Name matches Name (romanised)
             if (!string.IsNullOrEmpty(name) && _names.TryGetValue(name, out var m3))
                 return m3;
 
-            // Pass 4: Flipped Name matches Name
+            // Flipped Name matches Name (romanised)
             if (flippedName != null && _names.TryGetValue(flippedName, out var m4))
                 return m4;
 
-            // Pass 5: AniDB Name against TMDB AlternativeNames
+            // AniDB Name matches TMDB AlternativeNames
             if (!string.IsNullOrEmpty(name) && _altNames.TryGetValue(name, out var m5))
                 return m5;
 
-            // Pass 6: Flipped AniDB Name against TMDB AlternativeNames
+            // Flipped AniDB Name matches TMDB AlternativeNames (and their flipped variants)
             return flippedName != null && _altNames.TryGetValue(flippedName, out var m6) ? m6 : null;
         }
     }

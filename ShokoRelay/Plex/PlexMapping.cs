@@ -48,7 +48,7 @@ public static class PlexMapping
     /// <param name="seriesPreferredOrderingId">Optional TMDB ordering ID.</param>
     /// <param name="tmdbOrderingLookup">Optional pre-indexed lookup mapping TMDB episode IDs to coordinates.</param>
     /// <returns>Resolved coordinates.</returns>
-    public static PlexCoords GetPlexCoordinatesWithLookup(IEpisode episode, string? seriesPreferredOrderingId = null, Dictionary<MetadataGuid, (int Season, int Episode)>? tmdbOrderingLookup = null)
+    public static PlexCoords GetPlexCoordinates(IEpisode episode, string? seriesPreferredOrderingId = null, Dictionary<MetadataGuid, (int Season, int Episode)>? tmdbOrderingLookup = null)
     {
         if (episode == null)
             return new PlexCoords { Season = PlexConstants.SeasonStandard, Episode = 1 };
@@ -102,12 +102,6 @@ public static class PlexMapping
 
         return new PlexCoords { Season = seasonNum, Episode = episode.EpisodeNumber };
     }
-
-    /// <summary>Calculate Plex coordinates for an episode.</summary>
-    /// <param name="episode">The episode metadata.</param>
-    /// <param name="seriesPreferredOrderingId">Optional TMDB ordering ID.</param>
-    /// <returns>Resolved coordinates.</returns>
-    public static PlexCoords GetPlexCoordinates(IEpisode episode, string? seriesPreferredOrderingId = null) => GetPlexCoordinatesWithLookup(episode, seriesPreferredOrderingId, null);
 
     /// <summary>Determine Plex coordinates for episodes sharing a file.</summary>
     /// <param name="episodes">The collection of episodes.</param>
