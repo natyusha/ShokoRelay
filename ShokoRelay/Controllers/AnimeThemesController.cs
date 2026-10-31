@@ -241,19 +241,37 @@ public class AnimeThemesController(
 
                     var segments = pathRaw.Replace('\\', '/').Trim().Split('/', StringSplitOptions.RemoveEmptyEntries);
                     int? seriesId = null;
-                    for (int i = 0; i < segments.Length; i++)
+
+                    // Fast path: determine whether the ID preceding Shorts belongs to a Movie VFS (EpisodeID) or TV VFS (SeriesID)
+                    int shortsIdx = Array.FindIndex(segments, s => string.Equals(s, "Shorts", StringComparison.OrdinalIgnoreCase));
+                    if (shortsIdx > 0 && int.TryParse(segments[shortsIdx - 1], out int directSid))
                     {
-                        if (int.TryParse(segments[i], out int sid))
+                        bool isMovieVfs = shortsIdx > 1 && string.Equals(segments[shortsIdx - 2], VfsShared.ResolveMovieRootFolderName(), StringComparison.OrdinalIgnoreCase);
+                        if (isMovieVfs)
                         {
-                            if (MetadataService.GetShokoSeriesByID(sid) is { } series)
-                            {
-                                seriesId = series.LocalID;
-                                break;
-                            }
-                            if (MetadataService.GetShokoEpisodeByID(sid) is { ShokoSeriesID: var epSeriesId })
-                            {
+                            if (MetadataService.GetShokoEpisodeByID(directSid) is { ShokoSeriesID: var epSeriesId })
                                 seriesId = epSeriesId;
-                                break;
+                        }
+                        else if (MetadataService.GetShokoSeriesByID(directSid) is { } series)
+                            seriesId = series.LocalID;
+                    }
+
+                    if (!seriesId.HasValue)
+                    {
+                        for (int i = 0; i < segments.Length; i++)
+                        {
+                            if (int.TryParse(segments[i], out int sid))
+                            {
+                                if (MetadataService.GetShokoSeriesByID(sid) is { } series)
+                                {
+                                    seriesId = series.LocalID;
+                                    break;
+                                }
+                                if (MetadataService.GetShokoEpisodeByID(sid) is { ShokoSeriesID: var epSeriesId })
+                                {
+                                    seriesId = epSeriesId;
+                                    break;
+                                }
                             }
                         }
                     }
@@ -311,6 +329,23 @@ public class AnimeThemesController(
                 var managedFolders = videoService.GetAllManagedFolders()?.Where(VfsShared.IsVfsEnabledFolder).Select(f => f.Path).ToList() ?? [];
                 string themeRootName = VfsShared.ResolveAnimeThemesFolderName();
 
+                // Scan physically present .webm files once into an in-memory dictionary to eliminate thousands of disk File.Exists probes
+                var physicalThemes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var mf in managedFolders)
+                {
+                    if (string.IsNullOrWhiteSpace(mf))
+                        continue;
+                    string themeDir = Path.Combine(mf, themeRootName);
+                    if (Directory.Exists(themeDir))
+                    {
+                        foreach (var file in Directory.EnumerateFiles(themeDir, "*.webm", SearchOption.AllDirectories))
+                        {
+                            string rel = Path.GetRelativePath(themeDir, file).Replace('\\', '/').TrimStart('/');
+                            physicalThemes.TryAdd(rel, file);
+                        }
+                    }
+                }
+
                 // Pre-calculate a fast lookup hashset for series that physically exist in the local collection
                 var localSeriesWithFiles = new HashSet<int>(MetadataService.GetAllShokoSeries()?.Where(s => s.Episodes.Any(e => e.Videos?.Count > 0)).Select(s => s.AnidbAnimeID) ?? []);
 
@@ -320,21 +355,8 @@ public class AnimeThemesController(
                     if (localSeriesWithFiles.Contains(entry.AniDbId))
                         continue;
 
-                    // Locate the physical file inside the managed !AnimeThemes folders
-                    string? absolutePath = null;
-                    foreach (var mf in managedFolders)
-                    {
-                        if (string.IsNullOrWhiteSpace(mf))
-                            continue;
-                        string candidate = Path.Combine(mf, themeRootName, entry.FilePath.TrimStart('/', '\\').Replace('/', Path.DirectorySeparatorChar));
-                        if (IoFile.Exists(candidate))
-                        {
-                            absolutePath = candidate;
-                            break;
-                        }
-                    }
-
-                    if (absolutePath == null)
+                    string normRel = entry.FilePath.TrimStart('/', '\\').Replace('\\', '/');
+                    if (!physicalThemes.TryGetValue(normRel, out var absolutePath))
                         continue;
 
                     // Parse series name gracefully directly from the file basename

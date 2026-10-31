@@ -50,6 +50,15 @@ public class ShokoController(
 {
     #region Virtual File System
 
+    /// <summary>Cached serialized JSON payload of the VFS tree to bypass redundant disk and LINQ processing.</summary>
+    private static string? s_cachedTreeJson;
+
+    /// <summary>Last write timestamp of the blueprint file used to invalidate the cached JSON.</summary>
+    private static DateTime s_lastBlueprintWriteUtc = DateTime.MinValue;
+
+    /// <summary>Lock object for synchronizing tree cache updates.</summary>
+    private static readonly Lock s_treeCacheLock = new();
+
     /// <summary>Builds the VFS symlink tree for configured managed folders.</summary>
     /// <param name="clean">Whether to clear the existing root.</param>
     /// <param name="run">Flag required to execute build.</param>
@@ -125,6 +134,13 @@ public class ShokoController(
         if (!IoFile.Exists(VfsShared.BlueprintFilePath))
             return EmptyTree();
 
+        var lastWrite = IoFile.GetLastWriteTimeUtc(VfsShared.BlueprintFilePath);
+        lock (s_treeCacheLock)
+        {
+            if (s_cachedTreeJson != null && s_lastBlueprintWriteUtc == lastWrite)
+                return Content(s_cachedTreeJson, "application/json");
+        }
+
         try
         {
             // Normalize Managed Folder paths to remove trailing slashes for consistent comparison with blueprint keys. Filter out folders that are disabled for VFS.
@@ -188,8 +204,15 @@ public class ShokoController(
                 .OrderBy(r => r.name)
                 .ToList();
 
+            var json = JsonSerializer.Serialize(new { roots });
+            lock (s_treeCacheLock)
+            {
+                s_cachedTreeJson = json;
+                s_lastBlueprintWriteUtc = lastWrite;
+            }
+
             // Bypass MVC's default Newtonsoft.Json formatter and return explicit System.Text.Json to preserve attribute-based casing
-            return Content(JsonSerializer.Serialize(new { roots }), "application/json");
+            return Content(json, "application/json");
         }
         catch (Exception ex)
         {

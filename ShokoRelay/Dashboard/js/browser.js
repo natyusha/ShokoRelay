@@ -72,35 +72,42 @@
   }
 
   /**
-   * Aggregates and deduplicates series data across all roots to construct a virtual "All" tab.
+   * Aggregates series data across all roots to construct a virtual "All" tab, cloning on collision only to avoid mutating single-root objects.
    * @param {Object[]} roots - The raw list of VFS roots from the server.
    * @returns {Object} A unified virtual root object containing merged series listings.
    */
   function buildAllTab(roots) {
     const seriesMap = new Map();
+    const clonedIds = new Set();
+
     roots.forEach((root) => {
       root.series.forEach((s) => {
         if (!seriesMap.has(s.id)) {
-          // Deep copy to avoid modifying the original root series objects in memory
-          seriesMap.set(s.id, {
-            id: s.id,
-            anidbId: s.anidbId,
-            title: s.title,
-            rootFiles: [...(s.rootFiles || [])],
-            seasons: (s.seasons || []).map((se) => ({ name: se.name, seasonId: se.seasonId, files: [...se.files] })),
-          });
+          seriesMap.set(s.id, s);
         } else {
-          const existing = seriesMap.get(s.id);
+          let merged = seriesMap.get(s.id);
+          if (!clonedIds.has(s.id)) {
+            merged = {
+              id: merged.id,
+              anidbId: merged.anidbId,
+              title: merged.title,
+              rootFiles: [...(merged.rootFiles || [])],
+              seasons: (merged.seasons || []).map((se) => ({ name: se.name, seasonId: se.seasonId, files: [...se.files] })),
+            };
+            seriesMap.set(s.id, merged);
+            clonedIds.add(s.id);
+          }
+
           (s.rootFiles || []).forEach((f) => {
-            if (!existing.rootFiles.some((ef) => ef.name === f.name && ef.source === f.source)) existing.rootFiles.push(f);
+            if (!merged.rootFiles.some((ef) => ef.name === f.name && ef.source === f.source)) merged.rootFiles.push(f);
           });
           (s.seasons || []).forEach((se) => {
-            const existSeason = existing.seasons.find((ese) => ese.name === se.name);
+            const existSeason = merged.seasons.find((ese) => ese.name === se.name);
             if (existSeason) {
               se.files.forEach((f) => {
                 if (!existSeason.files.some((ef) => ef.name === f.name && ef.source === f.source)) existSeason.files.push(f);
               });
-            } else existing.seasons.push({ name: se.name, seasonId: se.seasonId, files: [...se.files] });
+            } else merged.seasons.push({ name: se.name, seasonId: se.seasonId, files: [...se.files] });
           });
         }
       });

@@ -357,16 +357,16 @@
     /**
      * Helper to construct a standard folder node in the tree with deferred child rendering.
      * @param {string} name - The display name for the folder.
-     * @param {HTMLElement[]} childrenElements - The array of child list-item elements.
+     * @param {Function} renderFn - Callback that appends child list-item elements when expanded.
      * @param {boolean} isOpen - If true, forces children to render immediately.
      * @param {boolean} [isMissing=false] - Whether to apply missing collection styling to the title.
      * @param {string} [extraHtml=""] - Additional HTML to append to the folder title.
      * @returns {HTMLLIElement} The completed folder list item node.
      */
-    const createFolderNode = (name, childrenElements, isOpen, isMissing = false, extraHtml = "") => {
+    const createFolderNode = (name, renderFn, isOpen, isMissing = false, extraHtml = "") => {
       const li = document.createElement("li");
       const ul = document.createElement("ul");
-      const det = window._sr.createLazyDetails(name, ul, (container) => childrenElements.forEach((c) => container.appendChild(c)), isOpen);
+      const det = window._sr.createLazyDetails(name, ul, renderFn, isOpen);
       const sum = det.querySelector("summary");
       if (isMissing) sum.querySelector(".vfs-title")?.classList.add("tree-missing");
       if (extraHtml) sum.insertAdjacentHTML("beforeend", extraHtml);
@@ -410,9 +410,7 @@
       const seasonOrder = { winter: 1, spring: 2, summer: 3, fall: 4 };
       const getSeasonWeight = (name) => seasonOrder[name.toLowerCase()] || 99;
 
-      const renderFolderTree = (node, isRoot) => {
-        const childrenElements = [];
-
+      const renderFolderTree = (node, isRoot, container) => {
         const sortedFolders = [...node.folders.keys()].sort((a, b) => {
           const wA = getSeasonWeight(a);
           const wB = getSeasonWeight(b);
@@ -423,16 +421,14 @@
         sortedFolders.forEach((folderName) => {
           const childNode = node.folders.get(folderName);
           const extraHtml = childNode.isSeries ? buildSeriesLinks(childNode.seriesId, childNode.anidbId) : "";
-          childrenElements.push(createFolderNode(folderName, renderFolderTree(childNode, false), ft, childNode.isMissing, extraHtml));
+          container.appendChild(createFolderNode(folderName, (c) => renderFolderTree(childNode, false, c), ft, childNode.isMissing, extraHtml));
         });
 
         const sortedFiles = node.files.sort((a, b) => a.file.localeCompare(b.file, undefined, { numeric: true }));
-        sortedFiles.forEach((item) => childrenElements.push(createFileNode(item, decodeUnicode(item.file))));
-
-        return childrenElements;
+        sortedFiles.forEach((item) => container.appendChild(createFileNode(item, decodeUnicode(item.file))));
       };
 
-      renderFolderTree(rootNode, true).forEach((n) => rootUl.appendChild(n));
+      renderFolderTree(rootNode, true, rootUl);
     } else {
       // Standard Metadata View (Group -> Series -> File)
       const groups = new Map();
@@ -454,15 +450,26 @@
         const isMissing = gName === MISSING_LABEL;
         const sKeys = [...sMap.keys()].sort((a, b) => a.localeCompare(b));
 
-        const sNodes = sKeys.map((sName) => {
+        const renderSeriesFolders = (container) => {
+          sKeys.forEach((sName) => {
+            const seriesFiles = sMap.get(sName);
+            const firstFile = seriesFiles[0];
+            const extraHtml = buildSeriesLinks(firstFile.seriesId, firstFile.anidbId);
+            const renderFiles = (fContainer) => seriesFiles.forEach((f) => fContainer.appendChild(createFileNode(f, decodeUnicode(f.file))));
+            container.appendChild(createFolderNode(sName, renderFiles, ft, isMissing, extraHtml));
+          });
+        };
+
+        if (sKeys.length === 1 && !isMissing) {
+          const sName = sKeys[0];
           const seriesFiles = sMap.get(sName);
-          const fileNodes = seriesFiles.map((f) => createFileNode(f, decodeUnicode(f.file)));
           const firstFile = seriesFiles[0];
           const extraHtml = buildSeriesLinks(firstFile.seriesId, firstFile.anidbId);
-          return createFolderNode(sName, fileNodes, ft, isMissing, extraHtml);
-        });
-
-        rootUl.appendChild(sKeys.length === 1 && !isMissing ? sNodes[0] : createFolderNode(gName, sNodes, ft, isMissing));
+          const renderFiles = (container) => seriesFiles.forEach((f) => container.appendChild(createFileNode(f, decodeUnicode(f.file))));
+          rootUl.appendChild(createFolderNode(sName, renderFiles, ft, isMissing, extraHtml));
+        } else {
+          rootUl.appendChild(createFolderNode(gName, renderSeriesFolders, ft, isMissing));
+        }
       });
     }
 
