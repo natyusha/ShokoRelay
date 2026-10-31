@@ -16,6 +16,34 @@
   "icon_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-icon.png",
   "releases": [
     {
+      "version": "0.21.3",
+      "tag": "v0.21.3",
+      "source_revision": "9f79fe388e2e67358a93912922fb9579c5c4dc3d",
+      "released_at": "2026-10-31T15:02:46Z",
+      "channel": "Dev",
+      "release_notes": "This release is a general optimisation pass with some improvements across the board for VFS builds and metadata lookups. The most significant improvement affects series that have alternate episode orderings assigned to them (which were incorrectly querying Shoko's database multiple times per episode causing massive performance degradation).\r\n\r\n**Changes:**\r\n- Massively improved metadata provider response times and eliminated potential thread pool starvation during large library scans\r\n- Added an in-memory series context cache with automatic invalidation during VFS updates and scheduled metadata fixups\r\n- Drastically sped up alternate TMDB episode group resolution by replacing repeated database queries with pre-indexed lookups\r\n- Optimized cast and crew deduplication by replacing linear name scans and runtime string splitting with indexed lookups\r\n- Accelerated VFS generation by linking series-level metadata once per folder and skipping redundant disk checks on clean builds\r\n- Slightly Sped up VFS Browser and AnimeThemes Player loading by caching tree data, batching disk checks, and implementing lazy UI rendering\r\n- Bumped Shoko.Abstractions to v6.0.0-alpha.120\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.21.2...v0.21.3",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.21.3/ShokoRelay-v0.21.3-dev_linux-arm64.zip",
+          "checksum": "sha256:7f1c79f24dd2dfcf1d7bc7631858b8beaa5b67beefbd33c02ff68094fb6b6de7"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.21.3/ShokoRelay-v0.21.3-dev_linux-x64.zip",
+          "checksum": "sha256:dcbb45976a165eb7675d0b8ba232e9d63f848ac7c82e6103b4765a22f553bfb9"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.21.3/ShokoRelay-v0.21.3-dev_win-x64.zip",
+          "checksum": "sha256:4dd80c15e8261996991e6da10c1abb4dcdcdb20af7abdd57efd1fc46db0ed6df"
+        }
+      ]
+    },
+    {
       "version": "0.21.2",
       "tag": "v0.21.2",
       "source_revision": "46de7977e644ea17fbea920e2c9d6f20d47487fe",
