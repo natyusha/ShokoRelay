@@ -203,9 +203,10 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         bool isFiltered = seriesIds?.Count > 0;
 
         var blueprint = isFiltered ? VfsShared.LoadBlueprint() : new ConcurrentDictionary<string, ConcurrentDictionary<int, VfsBlueprintSeries>>(VfsShared.PathComparer);
+        bool isCleanBuild = cleanRoot && !isFiltered;
 
         // Delete the entire VFS root folder across all managed locations
-        if (cleanRoot && !isFiltered)
+        if (isCleanBuild)
         {
             logger.LogInformation("VFS: Performing global root cleanup...");
             var allRoots = videoService.GetAllManagedFolders()?.Select(f => f.Path).Where(p => !string.IsNullOrEmpty(p)).Distinct(VfsShared.PathComparer) ?? [];
@@ -215,7 +216,6 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                 bool doMovie = Settings.Advanced.MovieGenerationMode != MovieGenerationMode.Disabled;
                 CleanVfsRoot(Path.Combine(root, VfsShared.ResolveMovieRootFolderName()), cleanupDetails, logger, true, doMovie);
             }
-            cleanRoot = false;
         }
 
         // Resolve series list to process
@@ -270,7 +270,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                     var (sCreated, sSkipped, sSkippedList, sErrors, sPlanned) = BuildSeries(
                         series,
                         rootName,
-                        cleanRoot,
+                        isCleanBuild,
                         isFiltered,
                         ignoredFolders,
                         session,
@@ -425,6 +425,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
 
         var resolvedVfsSeriesPaths = new HashSet<string>(VfsShared.PathComparer);
         var expectedFiles = new HashSet<string>(VfsShared.PathComparer);
+        var linkedSeriesMetaDirs = new HashSet<string>(VfsShared.PathComparer);
         bool skipCheck = cleanRoot && !isFiltered;
 
         // Evaluates the categorization logic to determine if the series should be processed as a movie
@@ -499,21 +500,28 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
 
                     // Resolve Primary IDs to allow local asset linking for crossover files that have been consolidated via VFS Overrides.
                     LocalOnLink(locInfo.ImportRoot, seasonName, fileName, locInfo.Src, destFilePath);
-                    var distinctPrimarySeriesCount =
-                        mapping.Video?.CrossReferences?.Where(cr => cr.ShokoEpisode != null).Select(cr => OverrideHelper.GetPrimary(cr.ShokoEpisode!.ShokoSeriesID, metadataService)).Distinct().Count() ?? 0;
-                    if (distinctPrimarySeriesCount <= 1)
+                    bool isCrossover =
+                        mapping.Video?.CrossReferences is { Count: > 1 } xrefs
+                        && xrefs.Where(cr => cr.ShokoEpisode != null).Select(cr => OverrideHelper.GetPrimary(cr.ShokoEpisode!.ShokoSeriesID, metadataService)).Distinct().Count() > 1;
+
+                    if (!isCrossover)
                     {
-                        assetLinker.LinkSeriesMetadata(
-                            Path.GetDirectoryName(locInfo.Src)!,
-                            seriesPath,
-                            videoBaseNames,
-                            session.MetadataFileCache,
-                            (name, s) => LocalOnLink(locInfo.ImportRoot, "", name, s, Path.Combine(seriesPath, name)),
-                            skipCheck
-                        );
+                        string srcDir = Path.GetDirectoryName(locInfo.Src)!;
+                        if (linkedSeriesMetaDirs.Add(Path.Combine(srcDir, seriesPath)))
+                        {
+                            assetLinker.LinkSeriesMetadata(
+                                srcDir,
+                                seriesPath,
+                                videoBaseNames,
+                                session.MetadataFileCache,
+                                (name, s) => LocalOnLink(locInfo.ImportRoot, "", name, s, Path.Combine(seriesPath, name)),
+                                skipCheck
+                            );
+                        }
+
                         assetLinker.LinkEpisodeMetadata(
                             locInfo.Src,
-                            Path.GetDirectoryName(locInfo.Src)!,
+                            srcDir,
                             Path.GetFileNameWithoutExtension(destFilePath),
                             seasonPath,
                             session.SubtitleFileCache,
@@ -636,21 +644,27 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                     planned++;
                     expectedFiles.Add(destFilePath);
                     onLink?.Invoke(locInfo.ImportRoot, $"Movie ❯ {folderName}", fileName, locInfo.Src);
-                    assetLinker.LinkSeriesMetadata(
-                        Path.GetDirectoryName(locInfo.Src)!,
-                        moviePath,
-                        videoBaseNames,
-                        session.MetadataFileCache,
-                        (name, s) =>
-                        {
-                            expectedFiles.Add(Path.Combine(moviePath, name));
-                            onLink?.Invoke(locInfo.ImportRoot, $"Movie ❯ {folderName}", name, s);
-                        },
-                        skipCheck
-                    );
+
+                    string srcDir = Path.GetDirectoryName(locInfo.Src)!;
+                    if (linkedSeriesMetaDirs.Add(Path.Combine(srcDir, moviePath)))
+                    {
+                        assetLinker.LinkSeriesMetadata(
+                            srcDir,
+                            moviePath,
+                            videoBaseNames,
+                            session.MetadataFileCache,
+                            (name, s) =>
+                            {
+                                expectedFiles.Add(Path.Combine(moviePath, name));
+                                onLink?.Invoke(locInfo.ImportRoot, $"Movie ❯ {folderName}", name, s);
+                            },
+                            skipCheck
+                        );
+                    }
+
                     assetLinker.LinkEpisodeMetadata(
                         locInfo.Src,
-                        Path.GetDirectoryName(locInfo.Src)!,
+                        srcDir,
                         Path.GetFileNameWithoutExtension(destFilePath),
                         moviePath,
                         session.SubtitleFileCache,

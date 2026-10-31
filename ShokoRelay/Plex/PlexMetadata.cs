@@ -267,8 +267,7 @@ public class PlexMetadata(IMetadataService metadataService, ILogger<PlexMetadata
     /// <returns>A dictionary of Plex metadata properties.</returns>
     public Dictionary<string, object?> MapSeason(SeriesContext ctx, int seasonNum)
     {
-        var ps = ctx.Series;
-        var images = ps;
+        var series = ctx.Series;
         var seasonTitle = GetSeasonFolder(seasonNum);
         var seasonDate = ctx.FileData.GetForSeason(seasonNum).SelectMany(m => m.Episodes).Where(e => e.AirDate.HasValue).Min(e => e.AirDate);
         string? seasonSummary = null;
@@ -278,7 +277,7 @@ public class PlexMetadata(IMetadataService metadataService, ILogger<PlexMetadata
         ISeason? tmdbSeason = null;
         if (!ignoreTmdb)
         {
-            var groupIds = OverrideHelper.GetGroup(ps.LocalID, metadataService);
+            var groupIds = OverrideHelper.GetGroup(series.LocalID, metadataService);
             tmdbSeason = groupIds
                 .Select(metadataService.GetShokoSeriesByID)
                 .OfType<IShokoSeries>()
@@ -303,31 +302,31 @@ public class PlexMetadata(IMetadataService metadataService, ILogger<PlexMetadata
         // csharpier-ignore
         return new()
         {
-            ["ratingKey"]             = ps.GetPlexRatingKey(seasonNum),
-            ["key"]                   = $"/metadata/{ps.GetPlexRatingKey(seasonNum)}/children",
-            ["guid"]                  = ps.GetPlexGuid(seasonNum),
+            ["ratingKey"]             = series.GetPlexRatingKey(seasonNum),
+            ["key"]                   = $"/metadata/{series.GetPlexRatingKey(seasonNum)}/children",
+            ["guid"]                  = series.GetPlexGuid(seasonNum),
             ["type"]                  = "season",
             ["title"]                 = seasonTitle,
             ["originallyAvailableAt"] = seasonDate?.ToString("yyyy-MM-dd", null),
-            ["thumb"]                 = thumb ??= images.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage),
+            ["thumb"]                 = thumb ??= series.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage),
             ["contentRating"]         = ctx.ContentRating,
             //['originalTitle']       = No source for original season titles
             ["titleSort"]             = seasonTitle,
             ["year"]                  = seasonDate?.Year,
             ["summary"]               = seasonSummary ?? string.Empty,
-            ["isAdult"]               = ContentRatingHelper.GetContentRatingAndAdult(ps).IsAdult,
+            ["isAdult"]               = ContentRatingHelper.GetContentRatingAndAdult(series).IsAdult,
 
-            ["parentRatingKey"]       = ps.GetPlexRatingKey(),
-            ["parentKey"]             = $"/metadata/{ps.ID.ID}",
-            ["parentGuid"]            = ps.GetPlexGuid(),
+            ["parentRatingKey"]       = series.GetPlexRatingKey(),
+            ["parentKey"]             = $"/metadata/{series.ID.ID}",
+            ["parentGuid"]            = series.GetPlexGuid(),
             ["parentType"]            = "show",
             ["parentTitle"]           = ctx.Titles.DisplayTitle,
-            ["parentThumb"]           = images.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage),
-            ["parentArt"]             = images.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage),
+            ["parentThumb"]           = series.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage),
+            ["parentArt"]             = series.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage),
             ["index"]                 = seasonNum,
 
             // Force addEveryImage to true if TMDB season posters are present, otherwise fallback to the configuration. (Remove this once Shoko's WebUI supports selecting the preferred poster)
-            ["Image"]                 = ImageHelper.BuildCoverPosterArray(images, seasonTitle, posters != null || Settings.AddEveryImage, Settings.TmdbImageLanguage, posters),
+            ["Image"]                 = ImageHelper.BuildCoverPosterArray(series, seasonTitle, posters != null || Settings.AddEveryImage, Settings.TmdbImageLanguage, posters),
             ["Guid"]                  = BuildSeasonXrefGuidArray(tmdbSeason),
             //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
         };

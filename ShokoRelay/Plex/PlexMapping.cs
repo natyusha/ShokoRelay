@@ -43,29 +43,40 @@ public static class PlexMapping
 
     #region Coordinate Calc
 
-    /// <summary>Calculate Plex coordinates for an episode.</summary>
+    /// <summary>Calculate Plex coordinates for an episode, utilizing an optional pre-indexed TMDB ordering lookup table.</summary>
     /// <param name="episode">The episode metadata.</param>
     /// <param name="seriesPreferredOrderingId">Optional TMDB ordering ID.</param>
+    /// <param name="tmdbOrderingLookup">Optional pre-indexed lookup mapping TMDB episode IDs to coordinates.</param>
     /// <returns>Resolved coordinates.</returns>
-    public static PlexCoords GetPlexCoordinates(IEpisode episode, string? seriesPreferredOrderingId = null)
+    public static PlexCoords GetPlexCoordinatesWithLookup(IEpisode episode, string? seriesPreferredOrderingId = null, Dictionary<MetadataGuid, (int Season, int Episode)>? tmdbOrderingLookup = null)
     {
         if (episode == null)
             return new PlexCoords { Season = PlexConstants.SeasonStandard, Episode = 1 };
-        string? showPrefId = seriesPreferredOrderingId;
 
         if (EnforceTmdbNumbering && episode is IShokoEpisode shokoEpisode && shokoEpisode.GetLinkedEpisodes(MetadataSource.TMDB) is { Count: > 0 } tmdbEps)
         {
-            var tmdbEpisodes = string.IsNullOrWhiteSpace(showPrefId) ? [.. tmdbEps.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber)] : SelectPreferredTmdbOrdering(tmdbEps, showPrefId);
+            // Fast path: resolve coordinates from the pre-indexed alternate ordering table in O(1)
+            if (tmdbOrderingLookup != null)
+            {
+                var first = tmdbEps[0];
+                if (tmdbOrderingLookup.TryGetValue(first.ID, out var c))
+                    return new PlexCoords { Season = c.Season, Episode = c.Episode };
+            }
+
+            var tmdbEpisodes = string.IsNullOrWhiteSpace(seriesPreferredOrderingId)
+                ? [.. tmdbEps.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber)]
+                : SelectPreferredTmdbOrdering(tmdbEps, seriesPreferredOrderingId);
+
             if (tmdbEpisodes.Count > 0)
             {
-                var first = tmdbEpisodes.First();
-                var (season, epNum) = GetOrderingCoords(first, showPrefId);
+                var first = tmdbEpisodes[0];
+                var (season, epNum) = GetOrderingCoords(first, seriesPreferredOrderingId);
                 if (season.HasValue)
                 {
                     int? endEp = null;
                     if (tmdbEpisodes.Count > 1)
                     {
-                        var (lastSeason, lastEpisode) = GetOrderingCoords(tmdbEpisodes.Last(), showPrefId);
+                        var (lastSeason, lastEpisode) = GetOrderingCoords(tmdbEpisodes[^1], seriesPreferredOrderingId);
                         if (lastSeason == season)
                             endEp = lastEpisode;
                     }
@@ -91,6 +102,12 @@ public static class PlexMapping
 
         return new PlexCoords { Season = seasonNum, Episode = episode.EpisodeNumber };
     }
+
+    /// <summary>Calculate Plex coordinates for an episode.</summary>
+    /// <param name="episode">The episode metadata.</param>
+    /// <param name="seriesPreferredOrderingId">Optional TMDB ordering ID.</param>
+    /// <returns>Resolved coordinates.</returns>
+    public static PlexCoords GetPlexCoordinates(IEpisode episode, string? seriesPreferredOrderingId = null) => GetPlexCoordinatesWithLookup(episode, seriesPreferredOrderingId, null);
 
     /// <summary>Determine Plex coordinates for episodes sharing a file.</summary>
     /// <param name="episodes">The collection of episodes.</param>
