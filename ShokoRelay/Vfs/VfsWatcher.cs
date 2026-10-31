@@ -17,6 +17,7 @@ namespace ShokoRelay.Vfs;
 /// <param name="atMapping">AnimeThemes mapping service.</param>
 /// <param name="criticRatingService">Plex critic rating service.</param>
 /// <param name="imageSyncService">Shoko image sync service.</param>
+/// <param name="plexMetadata">Plex metadata mapper.</param>
 /// <param name="logger">Logger instance.</param>
 public class VfsWatcher(
     IVideoService videoService,
@@ -28,6 +29,7 @@ public class VfsWatcher(
     AnimeThemesMapping atMapping,
     ICriticRatingService criticRatingService,
     IImageSyncService imageSyncService,
+    PlexMetadata plexMetadata,
     ILogger<VfsWatcher> logger
 )
 {
@@ -215,7 +217,10 @@ public class VfsWatcher(
                         );
 
                         foreach (var seriesId in seriesIds)
+                        {
+                            plexMetadata.InvalidateCache(seriesId);
                             TriggerPlexUpdates(seriesId);
+                        }
                     }
                     finally
                     {
@@ -344,6 +349,9 @@ public class VfsWatcher(
         try
         {
             bool isDeferred = Settings.Advanced.DeferVfsCreationUntilFixup;
+
+            // Invalidate cached metadata so Plex receives the fresh, updated series context upon refresh
+            plexMetadata.InvalidateCache(series.LocalID);
 
             // Regenerate the VFS to account for cases where the episode/season numbering was updated in Shoko after the initial file event was processed
             var vfsResult = builder.Build(series.LocalID, cleanRoot: false);

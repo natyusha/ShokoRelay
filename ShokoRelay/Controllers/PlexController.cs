@@ -46,6 +46,7 @@ public sealed record PlexAutomationRunResult(
 /// <param name="userService">Shoko user service.</param>
 /// <param name="userDataService">Shoko user data service.</param>
 /// <param name="imageSyncService">Shoko image sync service.</param>
+/// <param name="plexMetadata">Plex metadata mapper.</param>
 /// <param name="logger">Logger instance.</param>
 [ApiController]
 [ApiVersion(ShokoRelayConstants.ApiVersion)]
@@ -60,6 +61,7 @@ public class PlexController(
     IUserService userService,
     IUserDataService userDataService,
     IImageSyncService imageSyncService,
+    PlexMetadata plexMetadata,
     ILogger<PlexController> logger
 ) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary, logger)
 {
@@ -219,6 +221,9 @@ public class PlexController(
         {
             if (series == null)
                 continue;
+
+            plexMetadata.InvalidateCache(series.LocalID);
+
             foreach (var target in targets)
             {
                 try

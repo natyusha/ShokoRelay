@@ -17,7 +17,7 @@ public class PlexMetadata(IMetadataService metadataService)
     private sealed class ContextCacheEntry(Func<SeriesContext> factory)
     {
         /// <summary>Expiration timestamp in UTC ticks after which the cached entry is considered stale.</summary>
-        public long ExpirationTicks { get; set; } = DateTime.UtcNow.Ticks + TimeSpan.FromMinutes(5).Ticks;
+        public long ExpirationTicks { get; set; } = DateTime.UtcNow.Ticks + TimeSpan.FromMinutes(1).Ticks;
 
         /// <summary>Lazily-evaluated series context instance.</summary>
         public Lazy<SeriesContext> LazyContext { get; } = new(factory);
@@ -28,6 +28,17 @@ public class PlexMetadata(IMetadataService metadataService)
 
     /// <summary>Lock object used to prevent cache stampedes (thundering herd) when cache entries expire during high-traffic bursts.</summary>
     private readonly Lock _cacheLock = new();
+
+    /// <summary>Invalidates the cached SeriesContext for a specific series or override group.</summary>
+    /// <param name="seriesId">The Shoko series ID to invalidate.</param>
+    public void InvalidateCache(int seriesId)
+    {
+        int primaryId = OverrideHelper.GetPrimary(seriesId, metadataService);
+        _contextCache.TryRemove(primaryId, out _);
+    }
+
+    /// <summary>Clears the entire SeriesContext cache.</summary>
+    public void ClearCache() => _contextCache.Clear();
 
     /// <summary>Aggregates relevant information about a Shoko series for controller responses.</summary>
     /// <param name="Series">The primary series metadata.</param>
@@ -81,7 +92,7 @@ public class PlexMetadata(IMetadataService metadataService)
         }
 
         var ctx = cached.LazyContext.Value;
-        cached.ExpirationTicks = DateTime.UtcNow.Ticks + TimeSpan.FromMinutes(5).Ticks;
+        cached.ExpirationTicks = DateTime.UtcNow.Ticks + TimeSpan.FromMinutes(1).Ticks;
         return ctx;
     }
 
