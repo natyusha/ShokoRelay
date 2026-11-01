@@ -42,11 +42,21 @@ public class PlexMetadata(IMetadataService metadataService)
 
     /// <summary>Aggregates relevant information about a Shoko series for controller responses.</summary>
     /// <param name="Series">The primary series metadata.</param>
+    /// <param name="TmdbSeries">The linked TMDB series metadata, if present.</param>
     /// <param name="Titles">A tuple containing Display, Sort, and Original titles.</param>
     /// <param name="ContentRating">The resolved content rating string.</param>
+    /// <param name="IsAdult">Whether the series is flagged as adult content.</param>
     /// <param name="FileData">The mapping data for the series' files.</param>
     /// <param name="PreferredOrderingId">The preferred TMDB alternate ordering identifier, if configured.</param>
-    public record SeriesContext(IShokoSeries Series, (string DisplayTitle, string SortTitle, string? OriginalTitle) Titles, string ContentRating, MapHelper.SeriesFileData FileData, string? PreferredOrderingId);
+    public record SeriesContext(
+        IShokoSeries Series,
+        ISeries? TmdbSeries,
+        (string DisplayTitle, string SortTitle, string? OriginalTitle) Titles,
+        string ContentRating,
+        bool IsAdult,
+        MapHelper.SeriesFileData FileData,
+        string? PreferredOrderingId
+    );
 
     /// <summary>Resolves a Plex-style ratingKey into a <see cref="SeriesContext"/>.</summary>
     /// <param name="ratingKey">Plex rating key representing a show, season or episode.</param>
@@ -70,9 +80,11 @@ public class PlexMetadata(IMetadataService metadataService)
             new(() =>
             {
                 var primarySeries = metadataService.GetShokoSeriesByID(primaryId) ?? series;
+                var tmdbSeries = primarySeries.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() ?? primarySeries.AsTmdb();
                 var fileData = MapHelper.GetConsolidatedSeriesFileData(primarySeries, metadataService);
                 var prefId = MapHelper.GetPreferredTmdbOrderingId(primarySeries);
-                return new SeriesContext(primarySeries, TextHelper.ResolveFullSeriesTitles(primarySeries), ContentRatingHelper.GetContentRatingAndAdult(primarySeries).Rating ?? "", fileData, prefId);
+                var (rating, isAdult) = ContentRatingHelper.GetContentRatingAndAdult(primarySeries, tmdbSeries);
+                return new SeriesContext(primarySeries, tmdbSeries, TextHelper.ResolveFullSeriesTitles(primarySeries), rating ?? "", isAdult, fileData, prefId);
             });
 
         var cached = _contextCache.GetOrAdd(primaryId, _ => CreateEntry());
@@ -146,17 +158,16 @@ public class PlexMetadata(IMetadataService metadataService)
     #region Series
 
     /// <summary>Builds a Plex-compatible metadata dictionary for a series (show).</summary>
-    /// <param name="series">The Shoko series metadata.</param>
-    /// <param name="titles">The resolved title tuple.</param>
+    /// <param name="ctx">The resolved series context.</param>
     /// <returns>A dictionary of Plex metadata properties.</returns>
-    public Dictionary<string, object?> MapSeries(ISeries series, (string DisplayTitle, string SortTitle, string? OriginalTitle) titles)
+    public Dictionary<string, object?> MapSeries(SeriesContext ctx)
     {
+        var series = ctx.Series;
         var images = (IWithImages)series;
-        var tmdbSeries = (series as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() ?? series.AsTmdb();
+        var tmdbSeries = ctx.TmdbSeries;
         var description = TextHelper.GetDescriptionByLanguage(series, Settings.DescriptionLanguage);
         var tmdbDescription = tmdbSeries?.PreferredOverview?.Value;
         var studios = CastHelper.GetStudioTags(series);
-        var (rating, isAdult) = ContentRatingHelper.GetContentRatingAndAdult(series);
         // csharpier-ignore
         return new()
         {
@@ -164,22 +175,22 @@ public class PlexMetadata(IMetadataService metadataService)
             ["key"]                   = $"/metadata/{series.GetPlexRatingKey()}/children",
             ["guid"]                  = series.GetPlexGuid(),
             ["type"]                  = "show",
-            ["title"]                 = titles.DisplayTitle,
+            ["title"]                 = ctx.Titles.DisplayTitle,
             ["originallyAvailableAt"] = series.AirDate?.ToDateOnly().ToString("yyyy-MM-dd", null),
             ["thumb"]                 = images.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage),
             ["art"]                   = images.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage),
-            ["contentRating"]         = rating,
-            ["originalTitle"]         = titles.OriginalTitle,
-            ["titleSort"]             = titles.SortTitle,
+            ["contentRating"]         = ctx.ContentRating,
+            ["originalTitle"]         = ctx.Titles.OriginalTitle,
+            ["titleSort"]             = ctx.Titles.SortTitle,
             ["year"]                  = series.AirDate?.Year,
             ["summary"]               = TextHelper.SanitizeSummaryWithFallback(description, tmdbDescription, Settings.SummaryMode),
-            ["isAdult"]               = isAdult,
+            ["isAdult"]               = ctx.IsAdult,
             ["duration"]              = series.Episodes is { Count: > 0 } eps ? (int)eps.Sum(e => e.Runtime.TotalMilliseconds) : null,
             //["tagline"]             = TMDB has this but it is not exposed
             ["studio"]                = studios.FirstOrDefault()?.Tag,
             ["theme"]                 = Settings.PlexThemeMusic && tmdbSeries?.GetCrossSourceID("tvdb", MetadataEntityType.Series) is { } tvdb ? $"https://tvthemes.plexapp.com/{tvdb}.mp3" : null,
 
-            ["Image"]                 = ImageHelper.GenerateImageArray(images, titles.DisplayTitle, Settings.AddEveryImage, Settings.TmdbImageLanguage),
+            ["Image"]                 = ImageHelper.GenerateImageArray(images, ctx.Titles.DisplayTitle, Settings.AddEveryImage, Settings.TmdbImageLanguage),
             //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
             ["Genre"]                 = TagHelper.GetFilteredTags(series, tmdbSeries),
             ["Guid"]                  = BuildXrefGuidArray(series, tmdbSeries),
@@ -218,7 +229,10 @@ public class PlexMetadata(IMetadataService metadataService)
             description = TextHelper.GetDescriptionByLanguage(series, Settings.DescriptionLanguage);
 
         string? tmdbDescription = tmdbMovie?.PreferredOverview?.Value ?? tmdbSeries?.PreferredOverview?.Value;
-        var (rating, isAdult) = ContentRatingHelper.GetContentRatingAndAdult(series);
+        var (rating, isAdult) = ContentRatingHelper.GetContentRatingAndAdult(
+            series,
+            tmdbMovie ?? (series as IShokoSeries)?.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault() ?? (tmdbSeries as IWithContentRatings)
+        );
         var studios = CastHelper.GetStudioTags(series);
 
         var imagesArray = ImageHelper.GenerateMovieImageArray(seriesImages, movieImages, episode.EpisodeNumber, title, Settings.AddEveryImage, Settings.TmdbImageLanguage, out string? thumbUrl);
@@ -318,7 +332,7 @@ public class PlexMetadata(IMetadataService metadataService)
             ["titleSort"]             = seasonTitle,
             ["year"]                  = seasonDate?.Year,
             ["summary"]               = seasonSummary ?? string.Empty,
-            ["isAdult"]               = ContentRatingHelper.GetContentRatingAndAdult(series).IsAdult,
+            ["isAdult"]               = ctx.IsAdult,
 
             ["parentRatingKey"]       = series.GetPlexRatingKey(),
             ["parentKey"]             = $"/metadata/{series.ID.ID}",
@@ -343,34 +357,24 @@ public class PlexMetadata(IMetadataService metadataService)
     /// <summary>Builds a Plex-compatible metadata dictionary for a single episode.</summary>
     /// <param name="episode">The episode metadata.</param>
     /// <param name="mapped">The resolved Plex coordinates.</param>
-    /// <param name="series">The Shoko series metadata.</param>
-    /// <param name="titles">The resolved title tuple.</param>
+    /// <param name="ctx">The resolved series context.</param>
     /// <param name="partIndex">Optional index for multi-part files.</param>
     /// <param name="tmdbEpisode">Optional TMDB episode metadata override.</param>
     /// <returns>A dictionary of Plex metadata properties.</returns>
-    public Dictionary<string, object?> MapEpisode(
-        IEpisode episode,
-        PlexCoords mapped,
-        ISeries series,
-        (string DisplayTitle, string SortTitle, string? OriginalTitle) titles,
-        int? partIndex = null,
-        IEpisode? tmdbEpisode = null
-    )
+    public Dictionary<string, object?> MapEpisode(IEpisode episode, PlexCoords mapped, SeriesContext ctx, int? partIndex = null, IEpisode? tmdbEpisode = null)
     {
+        var series = ctx.Series;
         var tmdbEps = (episode as IShokoEpisode)?.GetLinkedEpisodes(MetadataSource.TMDB);
         var tmdbEp = tmdbEpisode ?? tmdbEps?.FirstOrDefault() ?? episode.AsTmdb();
         var images = (IWithImages)episode;
         var seriesImages = (IWithImages)series;
 
-        string epTitle = tmdbEp is IWithTitles { PreferredTitle.Value: { Length: > 0 } pt } ? pt : TextHelper.ResolveEpisodeTitle(episode, titles.DisplayTitle, tmdbEp);
+        string epTitle = tmdbEp is IWithTitles { PreferredTitle.Value: { Length: > 0 } pt } ? pt : TextHelper.ResolveEpisodeTitle(episode, ctx.Titles.DisplayTitle, tmdbEp);
         string epDescription = tmdbEp is IWithOverviews { PreferredOverview.Value: { Length: > 0 } pd } ? pd : TextHelper.GetDescriptionByLanguage(episode, Settings.DescriptionLanguage);
 
         string? parentThumb = null;
-        if (Settings.TmdbSeasonPosters && mapped.Season >= 0 && string.IsNullOrEmpty(MapHelper.GetPreferredTmdbOrderingId(series)))
-        {
-            var s = metadataService.GetShokoSeriesByID(series.GetPrimaryId(metadataService));
-            parentThumb = s?.GetLinkedSeasons(MetadataSource.TMDB)?.FirstOrDefault(ts => ts.SeasonNumber == mapped.Season)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage);
-        }
+        if (Settings.TmdbSeasonPosters && mapped.Season >= 0 && string.IsNullOrEmpty(ctx.PreferredOrderingId))
+            parentThumb = series.GetLinkedSeasons(MetadataSource.TMDB)?.FirstOrDefault(ts => ts.SeasonNumber == mapped.Season)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage);
         // csharpier-ignore
         return new()
         {
@@ -383,12 +387,12 @@ public class PlexMetadata(IMetadataService metadataService)
             ["originallyAvailableAt"] = episode.AirDate?.ToString("yyyy-MM-dd", null),
             ["thumb"]                 = Settings.TmdbThumbnails ? images.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage) : null,
             //["art"]                 = No source for episode level background images
-            ["contentRating"]         = ContentRatingHelper.GetContentRatingAndAdult(series).Rating,
+            ["contentRating"]         = ctx.ContentRating,
             //["originalTitle"]       = No source for original episode titles
             ["titleSort"]             = epTitle,
             ["year"]                  = episode.AirDate?.Year,
             ["summary"]               = TextHelper.SanitizeSummaryWithFallback(epDescription, tmdbEp?.PreferredOverview?.Value, Settings.SummaryMode),
-            ["isAdult"]               = ContentRatingHelper.GetContentRatingAndAdult(series).IsAdult,
+            ["isAdult"]               = ctx.IsAdult,
             ["duration"]              = (int)episode.Runtime.TotalMilliseconds,
 
             ["parentRatingKey"]       = series.GetPlexRatingKey(mapped.Season),
@@ -404,7 +408,7 @@ public class PlexMetadata(IMetadataService metadataService)
             ["grandparentKey"]        = $"/metadata/{series.ID.ID}",
             ["grandparentGuid"]       = series.GetPlexGuid(),
             ["grandparentType"]       = "show",
-            ["grandparentTitle"]      = titles.DisplayTitle,
+            ["grandparentTitle"]      = ctx.Titles.DisplayTitle,
             ["grandparentThumb"]      = seriesImages.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage),
             ["grandparentArt"]        = seriesImages.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage),
             ["parentIndex"]           = mapped.Season,
@@ -432,7 +436,7 @@ public class PlexMetadata(IMetadataService metadataService)
     {
         var items = new List<(PlexCoords Coords, int? Part, object Meta)>();
         var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        string? prefId = MapHelper.GetPreferredTmdbOrderingId(ctx.Series);
+        string? prefId = ctx.PreferredOrderingId;
         bool enforceTmdb = EnforceTmdbNumbering;
 
         foreach (var m in ctx.FileData.GetForSeason(seasonNum))
@@ -449,7 +453,7 @@ public class PlexMetadata(IMetadataService metadataService)
                         continue;
                     var tmdbCoords = new PlexCoords { Season = season ?? 0, Episode = episode };
                     int? effectivePart = m.PartIndex ?? (i + 1); // Assign a virtual part index based on the TMDB segment order to ensure unique ratingKeys (e.g. e123p1, e123p2)
-                    var meta = MapEpisode(se, tmdbCoords, ctx.Series, ctx.Titles, effectivePart, tmdbEp);
+                    var meta = MapEpisode(se, tmdbCoords, ctx, effectivePart, tmdbEp);
                     if (meta is Dictionary<string, object?> d && d.TryGetValue("ratingKey", out var rk) && rk is string key && seenKeys.Add(key))
                         items.Add((tmdbCoords, effectivePart, meta));
                 }
@@ -464,7 +468,7 @@ public class PlexMetadata(IMetadataService metadataService)
                     var coordsEp = GetPlexCoordinates(ep, prefId);
                     if (coordsEp.Season != seasonNum)
                         continue;
-                    var meta = MapEpisode(ep, coordsEp, ctx.Series, ctx.Titles, m.PartIndex);
+                    var meta = MapEpisode(ep, coordsEp, ctx, m.PartIndex);
                     if (meta is Dictionary<string, object?> d && d.TryGetValue("ratingKey", out var rk) && rk is string key && seenKeys.Add(key))
                         items.Add((coordsEp, m.PartIndex, meta));
                 }
@@ -472,7 +476,7 @@ public class PlexMetadata(IMetadataService metadataService)
             }
 
             // Standard or Relation-linked files: Use the PrimaryEpisode resolved by MapHelper, which filters out unwanted relations.
-            var primaryMeta = MapEpisode(m.PrimaryEpisode, m.Coords, ctx.Series, ctx.Titles, m.PartIndex, m.TmdbEpisode);
+            var primaryMeta = MapEpisode(m.PrimaryEpisode, m.Coords, ctx, m.PartIndex, m.TmdbEpisode);
             if (primaryMeta is Dictionary<string, object?> pDict && pDict.TryGetValue("ratingKey", out var pRk) && pRk is string pKey && seenKeys.Add(pKey))
                 items.Add((m.Coords, m.PartIndex, primaryMeta));
         }

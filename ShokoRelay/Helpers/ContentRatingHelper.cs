@@ -1,6 +1,7 @@
 using System.Collections.Frozen;
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Anidb;
+using Shoko.Abstractions.Metadata.Containers;
 
 namespace ShokoRelay.Helpers;
 
@@ -22,10 +23,11 @@ public static class ContentRatingHelper
 
     #region Content Rating Logic
 
-    /// <summary>Determine a combined rating string and an adult flag for a series based on metadata and tags.</summary>
+    /// <summary>Determine a combined rating string and an adult flag for a series or movie based on metadata, tags, and TMDB fallback.</summary>
     /// <param name="series">The Shoko series metadata.</param>
+    /// <param name="fallback">Optional entity containing TMDB content ratings (e.g. TMDB series, movie, or season).</param>
     /// <returns>A tuple of (Rating, IsAdult).</returns>
-    public static (string? Rating, bool IsAdult) GetContentRatingAndAdult(ISeries? series)
+    public static (string? Rating, bool IsAdult) GetContentRatingAndAdult(ISeries? series, IWithContentRatings? fallback = null)
     {
         var tagSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var tags = (series as IShokoSeries)?.Tags;
@@ -64,59 +66,80 @@ public static class ContentRatingHelper
         // 18 restricted -> X (adult) immediately
         if (tagSet.Contains("18 restricted"))
             return ("X", true);
-        if (!Settings.AssumedContentRatings)
-            return (null, false);
 
-        // A rough approximation of: https://www.tvguidelines.org/resources/TheRatings.pdf
-        // Uses the content indicators described here: https://wiki.anidb.net/Categories:Content_Indicators
-        // Descriptor tags (Suggestive Dialogue, Sexual Situations, Violence)
-        var descriptorD = tagSet.Contains("sexual humour") ? "D" : string.Empty;
-        var descriptorS = (tagSet.Contains("nudity") || tagSet.Contains("sex")) ? "S" : string.Empty;
-        var descriptorV = tagSet.Contains("violence") ? "V" : string.Empty;
-        var descriptor = (!string.IsNullOrEmpty(descriptorD) || !string.IsNullOrEmpty(descriptorS) || !string.IsNullOrEmpty(descriptorV)) ? "-" + descriptorD + descriptorS + descriptorV : string.Empty;
-
-        string? c_rating = null;
-
-        // Iterate tags in order, check AniDB weight thresholds
-        (string Rating, bool IsAdult)? ApplyWeightedChecks((string Key, int Tv14, int TvMa)[] checks)
+        if (Settings.AssumedContentRatings)
         {
-            foreach (var (key, tv14, tvma) in checks)
+            // A rough approximation of: https://www.tvguidelines.org/resources/TheRatings.pdf
+            // Uses the content indicators described here: https://wiki.anidb.net/Categories:Content_Indicators
+            // Descriptor tags (Suggestive Dialogue, Sexual Situations, Violence)
+            var descriptorD = tagSet.Contains("sexual humour") ? "D" : string.Empty;
+            var descriptorS = (tagSet.Contains("nudity") || tagSet.Contains("sex")) ? "S" : string.Empty;
+            var descriptorV = tagSet.Contains("violence") ? "V" : string.Empty;
+            var descriptor = (!string.IsNullOrEmpty(descriptorD) || !string.IsNullOrEmpty(descriptorS) || !string.IsNullOrEmpty(descriptorV)) ? "-" + descriptorD + descriptorS + descriptorV : string.Empty;
+
+            string? c_rating = null;
+
+            // Iterate tags in order, check AniDB weight thresholds
+            (string Rating, bool IsAdult)? ApplyWeightedChecks((string Key, int Tv14, int TvMa)[] checks)
             {
-                if (!tagSet.Contains(key))
-                    continue;
-                var w = anidbWeights.TryGetValue(key, out var ww) ? ww : 0;
-                if (w >= tvma)
-                    return ("TV-MA" + descriptor, false);
-                if (w >= tv14 && c_rating != "TV-MA")
-                    c_rating = "TV-14";
+                foreach (var (key, tv14, tvma) in checks)
+                {
+                    if (!tagSet.Contains(key))
+                        continue;
+                    var w = anidbWeights.TryGetValue(key, out var ww) ? ww : 0;
+                    if (w >= tvma)
+                        return ("TV-MA" + descriptor, false);
+                    if (w >= tv14 && c_rating != "TV-MA")
+                        c_rating = "TV-14";
+                }
+                return null;
             }
-            return null;
-        }
 
-        // Borderline porn forces TV-MA
-        if (tagSet.Contains("borderline porn"))
-            return ("TV-MA" + descriptor, false);
+            // Borderline porn forces TV-MA
+            if (tagSet.Contains("borderline porn"))
+                return ("TV-MA" + descriptor, false);
 
-        // Run weighted checks in priority order (nudity, violence, sex). Returns immediately on TV-MA.
-        if (ApplyWeightedChecks(s_weightedRatingChecks) is (var finalRating, var finalAdult))
-            return (finalRating, finalAdult);
+            // Run weighted checks in priority order (nudity, violence, sex). Returns immediately on TV-MA.
+            if (ApplyWeightedChecks(s_weightedRatingChecks) is (var finalRating, var finalAdult))
+                return (finalRating, finalAdult);
 
-        // Uses the AniDB "target audience" tags to select a baseline rating when no weighted content indicators apply: https://anidb.net/tag/2606/animetb
-        // Check higher (more restrictive) ratings first and return immediately when matched.
-        if (string.IsNullOrEmpty(c_rating))
-        {
-            return tagSet switch
+            // Uses the AniDB "target audience" tags to select a baseline rating when no weighted content indicators apply: https://anidb.net/tag/2606/animetb
+            // Check higher (more restrictive) ratings first and return immediately when matched.
+            if (string.IsNullOrEmpty(c_rating))
             {
-                _ when tagSet.Contains("josei") || tagSet.Contains("seinen") => ("TV-14" + descriptor, false),
-                _ when tagSet.Contains("shoujo") || tagSet.Contains("shounen") => ("TV-PG" + descriptor, false),
-                _ when tagSet.Contains("mina") => ("TV-G" + descriptor, false),
-                _ when tagSet.Contains("kodomo") => ("TV-Y" + descriptor, false),
-                _ => (c_rating, false),
-            };
+                c_rating = tagSet switch
+                {
+                    _ when tagSet.Contains("josei") || tagSet.Contains("seinen") => "TV-14" + descriptor,
+                    _ when tagSet.Contains("shoujo") || tagSet.Contains("shounen") => "TV-PG" + descriptor,
+                    _ when tagSet.Contains("mina") => "TV-G" + descriptor,
+                    _ when tagSet.Contains("kodomo") => "TV-Y" + descriptor,
+                    _ => null,
+                };
+            }
+            else if (c_rating != "X")
+                c_rating += descriptor;
+
+            if (!string.IsNullOrEmpty(c_rating))
+                return (c_rating, false);
         }
-        if (c_rating != "X")
-            c_rating += descriptor;
-        return (c_rating, false);
+
+        // Fallback to TMDB content ratings when assumed ratings are disabled or undetermined
+        string? tmdbRating = GetTmdbContentRating(series, fallback);
+        return !string.IsNullOrWhiteSpace(tmdbRating) ? (tmdbRating, tmdbRating is "X" or "18+" or "R18+") : (null, false);
+    }
+
+    /// <summary>Resolves the best available TMDB content rating, prioritizing US ratings before falling back to the first available entry.</summary>
+    /// <param name="series">The primary series entity.</param>
+    /// <param name="fallback">The optional fallback content rating container.</param>
+    /// <returns>The resolved rating string or null.</returns>
+    private static string? GetTmdbContentRating(ISeries? series, IWithContentRatings? fallback)
+    {
+        var ratings = fallback?.ContentRatings ?? (series as IWithContentRatings)?.ContentRatings ?? (series as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault()?.ContentRatings;
+
+        return ratings is not { Count: > 0 }
+            ? null
+            : ratings.FirstOrDefault(r => string.Equals(r.CountryCode, "US", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(r.Value))?.Value
+                ?? ratings.FirstOrDefault(r => !string.IsNullOrWhiteSpace(r.Value))?.Value;
     }
 
     #endregion

@@ -10,7 +10,7 @@
 
 This is a plugin for [Shoko](https://shokoanime.com/) that acts as a [Custom Metadata Provider](https://forums.plex.tv/t/announcement-custom-metadata-providers/934384) for Plex. It is a successor to the [ShokoRelay.bundle](https://github.com/natyusha/ShokoRelay.bundle) legacy agent/scanner and mirrors all of its functionality (including the automation scripts). Scanning is much faster and there are many new features included as well. Just like the old bundle this is intended to work with series of all types within a single "TV Shows" library but separate movie library support is included as well. All you need to get started is a populated [Shoko Server](https://shokoanime.com/downloads/shoko-server) (_using a daily build_) and [Plex Media Server](https://www.plex.tv/media-server-downloads/).
 
-Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File System) to ensure that varied folder structures are supported. This means that your anime can be organised with whatever file or folder structure you want. There is one caveat though. A folder cannot contain more than one AniDB series at a time if you want it to fully support every type of [local media asset](https://support.plex.tv/articles/200220717-local-media-assets-tv-shows/) (like posters or theme songs). The VFS will be automatically updated when a file move or rename is detected by Shoko.
+Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File System) to ensure that varied folder structures are supported. This means that your anime can be organised with whatever file or folder structure you want. There is one caveat though. A folder cannot contain more than one AniDB series at a time if you want it to fully support every single type of [local media asset](https://support.plex.tv/articles/200220717-local-media-assets-tv-shows/) (posters, theme songs, etc.). The VFS will be automatically updated when any file changes are detected by Shoko.
 
 ## Installation
 
@@ -51,14 +51,15 @@ Installation can be completed via Shoko's WebUI (Recommended) or Manually. Both 
     - First time generation may take several minutes to complete with a large library
   - A report of the run will be written to `logs/shoko-vfs-build-report.log` inside the plugin directory
     - You can download the report via the dashboard's "Task Logs" section or a toast that will appear on task completion
-  - The VFS will automatically update when it detects files have been renamed or moved
+  - The VFS will automatically update when it detects files have been added, renamed, moved or deleted
 - **Recommended:**
   - Link the plugin to your Plex account via the `Start Plex Auth` button in the "Plex Authentication" section
     - Once clicked it will change to a `Login` link which will redirect you to `app.plex.tv/auth`
     - From there you can login to Plex as normal using your credentials and then close the tab
     - This will enable: Auto Scanning, Scrobbling (via sync or webhook) and enhanced collection/ratings support
   - Configure the `Sync Users` under the `Quick Actions > Watch Sync Menu` (Sync Watched States Menu) to enable webhooks and syncing
-- There are additional options at the bottom under "Provider Settings" which also contains a "Help" button in the top right.
+- There are additional options at the bottom under "Provider Settings" which also contains a "Help" button in the top right
+  - Once clicked the help button opens a modal containing more information about some of the more complex options
 
 > [!TIP]
 > If you are sharing the symlinks over an SMB share they may not appear depending on the [Samba Configuration](https://www.samba.org/samba/docs/current/man-html/smb.conf.5.html). An example entry for `smb.conf` that may help to mitigate this is listed below:
@@ -114,9 +115,6 @@ Enable the following options in Shoko to ensure that Plex has at least one sourc
 - Under `additional providers` select `Plex Local Media` then click the `+`
 - Ensure that the additional provider(s) are above the `Shoko Relay` primary entry and `Save`
 
-> [!TIP]
-> You can override the provider's settings by appending them as a URL path parameter segment separated by semicolons (e.g. `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/options/SeriesTitleLanguage=EN;TmdbImageLanguage=EN`).
-
 #### Library
 
 > [!TIP]
@@ -126,7 +124,8 @@ Enable the following options in Shoko to ensure that Plex has at least one sourc
 - The standard Shoko Relay agent setup requires a `TV Shows` type library to be created (or an existing one to be used)
 - Under `Add Folders` be sure to only enter the path to `!ShokoRelayVFS` (or the configured `VFS Root Path`) as the directory
 - Under `Advanced` simply change the Scanner of the library to `Plex TV Series` and the Agent to `Shoko Relay`
-  - You can override Provider Settings on a per-library basis by configuring an additional Metadata Provider matching the format described in the Metadata Agent TIP above
+  - You can override Provider Settings on a per-library basis by adding an additional Metadata Provider with `/options/` appended
+    - The format is described in [Controller.md/Metadata Provider](./Docs/Controller.md#metadata-provider)
     - _Overrides only apply to live metadata requests. Background automations (e.g. Collection Generation or Critic Ratings) will always use the global dashboard configuration_
 - Additionally it is highly recommended to set the following Advanced settings:
   - [x] Use season titles
@@ -431,8 +430,7 @@ With `TMDB Episode Numbering` enabled in the Advanced Provider Settings the foll
 
 **Curated TMDB Mappings**
 
-If you don't have any TMDB links in Shoko it is recommended that you start off with a curated list before auto linking.\
-[**Additional Info Here**](https://docs.shokoanime.com/shoko-server/tmdb-features#curated-tmdb-mappings)
+If you don't have any TMDB links in Shoko it is recommended that you start off with a curated list before auto linking. Simply navigate to `Settings > Metadata > Cross-References` in Shoko and import the following file: [**Shoko: AniDB → TMDB Mappings**](https://gist.github.com/natyusha/129848213161c57101c9f39ed3f263ed)
 
 **Alternate TMDB Episode Ordering**
 
@@ -457,7 +455,7 @@ Sometimes you may encounter a single episode which is split across multiple file
 
 ### Assumed Content Ratings
 
-If `Assumed Content Ratings` are enabled in the Provider Settings the [target audience](https://anidb.net/tag/2606/animetb) and [content indicator](https://anidb.net/tag/2604/animetb) tags from AniDB will be used to roughly match the [TV Parental Guidelines](https://www.tvguidelines.org/resources/TheRatings.pdf) system. The target audience tags will be checked for ratings from most restrictive to least, then the content indicators will be appended. If the tag weights for the content indicators are high enough (≥ 400 or ★★☆) the rating will be raised to compensate. A general overview is listed in the table below:
+If `Assumed Content Ratings` are enabled in the Provider Settings the [target audience](https://anidb.net/tag/2606/animetb) and [content indicator](https://anidb.net/tag/2604/animetb) tags from AniDB will be used to roughly match the [TV Parental Guidelines](https://www.tvguidelines.org/resources/TheRatings.pdf) system. These ratings will take precedence over any ratings that TMDB might provide. The target audience tags will be checked for ratings from most restrictive to least, then the content indicators will be appended. If the tag weights for the content indicators are high enough (≥ 400 or ★★☆) the rating will be raised to compensate. A general overview is listed in the table below:
 
 | Tag                        | Rating  |
 | :------------------------- | :------ |

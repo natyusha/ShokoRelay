@@ -329,7 +329,7 @@ public class AnimeThemesController(
                 var managedFolders = videoService.GetAllManagedFolders()?.Where(VfsShared.IsVfsEnabledFolder).Select(f => f.Path).ToList() ?? [];
                 string themeRootName = VfsShared.ResolveAnimeThemesFolderName();
 
-                // Scan physically present .webm files once into an in-memory dictionary to eliminate thousands of disk File.Exists probes
+                // Scan physically present .webm files once into an in-memory dictionary
                 var physicalThemes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var mf in managedFolders)
                 {

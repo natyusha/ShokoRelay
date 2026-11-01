@@ -29,8 +29,8 @@ public static class ActionScheduleHelper
         var triggers = new List<ActionTrigger>();
         if (freqHours > 0)
         {
-            // If the interval divides evenly into 24 hours, generate specific daily clock-aligned triggers mapped to the user's timezone via the UTC offset
-            if (freqHours <= 24 && 24 % freqHours == 0)
+            // If the interval divides evenly into 24 hours (excluding 1 hour), generate specific daily clock-aligned triggers mapped to the user's timezone via the UTC offset
+            if (freqHours > 1 && freqHours <= 24 && 24 % freqHours == 0)
             {
                 for (int i = 0; i < 24; i += freqHours)
                 {
@@ -43,10 +43,8 @@ public static class ActionScheduleHelper
                 }
             }
             else
-            {
-                // For intervals greater than 24 hours or non-divisors, fall back to a rolling interval
+                // For 1 hour, intervals greater than 24 hours, or non-divisors, fall back to a rolling interval
                 triggers.Add(ActionTrigger.Every(TimeSpan.FromHours(freqHours)));
-            }
         }
 
         // Compare existing triggers with desired triggers to avoid unnecessary database writes

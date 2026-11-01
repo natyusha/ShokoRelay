@@ -92,7 +92,9 @@ Endpoints managed by `MetadataController`
 
 ```
 GET  /                                                         -> GetMediaProvider           (TV Shows)
+GET  /options/{overrides}                                      -> GetMediaProvider           (TV Shows)
 GET  /movie                                                    -> GetMediaProvider           (Movies)
+GET  /movie/options/{overrides}                                -> GetMediaProvider           (Movies)
 GET  /matches?filename={path}&title={id}&manual=1              -> Match                      (for preview/testing)
 POST /matches?filename={path}&title={id}&manual=1              -> Match
 
@@ -107,7 +109,7 @@ GET  /metadata/{ratingKey}/images                              -> GetMetadataIma
 GET  /metadata/{ratingKey}/extras                              -> GetMetadataExtras
 ```
 
-- `GetMediaProvider` returns the agent descriptor describing supported types for TV Shows (`/`) or Movies (`/movie`).
+- `GetMediaProvider` returns the agent descriptor describing supported types for TV Shows (`/` or `/options/{overrides}`) or Movies (`/movie` or `/movie/options/{overrides}`).
 - `Match` looks up a series by filename or title. Priority is given to IDs found in the path.
   - `filename`: The file path provided by Plex.
   - `title`: The Shoko Series ID (used when `manual=1`).
