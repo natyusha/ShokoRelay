@@ -21,7 +21,7 @@
       "source_revision": "7ddca864952f73b6d03d35b6995aacf305c2a504",
       "released_at": "2026-11-03T20:52:06Z",
       "channel": "Dev",
-      "release_notes": "**Changes:**\r\n- Fall back to TMDB content ratings when AssumedContentRatings is disabled or when no assumed rating tags match\r\n- Pass linked TMDB series, movies, and seasons to ContentRatingHelper across PlexMetadata mapping methods\r\n- Add TmdbSeries and IsAdult to SeriesContext to eliminate redundant database queries and parental rating checks\r\n- Update MapSeries and MapEpisode to accept SeriesContext directly, aligning with MapSeason\r\n- Exclude 1-hour frequency from generating 24 daily triggers in ActionScheduleHelper.cs and fall back to a single hourly interval trigger\r\n- Patch path traversal in Log/WebM endpoints and SourceLinkService\r\n- Bump Shoko.Abstractions to v6.0.0-alpha.125\r\n- Minor README/Controller.md tweaks\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.21.3...v0.21.4",
+      "release_notes": "**Changes:**\r\n- Fall back to TMDB content ratings when AssumedContentRatings is disabled or when no assumed rating tags match\r\n- Add TmdbSeries and IsAdult to SeriesContext to eliminate redundant database queries and parental rating checks\r\n- Update MapSeries and MapEpisode to accept SeriesContext directly, aligning with MapSeason\r\n- Exclude 1-hour frequency from generating 24 daily triggers in ActionScheduleHelper.cs and fall back to a single hourly interval trigger\r\n- Patch path traversal in Log/WebM endpoints and SourceLinkService\r\n- Bump Shoko.Abstractions to v6.0.0-alpha.125\r\n- Minor README/Controller.md tweaks\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.21.3...v0.21.4",
       "archives": [
         {
           "runtime": "linux-arm64",
@@ -49,7 +49,7 @@
       "source_revision": "9f79fe388e2e67358a93912922fb9579c5c4dc3d",
       "released_at": "2026-10-31T15:02:46Z",
       "channel": "Dev",
-      "release_notes": "This release is a general optimisation pass with some improvements across the board for VFS builds and metadata lookups. The most significant improvement affects series that have alternate episode orderings assigned to them (which were incorrectly querying Shoko's database multiple times per episode causing massive performance degradation).\r\n\r\n**Changes:**\r\n- Massively improved metadata provider response times and eliminated potential thread pool starvation during large library scans\r\n- Added an in-memory series context cache with automatic invalidation during VFS updates and scheduled metadata fixups\r\n- Drastically sped up alternate TMDB episode group resolution by replacing repeated database queries with pre-indexed lookups\r\n- Optimized cast and crew deduplication by replacing linear name scans and runtime string splitting with indexed lookups\r\n- Accelerated VFS generation by linking series-level metadata once per folder and skipping redundant disk checks on clean builds\r\n- Slightly Sped up VFS Browser and AnimeThemes Player loading by caching tree data, batching disk checks, and implementing lazy UI rendering\r\n- Bumped Shoko.Abstractions to v6.0.0-alpha.120\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.21.2...v0.21.3",
+      "release_notes": "This release is a general optimisation pass with some improvements across the board for VFS builds and metadata lookups. The most significant improvement affects series that have alternate episode orderings assigned to them (which were incorrectly querying Shoko's database multiple times per episode causing massive performance degradation).\r\n\r\n**Changes:**\r\n- Massively improved metadata provider response times and eliminated potential thread pool starvation during large library scans\r\n- Added an in-memory series context cache with automatic invalidation during VFS updates and scheduled metadata fixups\r\n- Drastically sped up alternate TMDB episode group resolution by replacing repeated database queries with pre-indexed lookups\r\n- Optimized cast and crew deduplication by replacing linear name scans and runtime string splitting with indexed lookups\r\n- Accelerated VFS generation by linking series-level metadata once per folder and skipping redundant disk checks on clean builds\r\n- Slightly sped up VFS Browser and AnimeThemes Player loading by caching tree data, batching disk checks, and implementing lazy UI rendering\r\n- Bumped Shoko.Abstractions to v6.0.0-alpha.120\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.21.2...v0.21.3",
       "archives": [
         {
           "runtime": "linux-arm64",
@@ -152,90 +152,6 @@
           "abstraction": "6.0.0",
           "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.21.0/ShokoRelay-v0.21.0-dev_win-x64.zip",
           "checksum": "sha256:43ac20aa1c891e27114eb4aa2610a7ffce3e4a3409d54450d4c1098dfc6d3008"
-        }
-      ]
-    },
-    {
-      "version": "0.20.2",
-      "tag": "v0.20.2",
-      "source_revision": "70212574efc2e34135351eddadaed6b64ca36aca",
-      "released_at": "2026-10-15T19:43:01Z",
-      "channel": "Dev",
-      "release_notes": "Following Plex Server changes due to [CVE-2026-96655](https://github.com/advisories/GHSA-9x88-w2p7-56vh) cast & crew images must now be sourced from publicly available URLs rather than from Shoko. Due to this change TMDB is now the preferred provider for these images by default (to avoid strict AniDB HTTP limits). Therefore, it is highly recommended that TMDB cast information/images are enabled in Shoko Server.\r\n\r\n**Changes:**\r\n- Enabled forceRemote for cast and crew images in CastHelper to bypass Plex's caller-supplied URL restrictions\r\n- Added TmdbCastImages setting to RelayConfig to allow preferring TMDB images for cast and crew\r\n- Implemented robust name matching hierarchy (OriginalName, Name, Flipped Name, and AlternativeNames) in CastHelper\r\n- Applied deduplication and TMDB image resolution to both cast and crew entries within GetCastAndCrew\r\n- Implemented CleanCrewRole helper to strip department prefixes from crew job titles to prevent truncation in Plex UI\r\n- Added VideoUserDataSaveReason.PlaybackProgress for episode playback tracking\r\n- Bumped Shoko.Abstractions to v6.0.0-alpha.107\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.20.1...v0.20.2",
-      "archives": [
-        {
-          "runtime": "linux-arm64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.20.2/ShokoRelay-v0.20.2-dev_linux-arm64.zip",
-          "checksum": "sha256:2ed8459630631f8b5e3d598f35ef376aa3b1923821f3973c9f0067139dc98476"
-        },
-        {
-          "runtime": "linux-x64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.20.2/ShokoRelay-v0.20.2-dev_linux-x64.zip",
-          "checksum": "sha256:784b61158c3a4ab50646f953d4617e119b098981d24c14fd49f73f4fac5e0fd6"
-        },
-        {
-          "runtime": "win-x64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.20.2/ShokoRelay-v0.20.2-dev_win-x64.zip",
-          "checksum": "sha256:f125118774adad8b751fef96ecd788737b509f8be546fda4ebd099870de37509"
-        }
-      ]
-    },
-    {
-      "version": "0.20.1",
-      "tag": "v0.20.1",
-      "source_revision": "719514a696c2d5a3858df8ebb14e608fc7e5f64c",
-      "released_at": "2026-10-08T14:20:54Z",
-      "channel": "Dev",
-      "release_notes": "This release migrates the image management, logging and background automations within the plugin to use native solutions that are now provided by Shoko.Abstractions. Due to these changes anyone who was using the original Plex Image Sync method can run `/shoko/purge-all-custom-images` in swagger and then safely delete `images_shokorelay.cache` from the config folder (as the cache file is now obsolete).\r\n\r\n**Changes:**\r\n- Migrate background automation to Shoko's native Scheduled Actions system\r\n- Migrate logging from NLog to native Microsoft.Extensions.Logging using structured message templates\r\n- Migrate image management to native Shoko metadata sources to explicitly track ownership\r\n- Separate local asset and Plex thumbnail metadata sources to prevent purge loops\r\n- Optimize `SourceLinkService` to trigger targeted Shoko file scans upon symlink generation\r\n- Optimize performance and reduce memory allocations by utilizing compile-time `[GeneratedRegex]` source generators\r\n- Optimize TMDB metadata lookups and preferred episode orderings with bulk caching to significantly reduce database queries\r\n- Force remote HTTPS CDN URLs for preview thumbnails to bypass browser Mixed Content blocks in Plex's \"Fix Match\" UI\r\n- Refactor and compress the Plex match endpoint logic\r\n- Resolve a potential race condition in the VFS watcher queue\r\n- Sort AnimeThemes mapping report logs chronologically by year/decade\r\n- Standardize parameter naming, XML documentation, and JSDoc across the entire codebase\r\n- Gracefully handle task cancellation during server shutdown to prevent noisy console errors\r\n- Update README to clarify Plex's native collection assignment framework and Shoko's live file watcher exclusion rules\r\n- Bump Shoko.Abstractions to v6.0.0-alpha.100\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.20.0...v0.20.1",
-      "archives": [
-        {
-          "runtime": "linux-arm64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.20.1/ShokoRelay-v0.20.1-dev_linux-arm64.zip",
-          "checksum": "sha256:fcb13a3e19c7aa993c76522ff7045da54087a7739c274b141a3fc7fcec6eea1b"
-        },
-        {
-          "runtime": "linux-x64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.20.1/ShokoRelay-v0.20.1-dev_linux-x64.zip",
-          "checksum": "sha256:81d848b27be105d6b8c9bbd9190ff910e7b7fbd7b8752f13b390fe9091a3122a"
-        },
-        {
-          "runtime": "win-x64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.20.1/ShokoRelay-v0.20.1-dev_win-x64.zip",
-          "checksum": "sha256:f1520cd3af690669c79557fc71df3ae8d0cf19147d058c0f5077c2770a8eca07"
-        }
-      ]
-    },
-    {
-      "version": "0.20.0",
-      "tag": "v0.20.0",
-      "source_revision": "619d021e9ddb44b95c50769548b84c30a1276dbb",
-      "released_at": "2026-10-03T19:52:17Z",
-      "channel": "Dev",
-      "release_notes": "Another set of significant changes has been made in the abstractions, but just like last time core functionality for the plugin should remain the same.\r\n\r\n**Changes:**\r\n- Added `ShokoRelay.Vfs` to global using directives in `.csproj`\r\n- Added memory caching for `plex.token` as well as various other tweaks and adjustments\r\n- Replaced deprecated stylelint-config-concentric step with prettier-plugin-css-order in lint-format.yml\r\n- Bumped `Shoko.Abstractions` to `6.0.0-alpha.98`\r\n\r\n**Contributions:**\r\n* @revam in https://github.com/natyusha/ShokoRelay/pull/16\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.19.1...v0.20.0",
-      "archives": [
-        {
-          "runtime": "linux-arm64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.20.0/ShokoRelay-v0.20.0-dev_linux-arm64.zip",
-          "checksum": "sha256:12025c295ba02e3912a48214944c6d243f914a043e3902470f85f652b320b15f"
-        },
-        {
-          "runtime": "linux-x64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.20.0/ShokoRelay-v0.20.0-dev_linux-x64.zip",
-          "checksum": "sha256:6ff57f2bde21d6f722ed287877eb861f48b1f9af8a895d0ff49593fbcac22285"
-        },
-        {
-          "runtime": "win-x64",
-          "abstraction": "6.0.0",
-          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.20.0/ShokoRelay-v0.20.0-dev_win-x64.zip",
-          "checksum": "sha256:8713a96c2e7d6fde08e1670232cf3dc72f21b8683c2229bd9f09241d27a04f70"
         }
       ]
     }
