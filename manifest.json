@@ -16,6 +16,34 @@
   "icon_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-icon.png",
   "releases": [
     {
+      "version": "0.21.4",
+      "tag": "v0.21.4",
+      "source_revision": "7ddca864952f73b6d03d35b6995aacf305c2a504",
+      "released_at": "2026-11-03T20:52:06Z",
+      "channel": "Dev",
+      "release_notes": "**Changes:**\r\n- Fall back to TMDB content ratings when AssumedContentRatings is disabled or when no assumed rating tags match\r\n- Pass linked TMDB series, movies, and seasons to ContentRatingHelper across PlexMetadata mapping methods\r\n- Add TmdbSeries and IsAdult to SeriesContext to eliminate redundant database queries and parental rating checks\r\n- Update MapSeries and MapEpisode to accept SeriesContext directly, aligning with MapSeason\r\n- Exclude 1-hour frequency from generating 24 daily triggers in ActionScheduleHelper.cs and fall back to a single hourly interval trigger\r\n- Patch path traversal in Log/WebM endpoints and SourceLinkService\r\n- Bump Shoko.Abstractions to v6.0.0-alpha.125\r\n- Minor README/Controller.md tweaks\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.21.3...v0.21.4",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.21.4/ShokoRelay-v0.21.4-dev_linux-arm64.zip",
+          "checksum": "sha256:7fd66ef159fc34ac28ab3dc2c70a9adba7af68684acb93e256ab517a58eaf23a"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.21.4/ShokoRelay-v0.21.4-dev_linux-x64.zip",
+          "checksum": "sha256:1cd7a1d948cf87536f4069b8e2ed0ea2c43dd7aaf009340dc72f74884869502d"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.21.4/ShokoRelay-v0.21.4-dev_win-x64.zip",
+          "checksum": "sha256:ba984bc85bb7ff7a2a7f013d26528f978d8f18dd550c677561f55e6f864745c4"
+        }
+      ]
+    },
+    {
       "version": "0.21.3",
       "tag": "v0.21.3",
       "source_revision": "9f79fe388e2e67358a93912922fb9579c5c4dc3d",
