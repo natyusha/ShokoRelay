@@ -405,8 +405,11 @@ public class AnimeThemesController(
     {
         if (string.IsNullOrWhiteSpace(path))
             return BadRequest();
+
         string fullPath = Path.GetFullPath(PlexLibrary.MapPlexPathToShokoPath(path));
-        return !IoFile.Exists(fullPath) ? NotFound() : File(new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read), "video/webm", enableRangeProcessing: true);
+        return !string.Equals(Path.GetExtension(fullPath), ".webm", StringComparison.OrdinalIgnoreCase) || !IoFile.Exists(fullPath)
+            ? NotFound()
+            : File(new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read), "video/webm", enableRangeProcessing: true);
     }
 
     /// <summary>Returns the list of videoIds marked as favourites.</summary>

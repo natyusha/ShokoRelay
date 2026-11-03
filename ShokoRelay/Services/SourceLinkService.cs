@@ -43,7 +43,10 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
 
         if (string.IsNullOrWhiteSpace(mapFile))
             return new SourceLinkResult(0, false, details);
-        string normMapFile = mapFile.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
+
+        string safeMapFile = VfsShared.NormalizeSeparators(mapFile).TrimStart(Path.DirectorySeparatorChar);
+        if (!safeMapFile.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
+            return new SourceLinkResult(0, false, details);
 
         foreach (var mf in managedFolders)
         {
@@ -51,12 +54,13 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
             if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
                 continue;
 
-            string txtPath = Path.Combine(root, normMapFile);
-            if (!File.Exists(txtPath))
+            string fullRoot = Path.GetFullPath(root);
+            string fullTxtPath = Path.GetFullPath(Path.Combine(fullRoot, safeMapFile));
+            if (!fullTxtPath.StartsWith(fullRoot + Path.DirectorySeparatorChar, VfsShared.PathComparison) || !File.Exists(fullTxtPath))
                 continue;
 
-            string mappingFileDir = Path.GetDirectoryName(txtPath)!;
-            string[] lines = await File.ReadAllLinesAsync(txtPath).ConfigureAwait(false);
+            string mappingFileDir = Path.GetDirectoryName(fullTxtPath)!;
+            string[] lines = await File.ReadAllLinesAsync(fullTxtPath).ConfigureAwait(false);
             bool modified = false;
             var dirsToScan = new HashSet<string>(VfsShared.PathComparer);
 
@@ -76,8 +80,15 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
                 // Process a primary video file and all associated sidecar files/folders, renaming sidecars to match the destination naming convention
                 try
                 {
-                    string fullSrc = Path.Combine(mappingFileDir, srcInfo.Path);
-                    string fullDest = Path.Combine(root, destInfo.Path);
+                    string fullSrc = Path.GetFullPath(Path.Combine(mappingFileDir, srcInfo.Path));
+                    string fullDest = Path.GetFullPath(Path.Combine(fullRoot, destInfo.Path));
+
+                    if (!fullDest.StartsWith(fullRoot + Path.DirectorySeparatorChar, VfsShared.PathComparison))
+                    {
+                        logger.LogWarning("SourceLinkService: Destination path escapes import root -> {Path}", fullDest);
+                        continue;
+                    }
+
                     if (!File.Exists(fullSrc))
                     {
                         logger.LogWarning("SourceLinkService: Source file not found -> {Path}", fullSrc);
@@ -147,7 +158,7 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
             }
 
             if (modified)
-                await File.WriteAllLinesAsync(txtPath, lines).ConfigureAwait(false);
+                await File.WriteAllLinesAsync(fullTxtPath, lines).ConfigureAwait(false);
 
             foreach (var dir in dirsToScan)
             {

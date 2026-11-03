@@ -239,7 +239,7 @@ public class DashboardController(
             );
     }
 
-    /// <summary>Serves report files from the plugin's logs directory without allowing browser caching.</summary>
+    /// <summary>Serves report files from the plugin's logs directory without allowing browser caching or directory traversal.</summary>
     /// <param name="fileName">The log filename.</param>
     /// <returns>The log content as text/plain; charset=utf-8.</returns>
     [HttpGet("logs/{fileName}")]
@@ -247,15 +247,19 @@ public class DashboardController(
     {
         if (string.IsNullOrWhiteSpace(fileName))
             return BadRequest(new { status = "error", message = "fileName is required" });
-        var path = Path.Combine(ConfigProvider.PluginDirectory, "logs", fileName);
-        if (!IoFile.Exists(path))
+
+        string logsDir = Path.GetFullPath(Path.Combine(ConfigProvider.PluginDirectory, "logs"));
+        string safeFileName = Path.GetFileName(fileName);
+        string requested = Path.GetFullPath(Path.Combine(logsDir, safeFileName));
+
+        if (!requested.StartsWith(logsDir, StringComparison.OrdinalIgnoreCase) || !safeFileName.EndsWith("-report.log", StringComparison.OrdinalIgnoreCase) || !IoFile.Exists(requested))
             return NotFound(new { status = "error", message = "log not found" });
 
         Response.Headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
         Response.Headers["Pragma"] = "no-cache";
         Response.Headers["Expires"] = "0";
 
-        return PhysicalFile(path, "text/plain; charset=utf-8");
+        return PhysicalFile(requested, "text/plain; charset=utf-8");
     }
 
     #endregion
