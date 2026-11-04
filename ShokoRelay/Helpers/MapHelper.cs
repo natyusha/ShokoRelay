@@ -162,13 +162,11 @@ public static class MapHelper
         }
 
         var videoToEps = new Dictionary<int, List<(IEpisode Episode, PlexCoords Coords)>>();
-        var seasonsSet = new HashSet<int>();
         var seriesToPrimary = new Dictionary<int, int>();
 
         foreach (var (episode, videos) in seriesEpisodes)
         {
             var coords = GetPlexCoordinates(episode, prefId, tmdbOrderingLookup);
-            seasonsSet.Add(coords.Season);
             foreach (var v in videos)
             {
                 if (!videoToEps.TryGetValue(v.LocalID, out var list))
@@ -177,16 +175,14 @@ public static class MapHelper
             }
         }
 
-        bool s1 = seasonsSet.Contains(PlexConstants.SeasonStandard),
-            s0 = seasonsSet.Contains(PlexConstants.SeasonSpecials);
-
         var videoFileNameCache = seriesEpisodes.SelectMany(x => x.Videos).DistinctBy(v => v.LocalID).ToDictionary(v => v.LocalID, v => Path.GetFileName(v.Files.FirstOrDefault()?.Path ?? string.Empty));
-
         var episodeFileLists = seriesEpisodes.ToDictionary(x => x.Episode.ID, x => x.Videos.OrderBy(v => videoFileNameCache[v.LocalID]).ToList());
         var allVideos = seriesEpisodes.SelectMany(x => x.Videos).DistinctBy(v => v.LocalID).OrderBy(v => videoFileNameCache[v.LocalID]).ToList();
 
         // Pass 1: Resolve all coordinates and crossover statuses once
         var videoCoords = new Dictionary<int, (PlexCoords Coords, List<(IEpisode Episode, PlexCoords Coords)> Deduped)>();
+        var seasonsSet = new HashSet<int>();
+
         foreach (var video in allVideos)
         {
             if (!videoToEps.TryGetValue(video.LocalID, out var epList))
@@ -195,13 +191,8 @@ public static class MapHelper
             // Fast path: If the video has only 1 episode link, skip all crossover and deduplication checks
             if (epList.Count == 1)
             {
-                var fastCoords = epList[0].Coords;
-                if (fastCoords.Season == PlexConstants.SeasonOther)
-                    fastCoords.Season =
-                        !s1 ? PlexConstants.SeasonStandard
-                        : !s0 ? PlexConstants.SeasonSpecials
-                        : fastCoords.Season;
-                videoCoords[video.LocalID] = (fastCoords, epList);
+                videoCoords[video.LocalID] = (epList[0].Coords, epList);
+                seasonsSet.Add(epList[0].Coords.Season);
                 continue;
             }
 
@@ -235,17 +226,33 @@ public static class MapHelper
             var deduped = DeduplicateByCoords(sortedEps, video);
             if (deduped.Count == 0)
                 continue;
+
             var coords =
                 (deduped.Count > 1 && (episodeFileLists.GetValueOrDefault(deduped[0].Episode.ID)?.Count > 1 || deduped.Select(x => x.Episode.Type).Distinct().Count() == 1))
                     ? GetPlexCoordinatesForFile(deduped.Select(x => x.Episode))
                     : deduped[0].Coords;
-            // Apply fallback rules for "Other" (Featurette) season coordinates, remapping them to Standard or Specials folders if those are empty
-            if (coords.Season == PlexConstants.SeasonOther)
-                coords.Season =
+
+            videoCoords[video.LocalID] = (coords, deduped);
+            seasonsSet.Add(coords.Season);
+        }
+
+        // Apply fallback rules for "Other" (Featurette) season coordinates, remapping them to Standard or Specials folders if those are empty
+        bool s1 = seasonsSet.Contains(PlexConstants.SeasonStandard),
+            s0 = seasonsSet.Contains(PlexConstants.SeasonSpecials);
+
+        foreach (var key in videoCoords.Keys.ToList())
+        {
+            var info = videoCoords[key];
+            if (info.Coords.Season == PlexConstants.SeasonOther)
+            {
+                var newCoords = info.Coords;
+                newCoords.Season =
                     !s1 ? PlexConstants.SeasonStandard
                     : !s0 ? PlexConstants.SeasonSpecials
-                    : coords.Season;
-            videoCoords[video.LocalID] = (coords, deduped);
+                    : newCoords.Season;
+                info.Coords = newCoords;
+                videoCoords[key] = info;
+            }
         }
 
         // Pass 2: Build final mappings
@@ -254,6 +261,7 @@ public static class MapHelper
         {
             if (!videoCoords.TryGetValue(video.LocalID, out var info))
                 continue;
+
             var (coords, deduped) = info;
             var firstEp = deduped[0].Episode;
             var fileList = episodeFileLists.GetValueOrDefault(firstEp.ID);
