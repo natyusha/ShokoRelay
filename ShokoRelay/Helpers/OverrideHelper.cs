@@ -11,6 +11,9 @@ public static class OverrideHelper
     /// <summary>Cached dictionary of primary to secondary series ID mappings.</summary>
     private static IReadOnlyDictionary<int, List<int>> s_groups = new Dictionary<int, List<int>>();
 
+    /// <summary>Cached dictionary of custom episode coordinate overrides for specific secondary series.</summary>
+    private static IReadOnlyDictionary<int, (int Season, int Episode)> s_coordOverrides = new Dictionary<int, (int Season, int Episode)>();
+
     /// <summary>Tracks whether the override groups have been initialized.</summary>
     private static bool s_isInitialized;
 
@@ -54,8 +57,9 @@ public static class OverrideHelper
     /// <param name="metadataService">Optional metadata service used to discover and resolve automatic TMDB series merges.</param>
     private static void LoadInternal(IMetadataService? metadataService)
     {
-        // Use a local dictionary to build the groups, then perform an atomic swap to prevent race conditions where other threads see a cleared or partially-loaded static dictionary.
+        // Use local dictionaries to build the groups, then perform an atomic swap to prevent race conditions where other threads see a cleared or partially-loaded static dictionary.
         var newGroups = new Dictionary<int, List<int>>();
+        var newCoordOverrides = new Dictionary<int, (int Season, int Episode)>();
         string path = OverridesPath;
         void AddGroup(List<int> ids) => ids.ForEach(id => newGroups.TryAdd(id, ids)); // Helper to add a list of IDs to the group registry
 
@@ -69,16 +73,49 @@ public static class OverrideHelper
                     var line = raw.Trim();
                     if (line.Length == 0 || line[0] == '#')
                         continue;
-                    var parts = TextHelper
-                        .SplitCsvLine(line)
-                        .Select(s => s.Trim())
-                        .Where(s => s.Length > 0)
-                        .Select(s => int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) ? id : 0)
-                        .Where(id => id > 0)
-                        .Distinct()
-                        .ToList();
-                    if (parts.Count >= 2)
-                        AddGroup(parts);
+
+                    var parts = TextHelper.SplitCsvLine(line).Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
+                    if (parts.Count < 2)
+                        continue;
+
+                    if (!int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var primaryId) || primaryId <= 0)
+                        continue;
+
+                    var group = new List<int> { primaryId };
+
+                    for (int i = 1; i < parts.Count; i++)
+                    {
+                        var part = parts[i];
+                        int anidbId = 0;
+
+                        int sepIdx = part.IndexOf(';');
+                        if (sepIdx > 0)
+                        {
+                            var idStr = part[..sepIdx].Trim();
+                            var coordStr = part[(sepIdx + 1)..].Trim();
+                            if (int.TryParse(idStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out anidbId) && anidbId > 0)
+                            {
+                                var match = TextHelper.CustomCoordRegex().Match(coordStr);
+                                if (match.Success)
+                                {
+                                    int s = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+                                    int e = int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
+                                    newCoordOverrides[anidbId] = (s, e);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            if (int.TryParse(part, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedId))
+                                anidbId = parsedId;
+                        }
+
+                        if (anidbId > 0)
+                            group.Add(anidbId);
+                    }
+
+                    if (group.Count >= 2)
+                        AddGroup([.. group.Distinct()]);
                 }
             }
             catch { }
@@ -107,6 +144,7 @@ public static class OverrideHelper
 
         // Atomic swap
         s_groups = newGroups;
+        s_coordOverrides = newCoordOverrides;
     }
 
     #endregion
@@ -135,6 +173,16 @@ public static class OverrideHelper
         return (!EnforceTmdbNumbering || metadataService == null || metadataService.GetShokoSeriesByID(shokoSeriesId) is not { AnidbAnimeID: > 0 } s) ? [shokoSeriesId]
             : (s_groups.TryGetValue(s.AnidbAnimeID, out var grp) && grp.Count > 0) ? [.. grp.Select(metadataService.GetShokoSeriesByAnidbID).OfType<IShokoSeries>().Select(ss => ss.LocalID)]
             : [shokoSeriesId];
+    }
+
+    /// <summary>Retrieves manual VFS coordinates for a specific episode, if defined in the overrides file.</summary>
+    /// <param name="anidbAnimeId">The AniDB Anime ID the episode belongs to.</param>
+    /// <param name="episodeNumber">The numeric episode number of the specific type.</param>
+    /// <returns>The overriden season and episode coordinates, or null if unconfigured.</returns>
+    public static (int Season, int Episode)? GetCustomCoords(int anidbAnimeId, int episodeNumber)
+    {
+        EnsureLoaded();
+        return s_coordOverrides.Count > 0 && s_coordOverrides.TryGetValue(anidbAnimeId, out var coords) ? (coords.Season, coords.Episode + Math.Max(0, episodeNumber - 1)) : null;
     }
 
     #endregion

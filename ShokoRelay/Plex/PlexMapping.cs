@@ -53,6 +53,14 @@ public static class PlexMapping
         if (episode == null)
             return new PlexCoords { Season = PlexConstants.SeasonStandard, Episode = 1 };
 
+        // Fast path: Check for explicit manual VFS coordinate overrides (e.g. placing movies as specials)
+        if (episode is IShokoEpisode { Series: { AnidbAnimeID: > 0 } ss })
+        {
+            var custom = OverrideHelper.GetCustomCoords(ss.AnidbAnimeID, episode.EpisodeNumber);
+            if (custom.HasValue)
+                return new PlexCoords { Season = custom.Value.Season, Episode = custom.Value.Episode };
+        }
+
         if (EnforceTmdbNumbering && episode is IShokoEpisode shokoEpisode && shokoEpisode.GetLinkedEpisodes(MetadataSource.TMDB) is { Count: > 0 } tmdbEps)
         {
             // Fast path: resolve coordinates from the pre-indexed alternate ordering table in O(1)

@@ -440,9 +440,11 @@ If you aren't happy with TMDB's default episode/season structure for a series, y
 > [!NOTE]
 > If you select an alternate order for a series TMDB season posters will no longer be automatically added to Plex.
 
-**Combining Series**
+**Combining Series & Custom Episode Mappings**
 
-This allows shows which are separated on AniDB but part of the same TMDB listing to be combined into a single entry in Plex. To achieve this, click the `VFS Overrides Editor` button in the "Shoko: VFS" section of the dashboard. It will open a modal which will create (or edit an existing) `anidb_vfs_overrides.csv` file in the plugin's config directory. Each line should contain a comma separated list of AniDB IDs you wish to merge. The first ID is the _primary series_ and the others will be merged into it (for both VFS builds and metadata lookups). Lines that are blank or start with a "#" are ignored. It is highly recommended to use this feature for series like "Akahori Gedou Hour Rabuge" where every episode is a crossover.
+This allows shows which are separated on AniDB but part of the same TMDB listing to be combined into a single entry in Plex. To achieve this, click the `VFS Overrides Editor` button in the "Shoko: VFS" section of the dashboard. It will open a modal which will create (or edit an existing) `anidb_vfs_overrides.csv` file in the plugin's config directory. Each line should contain a comma separated list of AniDB IDs you wish to merge. For this to work automatically, all of the AniDB IDs on the line must share the exact same TMDB link. The first ID is the _primary series_ and the others will be merged into it (for both VFS builds and metadata lookups). If a secondary series does _not_ share a TMDB link, it must be mapped to a specific season and episode coordinate by appending `;S##E##` to the ID. Lines that are blank or start with a "#" are ignored.
+
+It is highly recommended to use this feature for series like "Akahori Gedou Hour Rabuge" where every episode is a crossover.
 
 An example `anidb_vfs_overrides.csv` is available [here](https://gist.github.com/natyusha/a9ad00a5c16276cfbe2553346c745f1c).
 
