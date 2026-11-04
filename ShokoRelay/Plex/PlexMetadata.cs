@@ -466,6 +466,7 @@ public class PlexMetadata(IMetadataService metadataService)
                 foreach (var ep in m.Episodes)
                 {
                     var coordsEp = GetPlexCoordinates(ep, prefId);
+                    coordsEp.Season = m.Coords.Season;
                     if (coordsEp.Season != seasonNum)
                         continue;
                     var meta = MapEpisode(ep, coordsEp, ctx, m.PartIndex);
