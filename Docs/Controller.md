@@ -7,7 +7,7 @@
 ## Table of Contents
 
 - [Dashboard / Config](#dashboard--config)
-- [Metadata](#metadata-provider)
+- [Metadata Provider](#metadata-provider)
 - [Plex](#plex)
 - [Shoko](#shoko)
 - [AnimeThemes](#animethemes)
@@ -21,7 +21,10 @@ Endpoints managed by `DashboardController`
 ---
 
 ```
-GET  /dashboard/{*path}                                        -> GetControllerPage
+GET  /dashboard                                                -> GetDashboardPage
+GET  /browser                                                  -> GetBrowserPage
+GET  /player                                                   -> GetPlayerPage
+GET  /dashboard/{*path}                                        -> GetAssetFile
 
 GET  /config                                                   -> GetConfig
 POST /config                                                   -> SaveConfig
@@ -37,12 +40,10 @@ GET  /logs/list                                                -> GetLogsList
 GET  /logs/{fileName}                                          -> GetLog
 ```
 
-- `GetControllerPage` Serves the plugin's frontend components and static assets from the `dashboard` folder.
-  - `/dashboard` (no path): Serves the main settings dashboard (`dashboard.cshtml`).
-  - `/player`: Serves the stand-alone AnimeThemes video player (`player.cshtml`).
-  - `/browser`: Serves the stand-alone VFS browser (`browser.cshtml`).
-  - `/dashboard/{assetPath}`: Serves static assets (JS, CSS, fonts, images).
-  - The controller uses `FileExtensionContentTypeProvider` for MIME mapping and automatically injects a `<base>` tag.
+- `GetDashboardPage` Serves the main settings dashboard (`dashboard.cshtml`).
+- `GetBrowserPage` Serves the stand-alone VFS browser (`browser.cshtml`).
+- `GetPlayerPage` Serves the stand-alone AnimeThemes video player (`player.cshtml`).
+- `GetAssetFile` Serves static assets (JS, CSS, fonts, images) from the `dashboard` folder using MIME type mapping and path traversal boundary checks.
 - `GetConfig` returns the current configuration payload (JSON) used by the dashboard page.
   - The `ConfigProvider` handles serialization and sanitization. Structure is nested into `Automation`, `Playback`, and `Advanced`.
   - This also includes `anidb_vfs_overrides.csv` in the response as a separate entry from the main payload.
@@ -57,8 +58,8 @@ GET  /logs/{fileName}                                          -> GetLog
 - `GetCompletedTasks` returns a dictionary of results for tasks that finished while the dashboard was disconnected or before a refresh.
 - `ClearTaskResult` acknowledges and removes a stored result from the server's memory.
 - `GetLogsList` returns a JSON list of all currently generated task logs that exist on disk.
-- `GetLog` serves report files created under the plugin's `logs` directory.
-  - This endpoint serves the file as `text/plain` without a download name, allowing it to be viewed directly in a browser tab.
+- `GetLog` serves report files created under the plugin's `logs` directory without browser caching.
+  - Access is restricted strictly to files ending with `-report.log` inside the `logs/` directory to prevent directory traversal.
 
 **Notes:**
 
@@ -92,9 +93,9 @@ Endpoints managed by `MetadataController`
 
 ```
 GET  /                                                         -> GetMediaProvider           (TV Shows)
-GET  /options/{overrides}                                      -> GetMediaProvider           (TV Shows)
+GET  /options/{overrides}                                      -> GetMediaProvider           (TV Shows with option overrides)
 GET  /movie                                                    -> GetMediaProvider           (Movies)
-GET  /movie/options/{overrides}                                -> GetMediaProvider           (Movies)
+GET  /movie/options/{overrides}                                -> GetMediaProvider           (Movies with option overrides)
 GET  /matches?filename={path}&title={id}&manual=1              -> Match                      (for preview/testing)
 POST /matches?filename={path}&title={id}&manual=1              -> Match
 
@@ -123,6 +124,7 @@ GET  /metadata/{ratingKey}/extras                              -> GetMetadataExt
 - `GetMetadata` returns full metadata for a ratingKey (movie/series/season/episode).
   - `includeChildren`: (default 0) set to 1 to embed immediate children in the response.
 - `GetChildren` / `GetGrandchildren` return only the immediate or second-level child items respectively.
+  - Both endpoints utilize deferred, page-aligned slicing to minimize serialization and mapping overhead.
 - `GetMetadataImages` returns a `MediaContainer` with an `Image` array used by Plex when fetching all artwork.
 - `GetMetadataExtras` returns an empty `MediaContainer` to satisfy Plex requirements and prevent 404 errors during metadata refreshes.
 
@@ -141,6 +143,7 @@ GET  /metadata/{ratingKey}/extras                              -> GetMetadataExt
   - `e567` (Shoko Episode ID) / `ae567` (AniDB Episode ID)
   - `e567p2` (Shoko Episode Part 2) / `ae567p2` (AniDB Episode Part 2)
   - `m890` (Shoko Episode ID mapped as a Movie)
+  - `m890p2` (Shoko Episode ID mapped as a Movie Part 2)
   - _AniDB IDs resolve to Shoko IDs and must be known to Shoko_
 - Part suffixes support both physical multi-part files and virtual TMDB episode segments.
 - Crossover episodes (files belonging to multiple series) are skipped for local metadata/subtitle linking to avoid conflicts.
@@ -186,10 +189,11 @@ GET  /plex/automation/run                                      -> RunPlexAutomat
 ```
 
 - `RefreshPlexSeries` triggers a partial library scan in Plex for a comma-separated list of series IDs.
-- `RefreshPlexMetadata` triggers a manual metadata refresh in Plex for a comma-separated list of series IDs (resolving their rating keys first).
+- `RefreshPlexMetadata` triggers a manual metadata refresh in Plex for an optional comma-separated list of series IDs (resolving their rating keys and invalidating cached series contexts first).
 - `BuildPlexCollections` generates Plex collections for a comma-separated list of series IDs (or all series if omitted).
-  - `assignment`: (default true) if false, skips assigning series to collections and only applies posters.
-  - `clean`: (default true) if true and `PlexMetadataPath` is configured, prunes old cached custom posters from Plex's local metadata directory
+  - `assignment`: (default true) if false, skips assigning series to collections and only applies artwork.
+  - `clean`: (default true) if true and `PlexMetadataPath` is configured, prunes old cached custom posters from Plex's local metadata directory.
+  - Artwork is uploaded via direct file streaming to avoid loopback network restrictions on private IP addresses.
   - This will also scan Plex for smart collection names allowing their posters to be set.
 - `ApplyAudienceRatings` updates ratings for a comma-separated list of series IDs based on the configured source (TMDB/AniDB).
 - `SyncPlexImages` queries Plex for generated episode thumbnails and scans VFS/collection paths for all local images, uploading and marking them as preferred in Shoko.
@@ -199,7 +203,7 @@ GET  /plex/automation/run                                      -> RunPlexAutomat
 
 **Notes:**
 
-- Each of the above (other than `RunPlexAutomationNow`) accepts a comma separated `filter`.
+- Each of the above (other than `RunPlexAutomationNow`) accepts an optional comma-separated `filter`.
   - The filter is comprised of Shoko or AniDB (prefixed with an 'a') series IDs.
 - All operations respect the `Advanced.Parallelism` setting to prevent IO saturation.
 - The scheduler is governed by `Automation.PlexAutomationFrequencyHours`.
@@ -244,18 +248,19 @@ GET  /vfs/tree                                                 -> GetVfsTree
 - `BuildVfs` (all query parameters are optional)
   - `run`: (default false) set to true to execute the VFS construction.
   - `clean`: (default true) clear the existing root before building.
-  - `filter`: (optional) comma separated Shoko or AniDB (prefixed with an 'a') series IDs.
+  - `filter`: (optional) comma-separated Shoko or AniDB (prefixed with an 'a') series IDs.
 - `AuditVfs` scans physical VFS directories against the database to find and remove orphaned folders and broken symlinks.
 - `SaveVfsOverrides` accepts raw text for `anidb_vfs_overrides.csv`.
-- `GetVfsTree` returns a hierarchical representation of the VFS structure by reading `vfs_blueprint.cache`.
+- `GetVfsTree` returns a hierarchical representation of the VFS structure by reading `vfs_blueprint.cache`, utilizing in-memory caching keyed to file modification time.
 
 **Notes:**
 
 - When `Automation.ScanOnVfsRefresh` is enabled, the controller schedules library scans for affected series automatically.
 - When importing local metadata images, files named `Specials.<ext>` are renamed to `Season-Specials-Poster.<ext>` in the VFS.
-- Any folder name listed in the `Folder Exclusions` setting (plus system folders like !AnimeThemes) is ignored during VFS generation.
-  - If `PlexLocalExtras` is enabled all folders and files matching Plex local extra formatting will be ignored as well.
+- Any folder name listed in the `Folder Exclusions` setting (plus system folders like `!AnimeThemes`) is ignored during VFS generation.
+  - If `PlexLocalExtras` is enabled, all folders and files matching Plex local extra formatting will be ignored as well.
 - Overrides allow grouping multiple AniDB IDs under a single primary Shoko Series ID for Plex.
+  - Secondary IDs must specify a `;S##E##` coordinate suffix (e.g. `2369,4515;S00E101`) when they do not share the same TMDB link as the primary.
 - `VfsWatcher` automatically triggers batch VFS builds when file events are detected.
 - If `Advanced.DeferVfsCreationUntilFixup` is enabled, `VfsWatcher` postpones generating VFS links until the Plex Fixup Delay window settles.
   - This prevents Plex from potentially scanning intermediate states.
@@ -301,7 +306,7 @@ GET  /sync-watched/start                                       -> StartWatchedSy
 
 **Notes:**
 
-- The response for `PurgeMissingFiles` includes a Processed property containing the count of records removed.
+- The response for `PurgeMissingFiles` includes a `Processed` property containing the count of records removed.
 - Scheduled automations are anchored to UTC midnight using `Automation.UtcOffsetHours`.
 - Managed user tokens are obtained transiently via Plex Home switching and are never persisted.
 
@@ -318,6 +323,7 @@ POST /shoko/purge-all-custom-images                            -> PurgeAllLocalI
 
 - `ProcessSourceLinks` manages relative symlinks from protected source folders to the library based on a text-based mapping file, or purges existing links.
   - `mapFile`: (required if not purging) path to the `.txt` file relative to the Import Root (e.g., `!Source/symlinks.txt`).
+    - Enforces boundary validation and `.txt` extension checks to prevent directory traversal.
   - `purgeLinks`: (default false) set to true to recursively remove all symlinks and `_attach` folders in the import roots.
 - `PurgeLocalImages` removes and purges all Shoko Relay uploaded custom user-submitted posters and Plex-generated episode screenshots from Shoko.
 - `PurgeAllLocalImages` removes and purges all custom user-submitted posters and Plex-generated episode screenshots from Shoko.
@@ -327,9 +333,8 @@ POST /shoko/purge-all-custom-images                            -> PurgeAllLocalI
 - If `purgeLinks` is `true`:
   - It explicitly excludes the configured VFS / AnimeThemes / Posters root folders and never deletes physical media files.
 - If `purgeLinks` is `false` (default):
-  - The `mapFile` parameter is the path to the `.txt` file relative to the Import Root (e.g., `!Source/symlinks.txt`).
   - Source paths are resolved relative to the directory containing the mapping file.
-  - Destination paths are resolved relative to the Import Root.
+  - Destination paths are resolved relative to the Import Root and validated against path traversal outside the root.
   - Sidecar files (any file starting with `{baseName}`) and attachment folders (directories named `{baseName}_attachments`) are automatically identified and renamed to match the destination.
     - The `_attachments` folders are renamed to `_attach` at the destination to allow the `purgeLinks` operation to delete them without touching the originals.
 
@@ -361,7 +366,9 @@ The mapping file uses a pipe-delimited (`|`) and semicolon-delimited (`;`) struc
   - This distinction ensures the `purgeLinks` command can safely remove generated links without touching original source files.
 - Relative Pathing: Links are created with relative targets. They remain valid as long as the relative depth between the source and destination remains consistent.
 - Bookkeeping: Lines that are successfully processed are automatically prefixed with `#` to prevent redundant processing in future runs.
-- `PurgeAllLocalImages` will be removed once Shoko's v3 API has similar functionality
+- `PurgeAllLocalImages` will be removed once Shoko's v3 API has similar functionality.
+
+---
 
 ## AnimeThemes
 
@@ -378,7 +385,7 @@ POST /animethemes/vfs/import                                   -> ImportAnimeThe
 ```
 
 - `AnimeThemesVfsBuild` applies the mapping and generates `webm_animethemes.cache`.
-  - `filter`: (optional) comma separated Shoko or AniDB (prefixed with an 'a') series IDs.
+  - `filter`: (optional) comma-separated Shoko or AniDB (prefixed with an 'a') series IDs.
   - Cache Format: `VfsPath|VideoId|Bitmask`.
   - Bitmask flags: `1:NC, 2:Lyrics, 4:Subs, 8:Uncen, 16:NSFW, 32:Spoil, 64:Trans, 128:Over`.
 - `AnimeThemesVfsMap` generates the mapping CSV or tests a single filename mapping.
@@ -400,7 +407,10 @@ POST /animethemes/webm/download                                -> DownloadAnimeT
 ```
 
 - `AnimeThemesWebmTree` returns the hierarchical tree including bitmask flags, `videoId`, and `relPath` (source folder path for folder view support).
+  - Employs single-pass in-memory dictionary caching of physical files to avoid redundant disk I/O on large mapping catalogs.
+  - Differentiates deterministically between TV and Movie VFS structures.
 - `AnimeThemesWebmStream` supports HTTP range requests for seekable browser playback.
+  - Enforces `.webm` extension validation to prevent arbitrary file streaming.
 - `GetAnimeThemesFavourites` returns a list of `videoId` favourites from `favs_animethemes.cache`.
 - `UpdateAnimeThemesFavourite` toggles a `videoId` in the favourites list using a raw integer body.
 - `DownloadAnimeThemesWebm` fetches WebM files from the AnimeThemes API and organizes them by Year/Season inside the configured `!AnimeThemes` folder.
@@ -408,7 +418,7 @@ POST /animethemes/webm/download                                -> DownloadAnimeT
   - If a `season` is provided without a `year`, it automatically defaults to the current year.
   - `force`: (default false) set to true to overwrite existing `.webm` files.
   - `destination`: (optional) absolute path to a specific managed folder to force downloads into.
-  - Files from before the year 2000 will sort by Decade/Season
+  - Files from before the year 2000 will be sorted by Decade/Season.
   - Automatically appends mapping entries for newly downloaded themes to the mapping CSV (`anidb_animethemes_xrefs.csv`).
 
 ---
@@ -447,5 +457,3 @@ GET  /animethemes/mp3/random?refresh={true|false}              -> AnimeThemesMp3
     - If a BD source is available, all non-BD sources (TV, Web, etc.) for that specific filename are skipped.
   - Numbering: If multiple sources of the same priority (e.g., multiple BDs or multiple TV rips) result in the same filename, they are de-duplicated by appending ` (2)`, ` (3)`, etc.
   - Overrides: Themes originating from secondary series in an override group receive a prefix (e.g., `P2 ❯ `, `P3 ❯ `) to distinguish them from the primary series themes.
-
----
