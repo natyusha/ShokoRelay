@@ -242,16 +242,28 @@ public static class MapHelper
 
         foreach (var key in videoCoords.Keys.ToList())
         {
-            var info = videoCoords[key];
-            if (info.Coords.Season == PlexConstants.SeasonOther)
+            var (coords, deduped) = videoCoords[key];
+            if (coords.Season == PlexConstants.SeasonOther)
             {
-                var newCoords = info.Coords;
-                newCoords.Season =
+                coords.Season =
                     !s1 ? PlexConstants.SeasonStandard
                     : !s0 ? PlexConstants.SeasonSpecials
-                    : newCoords.Season;
-                info.Coords = newCoords;
-                videoCoords[key] = info;
+                    : coords.Season;
+                videoCoords[key] = (coords, deduped);
+            }
+        }
+
+        // Fallback for credit-only series: if no standard or special season exists, promote Credits to Season 1 so Plex can index the series
+        if (!videoCoords.Values.Any(v => v.Coords.Season >= 0))
+        {
+            foreach (var key in videoCoords.Keys.ToList())
+            {
+                var (coords, deduped) = videoCoords[key];
+                if (coords.Season == PlexConstants.SeasonCredits)
+                {
+                    coords.Season = PlexConstants.SeasonStandard;
+                    videoCoords[key] = (coords, deduped);
+                }
             }
         }
 
