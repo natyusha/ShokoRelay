@@ -29,9 +29,10 @@
     "This allows shows which are separated on AniDB but part of the same TMDB listing to be combined into a single entry in Plex.\n" +
     "Each line should contain a comma separated list of AniDB IDs you wish to merge.\n" +
     "The first ID is the primary series and the others will be merged into it (for both VFS builds and metadata lookups).\n" +
-    "If the series do not share a TMDB link, you must append a specific season and episode number like so: ';S##E##'.\n" +
+    "If the series do not share a TMDB link, you must append a specific season and episode starting number like so: ';S##E##'.\n" +
+    "You can also map specific episodes, types, and ranges using '|' as a separator: ';1-10s1e1|11-20s2e1|s1s0e101|o1s0e102'.\n" +
     "Lines that are blank or start with a '#' are ignored. An example is shown below:\n\n" +
-    "## Shoko Relay VFS Overrides\n\n# Fairy Tail\n6662,8132,9980,13295\n\n# Bleach (Movies as Specials)\n2369,4515;S00E101,5352;S00E102,6041;S00E103,7666;S00E104";
+    "## Shoko Relay VFS Overrides\n\n# Fairy Tail\n6662,8132,9980,13295\n\n# Bleach (Movies as Specials)\n2369,4515;s0e101,5352;s0e102,6041;s0e103,7666;s0e104";
 
   /**
    * Initializes real-time input sanitization event listeners for Shoko inputs.

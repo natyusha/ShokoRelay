@@ -442,7 +442,9 @@ If you aren't happy with TMDB's default episode/season structure for a series, y
 
 **Combining Series & Custom Episode Mappings**
 
-This allows shows which are separated on AniDB but part of the same TMDB listing to be combined into a single entry in Plex. To achieve this, click the `VFS Overrides Editor` button in the "Shoko: VFS" section of the dashboard. It will open a modal which will create (or edit an existing) `anidb_vfs_overrides.csv` file in the plugin's config directory. Each line should contain a comma separated list of AniDB IDs you wish to merge. For this to work automatically, all of the AniDB IDs on the line must share the exact same TMDB link. The first ID is the _primary series_ and the others will be merged into it (for both VFS builds and metadata lookups). If a secondary series does _not_ share a TMDB link, it must be mapped to a specific season and episode coordinate by appending `;S##E##` to the ID. Lines that are blank or start with a "#" are ignored.
+This allows shows which are separated on AniDB but part of the same TMDB listing to be combined into a single entry in Plex. To achieve this, click the `VFS Overrides Editor` button in the "Shoko: VFS" section of the dashboard. It will open a modal which will create (or edit an existing) `anidb_vfs_overrides.csv` file in the plugin's config directory. Each line should contain a comma separated list of AniDB IDs you wish to merge. For this to work automatically, all of the AniDB IDs on the line must share the exact same TMDB link. The first ID is the _primary series_ and the others will be merged into it (for both VFS builds and metadata lookups).
+
+If a secondary series does _not_ share a TMDB link, it must be mapped to a specific season and episode starting coordinate by appending `;S##E##` to the ID. You can optionally specify episode types (C, S, T, P, O), specific episodes, or ranges by utilizing the `|` separator (e.g. `;1-10s1e1|11-20s2e1|s1s0e101|o1s0e102`). Lines that are blank or start with a "#" are ignored.
 
 It is highly recommended to use this feature for series like "Akahori Gedou Hour Rabuge" where every episode is a crossover.
 

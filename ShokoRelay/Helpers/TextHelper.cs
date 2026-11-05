@@ -54,8 +54,8 @@ public static partial class TextHelper
     [GeneratedRegex(@"\\u([0-9a-fA-F]{4})")]
     private static partial Regex UnicodeEscapeRegex();
 
-    /// <summary>Regex for parsing custom season and episode coordinates from VFS override entries.</summary>
-    [GeneratedRegex(@"^[sS](\d+);?[eE](\d+)$")]
+    /// <summary>Regex for parsing custom episode coordinate assignments from VFS override entries.</summary>
+    [GeneratedRegex(@"^(?:([CSTPO])?(\d+)(?:-(\d+))?)?[S](\d+)[E](\d+)$", RegexOptions.IgnoreCase)]
     public static partial Regex CustomCoordRegex();
 
     #endregion

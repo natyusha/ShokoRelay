@@ -1,7 +1,16 @@
 using System.Globalization;
 using Shoko.Abstractions.Metadata;
+using Shoko.Abstractions.Metadata.Enums;
 
 namespace ShokoRelay.Helpers;
+
+/// <summary>Defines a mapping rule for custom VFS coordinate overrides.</summary>
+/// <param name="Type">The source episode type to match.</param>
+/// <param name="StartEp">The starting episode number to match.</param>
+/// <param name="EndEp">The ending episode number to match (inclusive).</param>
+/// <param name="TargetSeason">The target Plex season number.</param>
+/// <param name="TargetEpisodeStart">The starting target Plex episode number.</param>
+public sealed record CustomCoordRule(EpisodeType Type, int StartEp, int EndEp, int TargetSeason, int TargetEpisodeStart);
 
 /// <summary>Parses an optional <see cref="ShokoRelayConstants.FileVfsOverrides"/> file to group multiple Shoko series IDs together.</summary>
 public static class OverrideHelper
@@ -12,7 +21,7 @@ public static class OverrideHelper
     private static IReadOnlyDictionary<int, List<int>> s_groups = new Dictionary<int, List<int>>();
 
     /// <summary>Cached dictionary of custom episode coordinate overrides for specific secondary series.</summary>
-    private static IReadOnlyDictionary<int, (int Season, int Episode)> s_coordOverrides = new Dictionary<int, (int Season, int Episode)>();
+    private static IReadOnlyDictionary<int, List<CustomCoordRule>> s_coordOverrides = new Dictionary<int, List<CustomCoordRule>>();
 
     /// <summary>Tracks whether the override groups have been initialized.</summary>
     private static bool s_isInitialized;
@@ -59,7 +68,7 @@ public static class OverrideHelper
     {
         // Use local dictionaries to build the groups, then perform an atomic swap to prevent race conditions where other threads see a cleared or partially-loaded static dictionary.
         var newGroups = new Dictionary<int, List<int>>();
-        var newCoordOverrides = new Dictionary<int, (int Season, int Episode)>();
+        var newCoordOverrides = new Dictionary<int, List<CustomCoordRule>>();
         string path = OverridesPath;
         void AddGroup(List<int> ids) => ids.ForEach(id => newGroups.TryAdd(id, ids)); // Helper to add a list of IDs to the group registry
 
@@ -95,13 +104,38 @@ public static class OverrideHelper
                             var coordStr = part[(sepIdx + 1)..].Trim();
                             if (int.TryParse(idStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out anidbId) && anidbId > 0)
                             {
-                                var match = TextHelper.CustomCoordRegex().Match(coordStr);
-                                if (match.Success)
+                                var ruleList = new List<CustomCoordRule>();
+                                foreach (var rStr in coordStr.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                                 {
-                                    int s = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
-                                    int e = int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
-                                    newCoordOverrides[anidbId] = (s, e);
+                                    var match = TextHelper.CustomCoordRegex().Match(rStr);
+                                    if (match.Success)
+                                    {
+                                        string tStr = match.Groups[1].Value;
+                                        EpisodeType eType = EpisodeType.Episode;
+                                        if (!string.IsNullOrEmpty(tStr))
+                                        {
+                                            eType = tStr.ToUpperInvariant() switch
+                                            {
+                                                "C" => EpisodeType.Credits,
+                                                "S" => EpisodeType.Special,
+                                                "T" => EpisodeType.Trailer,
+                                                "P" => EpisodeType.Parody,
+                                                "O" => EpisodeType.Other,
+                                                _ => EpisodeType.Episode,
+                                            };
+                                        }
+
+                                        int startEp = match.Groups[2].Success ? int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture) : 1;
+                                        int endEp = match.Groups[3].Success ? int.Parse(match.Groups[3].Value, CultureInfo.InvariantCulture) : (match.Groups[2].Success ? startEp : int.MaxValue);
+                                        int targetS = int.Parse(match.Groups[4].Value, CultureInfo.InvariantCulture);
+                                        int targetE = int.Parse(match.Groups[5].Value, CultureInfo.InvariantCulture);
+
+                                        ruleList.Add(new CustomCoordRule(eType, startEp, endEp, targetS, targetE));
+                                    }
                                 }
+
+                                if (ruleList.Count > 0)
+                                    newCoordOverrides[anidbId] = ruleList;
                             }
                         }
                         else
@@ -177,12 +211,24 @@ public static class OverrideHelper
 
     /// <summary>Retrieves manual VFS coordinates for a specific episode, if defined in the overrides file.</summary>
     /// <param name="anidbAnimeId">The AniDB Anime ID the episode belongs to.</param>
+    /// <param name="type">The source episode type to match against.</param>
     /// <param name="episodeNumber">The numeric episode number of the specific type.</param>
     /// <returns>The overriden season and episode coordinates, or null if unconfigured.</returns>
-    public static (int Season, int Episode)? GetCustomCoords(int anidbAnimeId, int episodeNumber)
+    public static (int Season, int Episode)? GetCustomCoords(int anidbAnimeId, EpisodeType type, int episodeNumber)
     {
         EnsureLoaded();
-        return s_coordOverrides.Count > 0 && s_coordOverrides.TryGetValue(anidbAnimeId, out var coords) ? (coords.Season, coords.Episode + Math.Max(0, episodeNumber - 1)) : null;
+        if (s_coordOverrides.TryGetValue(anidbAnimeId, out var rules))
+        {
+            foreach (var rule in rules)
+            {
+                if (rule.Type == type && episodeNumber >= rule.StartEp && episodeNumber <= rule.EndEp)
+                {
+                    int offset = episodeNumber - rule.StartEp;
+                    return (rule.TargetSeason, rule.TargetEpisodeStart + offset);
+                }
+            }
+        }
+        return null;
     }
 
     #endregion

@@ -56,7 +56,7 @@ public static class PlexMapping
         // Fast path: Check for explicit manual VFS coordinate overrides (e.g. placing movies as specials)
         if (episode is IShokoEpisode { Series: { AnidbAnimeID: > 0 } ss })
         {
-            var custom = OverrideHelper.GetCustomCoords(ss.AnidbAnimeID, episode.EpisodeNumber);
+            var custom = OverrideHelper.GetCustomCoords(ss.AnidbAnimeID, episode.Type, episode.EpisodeNumber);
             if (custom.HasValue)
                 return new PlexCoords { Season = custom.Value.Season, Episode = custom.Value.Episode };
         }
