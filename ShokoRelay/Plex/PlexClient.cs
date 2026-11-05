@@ -327,7 +327,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
                 Uuid = l.Uuid,
                 ServerId = l.ServerId,
                 ServerName = l.ServerName,
-                ServerUrl = l.ServerUrl,
+                ServerUrl = !string.IsNullOrWhiteSpace(Settings.Advanced.PlexServerUrl) ? Settings.Advanced.PlexServerUrl.Trim().TrimEnd('/') : l.ServerUrl,
                 LibraryType = (l.Type ?? "").ToLowerInvariant() switch
                 {
                     "movie" => PlexLibraryType.Movie,
@@ -349,10 +349,12 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
             return null;
 
         var server = configProvider.GetPlexDiscoveredServers().FirstOrDefault(s => !string.IsNullOrWhiteSpace(s.PreferredUri));
-        if (server == null)
+        if (server == null && string.IsNullOrWhiteSpace(Settings.Advanced.PlexServerUrl))
             return null;
 
-        using var req = CreateRequest(HttpMethod.Get, "/library/sections", server.PreferredUri);
+        string preferredUri = !string.IsNullOrWhiteSpace(Settings.Advanced.PlexServerUrl) ? Settings.Advanced.PlexServerUrl.Trim().TrimEnd('/') : server!.PreferredUri;
+
+        using var req = CreateRequest(HttpMethod.Get, "/library/sections", preferredUri);
         using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
         if (!resp.IsSuccessStatusCode)
             return null;
@@ -385,9 +387,9 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
                         Title = titleProp.GetString() ?? libraryName,
                         Type = type,
                         Uuid = dir.TryGetProperty("uuid", out var uuidProp) ? uuidProp.GetString() ?? "" : "",
-                        ServerId = server.Id,
-                        ServerName = server.Name,
-                        ServerUrl = server.PreferredUri,
+                        ServerId = server?.Id ?? "",
+                        ServerName = server?.Name ?? "Plex Server",
+                        ServerUrl = preferredUri,
                         LibraryType = type.Equals("movie", StringComparison.OrdinalIgnoreCase) ? PlexLibraryType.Movie : PlexLibraryType.Show,
                         Locations = locations,
                     };

@@ -301,6 +301,11 @@ public static class SyncHelper
                 var devices = allDevices ?? [];
                 foreach (var dev in devices)
                 {
+                    if (string.Equals(dev.ClientIdentifier, target.ServerId, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(dev.AccessToken))
+                    {
+                        serverAccessToken = dev.AccessToken;
+                        break;
+                    }
                     if (dev?.Connections == null)
                         continue;
                     foreach (var c in dev.Connections)

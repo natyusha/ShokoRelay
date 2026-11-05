@@ -232,7 +232,10 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config, ILogger<Plex
             for (int i = 0; i < servers.Count; i++)
             {
                 var srv = servers[i];
-                var ok = !string.IsNullOrEmpty(srv.PreferredUri) && await TryConnectAsync(srv.PreferredUri, srv, false).ConfigureAwait(false);
+                string? customUrl = !string.IsNullOrWhiteSpace(Settings.Advanced.PlexServerUrl) ? Settings.Advanced.PlexServerUrl.Trim().TrimEnd('/') : null;
+                var ok =
+                    (!string.IsNullOrEmpty(customUrl) && await TryConnectAsync(customUrl, srv with { PreferredUri = customUrl }, false).ConfigureAwait(false))
+                    || (!string.IsNullOrEmpty(srv.PreferredUri) && await TryConnectAsync(srv.PreferredUri, srv, false).ConfigureAwait(false));
 
                 // Fallback: If preferred URI failed, try other endpoints
                 if (!ok && devices.FirstOrDefault(d => string.Equals(d.ClientIdentifier, srv.Id, StringComparison.OrdinalIgnoreCase)) is { } dev && dev.Connections != null)

@@ -201,17 +201,18 @@
         } else {
           input.type = "text";
           if (p.Path.endsWith("ShokoServerUrl")) input.placeholder = "e.g. http://localhost:8111";
+          if (p.Path.endsWith("PlexServerUrl")) input.placeholder = "e.g. http://localhost:32400";
         }
         wrap.appendChild(input);
 
-        // Custom validation for ShokoServerUrl
-        if (p.Path.endsWith("ShokoServerUrl")) {
+        // Custom validation for ShokoServerUrl and PlexServerUrl
+        if (p.Path.endsWith("ShokoServerUrl") || p.Path.endsWith("PlexServerUrl")) {
           input.value = value ?? "";
           input.onchange = async () => {
             const urlRegex = /^https?:\/\/[a-zA-Z0-9.-]+(:\d+)?$/;
             const cleanVal = input.value.trim().replace(/\/+$/, "");
             if (cleanVal && !urlRegex.test(cleanVal)) {
-              showToast("Invalid Shoko URL. Use http(s)://HOST:PORT", "error", 5000);
+              showToast(`Invalid ${p.Path.endsWith("ShokoServerUrl") ? "Shoko" : "Plex"} URL. Use http(s)://HOST:PORT`, "error", 5000);
               input.value = getValueByPath(config, p.Path) || "";
               return;
             }

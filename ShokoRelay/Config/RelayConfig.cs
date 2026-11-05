@@ -384,6 +384,12 @@ public class AdvancedConfig
     [DefaultValue("")]
     public string ShokoServerUrl { get; set; } = "";
 
+    /// <summary>The base Plex server URL as defined by the user.</summary>
+    [Display(Name = "Plex Server URL", Description = "A URL and port used to communicate with Plex Media Server (e.g. http://localhost:32400)")]
+    [RegularExpression(@"^https?://[a-zA-Z0-9.-]+(:\d+)?$", ErrorMessage = "Invalid URL format. Use http(s)://HOST:PORT")]
+    [DefaultValue("")]
+    public string PlexServerUrl { get; set; } = "";
+
     /// <summary>Directory mappings between Shoko and the working device.</summary>
     [Display(Name = "Path Mappings", Description = "Mappings for working base paths to Shoko base paths. Enter one mapping per line")]
     public Dictionary<string, string> PathMappings { get; set; } = [];
