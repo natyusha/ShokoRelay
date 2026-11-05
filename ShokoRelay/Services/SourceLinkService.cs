@@ -55,8 +55,9 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
                 continue;
 
             string fullRoot = Path.GetFullPath(root);
+            string fullRootWithSep = fullRoot.EndsWith(Path.DirectorySeparatorChar) ? fullRoot : fullRoot + Path.DirectorySeparatorChar;
             string fullTxtPath = Path.GetFullPath(Path.Combine(fullRoot, safeMapFile));
-            if (!fullTxtPath.StartsWith(fullRoot + Path.DirectorySeparatorChar, VfsShared.PathComparison) || !File.Exists(fullTxtPath))
+            if (!fullTxtPath.StartsWith(fullRootWithSep, VfsShared.PathComparison) || !File.Exists(fullTxtPath))
                 continue;
 
             string mappingFileDir = Path.GetDirectoryName(fullTxtPath)!;
@@ -83,7 +84,7 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
                     string fullSrc = Path.GetFullPath(Path.Combine(mappingFileDir, srcInfo.Path));
                     string fullDest = Path.GetFullPath(Path.Combine(fullRoot, destInfo.Path));
 
-                    if (!fullDest.StartsWith(fullRoot + Path.DirectorySeparatorChar, VfsShared.PathComparison))
+                    if (!fullDest.StartsWith(fullRootWithSep, VfsShared.PathComparison))
                     {
                         logger.LogWarning("SourceLinkService: Destination path escapes import root -> {Path}", fullDest);
                         continue;
