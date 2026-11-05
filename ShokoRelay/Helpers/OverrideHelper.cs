@@ -84,68 +84,28 @@ public static class OverrideHelper
                         continue;
 
                     var parts = TextHelper.SplitCsvLine(line).Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
-                    if (parts.Count < 2)
+                    if (parts.Count == 0)
                         continue;
 
-                    if (!int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var primaryId) || primaryId <= 0)
+                    var (primaryId, primaryRules) = ParsePart(parts[0]);
+                    if (primaryId <= 0)
                         continue;
+
+                    if (primaryRules != null)
+                        newCoordOverrides[primaryId] = primaryRules;
 
                     var group = new List<int> { primaryId };
 
                     for (int i = 1; i < parts.Count; i++)
                     {
-                        var part = parts[i];
-                        int anidbId = 0;
+                        var (secId, secRules) = ParsePart(parts[i]);
+                        if (secId <= 0)
+                            continue;
 
-                        int sepIdx = part.IndexOf(';');
-                        if (sepIdx > 0)
-                        {
-                            var idStr = part[..sepIdx].Trim();
-                            var coordStr = part[(sepIdx + 1)..].Trim();
-                            if (int.TryParse(idStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out anidbId) && anidbId > 0)
-                            {
-                                var ruleList = new List<CustomCoordRule>();
-                                foreach (var rStr in coordStr.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-                                {
-                                    var match = TextHelper.CustomCoordRegex().Match(rStr);
-                                    if (match.Success)
-                                    {
-                                        string tStr = match.Groups[1].Value;
-                                        EpisodeType eType = EpisodeType.Episode;
-                                        if (!string.IsNullOrEmpty(tStr))
-                                        {
-                                            eType = tStr.ToUpperInvariant() switch
-                                            {
-                                                "C" => EpisodeType.Credits,
-                                                "S" => EpisodeType.Special,
-                                                "T" => EpisodeType.Trailer,
-                                                "P" => EpisodeType.Parody,
-                                                "O" => EpisodeType.Other,
-                                                _ => EpisodeType.Episode,
-                                            };
-                                        }
+                        if (secRules != null)
+                            newCoordOverrides[secId] = secRules;
 
-                                        int startEp = match.Groups[2].Success ? int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture) : 1;
-                                        int endEp = match.Groups[3].Success ? int.Parse(match.Groups[3].Value, CultureInfo.InvariantCulture) : (match.Groups[2].Success ? startEp : int.MaxValue);
-                                        int targetS = int.Parse(match.Groups[4].Value, CultureInfo.InvariantCulture);
-                                        int targetE = int.Parse(match.Groups[5].Value, CultureInfo.InvariantCulture);
-
-                                        ruleList.Add(new CustomCoordRule(eType, startEp, endEp, targetS, targetE));
-                                    }
-                                }
-
-                                if (ruleList.Count > 0)
-                                    newCoordOverrides[anidbId] = ruleList;
-                            }
-                        }
-                        else
-                        {
-                            if (int.TryParse(part, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedId))
-                                anidbId = parsedId;
-                        }
-
-                        if (anidbId > 0)
-                            group.Add(anidbId);
+                        group.Add(secId);
                     }
 
                     if (group.Count >= 2)
@@ -179,6 +139,58 @@ public static class OverrideHelper
         // Atomic swap
         s_groups = newGroups;
         s_coordOverrides = newCoordOverrides;
+    }
+
+    /// <summary>Parses an AniDB ID and optional custom coordinate rules from an override token.</summary>
+    /// <param name="part">The raw CSV token to parse.</param>
+    /// <returns>A tuple containing the AniDB ID and any parsed coordinate rules.</returns>
+    private static (int Id, List<CustomCoordRule>? Rules) ParsePart(string part)
+    {
+        int anidbId = 0;
+        List<CustomCoordRule>? ruleList = null;
+
+        int sepIdx = part.IndexOf(';');
+        if (sepIdx > 0)
+        {
+            var idStr = part[..sepIdx].Trim();
+            var coordStr = part[(sepIdx + 1)..].Trim();
+            if (int.TryParse(idStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out anidbId) && anidbId > 0)
+            {
+                ruleList = [];
+                foreach (var rStr in coordStr.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    var match = TextHelper.CustomCoordRegex().Match(rStr);
+                    if (!match.Success)
+                        continue;
+
+                    string tStr = match.Groups[1].Value;
+                    EpisodeType eType = EpisodeType.Episode;
+                    if (!string.IsNullOrEmpty(tStr))
+                    {
+                        eType = tStr.ToUpperInvariant() switch
+                        {
+                            "C" => EpisodeType.Credits,
+                            "S" => EpisodeType.Special,
+                            "T" => EpisodeType.Trailer,
+                            "P" => EpisodeType.Parody,
+                            "O" => EpisodeType.Other,
+                            _ => EpisodeType.Episode,
+                        };
+                    }
+
+                    int startEp = match.Groups[2].Success ? int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture) : 1;
+                    int endEp = match.Groups[3].Success ? int.Parse(match.Groups[3].Value, CultureInfo.InvariantCulture) : (match.Groups[2].Success ? startEp : int.MaxValue);
+                    int targetS = int.Parse(match.Groups[4].Value, CultureInfo.InvariantCulture);
+                    int targetE = int.Parse(match.Groups[5].Value, CultureInfo.InvariantCulture);
+
+                    ruleList.Add(new CustomCoordRule(eType, startEp, endEp, targetS, targetE));
+                }
+            }
+        }
+        else if (int.TryParse(part, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedId))
+            anidbId = parsedId;
+
+        return (anidbId, ruleList?.Count > 0 ? ruleList : null);
     }
 
     #endregion

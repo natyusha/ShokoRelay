@@ -444,7 +444,40 @@ If you aren't happy with TMDB's default episode/season structure for a series, y
 
 This allows shows which are separated on AniDB but part of the same TMDB listing to be combined into a single entry in Plex. To achieve this, click the `VFS Overrides Editor` button in the "Shoko: VFS" section of the dashboard. It will open a modal which will create (or edit an existing) `anidb_vfs_overrides.csv` file in the plugin's config directory. Each line should contain a comma separated list of AniDB IDs you wish to merge. For this to work automatically, all of the AniDB IDs on the line must share the exact same TMDB link. The first ID is the _primary series_ and the others will be merged into it (for both VFS builds and metadata lookups).
 
-If a secondary series does _not_ share a TMDB link, it must be mapped to a specific season and episode starting coordinate by appending `;S##E##` to the ID. You can optionally specify episode types (C, S, T, P, O), specific episodes, or ranges by utilizing the `|` separator (e.g. `;1-10s1e1|11-20s2e1|s1s0e101|o1s0e102`). Lines that are blank or start with a "#" are ignored.
+If a secondary series does _not_ share a TMDB link (or if you want to manually map episodes of a single series), you can assign specific season and episode coordinates by appending episode information to the ID. The formatting is available in the details block below:
+
+<details>
+<summary><b>Advanced Episode Formatting</b></summary><br>
+
+Custom episode assignments allow series to be mapped to specific seasons and episode numbers using the following syntax:
+
+`{AniDB ID};{Episode Type}{Source Range}S##E##`
+
+- **AniDB ID:** A single AniDB ID
+- **Assignment Separator:** `;` separates the series ID from its assignments
+- **Episode Type:** By default regular episodes are assumed meaning no episode type needs to be entered. Specific AniDB episode types can be targeted by prefixing the source episode number:
+  - `S` - Specials (e.g. `s1s0e101`)
+  - `C` - Credits / Theme Songs (e.g. `c1-2s0e201`)
+  - `T` - Trailers
+  - `P` - Parodies
+  - `O` - Other (e.g. `o1s0e102`)
+- **Source Range:** Ranges are specified with a hyphen (e.g. `1-10s1e1`), while single episodes omit it (e.g. `12s1e13`)
+- **Episode Separator:** `|` separates multiple assignments for the same series
+
+**Notes:**
+
+- All letters (`s`, `e`, and type prefixes) are case-insensitive and leading zeros are optional
+- If no source range or type is specified (e.g. `;s0e101`), all regular episodes of the secondary series are mapped sequentially starting from that episode number
+- Custom assignments can also be used on a standalone line for a single series without merging secondary series
+
+**Examples:**
+
+- `1234;1-12s1e1|13-24s2e1` - Splits the first 24 episodes of a single series across Season 1 and Season 2 without merging other series
+- `1234,5678;s0e101,91011;s0e201` - Maps all regular episodes of AniDB IDs `5678` and `91011` sequentially into Specials of `1234` starting at episodes 101 and 201
+- `1234,5678;1-12s1e1|13-24s2e1` - Splits the first 24 episodes of series `5678` across Season 1 and Season 2 of `1234`
+- `1234,5678;1-10s1e1|s1s0e101|o1s0e102` - Maps `5678` into `1234` with regular episodes 1–10 to Season 1, Special 1 to S00E101, and Other 1 to S00E102
+
+</details>
 
 It is highly recommended to use this feature for series like "Akahori Gedou Hour Rabuge" where every episode is a crossover.
 
