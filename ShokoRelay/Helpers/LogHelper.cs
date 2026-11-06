@@ -86,27 +86,43 @@ public static class LogHelper
 
     /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskPlexAuthRefresh"/>.</summary>
     /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
-    /// <param name="r">List of discovered Plex libraries.</param>
-    public static void BuildDiscoveryReport(StringBuilder sb, List<PlexAvailableLibrary> r)
+    /// <param name="r">Plex discovery result data.</param>
+    public static void BuildDiscoveryReport(StringBuilder sb, PlexDiscoveryResult r)
     {
-        AppendHeader(sb, "Plex Discovery Report");
-        sb.AppendLine($"  Libraries Found          : {r.Count}");
+        var libs = r.Libraries;
+        string? customUrl = !string.IsNullOrWhiteSpace(r.CustomUrl) ? r.CustomUrl.Trim().TrimEnd('/') : null;
 
-        var tvLibs = r.Where(l => !string.Equals(l.Type, "movie", StringComparison.OrdinalIgnoreCase)).ToList();
-        var movieLibs = r.Where(l => string.Equals(l.Type, "movie", StringComparison.OrdinalIgnoreCase)).ToList();
+        AppendHeader(sb, "Plex Discovery Report");
+        sb.AppendLine($"  Libraries Found          : {libs.Count}");
+
+        if (customUrl != null)
+            sb.AppendLine($"  Configured Override URL  : {customUrl}");
+
+        var tvLibs = libs.Where(l => !string.Equals(l.Type, "movie", StringComparison.OrdinalIgnoreCase)).ToList();
+        var movieLibs = libs.Where(l => string.Equals(l.Type, "movie", StringComparison.OrdinalIgnoreCase)).ToList();
+
+        void PrintLib(PlexAvailableLibrary l)
+        {
+            string urlLabel = (customUrl != null && string.Equals(l.ServerUrl.TrimEnd('/'), customUrl, StringComparison.OrdinalIgnoreCase)) ? " [Override]" : "";
+            sb.AppendLine($"  - [{l.ServerName}] {l.Title}");
+            sb.AppendLine($"    URL   : {l.ServerUrl}{urlLabel}");
+            sb.AppendLine($"    Agent : {l.Agent}");
+            if (l.Locations.Count > 0)
+                sb.AppendLine($"    Paths : {string.Join(", ", l.Locations)}");
+        }
 
         if (tvLibs.Count > 0)
         {
             sb.AppendLine().AppendLine("TV Shows Libraries:");
             foreach (var l in tvLibs)
-                sb.AppendLine($"  - [{l.ServerName}] {l.Title}");
+                PrintLib(l);
         }
 
         if (movieLibs.Count > 0)
         {
             sb.AppendLine().AppendLine("Movie Libraries:");
             foreach (var l in movieLibs)
-                sb.AppendLine($"  - [{l.ServerName}] {l.Title}");
+                PrintLib(l);
         }
     }
 

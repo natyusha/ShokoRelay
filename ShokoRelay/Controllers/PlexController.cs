@@ -12,6 +12,11 @@ namespace ShokoRelay.Controllers;
 
 #region Data Models
 
+/// <summary>Result of a Plex discovery refresh.</summary>
+/// <param name="Libraries">List of discovered libraries.</param>
+/// <param name="CustomUrl">The custom server URL configured at the time of discovery.</param>
+public sealed record PlexDiscoveryResult(List<PlexAvailableLibrary> Libraries, string? CustomUrl);
+
 /// <summary>Result of a full Plex automation run containing elapsed times and individual sub-task results.</summary>
 /// <param name="TotalElapsed">The total elapsed time for the entire automation run.</param>
 /// <param name="CollectionsElapsed">The elapsed time for the collection building sub-task.</param>
@@ -157,7 +162,7 @@ public class PlexController(
                     await ConfigProvider.RefreshAdminUsername(plexAuth, HttpContext.RequestAborted).ConfigureAwait(false);
                     var discovery = await plexAuth.DiscoverShokoLibrariesAsync(ConfigProvider.GetPlexToken(), ConfigProvider.GetPlexClientIdentifier(), HttpContext.RequestAborted).ConfigureAwait(false);
                     PersistDiscoveryResults(discovery);
-                    return CollectDiscoveredLibraries(discovery.ShokoLibraries);
+                    return new PlexDiscoveryResult(CollectDiscoveredLibraries(discovery.ShokoLibraries), ConfigProvider.GetSettings().Advanced.PlexServerUrl);
                 },
                 SyncHelper.SyncLock
             );
