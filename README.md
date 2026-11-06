@@ -340,7 +340,17 @@ Non standard episodes on the other hand, are placed into a local series level Ex
 
 **"Other" Rule**
 
-`Other` type episodes have a special rule where they will attempt to place themselves in `Season 1` or `Specials` if either is empty. Otherwise, they will be placed in `Featurettes` and display as extras in Plex. This was implemented because these episodes are generally parts of a Movie and have a full set of metadata which would not appear if they were in Plex's local extras.
+`Other` type episodes have a special rule where they will attempt to place themselves in `Season 1` or `Specials` if either is empty of physical files. Otherwise, they will be placed in `Featurettes` and display as extras in Plex. This was implemented because these episodes are generally parts of a Movie and have a full set of metadata which would not appear if they were in Plex's local extras.
+
+**Extra-Only Series Rule**
+
+Plex requires a series to have at least one episode in a recognized season folder (`Season ##` or `Specials`) for it to be visible in a library. For series which are comprised entirely of Extras (non-standard episodes), the highest priority extra type will be promoted to `Season 1` which will allow Plex to display it. The following priority determines what is promoted first:
+
+1. `Credits` (Shorts)
+2. `Trailers` (Trailers)
+3. `Parody` (Scenes)
+
+Any remaining extras will stay in their respective subfolders as normal.
 
 **Crossover Episode Limitations**
 

@@ -253,18 +253,25 @@ public static class MapHelper
             }
         }
 
-        // Fallback for credit-only series: if no standard or special season exists, promote Credits to Season 1 so Plex can index the series
+        // Fallback for extra-only series: if no standard or special season exists, promote Credits, Trailers, or Parodies (in priority order) to Season 1 so Plex can index the series
         if (!videoCoords.Values.Any(v => v.Coords.Season >= 0))
         {
-            foreach (var key in videoCoords.Keys.ToList())
-            {
-                var (coords, deduped) = videoCoords[key];
-                if (coords.Season == PlexConstants.SeasonCredits)
+            int? promoSeason =
+                videoCoords.Values.Any(v => v.Coords.Season == PlexConstants.SeasonCredits) ? PlexConstants.SeasonCredits
+                : videoCoords.Values.Any(v => v.Coords.Season == PlexConstants.SeasonTrailers) ? PlexConstants.SeasonTrailers
+                : videoCoords.Values.Any(v => v.Coords.Season == PlexConstants.SeasonParody) ? PlexConstants.SeasonParody
+                : null;
+
+            if (promoSeason.HasValue)
+                foreach (var key in videoCoords.Keys.ToList())
                 {
-                    coords.Season = PlexConstants.SeasonStandard;
-                    videoCoords[key] = (coords, deduped);
+                    var (coords, deduped) = videoCoords[key];
+                    if (coords.Season == promoSeason.Value)
+                    {
+                        coords.Season = PlexConstants.SeasonStandard;
+                        videoCoords[key] = (coords, deduped);
+                    }
                 }
-            }
         }
 
         // Pass 2: Build final mappings
