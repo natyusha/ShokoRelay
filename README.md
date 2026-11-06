@@ -14,6 +14,8 @@ Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File Sy
 
 ## Installation
 
+### Shoko
+
 > [!WARNING]
 > The VFS is created inside each of Shoko's managed folders (that aren't marked exclusively as a "Source") under a subfolder named `!ShokoRelayVFS` (configurable under `Advanced Settings > VFS Root Path`).
 > While Shoko Relay includes an internal ignore rule to block scans of VFS folders during manual and scheduled imports, **Shoko's live file watcher ("Watch For New Files") bypasses plugin ignore rules entirely**.
@@ -138,7 +140,7 @@ Enable the following options in Shoko to ensure that Plex has at least one sourc
 
 Once you are happy with your new libraries you can safely delete all of the old data left behind from any anime related legacy agents you may have used. To do so simply navigate to your [Plex Media Server data directory](https://support.plex.tv/articles/202915258-where-is-the-plex-media-server-data-directory-located/) and search for the full agent name. You can then delete all of the files and folders found that match the search result. Some example search terms are listed below:
 
-```
+```text
 com.plexapp.agents.hama
 com.plexapp.agents.shoko
 com.plexapp.agents.shokorelay
@@ -148,13 +150,13 @@ com.plexapp.agents.shokorelay
 
 ## Automation Controls
 
-#### Force Partial Scans
+### Force Partial Scans
 
 - When `Force Partial Scans` is enabled Plex's HTTP API will be used to scan folders modified by the VFS watcher
 - On certain setups this is much more reliable than Plex's default "Scan my library automatically" or "Run a partial scan when changes are detected" implementation
 - _Requires Plex authentication **and** should not be used if Plex's auto scanning is enabled_
 
-#### Auto Scrobble
+### Auto Scrobble
 
 - When `Auto Scrobble` is enabled Plex's [webhook](https://support.plex.tv/articles/115002267687-webhooks/) will be used to forward scrobble events to shoko
 - This can be enabled in the Plex Web/Desktop App under `Settings > Webhooks`
@@ -184,7 +186,7 @@ com.plexapp.agents.shokorelay
   - Make sure to set `AniDB > Update Options > Files With Missing Info` to "Never" if you use this
 - The scheduled tasks above can be disabled by setting their configured interval to `0`.
 
-**Run Plex Automation Now**
+#### Run Plex Automation Now
 
 The button in the top right of the Automation Controls panel will run all three Plex automations sequentially without waiting for the scheduled interval.
 
@@ -244,9 +246,11 @@ Applying a hyphenated suffix to the image that matches Plex's naming conventions
 
 ## AnimeThemes Integration
 
+Shoko Relay includes full [AnimeThemes](https://animethemes.moe/) integration. This allows those who are fans of anime openings and endings to have automatic OP/ED metadata for the majority of their collection.
+
 ### Themes as Video Extras
 
-This plugin includes full [AnimeThemes](https://animethemes.moe/) integration. It will look for '.webm' theme files in a folder called `!AnimeThemes` (or the configured `AnimeThemes Root Path`) which is located in the root of your anime library (this works for any "destination" type folder managed by Shoko). These files must have the same name as they do on the AnimeThemes website and then a mapping must be generated for them, in what is essentially a 3 step process. Simply navigate to the "AnimeThemes: VFS" section of the dashboard page to get started.
+The plugin will look for '.webm' theme files in a folder called `!AnimeThemes` (or the configured `AnimeThemes Root Path`) which is located in the root of your anime library (this works for any "destination" type folder managed by Shoko). These files must have the same name as they do on the AnimeThemes website and then a mapping must be generated for them, in what is essentially a 3 step process. Simply navigate to the "AnimeThemes: VFS" section of the dashboard page to get started.
 
 1. Download anime theme videos and place them in the `!AnimeThemes` folder
    - There is a torrent available with over 19000+ themes and a button on the dashboard for downloading themes from the current season
@@ -278,7 +282,7 @@ There is also support for generating `Theme.mp3` files as local metadata. This w
   - Generally this means entering a `1`
 - _Theme.mp3 generation can be run per folder from the [VFS Browser](#vfs-browser) page (uses the default settings)_
 
-**Miniplayer**
+#### Miniplayer
 
 There is a mini media player included on the dashboard which will play downloaded themes if enabled. You can set it to looped playback or even have it shuffle through all of your Theme.mp3 files if desired. The progress bar is fully functional and you can pause playback by middle clicking it.
 
@@ -295,11 +299,11 @@ There is an included tree view which allows you to browse your themes by `Group 
 
 You can mark any theme as a favourite by clicking the heart icon `❤` next to its name in the tree view. Once marked as a favourite the icon for a given item will change to be red in colour and it will be persisted to a settings file based on its AnimeThemes VideoID. To quickly view only your marked themes, type `favs` into the search bar. This keyword can be combined with other search terms as well as tags (e.g., `+nc favs gundam`) to find specific favourites.
 
-## Information
+## Additional Information
 
 ### Advanced Plex Metadata
 
-Shoko Relay has full support for all of Plex's features which involve local metadata or sidecar files. This includes:
+Shoko Relay has full support for all of Plex's features which involve local metadata or sidecar files:
 
 - [Local Media Assets](https://support.plex.tv/articles/200220717-local-media-assets-tv-shows/)
   - Allows custom metadata to be added to Plex at either the series or episode level
@@ -318,7 +322,7 @@ Shoko Relay has full support for all of Plex's features which involve local meta
   - _Requires the `Plex NFO Series` provider to be added to the Shoko Relay Agent in Plex_
 - Be sure to read each of the above Plex articles if you need help figuring out the format for any of the local metadata
 
-### VFS Mapping
+### Virtual File System (VFS)
 
 > [!IMPORTANT]
 > The VFS is created inside each of Shoko's managed folders: if they are configured as a "Destination", have no type set, or have not been excluded via `Managed Folder Exclusions`. A subfolder named `!ShokoRelayVFS` (renaming it is possible under `Advanced Settings > VFS Root Path`) will house it. Do not manage anything inside the VFS folders manually.
@@ -338,11 +342,11 @@ Non standard episodes on the other hand, are placed into a local series level Ex
 | O# ❯   | Other   | Featurettes |
 | U# ❯   | Unknown | Other       |
 
-**"Other" Rule**
+#### "Other" Rule
 
 `Other` type episodes have a special rule where they will attempt to place themselves in `Season 1` or `Specials` if either is empty of physical files. Otherwise, they will be placed in `Featurettes` and display as extras in Plex. This was implemented because these episodes are generally parts of a Movie and have a full set of metadata which would not appear if they were in Plex's local extras.
 
-**Extra-Only Series Rule**
+#### Extra-Only Series Rule
 
 Plex requires a series to have at least one episode in a recognized season folder (`Season ##` or `Specials`) for it to be visible in a library. For series which are comprised entirely of Extras (non-standard episodes), the highest priority extra type will be promoted to `Season 1` which will allow Plex to display it. The following priority determines what is promoted first:
 
@@ -352,21 +356,21 @@ Plex requires a series to have at least one episode in a recognized season folde
 
 Any remaining extras will stay in their respective subfolders as normal.
 
-**Crossover Episode Limitations**
+#### Crossover Episode Limitations
 
 Crossover episodes are files which are linked to multiple episodes spanning separate AniDB series. Due to Plex's architecture they will only function in one series at a time. Since the plugin doesn't know which episode the user prefers, unwanted crossover entries must be hidden via Shoko's series page. To work around this limitation crossover episodes can also be modified (so the file's hash changes) then manually linked in Shoko to the desired episode.
 
-**VFS Audit**
+#### VFS Audit
 
 The VFS includes built-in audit functionality that scans existing VFS directories to find and prune orphaned folders, empty subdirectories, and broken symlinks whose source files were deleted or moved. It also updates the VFS Browser blueprint and generates a report at `logs/shoko-vfs-audit-report.log` in the plugin directory. It can be accessed via the `VFS Audit` button (database checkmark) in the "Shoko: VFS" section of the dashboard.
 
-### VFS Browser
+#### VFS Browser
 
 In order to help visualise the VFS and all of the files it contains there is a "VFS Browser" page included with the plugin. It can be navigated to by clicking the folder icon in the top right of the "Shoko: VFS" section of the dashboard, as an embed in Shoko's WebUI under `Settings > Plugins > Shoko Relay > VFS Browser`, or by a dedicated URL: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/browser`. Unlike opening the VFS in a normal file browser, this will list the series title and the AniDB/Shoko IDs which correspond to each folder. Each ID will link directly to its source and there is also an included link to the `/metadata/` endpoint for series and seasons. VFS regeneration can be called on any series by clicking the "Refresh VFS Folder" `⟳` icon next to its name in the tree view (this avoids having to look up AniDB/Shoko IDs to use the filter on the dashboard). Similar to the refresh button, there is a "Theme.mp3" `♬` button which tracks if a given VFS entry has a local AnimeThemes `.mp3` attached to it or not. Clicking the button will attempt to generate a theme for any series missing one.
 
 ### Automatic Title Modification
 
-**Common Prefixes for Series**
+#### Common Prefixes for Series
 
 When a series starts with a common title prefix (and `Move Common Series Title Prefixes` is enabled in the Provider Settings) it will be moved to the end of the title. The prefixes considered common by the provider are governed by the following regex:
 
@@ -374,7 +378,7 @@ When a series starts with a common title prefix (and `Move Common Series Title P
 ^(Gekijou ?(?:ban(?: 3D)?|Tanpen|Remix Ban|Henshuuban|Soushuuhen)|Eiga|OVA) (.*$)
 ```
 
-**Ambiguous Titles for Episodes**
+#### Ambiguous Titles for Episodes
 
 In cases where AniDB uses ambiguous episode titles the series title will be used instead (with the original title appended to it as necessary). The titles considered ambiguous by the provider are governed by the following regex:
 
@@ -389,7 +393,7 @@ In cases where AniDB uses ambiguous episode titles the series title will be used
 
 If you prefer separate movie libraries (which is not recommended), Shoko Relay provides an opt-in feature to allow this. By enabling `Movie Generation Mode` under `Advanced Settings`, the plugin will generate a dedicated VFS root for movies (default `!ShokoRelayMovieVFS`) alongside the standard unified VFS.
 
-**Caveats**
+#### Caveats
 
 - Shoko groups that blend series and movies will be split across two entirely separate Plex libraries, breaking the chronological viewing order that Plex would usually provide for them
 - For Shoko series entries containing multiple movies, symlinks for specials will be duplicated across each movie as there is no way to automatically determine which one it belongs to
@@ -413,12 +417,12 @@ If you prefer separate movie libraries (which is not recommended), Shoko Relay p
 <details>
 <summary><b>Info</b></summary><br>
 
-**VFS Mapping**
+#### VFS Mapping
 
 When building the movie VFS files are placed into folders which are named according to their Shoko EpisodeID. Movies placed into those folders are named with the following pattern: `Movie(-pt#)(-dup#) [{ShokoFileID}]([{isVariation}]).ext` (the parts in parenthesis are conditional). Files with `-pt#` in their name will also have `[{ShokoFileID}]([{isVariation}])` stripped to fully follow the format described [here](https://support.plex.tv/articles/naming-and-organizing-your-movie-media-files/#toc-3). Non standard episodes on the other hand are handled the same way as the [standard VFS](#vfs-mapping).\
 _The ShokoFileID is unused by Plex and is there purely to help users visualise the file mappings._
 
-**VFS Browser**
+#### VFS Browser
 
 When enabled movies will also appear in the [VFS Browser](#vfs-browser) as entries under their corresponding ShokoSeriesID.
 
@@ -438,11 +442,11 @@ With `TMDB Episode Numbering` enabled in the Advanced Provider Settings the foll
 - Combining multiple Shoko series into a single Plex entry
 - Alternate episode ordering for seasons
 
-**Curated TMDB Mappings**
+#### Curated TMDB Mappings
 
 If you don't have any TMDB links in Shoko it is recommended that you start off with a curated list before auto linking. Simply navigate to `Settings > Metadata > Cross-References` in Shoko and import the following file: [**Shoko: AniDB → TMDB Mappings**](https://gist.github.com/natyusha/129848213161c57101c9f39ed3f263ed)
 
-**Alternate TMDB Episode Ordering**
+#### Alternate TMDB Episode Ordering
 
 If you aren't happy with TMDB's default episode/season structure for a series, you can change it to an alternate.\
 [**Additional Info Here**](https://docs.shokoanime.com/shoko-server/tmdb-features#alternate-episode-ordering)
@@ -450,7 +454,7 @@ If you aren't happy with TMDB's default episode/season structure for a series, y
 > [!NOTE]
 > If you select an alternate order for a series TMDB season posters will no longer be automatically added to Plex.
 
-**Combining Series & Custom Episode Mappings**
+### Combining Series & Custom Episode Mappings
 
 This allows shows which are separated on AniDB but part of the same TMDB listing to be combined into a single entry in Plex. To achieve this, click the `VFS Overrides Editor` button in the "Shoko: VFS" section of the dashboard. It will open a modal which will create (or edit an existing) `anidb_vfs_overrides.csv` file in the plugin's config directory. Each line should contain a comma separated list of AniDB IDs you wish to merge. For this to work automatically, all of the AniDB IDs on the line must share the exact same TMDB link. The first ID is the _primary series_ and the others will be merged into it (for both VFS builds and metadata lookups).
 
@@ -474,13 +478,13 @@ Custom episode assignments allow series to be mapped to specific seasons and epi
 - **Source Range:** Ranges are specified with a hyphen (e.g. `1-10s1e1`), while single episodes omit it (e.g. `12s1e13`)
 - **Episode Separator:** `|` separates multiple assignments for the same series
 
-**Notes:**
+#### Notes:
 
 - All letters (`s`, `e`, and type prefixes) are case-insensitive and leading zeros are optional
 - If no source range or type is specified (e.g. `;s0e101`), all regular episodes of the secondary series are mapped sequentially starting from that episode number
 - Custom assignments can also be used on a standalone line for a single series without merging secondary series
 
-**Examples:**
+#### Examples:
 
 - `1234;1-12s1e1|13-24s2e1` - Splits the first 24 episodes of a single series across Season 1 and Season 2 without merging other series
 - `1234,5678;s0e101,91011;s0e201` - Maps all regular episodes of AniDB IDs `5678` and `91011` sequentially into Specials of `1234` starting at episodes 101 and 201
