@@ -16,6 +16,34 @@
   "icon_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-icon.png",
   "releases": [
     {
+      "version": "0.21.5",
+      "tag": "v0.21.5",
+      "source_revision": "423f8e49c4300f12d4ebb0478d0182d9e6b3d7c9",
+      "released_at": "2026-11-06T04:03:53Z",
+      "channel": "Dev",
+      "release_notes": "For this release force refreshing the dashboard (`Ctrl-F5`) may be required for all of the front end changes to take effect.\r\nShout-out to kifujin/preeefix for making me aware of the extra-only series and dynamic Plex server URL issues respectively.\r\n\r\n**Changes:**\r\n- Introduced an advanced custom episode mapping system to VFS Overrides, allowing specific episodes, ranges, and types to be mapped to custom season and episode coordinates.\r\n- Added support for applying custom episode mappings to standalone series without needing to merge multiple AniDB IDs.\r\n- Added a \"Plex Server URL\" advanced setting to manually override auto-discovered Plex connection addresses, resolving connectivity issues in dynamic environments (#23).\r\n- Improved managed user token resolution to reliably match Plex server identities across custom hostnames and reverse proxies.\r\n- Implemented a fallback rule for extra-only series to promote Credits, Trailers, or Parodies to Season 1, ensuring series without regular episodes are properly indexed by Plex.\r\n- Fixed the \"Other\" episode fallback rule to correctly identify empty seasons when dealing with discarded crossover episodes and joined multi-episode files.\r\n- Enhanced the Plex Discovery task report to display resolved server URLs, active connection overrides, the configured metadata agent, and physical folder paths.\r\n- Fixed a boundary validation regression that prevented source symlink mapping when using drive root mounts.\r\n- Updated the README and API documentation to reflect the new custom mapping syntax, endpoints, and fallback behaviors.\r\n\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.21.4...v0.21.5",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.21.5/ShokoRelay-v0.21.5-dev_linux-arm64.zip",
+          "checksum": "sha256:db7d3cd7b0bf99e06b05642c419cd06c99ea0a211f6312d18813dd5091fbf52a"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.21.5/ShokoRelay-v0.21.5-dev_linux-x64.zip",
+          "checksum": "sha256:6a1f7f9701dbc87fcd23ce5ec1e569fad258071538bb2f70e90251bd63c24e11"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.21.5/ShokoRelay-v0.21.5-dev_win-x64.zip",
+          "checksum": "sha256:db26764064969b68d4a42d7b006a842b4568f1e7ecfaf21a01472fe43bf2687a"
+        }
+      ]
+    },
+    {
       "version": "0.21.4",
       "tag": "v0.21.4",
       "source_revision": "7ddca864952f73b6d03d35b6995aacf305c2a504",
