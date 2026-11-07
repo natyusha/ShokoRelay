@@ -80,6 +80,20 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
             catch { }
         }
 
+        // Cache files that already have a valid AniDB ID mapping to avoid redundant processing
+        var mappedFilesWithAnidb = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        string mapPath = Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FileAtMapping);
+        if (File.Exists(mapPath))
+        {
+            try
+            {
+                var parsed = AnimeThemesHelper.ParseMappingContentWithComments(File.ReadAllText(mapPath)).Entries;
+                foreach (var e in parsed.Where(e => e.AniDbId > 0))
+                    mappedFilesWithAnidb.Add(Path.GetFileName(e.FilePath));
+            }
+            catch { }
+        }
+
         int page = 1;
         bool hasNext = true;
 
@@ -108,15 +122,23 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
                         if (video == null || string.IsNullOrWhiteSpace(video.Link) || string.IsNullOrWhiteSpace(video.Basename))
                             continue;
 
+                        string targetPath = Path.Combine(baseThemePath, yearFolder, seasonFolder, video.Basename);
+                        string relPath = $"/{yearFolder}/{seasonFolder}/{video.Basename}";
+
                         if (!query.Force && existingFiles.Contains(video.Basename))
                         {
-                            logger.LogDebug("AnimeThemes WebM: Skipping Downloaded Theme -> {Basename}...", video.Basename);
-                            skipped++;
+                            if (mappedFilesWithAnidb.Contains(video.Basename))
+                            {
+                                logger.LogDebug("AnimeThemes WebM: Skipping already mapped theme -> {Basename}...", video.Basename);
+                                skipped++;
+                                continue;
+                            }
+
+                            downloadedItems.Add((relPath, video.Basename));
+                            logger.LogInformation("AnimeThemes WebM: Found unmapped local theme -> {Basename}, checking for AniDB ID...", video.Basename);
                             continue;
                         }
 
-                        string targetPath = Path.Combine(baseThemePath, yearFolder, seasonFolder, video.Basename);
-                        string relPath = $"/{yearFolder}/{seasonFolder}/{video.Basename}";
                         Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
                         logger.LogDebug("AnimeThemes WebM: Downloading -> {Basename}...", video.Basename);
 

@@ -39,6 +39,9 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
             var entries = AnimeThemesHelper.ParseMappingContentWithComments(File.ReadAllText(mapPath)).Entries;
             foreach (var entry in entries)
             {
+                if (entry.AniDbId <= 0)
+                    continue;
+
                 if (!mappings.TryGetValue(entry.AniDbId, out var list))
                     mappings[entry.AniDbId] = list = [];
 
@@ -138,15 +141,15 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
             {
                 string rel = roots.FirstOrDefault(r => file.StartsWith(r + Path.DirectorySeparatorChar)) is string root ? "/" + Path.GetRelativePath(root, file).Replace('\\', '/') : file;
 
-                if (existing.TryGetValue(rel, out var old))
+                if (existing.TryGetValue(rel, out var old) && old.AniDbId > 0)
                     entries.Add(old);
-                else if (existingByFilename.TryGetValue(Path.GetFileName(file), out var oldByName))
+                else if (existingByFilename.TryGetValue(Path.GetFileName(file), out var oldByName) && oldByName.AniDbId > 0)
                     entries.Add(oldByName with { FilePath = rel });
                 else
                     toProcess.Add((file, rel));
             }
 
-            logger.LogInformation("AnimeThemes Map: Found {TotalCount} total files ({CachedCount} cached, {PendingCount} pending mapping resolution)...", filesBag.Count, existing.Count, toProcess.Count);
+            logger.LogInformation("AnimeThemes Map: Found {TotalCount} total files ({CachedCount} cached, {PendingCount} pending mapping resolution)...", filesBag.Count, entries.Count, toProcess.Count);
 
             int reusedCount = entries.Count;
             var errorsBag = new ConcurrentBag<(int Year, string FilePath, string Message)>();
@@ -161,20 +164,30 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                         try
                         {
                             int year = AnimeThemesHelper.GetYearForSort(item.Rel);
-                            var (lookup, idMissing) = await FetchMetadataAsync(Path.GetFileName(item.File), token).ConfigureAwait(false);
+                            var (lookup, idMissing) = await FetchMetadataAsync(Path.GetFileName(item.File), null, token).ConfigureAwait(false);
                             if (lookup == null)
                             {
-                                string errMsg = idMissing ? $"AniDB ID missing for {item.Rel}" : $"Missing metadata for {item.Rel}";
+                                string errMsg = $"Missing metadata for {item.Rel}";
                                 errorsBag.Add((year, item.Rel, errMsg));
-                                logger.LogWarning("AnimeThemes Map: Failed to map '{Path}' -> {Reason}", item.Rel, idMissing ? "AniDB ID missing" : "Metadata missing");
+                                logger.LogWarning("AnimeThemes Map: Failed to map '{Path}' -> Metadata missing", item.Rel);
                                 Interlocked.Increment(ref errors);
                                 return;
                             }
+
                             lock (entries)
                                 entries.Add(new AnimeThemesMappingEntry(item.Rel, lookup));
-                            string mapMsg = $"Mapped: {item.Rel} -> VideoID: {lookup.VideoId}, AniDB ID: {lookup.AniDbId}";
-                            newMappingsBag.Add((year, item.Rel, mapMsg));
-                            logger.LogDebug("AnimeThemes Map: Mapped '{Path}' -> VideoID: {VideoId}, AniDB ID: {AnidbId}", item.Rel, lookup.VideoId, lookup.AniDbId);
+
+                            if (idMissing)
+                            {
+                                errorsBag.Add((year, item.Rel, $"AniDB ID still missing on AnimeThemes for {item.Rel}"));
+                                logger.LogWarning("AnimeThemes Map: Recorded '{Path}' with missing AniDB ID", item.Rel);
+                            }
+                            else
+                            {
+                                string mapMsg = $"Mapped: {item.Rel} -> VideoID: {lookup.VideoId}, AniDB ID: {lookup.AniDbId}";
+                                newMappingsBag.Add((year, item.Rel, mapMsg));
+                                logger.LogDebug("AnimeThemes Map: Mapped '{Path}' -> VideoID: {VideoId}, AniDB ID: {AnidbId}", item.Rel, lookup.VideoId, lookup.AniDbId);
+                            }
                         }
                         catch (Exception ex)
                         {
@@ -233,22 +246,28 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
         int addedCount = 0;
         foreach (var (relPath, fileName) in newFiles)
         {
-            if (existing.ContainsKey(relPath))
+            if (existing.TryGetValue(relPath, out var oldEntry) && oldEntry.AniDbId > 0)
                 continue;
 
             try
             {
-                var (lookup, idMissing) = await FetchMetadataAsync(fileName, cancellationToken).ConfigureAwait(false);
+                var (lookup, idMissing) = await FetchMetadataAsync(fileName, null, cancellationToken).ConfigureAwait(false);
                 if (lookup != null)
                 {
                     var entry = new AnimeThemesMappingEntry(relPath, lookup);
+                    if (oldEntry != null)
+                        entries.Remove(oldEntry);
+
                     entries.Add(entry);
                     existing[relPath] = entry;
                     addedCount++;
-                    logger.LogInformation("AnimeThemes Map: Auto-mapped '{Path}' -> VideoID: {VideoId}, AniDB ID: {AnidbId}", relPath, lookup.VideoId, lookup.AniDbId);
+                    if (lookup.AniDbId > 0)
+                        logger.LogInformation("AnimeThemes Map: Auto-mapped '{Path}' -> VideoID: {VideoId}, AniDB ID: {AnidbId}", relPath, lookup.VideoId, lookup.AniDbId);
+                    else
+                        logger.LogWarning("AnimeThemes Map: Recorded '{Path}' with missing AniDB ID", relPath);
                 }
                 else
-                    logger.LogWarning("AnimeThemes Map: Failed to auto-map '{Path}' -> {Reason}", relPath, idMissing ? "AniDB ID missing" : "Metadata missing");
+                    logger.LogWarning("AnimeThemes Map: Failed to auto-map '{Path}' -> Metadata missing", relPath);
             }
             catch (Exception ex)
             {
@@ -266,17 +285,81 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
         return addedCount;
     }
 
+    /// <summary>Tests, resolves, or populates a mapping entry for a specific webm filename with optional persistence and AniDB ID override.</summary>
+    /// <param name="webmFileName">The webm filename or relative path.</param>
+    /// <param name="save">Whether to save the resolved mapping to anidb_animethemes_xrefs.csv.</param>
+    /// <param name="overrideAnidbId">Optional AniDB ID override.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A tuple containing the mapping entry, error message, generated filename, and save status.</returns>
+    public async Task<(AnimeThemesMappingEntry? entry, string? error, string filename, bool wasSaved)> ProcessSingleMappingAsync(
+        string webmFileName,
+        bool save = false,
+        int? overrideAnidbId = null,
+        CancellationToken cancellationToken = default
+    )
+    {
+        string fileName = Path.GetFileName(webmFileName);
+        var (lookup, idMissing) = await FetchMetadataAsync(fileName, overrideAnidbId, cancellationToken).ConfigureAwait(false);
+        if (lookup == null)
+            return (null, "Missing metadata on AnimeThemes", webmFileName, false);
+
+        string mapPath = Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FileAtMapping);
+        var entries = new List<AnimeThemesMappingEntry>();
+        var existingComments = new List<string>();
+        string relPath = webmFileName.StartsWith('/') ? webmFileName : "";
+
+        if (File.Exists(mapPath))
+        {
+            try
+            {
+                (existingComments, entries) = AnimeThemesHelper.ParseMappingContentWithComments(await File.ReadAllTextAsync(mapPath, cancellationToken).ConfigureAwait(false));
+                if (string.IsNullOrEmpty(relPath) && entries.FirstOrDefault(e => string.Equals(Path.GetFileName(e.FilePath), fileName, StringComparison.OrdinalIgnoreCase)) is { } match)
+                    relPath = match.FilePath;
+            }
+            catch { }
+        }
+
+        if (string.IsNullOrEmpty(relPath))
+        {
+            string themeFolder = VfsShared.ResolveAnimeThemesFolderName();
+            var matchedRoot = (videoService.GetAllManagedFolders() ?? [])
+                .Where(VfsShared.IsVfsEnabledFolder)
+                .Select(f => f.Path)
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Select(p => Path.Combine(p, themeFolder))
+                .FirstOrDefault(dir => Directory.Exists(dir) && Directory.EnumerateFiles(dir, fileName, SearchOption.AllDirectories).Any());
+
+            if (matchedRoot != null && Directory.EnumerateFiles(matchedRoot, fileName, SearchOption.AllDirectories).FirstOrDefault() is { } fullPath)
+                relPath = "/" + Path.GetRelativePath(matchedRoot, fullPath).Replace('\\', '/');
+        }
+
+        if (string.IsNullOrEmpty(relPath))
+            relPath = "/unknown/" + fileName;
+
+        var entry = new AnimeThemesMappingEntry(relPath, lookup);
+        string genFileName = AnimeThemesHelper.BuildNewFileName(lookup, Path.GetExtension(fileName));
+
+        if (!save)
+            return (entry, idMissing ? "AniDB ID missing on AnimeThemes" : null, genFileName, false);
+
+        entries.RemoveAll(e => string.Equals(e.FilePath, relPath, StringComparison.OrdinalIgnoreCase) || string.Equals(Path.GetFileName(e.FilePath), fileName, StringComparison.OrdinalIgnoreCase));
+        entries.Add(entry);
+
+        var finalEntries = entries.DistinctBy(e => e.FilePath).OrderBy(e => AnimeThemesHelper.GetYearForSort(e.FilePath)).ThenBy(e => e.FilePath).ToList();
+        await File.WriteAllTextAsync(mapPath, AnimeThemesHelper.SerializeMapping(existingComments, finalEntries), cancellationToken).ConfigureAwait(false);
+        logger.LogInformation("AnimeThemes Map: Saved mapping for '{Path}' -> VideoID: {VideoId}, AniDB ID: {AnidbId}", relPath, lookup.VideoId, lookup.AniDbId);
+
+        return (entry, null, genFileName, true);
+    }
+
     /// <summary>Test the mapping process for a single webm filename without adding it to the CSV.</summary>
     /// <param name="webmFileName">The webm filename to test.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A result containing the entry, error, and generated filename.</returns>
     public async Task<(AnimeThemesMappingEntry? entry, string? error, string filename)> TestMappingEntryAsync(string webmFileName, CancellationToken cancellationToken = default)
     {
-        var (lookup, idMissing) = await FetchMetadataAsync(webmFileName, cancellationToken).ConfigureAwait(false);
-        if (lookup == null)
-            return (null, idMissing ? "AniDB ID missing" : "Missing metadata", webmFileName);
-        var entry = new AnimeThemesMappingEntry("/test/" + webmFileName, lookup);
-        return (entry, null, AnimeThemesHelper.BuildNewFileName(lookup, Path.GetExtension(webmFileName)));
+        var (entry, error, gen, _) = await ProcessSingleMappingAsync(webmFileName, false, null, cancellationToken).ConfigureAwait(false);
+        return (entry, error, gen);
     }
 
     /// <summary>Read a previously built mapping file and create/update VFS links for matching theme files.</summary>
@@ -535,9 +618,10 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
 
     /// <summary>Fetches the theme metadata for a specific video filename.</summary>
     /// <param name="fileName">The basename of the video file.</param>
+    /// <param name="overrideAnidbId">Optional manual AniDB ID override.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A tuple containing the mapped metadata lookup and a boolean indicating if the AniDB ID was missing.</returns>
-    private async Task<(AnimeThemesVideoLookup? lookup, bool idMissing)> FetchMetadataAsync(string fileName, CancellationToken cancellationToken)
+    private async Task<(AnimeThemesVideoLookup? lookup, bool idMissing)> FetchMetadataAsync(string fileName, int? overrideAnidbId = null, CancellationToken cancellationToken = default)
     {
         var v = await _apiClient.FetchVideoWithArtistsAsync(fileName, cancellationToken).ConfigureAwait(false);
         if (v == null)
@@ -563,33 +647,32 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
             .ThenBy(x => x.ids?.FirstOrDefault() ?? 9999)
             .FirstOrDefault();
 
-        if (best != null)
-        {
-            var theme = first.Animetheme;
-            return (
-                new AnimeThemesVideoLookup(
-                    v.Id,
-                    theme.Id,
-                    best.ids![0],
-                    v.Nc,
-                    theme.Slug ?? "",
-                    first.Version,
-                    string.Join(" / ", theme.Song?.Performances?.Select(p => p.Artist?.Name?.Main).Where(n => !string.IsNullOrEmpty(n)) ?? []),
-                    theme.Song?.Title?.Romaji ?? "",
-                    v.Lyrics,
-                    v.Subbed,
-                    v.Uncen,
-                    first.Nsfw,
-                    first.Spoiler,
-                    v.Source ?? "",
-                    v.Resolution ?? 0,
-                    first.Episodes ?? "",
-                    v.Overlap ?? ""
-                ),
-                false
-            );
-        }
-        return (null, true);
+        int anidbId = overrideAnidbId ?? best?.ids?[0] ?? 0;
+        bool idMissing = anidbId <= 0;
+        var theme = first.Animetheme;
+
+        return (
+            new AnimeThemesVideoLookup(
+                v.Id,
+                theme.Id,
+                anidbId,
+                v.Nc,
+                theme.Slug ?? "",
+                first.Version,
+                string.Join(" / ", theme.Song?.Performances?.Select(p => p.Artist?.Name?.Main).Where(n => !string.IsNullOrEmpty(n)) ?? []),
+                theme.Song?.Title?.Romaji ?? "",
+                v.Lyrics,
+                v.Subbed,
+                v.Uncen,
+                first.Nsfw,
+                first.Spoiler,
+                v.Source ?? "",
+                v.Resolution ?? 0,
+                first.Episodes ?? "",
+                v.Overlap ?? ""
+            ),
+            idMissing
+        );
     }
 
     #endregion

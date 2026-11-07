@@ -53,15 +53,17 @@ public class AnimeThemesController(
                 VfsShared.VfsLock
             );
 
-    /// <summary>Generates the anime‑themes mapping CSV or tests a single filename mapping.</summary>
+    /// <summary>Generates the anime‑themes mapping CSV, tests a single filename mapping, or updates/saves a mapping.</summary>
     /// <param name="testPath">Optional webm filename to test mapping logic against.</param>
+    /// <param name="save">Whether to save or update the mapping in the CSV file.</param>
+    /// <param name="anidbId">Optional manual AniDB ID override.</param>
     /// <returns>A task representing the result of the mapping or test.</returns>
     [HttpGet("animethemes/vfs/map")]
-    public async Task<IActionResult> AnimeThemesVfsMap(string? testPath = null)
+    public async Task<IActionResult> AnimeThemesVfsMap([FromQuery] string? testPath = null, [FromQuery] bool save = false, [FromQuery] int? anidbId = null)
     {
         if (!string.IsNullOrWhiteSpace(testPath))
         {
-            var (entry, error, gen) = await animeThemesMapping.TestMappingEntryAsync(testPath, CancellationToken.None).ConfigureAwait(false);
+            var (entry, error, gen, wasSaved) = await animeThemesMapping.ProcessSingleMappingAsync(testPath, save, anidbId, CancellationToken.None).ConfigureAwait(false);
             return error != null
                 ? Ok(new RelayResponse<object>(Status: "error", Message: error, Data: new { testPath }))
                 : Ok(
@@ -69,6 +71,7 @@ public class AnimeThemesController(
                         Data: new
                         {
                             testPath,
+                            saved = wasSaved,
                             generatedFilename = gen,
                             csvLine = entry != null ? AnimeThemesMapping.SerializeMappingEntry(entry) : null,
                             entry,
