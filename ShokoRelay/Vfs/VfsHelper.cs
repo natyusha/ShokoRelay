@@ -70,7 +70,6 @@ public static class VfsHelper
 
         string processed = name;
         if (name.AsSpan().IndexOfAny(InvalidFileNameChars) >= 0)
-        {
             processed = string.Create(
                 name.Length,
                 name,
@@ -80,7 +79,6 @@ public static class VfsHelper
                         chars[i] = InvalidFileNameChars.Contains(state[i]) ? ' ' : state[i];
                 }
             );
-        }
 
         var cleaned = TextHelper.CondenseSpaces(processed).Trim().TrimEnd('.');
         return cleaned.Length > 0 ? cleaned : "Unknown";
@@ -98,17 +96,13 @@ public static class VfsHelper
             c = c.Replace(f, r, StringComparison.Ordinal);
         c = s_quotedTextRegex.Replace(c, "“$1”");
 
-        const string Zwsp = "\u200B",
-            Hsp = "\u200A";
-
         // Zero-width space (\u200B) and hair space (\u200A) bypass Plex's undocumented behavior of automatically stripping OP/ED/extra prefixes from display titles while also sorting Openings before Endings
         if (c.StartsWith("Opening", StringComparison.OrdinalIgnoreCase))
-            c = $"{Hsp}O{Zwsp}pening{c[7..]}";
+            c = $"{TextHelper.HairSpace}O{TextHelper.ZeroWidthSpace}pening{c[7..]}";
         else if (c.StartsWith("Ending", StringComparison.OrdinalIgnoreCase))
-            c = $"E{Zwsp}nding{c[6..]}";
+            c = $"E{TextHelper.ZeroWidthSpace}nding{c[6..]}";
 
         if (c.AsSpan().IndexOfAny(s_replacementChars) >= 0)
-        {
             c = string.Create(
                 c.Length,
                 c,
@@ -118,7 +112,6 @@ public static class VfsHelper
                         chars[i] = ReplacementCharMap.TryGetValue(state[i], out var m) ? m : state[i];
                 }
             );
-        }
 
         return s_whitespaceRegex.Replace(c, " ").Trim(' ');
     }
@@ -161,11 +154,7 @@ public static class VfsHelper
         bool isVariation = false
     )
     {
-        string epFormat =
-            pad == 2 ? "D2"
-            : pad == 3 ? "D3"
-            : pad == 4 ? "D4"
-            : $"D{pad}";
+        string epFormat = $"D{pad}";
         string name =
             mapping.Coords.EndEpisode.HasValue && mapping.Coords.EndEpisode != mapping.Coords.Episode
                 ? $"S{mapping.Coords.Season:D2}E{mapping.Coords.Episode.ToString(epFormat)}-E{mapping.Coords.EndEpisode.Value.ToString(epFormat)}"
@@ -290,14 +279,7 @@ public static class VfsHelper
     public static bool IsLocalExtraFile(ReadOnlySpan<char> fileNameWithoutExtension, out int suffixIndex)
     {
         var enumerator = s_localExtraFileRegex.EnumerateMatches(fileNameWithoutExtension);
-        if (enumerator.MoveNext())
-        {
-            suffixIndex = enumerator.Current.Index;
-            return true;
-        }
-
-        suffixIndex = -1;
-        return false;
+        return (suffixIndex = enumerator.MoveNext() ? enumerator.Current.Index : -1) >= 0;
     }
 
     #endregion

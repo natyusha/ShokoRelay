@@ -169,8 +169,8 @@
 
   /** Synchronizes the MP3 playback UI states with the audio object. */
   function syncPlaybackUI() {
-    const isE = el("at-playback")?.getAttribute("aria-pressed") === "true",
-      isA = isE && atAudio?.src && !atAudio.ended;
+    const isE = el("at-playback")?.getAttribute("aria-pressed") === "true";
+    const isA = isE && atAudio?.src && !atAudio.ended;
     atTrack?.classList.toggle("active", isA);
     atTrack?.classList.toggle("paused", atAudio?.paused);
     if (!isA && atFill) atFill.style.width = "0%";
@@ -229,9 +229,9 @@
    * @param {Function} persist - Async function to save config changes.
    */
   window._sr.initAtConfig = (cfg, persist) => {
-    const playback = el("at-playback"),
-      modeButton = el("at-mode"),
-      playButton = el("at-play");
+    const playback = el("at-playback");
+    const modeButton = el("at-mode");
+    const playButton = el("at-play");
 
     const getVal = (path) => window._sr.getValueByPath(cfg, path);
 

@@ -379,14 +379,7 @@ public class PlexController(
             return Ok(new { status = "ignored", reason = "auto_scrobble_disabled" });
 
         // Extract and parses the raw JSON payload from the Plex webhook request stream
-        string? payloadJson = null;
-        if (Request.HasFormContentType && Request.Form.ContainsKey("payload"))
-            payloadJson = Request.Form["payload"].ToString();
-        else
-        {
-            using var sr = new StreamReader(Request.Body);
-            payloadJson = await sr.ReadToEndAsync().ConfigureAwait(false);
-        }
+        string? payloadJson = (Request.HasFormContentType && Request.Form.TryGetValue("payload", out var p)) ? p.ToString() : await new StreamReader(Request.Body).ReadToEndAsync().ConfigureAwait(false);
 
         if (string.IsNullOrWhiteSpace(payloadJson))
             return BadRequest(new { status = "error", message = "invalid payload" });

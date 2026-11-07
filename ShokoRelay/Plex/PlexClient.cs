@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Shoko.Abstractions.Metadata.Enums;
 
 namespace ShokoRelay.Plex;
@@ -51,24 +52,16 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
 
         var exactMatches = allTargets.Where(target => target.Locations.Any(loc => normMapped.StartsWith(TextHelper.NormalizePathForPlex(loc), StringComparison.OrdinalIgnoreCase)));
         if (exactMatches.Any())
-        {
-            foreach (var t in exactMatches)
-                results.Add((t, mapped));
-            return results;
-        }
+            return [.. exactMatches.Select(t => (t, mapped))];
 
         // If Path Mappings aren't configured, safely infer the correct Plex path by matching the VFS root name to Plex's configured library locations.
         string vfsRootName = VfsShared.ResolveRootFolderName();
         string movieRootName = VfsShared.ResolveMovieRootFolderName();
 
-        string? activeRootName = null;
         int GetRootIndex(string rootName) => normMapped.StartsWith(rootName + "/", StringComparison.OrdinalIgnoreCase) ? 0 : normMapped.IndexOf($"/{rootName}/", StringComparison.OrdinalIgnoreCase);
 
         int vfsIdx = GetRootIndex(movieRootName);
-        if (vfsIdx >= 0)
-            activeRootName = movieRootName;
-        else if ((vfsIdx = GetRootIndex(vfsRootName)) >= 0)
-            activeRootName = vfsRootName;
+        string? activeRootName = vfsIdx >= 0 ? movieRootName : ((vfsIdx = GetRootIndex(vfsRootName)) >= 0 ? vfsRootName : null);
 
         if (vfsIdx >= 0 && activeRootName != null)
         {
@@ -76,14 +69,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
             string relativeSuffix = normMapped[(vfsIdx + tokenLength)..];
 
             // Extract Shoko's parent directory name preceding the VFS root
-            string shokoParentName = "";
-            int parentEndIdx = vfsIdx;
-            if (parentEndIdx > 0)
-            {
-                int parentStartIdx = normMapped.LastIndexOf('/', parentEndIdx - 1);
-                if (parentStartIdx >= 0)
-                    shokoParentName = normMapped[(parentStartIdx + 1)..parentEndIdx];
-            }
+            string shokoParentName = vfsIdx > 0 && normMapped.LastIndexOf('/', vfsIdx - 1) is int parentStartIdx && parentStartIdx >= 0 ? normMapped[(parentStartIdx + 1)..vfsIdx] : "";
 
             var potentialFallbacks = new List<(PlexLibraryTarget Target, string GuessedPath, bool IsParentMatch)>();
 
@@ -102,14 +88,8 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
                         string guessedPath = $"{loc.TrimEnd('\\', '/')}{plexSep}{nativeSuffix}";
 
                         // Extract Plex's parent directory name preceding the VFS root
-                        string plexParentName = "";
                         int plexEndIdx = normLoc.LastIndexOf(locSuffix, StringComparison.OrdinalIgnoreCase);
-                        if (plexEndIdx > 0)
-                        {
-                            int plexStartIdx = normLoc.LastIndexOf('/', plexEndIdx - 1);
-                            if (plexStartIdx >= 0)
-                                plexParentName = normLoc[(plexStartIdx + 1)..plexEndIdx];
-                        }
+                        string plexParentName = plexEndIdx > 0 && normLoc.LastIndexOf('/', plexEndIdx - 1) is int plexStartIdx && plexStartIdx >= 0 ? normLoc[(plexStartIdx + 1)..plexEndIdx] : "";
 
                         bool isParentMatch = !string.IsNullOrEmpty(shokoParentName) && string.Equals(shokoParentName, plexParentName, StringComparison.OrdinalIgnoreCase);
                         potentialFallbacks.Add((target, guessedPath, isParentMatch));
@@ -119,13 +99,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
 
             // Filter to only parent-matching locations if any exist; otherwise fallback to broad scan
             bool hasParentMatch = potentialFallbacks.Any(f => f.IsParentMatch);
-
-            foreach (var (tgt, guessedPath, isParentMatch) in potentialFallbacks)
-            {
-                if (hasParentMatch && !isParentMatch)
-                    continue;
-                results.Add((tgt, guessedPath));
-            }
+            results.AddRange(potentialFallbacks.Where(f => !hasParentMatch || f.IsParentMatch).Select(f => (f.Target, f.GuessedPath)));
         }
 
         return results;
@@ -235,8 +209,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
 
             // Get Trashed Items
             var trashedItems = new List<string>();
-            int start = 0;
-            int trashedSize = 0;
+            var (start, trashedSize) = (0, 0);
             while (true)
             {
                 using var trashReq = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?type={typeId}&trash=1&X-Plex-Container-Start={start}&X-Plex-Container-Size=200", target.ServerUrl);
@@ -362,7 +335,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
         var content = await resp.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            using var doc = System.Text.Json.JsonDocument.Parse(content);
+            using var doc = JsonDocument.Parse(content);
             if (!doc.RootElement.TryGetProperty("MediaContainer", out var mc) || !mc.TryGetProperty("Directory", out var dirs))
                 return null;
 

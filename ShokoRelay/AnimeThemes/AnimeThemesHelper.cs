@@ -414,14 +414,12 @@ internal static partial class AnimeThemesHelper
         string overridePrefix = overrideIndex > 0 ? $"P{overrideIndex + 1} ❯ " : "";
         string nc = lookup.NC ? "NC" : "";
         string slug = string.IsNullOrWhiteSpace(baseSlug) ? "Theme" : baseSlug;
-        const string Zwsp = "\u200B",
-            Hsp = "\u200A";
 
         // Zero-width space (\u200B) and hair space (\u200A) bypass Plex's undocumented behavior of automatically stripping OP/ED/extra prefixes from display titles and sort OP before ED
         if (slug.StartsWith("OP", StringComparison.OrdinalIgnoreCase))
-            slug = $"{Hsp}O{Zwsp}P{slug[2..]}";
+            slug = $"{TextHelper.HairSpace}O{TextHelper.ZeroWidthSpace}P{slug[2..]}";
         else if (slug.StartsWith("ED", StringComparison.OrdinalIgnoreCase))
-            slug = $"E{Zwsp}D{slug[2..]}";
+            slug = $"E{TextHelper.ZeroWidthSpace}D{slug[2..]}";
 
         string ver = lookup.Version > 1 ? $"v{lookup.Version}" : "";
         string title = string.IsNullOrWhiteSpace(lookup.SongTitle) ? "" : " ❯ " + lookup.SongTitle;

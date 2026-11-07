@@ -133,20 +133,10 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config, ILogger<Plex
 
                 var pref = validConnections
                     ?.OrderByDescending(c =>
-                    {
-                        int score = 0;
-                        if (c.Local && !c.Relay)
-                            score += 100;
-                        if (!c.Relay)
-                            score += 1;
-
-                        // Only prefer HTTPS if it's a valid .plex.direct URI OR if the server requires HTTPS.
-                        if (c.Uri?.StartsWith("https", StringComparison.Ordinal) == true)
-                            if (c.Uri.Contains(".plex.direct", StringComparison.OrdinalIgnoreCase) || d.HttpsRequired)
-                                score += 10;
-
-                        return score;
-                    })
+                        (c.Local && !c.Relay ? 100 : 0)
+                        + (!c.Relay ? 1 : 0)
+                        + (c.Uri?.StartsWith("https", StringComparison.Ordinal) == true && (c.Uri.Contains(".plex.direct", StringComparison.OrdinalIgnoreCase) || d.HttpsRequired) ? 10 : 0)
+                    )
                     .FirstOrDefault()
                     ?.Uri;
 

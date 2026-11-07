@@ -33,39 +33,21 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     public IActionResult GetMediaProvider() =>
         SafeRequest(() =>
         {
-            bool isMovieEndpoint = Request.Path.Value?.Contains("/movie", StringComparison.OrdinalIgnoreCase) == true || string.Equals(Request.Query["type"], "1");
-
-            if (isMovieEndpoint)
-            {
-                return Ok(
-                    new
-                    {
-                        MediaProvider = new
-                        {
-                            identifier = ShokoRelayConstants.MovieAgentScheme,
-                            title = $"{ShokoRelayConstants.Name} Movie",
-                            version = ShokoRelayConstants.Version,
-                            Types = new[] { new { type = PlexConstants.TypeMovie, Scheme = new[] { new { scheme = ShokoRelayConstants.MovieAgentScheme } } } },
-                            Feature = new[] { new { type = "metadata", key = "/metadata" }, new { type = "match", key = "/matches" }, new { type = "collection", key = "/collections" } },
-                        },
-                    }
-                );
-            }
-
-            var supportedTypes = new[] { PlexConstants.TypeShow, PlexConstants.TypeSeason, PlexConstants.TypeEpisode };
-            var typePayload = supportedTypes.Select(t => new { type = t, Scheme = new[] { new { scheme = ShokoRelayConstants.AgentScheme } } });
-            var featurePayload = new[] { new { type = "metadata", key = "/metadata" }, new { type = "match", key = "/matches" }, new { type = "collection", key = "/collections" } };
-
+            bool isMovie = Request.Path.Value?.Contains("/movie", StringComparison.OrdinalIgnoreCase) == true || string.Equals(Request.Query["type"], "1");
             return Ok(
                 new
                 {
                     MediaProvider = new
                     {
-                        identifier = ShokoRelayConstants.AgentScheme,
-                        title = ShokoRelayConstants.Name,
+                        identifier = isMovie ? ShokoRelayConstants.MovieAgentScheme : ShokoRelayConstants.AgentScheme,
+                        title = isMovie ? $"{ShokoRelayConstants.Name} Movie" : ShokoRelayConstants.Name,
                         version = ShokoRelayConstants.Version,
-                        Types = typePayload,
-                        Feature = featurePayload,
+                        Types = (isMovie ? [PlexConstants.TypeMovie] : new[] { PlexConstants.TypeShow, PlexConstants.TypeSeason, PlexConstants.TypeEpisode }).Select(t => new
+                        {
+                            type = t,
+                            Scheme = new[] { new { scheme = isMovie ? ShokoRelayConstants.MovieAgentScheme : ShokoRelayConstants.AgentScheme } },
+                        }),
+                        Feature = new[] { new { type = "metadata", key = "/metadata" }, new { type = "match", key = "/matches" }, new { type = "collection", key = "/collections" } },
                     },
                 }
             );
@@ -326,15 +308,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             if (ctx == null)
                 return NotFound();
 
-            int start =
-                int.TryParse(Request.Headers["X-Plex-Container-Start"], out var s) ? s
-                : int.TryParse(Request.Query["X-Plex-Container-Start"], out var sq) ? sq
-                : 0;
-            int size =
-                int.TryParse(Request.Headers["X-Plex-Container-Size"], out var z) ? z
-                : int.TryParse(Request.Query["X-Plex-Container-Size"], out var zq) ? zq
-                : 50;
-
+            var (start, size) = GetPaging();
             var sortedMappings = ctx.FileData.Mappings.OrderBy(m => m.Coords.Season).ThenBy(m => m.Coords.Episode).ThenBy(m => m.PartIndex ?? 0).ToList();
 
             var pagedData = sortedMappings.Skip(start).Take(size).Select(m => (object)mapper.MapEpisode(m.PrimaryEpisode, m.Coords, ctx, m.PartIndex, m.TmdbEpisode)).ToArray();
@@ -366,13 +340,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             if (PlexHelper.IsMovieKey(ratingKey))
             {
                 var (ep, series, tmdbMovie) = TryResolveMovieContext(ratingKey);
-                if (ep != null && series != null)
-                {
-                    var titles = TextHelper.ResolveFullSeriesTitles(series);
-                    images = ExtractImages(mapper.MapMovie(ep, series, tmdbMovie, titles));
-                }
-                else
-                    images = [];
+                images = (ep != null && series != null) ? ExtractImages(mapper.MapMovie(ep, series, tmdbMovie, TextHelper.ResolveFullSeriesTitles(series))) : [];
                 return Ok(
                     new
                     {

@@ -225,15 +225,17 @@ public class SyncToShoko(
                     bool wouldMark = isWatchedInPlex && !alreadyWatched && (ep.Videos?.Count > 0);
                     bool wouldUpdateProgress = false;
 
-                    if (!isWatchedInPlex && hasProgressInPlex && !alreadyWatched && (ep.Videos?.Count > 0))
-                    {
-                        wouldUpdateProgress = true;
-                        if (userDataService.GetVideoUserData(ep.Videos.First(), defaultUser) is { } existingData && Math.Abs(existingData.ProgressPosition.TotalMilliseconds - item.ViewOffset!.Value) < 5000)
-                            wouldUpdateProgress = false;
-                    }
+                    if (!isWatchedInPlex && hasProgressInPlex && !alreadyWatched && ep.Videos?.Count > 0)
+                        wouldUpdateProgress =
+                            userDataService.GetVideoUserData(ep.Videos.First(), defaultUser) is not { } existingData
+                            || Math.Abs(existingData.ProgressPosition.TotalMilliseconds - item.ViewOffset!.Value) >= 5000;
 
                     DateTime? watchedAt = SyncHelper.UnixSecondsToDateTime(item.LastViewedAt);
-                    var prefId = ep.Series != null ? (prefIdCache.TryGetValue(ep.ShokoSeriesID, out var pId) ? pId : prefIdCache[ep.ShokoSeriesID] = MapHelper.GetPreferredTmdbOrderingId(ep.Series)) : null;
+
+                    string? prefId = null;
+                    if (ep.Series != null && !prefIdCache.TryGetValue(ep.ShokoSeriesID, out prefId))
+                        prefIdCache[ep.ShokoSeriesID] = prefId = MapHelper.GetPreferredTmdbOrderingId(ep.Series);
+
                     var coords = PlexMapping.GetPlexCoordinates(ep, prefId);
                     string typeLabel = PlexHelper.IsMovieKey(item.RatingKey!) ? "movie" : "episode";
 

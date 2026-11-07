@@ -1,3 +1,5 @@
+using System.Net.Http.Headers;
+
 namespace ShokoRelay.Plex;
 
 #region Data Models
@@ -105,7 +107,7 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient, ILogg
             using var request = plexClient.CreateRequest(HttpMethod.Post, $"/library/metadata/{collectionId}/{subEndpoint}", target.ServerUrl);
 
             var content = new StreamContent(fs);
-            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(ImageHelper.GetMimeType(Path.GetExtension(imagePath)) ?? "image/jpeg");
+            content.Headers.ContentType = new MediaTypeHeaderValue(ImageHelper.GetMimeType(Path.GetExtension(imagePath)) ?? "image/jpeg");
             request.Content = content;
 
             using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);

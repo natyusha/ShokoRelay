@@ -81,10 +81,8 @@ public class ShokoController(
 
                 // Trigger standard debounced Plex updates if this is a targeted manual rebuild
                 if (PlexLibrary.IsEnabled && filterIds.Count > 0)
-                {
                     foreach (var id in filterIds)
                         vfsWatcher.TriggerPlexUpdates(id);
-                }
 
                 return result;
             },

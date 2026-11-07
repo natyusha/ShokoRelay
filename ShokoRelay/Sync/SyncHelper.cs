@@ -269,12 +269,8 @@ public static class SyncHelper
                     );
                     if (matched != null)
                     {
-                        var fetched = await plexAuth.SwitchHomeUserAsync(matched.Id, adminToken, pin, cancellationToken).ConfigureAwait(false);
-                        if (!string.IsNullOrWhiteSpace(fetched))
-                        {
-                            userToken = fetched;
+                        if (!string.IsNullOrWhiteSpace(userToken = await plexAuth.SwitchHomeUserAsync(matched.Id, adminToken, pin, cancellationToken).ConfigureAwait(false)))
                             logger?.LogDebug("WatchedSyncService: fetched transient token for managed Plex user '{User}' (id={Id}) not persisted", userName, matched.Id);
-                        }
                         else
                             logger?.LogInformation("WatchedSyncService: SwitchHomeUser returned no token for managed user '{User}' (id={Id})", userName, matched.Id);
                     }

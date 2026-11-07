@@ -194,13 +194,18 @@ public class CollectionService(
                 // Map collection rating keys to metadata items to inspect existing poster state
                 var collectionRatingKeyMap = collections.Where(c => !string.IsNullOrEmpty(c.RatingKey)).ToDictionary(c => c.RatingKey!, StringComparer.OrdinalIgnoreCase);
 
+                // Map collection names to their Plex RatingKeys (IDs)
+                var collectionIdMap = collections
+                    .Where(c => !string.IsNullOrEmpty(c.Title) && !string.IsNullOrEmpty(c.RatingKey))
+                    .GroupBy(c => c.Title!, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(g => g.Key, g => int.Parse(g.First().RatingKey!), StringComparer.OrdinalIgnoreCase);
+
                 // Prune cache keys for collections that no longer exist in this target (e.g. library deleted and rebuilt)
                 var targetPrefix = $"{target.SectionId}|";
                 var staleCollectionKeys = cache
                     .Keys.Where(k =>
                         k.StartsWith(targetPrefix, StringComparison.Ordinal)
-                        && k.Split('|') is var parts
-                        && parts.Length == 3
+                        && k.Split('|') is { Length: 3 } parts
                         && !collectionRatingKeyMap.ContainsKey(parts[1].StartsWith("sc", StringComparison.OrdinalIgnoreCase) ? parts[1][2..] : parts[1])
                     )
                     .ToList();
@@ -211,12 +216,6 @@ public class CollectionService(
                         cache.Remove(k);
                     cacheModified = true;
                 }
-
-                // Map collection names to their Plex RatingKeys (IDs)
-                var collectionIdMap = collections
-                    .Where(c => !string.IsNullOrEmpty(c.Title) && !string.IsNullOrEmpty(c.RatingKey))
-                    .GroupBy(c => c.Title!, StringComparer.OrdinalIgnoreCase)
-                    .ToDictionary(g => g.Key, g => int.Parse(g.First().RatingKey!), StringComparer.OrdinalIgnoreCase);
 
                 var posted = new HashSet<(int Cid, string Prefix)>();
 
@@ -394,17 +393,12 @@ public class CollectionService(
                 deletedList = await plexCollections.DeleteEmptyCollectionsAsync(cancellationToken).ConfigureAwait(false);
 
             if (deletedList.Count > 0)
-            {
                 foreach (var del in deletedList)
+                foreach (var k in cache.Keys.Where(k => k.Contains($"|{del.RatingKey}|") || k.Contains($"|sc{del.RatingKey}|")).ToList())
                 {
-                    var targetKeys = cache.Keys.Where(k => k.Contains($"|{del.RatingKey}|") || k.Contains($"|sc{del.RatingKey}|")).ToList();
-                    foreach (var k in targetKeys)
-                    {
-                        cache.Remove(k);
-                        cacheModified = true;
-                    }
+                    cache.Remove(k);
+                    cacheModified = true;
                 }
-            }
 
             if (cacheModified)
             {

@@ -176,18 +176,13 @@ public class AnimeThemesMp3Generator(
         {
             try
             {
-                var lines = File.ReadLines(ThemeCacheFilePath).Where(l => !string.IsNullOrWhiteSpace(l));
-                var dict = new ConcurrentDictionary<string, string>(VfsShared.PathComparer);
-                foreach (var line in lines)
-                {
-                    var parts = line.Split('|', 3);
-                    if (parts.Length > 0 && !string.IsNullOrWhiteSpace(parts[0]))
-                    {
-                        string slug = parts.Length > 1 ? parts[1] : "";
-                        string upgrade = parts.Length > 2 ? parts[2] : "";
-                        dict[parts[0]] = $"{slug}|{upgrade}";
-                    }
-                }
+                var dict = new ConcurrentDictionary<string, string>(
+                    File.ReadLines(ThemeCacheFilePath)
+                        .Where(l => !string.IsNullOrWhiteSpace(l))
+                        .Select(l => l.Split('|', 3))
+                        .Where(p => p.Length > 0 && !string.IsNullOrWhiteSpace(p[0]))
+                        .ToDictionary(p => p[0], p => $"{(p.Length > 1 ? p[1] : "")}|{(p.Length > 2 ? p[2] : "")}", VfsShared.PathComparer)
+                );
                 if (!dict.IsEmpty)
                 {
                     _themeMp3Cache = dict;
@@ -341,12 +336,7 @@ public class AnimeThemesMp3Generator(
             var entry = anime?.Anime?.ElementAtOrDefault(query.Offset);
 
             string? audioUrl = null;
-            string slugRaw = "",
-                slugDisplay = "",
-                songTitle = "",
-                artist = "",
-                animeTitle = "",
-                animeSlug = "";
+            var (slugRaw, slugDisplay, songTitle, artist, animeTitle, animeSlug) = ("", "", "", "", "", "");
 
             if (entry?.Animethemes != null && entry.Animethemes.Count > 0)
             {
@@ -359,14 +349,9 @@ public class AnimeThemesMp3Generator(
                             {
                                 string s = t.Slug ?? "";
                                 var (baseSlug, _) = AnimeThemesHelper.ParseSlug(s);
-                                bool isOp = baseSlug.StartsWith("OP", StringComparison.OrdinalIgnoreCase);
-                                bool isEd = baseSlug.StartsWith("ED", StringComparison.OrdinalIgnoreCase);
                                 int num = AnimeThemesHelper.ExtractSlugNumber(baseSlug);
 
-                                int group =
-                                    isOp ? 1
-                                    : isEd ? 2
-                                    : 3;
+                                int group = baseSlug.StartsWith("OP", StringComparison.OrdinalIgnoreCase) ? 1 : (baseSlug.StartsWith("ED", StringComparison.OrdinalIgnoreCase) ? 2 : 3);
                                 return (Theme: t, OriginalIndex: index, Group: group, Number: num);
                             }
                         )
@@ -483,15 +468,13 @@ public class AnimeThemesMp3Generator(
         }
         finally
         {
-            try
-            {
-                if (!string.IsNullOrEmpty(temp) && File.Exists(temp))
+            if (!string.IsNullOrEmpty(temp) && File.Exists(temp))
+                try
                 {
                     logger.LogTrace("AnimeThemes MP3: Cleaning up temporary file -> {TempFile}", temp);
                     File.Delete(temp);
                 }
-            }
-            catch { }
+                catch { }
         }
     }
 
@@ -504,8 +487,7 @@ public class AnimeThemesMp3Generator(
         var overriddenOps = new ConcurrentBag<string>();
         var overriddenEds = new ConcurrentBag<string>();
         var errors = new ConcurrentBag<string>();
-        int processed = 0,
-            fixes = 0;
+        var (processed, fixes) = (0, 0);
 
         var cache = GetCachedThemeMp3s();
         bool cacheUpdated = false;

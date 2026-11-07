@@ -190,15 +190,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
     /// <returns>Paged Plex-compatible JSON response.</returns>
     protected IActionResult WrapInPagedContainer(IEnumerable<object> metadataList, string? identifier = null)
     {
-        int start =
-            int.TryParse(Request.Headers["X-Plex-Container-Start"], out var s) ? s
-            : int.TryParse(Request.Query["X-Plex-Container-Start"], out var sq) ? sq
-            : 0;
-        int size =
-            int.TryParse(Request.Headers["X-Plex-Container-Size"], out var z) ? z
-            : int.TryParse(Request.Query["X-Plex-Container-Size"], out var zq) ? zq
-            : 50;
-
+        var (start, size) = GetPaging();
         var allItems = metadataList.ToList();
         var pagedData = allItems.Skip(start).Take(size).ToArray();
         string defaultIdentifier = Request.Path.Value?.Contains("/movie", StringComparison.OrdinalIgnoreCase) == true ? ShokoRelayConstants.MovieAgentScheme : ShokoRelayConstants.AgentScheme;
@@ -221,6 +213,25 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
     /// <summary>Return an empty Plex match response (zero results).</summary>
     /// <returns>Plex-compatible empty MediaContainer result.</returns>
     protected IActionResult EmptyMatch() => Ok(new { MediaContainer = new { size = 0, Metadata = Array.Empty<object>() } });
+
+    #endregion
+
+    #region Plex Pagination
+
+    /// <summary>Extracts the Plex container paging parameters from the current request.</summary>
+    /// <returns>A tuple containing the Start offset and Size limit.</returns>
+    protected (int Start, int Size) GetPaging()
+    {
+        int start =
+            int.TryParse(Request.Headers["X-Plex-Container-Start"], out var s) ? s
+            : int.TryParse(Request.Query["X-Plex-Container-Start"], out var sq) ? sq
+            : 0;
+        int size =
+            int.TryParse(Request.Headers["X-Plex-Container-Size"], out var z) ? z
+            : int.TryParse(Request.Query["X-Plex-Container-Size"], out var zq) ? zq
+            : 50;
+        return (start, size);
+    }
 
     #endregion
 

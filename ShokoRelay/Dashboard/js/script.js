@@ -235,8 +235,8 @@
     unwrapConfig: (data) => (data?.payload !== undefined ? data.payload || {} : data || {}),
     getValueByPath: (obj, path) => path.split(".").reduce((o, k) => o?.[k], obj),
     setValueByPath: (obj, path, value) => {
-      const parts = path.split("."),
-        last = parts.pop();
+      const parts = path.split(".");
+      const last = parts.pop();
       const target = parts.reduce((o, k) => ((o[k] ??= {}), o[k]), obj);
       target[last] = value;
     },
@@ -297,8 +297,8 @@
           place = "bottom";
         }
       }
-      const minLeft = margin,
-        maxLeft = vw - tpl.offsetWidth - margin;
+      const minLeft = margin;
+      const maxLeft = vw - tpl.offsetWidth - margin;
       const clampedLeft = Math.max(minLeft, Math.min(left, maxLeft));
       const arrow = tpl.querySelector(".tooltip-arrow");
       if (arrow) arrow.style.marginLeft = `${left - clampedLeft}px`;

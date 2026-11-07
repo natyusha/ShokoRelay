@@ -145,10 +145,10 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                     _ => null,
                 };
 
-                var prefId =
-                    episode.Series != null
-                        ? (prefIdCache.TryGetValue(episode.ShokoSeriesID, out var pId) ? pId : prefIdCache[episode.ShokoSeriesID] = MapHelper.GetPreferredTmdbOrderingId(episode.Series))
-                        : null;
+                string? prefId = null;
+                if (episode.Series != null && !prefIdCache.TryGetValue(episode.ShokoSeriesID, out prefId))
+                    prefIdCache[episode.ShokoSeriesID] = prefId = MapHelper.GetPreferredTmdbOrderingId(episode.Series);
+
                 var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
                 var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - S{coords.Season:D2}E{coords.Episode:D2} (RatingKey: {item.RatingKey})";
 
@@ -196,10 +196,10 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                     _ => null,
                 };
 
-                var prefId =
-                    episode.Series != null
-                        ? (prefIdCache.TryGetValue(episode.ShokoSeriesID, out var pId) ? pId : prefIdCache[episode.ShokoSeriesID] = MapHelper.GetPreferredTmdbOrderingId(episode.Series))
-                        : null;
+                string? prefId = null;
+                if (episode.Series != null && !prefIdCache.TryGetValue(episode.ShokoSeriesID, out prefId))
+                    prefIdCache[episode.ShokoSeriesID] = prefId = MapHelper.GetPreferredTmdbOrderingId(episode.Series);
+
                 var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
                 var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - S{coords.Season:D2}E{coords.Episode:D2} (RatingKey: {item.RatingKey})";
 

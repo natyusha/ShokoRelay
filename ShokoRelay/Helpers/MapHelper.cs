@@ -237,8 +237,7 @@ public static class MapHelper
         }
 
         // Apply fallback rules for "Other" (Featurette) season coordinates, remapping them to Standard or Specials folders if those are empty
-        bool s1 = seasonsSet.Contains(PlexConstants.SeasonStandard),
-            s0 = seasonsSet.Contains(PlexConstants.SeasonSpecials);
+        var (s1, s0) = (seasonsSet.Contains(PlexConstants.SeasonStandard), seasonsSet.Contains(PlexConstants.SeasonSpecials));
 
         foreach (var key in videoCoords.Keys.ToList())
         {
@@ -284,8 +283,7 @@ public static class MapHelper
             var (coords, deduped) = info;
             var firstEp = deduped[0].Episode;
             var fileList = episodeFileLists.GetValueOrDefault(firstEp.ID);
-            int fIdx = fileList?.FindIndex(x => x.LocalID == video.LocalID) ?? 0,
-                fCount = fileList?.Count ?? 1;
+            var (fIdx, fCount) = (fileList?.FindIndex(x => x.LocalID == video.LocalID) ?? 0, fileList?.Count ?? 1);
             string fileName = Path.GetFileName(video.Files?.FirstOrDefault()?.Path ?? "");
             bool allowPt = fCount > 1 && VfsHelper.HasPlexSplitTag(fileName) && deduped.Select(d => d.Episode.Type).Distinct().Count() <= 1;
 

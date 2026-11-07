@@ -75,10 +75,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
             var prefIdCache = new ConcurrentDictionary<int, string?>();
             var errsBag = new ConcurrentBag<string>();
             var uploadedBag = new ConcurrentBag<string>();
-            int p = 0,
-                u = 0,
-                s = 0,
-                e = 0;
+            var (p, u, s, e) = (0, 0, 0, 0);
 
             void AddStats(bool handled, bool uploaded, bool skipped, bool error)
             {

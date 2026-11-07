@@ -77,24 +77,14 @@ public static class PlexMapping
 
             if (tmdbEpisodes.Count > 0)
             {
-                var first = tmdbEpisodes[0];
-                var (season, epNum) = GetOrderingCoords(first, seriesPreferredOrderingId);
+                var (season, epNum) = GetOrderingCoords(tmdbEpisodes[0], seriesPreferredOrderingId);
                 if (season.HasValue)
-                {
-                    int? endEp = null;
-                    if (tmdbEpisodes.Count > 1)
-                    {
-                        var (lastSeason, lastEpisode) = GetOrderingCoords(tmdbEpisodes[^1], seriesPreferredOrderingId);
-                        if (lastSeason == season)
-                            endEp = lastEpisode;
-                    }
                     return new PlexCoords
                     {
                         Season = season.Value,
                         Episode = epNum,
-                        EndEpisode = endEp,
+                        EndEpisode = tmdbEpisodes.Count > 1 && GetOrderingCoords(tmdbEpisodes[^1], seriesPreferredOrderingId) is var (lastSeason, lastEpisode) && lastSeason == season ? lastEpisode : null,
                     };
-                }
             }
         }
 
@@ -133,14 +123,12 @@ public static class PlexMapping
                 ? [.. tmdbEntriesRaw.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber)]
                 : SelectPreferredTmdbOrdering(tmdbEntriesRaw, showPrefId);
 
-            if (tmdbEntries.Any())
+            if (tmdbEntries.Count > 0)
             {
-                var first = tmdbEntries.First();
-                var (season, episode) = GetOrderingCoords(first, showPrefId);
+                var (season, episode) = GetOrderingCoords(tmdbEntries[0], showPrefId);
                 if (season.HasValue)
                 {
-                    var last = tmdbEntries.Last();
-                    var (lastSeason, lastEpisode) = GetOrderingCoords(last, showPrefId);
+                    var (lastSeason, lastEpisode) = GetOrderingCoords(tmdbEntries[^1], showPrefId);
                     int? endEpisode = (tmdbEntries.Count > 1 && lastSeason == season) ? lastEpisode : null;
                     return new PlexCoords
                     {

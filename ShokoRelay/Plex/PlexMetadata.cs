@@ -99,10 +99,7 @@ public class PlexMetadata(IMetadataService metadataService)
                 if (_contextCache.TryGetValue(primaryId, out var fresh) && fresh.ExpirationTicks >= now)
                     cached = fresh;
                 else
-                {
-                    cached = CreateEntry();
-                    _contextCache[primaryId] = cached;
-                }
+                    _contextCache[primaryId] = cached = CreateEntry();
             }
         }
 

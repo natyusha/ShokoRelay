@@ -57,19 +57,16 @@ public static class CastHelper
                 {
                     string? tag = GetName(getCreator(c), getName(c));
                     string? role = getRole(c);
-                    if (string.Equals(tag, role, StringComparison.Ordinal))
-                        continue;
-
-                    var thumbImg = getCreator(c)?.PrimaryImage;
-                    finalRoles.Add(
-                        new
-                        {
-                            order = order++,
-                            tag,
-                            role,
-                            thumb = thumbImg != null ? ImageHelper.GetImageUrl(thumbImg, forceRemote: true) : null,
-                        }
-                    );
+                    if (!string.Equals(tag, role, StringComparison.Ordinal))
+                        finalRoles.Add(
+                            new
+                            {
+                                order = order++,
+                                tag,
+                                role,
+                                thumb = getCreator(c)?.PrimaryImage is { } img ? ImageHelper.GetImageUrl(img, forceRemote: true) : null,
+                            }
+                        );
                 }
                 return;
             }

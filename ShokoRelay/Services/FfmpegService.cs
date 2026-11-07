@@ -110,9 +110,7 @@ public sealed class FfmpegService(string pluginDirectory, string applicationPath
             _ffmpegPath = ffmpegName;
             _ffprobePath = ffprobeName;
 
-            bool ffmpegFound = false;
-            bool ffprobeFound = false;
-            string? locatedDir = null;
+            var (ffmpegFound, ffprobeFound, locatedDir) = (false, false, (string?)null);
             var candidates = new List<string>();
             string configured = Settings.Advanced.FFmpegPath;
             if (!string.IsNullOrWhiteSpace(configured))
@@ -226,7 +224,6 @@ public sealed class FfmpegService(string pluginDirectory, string applicationPath
 
             var tasks = new List<Task>();
             if (stdIn != null)
-            {
                 tasks.Add(
                     Task.Run(
                         async () =>
@@ -244,7 +241,6 @@ public sealed class FfmpegService(string pluginDirectory, string applicationPath
                         cancellationToken
                     )
                 );
-            }
 
             if (stdOut != null)
                 tasks.Add(process.StandardOutput.BaseStream.CopyToAsync(stdOut, cancellationToken));

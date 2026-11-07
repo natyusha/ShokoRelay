@@ -224,15 +224,9 @@ public class ConfigProvider
         // Extract from Path Segment (options/{overrides})
         var overridePath = ctx.Request.RouteValues["overrides"]?.ToString();
         if (!string.IsNullOrWhiteSpace(overridePath))
-        {
-            var pairs = overridePath.Split(';', StringSplitOptions.RemoveEmptyEntries);
-            foreach (var pair in pairs)
-            {
-                var kv = pair.Split('=', 2);
-                if (kv.Length == 2)
+            foreach (var pair in overridePath.Split(';', StringSplitOptions.RemoveEmptyEntries))
+                if (pair.Split('=', 2) is { Length: 2 } kv)
                     overrides[kv[0].Trim()] = kv[1].Trim();
-            }
-        }
 
         // Extract from Query String (fallback for testing)
         foreach (var q in ctx.Request.Query)

@@ -124,10 +124,10 @@ public class SyncToPlex(
                                 continue;
                         }
 
-                        var prefId =
-                            episode!.Series != null
-                                ? (prefIdCache.TryGetValue(episode.ShokoSeriesID, out var pId) ? pId : prefIdCache[episode.ShokoSeriesID] = MapHelper.GetPreferredTmdbOrderingId(episode.Series))
-                                : null;
+                        string? prefId = null;
+                        if (episode!.Series != null && !prefIdCache.TryGetValue(episode.ShokoSeriesID, out prefId))
+                            prefIdCache[episode.ShokoSeriesID] = prefId = MapHelper.GetPreferredTmdbOrderingId(episode.Series);
+
                         var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
                         string typeLabel = PlexHelper.IsMovieKey(plexItem.RatingKey!) ? "movie" : "episode";
 

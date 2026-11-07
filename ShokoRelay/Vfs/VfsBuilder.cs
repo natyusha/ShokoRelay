@@ -43,10 +43,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
 
         var removed = new ConcurrentBag<string>();
         var errors = new ConcurrentBag<string>();
-        int brokenLinks = 0,
-            orphanedFolders = 0,
-            seriesChecked = 0;
-        int blueprintUpdated = 0;
+        var (brokenLinks, orphanedFolders, seriesChecked, blueprintUpdated) = (0, 0, 0, 0);
 
         string rootName = VfsShared.ResolveRootFolderName();
         string movieRootName = VfsShared.ResolveMovieRootFolderName();
@@ -104,11 +101,9 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                                 removed.Add($"[Orphaned Series] {seriesFolder}");
 
                                 if (parsedFolderId > 0)
-                                {
                                     foreach (var rootDict in blueprint.Values)
                                         if (rootDict.TryRemove(parsedFolderId, out _))
                                             Interlocked.Exchange(ref blueprintUpdated, 1);
-                                }
                             }
                             catch (Exception ex)
                             {
@@ -448,8 +443,8 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                 if (!TryResolveAndValidate(mapping, out var locInfo))
                     continue;
 
-                string rootPath = Path.Combine(locInfo.ImportRoot, rootFolderName),
-                    seriesPath = Path.Combine(rootPath, folderId.ToString());
+                string rootPath = Path.Combine(locInfo.ImportRoot, rootFolderName);
+                string seriesPath = Path.Combine(rootPath, folderId.ToString());
                 resolvedVfsSeriesPaths.Add(seriesPath);
 
                 EnsureDirectory(rootPath, session, true);

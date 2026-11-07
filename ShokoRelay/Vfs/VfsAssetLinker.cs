@@ -269,8 +269,7 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
                 if (!match.Success)
                     continue;
 
-                string type = match.Groups[1].Value,
-                    seasonNum = match.Groups[3].Value;
+                var (type, seasonNum) = (match.Groups[1].Value, match.Groups[3].Value);
                 string plexDirName = PlexConstants.LocalExtraDirs.First(d => string.Equals(d, type, StringComparison.OrdinalIgnoreCase));
                 string seasonFolder = string.IsNullOrEmpty(seasonNum) ? "" : VfsHelper.SanitizeName(PlexMapping.GetSeasonFolder(int.Parse(seasonNum)));
 

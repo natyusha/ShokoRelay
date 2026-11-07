@@ -46,9 +46,7 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
         var messages = new List<string>();
         var downloads = new List<string>();
         var downloadedItems = new List<(string RelPath, string FileName)>();
-        int downloaded = 0,
-            skipped = 0,
-            errors = 0;
+        var (downloaded, skipped, errors) = (0, 0, 0);
 
         string themeRootName = VfsShared.ResolveAnimeThemesFolderName();
         var managedFolders = videoService.GetAllManagedFolders()?.Where(VfsShared.IsVfsEnabledFolder).Select(f => f.Path).Where(p => !string.IsNullOrWhiteSpace(p)).ToList() ?? [];
@@ -178,12 +176,8 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
             page++;
         }
 
-        if (downloadedItems.Count > 0)
-        {
-            int mapped = await mappingService.AppendEntriesToMappingFileAsync(downloadedItems, CancellationToken.None).ConfigureAwait(false);
-            if (mapped > 0)
-                messages.Add($"Auto-mapped {mapped} new entries into {ShokoRelayConstants.FileAtMapping}");
-        }
+        if (await mappingService.AppendEntriesToMappingFileAsync(downloadedItems, CancellationToken.None).ConfigureAwait(false) is int mapped && mapped > 0)
+            messages.Add($"Auto-mapped {mapped} new entries into {ShokoRelayConstants.FileAtMapping}");
 
         logger.LogInformation("AnimeThemes WebM: Download operation finished -> {Downloaded} downloaded, {Skipped} skipped, {Errors} errors", downloaded, skipped, errors);
         return new WebmDownloadResult(downloaded, skipped, errors, downloads, messages);

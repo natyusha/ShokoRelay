@@ -62,6 +62,12 @@ public static partial class TextHelper
 
     #region General Text Helpers
 
+    /// <summary>Zero-width space character used to bypass Plex title stripping.</summary>
+    public const string ZeroWidthSpace = "\u200B";
+
+    /// <summary>Hair space character used to bypass Plex title stripping and force Openings before Endings.</summary>
+    public const string HairSpace = "\u200A";
+
     /// <summary>Replace runs of two or more whitespace characters with a single space.</summary>
     /// <param name="input">The string to process.</param>
     /// <returns>The condensed string.</returns>
