@@ -2,7 +2,7 @@
 
 ![Shoko Relay Logo](https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-logo-small.png "Shoko Relay")  
 [![Discord](https://img.shields.io/discord/96234011612958720?logo=discord&logoColor=fff&label=Discord&color=5865F2 "Shoko Discord")](https://discord.gg/shokoanime)
-[![Shoko Docs](https://img.shields.io/badge/VitePress-Shoko_Docs-4E7CF5?logo=vitepress&logoColor=fff)](https://docs.shokoanime.com/)
+[![Shoko Docs](https://img.shields.io/badge/VitePress-Shoko_Docs-4E7CF5?logo=vitepress&logoColor=fff)](https://docs.shokoanime.com/daily/)
 [![GitHub Latest](https://img.shields.io/github/v/tag/natyusha/ShokoRelay?label=Latest&logo=github&logoColor=fff)](https://github.com/natyusha/ShokoRelay/releases/latest)
 -
 
