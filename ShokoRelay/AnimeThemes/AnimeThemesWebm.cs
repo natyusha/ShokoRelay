@@ -86,10 +86,11 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
         while (hasNext && !cancellationToken.IsCancellationRequested)
         {
             var resp = await _api.FetchAnimePageAsync(query.Year, query.Season, query.Name, page, cancellationToken).ConfigureAwait(false);
-            if (resp?.Anime == null || resp.Anime.Count == 0)
+            var animeList = resp?.Data;
+            if (animeList == null || animeList.Count == 0)
                 break;
 
-            foreach (var anime in resp.Anime)
+            foreach (var anime in animeList)
             {
                 // Format the year into a decade string if before 2000, otherwise returns the exact year
                 string yearFolder = !anime.Year.HasValue ? "Unknown" : (anime.Year.Value >= 2000 ? anime.Year.Value.ToString() : $"{anime.Year.Value / 10 * 10 % 100:D2}s");
@@ -102,7 +103,7 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
                     try
                     {
                         var details = await _api.FetchAnimeThemeWithArtistsAsync(theme.Id, cancellationToken).ConfigureAwait(false);
-                        var video = details?.Animetheme?.Animethemeentries?.FirstOrDefault()?.Videos?.FirstOrDefault();
+                        var video = details?.Animethemeentries?.FirstOrDefault()?.Videos?.Nodes?.FirstOrDefault();
 
                         if (video == null || string.IsNullOrWhiteSpace(video.Link) || string.IsNullOrWhiteSpace(video.Basename))
                             continue;
@@ -172,7 +173,7 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
                 }
             }
 
-            hasNext = !string.IsNullOrWhiteSpace(resp.Links?.Next);
+            hasNext = resp?.PaginatorInfo?.HasMorePages ?? false;
             page++;
         }
 

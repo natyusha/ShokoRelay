@@ -111,8 +111,8 @@ internal static partial class AnimeThemesHelper
 {
     #region Constants & Fields
 
-    /// <summary>The base URL for the AnimeThemes API.</summary>
-    internal const string AtApiBase = "https://api.animethemes.moe";
+    /// <summary>The base URL for the AnimeThemes GraphQL API.</summary>
+    internal const string AtApiBase = "https://graphql.animethemes.moe/";
 
     /// <summary>The raw URL to the curated AnimeThemes mapping CSV on GitHub.</summary>
     internal const string AtRawMapUrl = "https://gist.githubusercontent.com/natyusha/bb33a3b3bc95bc7a3869633e23d522bb/raw/";

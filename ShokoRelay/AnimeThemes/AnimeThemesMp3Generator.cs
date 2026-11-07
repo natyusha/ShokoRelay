@@ -327,24 +327,32 @@ public class AnimeThemesMp3Generator(
                 throw new ArgumentException("Invalid slug format.");
 
             logger.LogDebug("AnimeThemes MP3: Fetching metadata for AniDB ID -> {AnidbId} (Slug: {Slug}, Offset: {Offset})", series.AnidbAnimeID, query.Slug ?? "Auto", query.Offset);
-            var (parsedBase, _) = AnimeThemesHelper.ParseSlug(query.Slug ?? "");
-            string filter = string.IsNullOrEmpty(query.Slug)
-                ? "&filter[animetheme][type]=OP,ED"
-                : $"&filter[animetheme][slug]={Uri.EscapeDataString(parsedBase is "OP" or "ED" ? $"{parsedBase},{parsedBase}1" : parsedBase)}";
-
-            var anime = await _apiClient.FetchAnimeThemesAsync(series.AnidbAnimeID, filter, cancellationToken).ConfigureAwait(false);
-            var entry = anime?.Anime?.ElementAtOrDefault(query.Offset);
+            var anime = await _apiClient.FetchAnimeThemesAsync(series.AnidbAnimeID, cancellationToken).ConfigureAwait(false);
+            var entry = anime?.ElementAtOrDefault(query.Offset);
 
             string? audioUrl = null;
             var (slugRaw, slugDisplay, songTitle, artist, animeTitle, animeSlug) = ("", "", "", "", "", "");
 
             if (entry?.Animethemes != null && entry.Animethemes.Count > 0)
             {
+                var validThemes = entry
+                    .Animethemes.Where(t =>
+                    {
+                        if (string.IsNullOrEmpty(query.Slug))
+                            return t.Slug != null && (t.Slug.StartsWith("OP", StringComparison.OrdinalIgnoreCase) || t.Slug.StartsWith("ED", StringComparison.OrdinalIgnoreCase));
+                        var (baseSlug, _) = AnimeThemesHelper.ParseSlug(t.Slug ?? "");
+                        var (queryBase, _) = AnimeThemesHelper.ParseSlug(query.Slug);
+                        return string.Equals(baseSlug, queryBase, StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(baseSlug, queryBase + "1", StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(baseSlug + "1", queryBase, StringComparison.OrdinalIgnoreCase);
+                    })
+                    .ToList();
+
                 int idx = 0;
                 if (string.IsNullOrEmpty(query.Slug))
                 {
-                    var (bestTheme, bestIndex, _, _) = entry
-                        .Animethemes.Select(
+                    var (bestTheme, bestIndex, _, _) = validThemes
+                        .Select(
                             (t, index) =>
                             {
                                 string s = t.Slug ?? "";
@@ -364,23 +372,26 @@ public class AnimeThemesMp3Generator(
                         idx = bestIndex;
                 }
 
-                var themeDetail = await _apiClient.FetchAnimeThemeWithArtistsAsync(entry.Animethemes[idx].Id, cancellationToken).ConfigureAwait(false);
-                audioUrl = themeDetail?.Animetheme?.Animethemeentries?.FirstOrDefault()?.Videos?.FirstOrDefault()?.Audio?.Link;
-
-                if (!string.IsNullOrEmpty(audioUrl))
+                if (validThemes.Count > idx)
                 {
-                    var (bp, sp) = AnimeThemesHelper.ParseSlug(themeDetail!.Animetheme!.Slug ?? "");
-                    slugRaw = themeDetail.Animetheme.Slug ?? "";
-                    slugDisplay = $"{(bp.StartsWith("OP", StringComparison.OrdinalIgnoreCase) ? "Opening" : "Ending")} {bp[2..]}".Trim() + AnimeThemesHelper.FormatSlugTag(sp);
-                    songTitle = themeDetail.Animetheme.Song?.Title ?? "";
+                    var themeDetail = await _apiClient.FetchAnimeThemeWithArtistsAsync(validThemes[idx].Id, cancellationToken).ConfigureAwait(false);
+                    audioUrl = themeDetail?.Animethemeentries?.FirstOrDefault()?.Videos?.Nodes?.FirstOrDefault()?.Audio?.Link;
 
-                    var artists = themeDetail.Animetheme.Song?.Artists;
-                    artist = artists?.Count > 1 ? string.Join("; ", artists.Where(a => !string.IsNullOrEmpty(a.Name)).Select(a => a.Name)) : artists?.FirstOrDefault()?.Name ?? "";
+                    if (!string.IsNullOrEmpty(audioUrl))
+                    {
+                        var (bp, sp) = AnimeThemesHelper.ParseSlug(themeDetail!.Slug ?? "");
+                        slugRaw = themeDetail.Slug ?? "";
+                        slugDisplay = $"{(bp.StartsWith("OP", StringComparison.OrdinalIgnoreCase) ? "Opening" : "Ending")} {bp[2..]}".Trim() + AnimeThemesHelper.FormatSlugTag(sp);
+                        songTitle = themeDetail.Song?.Title?.Romaji ?? "";
 
-                    animeTitle = entry.Name ?? "";
-                    animeSlug = entry.Slug ?? "";
+                        var artists = themeDetail.Song?.Performances?.Select(p => p.Artist).ToList();
+                        artist = artists?.Count > 1 ? string.Join("; ", artists.Select(a => a?.Name?.Main).Where(n => !string.IsNullOrEmpty(n))) : artists?.FirstOrDefault()?.Name?.Main ?? "";
 
-                    logger.LogDebug("AnimeThemes MP3: Selected theme for series -> {Title} [{LocalId}] ({Slug} - {SongTitle})", series.GetDisplayTitle(), series.LocalID, slugRaw, songTitle);
+                        animeTitle = entry.Title?.Romaji ?? "";
+                        animeSlug = entry.Slug ?? "";
+
+                        logger.LogDebug("AnimeThemes MP3: Selected theme for series -> {Title} [{LocalId}] ({Slug} - {SongTitle})", series.GetDisplayTitle(), series.LocalID, slugRaw, songTitle);
+                    }
                 }
             }
 
@@ -554,8 +565,8 @@ public class AnimeThemesMp3Generator(
                             if (s == null)
                                 return;
 
-                            var anime = await _apiClient.FetchAnimeThemesAsync(s.AnidbAnimeID, null, token).ConfigureAwait(false);
-                            var animethemes = anime?.Anime?.FirstOrDefault()?.Animethemes ?? [];
+                            var anime = await _apiClient.FetchAnimeThemesAsync(s.AnidbAnimeID, token).ConfigureAwait(false);
+                            var animethemes = anime?.FirstOrDefault()?.Animethemes ?? [];
                             var op = animethemes
                                 .Where(t => t.Slug != null && t.Slug.StartsWith("OP", StringComparison.OrdinalIgnoreCase))
                                 .OrderBy(t => AnimeThemesHelper.ExtractSlugNumber(t.Slug!))

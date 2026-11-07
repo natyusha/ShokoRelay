@@ -533,24 +533,29 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
 
     #region Metadata Fetching
 
+    /// <summary>Fetches the theme metadata for a specific video filename.</summary>
+    /// <param name="fileName">The basename of the video file.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A tuple containing the mapped metadata lookup and a boolean indicating if the AniDB ID was missing.</returns>
     private async Task<(AnimeThemesVideoLookup? lookup, bool idMissing)> FetchMetadataAsync(string fileName, CancellationToken cancellationToken)
     {
         var v = await _apiClient.FetchVideoWithArtistsAsync(fileName, cancellationToken).ConfigureAwait(false);
-        if (v?.Video == null)
+        if (v == null)
             return (null, false);
-        var first = v.Video.Animethemeentries?.FirstOrDefault();
+        var first = v.Animethemeentries?.Nodes?.FirstOrDefault();
         if (first?.Animetheme == null)
             return (null, false);
 
-        var anime = await _apiClient.FetchAnimeResourcesAsync(v.Video.Id, cancellationToken).ConfigureAwait(false);
         string[] seasonOrder = ["Winter", "Spring", "Summer", "Fall"];
-        var best = anime
-            ?.Anime?.Select(e => new
+        var allAnime = v.Animethemeentries?.Nodes?.Select(e => e.Animetheme?.Anime).Where(a => a != null).ToList() ?? [];
+
+        var best = allAnime
+            .Select(e => new
             {
                 Entry = e,
-                Year = e.Year ?? 9999,
+                Year = e!.Year ?? 9999,
                 SVal = e.Season != null ? Array.IndexOf(seasonOrder, e.Season) : 9999,
-                ids = e.Resources?.Where(r => string.Equals(r.Site, "aniDB", StringComparison.OrdinalIgnoreCase) && r.ExternalId.HasValue).Select(r => r.ExternalId!.Value).OrderBy(i => i).ToList(),
+                ids = e.Resources?.Nodes?.Where(r => string.Equals(r.Site, "aniDB", StringComparison.OrdinalIgnoreCase) && r.ExternalId.HasValue).Select(r => r.ExternalId!.Value).OrderBy(i => i).ToList(),
             })
             .Where(x => x.ids?.Count > 0)
             .OrderBy(x => x.Year)
@@ -563,23 +568,23 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
             var theme = first.Animetheme;
             return (
                 new AnimeThemesVideoLookup(
-                    v.Video.Id,
+                    v.Id,
                     theme.Id,
                     best.ids![0],
-                    v.Video.NC,
+                    v.Nc,
                     theme.Slug ?? "",
                     first.Version,
-                    string.Join(" / ", theme.Song?.Artists?.Select(a => a.Name).Where(n => !string.IsNullOrEmpty(n)) ?? []),
-                    theme.Song?.Title ?? "",
-                    v.Video.Lyrics,
-                    v.Video.Subbed,
-                    v.Video.Uncen,
-                    first.NSFW,
+                    string.Join(" / ", theme.Song?.Performances?.Select(p => p.Artist?.Name?.Main).Where(n => !string.IsNullOrEmpty(n)) ?? []),
+                    theme.Song?.Title?.Romaji ?? "",
+                    v.Lyrics,
+                    v.Subbed,
+                    v.Uncen,
+                    first.Nsfw,
                     first.Spoiler,
-                    v.Video.Source ?? "",
-                    v.Video.Resolution ?? 0,
+                    v.Source ?? "",
+                    v.Resolution ?? 0,
                     first.Episodes ?? "",
-                    v.Video.Overlap ?? ""
+                    v.Overlap ?? ""
                 ),
                 false
             );
