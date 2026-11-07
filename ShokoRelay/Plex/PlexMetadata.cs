@@ -43,6 +43,7 @@ public class PlexMetadata(IMetadataService metadataService)
     /// <summary>Aggregates relevant information about a Shoko series for controller responses.</summary>
     /// <param name="Series">The primary series metadata.</param>
     /// <param name="TmdbSeries">The linked TMDB series metadata, if present.</param>
+    /// <param name="TmdbMovie">The linked TMDB movie metadata, if present.</param>
     /// <param name="Titles">A tuple containing Display, Sort, and Original titles.</param>
     /// <param name="ContentRating">The resolved content rating string.</param>
     /// <param name="IsAdult">Whether the series is flagged as adult content.</param>
@@ -51,6 +52,7 @@ public class PlexMetadata(IMetadataService metadataService)
     public record SeriesContext(
         IShokoSeries Series,
         ISeries? TmdbSeries,
+        IMovie? TmdbMovie,
         (string DisplayTitle, string SortTitle, string? OriginalTitle) Titles,
         string ContentRating,
         bool IsAdult,
@@ -81,10 +83,11 @@ public class PlexMetadata(IMetadataService metadataService)
             {
                 var primarySeries = metadataService.GetShokoSeriesByID(primaryId) ?? series;
                 var tmdbSeries = primarySeries.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() ?? primarySeries.AsTmdb();
+                var tmdbMovie = primarySeries.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault() ?? primarySeries.Episodes.FirstOrDefault()?.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault();
                 var fileData = MapHelper.GetConsolidatedSeriesFileData(primarySeries, metadataService);
                 var prefId = MapHelper.GetPreferredTmdbOrderingId(primarySeries);
-                var (rating, isAdult) = ContentRatingHelper.GetContentRatingAndAdult(primarySeries, tmdbSeries);
-                return new SeriesContext(primarySeries, tmdbSeries, TextHelper.ResolveFullSeriesTitles(primarySeries), rating ?? "", isAdult, fileData, prefId);
+                var (rating, isAdult) = ContentRatingHelper.GetContentRatingAndAdult(primarySeries, tmdbMovie ?? (tmdbSeries as IWithContentRatings));
+                return new SeriesContext(primarySeries, tmdbSeries, tmdbMovie, TextHelper.ResolveFullSeriesTitles(primarySeries), rating ?? "", isAdult, fileData, prefId);
             });
 
         var cached = _contextCache.GetOrAdd(primaryId, _ => CreateEntry());
@@ -165,9 +168,15 @@ public class PlexMetadata(IMetadataService metadataService)
         var series = ctx.Series;
         var images = (IWithImages)series;
         var tmdbSeries = ctx.TmdbSeries;
+        var tmdbMovie = ctx.TmdbMovie;
         var description = TextHelper.GetDescriptionByLanguage(series, Settings.DescriptionLanguage);
-        var tmdbDescription = tmdbSeries?.PreferredOverview?.Value;
+        var tmdbDescription = tmdbSeries?.PreferredOverview?.Value ?? tmdbMovie?.PreferredOverview?.Value;
         var studios = CastHelper.GetStudioTags(series);
+        double? tmdbRating =
+            tmdbSeries?.Rating > 0 ? tmdbSeries.Rating
+            : tmdbMovie?.Rating > 0 ? tmdbMovie.Rating
+            : null;
+        double? anidbRating = series.Rating > 0 ? series.Rating : (series.Episodes.FirstOrDefault() is { Rating: > 0 } ep ? ep.Rating : null);
         // csharpier-ignore
         return new()
         {
@@ -176,16 +185,16 @@ public class PlexMetadata(IMetadataService metadataService)
             ["guid"]                  = series.GetPlexGuid(),
             ["type"]                  = "show",
             ["title"]                 = ctx.Titles.DisplayTitle,
-            ["originallyAvailableAt"] = series.AirDate?.ToDateOnly().ToString("yyyy-MM-dd", null),
-            ["thumb"]                 = images.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage),
-            ["art"]                   = images.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage),
+            ["originallyAvailableAt"] = series.AirDate?.ToDateOnly().ToString("yyyy-MM-dd", null) ?? tmdbMovie?.ReleaseDate?.ToString("yyyy-MM-dd", null),
+            ["thumb"]                 = images.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage) ?? (tmdbMovie as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage),
+            ["art"]                   = images.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage) ?? (tmdbMovie as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage),
             ["contentRating"]         = ctx.ContentRating,
             ["originalTitle"]         = ctx.Titles.OriginalTitle,
             ["titleSort"]             = ctx.Titles.SortTitle,
-            ["year"]                  = series.AirDate?.Year,
+            ["year"]                  = series.AirDate?.Year ?? tmdbMovie?.ReleaseDate?.Year,
             ["summary"]               = TextHelper.SanitizeSummaryWithFallback(description, tmdbDescription, Settings.SummaryMode),
             ["isAdult"]               = ctx.IsAdult,
-            ["duration"]              = series.Episodes is { Count: > 0 } eps ? (int)eps.Sum(e => e.Runtime.TotalMilliseconds) : null,
+            ["duration"]              = series.Episodes is { Count: > 0 } eps ? (int)eps.Sum(e => e.Runtime.TotalMilliseconds) : (tmdbMovie?.Runtime.HasValue == true ? (int)tmdbMovie.Runtime.Value.TotalMilliseconds : null),
             //["tagline"]             = TMDB has this but it is not exposed
             ["studio"]                = studios.FirstOrDefault()?.Tag,
             ["theme"]                 = Settings.PlexThemeMusic && tmdbSeries?.GetCrossSourceID("tvdb", MetadataEntityType.Series) is { } tvdb ? $"https://tvthemes.plexapp.com/{tvdb}.mp3" : null,
@@ -193,8 +202,8 @@ public class PlexMetadata(IMetadataService metadataService)
             ["Image"]                 = ImageHelper.GenerateImageArray(images, ctx.Titles.DisplayTitle, Settings.AddEveryImage, Settings.TmdbImageLanguage),
             //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
             ["Genre"]                 = TagHelper.GetFilteredTags(series, tmdbSeries),
-            ["Guid"]                  = BuildXrefGuidArray(series, tmdbSeries),
-            ["Country"]               = BuildCountryArray(series, tmdbSeries),
+            ["Guid"]                  = BuildXrefGuidArray(series, tmdbSeries, tmdbMovie),
+            ["Country"]               = BuildCountryArray(series, tmdbSeries, tmdbMovie),
             ["Role"]                  = CastHelper.GetCastAndCrew(series),
             ["Director"]              = CastHelper.GetDirectors(series),
             ["Producer"]              = CastHelper.GetProducers(series),
@@ -203,7 +212,7 @@ public class PlexMetadata(IMetadataService metadataService)
             ["Studio"]                = studios,
             ["Collection"]            = GetCollectionName(series) is string c ? new[] { new { tag = c } } : null,
             ["Network"]               = BuildNetworkArray(tmdbSeries),
-            ["Rating"]                = BuildRatingArray(tmdbSeries?.Rating ?? series.Rating),
+            ["Rating"]                = BuildRatingArray(tmdbRating, anidbRating),
             //[SeasonType]            = Not relevant
         };
     }
@@ -237,6 +246,8 @@ public class PlexMetadata(IMetadataService metadataService)
 
         var imagesArray = ImageHelper.GenerateMovieImageArray(seriesImages, movieImages, episode.EpisodeNumber, title, Settings.AddEveryImage, Settings.TmdbImageLanguage, out string? thumbUrl);
         string? artUrl = seriesImages.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage) ?? movieImages?.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage);
+        double? movieTmdbRating = tmdbMovie?.Rating ?? (episode as IShokoEpisode)?.GetLinkedEpisodes(MetadataSource.TMDB)?.FirstOrDefault()?.Rating ?? tmdbSeries?.Rating;
+        double? movieAnidbRating = episode.Rating > 0 ? episode.Rating : series.Rating;
         // csharpier-ignore
         return new()
         {
@@ -271,7 +282,7 @@ public class PlexMetadata(IMetadataService metadataService)
             ["Similar"]               = BuildSimilarArray(series),
             ["Studio"]                = studios,
             ["Collection"]            = GetCollectionName(series) is string c ? new[] { new { tag = c } } : null,
-            ["Rating"]                = BuildRatingArray(tmdbMovie?.Rating ?? (episode as IShokoEpisode)?.GetLinkedEpisodes(MetadataSource.TMDB)?.FirstOrDefault()?.Rating ?? tmdbSeries?.Rating ?? series.Rating)
+            ["Rating"]                = BuildRatingArray(movieTmdbRating, movieAnidbRating)
         };
     }
 
@@ -394,6 +405,15 @@ public class PlexMetadata(IMetadataService metadataService)
 
         var (rating, isAdult) =
             isMovieOverride && actualSeries.LocalID != series.LocalID ? ContentRatingHelper.GetContentRatingAndAdult(actualSeries, tmdbEp as IWithContentRatings ?? tmdbMovie) : (ctx.ContentRating, ctx.IsAdult);
+
+        double? epTmdbRating =
+            tmdbEp?.Rating > 0 ? tmdbEp.Rating
+            : tmdbMovie?.Rating > 0 ? tmdbMovie.Rating
+            : null;
+        double? epAnidbRating =
+            episode.Rating > 0 ? episode.Rating
+            : series.Rating > 0 ? series.Rating
+            : null;
         // csharpier-ignore
         return new()
         {
@@ -439,7 +459,7 @@ public class PlexMetadata(IMetadataService metadataService)
             ["Director"]              = CastHelper.GetDirectors(episode),
             ["Producer"]              = CastHelper.GetProducers(episode),
             ["Writer"]                = CastHelper.GetWriters(episode),
-            ["Rating"]                = BuildRatingArray(tmdbEp?.Rating ?? tmdbMovie?.Rating ?? episode.Rating)
+            ["Rating"]                = BuildRatingArray(epTmdbRating, epAnidbRating)
         };
     }
 
@@ -553,12 +573,13 @@ public class PlexMetadata(IMetadataService metadataService)
                 : [],
         ]);
 
-    /// <summary>Resolves production country codes to English names for a series.</summary>
+    /// <summary>Resolves production country codes to English names for a series or movie.</summary>
     /// <param name="series">The Shoko series metadata.</param>
     /// <param name="tmdbSeries">The TMDB series metadata object.</param>
+    /// <param name="tmdbMovie">The optional TMDB movie metadata object.</param>
     /// <returns>An array of objects containing country tags, or null if none found.</returns>
-    private object[]? BuildCountryArray(ISeries series, ISeries? tmdbSeries = null) =>
-        (tmdbSeries?.ProductionCountries ?? (series as IShokoSeries)?.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault()?.ProductionCountries) is { } codes
+    private object[]? BuildCountryArray(ISeries series, ISeries? tmdbSeries = null, IMovie? tmdbMovie = null) =>
+        (tmdbSeries?.ProductionCountries ?? tmdbMovie?.ProductionCountries ?? (series as IShokoSeries)?.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault()?.ProductionCountries) is { } codes
             ? CreateTagArray(
                 codes
                     .Where(c => !string.IsNullOrWhiteSpace(c))
@@ -596,21 +617,30 @@ public class PlexMetadata(IMetadataService metadataService)
     /// <returns>An array of objects containing network tags, or null if none found.</returns>
     private object[]? BuildNetworkArray(ISeries? tmdbSeries) => tmdbSeries is { } src ? CreateTagArray(src.Networks.Select(n => n.Name)) : null;
 
-    /// <summary>Formats a numeric rating into a Plex-compatible audience rating object.</summary>
-    /// <param name="r">The raw rating value (0-10).</param>
-    /// <returns>An array containing the Plex rating object, or null if invalid.</returns>
-    private object? BuildRatingArray(double? r) =>
-        r > 0
-            ? new[]
+    /// <summary>Formats numeric ratings into a Plex-compatible audience rating array.</summary>
+    /// <param name="tmdbRating">The TMDB rating value (0-10).</param>
+    /// <param name="anidbRating">The AniDB rating value (0-10).</param>
+    /// <returns>An array containing Plex rating objects, or null if none are valid.</returns>
+    private static object[]? BuildRatingArray(double? tmdbRating, double? anidbRating)
+    {
+        var ratings = new List<object>();
+        static object CreateRating(string image, double val) =>
+            new
             {
-                new
-                {
-                    image = "themoviedb://image.rating",
-                    type = "audience",
-                    value = (float)r.Value,
-                },
-            }
-            : null;
+                image,
+                type = "audience",
+                value = (float)val,
+            };
+
+        if (Settings.AnidbAsRottenTomatoes && anidbRating > 0)
+            ratings.Add(CreateRating("rottentomatoes://image.rating.upright", anidbRating.Value));
+
+        double? tmdbVal = tmdbRating > 0 ? tmdbRating : (!Settings.AnidbAsRottenTomatoes ? anidbRating : null);
+        if (tmdbVal > 0)
+            ratings.Add(CreateRating("themoviedb://image.rating", tmdbVal.Value));
+
+        return ratings.Count > 0 ? [.. ratings] : null;
+    }
 
     #endregion
 }

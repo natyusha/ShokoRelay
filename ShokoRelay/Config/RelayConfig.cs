@@ -196,13 +196,18 @@ public class RelayConfig
     [DefaultValue(true)]
     public bool MoveCommonSeriesTitlePrefixes { get; set; } = true;
 
+    /// <summary>Whether to display AniDB ratings with the Rotten Tomatoes audience rating icon.</summary>
+    [Display(Name = "Spoof AniDB Ratings", Description = "Enable to use the Rotten Tomatoes audience rating icon to display AniDB ratings")]
+    [DefaultValue(true)]
+    public bool AnidbAsRottenTomatoes { get; set; } = true;
+
     /// <summary>Whether to derive ratings and descriptors from AniDB tags.</summary>
     [Display(Name = "Assumed Content Ratings", Description = "Enable to use content ratings and descriptors that are derived from AniDB tags")]
     [DefaultValue(true)]
     public bool AssumedContentRatings { get; set; } = true;
 
     /// <summary>Whether to include staff in Plex's cast list.</summary>
-    [Display(Name = "Crew Listings", Description = "Enable to include staff listings in Plex's Cast & Crew section")]
+    [Display(Name = "Crew Listings", Description = "Enable to include staff listings at the end of Plex's Cast & Crew section")]
     [DefaultValue(true)]
     public bool CrewListings { get; set; } = true;
 
