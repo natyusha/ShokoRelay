@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.Frozen;
 using System.Globalization;
 using System.Text;
@@ -17,17 +18,27 @@ public static partial class TagHelper
     [GeneratedRegex(@"[\'\w\d-]+\b")]
     private static partial Regex WordRegex();
 
-    /// <summary>Regex which strips moderator notes and trailing comments starting with double hyphens from AniDB tags.</summary>
-    [GeneratedRegex(@"\s*--.*$")]
+    /// <summary>Regex which strips moderator notes, trailing comments starting with double hyphens, and migration instructions from AniDB tags.</summary>
+    [GeneratedRegex(@"\s*(?:--.*|-\s*to be\s+.*deleted)$", RegexOptions.IgnoreCase)]
     private static partial Regex TagCleanupRegex();
 
+    /// <summary>Regex matching characters outside basic Latin and punctuation blocks, used to filter out non-English TMDB keywords: https://www.themoviedb.org/bible/general#59f793929251413e9300000f.</summary>
+    [GeneratedRegex(@"[^\u0020-\u024F\u1E00-\u1EFF\u2000-\u206F]")]
+    private static partial Regex NonEnglishTagRegex();
+
     // csharpier-ignore
-    /// <summary><c>TagBlacklistAniDBHelpers</c>: https://github.com/ShokoAnime/ShokoServer/blob/master/Shoko.Server/Utilities/TagFilter.cs#L37</summary>
-    private static readonly FrozenSet<string> s_tagBlacklistAniDBHelpers = new[] {
-        "asia", "awards", "body and host", "breasts", "cast missing", "cast", "complete manga adaptation", "content indicators", "delayed 16-9 broadcast", "description missing",
-        "description needs improvement", "development hell", "dialogue driven", "dynamic", "earth", "elements", "ending", "ensemble cast", "family life", "fast-paced", "fetishes", "maintenance tags",
-        "meta tags", "motifs", "no english subs available", "origin", "pic needs improvement", "place", "pornography", "season", "setting", "source material", "staff missing", "storytelling",
-        "tales", "target audience", "technical aspects", "themes", "time", "to be moved to character", "to be moved to episode", "translation convention", "tropes", "unsorted"
+    /// <summary>A custom version of Shoko's default <c>TagBlacklistAniDBHelpers</c>: https://github.com/ShokoAnime/ShokoServer/blob/master/Shoko.Server/Utilities/TagFilter.cs#L37</summary>
+    private static readonly FrozenSet<string> s_tagBlacklistHelper = new[] {
+        // AniDB parent tags which only exist if a more specific child tag is present
+        "awards", "body and host", "breasts", "cast", "character related tags which need deleting or merging", "content indicators", "dynamic", "elements", "ending", "ending tags that need merging",
+        "family life", "fetishes", "maintenance tags", "meta tags", "motifs", "origin", "place", "pornography", "season", "setting", "storytelling", "tales", "target audience", "technical aspects",
+        "themes", "time", "tropes", "unsorted",
+        // AniDB maintenance tags: https://anidb.net/tag/30/animetb
+        "cast missing", "description missing", "description needs improvement", "no english subs available", "pic needs improvement", "staff missing", "to be moved to character", "to be moved to episode",
+        // AniDB parent tags which are too broad
+        "asia", "earth",
+        // TMDB tags which are too broad
+        "Animation", "Anime"
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     // csharpier-ignore
@@ -37,18 +48,35 @@ public static partial class TagHelper
         "over", "per", "to", "up", "with", "as", "4-koma", "-hime", "-kei", "-kousai", "-sama", "-warashi", "no", "vs", "x"
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
+    // csharpier-ignore
     /// <summary>Abbreviations or acronyms that should be fully capitalised</summary>
-    private static readonly FrozenSet<string> s_forceUpper = new[] { "3d", "bdsm", "cg", "cgi", "ed", "fff", "ffm", "ii", "milf", "mmf", "mmm", "npc", "op", "rpg", "tbs", "tv" }.ToFrozenSet(
-        StringComparer.OrdinalIgnoreCase
-    );
+    private static readonly FrozenSet<string> s_forceUpper = new[] {
+        "3d", "bdsm", "cg", "cgi", "ed", "fff", "ffm", "ii", "milf", "mmf", "mmm", "npc", "op", "rpg", "tbs", "tv",  // AniDB
+        "bl", "gl", "jk", "jsdf", "mma", "ntr", "ol", "ona", "ova", "pov", "ptsd", "us", "vr", "vrmmo"               // TMDB
+    }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
+    // csharpier-ignore
     /// <summary>Special cases where a specific capitalisation style is preferred</summary>
     private static readonly FrozenDictionary<string, string> s_forceSpecial = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
-        { "comicfesta", "ComicFesta" },
-        { "d'etat", "d'Etat" },
-        { "noitamina", "noitaminA" },
+        // AniDB
+        { "-japanese", "-Japanese" }, { "animefesta", "AnimeFesta" }, { "comicfesta", "ComicFesta" },
+        { "d'etat", "d'Etat" }, { "jdrama", "JDrama" }, { "noitamina", "noitaminA" },
+        // TMDB
+        { "vtuber", "VTuber" },
     }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+
+    // csharpier-ignore
+    /// <summary>Explicit tag merges mapping canonical AniDB tags to one or more TMDB keywords/tags in Combined mode.</summary>
+    private static readonly FrozenDictionary<string, string> s_tmdbTagMerges = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+    {
+        { "artificial intelligence", ["artificial intelligence (a.i.)"] },
+        { "large breasts", ["big tits"] },
+        { "small breasts", ["small tits"] },
+    }.SelectMany(kvp => kvp.Value.Select(tmdb => (Tmdb: tmdb, Anidb: kvp.Key))).ToFrozenDictionary(x => x.Tmdb, x => x.Anidb, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Global cache mapping normalized tag keys to their preferred display representations and priorities to ensure cross-series deduplication.</summary>
+    private static readonly ConcurrentDictionary<string, (string DisplayName, int Priority)> s_globalTagCache = new();
 
     #endregion
 
@@ -64,21 +92,25 @@ public static partial class TagHelper
         var shokoTags = shokoSeries?.Tags;
         if (shokoTags == null)
             return [];
+
         var userBlacklist = string.IsNullOrWhiteSpace(Settings.TagBlacklist) ? [] : Settings.TagBlacklist.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         var sourceSetting = Settings.TagSources;
-        var shokoNames = shokoTags.Select(t => t.Name).Where(n => !string.IsNullOrWhiteSpace(n));
+        var shokoNames = shokoTags.Select(t => t.Name).Where(n => !string.IsNullOrWhiteSpace(n)).Select(n => (Name: n, Priority: 3));
 
         if (sourceSetting == TagSources.UserOnly)
             return [.. FilterAndFormat(shokoNames, userBlacklist)];
 
-        IEnumerable<string> anidbNames = [];
+        IEnumerable<(string Name, int Priority)> anidbNames = [];
         int minWeight = (int)Settings.MinimumTagWeight;
         if ((sourceSetting == TagSources.Combined || sourceSetting == TagSources.AniDB) && shokoSeries?.AnidbAnime?.Tags is IReadOnlyList<IAnidbTagForAnime> anidbTags)
-            anidbNames = anidbTags.Where(t => !string.IsNullOrWhiteSpace(t.Name) && (minWeight <= 0 || t.Weight >= minWeight)).Select(t => t.Name);
+            anidbNames = anidbTags.Where(t => !string.IsNullOrWhiteSpace(t.Name) && (minWeight <= 0 || t.Weight >= minWeight)).Select(t => (t.Name, Priority: 1));
 
-        IEnumerable<string> tmdbNames = [];
+        IEnumerable<(string Name, int Priority)> tmdbNames = [];
+        bool isCombined = sourceSetting == TagSources.Combined;
         if ((sourceSetting == TagSources.Combined || sourceSetting == TagSources.TMDB) && (tmdbSeries ?? shokoSeries?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault()) is { } tmdb)
-            tmdbNames = tmdb.Tags.Where(t => t.Kind == TagKind.Keyword).Concat(tmdb.Tags.Where(t => t.Kind == TagKind.Genre)).Select(t => t.Name).Where(k => !string.IsNullOrWhiteSpace(k));
+            tmdbNames = tmdb
+                .Tags.Where(t => !string.IsNullOrWhiteSpace(t.Name) && (t.Kind is TagKind.Genre || (t.Kind is TagKind.Keyword && !NonEnglishTagRegex().IsMatch(t.Name))))
+                .Select(t => (Name: isCombined && s_tmdbTagMerges.TryGetValue(t.Name.Trim(), out var target) ? target : t.Name, Priority: 2));
 
         return [.. FilterAndFormat(anidbNames.Concat(tmdbNames).Concat(shokoNames), userBlacklist)];
     }
@@ -101,19 +133,25 @@ public static partial class TagHelper
     }
 
     /// <summary>Filters the raw tag strings against the user blacklist, deduplicates across punctuation and diacritics, and normalizes them into title case.</summary>
-    /// <param name="tags">The raw collection of tag name strings to process.</param>
+    /// <param name="tags">The raw collection of tag name strings to process along with their source priority.</param>
     /// <param name="userBlacklist">The array of blacklisted tag names to filter out.</param>
     /// <returns>An enumerable collection of formatted anonymous objects containing the sanitized tags.</returns>
-    private static IEnumerable<object> FilterAndFormat(IEnumerable<string> tags, string[] userBlacklist)
+    private static IEnumerable<object> FilterAndFormat(IEnumerable<(string Name, int Priority)> tags, string[] userBlacklist)
     {
         var blacklistKeys = userBlacklist.Select(NormalizeTagKey).Where(k => k.Length > 0).ToHashSet();
 
-        return tags.Where(t => !string.IsNullOrWhiteSpace(t))
-            .Select(t => TagCleanupRegex().Replace(t, "").Trim())
-            .Where(t => !string.IsNullOrWhiteSpace(t) && !s_tagBlacklistAniDBHelpers.Contains(t) && (blacklistKeys.Count == 0 || !blacklistKeys.Contains(NormalizeTagKey(t))))
-            .Select(TitleCase)
-            .DistinctBy(NormalizeTagKey)
-            .Select(t => (object)new { tag = t });
+        return tags.Where(t => !string.IsNullOrWhiteSpace(t.Name))
+            .Select(t => (Name: TagCleanupRegex().Replace(t.Name, "").Trim(), t.Priority))
+            .Where(t => !string.IsNullOrWhiteSpace(t.Name) && !s_tagBlacklistHelper.Contains(t.Name) && (blacklistKeys.Count == 0 || !blacklistKeys.Contains(NormalizeTagKey(t.Name))))
+            .Select(t =>
+            {
+                string normKey = NormalizeTagKey(t.Name);
+                string titleCased = TitleCase(t.Name);
+                var (displayName, _) = s_globalTagCache.AddOrUpdate(normKey, _ => (titleCased, t.Priority), (_, existing) => t.Priority <= existing.Priority ? (titleCased, t.Priority) : existing);
+                return (Key: normKey, DisplayName: displayName);
+            })
+            .DistinctBy(t => t.Key)
+            .Select(t => (object)new { tag = t.DisplayName });
     }
 
     #endregion
