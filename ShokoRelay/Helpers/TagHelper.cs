@@ -1,4 +1,6 @@
 using System.Collections.Frozen;
+using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Anidb;
@@ -81,18 +83,38 @@ public static partial class TagHelper
         return [.. FilterAndFormat(anidbNames.Concat(tmdbNames).Concat(shokoNames), userBlacklist)];
     }
 
-    /// <summary>Filters the raw tag strings against the user blacklist, deduplicates, and normalizes them into title case.</summary>
+    /// <summary>Generates a normalized comparison key ignoring case, spacing, punctuation, and diacritics.</summary>
+    /// <param name="text">The raw tag name string.</param>
+    /// <returns>A normalized alphanumeric ASCII lowercase string.</returns>
+    private static string NormalizeTagKey(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return string.Empty;
+
+        var normalized = text.Normalize(NormalizationForm.FormD);
+        var sb = new StringBuilder(normalized.Length);
+        foreach (char c in normalized)
+            if (CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark && char.IsLetterOrDigit(c))
+                sb.Append(char.ToLowerInvariant(c));
+
+        return sb.ToString();
+    }
+
+    /// <summary>Filters the raw tag strings against the user blacklist, deduplicates across punctuation and diacritics, and normalizes them into title case.</summary>
     /// <param name="tags">The raw collection of tag name strings to process.</param>
     /// <param name="userBlacklist">The array of blacklisted tag names to filter out.</param>
     /// <returns>An enumerable collection of formatted anonymous objects containing the sanitized tags.</returns>
-    private static IEnumerable<object> FilterAndFormat(IEnumerable<string> tags, string[] userBlacklist) =>
-        tags.Where(tagName => !string.IsNullOrWhiteSpace(tagName))
-            .Select(tagName => TagCleanupRegex().Replace(tagName, "").Trim())
-            .Where(tagName =>
-                !string.IsNullOrWhiteSpace(tagName) && !s_tagBlacklistAniDBHelpers.Contains(tagName) && (userBlacklist.Length == 0 || !userBlacklist.Contains(tagName, StringComparer.OrdinalIgnoreCase))
-            )
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(tagName => new { tag = TitleCase(tagName) });
+    private static IEnumerable<object> FilterAndFormat(IEnumerable<string> tags, string[] userBlacklist)
+    {
+        var blacklistKeys = userBlacklist.Select(NormalizeTagKey).Where(k => k.Length > 0).ToHashSet();
+
+        return tags.Where(t => !string.IsNullOrWhiteSpace(t))
+            .Select(t => TagCleanupRegex().Replace(t, "").Trim())
+            .Where(t => !string.IsNullOrWhiteSpace(t) && !s_tagBlacklistAniDBHelpers.Contains(t) && (blacklistKeys.Count == 0 || !blacklistKeys.Contains(NormalizeTagKey(t))))
+            .Select(TitleCase)
+            .DistinctBy(NormalizeTagKey)
+            .Select(t => (object)new { tag = t });
+    }
 
     #endregion
 
