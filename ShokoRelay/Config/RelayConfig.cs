@@ -211,6 +211,11 @@ public class RelayConfig
     [DefaultValue(true)]
     public bool CrewListings { get; set; } = true;
 
+    /// <summary>Whether to include studios in Plex's cast list.</summary>
+    [Display(Name = "Studio Listings", Description = "Enable to include studio listings at the end of Plex's Cast & Crew section")]
+    [DefaultValue(true)]
+    public bool StudioListings { get; set; } = true;
+
     /// <summary>Whether to set the group poster as the Plex collection poster.</summary>
     [Display(Name = "Collection Images", Description = "Enable to set the primary series poster/logo/backdrop in a Shoko group as Plex collection images")]
     [DefaultValue(true)]

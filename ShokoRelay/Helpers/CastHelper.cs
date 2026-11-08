@@ -33,10 +33,11 @@ public static class CastHelper
 
     #region Cast and Crew Logic
 
-    /// <summary>Return an array of objects representing cast (and optionally crew) for the specified media item. The crew portion is included based on the <c>CrewListings</c> setting.</summary>
+    /// <summary>Return an array of objects representing cast (and optionally crew/studios) for the specified media item. The crew and studio portions are included based on configuration.</summary>
     /// <param name="item">Item implementing <see cref="IWithCastAndCrew"/>.</param>
-    /// <returns>An array of anonymous cast/crew objects suitable for Plex metadata responses.</returns>
-    public static object[] GetCastAndCrew(IWithCastAndCrew item)
+    /// <param name="studios">Optional pre-resolved studio tags to append to the cast and crew listing.</param>
+    /// <returns>An array of anonymous cast, crew, and studio objects suitable for Plex metadata responses.</returns>
+    public static object[] GetCastAndCrew(IWithCastAndCrew item, TagItem[]? studios = null)
     {
         int order = 1;
         var finalRoles = new List<object>();
@@ -133,6 +134,18 @@ public static class CastHelper
         if (Settings.CrewListings && item.Crew != null)
             foreach (var group in item.Crew.GroupBy(c => c.RoleType))
                 ProcessRoleGroup(group, c => c.Creator, c => c.Name, c => c.RoleType == CrewRoleType.Music ? "Composer" : CleanCrewRole(c.Name));
+
+        if (Settings.StudioListings && studios != null)
+            foreach (var studio in studios)
+                finalRoles.Add(
+                    new
+                    {
+                        order = order++,
+                        tag = studio.Tag,
+                        role = "Studio",
+                        thumb = (string?)null,
+                    }
+                );
 
         return [.. finalRoles];
     }
