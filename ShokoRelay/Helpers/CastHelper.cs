@@ -163,17 +163,12 @@ public static class CastHelper
 
     #region Studio Logic
 
-    /// <summary>Assemble an array of <see cref="TagItem"/> objects representing the series' studios.</summary>
+    /// <summary>Assemble an array of <see cref="TagItem"/> objects representing the series' studios, utilizing Shoko's native cross-source merging.</summary>
     /// <param name="series">The Shoko series metadata.</param>
+    /// <param name="metadataService">The metadata service used to invoke cross-source merging.</param>
     /// <returns>An array of <see cref="TagItem"/> instances, one per distinct studio.</returns>
-    public static TagItem[] GetStudioTags(ISeries series) =>
-        series
-            .Studios?.Where(s => !string.IsNullOrWhiteSpace(s.Name))
-            .OrderBy(s => s.ID.Source == MetadataSource.TMDB ? 1 : 0)
-            .DistinctBy(s => s.Name.Contains(' ') ? s.Name.Replace(" ", "", StringComparison.Ordinal) : s.Name, StringComparer.OrdinalIgnoreCase)
-            .Select(s => new TagItem { Tag = s.Name })
-            .ToArray()
-        ?? [];
+    public static TagItem[] GetStudioTags(ISeries series, IMetadataService metadataService) =>
+        series is IShokoSeries { AnidbAnimeID: > 0 } ss && metadataService.GetMergedStudios(ss.AnidbAnimeID) is { Count: > 0 } studios ? [.. studios.Select(s => new TagItem { Tag = s.Name })] : [];
 
     #endregion
 

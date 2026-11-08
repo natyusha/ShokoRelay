@@ -168,7 +168,7 @@ public class PlexMetadata(IMetadataService metadataService)
         var tmdbMovie = ctx.TmdbMovie;
         var description = TextHelper.GetDescriptionByLanguage(series, Settings.DescriptionLanguage);
         var tmdbDescription = tmdbSeries?.PreferredOverview?.Value ?? tmdbMovie?.PreferredOverview?.Value;
-        var studios = CastHelper.GetStudioTags(series);
+        var studios = CastHelper.GetStudioTags(series, metadataService);
         double? tmdbRating =
             tmdbSeries?.Rating > 0 ? tmdbSeries.Rating
             : tmdbMovie?.Rating > 0 ? tmdbMovie.Rating
@@ -239,7 +239,7 @@ public class PlexMetadata(IMetadataService metadataService)
             series,
             tmdbMovie ?? (series as IShokoSeries)?.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault() ?? (tmdbSeries as IWithContentRatings)
         );
-        var studios = CastHelper.GetStudioTags(series);
+        var studios = CastHelper.GetStudioTags(series, metadataService);
 
         var imagesArray = ImageHelper.GenerateMovieImageArray(seriesImages, movieImages, episode.EpisodeNumber, title, Settings.AddEveryImage, Settings.TmdbImageLanguage, out string? thumbUrl);
         string? artUrl = seriesImages.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage) ?? movieImages?.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage);
