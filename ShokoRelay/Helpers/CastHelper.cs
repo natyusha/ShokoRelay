@@ -33,11 +33,12 @@ public static class CastHelper
 
     #region Cast and Crew Logic
 
-    /// <summary>Return an array of objects representing cast (and optionally crew/studios) for the specified media item. The crew and studio portions are included based on configuration.</summary>
+    /// <summary>Return an array of objects representing cast (and optionally crew, studios, and production companies) for the specified media item.</summary>
     /// <param name="item">Item implementing <see cref="IWithCastAndCrew"/>.</param>
-    /// <param name="studios">Optional pre-resolved studio tags to append to the cast and crew listing.</param>
-    /// <returns>An array of anonymous cast, crew, and studio objects suitable for Plex metadata responses.</returns>
-    public static object[] GetCastAndCrew(IWithCastAndCrew item, TagItem[]? studios = null)
+    /// <param name="metadataService">Optional metadata service to resolve animation studios and cross-references.</param>
+    /// <param name="tmdbSeries">Optional TMDB series metadata to resolve companies and broadcasting networks.</param>
+    /// <returns>An array of anonymous cast, crew, studio, and company objects suitable for Plex metadata responses.</returns>
+    public static object[] GetCastAndCrew(IWithCastAndCrew item, IMetadataService? metadataService = null, ISeries? tmdbSeries = null)
     {
         int order = 1;
         var finalRoles = new List<object>();
@@ -135,17 +136,35 @@ public static class CastHelper
             foreach (var group in item.Crew.GroupBy(c => c.RoleType))
                 ProcessRoleGroup(group, c => c.Creator, c => c.Name, c => c.RoleType == CrewRoleType.Music ? "Composer" : CleanCrewRole(c.Name));
 
-        if (Settings.StudioListings && studios != null)
-            foreach (var studio in studios)
+        if (Settings.CompanyListings && item is ISeries series)
+        {
+            var animationStudios =
+                (metadataService != null && series is IShokoSeries { AnidbAnimeID: > 0 } ss)
+                    ? metadataService.GetMergedStudios(ss.AnidbAnimeID).Select(s => s.Name).Where(n => !string.IsNullOrWhiteSpace(n)).ToHashSet(StringComparer.OrdinalIgnoreCase)
+                    : [];
+
+            var networkNames = tmdbSeries?.Networks?.Select(n => n.Name).Where(n => !string.IsNullOrWhiteSpace(n)).ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
+
+            var companies = (series.Studios ?? [])
+                .Concat(tmdbSeries?.Studios ?? [])
+                .Select(s => s.Name)
+                .Concat(animationStudios)
+                .Where(name => !string.IsNullOrWhiteSpace(name) && !networkNames.Contains(name))
+                .DistinctBy(name => name.Replace(" ", "", StringComparison.Ordinal).Replace("-", "", StringComparison.Ordinal), StringComparer.OrdinalIgnoreCase)
+                .OrderByDescending(animationStudios.Contains)
+                .ThenBy(name => name);
+
+            foreach (var name in companies)
                 finalRoles.Add(
                     new
                     {
                         order = order++,
-                        tag = studio.Tag,
-                        role = "Studio",
+                        tag = name,
+                        role = animationStudios.Contains(name) ? "Studio" : "Production",
                         thumb = (string?)null,
                     }
                 );
+        }
 
         return [.. finalRoles];
     }
