@@ -132,15 +132,12 @@ public static class ContentRatingHelper
     /// <param name="series">The primary series entity.</param>
     /// <param name="fallback">The optional fallback content rating container.</param>
     /// <returns>The resolved rating string or null.</returns>
-    private static string? GetTmdbContentRating(ISeries? series, IWithContentRatings? fallback)
-    {
-        var ratings = fallback?.ContentRatings ?? (series as IWithContentRatings)?.ContentRatings ?? (series as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault()?.ContentRatings;
-
-        return ratings is not { Count: > 0 }
-            ? null
-            : ratings.FirstOrDefault(r => string.Equals(r.CountryCode, "US", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(r.Value))?.Value
-                ?? ratings.FirstOrDefault(r => !string.IsNullOrWhiteSpace(r.Value))?.Value;
-    }
+    private static string? GetTmdbContentRating(ISeries? series, IWithContentRatings? fallback) =>
+        (fallback?.ContentRatings ?? (series as IWithContentRatings)?.ContentRatings ?? (series as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault()?.ContentRatings)
+            is { Count: > 0 } ratings
+            ? ratings.FirstOrDefault(r => string.Equals(r.CountryCode, "US", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(r.Value))?.Value
+                ?? ratings.FirstOrDefault(r => !string.IsNullOrWhiteSpace(r.Value))?.Value
+            : null;
 
     #endregion
 }

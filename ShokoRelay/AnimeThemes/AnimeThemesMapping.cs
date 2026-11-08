@@ -119,7 +119,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                 catch { }
             }
 
-            var filesBag = new ConcurrentBag<string>();
+            var filesBag = new ConcurrentBag<(string File, string Rel)>();
             var sepMiscSep = $"{Path.DirectorySeparatorChar}misc{Path.DirectorySeparatorChar}";
 
             Parallel.ForEach(
@@ -128,19 +128,15 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                 root =>
                 {
                     foreach (var file in Directory.EnumerateFiles(root, "*.webm", SearchOption.AllDirectories))
-                    {
                         if (!file.Contains(sepMiscSep, StringComparison.OrdinalIgnoreCase))
-                            filesBag.Add(file);
-                    }
+                            filesBag.Add((file, "/" + Path.GetRelativePath(root, file).Replace('\\', '/')));
                 }
             );
 
             var toProcess = new List<(string File, string Rel)>();
 
-            foreach (string file in filesBag)
+            foreach (var (file, rel) in filesBag)
             {
-                string rel = roots.FirstOrDefault(r => file.StartsWith(r + Path.DirectorySeparatorChar)) is string root ? "/" + Path.GetRelativePath(root, file).Replace('\\', '/') : file;
-
                 if (existing.TryGetValue(rel, out var old) && old.AniDbId > 0)
                     entries.Add(old);
                 else if (existingByFilename.TryGetValue(Path.GetFileName(file), out var oldByName) && oldByName.AniDbId > 0)

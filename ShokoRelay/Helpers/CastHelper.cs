@@ -172,24 +172,17 @@ public static class CastHelper
     /// <summary>Return director credits for the given item.</summary>
     /// <param name="item">Item with cast/crew data.</param>
     /// <returns>An array of anonymous objects containing director names.</returns>
-    public static object[] GetDirectors(IWithCastAndCrew item) => FilterCrew(item, CrewRoleType.Director);
+    public static object[] GetDirectors(IWithCastAndCrew item) => FilterCrew(item, c => c.RoleType == CrewRoleType.Director);
 
     /// <summary>Retrieve writing credits (series composers or source work) for the item.</summary>
     /// <param name="item">Source item.</param>
     /// <returns>An array of anonymous objects containing writer names.</returns>
-    public static object[] GetWriters(IWithCastAndCrew item) =>
-        [
-            .. DeduplicateCrew(item.Crew?.Where(c => c.RoleType is CrewRoleType.SeriesComposer or CrewRoleType.SourceWork))
-                .Select(c => GetName(c.Creator, c.Name))
-                .Where(name => !string.IsNullOrWhiteSpace(name))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Select(name => (object)new { tag = name }),
-        ];
+    public static object[] GetWriters(IWithCastAndCrew item) => FilterCrew(item, c => c.RoleType is CrewRoleType.SeriesComposer or CrewRoleType.SourceWork);
 
     /// <summary>Retrieve producer credits for the given item.</summary>
     /// <param name="item">Item with cast/crew data.</param>
     /// <returns>An array of anonymous objects containing producer names.</returns>
-    public static object[] GetProducers(IWithCastAndCrew item) => FilterCrew(item, CrewRoleType.Producer);
+    public static object[] GetProducers(IWithCastAndCrew item) => FilterCrew(item, c => c.RoleType == CrewRoleType.Producer);
 
     #endregion
 
@@ -234,13 +227,13 @@ public static class CastHelper
         return commaIdx > 0 && s_tmdbDepartments.Contains(role[..commaIdx].Trim()) ? role[(commaIdx + 1)..].Trim() : role.Trim();
     }
 
-    /// <summary>Filters the crew by a specific role type and returns a formatted array of tags.</summary>
+    /// <summary>Filters the crew by a specific predicate and returns a formatted array of tags.</summary>
     /// <param name="item">The media item containing cast and crew.</param>
-    /// <param name="roleType">The role type to filter for.</param>
+    /// <param name="predicate">Filter predicate to evaluate each crew member against.</param>
     /// <returns>An array of anonymous objects containing crew tags.</returns>
-    private static object[] FilterCrew(IWithCastAndCrew item, CrewRoleType roleType) =>
+    private static object[] FilterCrew(IWithCastAndCrew item, Func<ICrew, bool> predicate) =>
         [
-            .. DeduplicateCrew(item.Crew?.Where(c => c.RoleType == roleType))
+            .. DeduplicateCrew(item.Crew?.Where(predicate))
                 .Select(c => GetName(c.Creator, c.Name))
                 .Where(name => !string.IsNullOrWhiteSpace(name))
                 .Distinct(StringComparer.OrdinalIgnoreCase)

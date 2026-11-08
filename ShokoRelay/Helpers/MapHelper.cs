@@ -175,9 +175,10 @@ public static class MapHelper
             }
         }
 
-        var videoFileNameCache = seriesEpisodes.SelectMany(x => x.Videos).DistinctBy(v => v.LocalID).ToDictionary(v => v.LocalID, v => Path.GetFileName(v.Files.FirstOrDefault()?.Path ?? string.Empty));
+        var distinctVideos = seriesEpisodes.SelectMany(x => x.Videos).DistinctBy(v => v.LocalID).ToList();
+        var videoFileNameCache = distinctVideos.ToDictionary(v => v.LocalID, v => Path.GetFileName(v.Files.FirstOrDefault()?.Path ?? string.Empty));
         var episodeFileLists = seriesEpisodes.ToDictionary(x => x.Episode.ID, x => x.Videos.OrderBy(v => videoFileNameCache[v.LocalID]).ToList());
-        var allVideos = seriesEpisodes.SelectMany(x => x.Videos).DistinctBy(v => v.LocalID).OrderBy(v => videoFileNameCache[v.LocalID]).ToList();
+        var allVideos = distinctVideos.OrderBy(v => videoFileNameCache[v.LocalID]).ToList();
 
         // Pass 1: Resolve all coordinates and crossover statuses once
         var videoCoords = new Dictionary<int, (PlexCoords Coords, List<(IEpisode Episode, PlexCoords Coords)> Deduped)>();

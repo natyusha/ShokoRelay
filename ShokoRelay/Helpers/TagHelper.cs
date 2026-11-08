@@ -141,14 +141,15 @@ public static partial class TagHelper
         var blacklistKeys = userBlacklist.Select(NormalizeTagKey).Where(k => k.Length > 0).ToHashSet();
 
         return tags.Where(t => !string.IsNullOrWhiteSpace(t.Name))
-            .Select(t => (Name: TagCleanupRegex().Replace(t.Name, "").Trim(), t.Priority))
-            .Where(t => !string.IsNullOrWhiteSpace(t.Name) && !s_tagBlacklistHelper.Contains(t.Name) && (blacklistKeys.Count == 0 || !blacklistKeys.Contains(NormalizeTagKey(t.Name))))
+            .Select(t => (CleanName: TagCleanupRegex().Replace(t.Name, "").Trim(), t.Priority))
+            .Where(t => !string.IsNullOrWhiteSpace(t.CleanName) && !s_tagBlacklistHelper.Contains(t.CleanName))
+            .Select(t => (t.CleanName, NormKey: NormalizeTagKey(t.CleanName), t.Priority))
+            .Where(t => blacklistKeys.Count == 0 || !blacklistKeys.Contains(t.NormKey))
             .Select(t =>
             {
-                string normKey = NormalizeTagKey(t.Name);
-                string titleCased = TitleCase(t.Name);
-                var (displayName, _) = s_globalTagCache.AddOrUpdate(normKey, _ => (titleCased, t.Priority), (_, existing) => t.Priority <= existing.Priority ? (titleCased, t.Priority) : existing);
-                return (Key: normKey, DisplayName: displayName);
+                string titleCased = TitleCase(t.CleanName);
+                var (displayName, _) = s_globalTagCache.AddOrUpdate(t.NormKey, _ => (titleCased, t.Priority), (_, existing) => t.Priority <= existing.Priority ? (titleCased, t.Priority) : existing);
+                return (Key: t.NormKey, DisplayName: displayName);
             })
             .DistinctBy(t => t.Key)
             .Select(t => (object)new { tag = t.DisplayName });

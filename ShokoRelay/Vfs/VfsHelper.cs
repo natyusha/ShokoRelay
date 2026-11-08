@@ -301,9 +301,7 @@ public static class VfsHelper
                 continue;
 
             foreach (var file in Directory.EnumerateFiles(seriesPath, "*", SearchOption.AllDirectories))
-            {
                 if (!expectedFiles.Contains(file))
-                {
                     try
                     {
                         var fi = new FileInfo(file);
@@ -315,8 +313,6 @@ public static class VfsHelper
                         File.Delete(file);
                     }
                     catch { }
-                }
-            }
 
             var dirs = Directory.EnumerateDirectories(seriesPath, "*", SearchOption.AllDirectories).OrderByDescending(d => d.Length).ToList();
             foreach (var d in dirs)

@@ -33,6 +33,18 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
     /// <summary>Exclusive lock used to ensure thread-safe path mapping cache compilation.</summary>
     private readonly Lock _mappingLock = new();
 
+    /// <summary>Cached list of compiled library targets.</summary>
+    private List<PlexLibraryTarget> _cachedTargets = [];
+
+    /// <summary>Reference to the last evaluated discovered libraries list used for cache invalidation.</summary>
+    private IReadOnlyList<PlexAvailableLibrary>? _lastDiscoveredLibraries;
+
+    /// <summary>Reference to the last evaluated custom Plex URL used for cache invalidation.</summary>
+    private string? _lastConfiguredPlexUrl;
+
+    /// <summary>Exclusive lock used to ensure thread-safe library target cache compilation.</summary>
+    private readonly Lock _targetsLock = new();
+
     #endregion
 
     #region Library & Section
@@ -288,29 +300,44 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
 
     #region Target Discovery
 
-    /// <summary>Returns a list of library targets based on discovered configuration.</summary>
+    /// <summary>Returns a list of library targets based on discovered configuration, caching the compiled list to prevent redundant allocations.</summary>
     /// <returns>A read-only list of configured library targets.</returns>
-    public IReadOnlyList<PlexLibraryTarget> GetConfiguredTargets() =>
-        [
-            .. DiscoveredLibraries.Select(l => new PlexLibraryTarget
+    public IReadOnlyList<PlexLibraryTarget> GetConfiguredTargets()
+    {
+        var libs = DiscoveredLibraries;
+        var customUrl = Settings.Advanced.PlexServerUrl;
+        lock (_targetsLock)
+        {
+            if (!ReferenceEquals(_lastDiscoveredLibraries, libs) || _lastConfiguredPlexUrl != customUrl)
             {
-                SectionId = l.Id,
-                Title = l.Title,
-                Type = l.Type,
-                Uuid = l.Uuid,
-                ServerId = l.ServerId,
-                ServerName = l.ServerName,
-                ServerUrl = !string.IsNullOrWhiteSpace(Settings.Advanced.PlexServerUrl) ? Settings.Advanced.PlexServerUrl.Trim().TrimEnd('/') : l.ServerUrl,
-                LibraryType = (l.Type ?? "").ToLowerInvariant() switch
-                {
-                    "movie" => PlexLibraryType.Movie,
-                    "artist" => PlexLibraryType.Music,
-                    "photo" => PlexLibraryType.Photo,
-                    _ => PlexLibraryType.Show,
-                },
-                Locations = l.Locations ?? [],
-            }),
-        ];
+                _lastDiscoveredLibraries = libs;
+                _lastConfiguredPlexUrl = customUrl;
+                string? trimmedUrl = !string.IsNullOrWhiteSpace(customUrl) ? customUrl.Trim().TrimEnd('/') : null;
+                _cachedTargets =
+                [
+                    .. libs.Select(l => new PlexLibraryTarget
+                    {
+                        SectionId = l.Id,
+                        Title = l.Title,
+                        Type = l.Type,
+                        Uuid = l.Uuid,
+                        ServerId = l.ServerId,
+                        ServerName = l.ServerName,
+                        ServerUrl = trimmedUrl ?? l.ServerUrl,
+                        LibraryType = (l.Type ?? "").ToLowerInvariant() switch
+                        {
+                            "movie" => PlexLibraryType.Movie,
+                            "artist" => PlexLibraryType.Music,
+                            "photo" => PlexLibraryType.Photo,
+                            _ => PlexLibraryType.Show,
+                        },
+                        Locations = l.Locations ?? [],
+                    }),
+                ];
+            }
+            return _cachedTargets;
+        }
+    }
 
     /// <summary>Retrieves a library target by name directly from the Plex server, bypassing the Shoko Relay agent filter.</summary>
     /// <param name="libraryName">The exact name of the Plex library.</param>
