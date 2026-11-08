@@ -28,68 +28,77 @@ public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesAp
     /// <param name="videoBaseName">The base name of the video file to query.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A <see cref="VideoWithAudioEntry"/> containing metadata, or null if not found.</returns>
-    public Task<VideoWithAudioEntry?> FetchVideoWithArtistsAsync(string videoBaseName, CancellationToken cancellationToken)
-    {
-        string query =
-            @"query($basename: Mixed) {
-          videoPagination(where: { column: BASENAME, operator: EQ, value: $basename }) {
-            data {
-              id basename nc subbed lyrics uncen resolution source overlap audio { link }
-              animethemeentries {
-                nodes {
-                  version episodes nsfw spoiler
-                  animetheme {
-                    id slug
-                    anime { id title { romaji } season year resources { nodes { externalId site } } }
-                    song { title { romaji } performances { artist { name { main } } } }
+    public async Task<VideoWithAudioEntry?> FetchVideoWithArtistsAsync(string videoBaseName, CancellationToken cancellationToken) =>
+        (
+            await PostGraphQlAsync<VideoPaginationResponse>(
+                    @"query($basename: Mixed) {
+              videoPagination(where: { column: BASENAME, operator: EQ, value: $basename }) {
+                data {
+                  id basename nc subbed lyrics uncen resolution source overlap audio { link }
+                  animethemeentries {
+                    nodes {
+                      version episodes nsfw spoiler
+                      animetheme {
+                        id slug
+                        anime { id title { romaji } season year resources { nodes { externalId site } } }
+                        song { title { romaji } performances { artist { name { main } } } }
+                      }
+                    }
                   }
                 }
               }
-            }
-          }
-        }";
-        return PostGraphQlAsync<VideoPaginationResponse>(query, new { basename = videoBaseName }, cancellationToken).ContinueWith(t => t.Result?.VideoPagination?.Data?.FirstOrDefault(), cancellationToken);
-    }
+            }",
+                    new { basename = videoBaseName },
+                    cancellationToken
+                )
+                .ConfigureAwait(false)
+        )?.VideoPagination?.Data?.FirstOrDefault();
 
     /// <summary>Fetch anime and available themes for mp3 generation with a given AniDB ID.</summary>
     /// <param name="anidbId">The AniDB ID of the series.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A list of <see cref="AnimeThemesEntry"/> containing theme metadata, or null if not found.</returns>
-    public Task<List<AnimeThemesEntry>?> FetchAnimeThemesAsync(int anidbId, CancellationToken cancellationToken)
-    {
-        string query =
-            @"query($anidbId: [Int!]) {
-          findAnimeByExternalSite(site: ANIDB, id: $anidbId) {
-            title { romaji } slug
-            animethemes { id slug }
-          }
-        }";
-        return PostGraphQlAsync<FindAnimeResponse>(query, new { anidbId = new[] { anidbId } }, cancellationToken).ContinueWith(t => t.Result?.Anime, cancellationToken);
-    }
+    public async Task<List<AnimeThemesEntry>?> FetchAnimeThemesAsync(int anidbId, CancellationToken cancellationToken) =>
+        (
+            await PostGraphQlAsync<FindAnimeResponse>(
+                    @"query($anidbId: [Int!]) {
+              findAnimeByExternalSite(site: ANIDB, id: $anidbId) {
+                title { romaji } slug
+                animethemes { id slug }
+              }
+            }",
+                    new { anidbId = new[] { anidbId } },
+                    cancellationToken
+                )
+                .ConfigureAwait(false)
+        )?.Anime;
 
     /// <summary>Fetch animetheme details for mp3 generation, including artists.</summary>
     /// <param name="themeId">The internal AnimeThemes theme ID.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A <see cref="ThemeWithAudioWrapper"/> containing audio and artist info, or null if not found.</returns>
-    public Task<ThemeWithAudioWrapper?> FetchAnimeThemeWithArtistsAsync(int themeId, CancellationToken cancellationToken)
-    {
-        string query =
-            @"query($themeId: Mixed) {
-          animethemePagination(where: { column: ID, operator: EQ, value: $themeId }) {
-            data {
-              id slug
-              song { title { romaji } performances { artist { name { main } } } }
-              animethemeentries {
-                version episodes nsfw spoiler
-                videos {
-                  nodes { id basename link audio { link } }
+    public async Task<ThemeWithAudioWrapper?> FetchAnimeThemeWithArtistsAsync(int themeId, CancellationToken cancellationToken) =>
+        (
+            await PostGraphQlAsync<AnimeThemePaginationResponse>(
+                    @"query($themeId: Mixed) {
+              animethemePagination(where: { column: ID, operator: EQ, value: $themeId }) {
+                data {
+                  id slug
+                  song { title { romaji } performances { artist { name { main } } } }
+                  animethemeentries {
+                    version episodes nsfw spoiler
+                    videos {
+                      nodes { id basename link audio { link } }
+                    }
+                  }
                 }
               }
-            }
-          }
-        }";
-        return PostGraphQlAsync<AnimeThemePaginationResponse>(query, new { themeId = themeId }, cancellationToken).ContinueWith(t => t.Result?.AnimethemePagination?.Data?.FirstOrDefault(), cancellationToken);
-    }
+            }",
+                    new { themeId },
+                    cancellationToken
+                )
+                .ConfigureAwait(false)
+        )?.AnimethemePagination?.Data?.FirstOrDefault();
 
     /// <summary>Fetch a paginated list of anime matching specific filters for bulk WebM downloads.</summary>
     /// <param name="year">Optional broadcast year filter.</param>
@@ -98,7 +107,7 @@ public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesAp
     /// <param name="page">The current pagination page.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A <see cref="AnimePagination"/> containing a page of anime results.</returns>
-    public Task<AnimePagination?> FetchAnimePageAsync(int? year, string? season, string? name, int page, CancellationToken cancellationToken)
+    public async Task<AnimePagination?> FetchAnimePageAsync(int? year, string? season, string? name, int page, CancellationToken cancellationToken)
     {
         var filters = new List<string>();
         if (year.HasValue)
@@ -120,7 +129,7 @@ public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesAp
           }}
         }}";
 
-        return PostGraphQlAsync<AnimePaginationResponse>(query, new { page }, cancellationToken).ContinueWith(t => t.Result?.AnimePagination, cancellationToken);
+        return (await PostGraphQlAsync<AnimePaginationResponse>(query, new { page }, cancellationToken).ConfigureAwait(false))?.AnimePagination;
     }
 
     #endregion
