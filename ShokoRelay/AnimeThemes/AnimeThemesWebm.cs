@@ -82,7 +82,7 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
 
         // Cache files that already have a valid AniDB ID mapping to avoid redundant processing
         var mappedFilesWithAnidb = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        string mapPath = Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FileAtMapping);
+        string mapPath = Path.Combine(ConfigDirectory, ShokoRelayConstants.FileAtMapping);
         if (File.Exists(mapPath))
         {
             try

@@ -54,25 +54,26 @@ public class AnimeThemesController(
             );
 
     /// <summary>Generates the anime‑themes mapping CSV, tests a single filename mapping, or updates/saves a mapping.</summary>
-    /// <param name="testPath">Optional webm filename to test mapping logic against.</param>
+    /// <param name="path">Optional webm filename or relative path to test or update mapping against.</param>
     /// <param name="save">Whether to save or update the mapping in the CSV file.</param>
     /// <param name="anidbId">Optional manual AniDB ID override.</param>
-    /// <returns>A task representing the result of the mapping or test.</returns>
+    /// <returns>A task representing the result of the mapping, test, or update.</returns>
     [HttpGet("animethemes/vfs/map")]
-    public async Task<IActionResult> AnimeThemesVfsMap([FromQuery] string? testPath = null, [FromQuery] bool save = false, [FromQuery] int? anidbId = null)
+    public async Task<IActionResult> AnimeThemesVfsMap([FromQuery] string? path = null, [FromQuery] bool save = false, [FromQuery] int? anidbId = null)
     {
-        if (!string.IsNullOrWhiteSpace(testPath))
+        if (!string.IsNullOrWhiteSpace(path))
         {
-            var (entry, error, gen, wasSaved) = await animeThemesMapping.ProcessSingleMappingAsync(testPath, save, anidbId, CancellationToken.None).ConfigureAwait(false);
+            var (entry, error, gen, wasSaved, changedFields) = await animeThemesMapping.ProcessSingleMappingAsync(path, save, anidbId, HttpContext.RequestAborted).ConfigureAwait(false);
             return error != null
-                ? Ok(new RelayResponse<object>(Status: "error", Message: error, Data: new { testPath }))
+                ? Ok(new RelayResponse<object>(Status: "error", Message: error, Data: new { path }))
                 : Ok(
                     new RelayResponse<object>(
                         Data: new
                         {
-                            testPath,
+                            path,
                             saved = wasSaved,
                             generatedFilename = gen,
+                            changedFields,
                             csvLine = entry != null ? AnimeThemesMapping.SerializeMappingEntry(entry) : null,
                             entry,
                         }

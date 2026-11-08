@@ -285,13 +285,13 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
         return addedCount;
     }
 
-    /// <summary>Tests, resolves, or populates a mapping entry for a specific webm filename with optional persistence and AniDB ID override.</summary>
+    /// <summary>Tests, resolves, or updates mapping fields for a specific webm filename without redownloading, with optional persistence and AniDB ID override.</summary>
     /// <param name="webmFileName">The webm filename or relative path.</param>
     /// <param name="save">Whether to save the resolved mapping to anidb_animethemes_xrefs.csv.</param>
     /// <param name="overrideAnidbId">Optional AniDB ID override.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A tuple containing the mapping entry, error message, generated filename, and save status.</returns>
-    public async Task<(AnimeThemesMappingEntry? entry, string? error, string filename, bool wasSaved)> ProcessSingleMappingAsync(
+    /// <returns>A tuple containing the mapping entry, error message, generated filename, save status, and list of updated fields.</returns>
+    public async Task<(AnimeThemesMappingEntry? entry, string? error, string filename, bool wasSaved, List<string> changedFields)> ProcessSingleMappingAsync(
         string webmFileName,
         bool save = false,
         int? overrideAnidbId = null,
@@ -301,19 +301,24 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
         string fileName = Path.GetFileName(webmFileName);
         var (lookup, idMissing) = await FetchMetadataAsync(fileName, overrideAnidbId, cancellationToken).ConfigureAwait(false);
         if (lookup == null)
-            return (null, "Missing metadata on AnimeThemes", webmFileName, false);
+            return (null, "Missing metadata on AnimeThemes", webmFileName, false, []);
 
         string mapPath = Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FileAtMapping);
         var entries = new List<AnimeThemesMappingEntry>();
         var existingComments = new List<string>();
         string relPath = webmFileName.StartsWith('/') ? webmFileName : "";
+        AnimeThemesMappingEntry? match = null;
 
         if (File.Exists(mapPath))
         {
             try
             {
                 (existingComments, entries) = AnimeThemesHelper.ParseMappingContentWithComments(await File.ReadAllTextAsync(mapPath, cancellationToken).ConfigureAwait(false));
-                if (string.IsNullOrEmpty(relPath) && entries.FirstOrDefault(e => string.Equals(Path.GetFileName(e.FilePath), fileName, StringComparison.OrdinalIgnoreCase)) is { } match)
+                match = entries.FirstOrDefault(e =>
+                    string.Equals(Path.GetFileName(e.FilePath), fileName, StringComparison.OrdinalIgnoreCase)
+                    || (!string.IsNullOrEmpty(relPath) && string.Equals(e.FilePath, relPath, StringComparison.OrdinalIgnoreCase))
+                );
+                if (string.IsNullOrEmpty(relPath) && match != null)
                     relPath = match.FilePath;
             }
             catch { }
@@ -336,20 +341,66 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
         if (string.IsNullOrEmpty(relPath))
             relPath = "/unknown/" + fileName;
 
-        var entry = new AnimeThemesMappingEntry(relPath, lookup);
-        string genFileName = AnimeThemesHelper.BuildNewFileName(lookup, Path.GetExtension(fileName));
+        // Preserve existing AniDB ID if already mapped and AnimeThemes still lacks the resource link
+        int effectiveAnidbId = overrideAnidbId ?? (lookup.AniDbId > 0 ? lookup.AniDbId : (match?.AniDbId ?? 0));
+        var effectiveLookup = lookup with { AniDbId = effectiveAnidbId };
+        var entry = new AnimeThemesMappingEntry(relPath, effectiveLookup);
+        string genFileName = AnimeThemesHelper.BuildNewFileName(effectiveLookup, Path.GetExtension(fileName));
+
+        var changedFields = new List<string>();
+        if (match != null)
+        {
+            if (match.AniDbId != entry.AniDbId)
+                changedFields.Add($"AniDbId: {match.AniDbId} -> {entry.AniDbId}");
+            if (!string.Equals(match.SongTitle, entry.SongTitle, StringComparison.Ordinal))
+                changedFields.Add($"SongTitle: \"{match.SongTitle}\" -> \"{entry.SongTitle}\"");
+            if (!string.Equals(match.ArtistName, entry.ArtistName, StringComparison.Ordinal))
+                changedFields.Add($"ArtistName: \"{match.ArtistName}\" -> \"{entry.ArtistName}\"");
+            if (match.NC != entry.NC)
+                changedFields.Add($"NC: {match.NC} -> {entry.NC}");
+            if (!string.Equals(match.Slug, entry.Slug, StringComparison.Ordinal))
+                changedFields.Add($"Slug: {match.Slug} -> {entry.Slug}");
+            if (match.Version != entry.Version)
+                changedFields.Add($"Version: {match.Version} -> {entry.Version}");
+            if (match.Lyrics != entry.Lyrics)
+                changedFields.Add($"Lyrics: {match.Lyrics} -> {entry.Lyrics}");
+            if (match.Subbed != entry.Subbed)
+                changedFields.Add($"Subbed: {match.Subbed} -> {entry.Subbed}");
+            if (match.Uncen != entry.Uncen)
+                changedFields.Add($"Uncen: {match.Uncen} -> {entry.Uncen}");
+            if (match.NSFW != entry.NSFW)
+                changedFields.Add($"NSFW: {match.NSFW} -> {entry.NSFW}");
+            if (match.Spoiler != entry.Spoiler)
+                changedFields.Add($"Spoiler: {match.Spoiler} -> {entry.Spoiler}");
+            if (!string.Equals(match.Source, entry.Source, StringComparison.Ordinal))
+                changedFields.Add($"Source: {match.Source} -> {entry.Source}");
+            if (match.Resolution != entry.Resolution)
+                changedFields.Add($"Resolution: {match.Resolution} -> {entry.Resolution}");
+            if (!string.Equals(match.Episodes, entry.Episodes, StringComparison.Ordinal))
+                changedFields.Add($"Episodes: \"{match.Episodes}\" -> \"{entry.Episodes}\"");
+            if (!string.Equals(match.Overlap, entry.Overlap, StringComparison.Ordinal))
+                changedFields.Add($"Overlap: {match.Overlap} -> {entry.Overlap}");
+        }
 
         if (!save)
-            return (entry, idMissing ? "AniDB ID missing on AnimeThemes" : null, genFileName, false);
+            return (entry, idMissing && effectiveAnidbId <= 0 ? "AniDB ID missing on AnimeThemes" : null, genFileName, false, changedFields);
 
         entries.RemoveAll(e => string.Equals(e.FilePath, relPath, StringComparison.OrdinalIgnoreCase) || string.Equals(Path.GetFileName(e.FilePath), fileName, StringComparison.OrdinalIgnoreCase));
         entries.Add(entry);
 
         var finalEntries = entries.DistinctBy(e => e.FilePath).OrderBy(e => AnimeThemesHelper.GetYearForSort(e.FilePath)).ThenBy(e => e.FilePath).ToList();
         await File.WriteAllTextAsync(mapPath, AnimeThemesHelper.SerializeMapping(existingComments, finalEntries), cancellationToken).ConfigureAwait(false);
-        logger.LogInformation("AnimeThemes Map: Saved mapping for '{Path}' -> VideoID: {VideoId}, AniDB ID: {AnidbId}", relPath, lookup.VideoId, lookup.AniDbId);
 
-        return (entry, null, genFileName, true);
+        if (changedFields.Count > 0)
+            logger.LogInformation("AnimeThemes Map: Updated {Count} field(s) for '{Path}': {Fields}", changedFields.Count, relPath, string.Join(", ", changedFields));
+        else
+            logger.LogInformation("AnimeThemes Map: Saved mapping for '{Path}' -> VideoID: {VideoId}, AniDB ID: {AnidbId}", relPath, effectiveLookup.VideoId, effectiveLookup.AniDbId);
+
+        // If the entry has a valid AniDB ID, refresh the VFS symlink immediately so the renamed file is visible in Plex
+        if (entry.AniDbId > 0)
+            await ApplyMappingAsync([entry.AniDbId], cancellationToken).ConfigureAwait(false);
+
+        return (entry, null, genFileName, true, changedFields);
     }
 
     /// <summary>Test the mapping process for a single webm filename without adding it to the CSV.</summary>
@@ -358,7 +409,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
     /// <returns>A result containing the entry, error, and generated filename.</returns>
     public async Task<(AnimeThemesMappingEntry? entry, string? error, string filename)> TestMappingEntryAsync(string webmFileName, CancellationToken cancellationToken = default)
     {
-        var (entry, error, gen, _) = await ProcessSingleMappingAsync(webmFileName, false, null, cancellationToken).ConfigureAwait(false);
+        var (entry, error, gen, _, _) = await ProcessSingleMappingAsync(webmFileName, false, null, cancellationToken).ConfigureAwait(false);
         return (entry, error, gen);
     }
 

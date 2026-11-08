@@ -381,7 +381,7 @@ Endpoints managed by `AnimeThemesController`
 ```
 GET  /animethemes/vfs/build?filter={csv}                       -> AnimeThemesVfsBuild
 GET  /animethemes/vfs/map                                      -> AnimeThemesVfsMap
-     [?testPath={filename}&save={true|false}&anidbId={int}]
+     [?path={filename}&save={true|false}&anidbId={int}]
 POST /animethemes/vfs/import                                   -> ImportAnimeThemesMapping
 ```
 
@@ -389,9 +389,9 @@ POST /animethemes/vfs/import                                   -> ImportAnimeThe
   - `filter`: (optional) comma-separated Shoko or AniDB (prefixed with an 'a') series IDs.
   - Cache Format: `VfsPath|VideoId|Bitmask`.
   - Bitmask flags: `1:NC, 2:Lyrics, 4:Subs, 8:Uncen, 16:NSFW, 32:Spoil, 64:Trans, 128:Over`.
-- `AnimeThemesVfsMap` generates the mapping CSV, tests a single filename mapping, or populates/saves an entry.
-  - `testPath`: (optional) provide a filename to preview its mapping result and generated name, or populate it.
-  - `save`: (default false) set to true to save/update the resolved mapping in `anidb_animethemes_xrefs.csv`.
+- `AnimeThemesVfsMap` generates the mapping CSV, tests a single filename mapping, or updates/populates mapping fields in the CSV without redownloading the video.
+  - `path`: (optional) provide a filename or relative path to preview its mapping result, or update it.
+  - `save`: (default false) set to true to update or save the resolved metadata fields into `anidb_animethemes_xrefs.csv` and refresh its VFS link.
   - `anidbId`: (optional) manually override or provide the AniDB ID when saving.
   - The filename generation respects the `Advanced.AnimeThemesAppendTags` setting.
 
