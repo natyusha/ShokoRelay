@@ -61,10 +61,8 @@ public static partial class TagHelper
     /// <summary>Special cases where a specific capitalisation style is preferred</summary>
     private static readonly FrozenDictionary<string, string> s_forceSpecial = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
-        // AniDB
-        { "-japanese", "-Japanese" }, { "animefesta", "AnimeFesta" }, { "comicfesta", "ComicFesta" }, { "d'etat", "d'Etat" }, { "jdrama", "JDrama" }, { "noitamina", "noitaminA" },
-        // TMDB
-        { "vtuber", "VTuber" },
+        { "-japanese", "-Japanese" }, { "animefesta", "AnimeFesta" }, { "comicfesta", "ComicFesta" }, { "d'etat", "d'Etat" }, { "jdrama", "JDrama" }, { "noitamina", "noitaminA" }, // AniDB
+        { "vtuber", "VTuber" }, { "youtuber", "YouTuber" },                                                                                                                         // TMDB
     }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
     // csharpier-ignore
@@ -75,14 +73,21 @@ public static partial class TagHelper
         // AniDB <- TMDB Mappings
         ("3d cg animation", ["3d animation", "cg animated"]),
         ("absurdist humour", ["absurd", "absurdist"]),
+        ("adolescent", ["teenage", "teenager"]),
         ("artificial intelligence", ["artificial intelligence (a.i.)"]),
         ("association football", ["football (soccer)"]),
         ("bishoujo", ["bishojo"]),
         ("bukkake", ["bukakke"]),
         ("chinese production", ["donghua"]),
+        ("corrupt", ["corruption"]),
+        ("cosplaying", ["cosplay", "cosplayer"]),
         ("creampie", ["nakadashi"]),
         ("cross-dressing", ["cross dresser"]),
         ("cute girls doing cute things", ["cgdct"]),
+        ("dancing", ["dance"]),
+        ("deception", ["deceit"]),
+        ("deflowering", ["defloration"]),
+        ("delinquent", ["delinquency"]),
         ("cyberpunk", ["cyber"]),
         ("demon", ["youkai"]),
         ("elf", ["elves"]),
@@ -90,8 +95,13 @@ public static partial class TagHelper
         ("isekai", ["another world", "other world", "otherworld"]),
         ("korean-japanese co-production", ["japanese-korean coproduction"]),
         ("juujin", ["furry"]),
+        ("kidnapping", ["kidnapped"]),
+        ("kumamoto", ["kumamoto, japan"]),
+        ("kyoto", ["kyoto, japan"]),
         ("large breasts", ["big tits"]),
         ("loli", ["lolis", "loli type"]),
+        ("london", ["london, england"]),
+        ("lonely", ["loneliness"]),
         ("magical girl", ["magic girl"]),
         ("mecha", ["mechs"]),
         ("netorare", ["netorare (ntr)", "ntr"]),
@@ -108,12 +118,22 @@ public static partial class TagHelper
         ("shoujo ai", ["girls' love (gl)"]),
         ("shounen ai", ["boys' love (bl)"]),
         ("small breasts", ["small tits"]),
+        ("spaceship", ["spacecraft"]),
         ("taishou period", ["taisho period"]),
+        ("thievery", ["thief"]),
+        ("time stop", ["time freeze"]),
+        ("tokyo", ["tokyo, japan"]),
         ("unidentified flying object", ["ufo"]),
+        ("virgin", ["loss of virginity", "virginity"]),
         ("virtual world", ["virtual reality", "vr"]),
+        ("voyeurism", ["voyeur"]),
+        ("water scarcity", ["water shortage"]),
         ("wolf", ["wolves"]),
+        ("yokohama", ["yokohama, Kanagawa, Japan"]),
         // TMDB <- TMDB Mappings
         (null, ["eroticism", "erotism"]),
+        (null, ["juvenile delinquent", "juvenile delinquency"]),
+        (null, ["kiss", "kissing"]),
         (null, ["mixed martial arts (mma)", "mixed martial arts"]),
         (null, ["online game", "online gaming"]),
         (null, ["paranormal", "paranormal activity", "paranormal events", "paranormal investigation", "paranormal phenomena"]),
