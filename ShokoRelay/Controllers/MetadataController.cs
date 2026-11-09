@@ -449,7 +449,10 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
 
     #region Exception Handling
 
+    /// <summary>Timestamp of the last logged abstraction error to throttle log output.</summary>
     private static DateTime s_lastErrorLog = DateTime.MinValue;
+
+    /// <summary>Lock object synchronizing error logging throttle updates.</summary>
     private static readonly Lock s_errorLogLock = new();
 
     /// <summary>Safely executes a metadata request, catching API abstraction mismatches to prevent Kestrel log spam.</summary>

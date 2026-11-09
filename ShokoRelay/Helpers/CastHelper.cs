@@ -35,8 +35,14 @@ public static class CastHelper
     /// <summary>Explicit studio name merges mapping TMDB company names to canonical AniDB studio names.</summary>
     private static readonly FrozenDictionary<string, string> s_studioMerges = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
     {
-        { "Studio Houkiboshi", ["studio HōKIBOSHI"] },
+        { "placeholder", ["placeholder"] },
     }.SelectMany(kvp => kvp.Value.Select(tmdb => (Tmdb: tmdb, Anidb: kvp.Key))).ToFrozenDictionary(x => x.Tmdb, x => x.Anidb, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Global cache mapping normalized studio keys to their preferred display names and priority (1 = AniDB, 2 = TMDB).</summary>
+    private static readonly ConcurrentDictionary<string, (string Name, int Priority)> s_globalStudioNames = new(
+        s_studioMerges.Values.Distinct(StringComparer.OrdinalIgnoreCase).ToDictionary(NormalizeStudioKey, name => (name, 1), StringComparer.OrdinalIgnoreCase),
+        StringComparer.OrdinalIgnoreCase
+    );
 
     /// <summary>Global cache mapping normalized studio keys to resolved TMDB logo URLs to avoid AniDB image requests.</summary>
     private static readonly ConcurrentDictionary<string, string> s_globalStudioThumbs = new(StringComparer.OrdinalIgnoreCase);
@@ -52,6 +58,28 @@ public static class CastHelper
     /// <returns>An array of anonymous cast, crew, studio, and company objects suitable for Plex metadata responses.</returns>
     public static object[] GetCastAndCrew(IWithCastAndCrew item, IMetadataService? metadataService = null, ISeries? tmdbSeries = null)
     {
+        if (item is ISeries seriesItem)
+        {
+            // Seed global studio names from the current series' AniDB studios and crew companies (e.g. Original Work) without extra DB queries
+            foreach (var s in seriesItem.Studios ?? [])
+                if (s.ID.Source == MetadataSource.AniDB && !string.IsNullOrWhiteSpace(s.Name))
+                    s_globalStudioNames.TryAdd(NormalizeStudioKey(s.Name), (s.Name.Trim(), 1));
+
+            if (item.Crew != null)
+                foreach (var c in item.Crew)
+                    if ((c.Creator == null || c.Creator.ID.Source == MetadataSource.AniDB) && (c.Creator?.Title ?? c.Name) is { Length: > 0 } cName)
+                        s_globalStudioNames.TryAdd(NormalizeStudioKey(cName), (cName.Trim(), 1));
+
+            // Pre-populate global studio thumbs from this series' TMDB studios so both crew and company listings can reference them
+            foreach (var s in (seriesItem.Studios ?? []).Concat(tmdbSeries?.Studios ?? []))
+                if (s.ID.Source == MetadataSource.TMDB && s is IWithImages withImages && !string.IsNullOrWhiteSpace(s.Name))
+                {
+                    string sKey = NormalizeStudioKey(s_studioMerges.TryGetValue(s.Name.Trim(), out var m) ? m : s.Name.Trim());
+                    if (!s_globalStudioThumbs.ContainsKey(sKey) && withImages.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, forceRemote: true) is { } logoUrl)
+                        s_globalStudioThumbs[sKey] = logoUrl;
+                }
+        }
+
         int order = 1;
         var finalRoles = new List<object>();
 
@@ -72,15 +100,23 @@ public static class CastHelper
                     string? tag = GetName(getCreator(c), getName(c));
                     string? role = getRole(c);
                     if (!string.Equals(tag, role, StringComparison.Ordinal))
+                    {
+                        string? thumb = null;
+                        if (Settings.TmdbCastImages && !string.IsNullOrEmpty(tag) && s_globalStudioThumbs.TryGetValue(NormalizeStudioKey(tag), out var cachedLogo))
+                            thumb = cachedLogo;
+                        else if (getCreator(c)?.PrimaryImage is { } img)
+                            thumb = ImageHelper.GetImageUrl(img, forceRemote: true);
+
                         finalRoles.Add(
                             new
                             {
                                 order = order++,
                                 tag,
                                 role,
-                                thumb = getCreator(c)?.PrimaryImage is { } img ? ImageHelper.GetImageUrl(img, forceRemote: true) : null,
+                                thumb,
                             }
                         );
+                    }
                 }
                 return;
             }
@@ -107,13 +143,19 @@ public static class CastHelper
                         thumbImg = getCreator(match)!.PrimaryImage;
                 }
 
+                string? thumb = null;
+                if (Settings.TmdbCastImages && !string.IsNullOrEmpty(tag) && s_globalStudioThumbs.TryGetValue(NormalizeStudioKey(tag), out var cachedLogo))
+                    thumb = cachedLogo;
+                else if (thumbImg != null)
+                    thumb = ImageHelper.GetImageUrl(thumbImg, forceRemote: true);
+
                 finalRoles.Add(
                     new
                     {
                         order = order++,
                         tag,
                         role,
-                        thumb = thumbImg != null ? ImageHelper.GetImageUrl(thumbImg, forceRemote: true) : null,
+                        thumb,
                     }
                 );
             }
@@ -168,29 +210,20 @@ public static class CastHelper
             {
                 string rawName = s.Name.Trim();
                 bool isAniDb = s.ID.Source == MetadataSource.AniDB;
+                int priority = isAniDb ? 1 : 2;
                 bool isAnimation = animationStudioNames.Contains(rawName);
-                string resolvedName = s_studioMerges.TryGetValue(rawName, out var mapped) ? mapped : rawName;
-                string key = NormalizeStudioKey(resolvedName);
-
-                // Check global TMDB logo cache first to avoid redundant image queries
-                if (!s_globalStudioThumbs.TryGetValue(key, out var thumb))
-                {
-                    if (s.ID.Source == MetadataSource.TMDB && s is IWithImages tmdbWithImages)
-                    {
-                        thumb = tmdbWithImages.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, forceRemote: true);
-                        if (!string.IsNullOrEmpty(thumb))
-                            s_globalStudioThumbs[key] = thumb;
-                    }
-                    else if (isAniDb && s is IWithImages anidbWithImages)
-                        thumb = anidbWithImages.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, forceRemote: true);
-                }
+                string preferredName = ResolvePreferredStudioName(rawName, priority);
+                string key = NormalizeStudioKey(preferredName);
 
                 if (!studioGroups.TryGetValue(key, out var existing))
-                    studioGroups[key] = (resolvedName, isAnimation, thumb);
+                {
+                    string? thumb = s is IWithImages withImages ? withImages.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, forceRemote: true) : null;
+                    studioGroups[key] = (preferredName, isAnimation, thumb);
+                }
                 else
                 {
-                    string bestName = isAniDb || s_studioMerges.ContainsKey(rawName) ? resolvedName : existing.Name;
-                    studioGroups[key] = (bestName, existing.IsAnimationStudio || isAnimation, existing.Thumb ?? thumb);
+                    string? thumb = existing.Thumb ?? (s is IWithImages withImages ? withImages.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, forceRemote: true) : null);
+                    studioGroups[key] = (preferredName, existing.IsAnimationStudio || isAnimation, thumb);
                 }
             }
 
@@ -230,6 +263,18 @@ public static class CastHelper
 
     #region Studio Logic
 
+    /// <summary>Resolves the preferred studio name using explicit merges and the global AniDB studio name cache.</summary>
+    /// <param name="rawName">The raw studio or company name.</param>
+    /// <param name="priority">The source priority (1 = AniDB, 2 = TMDB).</param>
+    /// <returns>The globally preferred studio name.</returns>
+    private static string ResolvePreferredStudioName(string rawName, int priority = 2)
+    {
+        string name = s_studioMerges.TryGetValue(rawName, out var mapped) ? mapped : rawName;
+        string key = NormalizeStudioKey(name);
+        var (cachedName, _) = s_globalStudioNames.AddOrUpdate(key, _ => (name, priority), (_, existing) => priority <= existing.Priority ? (name, priority) : existing);
+        return cachedName;
+    }
+
     /// <summary>Normalizes a studio or company name for comparison by stripping diacritics, spaces, punctuation, and standardizing long Japanese vowels.</summary>
     /// <param name="name">The studio name to normalize.</param>
     /// <returns>A normalized key string.</returns>
@@ -252,7 +297,9 @@ public static class CastHelper
     /// <param name="metadataService">The metadata service used to invoke cross-source merging.</param>
     /// <returns>An array of <see cref="TagItem"/> instances, one per distinct studio.</returns>
     public static TagItem[] GetStudioTags(ISeries series, IMetadataService metadataService) =>
-        series is IShokoSeries { AnidbAnimeID: > 0 } ss && metadataService.GetMergedStudios(ss.AnidbAnimeID) is { Count: > 0 } studios ? [.. studios.Select(s => new TagItem { Tag = s.Name })] : [];
+        series is IShokoSeries { AnidbAnimeID: > 0 } ss && metadataService.GetMergedStudios(ss.AnidbAnimeID) is { Count: > 0 } studios
+            ? [.. studios.Select(s => new TagItem { Tag = ResolvePreferredStudioName(s.Name, s.ID.Source == MetadataSource.AniDB ? 1 : 2) })]
+            : [];
 
     #endregion
 
