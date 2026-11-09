@@ -1,7 +1,6 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
-using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Enums;
 using Shoko.Abstractions.Video.Services;
 using static ShokoRelay.Plex.PlexMapping;

@@ -1,4 +1,3 @@
-using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Containers;
 
 namespace ShokoRelay.Helpers;

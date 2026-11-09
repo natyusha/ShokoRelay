@@ -1,5 +1,4 @@
 using System.Globalization;
-using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Enums;
 
 namespace ShokoRelay.Helpers;

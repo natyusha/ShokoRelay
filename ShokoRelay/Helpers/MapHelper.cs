@@ -1,4 +1,3 @@
-using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Enums;
 using Shoko.Abstractions.Video;
 using static ShokoRelay.Plex.PlexMapping;

@@ -1,6 +1,5 @@
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
-using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Enums;
 

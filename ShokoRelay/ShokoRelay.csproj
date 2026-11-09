@@ -54,6 +54,7 @@
   <!-- Global using directives for things that are used in 17 files or more across the project -->
   <ItemGroup>
     <Using Include="Microsoft.Extensions.Logging" />
+    <Using Include="Shoko.Abstractions.Metadata" />
     <Using Include="Shoko.Abstractions.Metadata.Shoko" />
     <Using Include="Shoko.Abstractions.Metadata.Services" />
     <Using Include="ShokoRelay.Config" />

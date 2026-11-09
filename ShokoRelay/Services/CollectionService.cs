@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Video.Services;
 
 namespace ShokoRelay.Services;

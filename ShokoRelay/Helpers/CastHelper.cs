@@ -3,7 +3,6 @@ using System.Collections.Frozen;
 using System.Globalization;
 using System.Text;
 using Newtonsoft.Json;
-using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Enums;
 

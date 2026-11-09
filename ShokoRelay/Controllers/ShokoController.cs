@@ -1,7 +1,6 @@
 using System.Text.Json;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
-using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Image.Options;
 using Shoko.Abstractions.ScheduledActions.Services;
 using Shoko.Abstractions.Video.Services;
