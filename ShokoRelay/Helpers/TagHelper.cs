@@ -121,7 +121,7 @@ public static partial class TagHelper
         (null, ["otome game", "otome"]),
         (null, ["role playing game (rpg)", "rpg"]),
         (null, ["romcom", "love comedy"])
-    }.SelectMany(rule => rule.Tmdb.Select(t => (Key: t, Rule: (TmdbPrimary: rule.Tmdb[0], AnidbTarget: rule.Anidb)))).ToFrozenDictionary(x => x.Key, x => x.Rule, StringComparer.OrdinalIgnoreCase);
+    }.SelectMany(rule => (rule.Anidb != null ? rule.Tmdb.Append(rule.Anidb) : rule.Tmdb).Select(t => (Key: t, Rule: (TmdbPrimary: rule.Tmdb[0], AnidbTarget: rule.Anidb)))).ToFrozenDictionary(x => x.Key, x => x.Rule, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Global cache mapping normalized tag keys to their preferred display representations and priorities to ensure cross-series deduplication.</summary>
     private static readonly ConcurrentDictionary<string, (string DisplayName, int Priority)> s_globalTagCache = new();
@@ -156,16 +156,23 @@ public static partial class TagHelper
         IEnumerable<(string Name, int Priority)> tmdbNames = [];
         bool isCombined = sourceSetting == TagSources.Combined;
         if ((sourceSetting is TagSources.Combined or TagSources.TMDB) && (tmdbSeries ?? shokoSeries?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault()) is { } tmdb)
-            tmdbNames = tmdb
+        {
+            var validTags = tmdb
                 .Tags.Where(t => !string.IsNullOrWhiteSpace(t.Name) && (t.Kind is TagKind.Genre || (t.Kind is TagKind.Keyword && !NonEnglishTagRegex().IsMatch(t.Name))))
-                .Select(t =>
-                {
-                    string name = t.Name.Trim();
-                    if (s_tagMerges.TryGetValue(name, out var rule))
-                        name = isCombined && rule.AnidbTarget != null ? rule.AnidbTarget : rule.TmdbPrimary;
+                .Select(t => t.Name.Trim())
+                .ToList();
 
-                    return (Name: name, Priority: 2);
-                });
+            tmdbNames = validTags.Select(name =>
+            {
+                if (s_tagMerges.TryGetValue(name, out var rule))
+                    name =
+                        isCombined && rule.AnidbTarget != null ? rule.AnidbTarget
+                        : rule.AnidbTarget != null && validTags.Any(vt => string.Equals(vt, rule.AnidbTarget, StringComparison.OrdinalIgnoreCase)) ? rule.AnidbTarget
+                        : rule.TmdbPrimary;
+
+                return (Name: name, Priority: 2);
+            });
+        }
 
         return [.. FilterAndFormat(anidbNames.Concat(tmdbNames).Concat(shokoNames), userBlacklist)];
     }
