@@ -573,7 +573,8 @@ Due to this plugin relying on Plex's metadata provider feature (which is still u
 ## TODO
 
 - Ongoing
-  - Expand TagHelper.cs `s_tagMerges` to provide better deduplication for tags
+  - Expand CastHelper.cs `s_studioMerges` to provide better deduplication for studios that are added to cast entries
+  - Expand TagHelper.cs `s_tagMerges` to provide better deduplication for tags (keywords) from TMDB
 - Once available in Plex metadata providers:
   - Switch enhanced collection metadata support from the Plex HTTP API "Generate Collections" button to the provider
   - Add custom or generic series/episode ratings directly through the provider instead of via HTTP API

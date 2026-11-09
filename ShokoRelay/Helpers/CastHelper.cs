@@ -1,4 +1,7 @@
+using System.Collections.Concurrent;
 using System.Collections.Frozen;
+using System.Globalization;
+using System.Text;
 using Newtonsoft.Json;
 using Shoko.Abstractions.Metadata;
 using Shoko.Abstractions.Metadata.Containers;
@@ -28,6 +31,16 @@ public static class CastHelper
     private static readonly FrozenSet<string> s_tmdbDepartments = new[] {
         "Production", "Costume & Make-Up", "Lighting", "Actors", "Crew", "Directing", "Writing", "Editing", "Sound", "Visual Effects", "Camera", "Art"
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+    // csharpier-ignore
+    /// <summary>Explicit studio name merges mapping TMDB company names to canonical AniDB studio names.</summary>
+    private static readonly FrozenDictionary<string, string> s_studioMerges = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+    {
+        { "Studio Houkiboshi", ["studio HōKIBOSHI"] },
+    }.SelectMany(kvp => kvp.Value.Select(tmdb => (Tmdb: tmdb, Anidb: kvp.Key))).ToFrozenDictionary(x => x.Tmdb, x => x.Anidb, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Global cache mapping normalized studio keys to resolved TMDB logo URLs to avoid AniDB image requests.</summary>
+    private static readonly ConcurrentDictionary<string, string> s_globalStudioThumbs = new(StringComparer.OrdinalIgnoreCase);
 
     #endregion
 
@@ -138,30 +151,60 @@ public static class CastHelper
 
         if (Settings.CompanyListings && item is ISeries series)
         {
-            var animationStudios =
-                (metadataService != null && series is IShokoSeries { AnidbAnimeID: > 0 } ss)
-                    ? metadataService.GetMergedStudios(ss.AnidbAnimeID).Select(s => s.Name).Where(n => !string.IsNullOrWhiteSpace(n)).ToHashSet(StringComparer.OrdinalIgnoreCase)
-                    : [];
+            var anidbMergedStudios = (metadataService != null && series is IShokoSeries { AnidbAnimeID: > 0 } ss) ? metadataService.GetMergedStudios(ss.AnidbAnimeID) : [];
 
+            var animationStudioNames = anidbMergedStudios.Select(s => s.Name).Where(n => !string.IsNullOrWhiteSpace(n)).ToHashSet(StringComparer.OrdinalIgnoreCase);
             var networkNames = tmdbSeries?.Networks?.Select(n => n.Name).Where(n => !string.IsNullOrWhiteSpace(n)).ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
 
-            var companies = (series.Studios ?? [])
+            // Process TMDB studios first so their high-resolution logos are cached and preferred over AniDB images
+            var allStudios = (series.Studios ?? [])
                 .Concat(tmdbSeries?.Studios ?? [])
-                .Select(s => s.Name)
-                .Concat(animationStudios)
-                .Where(name => !string.IsNullOrWhiteSpace(name) && !networkNames.Contains(name))
-                .DistinctBy(name => name.Replace(" ", "", StringComparison.Ordinal).Replace("-", "", StringComparison.Ordinal), StringComparer.OrdinalIgnoreCase)
-                .OrderByDescending(animationStudios.Contains)
-                .ThenBy(name => name);
+                .Concat(anidbMergedStudios)
+                .Where(s => !string.IsNullOrWhiteSpace(s.Name) && !networkNames.Contains(s.Name))
+                .OrderByDescending(s => s.ID.Source == MetadataSource.TMDB);
 
-            foreach (var name in companies)
+            var studioGroups = new Dictionary<string, (string Name, bool IsAnimationStudio, string? Thumb)>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var s in allStudios)
+            {
+                string rawName = s.Name.Trim();
+                bool isAniDb = s.ID.Source == MetadataSource.AniDB;
+                bool isAnimation = animationStudioNames.Contains(rawName);
+                string resolvedName = s_studioMerges.TryGetValue(rawName, out var mapped) ? mapped : rawName;
+                string key = NormalizeStudioKey(resolvedName);
+
+                // Check global TMDB logo cache first to avoid redundant image queries
+                if (!s_globalStudioThumbs.TryGetValue(key, out var thumb))
+                {
+                    if (s.ID.Source == MetadataSource.TMDB && s is IWithImages tmdbWithImages)
+                    {
+                        thumb = tmdbWithImages.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, forceRemote: true);
+                        if (!string.IsNullOrEmpty(thumb))
+                            s_globalStudioThumbs[key] = thumb;
+                    }
+                    else if (isAniDb && s is IWithImages anidbWithImages)
+                        thumb = anidbWithImages.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, forceRemote: true);
+                }
+
+                if (!studioGroups.TryGetValue(key, out var existing))
+                    studioGroups[key] = (resolvedName, isAnimation, thumb);
+                else
+                {
+                    string bestName = isAniDb || s_studioMerges.ContainsKey(rawName) ? resolvedName : existing.Name;
+                    studioGroups[key] = (bestName, existing.IsAnimationStudio || isAnimation, existing.Thumb ?? thumb);
+                }
+            }
+
+            var ordered = studioGroups.Values.OrderByDescending(x => x.IsAnimationStudio).ThenBy(x => x.Name);
+
+            foreach (var (name, isAnimation, thumb) in ordered)
                 finalRoles.Add(
                     new
                     {
                         order = order++,
                         tag = name,
-                        role = animationStudios.Contains(name) ? "Studio" : "Production",
-                        thumb = (string?)null,
+                        role = isAnimation ? "Studio" : "Production",
+                        thumb,
                     }
                 );
         }
@@ -187,6 +230,23 @@ public static class CastHelper
     #endregion
 
     #region Studio Logic
+
+    /// <summary>Normalizes a studio or company name for comparison by stripping diacritics, spaces, punctuation, and standardizing long Japanese vowels.</summary>
+    /// <param name="name">The studio name to normalize.</param>
+    /// <returns>A normalized key string.</returns>
+    private static string NormalizeStudioKey(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return string.Empty;
+
+        var normalized = name.Normalize(NormalizationForm.FormD);
+        var sb = new StringBuilder(normalized.Length);
+        foreach (char c in normalized)
+            if (CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark && char.IsLetterOrDigit(c))
+                sb.Append(char.ToLowerInvariant(c));
+
+        return sb.ToString().Replace("ou", "o", StringComparison.Ordinal).Replace("uu", "u", StringComparison.Ordinal);
+    }
 
     /// <summary>Assemble an array of <see cref="TagItem"/> objects representing the series' studios, utilizing Shoko's native cross-source merging.</summary>
     /// <param name="series">The Shoko series metadata.</param>
