@@ -185,7 +185,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
             );
 
         // Refresh the override cache to catch any link changes made in Shoko since the last operation. This includes VFS Overrides and if MergeTmdbSeries is enabled auto merged TMDB series as well.
-        OverrideHelper.Reload(metadataService);
+        OverrideHelper.Reload();
 
         var (sw, created, skipped, seriesProcessed, planned) = (Stopwatch.StartNew(), 0, 0, 0, 0);
         var seriesDetailsBag = new ConcurrentBag<SeriesProcessDetails>();

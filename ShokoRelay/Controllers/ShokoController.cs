@@ -104,7 +104,7 @@ public class ShokoController(
         {
             Logger.LogInformation("Shoko: Updating VFS overrides file...");
             IoFile.WriteAllText(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileVfsOverrides), content ?? string.Empty);
-            OverrideHelper.Reload(MetadataService); // Pass the service to trigger TMDB discovery
+            OverrideHelper.Reload();
             return Ok(new RelayResponse<object>());
         }
         catch (Exception ex)

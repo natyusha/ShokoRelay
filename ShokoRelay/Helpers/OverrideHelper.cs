@@ -1,4 +1,6 @@
+using System.Collections.Concurrent;
 using System.Globalization;
+using Shoko.Abstractions.Metadata.CrossReferences;
 using Shoko.Abstractions.Metadata.Enums;
 
 namespace ShokoRelay.Helpers;
@@ -16,11 +18,14 @@ public static class OverrideHelper
 {
     #region Setup & Constants
 
-    /// <summary>Cached dictionary of primary to secondary series ID mappings.</summary>
+    /// <summary>Cached dictionary of primary to secondary series ID manual mappings.</summary>
     private static IReadOnlyDictionary<int, List<int>> s_groups = new Dictionary<int, List<int>>();
 
     /// <summary>Cached dictionary of custom episode coordinate overrides for specific secondary series.</summary>
     private static IReadOnlyDictionary<int, List<CustomCoordRule>> s_coordOverrides = new Dictionary<int, List<CustomCoordRule>>();
+
+    /// <summary>JIT Cache for automatically merged TMDB series groups.</summary>
+    private static readonly ConcurrentDictionary<string, List<int>> s_tmdbGroups = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Tracks whether the override groups have been initialized.</summary>
     private static bool s_isInitialized;
@@ -35,9 +40,8 @@ public static class OverrideHelper
 
     #region Loading Logic
 
-    /// <summary>Ensures the override groups are loaded into the memory cache. Optionally performs TMDB series link discovery if enabled.</summary>
-    /// <param name="metadataService">Service used to scan series for TMDB links.</param>
-    public static void EnsureLoaded(IMetadataService? metadataService = null)
+    /// <summary>Ensures the override groups are loaded into the memory cache.</summary>
+    public static void EnsureLoaded()
     {
         if (s_isInitialized)
             return;
@@ -45,33 +49,30 @@ public static class OverrideHelper
         {
             if (s_isInitialized)
                 return;
-            LoadInternal(metadataService);
+            LoadInternal();
             s_isInitialized = true;
         }
     }
 
     /// <summary>Forces a fresh reload of the overrides from the disk into the memory cache.</summary>
-    /// <param name="metadataService">Service used to scan series for TMDB links.</param>
-    public static void Reload(IMetadataService? metadataService = null)
+    public static void Reload()
     {
         lock (s_loadLock)
         {
-            LoadInternal(metadataService);
+            LoadInternal();
             s_isInitialized = true;
         }
     }
 
-    /// <summary>Loads manual and automatic VFS series override groups from disk and metadata relationships.</summary>
-    /// <param name="metadataService">Optional metadata service used to discover and resolve automatic TMDB series merges.</param>
-    private static void LoadInternal(IMetadataService? metadataService)
+    /// <summary>Loads manual VFS series override groups from disk.</summary>
+    private static void LoadInternal()
     {
-        // Use local dictionaries to build the groups, then perform an atomic swap to prevent race conditions where other threads see a cleared or partially-loaded static dictionary.
         var newGroups = new Dictionary<int, List<int>>();
         var newCoordOverrides = new Dictionary<int, List<CustomCoordRule>>();
         string path = OverridesPath;
-        void AddGroup(List<int> ids) => ids.ForEach(id => newGroups.TryAdd(id, ids)); // Helper to add a list of IDs to the group registry
+        void AddGroup(List<int> ids) => ids.ForEach(id => newGroups.TryAdd(id, ids));
 
-        // Load Manual CSV Overrides (Priority)
+        // Load Manual CSV Overrides
         if (File.Exists(path))
         {
             try
@@ -114,30 +115,10 @@ public static class OverrideHelper
             catch { }
         }
 
-        // Automatic TMDB Merge Discovery (Only for Series links)
-        if (Settings.Advanced.MergeTmdbSeries && metadataService != null)
-        {
-            var tmdbGroups =
-                metadataService
-                    .GetAllShokoSeries()
-                    ?.Select(s => (s.AnidbAnimeID, s.AirDate, TmdbId: s.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault()?.ID.ID))
-                    .Where(x => !string.IsNullOrWhiteSpace(x.TmdbId))
-                    .GroupBy(x => x.TmdbId)
-                    .Where(g => g.Count() > 1)
-                ?? [];
-
-            foreach (var group in tmdbGroups)
-            {
-                if (group.Any(x => newGroups.ContainsKey(x.AnidbAnimeID)))
-                    continue;
-                var ids = group.OrderBy(x => x.AirDate ?? PartialDateOnly.MaxValue).ThenBy(x => x.AnidbAnimeID).Select(x => x.AnidbAnimeID).ToList();
-                AddGroup(ids);
-            }
-        }
-
-        // Atomic swap
+        // Atomic swap & cache clear
         s_groups = newGroups;
         s_coordOverrides = newCoordOverrides;
+        s_tmdbGroups.Clear();
     }
 
     /// <summary>Parses an AniDB ID and optional custom coordinate rules from an override token.</summary>
@@ -196,16 +177,33 @@ public static class OverrideHelper
 
     #region Series Resolution
 
-    /// <summary>Return the primary series id for the given Shoko series ID according to overrides.</summary>
+    /// <summary>Return the primary series id for the given Shoko series ID according to overrides and auto-merges.</summary>
     /// <param name="shokoSeriesId">The input series ID.</param>
     /// <param name="metadataService">Service used to resolve series mappings.</param>
     /// <returns>The primary Shoko series ID, or the original ID if no override exists.</returns>
     public static int GetPrimary(int shokoSeriesId, IMetadataService metadataService)
     {
-        EnsureLoaded(metadataService);
-        return (!EnforceTmdbNumbering || metadataService == null || metadataService.GetShokoSeriesByID(shokoSeriesId) is not { AnidbAnimeID: > 0 } s) ? shokoSeriesId
-            : (s_groups.TryGetValue(s.AnidbAnimeID, out var grp) && grp.Count > 0 && metadataService.GetShokoSeriesByAnidbID(grp[0]) is { } ps) ? ps.LocalID
-            : shokoSeriesId;
+        EnsureLoaded();
+
+        if (metadataService?.GetShokoSeriesByID(shokoSeriesId) is not { AnidbAnimeID: > 0 } series || !EnforceTmdbNumbering)
+            return shokoSeriesId;
+
+        // 1. Manual override takes precedence (O(1))
+        if (s_groups.TryGetValue(series.AnidbAnimeID, out var manualGrp) && manualGrp.Count > 0)
+            return metadataService.GetShokoSeriesByAnidbID(manualGrp[0])?.LocalID ?? shokoSeriesId;
+
+        // 2. Auto TMDB Merge fast-path (O(1))
+        if (Settings.Advanced.MergeTmdbSeries && series.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() is { } tmdbSeries && !string.IsNullOrWhiteSpace(tmdbSeries.ID.ID))
+        {
+            if (s_tmdbGroups.TryGetValue(tmdbSeries.ID.ID, out var cachedGroup) && cachedGroup.Count > 0)
+                return metadataService.GetShokoSeriesByAnidbID(cachedGroup[0])?.LocalID ?? shokoSeriesId;
+
+            // Cache miss - resolve JIT via GetGroup
+            var group = GetGroup(shokoSeriesId, metadataService);
+            return group.Count > 0 ? group[0] : shokoSeriesId;
+        }
+
+        return shokoSeriesId;
     }
 
     /// <summary>Retrieve the full group of series IDs associated with the specified series ID.</summary>
@@ -214,10 +212,47 @@ public static class OverrideHelper
     /// <returns>A list of Shoko series IDs in the group (primary first).</returns>
     public static IReadOnlyList<int> GetGroup(int shokoSeriesId, IMetadataService metadataService)
     {
-        EnsureLoaded(metadataService);
-        return (!EnforceTmdbNumbering || metadataService == null || metadataService.GetShokoSeriesByID(shokoSeriesId) is not { AnidbAnimeID: > 0 } s) ? [shokoSeriesId]
-            : (s_groups.TryGetValue(s.AnidbAnimeID, out var grp) && grp.Count > 0) ? [.. grp.Select(metadataService.GetShokoSeriesByAnidbID).OfType<IShokoSeries>().Select(ss => ss.LocalID)]
-            : [shokoSeriesId];
+        EnsureLoaded();
+
+        if (metadataService?.GetShokoSeriesByID(shokoSeriesId) is not { AnidbAnimeID: > 0 } series || !EnforceTmdbNumbering)
+            return [shokoSeriesId];
+
+        // 1. Manual override takes precedence
+        if (s_groups.TryGetValue(series.AnidbAnimeID, out var manualGrp) && manualGrp.Count > 0)
+            return [.. manualGrp.Select(metadataService.GetShokoSeriesByAnidbID).OfType<IShokoSeries>().Select(ss => ss.LocalID)];
+
+        // 2. Auto TMDB Merge Just-In-Time Resolution
+        if (Settings.Advanced.MergeTmdbSeries && series.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() is { } tmdbSeries && !string.IsNullOrWhiteSpace(tmdbSeries.ID.ID))
+        {
+            string tmdbIdStr = tmdbSeries.ID.ID;
+            if (s_tmdbGroups.TryGetValue(tmdbIdStr, out var cachedGroup))
+                return [.. cachedGroup.Select(metadataService.GetShokoSeriesByAnidbID).OfType<IShokoSeries>().Select(ss => ss.LocalID)];
+
+            var xrefs = metadataService.GetCrossReferencesForProviderEntry(tmdbSeries.ID).OfType<IMetadataSeriesCrossReference>().ToList();
+            if (xrefs.Count > 1)
+            {
+                var groupIds = xrefs
+                    .Select(x => x.AnidbAnimeID)
+                    .Distinct()
+                    .Select(metadataService.GetShokoSeriesByAnidbID)
+                    .OfType<IShokoSeries>()
+                    .OrderBy(s => s.AirDate ?? PartialDateOnly.MaxValue)
+                    .ThenBy(s => s.AnidbAnimeID)
+                    .Select(s => s.AnidbAnimeID)
+                    .ToList();
+
+                if (groupIds.Count > 1)
+                {
+                    s_tmdbGroups[tmdbIdStr] = groupIds;
+                    return [.. groupIds.Select(metadataService.GetShokoSeriesByAnidbID).OfType<IShokoSeries>().Select(ss => ss.LocalID)];
+                }
+            }
+
+            // Single-item result or isolated series: cache to prevent re-querying
+            s_tmdbGroups[tmdbIdStr] = [series.AnidbAnimeID];
+        }
+
+        return [shokoSeriesId];
     }
 
     /// <summary>Retrieves manual VFS coordinates for a specific episode, if defined in the overrides file.</summary>

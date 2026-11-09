@@ -40,7 +40,7 @@ public class SyncToPlex(
         CancellationToken cancellationToken = default
     )
     {
-        OverrideHelper.Reload(metadataService);
+        OverrideHelper.Reload();
         var result = new PlexWatchedSyncResult();
         var auto = Settings.Automation;
         var userType = userTypeOverride ?? auto.ShokoSyncWatchedUserType;
