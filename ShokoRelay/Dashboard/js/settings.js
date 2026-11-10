@@ -190,6 +190,7 @@
         label.innerHTML = `<span>${p.Display || p.Path.split(".").pop()}</span>${p.Description ? `<small>${p.Description}</small>` : ""}`;
         wrap.appendChild(label);
         input = document.createElement(p.Type === "enum" ? "select" : p.Type === "json" || p.Path.endsWith("TagOverrides") || p.Path.endsWith("FolderExclusions") ? "textarea" : "input");
+        if (p.Path === "TagOverrides") input.id = "resizable";
         if (p.Type === "enum") {
           (p.EnumValues || []).forEach((ev) => {
             const opt = new Option(ev.name, ev.value);

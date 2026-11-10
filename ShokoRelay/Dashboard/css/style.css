@@ -159,6 +159,10 @@ textarea {
   height: 5em;
   resize: none;
 }
+textarea#resizable {
+  min-height: 5em;
+  resize: vertical;
+}
 label {
   display: inline-block;
   margin: 6px 0 2px;

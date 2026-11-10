@@ -69,6 +69,7 @@ public class ConfigProvider
             var settings = GetSettings();
             if (!string.IsNullOrWhiteSpace(settings.Advanced.ShokoServerUrl))
                 return settings.Advanced.ShokoServerUrl.Trim().TrimEnd('/');
+
             if (HttpContextAccessor?.HttpContext is { } ctx)
             {
                 var request = ctx.Request;
@@ -78,14 +79,16 @@ public class ConfigProvider
                 var host = request.Headers["X-Forwarded-Host"].FirstOrDefault()?.Split(',')[0].Trim() ?? request.Host.ToString();
 
                 var detectedUrl = $"{scheme}://{host}{request.PathBase}".TrimEnd('/');
-                if (settings.Advanced.ShokoServerUrlContext != detectedUrl)
-                {
-                    settings.Advanced.ShokoServerUrlContext = detectedUrl;
-                    SaveSettings(settings);
-                }
+
+                var tf = ReadTokenFile();
+                if (tf.AutoShokoServerUrl != detectedUrl)
+                    UpdatePlexTokenInfo(autoUrl: detectedUrl);
+
                 return detectedUrl;
             }
-            return !string.IsNullOrWhiteSpace(settings.Advanced.ShokoServerUrlContext) ? settings.Advanced.ShokoServerUrlContext : "http://localhost:8111";
+
+            var cachedUrl = ReadTokenFile().AutoShokoServerUrl;
+            return !string.IsNullOrWhiteSpace(cachedUrl) ? cachedUrl : "http://localhost:8111";
         }
     }
 
@@ -315,6 +318,9 @@ public class ConfigProvider
 
         /// <summary>List of discovered Plex libraries.</summary>
         public List<PlexAvailableLibrary>? Libraries { get; set; }
+
+        /// <summary>The auto-detected base URL of the Shoko server.</summary>
+        public string? AutoShokoServerUrl { get; set; }
     }
 
     /// <summary>Deletes the Plex token/secrets file from disk.</summary>
@@ -364,7 +370,8 @@ public class ConfigProvider
     /// <param name="a">Admin username.</param>
     /// <param name="s">Discovered servers list.</param>
     /// <param name="l">Discovered libraries list.</param>
-    private void WriteTokenFile(string? t, string? c, string? a, List<PlexAvailableServer>? s = null, List<PlexAvailableLibrary>? l = null)
+    /// <param name="autoUrl">Auto-detected Shoko Server URL.</param>
+    private void WriteTokenFile(string? t, string? c, string? a, List<PlexAvailableServer>? s = null, List<PlexAvailableLibrary>? l = null, string? autoUrl = null)
     {
         var tf = new TokenFile
         {
@@ -373,6 +380,7 @@ public class ConfigProvider
             AdminUsername = a ?? "",
             Servers = s ?? [],
             Libraries = l ?? [],
+            AutoShokoServerUrl = autoUrl ?? "",
         };
         lock (_settingsLock)
         {
@@ -439,10 +447,18 @@ public class ConfigProvider
     /// <param name="adminName">Optional new admin username.</param>
     /// <param name="servers">Optional list of discovered servers.</param>
     /// <param name="libraries">Optional list of discovered libraries.</param>
-    public void UpdatePlexTokenInfo(string? token = null, string? clientIdentifier = null, string? adminName = null, List<PlexAvailableServer>? servers = null, List<PlexAvailableLibrary>? libraries = null)
+    /// <param name="autoUrl">Optional auto-detected Shoko Server URL.</param>
+    public void UpdatePlexTokenInfo(
+        string? token = null,
+        string? clientIdentifier = null,
+        string? adminName = null,
+        List<PlexAvailableServer>? servers = null,
+        List<PlexAvailableLibrary>? libraries = null,
+        string? autoUrl = null
+    )
     {
         var e = ReadTokenFile();
-        WriteTokenFile(token ?? e.Token, clientIdentifier ?? e.ClientIdentifier, adminName ?? e.AdminUsername, servers ?? e.Servers, libraries ?? e.Libraries);
+        WriteTokenFile(token ?? e.Token, clientIdentifier ?? e.ClientIdentifier, adminName ?? e.AdminUsername, servers ?? e.Servers, libraries ?? e.Libraries, autoUrl ?? e.AutoShokoServerUrl);
     }
 
     /// <summary>Checks if the provided server UUID matches a managed server known to the provider.</summary>
