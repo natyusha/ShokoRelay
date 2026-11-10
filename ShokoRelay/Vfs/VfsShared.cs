@@ -171,7 +171,7 @@ internal static class VfsShared
 
             var ignored = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ResolveRootFolderName(), ResolveMovieRootFolderName(), ResolveAnimeThemesFolderName(), ResolveCollectionImagesFolderName() };
             foreach (var folder in (settings.Advanced.FolderExclusions ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-                ignored.Add(folder);
+                ignored.Add(folder.Trim('/', '\\'));
 
             // If Plex Local Extras are enabled, automatically include the standard Plex extra subdirectories in the ignore list.
             // This prevents Shoko from attempting to index these files, removing the need for manual user intervention for show and season-level extras.

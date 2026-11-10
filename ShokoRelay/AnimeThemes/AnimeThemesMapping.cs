@@ -432,6 +432,9 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
             string themeRootName = VfsShared.ResolveAnimeThemesFolderName();
             string vfsRoot = VfsShared.ResolveRootFolderName();
 
+            // Pre-index entries by AniDB ID for instant bucket lookups per series
+            var entriesByAniDb = entries.Where(e => e.AniDbId > 0).ToLookup(e => e.AniDbId);
+
             var folderGroups = (seriesFilter?.Count > 0 ? seriesFilter.Distinct().Select(metadataService.GetShokoSeriesByID) : metadataService.GetAllShokoSeries())
                 .Where(s => s?.AnidbAnimeID > 0)
                 .GroupBy(s => OverrideHelper.GetPrimary(s!.LocalID, metadataService))
@@ -473,15 +476,12 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                             .SelectMany(series =>
                             {
                                 int seriesIdx = overrideOrder.IndexOf(series.LocalID);
-                                return entries
+                                return entriesByAniDb[series.AnidbAnimeID]
                                     // Determine if a theme mapping's overlap level is allowed based on the configured overlap restriction
                                     .Where(e =>
-                                        e.AniDbId == series.AnidbAnimeID
-                                        && (
-                                            Settings.Advanced.AnimeThemesOverlapLevel == OverlapLevel.All
-                                            || e.Overlap.Equals("None", StringComparison.Ordinal)
-                                            || (Settings.Advanced.AnimeThemesOverlapLevel == OverlapLevel.TransitionOnly && e.Overlap.Equals("Transition", StringComparison.Ordinal))
-                                        )
+                                        Settings.Advanced.AnimeThemesOverlapLevel == OverlapLevel.All
+                                        || e.Overlap.Equals("None", StringComparison.Ordinal)
+                                        || (Settings.Advanced.AnimeThemesOverlapLevel == OverlapLevel.TransitionOnly && e.Overlap.Equals("Transition", StringComparison.Ordinal))
                                     )
                                     .Select(entry =>
                                     {

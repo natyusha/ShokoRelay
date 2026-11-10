@@ -564,7 +564,11 @@ public class ConfigProvider
 
         s.Advanced.FolderExclusions = string.Join(
             Environment.NewLine,
-            (s.Advanced.FolderExclusions ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(VfsShared.NormalizeSeparators).Distinct(VfsShared.PathComparer)
+            (s.Advanced.FolderExclusions ?? "")
+                .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(x => x.Trim('/', '\\'))
+                .Where(x => x.Length > 0)
+                .Distinct(VfsShared.PathComparer)
         );
 
         s.Advanced.ManagedFolderExclusions = string.Join(

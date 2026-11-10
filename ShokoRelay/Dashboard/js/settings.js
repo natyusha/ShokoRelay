@@ -210,13 +210,25 @@
         if (p.Path.endsWith("ShokoServerUrl") || p.Path.endsWith("PlexServerUrl")) {
           input.value = value ?? "";
           input.onchange = async () => {
-            const urlRegex = /^https?:\/\/[a-zA-Z0-9.-]+(:\d+)?$/;
+            const urlRegex = /^https?:\/\/([a-zA-Z0-9.-]+|\[[a-fA-F0-9:]+\])(:\d+)?$/;
             const cleanVal = input.value.trim().replace(/\/+$/, "");
             if (cleanVal && !urlRegex.test(cleanVal)) {
               showToast(`Invalid ${p.Path.endsWith("ShokoServerUrl") ? "Shoko" : "Plex"} URL. Use http(s)://HOST:PORT`, "error", 5000);
               input.value = getValueByPath(config, p.Path) || "";
               return;
             }
+            input.value = cleanVal;
+            setValueByPath(config, p.Path, cleanVal);
+            await saveSettings(config);
+          };
+        } else if (p.Path === "Advanced.FolderExclusions") {
+          input.value = value ?? "";
+          input.onchange = async () => {
+            const cleanVal = input.value
+              .split(/\r?\n/)
+              .map((line) => line.trim().replace(/^[\\/]+|[\\/]+$/g, ""))
+              .filter((line) => line.length > 0)
+              .join("\n");
             input.value = cleanVal;
             setValueByPath(config, p.Path, cleanVal);
             await saveSettings(config);
