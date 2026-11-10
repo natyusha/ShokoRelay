@@ -36,8 +36,8 @@ public static partial class TagHelper
         "cast missing", "description missing", "description needs improvement", "no english subs available", "pic needs improvement", "staff missing", "to be moved to character", "to be moved to episode",
         // AniDB parent tags which are too broad
         "asia", "earth",
-        // TMDB genres which are too broad
-        "Animation", "Anime",
+        // TMDB genres/keywords which are too broad
+        "Animation", "Anime", "Hentai",
         // TMDB keywords which violate the rules (mainly they are not english words) and will make it through the language filter. These can be removed once they are fixed on TMDB
         "accion", "animacion", "art martial", "boxeo", "bukatsu", "chuanyue", "chuyển sinh", "dongfang", "donghua", "espionnage", "futuro postapocalíptico",
         "gufeng", "guzhuang", "internete", "inzest", "magie", "samourai", "seadex", "sekai togou", "serie de tv"
@@ -53,8 +53,8 @@ public static partial class TagHelper
     // csharpier-ignore
     /// <summary>Abbreviations or acronyms that should be fully capitalised</summary>
     private static readonly FrozenSet<string> s_forceUpper = new[] {
-        "3d", "bdsm", "cg", "cgi", "ed", "fff", "ffm", "ii", "milf", "mmf", "mmm", "neet", "npc", "op", "rpg", "tbs", "tv",                     // AniDB
-        "a.i.", "bl", "diy", "gl", "jk", "jsdf", "lgbt", "mma", "mmorpg", "ntr", "ol", "ona", "ova", "pov", "ptsd", "ufo", "us", "vr", "vrmmo"  // TMDB
+        "3d", "bdsm", "cg", "cgi", "ed", "fff", "ffm", "ii", "milf", "mmf", "mmm", "neet", "npc", "op", "rpg", "tbs", "tv",               // AniDB
+        "a.i.", "bl", "diy", "gl", "jsdf", "lgbt", "mma", "mmorpg", "ntr", "ol", "ona", "ova", "pov", "ptsd", "ufo", "us", "vr", "vrmmo"  // TMDB
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     // csharpier-ignore
@@ -66,80 +66,182 @@ public static partial class TagHelper
     }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
     // csharpier-ignore
-    /// <summary>Explicit tag merges mapping synonymous TMDB keywords/tags to a primary TMDB tag and an optional canonical AniDB tag.</summary>
-    /// <remarks>This section will likely be expanded fairly often and can be quite subjective. It is best to avoid merging things here if there is any ambiguity.</remarks>
+    /// <summary>Explicit tag merges mapping synonymous TMDB keywords/tags to a primary TMDB tag and an optional canonical AniDB tag (with TMDB Fallback).</summary>
+    /// <remarks>
+    /// - This section will likely be expanded fairly often and can be quite subjective
+    /// - If AniDB groups the tags via aliases they will also be grouped here by the rules below
+    /// - Outside of the stock AniDB groupings it is best to avoid merging things here if there is any ambiguity
+    /// </remarks>
     private static readonly FrozenDictionary<string, (string TmdbPrimary, string? AnidbTarget)> s_tagMerges = new List<(string? Anidb, string[] Tmdb)>
     {
-        // AniDB <- TMDB Mappings
+        // AniDB <- TMDB Mappings                                                              // Generally uses the primary tag entry
         ("3d cg animation", ["3d animation", "cg animated"]),
         ("absurdist humour", ["absurd", "absurdist"]),
         ("adolescent", ["teenage", "teenager"]),
+        ("afterlife", ["life after death"]),
+        ("android", ["humanoid robot"]),
         ("artificial intelligence", ["artificial intelligence (a.i.)"]),
+        ("assassin", ["hitman"]),
         ("association football", ["football (soccer)"]),
+        ("attempted rape", ["rape attempt"]),
+        ("bisexual", ["bisexuality"]),
         ("bishoujo", ["bishojo"]),
+        ("black humour", ["black humor"]),
+        ("body swap", ["body exchange"]),
+        ("boobjob", ["tit fucking", "titty fuck"]),
+        ("brainwashing", ["mind control", "hypnosis", "mesmerization"]),
         ("bukkake", ["bukakke"]),
+        ("cafe", ["coffee shop"]),
+        ("cat person", ["cat people"]),
+        ("cheating", ["cheat"]),
         ("chinese production", ["donghua"]),
+        ("combat", ["fight", "fighting"]),
+        ("coming of age", ["growing up"]),
         ("corrupt", ["corruption"]),
         ("cosplaying", ["cosplay", "cosplayer"]),
+        ("countryside", ["rural", "rural area", "rural town"]),                                // 'rural town' is also a separate series tag on AniDB
         ("creampie", ["nakadashi"]),
         ("cross-dressing", ["cross dresser"]),
+        ("curse", ["cursed"]),
         ("cute girls doing cute things", ["cgdct"]),
+        ("cyberpunk", ["cyber"]),
+        ("daikaijuu", ["kaiju", "giant monster"]),
         ("dancing", ["dance"]),
+        ("dark-skinned girl", ["dark skin girl"]),
         ("deception", ["deceit"]),
         ("deflowering", ["defloration"]),
+        ("deity", ["god", "goddess"]),                                                         // AniDB groups both genders
         ("delinquent", ["delinquency"]),
-        ("cyberpunk", ["cyber"]),
-        ("demon", ["youkai"]),
+        ("demon", ["youkai", "Oni", "Ogre"]),
+        ("dildos - vibrators", ["dildo", "dildos", "vibrator"]),
+        ("dominatrix", ["femdom", "female domination"]),
+        ("dystopia", ["dystopian future"]),
         ("elf", ["elves"]),
         ("fellatio", ["blowjob", "blow job"]),
+        ("genetic modification", ["genetic engineering"]),
+        ("hairdresser", ["hairstylist"]),
+        ("heavy metal music", ["heavy metal"]),
+        ("hokkaido", ["hokkaido, japan"]),
+        ("homemaker", ["housewife", "housewives"]),
+        ("horse riding", ["horseback riding"]),
+        ("human cannibalism", ["eating of humans"]),
+        ("immortality", ["immortal"]),
         ("isekai", ["another world", "other world", "otherworld"]),
-        ("korean-japanese co-production", ["japanese-korean coproduction"]),
+        ("ishikawa", ["ishikawa, japan"]),
+        ("journey", ["travel", "traveling", "voyage"]),
         ("juujin", ["furry"]),
         ("kidnapping", ["kidnapped"]),
+        ("kitsune", ["fox spirit"]),
+        ("korean-japanese co-production", ["japanese-korean coproduction"]),
         ("kumamoto", ["kumamoto, japan"]),
         ("kyoto", ["kyoto, japan"]),
-        ("large breasts", ["big tits"]),
+        ("large breasts", ["big tits", "big boobs", "big breast"]),
         ("loli", ["lolis", "loli type"]),
         ("london", ["london, england"]),
         ("lonely", ["loneliness"]),
+        ("love between enemies", ["enemies to lovers"]),
+        ("mafia", ["yakuza", "organized crime"]),
+        ("magic", ["wizard", "sorcerer", "mage", "magician"]),
         ("magical girl", ["magic girl"]),
+        ("maze", ["labyrinth"]),
         ("mecha", ["mechs"]),
+        ("mobile phone", ["cellphone", "smartphone"]),
+        ("multiple personality disorder", ["multiple personality", "double personality", "split personality", "dissociative identities"]),
+        ("nagasaki", ["nagasaki, japan"]),
+        ("nazis", ["nazi"]),
         ("netorare", ["netorare (ntr)", "ntr"]),
+        ("ninja", ["shinobi", "female ninja", "kunoichi"]),                                    // AniDB groups both genders
         ("office lady", ["office lady (ol)"]),
+        ("oral", ["oral sex"]),
+        ("osaka", ["osaka, japan"]),
         ("pantsu", ["panties"]),
-        ("paramilitary", ["paramilitary organization"]),
         ("parallel world", ["parallel universe"]),
+        ("paramilitary", ["paramilitary organization"]),
         ("parenting", ["parenthood"]),
         ("paris", ["paris, france"]),
+        ("perverted", ["pervert", "pervertion"]),
+        ("point of view", ["pov (point of view)"]),
         ("police", ["cop", "police officer"]),
+        ("post-apocalyptic", ["post-apocalyptic future"]),
         ("racism", ["racist"]),
+        ("reincarnation", ["rebirth"]),
+        ("revenge", ["vengeance"]),
+        ("rpg", ["role playing game (rpg)"]),
+        ("salaryman", ["office worker"]),
         ("science fiction", ["sci-fi", "sci fi"]),
+        ("scissoring", ["tribadism"]),
+        ("secret organisation", ["secret organization"]),
+        ("seiyuu", ["voice acting"]),
+        ("sengoku period", ["warring states period"]),
+        ("sex", ["sexual intercourse"]),
+        ("sex change", ["gender swap"]),
+        ("sexual humour", ["sexual humor"]),
+        ("shintoism", ["shinto"]),
+        ("shizuoka", ["shizuoka, japan", "numazu, shizuoka, japan"]),
         ("shougi", ["shogi"]),
         ("shoujo ai", ["girls' love (gl)"]),
         ("shounen ai", ["boys' love (bl)"]),
-        ("small breasts", ["small tits"]),
+        ("slapstick", ["slapstick comedy"]),
+        ("small breasts", ["small tits", "flat chest", "pettanko"]),
+        ("space", ["outer space"]),
         ("spaceship", ["spacecraft"]),
+        ("sumo wrestling", ["sumo"]),
+        ("super power", ["special ability", "special power", "superhuman", "superhuman abilities"]),
+        ("swordplay", ["swordsplay"]),
         ("taishou period", ["taisho period"]),
+        ("tarot", ["tarot cards"]),
+        ("teacher x student", ["teacher student relationship", "teacher-student love"]),
         ("thievery", ["thief"]),
         ("time stop", ["time freeze"]),
+        ("tokugawa period", ["edo period"]),
         ("tokyo", ["tokyo, japan"]),
+        ("treasure hunting", ["treasure hunt"]),
         ("unidentified flying object", ["ufo"]),
+        ("university", ["college"]),
+        ("university", ["college"]),
+        ("urination", ["peeing", "pissing"]),
         ("virgin", ["loss of virginity", "virginity"]),
         ("virtual world", ["virtual reality", "vr"]),
         ("voyeurism", ["voyeur"]),
         ("water scarcity", ["water shortage"]),
         ("wolf", ["wolves"]),
         ("yokohama", ["yokohama, Kanagawa, Japan"]),
-        // TMDB <- TMDB Mappings
+        // TMDB <- TMDB Mappings                                                               // generally in order of popularity/usage
+        (null, ["adolescence", "adolescent", "youth"]),                                        // AniDB has a character tag called 'adolescent' for these
+        (null, ["car racing", "car race"]),
+        (null, ["censored", "censorship"]),
+        (null, ["classmates", "schoolmates"]),
+        (null, ["disability", "disabled person"]),
         (null, ["eroticism", "erotism"]),
+        (null, ["gay theme", "male homosexuality"]),
+        (null, ["hobby", "hobbies"]),
+        (null, ["horse racing", "horse race"]),
         (null, ["juvenile delinquent", "juvenile delinquency"]),
         (null, ["kiss", "kissing"]),
+        (null, ["lesbian", "female homosexuality"]),
+        (null, ["medieval", "medieval times"]),
+        (null, ["megami tensei", "megaten", "shin megami tensei"]),
+        (null, ["memories", "memory"]),
         (null, ["mixed martial arts (mma)", "mixed martial arts"]),
+        (null, ["mother", "mom"]),
+        (null, ["mourning", "grief"]),
+        (null, ["near future", "not too distant future"]),
         (null, ["online game", "online gaming"]),
-        (null, ["paranormal", "paranormal activity", "paranormal events", "paranormal investigation", "paranormal phenomena"]),
         (null, ["otome game", "otome"]),
+        (null, ["paranormal", "paranormal activity", "paranormal events", "paranormal investigation", "paranormal phenomena"]),
+        (null, ["past life", "past lives"]),
         (null, ["role playing game (rpg)", "rpg"]),
-        (null, ["romcom", "love comedy"])
+        (null, ["romcom", "love comedy"]),
+        (null, ["roommates", "flatmates", "shared house", "cohabitation", "living together"]), // 'under one roof' is also an AniDB tag with many matches
+        (null, ["schoolgirl", "student girl", "female student", "high school girl", "jk"]),    // AniDB has a character tag called 'student' for these
+        (null, ["semen", "cum"]),
+        (null, ["shapeshifting", "shapeshifter"]),
+        (null, ["street racing", "street race"]),
+        (null, ["supernatural power", "supernatural ability"]),
+        (null, ["sword fight", "sword duel"]),
+        (null, ["transsexual", "transsexuality"]),
+        (null, ["university student", "college student"]),
+        (null, ["wealthy family", "rich family"])
     }.SelectMany(rule => (rule.Anidb != null ? rule.Tmdb.Append(rule.Anidb) : rule.Tmdb).Select(t => (Key: t, Rule: (TmdbPrimary: rule.Tmdb[0], AnidbTarget: rule.Anidb)))).ToFrozenDictionary(x => x.Key, x => x.Rule, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Global cache mapping normalized tag keys to their preferred display representations and priorities to ensure cross-series deduplication.</summary>
