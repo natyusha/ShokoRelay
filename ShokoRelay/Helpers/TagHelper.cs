@@ -346,37 +346,25 @@ public static partial class TagHelper
 
     #region Title Casing Logic
 
-    /// <summary>Formats an individual word or hyphenated compound according to capitalization, uppercase acronym, lowercase suffix, and special casing rules.</summary>
-    /// <param name="word">The lowercase word token.</param>
-    /// <returns>The properly cased word string.</returns>
-    private static string FormatWord(string word)
+    /// <summary>Applies special case preferences for whole words and hyphenated suffixes.</summary>
+    /// <param name="word">The word token to format.</param>
+    /// <returns>The properly formatted word string.</returns>
+    private static string ApplySpecialCasing(string word)
     {
         if (s_forceSpecial.TryGetValue(word, out var special))
             return special;
-        if (s_forceLower.Contains(word))
-            return word;
-        if (s_forceUpper.Contains(word))
-            return word.ToUpperInvariant();
 
         if (word.Contains('-'))
         {
             var parts = word.Split('-');
-            for (int i = 0; i < parts.Length; i++)
-            {
-                if (string.IsNullOrEmpty(parts[i]))
-                    continue;
+            for (int i = 1; i < parts.Length; i++)
+                if (!string.IsNullOrEmpty(parts[i]) && s_forceSpecial.TryGetValue("-" + parts[i], out var hyphenSpecial))
+                    parts[i] = hyphenSpecial.TrimStart('-');
 
-                parts[i] =
-                    i > 0 && s_forceLower.Contains("-" + parts[i]) ? parts[i].ToLowerInvariant()
-                    : i > 0 && s_forceSpecial.TryGetValue("-" + parts[i], out var hyphenSpecial) ? hyphenSpecial.TrimStart('-')
-                    : s_forceSpecial.TryGetValue(parts[i], out var partSpecial) ? partSpecial
-                    : s_forceUpper.Contains(parts[i]) ? parts[i].ToUpperInvariant()
-                    : char.ToUpperInvariant(parts[i][0]) + parts[i][1..];
-            }
             return string.Join('-', parts);
         }
 
-        return char.ToUpperInvariant(word[0]) + word[1..];
+        return word;
     }
 
     /// <summary>Convert text to title case, honouring special word list logic.</summary>
@@ -387,8 +375,16 @@ public static partial class TagHelper
         if (string.IsNullOrWhiteSpace(text))
             return text;
 
-        // Primary Pass: Capitalize words, hyphenated compounds, and apply Upper/Lower/Special lists
-        string result = WordRegex().Replace(text.ToLowerInvariant(), m => FormatWord(m.Value));
+        // Primary Pass: Capitalize words and apply Upper/Lower lists
+        string result = WordRegex()
+            .Replace(
+                text.ToLowerInvariant(),
+                m =>
+                    s_forceLower.Contains(m.Value) ? m.Value.ToLowerInvariant()
+                    : s_forceUpper.Contains(m.Value) ? m.Value.ToUpperInvariant()
+                    // Capitalise all words accounting for apostrophes first
+                    : char.ToUpperInvariant(m.Value[0]) + m.Value[1..]
+            );
 
         // Force capitalise the first character no matter what
         result = char.ToUpperInvariant(result[0]) + result[1..];
@@ -398,6 +394,8 @@ public static partial class TagHelper
         if (lastSpaceIndex >= 0 && lastSpaceIndex < result.Length - 1)
             result = result[..(lastSpaceIndex + 1)] + char.ToUpperInvariant(result[lastSpaceIndex + 1]) + result[(lastSpaceIndex + 2)..];
 
+        // Apply special case preferences for whole words and hyphenated suffixes as the absolute final step
+        result = WordRegex().Replace(result, m => ApplySpecialCasing(m.Value));
         return result;
     }
 
