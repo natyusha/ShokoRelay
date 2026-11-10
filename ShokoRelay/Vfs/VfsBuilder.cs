@@ -778,6 +778,14 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
             return;
         }
 
+        // Safety verification: Prevent wiping user media if VfsRootPath was accidentally set to an existing non-VFS media directory
+        string marker = Path.Combine(path, ".ignore");
+        if (!File.Exists(marker) && Directory.EnumerateFileSystemEntries(path).Any(e => !File.GetAttributes(e).HasFlag(FileAttributes.ReparsePoint)))
+        {
+            logger.LogError("VFS: Aborting cleanup! Path '{Path}' contains non-symlink data and lacks a .ignore marker. Verify VFS Root Path settings.", path);
+            return;
+        }
+
         try
         {
             var cleanSw = Stopwatch.StartNew();

@@ -379,19 +379,18 @@ public class PlaybackConfig
 
 #region Advanced Config
 
-
 /// <summary>Low-level path and system configuration.</summary>
 public class AdvancedConfig
 {
     /// <summary>The base Shoko server URL as defined by the user.</summary>
     [Display(Name = "Shoko Server URL", Description = "A URL and port that Plex can access Shoko server from")]
-    [RegularExpression(@"^https?://[a-zA-Z0-9.-]+(:\d+)?$", ErrorMessage = "Invalid URL format. Use http(s)://HOST:PORT")]
+    [RegularExpression(@"^https?://([a-zA-Z0-9.-]+|\[[a-fA-F0-9:]+\])(:\d+)?$", ErrorMessage = "Invalid URL format. Use http(s)://HOST:PORT")]
     [DefaultValue("")]
     public string ShokoServerUrl { get; set; } = "";
 
     /// <summary>The base Plex server URL as defined by the user.</summary>
     [Display(Name = "Plex Server URL", Description = "A URL and port used to communicate with Plex Media Server")]
-    [RegularExpression(@"^https?://[a-zA-Z0-9.-]+(:\d+)?$", ErrorMessage = "Invalid URL format. Use http(s)://HOST:PORT")]
+    [RegularExpression(@"^https?://([a-zA-Z0-9.-]+|\[[a-fA-F0-9:]+\])(:\d+)?$", ErrorMessage = "Invalid URL format. Use http(s)://HOST:PORT")]
     [DefaultValue("")]
     public string PlexServerUrl { get; set; } = "";
 

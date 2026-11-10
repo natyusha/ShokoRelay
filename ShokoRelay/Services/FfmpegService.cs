@@ -28,15 +28,14 @@ public sealed class FfmpegService(string pluginDirectory, string applicationPath
     /// <summary>The root directory of the plugin.</summary>
     private readonly string _pluginDirectory = pluginDirectory;
 
+    /// <summary>The parent directory of the Shoko Server executable.</summary>
+    private readonly string _applicationPath = applicationPath;
+
+    /// <summary>The Shoko Server data directory.</summary>
+    private readonly string _dataPath = dataPath;
+
     /// <summary>The current working directory for FFmpeg process execution.</summary>
     private string _workingDirectory = pluginDirectory;
-
-    /// <summary>A list of potential directories to search for FFmpeg binaries.</summary>
-    private readonly List<string> _utilitiesDirectories =
-    [
-        .. !string.IsNullOrWhiteSpace(applicationPath) && Directory.Exists(Path.Combine(applicationPath, "Utilities", "FFmpeg")) ? new[] { Path.Combine(applicationPath, "Utilities", "FFmpeg") } : [],
-        .. !string.IsNullOrWhiteSpace(dataPath) && Directory.Exists(Path.Combine(dataPath, "Utilities", "FFmpeg")) ? new[] { Path.Combine(dataPath, "Utilities", "FFmpeg") } : [],
-    ];
 
     #endregion
 
@@ -137,9 +136,13 @@ public sealed class FfmpegService(string pluginDirectory, string applicationPath
                     logger.LogWarning(ex, "FfmpegService: Failed to resolve configured FFmpeg path");
                 }
             }
-            foreach (var dir in _utilitiesDirectories)
-                if (Directory.Exists(dir))
-                    candidates.Add(dir);
+
+            // Dynamically inspect Shoko Utilities folders to find binaries placed after server start
+            if (!string.IsNullOrWhiteSpace(_applicationPath) && Path.Combine(_applicationPath, "Utilities", "FFmpeg") is { } appUtil && Directory.Exists(appUtil))
+                candidates.Add(appUtil);
+            if (!string.IsNullOrWhiteSpace(_dataPath) && Path.Combine(_dataPath, "Utilities", "FFmpeg") is { } dataUtil && Directory.Exists(dataUtil))
+                candidates.Add(dataUtil);
+
             if (Directory.Exists(_pluginDirectory))
                 candidates.Add(_pluginDirectory);
 

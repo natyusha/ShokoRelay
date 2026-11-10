@@ -39,7 +39,7 @@ public static class ContentRatingHelper
                 var name = t.Name?.Trim();
                 if (string.IsNullOrWhiteSpace(name))
                     continue;
-                if (t.GetType().GetProperty("Source")?.GetValue(t) is string srcVal && srcVal.Equals("User", StringComparison.OrdinalIgnoreCase))
+                if (t.ID.Source == MetadataSource.User)
                     continue;
                 if (!s_ratingTags.Contains(name))
                     continue;

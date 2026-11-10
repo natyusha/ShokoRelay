@@ -124,10 +124,11 @@ public class DashboardController(
     [HttpGet("theme.css")]
     public IActionResult GetDynamicThemeCss()
     {
-        string themeId = Settings.Advanced.SelectedTheme;
-        if (string.IsNullOrWhiteSpace(themeId) || themeId.Equals("default", StringComparison.OrdinalIgnoreCase))
+        string rawThemeId = Settings.Advanced.SelectedTheme;
+        if (string.IsNullOrWhiteSpace(rawThemeId) || rawThemeId.Equals("default", StringComparison.OrdinalIgnoreCase))
             return Content(string.Empty, "text/css");
 
+        string themeId = Path.GetFileName(rawThemeId);
         if (string.Equals(themeId, "shoko-gray", StringComparison.OrdinalIgnoreCase))
             return Content(
                 """

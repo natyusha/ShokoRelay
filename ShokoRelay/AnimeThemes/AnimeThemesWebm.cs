@@ -147,8 +147,8 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
                             using var videoResp = await httpClient.GetAsync(video.Link, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
                             videoResp.EnsureSuccessStatusCode();
 
-                            using var fs = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
-                            await videoResp.Content.CopyToAsync(fs, cancellationToken).ConfigureAwait(false);
+                            using (var fs = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                                await videoResp.Content.CopyToAsync(fs, cancellationToken).ConfigureAwait(false);
 
                             downloads.Add(video.Basename);
                             downloadedItems.Add((relPath, video.Basename));
@@ -157,6 +157,13 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
                         }
                         catch (HttpRequestException ex) when (ex.StatusCode is HttpStatusCode.ServiceUnavailable or HttpStatusCode.TooManyRequests)
                         {
+                            if (File.Exists(targetPath))
+                                try
+                                {
+                                    File.Delete(targetPath);
+                                }
+                                catch { }
+
                             logger.LogWarning("AnimeThemes WebM: Rate limited (503/429) on theme ID -> {ThemeId}. Waiting 90 seconds before retrying...", theme.Id);
                             await Task.Delay(TimeSpan.FromSeconds(90), cancellationToken).ConfigureAwait(false);
 
@@ -165,8 +172,8 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
                                 using var retryResp = await httpClient.GetAsync(video.Link, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
                                 retryResp.EnsureSuccessStatusCode();
 
-                                using var fs = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
-                                await retryResp.Content.CopyToAsync(fs, cancellationToken).ConfigureAwait(false);
+                                using (var fs = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                                    await retryResp.Content.CopyToAsync(fs, cancellationToken).ConfigureAwait(false);
 
                                 downloads.Add(video.Basename);
                                 downloadedItems.Add((relPath, video.Basename));
@@ -175,12 +182,26 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
                             }
                             catch (Exception retryEx)
                             {
+                                if (File.Exists(targetPath))
+                                    try
+                                    {
+                                        File.Delete(targetPath);
+                                    }
+                                    catch { }
+
                                 logger.LogWarning(retryEx, "AnimeThemes WebM: Failed to download theme ID -> {ThemeId}", theme.Id);
                                 throw new InvalidOperationException($"Task aborted. Rate limit retry failed for theme ID {theme.Id}: {retryEx.Message}");
                             }
                         }
                         catch (Exception ex)
                         {
+                            if (File.Exists(targetPath))
+                                try
+                                {
+                                    File.Delete(targetPath);
+                                }
+                                catch { }
+
                             errors++;
                             messages.Add($"Failed to download theme ID {theme.Id}: {ex.Message}");
                             logger.LogWarning(ex, "AnimeThemes WebM: Failed to download theme ID -> {ThemeId}", theme.Id);

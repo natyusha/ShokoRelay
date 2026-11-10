@@ -286,6 +286,13 @@ public class ConfigProvider
     {
         ApplyDefaultValues(settings);
         NormalizeVfsRoots(settings);
+
+        // Sanitize server URLs before validation to prevent trailing slashes from failing the regex
+        if (!string.IsNullOrWhiteSpace(settings.Advanced.ShokoServerUrl))
+            settings.Advanced.ShokoServerUrl = settings.Advanced.ShokoServerUrl.Trim().TrimEnd('/');
+        if (!string.IsNullOrWhiteSpace(settings.Advanced.PlexServerUrl))
+            settings.Advanced.PlexServerUrl = settings.Advanced.PlexServerUrl.Trim().TrimEnd('/');
+
         if (!Validator.TryValidateObject(settings, new ValidationContext(settings), null, true))
             throw new ArgumentException("Config validation failed.");
         NormalizePathMappings(settings);
@@ -512,29 +519,38 @@ public class ConfigProvider
     {
         if (settings.Advanced.PathMappings.Count == 0)
             return;
-        settings.Advanced.PathMappings = settings.Advanced.PathMappings.ToDictionary(
-            k =>
+
+        var mapped = settings.Advanced.PathMappings.Select(kvp =>
+        {
+            string n = VfsShared.NormalizeSeparators(kvp.Key).Trim();
+            string key = n;
+            try
             {
-                string n = VfsShared.NormalizeSeparators(k.Key).Trim();
-                try
-                {
-                    return Path.IsPathRooted(n) ? Path.GetFullPath(n).TrimEnd(Path.DirectorySeparatorChar) : n.TrimEnd(Path.DirectorySeparatorChar);
-                }
-                catch
-                {
-                    return n;
-                }
-            },
-            v => (TextHelper.NormalizePathForPlex(v.Value.Trim()) is var p && !p.StartsWith('/') && !p.Contains(':') && !p.StartsWith("//", StringComparison.Ordinal)) ? "/" + p : p
-        );
+                key = Path.IsPathRooted(n) ? Path.GetFullPath(n).TrimEnd(Path.DirectorySeparatorChar) : n.TrimEnd(Path.DirectorySeparatorChar);
+            }
+            catch { }
+
+            string val = (TextHelper.NormalizePathForPlex(kvp.Value.Trim()) is var p && !p.StartsWith('/') && !p.Contains(':') && !p.StartsWith("//", StringComparison.Ordinal)) ? "/" + p : p;
+            return (Key: key, Value: val);
+        });
+
+        // Deduplicate keys before dictionary creation to prevent ArgumentException if duplicate paths were entered
+        settings.Advanced.PathMappings = mapped.DistinctBy(x => x.Key, VfsShared.PathComparer).ToDictionary(x => x.Key, x => x.Value, VfsShared.PathComparer);
     }
 
     /// <summary>Normalizes the subtitle language mappings to ensure they are case-insensitive while preserving priority order.</summary>
     /// <param name="settings">The relay configuration instance to update.</param>
     private static void NormalizeSubtitleMappings(RelayConfig settings)
     {
-        if (settings.Advanced.SubtitleLanguageMappings.Count > 0)
-            settings.Advanced.SubtitleLanguageMappings = new OrderedDictionary<string, string>(settings.Advanced.SubtitleLanguageMappings, StringComparer.OrdinalIgnoreCase);
+        if (settings.Advanced.SubtitleLanguageMappings.Count == 0)
+            return;
+
+        var dict = new OrderedDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in settings.Advanced.SubtitleLanguageMappings)
+            if (!dict.ContainsKey(entry.Key))
+                dict.Add(entry.Key, entry.Value);
+
+        settings.Advanced.SubtitleLanguageMappings = dict;
     }
 
     /// <summary>Normalizes comma-separated and newline-separated settings fields by trimming and removing duplicates.</summary>
@@ -549,6 +565,11 @@ public class ConfigProvider
         s.Advanced.FolderExclusions = string.Join(
             Environment.NewLine,
             (s.Advanced.FolderExclusions ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(VfsShared.NormalizeSeparators).Distinct(VfsShared.PathComparer)
+        );
+
+        s.Advanced.ManagedFolderExclusions = string.Join(
+            Environment.NewLine,
+            (s.Advanced.ManagedFolderExclusions ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase)
         );
 
         s.TagOverrides = string.Join(
