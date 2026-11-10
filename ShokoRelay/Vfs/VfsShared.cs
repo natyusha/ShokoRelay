@@ -59,7 +59,7 @@ internal static class VfsShared
         if (string.IsNullOrWhiteSpace(path))
             return null;
         string normalizedPath = NormalizeSeparators(path);
-        string relative = location.RelativePath?.TrimStart('/', '\\') ?? string.Empty;
+        string relative = location.RelativePath.TrimLeadingSlashes();
         if (!string.IsNullOrWhiteSpace(relative))
         {
             string normalizedRel = NormalizeSeparators(relative);
@@ -80,7 +80,7 @@ internal static class VfsShared
         string original = location.Path;
         if (!string.IsNullOrWhiteSpace(original) && File.Exists(original))
             return original;
-        string relative = location.RelativePath?.TrimStart('/', '\\') ?? string.Empty;
+        string relative = location.RelativePath.TrimLeadingSlashes();
         if (!string.IsNullOrWhiteSpace(relative))
         {
             string candidate = Path.Combine(importRoot, NormalizeSeparators(relative));
@@ -171,7 +171,7 @@ internal static class VfsShared
 
             var ignored = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ResolveRootFolderName(), ResolveMovieRootFolderName(), ResolveAnimeThemesFolderName(), ResolveCollectionImagesFolderName() };
             foreach (var folder in (settings.Advanced.FolderExclusions ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-                ignored.Add(folder.Trim('/', '\\'));
+                ignored.Add(folder.TrimSlashes());
 
             // If Plex Local Extras are enabled, automatically include the standard Plex extra subdirectories in the ignore list.
             // This prevents Shoko from attempting to index these files, removing the need for manual user intervention for show and season-level extras.
@@ -251,6 +251,16 @@ internal static class VfsShared
     /// <param name="path">The filesystem path to normalize.</param>
     /// <returns>A path string utilizing platform-specific directory separators.</returns>
     public static string NormalizeSeparators(string path) => path.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
+
+    /// <summary>Trims leading directory separators (both '/' and '\\') from a path string in a null-safe manner.</summary>
+    /// <param name="path">The path string to trim.</param>
+    /// <returns>A string without leading directory separators, or an empty string if null.</returns>
+    public static string TrimLeadingSlashes(this string? path) => path?.TrimStart('/', '\\') ?? string.Empty;
+
+    /// <summary>Trims leading and trailing directory separators (both '/' and '\\') from a path string in a null-safe manner.</summary>
+    /// <param name="path">The path string to trim.</param>
+    /// <returns>A string without leading or trailing directory separators, or an empty string if null.</returns>
+    public static string TrimSlashes(this string? path) => path?.Trim('/', '\\') ?? string.Empty;
 
     /// <summary>Checks if a path is safe to delete by ensuring it is not a filesystem root.</summary>
     /// <param name="path">The absolute path to evaluate.</param>

@@ -485,7 +485,7 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
                                     )
                                     .Select(entry =>
                                     {
-                                        string relPath = entry.FilePath.TrimStart('/', '\\');
+                                        string relPath = entry.FilePath.TrimLeadingSlashes();
                                         string? src = AnimeThemesHelper.ResolveThemeSourcePath(relPath, root, themeRootName);
                                         if (src == null)
                                             return null;

@@ -359,7 +359,7 @@ public class AnimeThemesController(
                     if (localSeriesWithFiles.Contains(entry.AniDbId))
                         continue;
 
-                    string normRel = entry.FilePath.TrimStart('/', '\\').Replace('\\', '/');
+                    string normRel = entry.FilePath.TrimLeadingSlashes().Replace('\\', '/');
                     if (!physicalThemes.TryGetValue(normRel, out var absolutePath))
                         continue;
 

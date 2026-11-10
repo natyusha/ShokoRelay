@@ -566,7 +566,7 @@ public class ConfigProvider
             Environment.NewLine,
             (s.Advanced.FolderExclusions ?? "")
                 .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Select(x => x.Trim('/', '\\'))
+                .Select(x => x.TrimSlashes())
                 .Where(x => x.Length > 0)
                 .Distinct(VfsShared.PathComparer)
         );

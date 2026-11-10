@@ -317,14 +317,12 @@ internal static partial class AnimeThemesHelper
     /// <summary>Serialize a single AnimeThemesMappingEntry to a comma-separated line.</summary>
     /// <param name="e">The entry to serialize.</param>
     /// <returns>A CSV formatted string line.</returns>
-    internal static string SerializeEntry(AnimeThemesMappingEntry e)
-    {
-        return $"{e.FilePath},{e.VideoId},{e.AniDbId},{(e.NC ? "1" : "0")},{e.Slug},{e.Version},"
-            + $"{TextHelper.EscapeCsvCommas(e.SongTitle)},{TextHelper.EscapeCsvCommas(e.ArtistName)},"
-            + $"{(e.Lyrics ? "1" : "0")},{(e.Subbed ? "1" : "0")},{(e.Uncen ? "1" : "0")},"
-            + $"{(e.NSFW ? "1" : "0")},{(e.Spoiler ? "1" : "0")},{e.Source},{e.Resolution},"
-            + $"{TextHelper.EscapeCsvCommas(e.Episodes)},{e.Overlap}";
-    }
+    internal static string SerializeEntry(AnimeThemesMappingEntry e) =>
+        $"{e.FilePath},{e.VideoId},{e.AniDbId},{(e.NC ? "1" : "0")},{e.Slug},{e.Version},"
+        + $"{TextHelper.EscapeCsvCommas(e.SongTitle)},{TextHelper.EscapeCsvCommas(e.ArtistName)},"
+        + $"{(e.Lyrics ? "1" : "0")},{(e.Subbed ? "1" : "0")},{(e.Uncen ? "1" : "0")},"
+        + $"{(e.NSFW ? "1" : "0")},{(e.Spoiler ? "1" : "0")},{e.Source},{e.Resolution},"
+        + $"{TextHelper.EscapeCsvCommas(e.Episodes)},{e.Overlap}";
 
     #endregion
 
@@ -375,7 +373,7 @@ internal static partial class AnimeThemesHelper
     /// <returns>An integer representing the chronological year.</returns>
     internal static int GetYearForSort(string path)
     {
-        var parts = path.TrimStart('/', '\\').Split(['/', '\\']);
+        var parts = path.TrimLeadingSlashes().Split(['/', '\\']);
         if (parts.Length > 0)
         {
             string y = parts[0];
@@ -489,14 +487,14 @@ internal static partial class AnimeThemesHelper
     /// <param name="themeRootFolder">The AnimeThemes folder name.</param>
     /// <returns>The full path or null if missing.</returns>
     internal static string? ResolveThemeSourcePath(string relativeFilePath, string importRoot, string themeRootFolder) =>
-        Path.Combine(importRoot, themeRootFolder, VfsShared.NormalizeSeparators(relativeFilePath.TrimStart('/', '\\'))) is var path && File.Exists(path) ? Path.GetFullPath(path) : null;
+        Path.Combine(importRoot, themeRootFolder, VfsShared.NormalizeSeparators(relativeFilePath.TrimLeadingSlashes())) is var path && File.Exists(path) ? Path.GetFullPath(path) : null;
 
     /// <summary>Builds the relative target path for a symlink to point back to the theme root.</summary>
     /// <param name="relativeFilePath">Relative path to the theme file.</param>
     /// <param name="themeRootFolder">The name of the AnimeThemes folder.</param>
     /// <returns>A relative path string.</returns>
     internal static string BuildThemeRelativeTarget(string relativeFilePath, string themeRootFolder) =>
-        VfsShared.NormalizeSeparators(Path.Combine("..", "..", "..", themeRootFolder, relativeFilePath.TrimStart('/', '\\')));
+        VfsShared.NormalizeSeparators(Path.Combine("..", "..", "..", themeRootFolder, relativeFilePath.TrimLeadingSlashes()));
 
     #endregion
 }
