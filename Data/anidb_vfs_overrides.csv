@@ -1,0 +1,65 @@
+### Shoko Relay VFS Overrides NN ###
+
+# General Rule: If an AniDB listing has has more than 40 episodes combine future seasons/specials
+# Special Rule: If a single entry special exists from before the main entry also combine it
+
+
+## Regular Series ##
+
+# Bishoujo Senshi Sailor Moon | Bishoujo Senshi Sailor Moon R | Bishoujo Senshi Sailor Moon S
+# Bishoujo Senshi Sailor Moon Super S | Bishoujo Senshi Sailor Moon Sailor Stars
+# https://www.themoviedb.org/tv/3570
+235,2539,2538,2540,2542
+
+# Boruto Naruto Next Generations | Boruto
+# https://www.themoviedb.org/tv/70881
+12661,13334
+
+# Black Clover (2017) | Black Clover
+# https://www.themoviedb.org/tv/73223/episode_group/5ea411e1bdc34c002625e6df
+12665,12351
+
+# Bleach | Bleach: Sennen Kessen Hen | Bleach: Sennen Kessen Hen - Ketsubetsu Tan
+# Bleach: Sennen Kessen Hen - Soukoku Tan | Bleach: Sennen Kessen Hen - Kashin Tan
+# https://www.themoviedb.org/tv/30984/episode_group/663fb548c10d4be3e80b2f6d
+2369,15449,17765,18220,19079
+
+# City Hunter | City Hunter 2 | City Hunter 3 | City Hunter '91 | City Hunter Special: The Secret Service
+# City Hunter Special: Kinkyuu Namachuukei!? Kyouakuhan Saeba Ryou no Saigo
+# City Hunter Special: Goodbye My Sweetheart
+# https://www.themoviedb.org/tv/36046
+942,1563,1564,1565,1569,1570,1571
+
+# Fairy Tail | Fairy Tail (2011) | Fairy Tail (2014) | Fairy Tail (2018)
+# https://www.themoviedb.org/tv/46261
+6662,8132,9980,13295
+
+# Gintama | Gintama' | Gintama' (2012) | Gintama' (2014) | Gintama (2015) | Gintama (2016) | Gintama.
+# Gintama. (2017) | Gintama. (2018)
+# https://www.themoviedb.org/tv/57041
+3468,8126,9427,10917,10993,11850,12419,13263,13917
+
+# Hokuto no Ken | Seikimatsu Kyuuseishu Densetsu: Hokuto no Ken 2
+# https://www.themoviedb.org/tv/56387
+386,984
+
+# Inuyasha | Inuyasha Kuroi Tessaiga | Inuyasha Kanketsuhen
+# https://www.themoviedb.org/tv/35610/episode_group/5d4db1bc7c6de30013a4820d
+144,7323,6716
+
+# Maison Ikkoku | Maison Ikkoku: Shiki Utsuriyuku Kisetsu no Naka de
+# Maison Ikkoku: Bangaihen Ikkokujima Nanpa Shimatsuki
+# https://www.themoviedb.org/tv/43018
+288,601,7963
+
+# Ranma ½ | Ranma ½ Nettou Hen | Ranma ½ (1993) | Ranma ½ Nettou Uta Gassen | Ranma ½ Special
+# Ranma ½ Super | Ranma ½ Akumu! Shunmin Kou
+# https://www.themoviedb.org/tv/57706/episode_group/61ae6fa8af85de0043620bba
+4576,193,405,6393,2995,2996,6141
+
+
+## Crossover Series ##
+
+# Akahori Gedou Hour Rabuge -> Zettai Seigi Love Pheromone | Sore Yuke! Gedou Otometai
+# https://www.themoviedb.org/tv/45398-akahori-gedou-hour-rabuge
+2840,2841
