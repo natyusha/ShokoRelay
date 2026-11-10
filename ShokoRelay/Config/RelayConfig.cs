@@ -192,7 +192,7 @@ public class RelayConfig
     public string TmdbImageLanguage { get; set; } = "SHOKO";
 
     /// <summary>Whether to append prefixes like OVA to the end of titles.</summary>
-    [Display(Name = "Move Common Series Title Prefixes", Description = "Enable to append 'Gekijouban', 'OVA', etc. to the end of the series title, after an em dash '—'")]
+    [Display(Name = "Move Common Series Title Prefixes", Description = "Enable to append 'Gekijouban', 'OVA', etc. to the series title, after an em dash '—'")]
     [DefaultValue(true)]
     public bool MoveCommonSeriesTitlePrefixes { get; set; } = true;
 
@@ -207,17 +207,17 @@ public class RelayConfig
     public bool AssumedContentRatings { get; set; } = true;
 
     /// <summary>Whether to include staff in Plex's cast list.</summary>
-    [Display(Name = "Crew Listings", Description = "Enable to include staff listings at the end of Plex's Cast & Crew section")]
+    [Display(Name = "Crew Listings", Description = "Enable to append staff listings to Plex's Cast & Crew section")]
     [DefaultValue(true)]
     public bool CrewListings { get; set; } = true;
 
     /// <summary>Whether to include production companies and studios in Plex's cast list.</summary>
-    [Display(Name = "Company Listings", Description = "Enable to include production companies and studios at the end of Plex's Cast & Crew section")]
+    [Display(Name = "Company Listings", Description = "Enable to append production companies and studios to Plex's Cast & Crew section")]
     [DefaultValue(true)]
     public bool CompanyListings { get; set; } = true;
 
     /// <summary>Whether to set the group poster as the Plex collection poster.</summary>
-    [Display(Name = "Collection Images", Description = "Enable to set the primary series poster/logo/backdrop in a Shoko group as Plex collection images")]
+    [Display(Name = "Collection Images", Description = "Enable to apply the primary series images in a Shoko group to Plex collections")]
     [DefaultValue(true)]
     public bool CollectionImages { get; set; } = true;
 
@@ -257,7 +257,7 @@ public class RelayConfig
     public SummaryMode SummaryMode { get; set; } = SummaryMode.FullySanitize;
 
     /// <summary>The source for critic ratings.</summary>
-    [Display(Name = "Critic Rating Mode", Description = "Select the preferred source for generic critic ratings in Plex *used by 'Apply Critic Ratings'")]
+    [Display(Name = "Critic Rating Mode", Description = "Select the preferred source for generic critic ratings in Plex")]
     [DefaultValue(CriticRatingMode.AniDB)]
     public CriticRatingMode CriticRatingMode { get; set; } = CriticRatingMode.AniDB;
 
@@ -271,10 +271,10 @@ public class RelayConfig
     [DefaultValue(MinimumTagWeight.Zero)]
     public MinimumTagWeight MinimumTagWeight { get; set; } = MinimumTagWeight.Zero;
 
-    /// <summary>Comma-separated list of tags to exclude.</summary>
-    [Display(Name = "Tag Blacklist", Description = "A list of tags to exclude from series in Plex, comma separated")]
+    /// <summary>Comma-separated list of tags to exclude or merge.</summary>
+    [Display(Name = "Tag Overrides", Description = "A list of tags to exclude or merge, comma separated (see help for syntax)")]
     [DefaultValue("")]
-    public string TagBlacklist { get; set; } = "";
+    public string TagOverrides { get; set; } = "";
 }
 
 #endregion
@@ -401,22 +401,22 @@ public class AdvancedConfig
     public string PlexServerUrl { get; set; } = "";
 
     /// <summary>Directory mappings between Shoko and the working device.</summary>
-    [Display(Name = "Path Mappings", Description = "Mappings for working base paths to Shoko base paths. Enter one mapping per line")]
+    [Display(Name = "Path Mappings", Description = "Per line mappings for working base paths to Shoko base paths")]
     public Dictionary<string, string> PathMappings { get; set; } = [];
 
     /// <summary>Subtitle language mappings, in collision priority order.</summary>
-    [Display(Name = "Subtitle Language Mappings", Description = "Mappings for subtitle language codes. Enter one mapping per line")]
+    [Display(Name = "Subtitle Language Mappings", Description = "Per line mappings for subtitle language codes")]
     [VfsRebuild]
     public OrderedDictionary<string, string> SubtitleLanguageMappings { get; set; } = [];
 
     /// <summary>Folders to ignore when generating the VFS.</summary>
-    [Display(Name = "Folder Exclusions", Description = "Folders within Shoko destinations which you do not want VFS generation to consider. One per line")]
+    [Display(Name = "Folder Exclusions", Description = "Per line folder names which you do not want the VFS to generate")]
     [DefaultValue("")]
     [VfsRebuild]
     public string FolderExclusions { get; set; } = "";
 
     /// <summary>Shoko managed folders to exclude from VFS generation.</summary>
-    [Display(Name = "Managed Folder Exclusions", Description = "Shoko Managed Folder names or IDs to exclude from VFS generation. One per line")]
+    [Display(Name = "Managed Folder Exclusions", Description = "Per line Shoko Managed Folder names or IDs to ignore")]
     [DefaultValue("")]
     [VfsRebuild]
     public string ManagedFolderExclusions { get; set; } = "";
@@ -427,7 +427,7 @@ public class AdvancedConfig
     public bool DeferVfsCreationUntilFixup { get; set; } = false;
 
     /// <summary>Whether to sync unique local images and Plex-generated episode thumbnails back to Shoko and mark them as preferred.</summary>
-    [Display(Name = "Plex Image Sync", Description = "Enable to automatically upload unique local images and Plex's generated episode thumbnails back to Shoko")]
+    [Display(Name = "Plex Image Sync", Description = "Enable to automatically upload Plex's unique local and generated images back to Shoko")]
     [DefaultValue(false)]
     public bool EnableImageSync { get; set; } = false;
 
@@ -450,7 +450,7 @@ public class AdvancedConfig
     public bool PlexLocalExtras { get; set; } = true;
 
     /// <summary>Whether to append metadata tags to AnimeThemes filenames.</summary>
-    [Display(Name = "Append AnimeThemes Tags", Description = "Enable to append attributes like [SPOIL, SUBS] to AnimeThemes VFS filenames (displayed in Plex)")]
+    [Display(Name = "Append AnimeThemes Tags", Description = "Enable to append attributes like [SPOIL, SUBS] to AnimeThemes VFS filenames")]
     [DefaultValue(true)]
     [VfsRebuild]
     public bool AnimeThemesAppendTags { get; set; } = true;
@@ -468,7 +468,7 @@ public class AdvancedConfig
     public MovieGenerationMode MovieGenerationMode { get; set; } = MovieGenerationMode.Disabled;
 
     /// <summary>Minimum overlap level for AnimeThemes.</summary>
-    [Display(Name = "AnimeThemes Overlap Level", Description = "The amount of overlap allowed for AnimeThemes .webm files to be added to the VFS")]
+    [Display(Name = "AnimeThemes Overlap Level", Description = "The amount of overlap for themes to be included")]
     [DefaultValue(OverlapLevel.All)]
     [VfsRebuild]
     public OverlapLevel AnimeThemesOverlapLevel { get; set; } = OverlapLevel.All;
@@ -480,58 +480,58 @@ public class AdvancedConfig
     public string VfsRootPath { get; set; } = ShokoRelayConstants.FolderVfsDefault;
 
     /// <summary>Folder name for the movie specific VFS root.</summary>
-    [Display(Name = "Movie VFS Root Path", Description = "The folder name used for the movie specific VFS (if enabled)")]
+    [Display(Name = "Movie VFS Root Path", Description = "The folder name used for the movie specific VFS, if enabled")]
     [DefaultValue(ShokoRelayConstants.FolderMoviesDefault)]
     [VfsRebuild]
     public string MovieVfsRootPath { get; set; } = ShokoRelayConstants.FolderMoviesDefault;
 
     /// <summary>Folder name for downloaded themes.</summary>
-    [Display(Name = "AnimeThemes Root Path", Description = "The location of AnimeThemes .webm files inside each import root")]
+    [Display(Name = "AnimeThemes Root Path", Description = "Per root location of AnimeThemes .webm files")]
     [DefaultValue(ShokoRelayConstants.FolderAnimeThemesDefault)]
     [VfsRebuild]
     public string AnimeThemesRootPath { get; set; } = ShokoRelayConstants.FolderAnimeThemesDefault;
 
     /// <summary>Folder name for custom collection images.</summary>
-    [Display(Name = "Collection Images Root Path", Description = "The location of custom local collection images inside each import root")]
+    [Display(Name = "Collection Images Root Path", Description = "Per root location of custom local collection images")]
     [DefaultValue(ShokoRelayConstants.FolderCollectionImagesDefault)]
     public string CollectionImagesRootPath { get; set; } = ShokoRelayConstants.FolderCollectionImagesDefault;
 
     /// <summary>Path to Plex's Metadata directory.</summary>
-    [Display(Name = "Plex Data Path", Description = "An optional setting for Plex's Metadata directory *must be accessible by Shoko")]
+    [Display(Name = "Plex Data Path", Description = "Plex's Metadata directory path *must be accessible by Shoko")]
     [DefaultValue("")]
     public string PlexMetadataPath { get; set; } = "";
 
     /// <summary>Path to FFmpeg binaries.</summary>
-    [Display(Name = "FFmpeg Path", Description = "An optional folder for FFmpeg/FFprobe. Leave empty to use 'Utilities/FFmpeg', or the plugin root / PATH")]
+    [Display(Name = "FFmpeg Path", Description = "Leave empty to use 'Utilities/FFmpeg', or the plugin root / PATH")]
     [DefaultValue("")]
     public string FFmpegPath { get; set; } = "";
 
     /// <summary>Percentage threshold for safely emptying Plex trash.</summary>
-    [Display(Name = "Empty Plex Trash Threshold", Description = "The percent threshold (from 1-100) for emptying Plex's trash. Set to 0 to disable")]
+    [Display(Name = "Empty Plex Trash Threshold", Description = "A percent threshold (from 1-100). Set to 0 to disable")]
     [Range(0, 100, ErrorMessage = "Empty Plex Trash Threshold must be between 0 and 100")]
     [DefaultValue(1)]
     public int EmptyPlexTrashThreshold { get; set; } = 1;
 
     /// <summary>Plex RefreshMetadataAsync delay.</summary>
-    [Display(Name = "Plex Fixup Delay", Description = "The delay (in minutes) after the VFS auto adds a file to regenerate it and force refresh series metadata")]
+    [Display(Name = "Plex Fixup Delay", Description = "A delay (in minutes) post VFS file add *req. 'Force Partial Scans'")]
     [Range(1, 60, ErrorMessage = "Plex Fixup Delay must be between 1 and 60")]
     [DefaultValue(2)]
     public int PlexFixupDelay { get; set; } = 2;
 
     /// <summary>Plex partial scan delay, and rating key polling interval for deferred mode.</summary>
-    [Display(Name = "Plex Scan Delay", Description = "The delay (in seconds) after the VFS adds a file to trigger a partial scan in Plex *req. 'Force Partial Scans'")]
+    [Display(Name = "Plex Scan Delay", Description = "A delay (in seconds) post VFS file add *req. 'Force Partial Scans'")]
     [Range(1, 60, ErrorMessage = "Plex Scan Delay must be between 1 and 60")]
-    [DefaultValue(10)]
+    [DefaultValue(5)]
     public int PlexScanDelay { get; set; } = 10;
 
     /// <summary>Task parallelism limit.</summary>
-    [Display(Name = "Parallelism", Description = "The maximum number of concurrent operations *used by VFS and AnimeThemes batch operations")]
+    [Display(Name = "Parallelism", Description = "The concurrent operations cap *used by VFS and AnimeThemes batching")]
     [Range(1, 16, ErrorMessage = "Parallelism must be between 1 and 16")]
     [DefaultValue(4)]
     public int Parallelism { get; set; } = 4;
 
     /// <summary>The selected Shoko WebUI theme ID.</summary>
-    [Display(Name = "Plugin Theme", Description = "Select a Shoko WebUI theme to apply its colour scheme to the dashboard/player/browser")]
+    [Display(Name = "Plugin Theme", Description = "Apply a Shoko WebUI theme to the dashboard/player/browser")]
     [DefaultValue("default")]
     public string SelectedTheme { get; set; } = "default";
 

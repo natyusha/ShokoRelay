@@ -65,187 +65,258 @@ public static partial class TagHelper
     }.ToFrozenDictionary(s => s, s => s, StringComparer.OrdinalIgnoreCase);
 
     // csharpier-ignore
-    /// <summary>Explicit tag merges mapping synonymous TMDB keywords/tags to a primary TMDB tag and an optional canonical AniDB tag (with TMDB Fallback).</summary>
+    /// <summary>Explicit tag merges mapping synonymous keywords/tags to a primary tag representation.</summary>
     /// <remarks>
     /// - This section will likely be expanded fairly often and can be quite subjective
     /// - If AniDB groups the tags via aliases they will also be grouped here by the rules below
     /// - Outside of the stock AniDB groupings it is best to avoid merging things here if there is any ambiguity
     /// </remarks>
-    private static readonly FrozenDictionary<string, (string TmdbPrimary, string? AnidbTarget)> s_tagMerges = new List<(string? Anidb, string[] Tmdb)>
+    private static readonly FrozenDictionary<string, string> s_defaultTagMerges = new string[][]
     {
         // AniDB <- TMDB Mappings                                                              // Generally uses the primary tag entry
-        ("3d cg animation", ["3d animation", "cg animated"]),
-        ("absurdist humour", ["absurd", "absurdist"]),
-        ("afterlife", ["life after death"]),
-        ("android", ["humanoid robot"]),
-        ("artificial intelligence", ["artificial intelligence (a.i.)"]),
-        ("assassin", ["hitman"]),
-        ("association football", ["football (soccer)"]),
-        ("attempted rape", ["rape attempt"]),
-        ("bisexual", ["bisexuality"]),
-        ("bishoujo", ["bishojo"]),
-        ("black humour", ["black humor"]),
-        ("body swap", ["body exchange"]),
-        ("boobjob", ["tit fucking", "titty fuck"]),
-        ("brainwashing", ["mind control", "hypnosis", "mesmerization"]),
-        ("bukkake", ["bukakke"]),
-        ("cafe", ["coffee shop"]),
-        ("cat person", ["cat people"]),
-        ("cheating", ["cheat"]),
-        ("chinese production", ["donghua"]),
-        ("combat", ["fight", "fighting"]),
-        ("coming of age", ["growing up"]),
-        ("corrupt", ["corruption"]),
-        ("cosplaying", ["cosplay", "cosplayer"]),
-        ("countryside", ["rural", "rural area", "rural town"]),                                // 'rural town' is also a separate series tag on AniDB
-        ("creampie", ["nakadashi"]),
-        ("cross-dressing", ["cross dresser"]),
-        ("curse", ["cursed"]),
-        ("cute girls doing cute things", ["cgdct"]),
-        ("cyberpunk", ["cyber"]),
-        ("daikaijuu", ["kaiju", "giant monster"]),
-        ("dancing", ["dance"]),
-        ("dark-skinned girl", ["dark skin girl"]),
-        ("deception", ["deceit"]),
-        ("deflowering", ["defloration"]),
-        ("deity", ["god", "goddess"]),                                                         // AniDB groups both genders
-        ("delinquent", ["delinquency"]),
-        ("demon", ["youkai", "Oni", "Ogre"]),
-        ("dildos - vibrators", ["dildo", "dildos", "vibrator"]),
-        ("dominatrix", ["femdom", "female domination"]),
-        ("dystopia", ["dystopian future"]),
-        ("elf", ["elves"]),
-        ("fellatio", ["blowjob", "blow job"]),
-        ("genetic modification", ["genetic engineering"]),
-        ("hairdresser", ["hairstylist"]),
-        ("heavy metal music", ["heavy metal"]),
-        ("hokkaido", ["hokkaido, japan"]),
-        ("homemaker", ["housewife", "housewives"]),
-        ("horse riding", ["horseback riding"]),
-        ("human cannibalism", ["eating of humans"]),
-        ("immortality", ["immortal"]),
-        ("isekai", ["another world", "other world", "otherworld"]),
-        ("ishikawa", ["ishikawa, japan"]),
-        ("journey", ["travel", "traveling", "voyage"]),
-        ("juujin", ["furry"]),
-        ("kidnapping", ["kidnapped"]),
-        ("kitsune", ["fox spirit"]),
-        ("korean-japanese co-production", ["japanese-korean coproduction"]),
-        ("kumamoto", ["kumamoto, japan"]),
-        ("kyoto", ["kyoto, japan"]),
-        ("large breasts", ["big tits", "big boobs", "big breast"]),
-        ("loli", ["lolis", "loli type"]),
-        ("london", ["london, england"]),
-        ("lonely", ["loneliness"]),
-        ("love between enemies", ["enemies to lovers"]),
-        ("mafia", ["yakuza", "organized crime"]),
-        ("magic", ["wizard", "sorcerer", "mage", "magician"]),
-        ("magical girl", ["magic girl"]),
-        ("maze", ["labyrinth"]),
-        ("mecha", ["mechs"]),
-        ("mobile phone", ["cellphone", "smartphone"]),
-        ("multiple personality disorder", ["multiple personality", "double personality", "split personality", "dissociative identities"]),
-        ("nagasaki", ["nagasaki, japan"]),
-        ("nazis", ["nazi"]),
-        ("netorare", ["netorare (ntr)", "ntr"]),
-        ("ninja", ["shinobi", "female ninja", "kunoichi"]),                                    // AniDB groups both genders
-        ("office lady", ["office lady (ol)"]),
-        ("oral", ["oral sex"]),
-        ("osaka", ["osaka, japan"]),
-        ("pantsu", ["panties"]),
-        ("parallel world", ["parallel universe"]),
-        ("paramilitary", ["paramilitary organization"]),
-        ("parenting", ["parenthood"]),
-        ("paris", ["paris, france"]),
-        ("perverted", ["pervert", "pervertion"]),
-        ("point of view", ["pov (point of view)"]),
-        ("police", ["cop", "police officer"]),
-        ("post-apocalyptic", ["post-apocalyptic future"]),
-        ("racism", ["racist"]),
-        ("reincarnation", ["rebirth"]),
-        ("revenge", ["vengeance"]),
-        ("rpg", ["role playing game (rpg)"]),
-        ("salaryman", ["office worker"]),
-        ("science fiction", ["sci-fi", "sci fi"]),
-        ("scissoring", ["tribadism"]),
-        ("secret organisation", ["secret organization"]),
-        ("seiyuu", ["voice acting"]),
-        ("sengoku period", ["warring states period"]),
-        ("sex", ["sexual intercourse"]),
-        ("sex change", ["gender swap"]),
-        ("sexual humour", ["sexual humor"]),
-        ("shintoism", ["shinto"]),
-        ("shizuoka", ["shizuoka, japan", "numazu, shizuoka, japan"]),
-        ("shougi", ["shogi"]),
-        ("shoujo ai", ["girls' love (gl)"]),
-        ("shounen ai", ["boys' love (bl)"]),
-        ("slapstick", ["slapstick comedy"]),
-        ("small breasts", ["small tits", "flat chest", "pettanko"]),
-        ("space", ["outer space"]),
-        ("spaceship", ["spacecraft"]),
-        ("sumo wrestling", ["sumo"]),
-        ("super power", ["special ability", "special power", "superhuman", "superhuman abilities"]),
-        ("swordplay", ["swordsplay"]),
-        ("taishou period", ["taisho period"]),
-        ("tarot", ["tarot cards"]),
-        ("teacher x student", ["teacher student relationship", "teacher-student love"]),
-        ("thievery", ["thief"]),
-        ("time stop", ["time freeze"]),
-        ("tokugawa period", ["edo period"]),
-        ("tokyo", ["tokyo, japan"]),
-        ("treasure hunting", ["treasure hunt"]),
-        ("unidentified flying object", ["ufo"]),
-        ("university", ["college"]),
-        ("urination", ["peeing", "pissing"]),
-        ("virgin", ["loss of virginity", "virginity"]),
-        ("virtual world", ["virtual reality", "vr"]),
-        ("voyeurism", ["voyeur"]),
-        ("water scarcity", ["water shortage"]),
-        ("wolf", ["wolves"]),
-        ("yokohama", ["yokohama, Kanagawa, Japan"]),
+        ["3d cg animation", "3d animation", "cg animated"],
+        ["absurdist humour", "absurd", "absurdist"],
+        ["afterlife", "life after death"],
+        ["android", "humanoid robot"],
+        ["artificial intelligence", "artificial intelligence (a.i.)"],
+        ["assassin", "hitman"],
+        ["association football", "football (soccer)"],
+        ["attempted rape", "rape attempt"],
+        ["bisexual", "bisexuality"],
+        ["bishoujo", "bishojo"],
+        ["black humour", "black humor"],
+        ["body swap", "body exchange"],
+        ["boobjob", "tit fucking", "titty fuck"],
+        ["brainwashing", "mind control", "hypnosis", "mesmerization"],
+        ["bukkake", "bukakke"],
+        ["cafe", "coffee shop"],
+        ["cat person", "cat people"],
+        ["cheating", "cheat"],
+        ["chinese production", "donghua"],
+        ["combat", "fight", "fighting"],
+        ["coming of age", "growing up"],
+        ["corrupt", "corruption"],
+        ["cosplaying", "cosplay", "cosplayer"],
+        ["countryside", "rural", "rural area", "rural town"],                                  // 'rural town' is also a separate series tag on AniDB
+        ["creampie", "nakadashi"],
+        ["cross-dressing", "cross dresser"],
+        ["curse", "cursed"],
+        ["cute girls doing cute things", "cgdct"],
+        ["cyberpunk", "cyber"],
+        ["daikaijuu", "kaiju", "giant monster"],
+        ["dancing", "dance"],
+        ["dark-skinned girl", "dark skin girl"],
+        ["deception", "deceit"],
+        ["deflowering", "defloration"],
+        ["deity", "god", "goddess"],                                                           // AniDB groups both genders
+        ["delinquent", "delinquency"],
+        ["demon", "youkai", "Oni", "Ogre"],
+        ["dildos - vibrators", "dildo", "dildos", "vibrator"],
+        ["dominatrix", "femdom", "female domination"],
+        ["dystopia", "dystopian future"],
+        ["elf", "elves"],
+        ["fellatio", "blowjob", "blow job"],
+        ["genetic modification", "genetic engineering"],
+        ["hairdresser", "hairstylist"],
+        ["heavy metal music", "heavy metal"],
+        ["hokkaido", "hokkaido, japan"],
+        ["homemaker", "housewife", "housewives"],
+        ["horse riding", "horseback riding"],
+        ["human cannibalism", "eating of humans"],
+        ["immortality", "immortal"],
+        ["isekai", "another world", "other world", "otherworld"],
+        ["ishikawa", "ishikawa, japan"],
+        ["journey", "travel", "traveling", "voyage"],
+        ["juujin", "furry"],
+        ["kidnapping", "kidnapped"],
+        ["kitsune", "fox spirit"],
+        ["korean-japanese co-production", "japanese-korean coproduction"],
+        ["kumamoto", "kumamoto, japan"],
+        ["kyoto", "kyoto, japan"],
+        ["large breasts", "big tits", "big boobs", "big breast"],
+        ["loli", "lolis", "loli type"],
+        ["london", "london, england"],
+        ["lonely", "loneliness"],
+        ["love between enemies", "enemies to lovers"],
+        ["mafia", "yakuza", "organized crime"],
+        ["magic", "wizard", "sorcerer", "mage", "magician"],
+        ["magical girl", "magic girl"],
+        ["maze", "labyrinth"],
+        ["mecha", "mechs"],
+        ["mobile phone", "cellphone", "smartphone"],
+        ["multiple personality disorder", "multiple personality", "double personality", "split personality", "dissociative identities"],
+        ["nagasaki", "nagasaki, japan"],
+        ["nazis", "nazi"],
+        ["netorare", "netorare (ntr)", "ntr"],
+        ["ninja", "shinobi", "female ninja", "kunoichi"],                                      // AniDB groups both genders
+        ["office lady", "office lady (ol)"],
+        ["oral", "oral sex"],
+        ["osaka", "osaka, japan"],
+        ["pantsu", "panties"],
+        ["parallel world", "parallel universe"],
+        ["paramilitary", "paramilitary organization"],
+        ["parenting", "parenthood"],
+        ["paris", "paris, france"],
+        ["perverted", "pervert", "pervertion"],
+        ["point of view", "pov (point of view)"],
+        ["police", "cop", "police officer"],
+        ["post-apocalyptic", "post-apocalyptic future"],
+        ["racism", "racist"],
+        ["reincarnation", "rebirth"],
+        ["revenge", "vengeance"],
+        ["rpg", "role playing game (rpg)"],
+        ["salaryman", "office worker"],
+        ["science fiction", "sci-fi", "sci fi"],
+        ["scissoring", "tribadism"],
+        ["secret organisation", "secret organization"],
+        ["seiyuu", "voice acting"],
+        ["sengoku period", "warring states period"],
+        ["sex", "sexual intercourse"],
+        ["sex change", "gender swap"],
+        ["sexual humour", "sexual humor"],
+        ["shintoism", "shinto"],
+        ["shizuoka", "shizuoka, japan", "numazu, shizuoka, japan"],
+        ["shougi", "shogi"],
+        ["shoujo ai", "girls' love (gl)"],
+        ["shounen ai", "boys' love (bl)"],
+        ["slapstick", "slapstick comedy"],
+        ["small breasts", "small tits", "flat chest", "pettanko"],
+        ["space", "outer space"],
+        ["spaceship", "spacecraft"],
+        ["sumo wrestling", "sumo"],
+        ["super power", "special ability", "special power", "superhuman", "superhuman abilities"],
+        ["swordplay", "swordsplay"],
+        ["taishou period", "taisho period"],
+        ["tarot", "tarot cards"],
+        ["teacher x student", "teacher student relationship", "teacher-student love"],
+        ["thievery", "thief"],
+        ["time stop", "time freeze"],
+        ["tokugawa period", "edo period"],
+        ["tokyo", "tokyo, japan"],
+        ["treasure hunting", "treasure hunt"],
+        ["unidentified flying object", "ufo"],
+        ["university", "college"],
+        ["urination", "peeing", "pissing"],
+        ["virgin", "loss of virginity", "virginity"],
+        ["virtual world", "virtual reality", "vr"],
+        ["voyeurism", "voyeur"],
+        ["water scarcity", "water shortage"],
+        ["wolf", "wolves"],
+        ["yokohama", "yokohama, Kanagawa, Japan"],
         // TMDB <- TMDB Mappings                                                               // generally in order of popularity/usage
-        (null, ["car racing", "car race"]),
-        (null, ["censored", "censorship"]),
-        (null, ["classmates", "schoolmates"]),
-        (null, ["disability", "disabled person"]),
-        (null, ["eroticism", "erotism"]),
-        (null, ["gay theme", "male homosexuality"]),
-        (null, ["hobby", "hobbies"]),
-        (null, ["horse racing", "horse race"]),
-        (null, ["juvenile delinquent", "juvenile delinquency"]),
-        (null, ["kiss", "kissing"]),
-        (null, ["lesbian", "female homosexuality"]),
-        (null, ["medieval", "medieval times"]),
-        (null, ["megami tensei", "megaten", "shin megami tensei"]),
-        (null, ["memories", "memory"]),
-        (null, ["mixed martial arts (mma)", "mixed martial arts"]),
-        (null, ["mother", "mom"]),
-        (null, ["mourning", "grief"]),
-        (null, ["near future", "not too distant future"]),
-        (null, ["online game", "online gaming"]),
-        (null, ["otome game", "otome"]),
-        (null, ["paranormal", "paranormal activity", "paranormal events", "paranormal investigation", "paranormal phenomena"]),
-        (null, ["past life", "past lives"]),
-        (null, ["romcom", "love comedy"]),
-        (null, ["roommates", "flatmates", "shared house", "cohabitation", "living together"]), // 'under one roof' is also an AniDB tag with many matches
-        (null, ["schoolgirl", "student girl", "female student", "high school girl", "jk"]),    // AniDB has a character tag called 'student' for these
-        (null, ["semen", "cum"]),
-        (null, ["shapeshifting", "shapeshifter"]),
-        (null, ["street racing", "street race"]),
-        (null, ["supernatural power", "supernatural ability"]),
-        (null, ["sword fight", "sword duel"]),
-        (null, ["teenager", "teenage", "adolescence", "adolescent", "youth"]),                 // AniDB has a character tag called 'adolescent' for these
-        (null, ["transsexual", "transsexuality"]),
-        (null, ["university student", "college student"]),
-        (null, ["wealthy family", "rich family"])
-    }.SelectMany(rule => (rule.Anidb != null ? rule.Tmdb.Append(rule.Anidb) : rule.Tmdb).Select(t => (Key: t, Rule: (TmdbPrimary: rule.Tmdb[0], AnidbTarget: rule.Anidb)))).ToFrozenDictionary(x => x.Key, x => x.Rule, StringComparer.OrdinalIgnoreCase);
+        ["car racing", "car race"],
+        ["censored", "censorship"],
+        ["classmates", "schoolmates"],
+        ["disability", "disabled person"],
+        ["eroticism", "erotism"],
+        ["gay theme", "male homosexuality"],
+        ["hobby", "hobbies"],
+        ["horse racing", "horse race"],
+        ["juvenile delinquent", "juvenile delinquency"],
+        ["kiss", "kissing"],
+        ["lesbian", "female homosexuality"],
+        ["medieval", "medieval times"],
+        ["megami tensei", "megaten", "shin megami tensei"],
+        ["memories", "memory"],
+        ["mixed martial arts (mma)", "mixed martial arts"],
+        ["mother", "mom"],
+        ["mourning", "grief"],
+        ["near future", "not too distant future"],
+        ["online game", "online gaming"],
+        ["otome game", "otome"],
+        ["paranormal", "paranormal activity", "paranormal events", "paranormal investigation", "paranormal phenomena"],
+        ["past life", "past lives"],
+        ["romcom", "love comedy"],
+        ["roommates", "flatmates", "shared house", "cohabitation", "living together"],         // 'under one roof' is also an AniDB tag with many matches
+        ["schoolgirl", "student girl", "female student", "high school girl", "jk"],            // AniDB has a character tag called 'student' for these
+        ["semen", "cum"],
+        ["shapeshifting", "shapeshifter"],
+        ["street racing", "street race"],
+        ["supernatural power", "supernatural ability"],
+        ["sword fight", "sword duel"],
+        ["teenager", "teenage", "adolescence", "adolescent", "youth"],                         // AniDB has a character tag called 'adolescent' for these
+        ["transsexual", "transsexuality"],
+        ["university student", "college student"],
+        ["wealthy family", "rich family"]
+    }.SelectMany(rule => rule.Skip(1).Select(t => (Key: t, Target: rule[0]))).ToFrozenDictionary(x => x.Key, x => x.Target, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Global cache mapping normalized tag keys to their preferred display representations and priorities to ensure cross-series deduplication.</summary>
     private static readonly ConcurrentDictionary<string, (string DisplayName, int Priority)> s_globalTagCache = new();
 
+    /// <summary>State variable caching the raw configuration string to detect changes.</summary>
+    private static string s_lastTagConfig = string.Empty;
+
+    /// <summary>Cached set of normalized blacklisted tag keys.</summary>
+    private static HashSet<string> s_cachedBlacklist = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Cached dictionary of active tag merges (combining defaults with user overrides).</summary>
+    private static Dictionary<string, string> s_cachedMerges = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Lock object for synchronizing tag configuration compilation.</summary>
+    private static readonly Lock s_configLock = new();
+
     #endregion
 
     #region Tag Filtering
+
+    /// <summary>Parses and caches the user's blacklist and merge rules, invalidating when the configuration changes.</summary>
+    /// <returns>A tuple containing the active normalized blacklist and active merge dictionary.</returns>
+    private static (HashSet<string> Blacklist, Dictionary<string, string> Merges) GetTagConfig()
+    {
+        var rawConfig = Settings.TagOverrides ?? string.Empty;
+        if (ReferenceEquals(s_lastTagConfig, rawConfig) || string.Equals(s_lastTagConfig, rawConfig, StringComparison.Ordinal))
+            return (s_cachedBlacklist, s_cachedMerges);
+
+        lock (s_configLock)
+        {
+            if (string.Equals(s_lastTagConfig, rawConfig, StringComparison.Ordinal))
+                return (s_cachedBlacklist, s_cachedMerges);
+
+            var blacklistKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var userMerges = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var userMentionedTags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var line in rawConfig.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (line.StartsWith(';'))
+                {
+                    var parts = line.TrimStart(';').Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    if (parts.Length > 0)
+                    {
+                        string target = parts[0];
+                        userMentionedTags.Add(target);
+                        for (int i = 1; i < parts.Length; i++)
+                        {
+                            userMerges[parts[i]] = target;
+                            userMentionedTags.Add(parts[i]);
+                        }
+                    }
+                }
+                else
+                {
+                    foreach (var tag in line.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                        if (NormalizeTagKey(tag) is { Length: > 0 } normKey)
+                            blacklistKeys.Add(normKey);
+                }
+            }
+
+            var activeMerges = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var def in s_defaultTagMerges)
+            {
+                // If a default source or target is mentioned in user overrides, drop the default rule entirely to allow the user to redefine it
+                if (!userMentionedTags.Contains(def.Key) && !userMentionedTags.Contains(def.Value))
+                    activeMerges[def.Key] = def.Value;
+            }
+
+            foreach (var um in userMerges)
+                activeMerges[um.Key] = um.Value;
+
+            s_cachedBlacklist = blacklistKeys;
+            s_cachedMerges = activeMerges;
+            s_lastTagConfig = rawConfig;
+            return (s_cachedBlacklist, s_cachedMerges);
+        }
+    }
 
     /// <summary>Return an array of tag objects derived from a series, applying filters and sources.</summary>
     /// <param name="series">The Shoko series metadata.</param>
@@ -258,40 +329,27 @@ public static partial class TagHelper
         if (shokoTags == null)
             return [];
 
-        var userBlacklist = string.IsNullOrWhiteSpace(Settings.TagBlacklist) ? [] : Settings.TagBlacklist.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var (blacklistKeys, merges) = GetTagConfig();
         var sourceSetting = Settings.TagSources;
-        var shokoNames = shokoTags.Select(t => t.Name).Where(n => !string.IsNullOrWhiteSpace(n)).Select(n => (Name: n, Priority: 3));
+        var shokoNames = shokoTags.Select(t => t.Name).Where(n => !string.IsNullOrWhiteSpace(n)).Select(n => (Name: merges.TryGetValue(n.Trim(), out var target) ? target : n.Trim(), Priority: 3));
 
         if (sourceSetting == TagSources.UserOnly)
-            return [.. FilterAndFormat(shokoNames, userBlacklist)];
+            return [.. FilterAndFormat(shokoNames, blacklistKeys)];
 
         IEnumerable<(string Name, int Priority)> anidbNames = [];
         int minWeight = (int)Settings.MinimumTagWeight;
         if ((sourceSetting is TagSources.Combined or TagSources.AniDB) && shokoSeries?.AnidbAnime?.Tags is IReadOnlyList<IAnidbTagForAnime> anidbTags)
-            anidbNames = anidbTags.Where(t => !string.IsNullOrWhiteSpace(t.Name) && (minWeight <= 0 || t.Weight >= minWeight)).Select(t => (t.Name, Priority: 1));
+            anidbNames = anidbTags
+                .Where(t => !string.IsNullOrWhiteSpace(t.Name) && (minWeight <= 0 || t.Weight >= minWeight))
+                .Select(t => (Name: merges.TryGetValue(t.Name.Trim(), out var target) ? target : t.Name.Trim(), Priority: 1));
 
         IEnumerable<(string Name, int Priority)> tmdbNames = [];
-        bool isCombined = sourceSetting == TagSources.Combined;
         if ((sourceSetting is TagSources.Combined or TagSources.TMDB) && (tmdbSeries ?? shokoSeries?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault()) is { } tmdb)
-        {
-            var validTags = tmdb
+            tmdbNames = tmdb
                 .Tags.Where(t => !string.IsNullOrWhiteSpace(t.Name) && (t.Kind is TagKind.Genre || (t.Kind is TagKind.Keyword && !NonEnglishTagRegex().IsMatch(t.Name))))
-                .Select(t => t.Name.Trim())
-                .ToList();
+                .Select(t => (Name: merges.TryGetValue(t.Name.Trim(), out var target) ? target : t.Name.Trim(), Priority: 2));
 
-            tmdbNames = validTags.Select(name =>
-            {
-                if (s_tagMerges.TryGetValue(name, out var rule))
-                    name =
-                        isCombined && rule.AnidbTarget != null ? rule.AnidbTarget
-                        : rule.AnidbTarget != null && validTags.Any(vt => string.Equals(vt, rule.AnidbTarget, StringComparison.OrdinalIgnoreCase)) ? rule.AnidbTarget
-                        : rule.TmdbPrimary;
-
-                return (Name: name, Priority: 2);
-            });
-        }
-
-        return [.. FilterAndFormat(anidbNames.Concat(tmdbNames).Concat(shokoNames), userBlacklist)];
+        return [.. FilterAndFormat(anidbNames.Concat(tmdbNames).Concat(shokoNames), blacklistKeys)];
     }
 
     /// <summary>Generates a normalized comparison key ignoring case, spacing, punctuation, and diacritics.</summary>
@@ -319,12 +377,10 @@ public static partial class TagHelper
 
     /// <summary>Filters the raw tag strings against the user blacklist, deduplicates across punctuation and diacritics, and normalizes them into title case.</summary>
     /// <param name="tags">The raw collection of tag name strings to process along with their source priority.</param>
-    /// <param name="userBlacklist">The array of blacklisted tag names to filter out.</param>
+    /// <param name="blacklistKeys">The set of normalized blacklisted tag keys to filter out.</param>
     /// <returns>An enumerable collection of formatted anonymous objects containing the sanitized tags.</returns>
-    private static IEnumerable<object> FilterAndFormat(IEnumerable<(string Name, int Priority)> tags, string[] userBlacklist)
+    private static IEnumerable<object> FilterAndFormat(IEnumerable<(string Name, int Priority)> tags, HashSet<string> blacklistKeys)
     {
-        var blacklistKeys = userBlacklist.Select(NormalizeTagKey).Where(k => k.Length > 0).ToHashSet();
-
         return tags.Select(t => (CleanName: TagCleanupRegex().Replace(t.Name, "").Trim(), t.Priority))
             .Where(t => !string.IsNullOrWhiteSpace(t.CleanName) && !s_tagBlacklistHelper.Contains(t.CleanName))
             .Select(t => (t.CleanName, NormKey: NormalizeTagKey(t.CleanName), t.Priority))

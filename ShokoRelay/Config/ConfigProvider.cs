@@ -528,11 +528,16 @@ public class ConfigProvider
         static string Norm(string? r, char separator) =>
             string.Join(separator + " ", (r ?? "").Split(separator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase));
 
-        s.TagBlacklist = Norm(s.TagBlacklist, ',');
         s.Automation.ExtraPlexUsers = Norm(s.Automation.ExtraPlexUsers, ',');
+
         s.Advanced.FolderExclusions = string.Join(
             Environment.NewLine,
             (s.Advanced.FolderExclusions ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(VfsShared.NormalizeSeparators).Distinct(VfsShared.PathComparer)
+        );
+
+        s.TagOverrides = string.Join(
+            Environment.NewLine,
+            (s.TagOverrides ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase)
         );
     }
 
