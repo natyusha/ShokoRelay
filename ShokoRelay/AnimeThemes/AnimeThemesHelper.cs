@@ -115,7 +115,7 @@ internal static partial class AnimeThemesHelper
     internal const string AtApiBase = "https://graphql.animethemes.moe/";
 
     /// <summary>The raw URL to the curated AnimeThemes mapping CSV on GitHub.</summary>
-    internal const string AtRawMapUrl = "https://gist.githubusercontent.com/natyusha/bb33a3b3bc95bc7a3869633e23d522bb/raw/";
+    internal const string AtRawMapUrl = "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/Data/anidb_animethemes_xrefs.csv";
 
     /// <summary>Regex for Plex Extra Credits which always start with a <c>C# ❯</c> prefix.</summary>
     [GeneratedRegex(@"^C\d+\s❯")]
