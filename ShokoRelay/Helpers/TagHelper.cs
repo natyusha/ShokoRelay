@@ -59,11 +59,10 @@ public static partial class TagHelper
 
     // csharpier-ignore
     /// <summary>Special cases where a specific capitalisation style is preferred</summary>
-    private static readonly FrozenDictionary<string, string> s_forceSpecial = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-    {
-        { "-japanese", "-Japanese" }, { "animefesta", "AnimeFesta" }, { "comicfesta", "ComicFesta" }, { "d'etat", "d'Etat" }, { "jdrama", "JDrama" }, { "noitamina", "noitaminA" }, // AniDB
-        { "vtuber", "VTuber" }, { "youtuber", "YouTuber" },                                                                                                                         // TMDB
-    }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+    private static readonly FrozenDictionary<string, string> s_forceSpecial = new[] {
+        "-Japanese", "AnimeFesta", "ComicFesta", "d'Etat", "JDrama", "noitaminA",              // AniDB
+        "VTuber", "YouTuber"                                                                   // TMDB
+    }.ToFrozenDictionary(s => s, s => s, StringComparer.OrdinalIgnoreCase);
 
     // csharpier-ignore
     /// <summary>Explicit tag merges mapping synonymous TMDB keywords/tags to a primary TMDB tag and an optional canonical AniDB tag (with TMDB Fallback).</summary>
@@ -77,7 +76,6 @@ public static partial class TagHelper
         // AniDB <- TMDB Mappings                                                              // Generally uses the primary tag entry
         ("3d cg animation", ["3d animation", "cg animated"]),
         ("absurdist humour", ["absurd", "absurdist"]),
-        ("adolescent", ["teenage", "teenager"]),
         ("afterlife", ["life after death"]),
         ("android", ["humanoid robot"]),
         ("artificial intelligence", ["artificial intelligence (a.i.)"]),
@@ -198,7 +196,6 @@ public static partial class TagHelper
         ("treasure hunting", ["treasure hunt"]),
         ("unidentified flying object", ["ufo"]),
         ("university", ["college"]),
-        ("university", ["college"]),
         ("urination", ["peeing", "pissing"]),
         ("virgin", ["loss of virginity", "virginity"]),
         ("virtual world", ["virtual reality", "vr"]),
@@ -207,7 +204,6 @@ public static partial class TagHelper
         ("wolf", ["wolves"]),
         ("yokohama", ["yokohama, Kanagawa, Japan"]),
         // TMDB <- TMDB Mappings                                                               // generally in order of popularity/usage
-        (null, ["adolescence", "adolescent", "youth"]),                                        // AniDB has a character tag called 'adolescent' for these
         (null, ["car racing", "car race"]),
         (null, ["censored", "censorship"]),
         (null, ["classmates", "schoolmates"]),
@@ -230,7 +226,6 @@ public static partial class TagHelper
         (null, ["otome game", "otome"]),
         (null, ["paranormal", "paranormal activity", "paranormal events", "paranormal investigation", "paranormal phenomena"]),
         (null, ["past life", "past lives"]),
-        (null, ["role playing game (rpg)", "rpg"]),
         (null, ["romcom", "love comedy"]),
         (null, ["roommates", "flatmates", "shared house", "cohabitation", "living together"]), // 'under one roof' is also an AniDB tag with many matches
         (null, ["schoolgirl", "student girl", "female student", "high school girl", "jk"]),    // AniDB has a character tag called 'student' for these
@@ -239,6 +234,7 @@ public static partial class TagHelper
         (null, ["street racing", "street race"]),
         (null, ["supernatural power", "supernatural ability"]),
         (null, ["sword fight", "sword duel"]),
+        (null, ["teenager", "teenage", "adolescence", "adolescent", "youth"]),                 // AniDB has a character tag called 'adolescent' for these
         (null, ["transsexual", "transsexuality"]),
         (null, ["university student", "college student"]),
         (null, ["wealthy family", "rich family"])
