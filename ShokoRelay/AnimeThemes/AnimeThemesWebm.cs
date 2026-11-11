@@ -24,14 +24,16 @@ public record WebmDownloadResult(int Downloaded, int Skipped, int Errors, List<s
 #endregion
 
 /// <summary>Provides functionality for bulk downloading and organizing AnimeThemes WebM files.</summary>
+/// <param name="apiClient">AnimeThemes API client.</param>
 /// <param name="httpClient">HTTP client.</param>
 /// <param name="videoService">Shoko video service.</param>
 /// <param name="mappingService">AnimeThemes mapping service.</param>
 /// <param name="logger">Logger instance.</param>
-public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService videoService, AnimeThemesMapping mappingService, ILogger<AnimeThemesWebmDownloader> logger)
+public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient httpClient, IVideoService videoService, AnimeThemesMapping mappingService, ILogger<AnimeThemesWebmDownloader> logger)
 {
     #region Setup
-    private readonly AnimeThemesApi _api = new(httpClient);
+
+    private readonly AnimeThemesApi _api = apiClient;
 
     #endregion
 

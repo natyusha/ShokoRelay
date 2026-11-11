@@ -75,7 +75,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
                         ? MetadataService.GetShokoSeriesByAnidbID(aid)?.LocalID
                         : null
                 );
-            int? id = string.IsNullOrWhiteSpace(rawPath) ? (manual == 1 ? manualId : null) : TextHelper.ExtractSeriesId(rawPath);
+            int? id = (manual == 1 && manualId.HasValue) ? manualId : (string.IsNullOrWhiteSpace(rawPath) ? null : TextHelper.ExtractSeriesId(rawPath));
 
             if (!id.HasValue)
                 return EmptyMatch();
@@ -263,7 +263,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
                 if (includeChildren == 1)
                 {
                     var episodes = mapper.BuildEpisodeList(ctx, sNum);
-                    ((IDictionary<string, object?>)seasonMeta)["Children"] = new { size = episodes.Count, Metadata = episodes };
+                    seasonMeta["Children"] = new { size = episodes.Count, Metadata = episodes };
                 }
                 return WrapInContainer(seasonMeta);
             }
@@ -271,7 +271,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             if (includeChildren == 1)
             {
                 var seasons = ctx.FileData.Seasons.Select(s => mapper.MapSeason(ctx, s)).ToList();
-                ((IDictionary<string, object?>)showMeta)["Children"] = new { size = seasons.Count, Metadata = seasons };
+                showMeta["Children"] = new { size = seasons.Count, Metadata = seasons };
             }
             return WrapInContainer(showMeta);
         });

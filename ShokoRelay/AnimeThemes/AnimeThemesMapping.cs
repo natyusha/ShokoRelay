@@ -5,15 +5,17 @@ using Shoko.Abstractions.Video.Services;
 namespace ShokoRelay.AnimeThemes;
 
 /// <summary>Provides operations for building and applying mappings between anime theme files and AniDB/video identifiers.</summary>
+/// <param name="apiClient">AnimeThemes API client.</param>
 /// <param name="httpClient">HTTP client.</param>
 /// <param name="metadataService">Shoko metadata service.</param>
 /// <param name="videoService">Shoko video service.</param>
 /// <param name="configProvider">Configuration provider.</param>
 /// <param name="logger">Logger instance.</param>
-public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadataService, IVideoService videoService, ConfigProvider configProvider, ILogger<AnimeThemesMapping> logger)
+public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient, IMetadataService metadataService, IVideoService videoService, ConfigProvider configProvider, ILogger<AnimeThemesMapping> logger)
 {
     #region Setup
-    private readonly AnimeThemesApi _apiClient = new(httpClient);
+
+    private readonly AnimeThemesApi _apiClient = apiClient;
 
     #endregion
 
@@ -98,7 +100,6 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
             if (roots.Count == 0)
                 throw new DirectoryNotFoundException("AnimeThemes root folder not found");
 
-            var sw = Stopwatch.StartNew();
             string mapPath = Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FileAtMapping);
             var entries = new List<AnimeThemesMappingEntry>();
             var existingComments = new List<string>();
@@ -728,9 +729,9 @@ public class AnimeThemesMapping(HttpClient httpClient, IMetadataService metadata
 
     private class MappingState
     {
-        public int Created,
-            Skipped,
-            Matched;
+        public int Created;
+        public int Skipped;
+        public int Matched;
         public ConcurrentBag<string> Errors = [];
         public ConcurrentBag<WebmCacheEntry> CacheEntries = [];
     }

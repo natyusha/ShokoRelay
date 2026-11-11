@@ -397,21 +397,21 @@ public class ConfigProvider
     }
 
     /// <summary>Serializes and writes updated Plex token and discovery details to disk.</summary>
-    /// <param name="t">Plex token.</param>
-    /// <param name="c">Client identifier.</param>
-    /// <param name="a">Admin username.</param>
-    /// <param name="s">Discovered servers list.</param>
-    /// <param name="l">Discovered libraries list.</param>
+    /// <param name="token">Plex token.</param>
+    /// <param name="clientIdentifier">Client identifier.</param>
+    /// <param name="adminUsername">Admin username.</param>
+    /// <param name="servers">Discovered servers list.</param>
+    /// <param name="libraries">Discovered libraries list.</param>
     /// <param name="autoUrl">Auto-detected Shoko Server URL.</param>
-    private void WriteTokenFile(string? t, string? c, string? a, List<PlexAvailableServer>? s = null, List<PlexAvailableLibrary>? l = null, string? autoUrl = null)
+    private void WriteTokenFile(string? token, string? clientIdentifier, string? adminUsername, List<PlexAvailableServer>? servers = null, List<PlexAvailableLibrary>? libraries = null, string? autoUrl = null)
     {
         var tf = new TokenFile
         {
-            Token = t ?? "",
-            ClientIdentifier = c ?? "",
-            AdminUsername = a ?? "",
-            Servers = s ?? [],
-            Libraries = l ?? [],
+            Token = token ?? "",
+            ClientIdentifier = clientIdentifier ?? "",
+            AdminUsername = adminUsername ?? "",
+            Servers = servers ?? [],
+            Libraries = libraries ?? [],
             AutoShokoServerUrl = autoUrl ?? "",
         };
         lock (_settingsLock)
@@ -489,8 +489,15 @@ public class ConfigProvider
         string? autoUrl = null
     )
     {
-        var e = ReadTokenFile();
-        WriteTokenFile(token ?? e.Token, clientIdentifier ?? e.ClientIdentifier, adminName ?? e.AdminUsername, servers ?? e.Servers, libraries ?? e.Libraries, autoUrl ?? e.AutoShokoServerUrl);
+        var existing = ReadTokenFile();
+        WriteTokenFile(
+            token ?? existing.Token,
+            clientIdentifier ?? existing.ClientIdentifier,
+            adminName ?? existing.AdminUsername,
+            servers ?? existing.Servers,
+            libraries ?? existing.Libraries,
+            autoUrl ?? existing.AutoShokoServerUrl
+        );
     }
 
     /// <summary>Checks if the provided server UUID matches a managed server known to the provider.</summary>

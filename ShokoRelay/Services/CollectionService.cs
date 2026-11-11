@@ -22,7 +22,6 @@ public interface ICollectionService
 /// <param name="Created">Number of collections successfully assigned.</param>
 /// <param name="Uploaded">Number of posters uploaded.</param>
 /// <param name="AlreadyUploaded">Number of collection images already set and skipped from re-uploading.</param>
-/// <param name="SeasonPostersUploaded">Number of season-specific posters uploaded.</param>
 /// <param name="Skipped">Number of items skipped.</param>
 /// <param name="Errors">Count of errors encountered.</param>
 /// <param name="DeletedEmptyCollections">Number of empty collections removed.</param>
@@ -36,7 +35,6 @@ public sealed record BuildCollectionsResult(
     int Created,
     int Uploaded,
     int AlreadyUploaded,
-    int SeasonPostersUploaded,
     int Skipped,
     int Errors,
     int DeletedEmptyCollections,
@@ -85,7 +83,7 @@ public class CollectionService(
             var targets = plexClient.GetConfiguredTargets();
 
             if (targets.Count == 0)
-                return new BuildCollectionsResult(0, 0, 0, 0, 0, 0, 0, 0, createdList, uploadedDetails, [], errorsList, sw.Elapsed);
+                return new BuildCollectionsResult(0, 0, 0, 0, 0, 0, 0, createdList, uploadedDetails, [], errorsList, sw.Elapsed);
 
             List<string> globalRoots = [.. (videoService.GetAllManagedFolders() ?? []).Select(f => f.Path).Where(p => !string.IsNullOrEmpty(p)).Distinct()];
 
@@ -415,7 +413,6 @@ public class CollectionService(
                 created,
                 uploaded,
                 alreadyUploaded,
-                0,
                 uniqueSeries.Count - created,
                 errs,
                 deletedList.Count,

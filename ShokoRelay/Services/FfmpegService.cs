@@ -35,7 +35,7 @@ public sealed class FfmpegService(string pluginDirectory, string applicationPath
     private readonly string _dataPath = dataPath;
 
     /// <summary>The current working directory for FFmpeg process execution.</summary>
-    private string _workingDirectory = pluginDirectory;
+    private string _workingDirectory = string.Empty;
 
     #endregion
 
@@ -319,7 +319,7 @@ public sealed class FfmpegService(string pluginDirectory, string applicationPath
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
-            WorkingDirectory = workingDir ?? _workingDirectory,
+            WorkingDirectory = workingDir ?? (!string.IsNullOrEmpty(_workingDirectory) ? _workingDirectory : _pluginDirectory),
         };
 
         foreach (var arg in args)

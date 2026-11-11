@@ -287,7 +287,8 @@ internal static class VfsShared
         var alternateLookup = names.GetAlternateLookup<ReadOnlySpan<char>>();
         int lastSlash = -1;
 
-        for (int start = 0, end; start < path.Length; start = end + 1)
+        int end;
+        for (int start = 0; start < path.Length; start = end + 1)
         {
             int relEnd = path.AsSpan(start).IndexOfAny(s_pathSeparators);
             end = relEnd < 0 ? path.Length : start + relEnd;

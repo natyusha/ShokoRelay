@@ -63,7 +63,7 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
 
         try
         {
-            var (pS, uS, pE, uE, errs) = (0, 0, 0, 0, 0);
+            var (processedShows, updatedShows, processedEpisodes, updatedEpisodes, errors) = (0, 0, 0, 0, 0);
             var errorsList = new List<string>();
             var appliedChanges = new List<RatingChange>();
             var prefIdCache = new Dictionary<int, string?>();
@@ -81,11 +81,11 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                 if (!shokoId.HasValue || (allowedSet != null && !allowedSet.Contains(shokoId.Value)))
                     return;
 
-                pS++;
+                processedShows++;
                 var series = metadataService.GetShokoSeriesByID(shokoId.Value);
                 if (series == null)
                 {
-                    errs++;
+                    errors++;
                     errorsList.Add($"Series {shokoId.Value} not found for RatingKey {item.RatingKey}");
                     return;
                 }
@@ -112,13 +112,13 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
 
                 if (await ApplyRatingAsync(item.RatingKey!, rating, target, cancellationToken))
                 {
-                    uS++;
+                    updatedShows++;
                     appliedChanges.Add(new RatingChange($"{series.GetDisplayTitle() ?? "Unknown"} [{series.LocalID}]", "Series", item.RatingKey!, item.Rating, rating));
                     logger.LogInformation("CriticRatingService: Updated series -> {Title} [{LocalId}] to {Rating}", series.GetDisplayTitle(), series.LocalID, rating?.ToString("F2") ?? "n/a");
                 }
                 else
                 {
-                    errs++;
+                    errors++;
                     errorsList.Add($"CriticRatingService: Failed update for series -> {series.GetDisplayTitle()} [{shokoId.Value}]");
                 }
             }
@@ -135,7 +135,7 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                 if (episode == null || (allowedSet != null && !allowedSet.Contains(episode.ShokoSeriesID)))
                     return;
 
-                pE++;
+                processedEpisodes++;
                 // Resolve the critic rating for an episode based on user configuration
                 double? rating = Settings.CriticRatingMode switch
                 {
@@ -159,7 +159,7 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
 
                 if (await ApplyRatingAsync(item.RatingKey!, rating, target, cancellationToken))
                 {
-                    uE++;
+                    updatedEpisodes++;
                     appliedChanges.Add(
                         new RatingChange($"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - S{coords.Season:D2}E{coords.Episode:D2}", "Episode", item.RatingKey!, item.Rating, rating)
                     );
@@ -167,7 +167,7 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                 }
                 else
                 {
-                    errs++;
+                    errors++;
                     errorsList.Add($"CriticRatingService: Failed update for episode -> {epLogName}");
                 }
             }
@@ -184,7 +184,7 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                 if (episode == null || (allowedSet != null && !allowedSet.Contains(episode.ShokoSeriesID)))
                     return;
 
-                pE++;
+                processedEpisodes++;
                 // Resolve the critic rating for a movie based on user configuration
                 double? rating = Settings.CriticRatingMode switch
                 {
@@ -210,7 +210,7 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
 
                 if (await ApplyRatingAsync(item.RatingKey!, rating, target, cancellationToken))
                 {
-                    uE++;
+                    updatedEpisodes++;
                     appliedChanges.Add(
                         new RatingChange($"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - S{coords.Season:D2}E{coords.Episode:D2}", "Movie", item.RatingKey!, item.Rating, rating)
                     );
@@ -218,7 +218,7 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                 }
                 else
                 {
-                    errs++;
+                    errors++;
                     errorsList.Add($"CriticRatingService: Failed update for movie -> {epLogName}");
                 }
             }
@@ -274,8 +274,8 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                 }
             }
             sw.Stop();
-            logger.LogInformation("CriticRatingService: Task finished -> Updated {SeriesCount} series and {EpisodeCount} episodes in {Elapsed}ms", uS, uE, sw.ElapsedMilliseconds);
-            return new ApplyRatingsResult(pS, uS, pE, uE, errs, errorsList, appliedChanges, sw.Elapsed);
+            logger.LogInformation("CriticRatingService: Task finished -> Updated {SeriesCount} series and {EpisodeCount} episodes in {Elapsed}ms", updatedShows, updatedEpisodes, sw.ElapsedMilliseconds);
+            return new ApplyRatingsResult(processedShows, updatedShows, processedEpisodes, updatedEpisodes, errors, errorsList, appliedChanges, sw.Elapsed);
         }
         finally
         {

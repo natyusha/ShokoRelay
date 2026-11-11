@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Text.RegularExpressions;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Enums;
@@ -93,8 +94,7 @@ public static partial class TextHelper
     #region Metadata Resolution
 
     /// <summary>Set of ambiguous AniDB episode titles that should be overridden by the series title.</summary>
-    private static readonly IReadOnlySet<string> s_ambiguousTitles = new HashSet<string>(
-        ["Complete Movie", "Music Video", "OAD", "OVA", "Short Movie", "Special", "TV Special", "Web"],
+    private static readonly FrozenSet<string> s_ambiguousTitles = new[] { "Complete Movie", "Music Video", "OAD", "OVA", "Short Movie", "Special", "TV Special", "Web" }.ToFrozenSet(
         StringComparer.OrdinalIgnoreCase
     );
 

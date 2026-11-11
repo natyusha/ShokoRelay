@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text.Json;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
@@ -17,28 +16,6 @@ namespace ShokoRelay.Controllers;
 /// <param name="CustomUrl">The custom server URL configured at the time of discovery.</param>
 public sealed record PlexDiscoveryResult(List<PlexAvailableLibrary> Libraries, string? CustomUrl);
 
-/// <summary>Result of a full Plex automation run containing elapsed times and individual sub-task results.</summary>
-/// <param name="TotalElapsed">The total elapsed time for the entire automation run.</param>
-/// <param name="CollectionsElapsed">The elapsed time for the collection building sub-task.</param>
-/// <param name="CollectionsResult">The result stats returned by the collection building service.</param>
-/// <param name="RatingsElapsed">The elapsed time for the critic rating application sub-task.</param>
-/// <param name="RatingsResult">The result stats returned by the critic rating application service.</param>
-/// <param name="ImageSyncElapsed">The optional elapsed time for the Plex image synchronization sub-task.</param>
-/// <param name="ImageSyncResult">The optional result stats returned by the Plex image synchronization service.</param>
-/// <param name="TrashElapsed">The optional elapsed time for the Plex empty trash sub-task.</param>
-/// <param name="TrashMessages">The optional list of Plex empty trash status messages.</param>
-public sealed record PlexAutomationRunResult(
-    TimeSpan TotalElapsed,
-    TimeSpan CollectionsElapsed,
-    BuildCollectionsResult CollectionsResult,
-    TimeSpan RatingsElapsed,
-    ApplyRatingsResult RatingsResult,
-    TimeSpan? ImageSyncElapsed,
-    ImageSyncResult? ImageSyncResult,
-    TimeSpan? TrashElapsed,
-    List<string>? TrashMessages
-);
-
 #endregion
 
 /// <summary>Manages Plex-specific integrations including authentication, metadata automation, and image sync.</summary>
@@ -51,6 +28,7 @@ public sealed record PlexAutomationRunResult(
 /// <param name="userService">Shoko user service.</param>
 /// <param name="userDataService">Shoko user data service.</param>
 /// <param name="imageSyncService">Shoko image sync service.</param>
+/// <param name="plexAutomationService">Plex automation service.</param>
 /// <param name="plexMetadata">Plex metadata mapper.</param>
 /// <param name="logger">Logger instance.</param>
 [ApiController]
@@ -66,6 +44,7 @@ public class PlexController(
     IUserService userService,
     IUserDataService userDataService,
     IImageSyncService imageSyncService,
+    IPlexAutomationService plexAutomationService,
     PlexMetadata plexMetadata,
     ILogger<PlexController> logger
 ) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary, logger)
@@ -328,48 +307,7 @@ public class PlexController(
             : ExecuteTrackedTaskAsync(
                 ShokoRelayConstants.TaskPlexAutomationRun,
                 (sb, r) => LogHelper.BuildPlexAutomationReport(sb, r, ApiBase),
-                async () =>
-                {
-                    var sw = Stopwatch.StartNew();
-                    var allSeries = MetadataService.GetAllShokoSeries()?.Cast<IShokoSeries?>().ToList() ?? [];
-
-                    var swCollections = Stopwatch.StartNew();
-                    var collectionRes = await collectionService.BuildCollectionsAsync(allSeries, cancellationToken: CancellationToken.None).ConfigureAwait(false);
-                    swCollections.Stop();
-
-                    var swRatings = Stopwatch.StartNew();
-                    var ratingRes = await criticRatingService.ApplyRatingsAsync(null, cancellationToken: CancellationToken.None).ConfigureAwait(false);
-                    swRatings.Stop();
-
-                    TimeSpan? imageSyncElapsed = null;
-                    ImageSyncResult? imageSyncRes = null;
-                    if (Settings.Advanced.EnableImageSync)
-                    {
-                        var swImages = Stopwatch.StartNew();
-                        imageSyncRes = await imageSyncService.SyncImagesAsync(cancellationToken: CancellationToken.None).ConfigureAwait(false);
-                        swImages.Stop();
-                        imageSyncElapsed = swImages.Elapsed;
-                    }
-
-                    TimeSpan? trashElapsed = null;
-                    var trashMessages = new List<string>();
-                    int threshold = Settings.Advanced.EmptyPlexTrashThreshold;
-                    if (threshold > 0)
-                    {
-                        var swTrash = Stopwatch.StartNew();
-                        foreach (var target in PlexLibrary.GetConfiguredTargets())
-                        {
-                            var (_, _, msg) = await PlexLibrary.EmptyTrashWithSafetyAsync(target, threshold, false, CancellationToken.None).ConfigureAwait(false);
-                            trashMessages.Add($"[{target.Title}] {msg}");
-                        }
-                        swTrash.Stop();
-                        trashElapsed = swTrash.Elapsed;
-                    }
-
-                    sw.Stop();
-
-                    return new PlexAutomationRunResult(sw.Elapsed, swCollections.Elapsed, collectionRes, swRatings.Elapsed, ratingRes, imageSyncElapsed, imageSyncRes, trashElapsed, trashMessages);
-                },
+                () => plexAutomationService.RunAutomationAsync(null, CancellationToken.None),
                 SyncHelper.SyncLock
             );
 

@@ -52,13 +52,9 @@ public record PlexWatchedChange(
 /// <param name="ProgressUpdated">Global progress update count.</param>
 /// <param name="Skipped">Global skip count.</param>
 /// <param name="Errors">Global error count.</param>
-/// <param name="ScheduledJobs">Scheduled background jobs count.</param>
 /// <param name="VotesFound">Total votes identified.</param>
 /// <param name="VotesUpdated">Total votes applied.</param>
 /// <param name="VotesSkipped">Total votes matching current state.</param>
-/// <param name="Matched">Total items matched.</param>
-/// <param name="MissingMappings">List of missing series/episodes.</param>
-/// <param name="MissingMappingsDiagnostics">Diagnostics for missing mappings.</param>
 /// <param name="PerUser">Per-user stats.</param>
 /// <param name="PerUserChanges">Detailed per-user change list.</param>
 /// <param name="ErrorsList">Encountered error messages.</param>
@@ -70,24 +66,14 @@ public record PlexWatchedSyncResult(
     int ProgressUpdated = 0,
     int Skipped = 0,
     int Errors = 0,
-    int ScheduledJobs = 0,
     int VotesFound = 0,
     int VotesUpdated = 0,
     int VotesSkipped = 0,
-    int Matched = 0,
-    List<int>? MissingMappings = null,
-    Dictionary<int, List<string>>? MissingMappingsDiagnostics = null,
     Dictionary<string, PlexWatchedUserResult>? PerUser = null,
     Dictionary<string, List<PlexWatchedChange>>? PerUserChanges = null,
     List<string>? ErrorsList = null
 )
 {
-    /// <inheritdoc />
-    public List<int> MissingMappings { get; init; } = MissingMappings ?? [];
-
-    /// <inheritdoc />
-    public Dictionary<int, List<string>> MissingMappingsDiagnostics { get; init; } = MissingMappingsDiagnostics ?? [];
-
     /// <inheritdoc />
     public Dictionary<string, PlexWatchedUserResult> PerUser { get; init; } = PerUser ?? [];
 

@@ -69,7 +69,6 @@ public static class MapHelper
     /// <returns>A SeriesFileData object.</returns>
     public static SeriesFileData GetConsolidatedSeriesFileData(ISeries series, IMetadataService metadataService)
     {
-        int pId = series.GetPrimaryId(metadataService);
         var group = series.GetOverrideGroup(metadataService).Select(metadataService.GetShokoSeriesByID).OfType<IShokoSeries>().ToList();
         return group.Count <= 1 ? GetSeriesFileData(group.FirstOrDefault() ?? series, metadataService) : GetSeriesFileDataMerged(group[0], group.Skip(1).Cast<ISeries>(), metadataService);
     }
@@ -327,8 +326,8 @@ public static class MapHelper
             }
             if (xrefPos == null)
                 continue;
-            int exPos = xrefPos.GetValueOrDefault(deduped[existingIdx].Episode.ID, -1),
-                enPos = xrefPos.GetValueOrDefault(entry.Episode.ID, -1);
+            int exPos = xrefPos.GetValueOrDefault(deduped[existingIdx].Episode.ID, -1);
+            int enPos = xrefPos.GetValueOrDefault(entry.Episode.ID, -1);
             if (enPos >= 0 && (exPos == -1 || enPos < exPos))
                 deduped[existingIdx] = entry;
         }

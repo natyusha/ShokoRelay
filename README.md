@@ -127,7 +127,7 @@ Enable the following options in Shoko to ensure that Plex has at least one sourc
 - Under `Add Folders` be sure to only enter the path to `!ShokoRelayVFS` (or the configured `VFS Root Path`) as the directory
 - Under `Advanced` simply change the Scanner of the library to `Plex TV Series` and the Agent to `Shoko Relay`
   - You can override Provider Settings on a per-library basis by adding an additional Metadata Provider with `/options/` appended
-    - The format is described in [Controller.md/Metadata Provider](./Docs/Controller.md#metadata-provider)
+    - The format is described in [CONTROLLER.md/Metadata Provider](./Docs/CONTROLLER.md#metadata-provider)
     - _Overrides only apply to live metadata requests. Background automations (e.g. Collection Generation or Critic Ratings) will always use the global dashboard configuration_
 - Additionally it is highly recommended to set the following Advanced settings:
   - [x] Use season titles
@@ -555,7 +555,7 @@ Most manual actions performed via the dashboard (as well as some direct API requ
 
 ### Plugin API
 
-Controlling this plugin directly is possible via HTTP GET/POST see [Controller.md](./Docs/Controller.md) for more information.
+Controlling this plugin directly is possible via HTTP GET/POST see [CONTROLLER.md](./Docs/CONTROLLER.md) for more information.
 
 ### Missing Info
 

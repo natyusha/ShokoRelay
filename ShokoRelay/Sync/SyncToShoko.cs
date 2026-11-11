@@ -48,7 +48,7 @@ public class SyncToShoko(
     )
     {
         OverrideHelper.Reload();
-        var result = new PlexWatchedSyncResult();
+        var result = new PlexWatchedSyncResult { Direction = "Plex->Shoko" };
         var auto = Settings.Automation;
         var userType = userTypeOverride ?? auto.ShokoSyncWatchedUserType;
 

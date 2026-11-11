@@ -60,6 +60,7 @@ public record ThemeMp3AuditResult(int Processed, int UpgradesFound, int MissingS
 #endregion
 
 /// <summary>Provides functionality for fetching, converting and previewing anime theme audio from the AnimeThemes API.</summary>
+/// <param name="apiClient">AnimeThemes API client.</param>
 /// <param name="httpClient">HTTP client.</param>
 /// <param name="metadataService">Shoko metadata service.</param>
 /// <param name="videoService">Shoko video service.</param>
@@ -68,6 +69,7 @@ public record ThemeMp3AuditResult(int Processed, int UpgradesFound, int MissingS
 /// <param name="plexClient">Plex client.</param>
 /// <param name="logger">Logger instance.</param>
 public class AnimeThemesMp3Generator(
+    AnimeThemesApi apiClient,
     HttpClient httpClient,
     IMetadataService metadataService,
     IVideoService videoService,
@@ -80,7 +82,7 @@ public class AnimeThemesMp3Generator(
     #region Setup & Cache
 
     /// <summary>HTTP client for interacting with the AnimeThemes API.</summary>
-    private readonly AnimeThemesApi _apiClient = new(httpClient);
+    private readonly AnimeThemesApi _apiClient = apiClient;
 
     /// <summary>In-memory cache mapping physical folder paths to their associated theme slugs.</summary>
     private ConcurrentDictionary<string, string>? _themeMp3Cache;
@@ -540,10 +542,10 @@ public class AnimeThemesMp3Generator(
 
                 if (!string.IsNullOrEmpty(slug))
                 {
-                    bool isOp = slug.StartsWith("OP", StringComparison.OrdinalIgnoreCase) || slug.StartsWith("Opening", StringComparison.OrdinalIgnoreCase);
-                    bool isOp1 = isOp && AnimeThemesHelper.ExtractSlugNumber(slug) == 1;
-                    bool isEd = slug.StartsWith("ED", StringComparison.OrdinalIgnoreCase) || slug.StartsWith("Ending", StringComparison.OrdinalIgnoreCase);
-                    bool isEd1 = isEd && AnimeThemesHelper.ExtractSlugNumber(slug) == 1;
+                    bool isOp = AnimeThemesHelper.IsOp(slug);
+                    bool isOp1 = AnimeThemesHelper.IsOp1(slug);
+                    bool isEd = AnimeThemesHelper.IsEd(slug);
+                    bool isEd1 = AnimeThemesHelper.IsEd1(slug);
 
                     if (isOp && !isOp1)
                         overriddenOps.Add($"{folder} | {slug}");

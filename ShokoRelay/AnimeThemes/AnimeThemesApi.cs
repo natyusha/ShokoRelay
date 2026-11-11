@@ -12,9 +12,9 @@ public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesAp
     #region Setup & State
 
     private static readonly TimeSpan s_minRequestInterval = TimeSpan.FromSeconds(0.7);
+    private static readonly JsonSerializerOptions s_jsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     private readonly HttpClient _http = httpClient ?? new HttpClient();
-    private readonly JsonSerializerOptions _jsonOptions = new() { PropertyNameCaseInsensitive = true, WriteIndented = true };
     private readonly SemaphoreSlim _rateLock = new(1, 1);
     private DateTimeOffset _lastRequest = DateTimeOffset.MinValue;
     private DateTimeOffset _rateLimitReset = DateTimeOffset.MinValue;
@@ -145,7 +145,7 @@ public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesAp
     private async Task<T?> PostGraphQlAsync<T>(string query, object variables, CancellationToken cancellationToken)
         where T : class
     {
-        string json = JsonSerializer.Serialize(new { query, variables }, _jsonOptions);
+        string json = JsonSerializer.Serialize(new { query, variables }, s_jsonOptions);
 
         for (int i = 0; i < 2; i++)
         {
@@ -171,7 +171,7 @@ public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesAp
             }
 
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-            var result = await JsonSerializer.DeserializeAsync<GraphQlResponse<T>>(stream, _jsonOptions, cancellationToken).ConfigureAwait(false);
+            var result = await JsonSerializer.DeserializeAsync<GraphQlResponse<T>>(stream, s_jsonOptions, cancellationToken).ConfigureAwait(false);
 
             if (result?.Errors != null && result.Errors.Count > 0)
                 logger?.LogWarning("AnimeThemes: GraphQL returned errors: {Errors}", string.Join(", ", result.Errors.Select(e => e.Message)));

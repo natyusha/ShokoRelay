@@ -59,6 +59,7 @@ public class ServiceRegistration : IPluginServiceRegistration
         serviceCollection.AddSingleton<ICollectionService, CollectionService>();
         serviceCollection.AddSingleton<ICriticRatingService, CriticRatingService>();
         serviceCollection.AddSingleton<IImageSyncService, ImageSyncService>();
+        serviceCollection.AddSingleton<IPlexAutomationService, PlexAutomationService>();
         serviceCollection.AddSingleton<IShokoImportService, ShokoImportService>();
         serviceCollection.AddSingleton<SourceLinkService>();
         serviceCollection.AddSingleton(provider =>

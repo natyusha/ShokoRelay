@@ -42,11 +42,11 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
     #region Setup
 
     /// <summary>Static configurations for local series artwork types.</summary>
-    private static readonly (string[] Names, string Prefix, ImageEntityType Type, string Label)[] s_seriesImageConfigs =
+    private static readonly (string[] Names, ImageEntityType Type, string Label)[] s_seriesImageConfigs =
     [
-        (["poster", "folder", "show"], "s", ImageEntityType.Primary, "poster"),
-        (["art", "backdrop", "background", "fanart"], "b", ImageEntityType.Backdrop, "backdrop"),
-        (["clearlogo", "logo"], "l", ImageEntityType.Logo, "logo"),
+        (["poster", "folder", "show"], ImageEntityType.Primary, "poster"),
+        (["art", "backdrop", "background", "fanart"], ImageEntityType.Backdrop, "backdrop"),
+        (["clearlogo", "logo"], ImageEntityType.Logo, "logo"),
     ];
 
     private readonly SemaphoreSlim _syncLock = new(1, 1);
@@ -74,18 +74,18 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
             var prefIdCache = new ConcurrentDictionary<int, string?>();
             var errsBag = new ConcurrentBag<string>();
             var uploadedBag = new ConcurrentBag<string>();
-            var (p, u, s, e) = (0, 0, 0, 0);
+            var (processed, uploaded, skipped, errors) = (0, 0, 0, 0);
 
-            void AddStats(bool handled, bool uploaded, bool skipped, bool error)
+            void AddStats(bool handled, bool wasUploaded, bool wasSkipped, bool error)
             {
-                if (handled && (uploaded || skipped || error))
-                    Interlocked.Increment(ref p);
-                if (uploaded)
-                    Interlocked.Increment(ref u);
-                else if (skipped)
-                    Interlocked.Increment(ref s);
+                if (handled && (wasUploaded || wasSkipped || error))
+                    Interlocked.Increment(ref processed);
+                if (wasUploaded)
+                    Interlocked.Increment(ref uploaded);
+                else if (wasSkipped)
+                    Interlocked.Increment(ref skipped);
                 else if (error)
-                    Interlocked.Increment(ref e);
+                    Interlocked.Increment(ref errors);
             }
 
             // Sync Episode Thumbnails (Local & Plex)
@@ -99,8 +99,8 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
             await SyncLocalSeriesImagesAsync(allSeries, errsBag, uploadedBag, AddStats, cancellationToken).ConfigureAwait(false);
 
             sw.Stop();
-            logger.LogInformation("ImageSyncService: Finished synchronization -> uploaded {UploadedCount} new images to Shoko in {Elapsed}ms", u, sw.ElapsedMilliseconds);
-            return new ImageSyncResult(p, u, s, e, [.. uploadedBag.OrderBy(x => x)], [.. errsBag.OrderBy(x => x)], sw.Elapsed);
+            logger.LogInformation("ImageSyncService: Finished synchronization -> uploaded {UploadedCount} new images to Shoko in {Elapsed}ms", uploaded, sw.ElapsedMilliseconds);
+            return new ImageSyncResult(processed, uploaded, skipped, errors, [.. uploadedBag.OrderBy(x => x)], [.. errsBag.OrderBy(x => x)], sw.Elapsed);
         }
         finally
         {

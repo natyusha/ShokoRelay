@@ -5,24 +5,29 @@ using System.Text.RegularExpressions;
 namespace ShokoRelay.Vfs;
 
 /// <summary>Utilities used during VFS generation including filename sanitization.</summary>
-public static class VfsHelper
+public static partial class VfsHelper
 {
     #region Regex and Mappings
 
     /// <summary>Regex to match standard quotes with the intention of turning them curly.</summary>
-    private static readonly Regex s_quotedTextRegex = new("\"(.*?)\"", RegexOptions.Compiled);
+    [GeneratedRegex("\"(.*?)\"")]
+    private static partial Regex QuotedTextRegex();
 
     /// <summary>Regex to match whitespace except for Hair Space and Zero Width Spaceas they are part of some Plex Extra filename formatting.</summary>
-    private static readonly Regex s_whitespaceRegex = new(@"((?![\u200A\u200B])\s)+", RegexOptions.Compiled);
+    [GeneratedRegex(@"((?![\u200A\u200B])\s)+")]
+    private static partial Regex WhitespaceRegex();
 
     /// <summary>Regex to identify Plex-style split tags in filenames.</summary>
-    private static readonly Regex s_plexSplitTagRegex = new(@"(?ix)(?:^|[\s._-])(cd|disc|disk|dvd|part|pt)[\s._-]*([1-8])(?!\d)", RegexOptions.Compiled);
+    [GeneratedRegex(@"(?ix)(?:^|[\s._-])(cd|disc|disk|dvd|part|pt)[\s._-]*([1-8])(?!\d)")]
+    private static partial Regex PlexSplitTagRegex();
 
     /// <summary>Regex to match local extra directories with optional season suffixes.</summary>
-    private static readonly Regex s_localExtraDirRegex = new($@"^({string.Join("|", PlexConstants.LocalExtraDirs)})(\s+[sS](\d+))?$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    [GeneratedRegex(@"^(Behind The Scenes|Deleted Scenes|Featurettes|Interviews|Scenes|Shorts|Trailers|Other)(\s+[sS](\d+))?$", RegexOptions.IgnoreCase)]
+    private static partial Regex LocalExtraDirRegex();
 
     /// <summary>Regex to match local extra file suffixes.</summary>
-    private static readonly Regex s_localExtraFileRegex = new($@"-(?:behindthescenes|deleted|featurette|interview|scene|short|trailer|other)\d*$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    [GeneratedRegex(@"-(?:behindthescenes|deleted|featurette|interview|scene|short|trailer|other)\d*$", RegexOptions.IgnoreCase)]
+    private static partial Regex LocalExtraFileRegex();
 
     /// <summary>Array of styled text replacements for cleaning episode titles.</summary>
     private static readonly (string Find, string Replace)[] s_styledReplacements = [("1/2", "½"), ("1/6", "⅙"), ("-->", "→"), ("<--", "←"), ("->", "→"), ("<-", "←")];
@@ -94,7 +99,7 @@ public static class VfsHelper
         string c = title;
         foreach (var (f, r) in s_styledReplacements)
             c = c.Replace(f, r, StringComparison.Ordinal);
-        c = s_quotedTextRegex.Replace(c, "“$1”");
+        c = QuotedTextRegex().Replace(c, "“$1”");
 
         // Zero-width space (\u200B) and hair space (\u200A) bypass Plex's undocumented behavior of automatically stripping OP/ED/extra prefixes from display titles while also sorting Openings before Endings
         if (c.StartsWith("Opening", StringComparison.OrdinalIgnoreCase))
@@ -113,7 +118,7 @@ public static class VfsHelper
                 }
             );
 
-        return s_whitespaceRegex.Replace(c, " ").Trim(' ');
+        return WhitespaceRegex().Replace(c, " ").Trim(' ');
     }
 
     #endregion
@@ -260,17 +265,17 @@ public static class VfsHelper
     /// <summary>Determine if a filename contains a Plex-style split tag (e.g. "pt1").</summary>
     /// <param name="fileName">The filename to check.</param>
     /// <returns>True if a split tag is found.</returns>
-    public static bool HasPlexSplitTag(string fileName) => !string.IsNullOrWhiteSpace(fileName) && s_plexSplitTagRegex.IsMatch(Path.GetFileNameWithoutExtension(fileName).Replace('[', ' ').Replace(']', ' '));
+    public static bool HasPlexSplitTag(string fileName) => !string.IsNullOrWhiteSpace(fileName) && PlexSplitTagRegex().IsMatch(Path.GetFileNameWithoutExtension(fileName).Replace('[', ' ').Replace(']', ' '));
 
     /// <summary>Identifies local extra directories with optional season suffixes.</summary>
     /// <param name="name">The directory name to evaluate.</param>
     /// <returns>A Match object containing the extra type and optional season number.</returns>
-    public static Match MatchLocalExtraDir(string name) => s_localExtraDirRegex.Match(name);
+    public static Match MatchLocalExtraDir(string name) => LocalExtraDirRegex().Match(name);
 
     /// <summary>Identifies local extra directories directly from a string span.</summary>
     /// <param name="name">The directory name to evaluate.</param>
     /// <returns>True if it matches the pattern.</returns>
-    public static bool IsLocalExtraDir(ReadOnlySpan<char> name) => s_localExtraDirRegex.IsMatch(name);
+    public static bool IsLocalExtraDir(ReadOnlySpan<char> name) => LocalExtraDirRegex().IsMatch(name);
 
     /// <summary>Identifies local extra files from a string span and returns the start index of the suffix if matched.</summary>
     /// <param name="fileNameWithoutExtension">The filename without its extension to evaluate.</param>
@@ -278,7 +283,7 @@ public static class VfsHelper
     /// <returns>True if the filename matches a Plex local extra pattern; otherwise, false.</returns>
     public static bool IsLocalExtraFile(ReadOnlySpan<char> fileNameWithoutExtension, out int suffixIndex)
     {
-        var enumerator = s_localExtraFileRegex.EnumerateMatches(fileNameWithoutExtension);
+        var enumerator = LocalExtraFileRegex().EnumerateMatches(fileNameWithoutExtension);
         return (suffixIndex = enumerator.MoveNext() ? enumerator.Current.Index : -1) >= 0;
     }
 

@@ -516,7 +516,7 @@ public class AdvancedConfig
     [Display(Name = "Plex Scan Delay", Description = "A delay (in seconds) post VFS file add *req. 'Force Partial Scans'")]
     [Range(1, 60, ErrorMessage = "Plex Scan Delay must be between 1 and 60")]
     [DefaultValue(5)]
-    public int PlexScanDelay { get; set; } = 10;
+    public int PlexScanDelay { get; set; } = 5;
 
     /// <summary>Task parallelism limit.</summary>
     [Display(Name = "Parallelism", Description = "The concurrent operations cap *used by VFS and AnimeThemes batching")]

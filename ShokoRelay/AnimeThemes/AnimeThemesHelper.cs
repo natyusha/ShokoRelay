@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -129,13 +130,25 @@ internal static partial class AnimeThemesHelper
     [GeneratedRegex("^(?:op|ed)(?!0)[0-9]{0,2}(?:-(?:bd|web|tv|original))?$", RegexOptions.IgnoreCase)]
     internal static partial Regex SlugRegex();
 
-    /// <summary>Regex for extracting digits from a theme slug.</summary>
-    [GeneratedRegex(@"\d+")]
-    private static partial Regex NumberRegex();
+    /// <summary>Regex for identifying Opening themes.</summary>
+    [GeneratedRegex(@"^(?:OP|Opening)\b", RegexOptions.IgnoreCase)]
+    internal static partial Regex OpRegex();
 
     /// <summary>Regex for identifying default Opening 1 themes (including their alternate names and suffixes).</summary>
     [GeneratedRegex(@"^(?:OP|Opening)\s*(?:1\b|-|\(|$)", RegexOptions.IgnoreCase)]
-    private static partial Regex Op1Regex();
+    internal static partial Regex Op1Regex();
+
+    /// <summary>Regex for identifying Ending themes.</summary>
+    [GeneratedRegex(@"^(?:ED|Ending)\b", RegexOptions.IgnoreCase)]
+    internal static partial Regex EdRegex();
+
+    /// <summary>Regex for identifying default Ending 1 themes (including their alternate names and suffixes).</summary>
+    [GeneratedRegex(@"^(?:ED|Ending)\s*(?:1\b|-|\(|$)", RegexOptions.IgnoreCase)]
+    internal static partial Regex Ed1Regex();
+
+    /// <summary>Regex for extracting digits from a theme slug.</summary>
+    [GeneratedRegex(@"\d+")]
+    private static partial Regex NumberRegex();
 
     /// <summary>Regex for inserting spaces into PascalCase strings accounting for numbers.</summary>
     [GeneratedRegex(@"(?<=[a-z])(?=[A-Z])|(?<=[a-z])(?=\d)|(?<=\d)(?=[A-Za-z])")]
@@ -146,7 +159,7 @@ internal static partial class AnimeThemesHelper
     private static partial Regex SlugStandardizeRegex();
 
     /// <summary>Dictionary mapping slug suffixes to their formatted display strings.</summary>
-    private static readonly Dictionary<string, string> s_slugFormatting = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly FrozenDictionary<string, string> s_slugFormatting = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
         { "Animax", "Animax" },
         { "ATX", "AT-X" },
@@ -172,7 +185,7 @@ internal static partial class AnimeThemesHelper
         { "TV", "Broadcast" },
         { "WEB", "Web" },
         { "YorinukiGintamaSan", "Yorinuki Gintama-san" },
-    };
+    }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
     #endregion
 
@@ -327,6 +340,26 @@ internal static partial class AnimeThemesHelper
     #endregion
 
     #region Naming & Path Logic
+
+    /// <summary>Checks if a slug corresponds to an Opening theme.</summary>
+    /// <param name="slug">The theme slug string.</param>
+    /// <returns>True if the slug represents an Opening theme.</returns>
+    internal static bool IsOp(string slug) => OpRegex().IsMatch(slug);
+
+    /// <summary>Checks if a slug corresponds to the primary/first Opening theme.</summary>
+    /// <param name="slug">The theme slug string.</param>
+    /// <returns>True if the slug represents Opening 1.</returns>
+    internal static bool IsOp1(string slug) => Op1Regex().IsMatch(slug);
+
+    /// <summary>Checks if a slug corresponds to an Ending theme.</summary>
+    /// <param name="slug">The theme slug string.</param>
+    /// <returns>True if the slug represents an Ending theme.</returns>
+    internal static bool IsEd(string slug) => EdRegex().IsMatch(slug);
+
+    /// <summary>Checks if a slug corresponds to the primary/first Ending theme.</summary>
+    /// <param name="slug">The theme slug string.</param>
+    /// <returns>True if the slug represents Ending 1.</returns>
+    internal static bool IsEd1(string slug) => Ed1Regex().IsMatch(slug);
 
     /// <summary>Extracts the numeric suffix from a theme slug, defaulting to 1 if unnumbered or unparseable.</summary>
     /// <param name="baseSlug">The base slug to extract numbers from.</param>
