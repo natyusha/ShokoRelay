@@ -144,7 +144,7 @@ public class AnimeThemesMp3Generator(
                 .Distinct(VfsShared.PathComparer)
                 .ToList();
 
-            _themeMp3Cache = new ConcurrentDictionary<string, string>(VfsShared.PathComparer);
+            var newCache = new ConcurrentDictionary<string, string>(VfsShared.PathComparer);
 
             Parallel.ForEach(
                 roots,
@@ -154,11 +154,12 @@ public class AnimeThemesMp3Generator(
                     {
                         string dir = Path.GetDirectoryName(f)!;
                         if (!VfsShared.IsPathIgnored(dir, videoService, Settings, excluded))
-                            _themeMp3Cache.TryAdd(dir, "|");
+                            newCache.TryAdd(dir, "|");
                     }
                 }
             );
 
+            _themeMp3Cache = newCache;
             SaveCacheToFile();
             logger.LogInformation("AnimeThemes MP3: Theme.mp3 cache refreshed -> {FolderCount} folders found across {RootCount} roots", _themeMp3Cache.Count, roots.Count);
         }

@@ -68,12 +68,13 @@ public class DashboardController(
         if (string.IsNullOrWhiteSpace(path) || "player".Equals(path, StringComparison.OrdinalIgnoreCase) || "browser".Equals(path, StringComparison.OrdinalIgnoreCase))
             return NotFound();
 
-        string dashboardDir = Path.Combine(ConfigProvider.PluginDirectory, "dashboard");
+        string dashboardDir = Path.GetFullPath(Path.Combine(ConfigProvider.PluginDirectory, "dashboard"));
+        string dashboardDirWithSep = dashboardDir.EndsWith(Path.DirectorySeparatorChar) ? dashboardDir : dashboardDir + Path.DirectorySeparatorChar;
         string safePath = VfsShared.NormalizeSeparators(path);
         string requested = Path.GetFullPath(Path.Combine(dashboardDir, safePath));
 
         // Resolve the MIME content type for a given file path, prioritizing .cshtml templates
-        return !requested.StartsWith(Path.GetFullPath(dashboardDir), StringComparison.OrdinalIgnoreCase) || !IoFile.Exists(requested) || requested.EndsWith(".cshtml", StringComparison.OrdinalIgnoreCase)
+        return !requested.StartsWith(dashboardDirWithSep, StringComparison.OrdinalIgnoreCase) || !IoFile.Exists(requested) || requested.EndsWith(".cshtml", StringComparison.OrdinalIgnoreCase)
             ? NotFound()
             : PhysicalFile(requested, s_contentTypeProvider.TryGetContentType(requested, out var contentType) ? contentType : "application/octet-stream");
     }

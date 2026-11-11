@@ -332,10 +332,10 @@ public sealed class FfmpegService(string pluginDirectory, string applicationPath
 
     #region Internal Helpers
 
-    /// <summary>Sanitizes metadata values by replacing double quotes with single quotes to ensure command-line argument integrity.</summary>
+    /// <summary>Sanitizes metadata values by removing newlines and replacing double quotes with single quotes to ensure command-line argument integrity.</summary>
     /// <param name="value">The raw metadata string to sanitize.</param>
     /// <returns>A sanitized string safe for use in FFmpeg metadata arguments.</returns>
-    private static string EscapeMetadata(string value) => value?.Replace("\"", "'") ?? string.Empty;
+    private static string EscapeMetadata(string value) => value?.Replace("\r", "").Replace("\n", " ").Replace("\"", "'") ?? string.Empty;
 
     #endregion
 }

@@ -147,8 +147,8 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
                             using var videoResp = await httpClient.GetAsync(video.Link, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
                             videoResp.EnsureSuccessStatusCode();
 
-                            using (var fs = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None))
-                                await videoResp.Content.CopyToAsync(fs, cancellationToken).ConfigureAwait(false);
+                            using var fs = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
+                            await videoResp.Content.CopyToAsync(fs, cancellationToken).ConfigureAwait(false);
 
                             downloads.Add(video.Basename);
                             downloadedItems.Add((relPath, video.Basename));
@@ -172,8 +172,8 @@ public class AnimeThemesWebmDownloader(HttpClient httpClient, IVideoService vide
                                 using var retryResp = await httpClient.GetAsync(video.Link, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
                                 retryResp.EnsureSuccessStatusCode();
 
-                                using (var fs = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None))
-                                    await retryResp.Content.CopyToAsync(fs, cancellationToken).ConfigureAwait(false);
+                                using var fs = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
+                                await retryResp.Content.CopyToAsync(fs, cancellationToken).ConfigureAwait(false);
 
                                 downloads.Add(video.Basename);
                                 downloadedItems.Add((relPath, video.Basename));

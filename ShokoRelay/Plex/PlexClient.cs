@@ -131,16 +131,23 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
 
         foreach (var (tgt, guessedPath) in targets)
         {
-            using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{tgt.SectionId}/refresh?path={Uri.EscapeDataString(guessedPath)}", tgt.ServerUrl);
-            using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
-            if (resp.IsSuccessStatusCode)
+            try
             {
-                anyOk = true;
-                logger.LogDebug("PlexClient: refresh triggered for -> '{Path}' on {ServerUrl}:{SectionId}", guessedPath, tgt.ServerUrl, tgt.SectionId);
+                using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{tgt.SectionId}/refresh?path={Uri.EscapeDataString(guessedPath)}", tgt.ServerUrl);
+                using var resp = await httpClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                if (resp.IsSuccessStatusCode)
+                {
+                    anyOk = true;
+                    logger.LogDebug("PlexClient: refresh triggered for -> '{Path}' on {ServerUrl}:{SectionId}", guessedPath, tgt.ServerUrl, tgt.SectionId);
+                }
+                else
+                {
+                    logger.LogWarning("PlexClient: refresh failed ({StatusCode}) for folder -> '{Path}' in section {SectionId}", resp.StatusCode, guessedPath, tgt.SectionId);
+                }
             }
-            else
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
             {
-                logger.LogWarning("PlexClient: refresh failed ({StatusCode}) for folder -> '{Path}' in section {SectionId}", resp.StatusCode, guessedPath, tgt.SectionId);
+                logger.LogWarning("PlexClient: Network timeout triggering refresh for '{Path}' in section {SectionId}", guessedPath, tgt.SectionId);
             }
         }
 
@@ -163,15 +170,23 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
         if (!IsEnabled || ratingKey <= 0 || target == null)
             return false;
 
-        using var req = CreateRequest(HttpMethod.Put, $"/library/metadata/{ratingKey}/refresh", target.ServerUrl);
-        using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            using var req = CreateRequest(HttpMethod.Put, $"/library/metadata/{ratingKey}/refresh", target.ServerUrl);
+            using var resp = await httpClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
 
-        if (resp.IsSuccessStatusCode)
-            logger.LogDebug("PlexClient: Metadata refresh triggered for RatingKey {RatingKey} on {ServerName}", ratingKey, target.ServerName);
-        else
-            logger.LogWarning("PlexClient: Metadata refresh failed ({StatusCode}) for RatingKey {RatingKey} on {ServerName}", resp.StatusCode, ratingKey, target.ServerName);
+            if (resp.IsSuccessStatusCode)
+                logger.LogDebug("PlexClient: Metadata refresh triggered for RatingKey {RatingKey} on {ServerName}", ratingKey, target.ServerName);
+            else
+                logger.LogWarning("PlexClient: Metadata refresh failed ({StatusCode}) for RatingKey {RatingKey} on {ServerName}", resp.StatusCode, ratingKey, target.ServerName);
 
-        return resp.IsSuccessStatusCode;
+            return resp.IsSuccessStatusCode;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            logger.LogWarning("PlexClient: Network timeout triggering metadata refresh for RatingKey {RatingKey}", ratingKey);
+            return false;
+        }
     }
 
     /// <summary>Request Plex to analyze the media for a specific item (e.g., to regenerate thumbnails or detect stream changes after a file replacement).</summary>
@@ -184,15 +199,23 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
         if (!IsEnabled || ratingKey <= 0 || target == null)
             return false;
 
-        using var req = CreateRequest(HttpMethod.Put, $"/library/metadata/{ratingKey}/analyze", target.ServerUrl);
-        using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            using var req = CreateRequest(HttpMethod.Put, $"/library/metadata/{ratingKey}/analyze", target.ServerUrl);
+            using var resp = await httpClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
 
-        if (resp.IsSuccessStatusCode)
-            logger.LogDebug("PlexClient: Media analysis triggered for RatingKey {RatingKey} on {ServerName}", ratingKey, target.ServerName);
-        else
-            logger.LogWarning("PlexClient: Media analysis failed ({StatusCode}) for RatingKey {RatingKey} on {ServerName}", resp.StatusCode, ratingKey, target.ServerName);
+            if (resp.IsSuccessStatusCode)
+                logger.LogDebug("PlexClient: Media analysis triggered for RatingKey {RatingKey} on {ServerName}", ratingKey, target.ServerName);
+            else
+                logger.LogWarning("PlexClient: Media analysis failed ({StatusCode}) for RatingKey {RatingKey} on {ServerName}", resp.StatusCode, ratingKey, target.ServerName);
 
-        return resp.IsSuccessStatusCode;
+            return resp.IsSuccessStatusCode;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            logger.LogWarning("PlexClient: Network timeout triggering media analysis for RatingKey {RatingKey}", ratingKey);
+            return false;
+        }
     }
 
     /// <summary>Evaluates and safely empties the trash for a given Plex library section based on a percentage threshold of items.</summary>
@@ -248,6 +271,11 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
                 return (true, [], "Trash is already empty.");
 
             double percent = (double)trashedSize / totalSize * 100;
+
+            // Critical guard: if a network mount drops entirely, 100% of the library is trashed. Always abort regardless of threshold setting.
+            if (percent >= 100)
+                return (false, trashedItems, $"Catastrophic failure detected: 100% of library is trashed. Aborting to prevent data loss.");
+
             if (percent > threshold)
                 return (false, trashedItems, $"Safety threshold exceeded. {trashedSize}/{totalSize} ({percent:F1}%) items trashed (Limit: {threshold}%).");
 
@@ -260,6 +288,11 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
             }
 
             return (true, trashedItems, $"Successfully processed {trashedSize} trashed items ({percent:F1}%).");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            logger.LogWarning("PlexClient: Network timeout during empty trash for section {SectionId}", target.SectionId);
+            return (false, [], $"Network timeout during trash processing.");
         }
         catch (Exception ex)
         {

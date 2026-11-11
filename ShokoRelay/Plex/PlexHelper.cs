@@ -1,5 +1,4 @@
 using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Enums;
 
@@ -10,30 +9,51 @@ public static partial class PlexHelper
 {
     #region ID Parsing/Extraction
 
-    /// <summary>Regex which extracts the ID from a Show GUID.</summary>
-    [GeneratedRegex(@"/show/(\d+)")]
-    private static partial Regex ShowIdRegex();
-
-    /// <summary>Regex which extracts the ID from an Episode or Movie GUID.</summary>
-    [GeneratedRegex(@"/(?:episode/e|movie/m)(\d+)")]
-    private static partial Regex EpisodeIdRegex();
-
-    /// <summary>Parse a Plex GUID string and return the embedded Shoko series ID.</summary>
+    /// <summary>Parse a Plex GUID string and return the embedded Shoko series ID using zero-allocation span parsing.</summary>
     /// <param name="guid">Plex GUID.</param>
     /// <returns>Extracted ID or null.</returns>
-    public static int? ExtractShokoSeriesIdFromGuid(string? guid) => ExtractIdFromGuid(guid, ShowIdRegex());
+    public static int? ExtractShokoSeriesIdFromGuid(string? guid)
+    {
+        if (string.IsNullOrWhiteSpace(guid))
+            return null;
 
-    /// <summary>Parse Shoko episode ID from GUID.</summary>
+        var span = guid.AsSpan();
+        int idx = span.IndexOf("/show/");
+        if (idx < 0)
+            return null;
+
+        var idSpan = span[(idx + 6)..];
+        int end = 0;
+        while (end < idSpan.Length && char.IsAsciiDigit(idSpan[end]))
+            end++;
+
+        return end > 0 && int.TryParse(idSpan[..end], out int id) ? id : null;
+    }
+
+    /// <summary>Parse Shoko episode ID from a Plex episode or movie GUID using zero-allocation span parsing.</summary>
     /// <param name="guid">Plex GUID.</param>
     /// <returns>Extracted ID or null.</returns>
-    public static int? ExtractShokoEpisodeIdFromGuid(string? guid) => ExtractIdFromGuid(guid, EpisodeIdRegex());
+    public static int? ExtractShokoEpisodeIdFromGuid(string? guid)
+    {
+        if (string.IsNullOrWhiteSpace(guid))
+            return null;
 
-    /// <summary>Extracts a numeric ID from a Plex GUID string using the provided regex.</summary>
-    /// <param name="guid">The Plex GUID string.</param>
-    /// <param name="regex">The Regex used to match the ID.</param>
-    /// <returns>Extracted ID or null.</returns>
-    private static int? ExtractIdFromGuid(string? guid, Regex regex) =>
-        !string.IsNullOrWhiteSpace(guid) && regex.Match(guid) is { Success: true } match && int.TryParse(match.Groups[1].Value, out var id) ? id : null;
+        var span = guid.AsSpan();
+        int slashIdx = span.LastIndexOf('/');
+        if (slashIdx < 0 || slashIdx >= span.Length - 2)
+            return null;
+
+        var idPart = span[(slashIdx + 1)..];
+        if (idPart[0] is not ('e' or 'm'))
+            return null;
+
+        var numSpan = idPart[1..];
+        int partIdx = numSpan.IndexOf('p');
+        if (partIdx >= 0)
+            numSpan = numSpan[..partIdx];
+
+        return int.TryParse(numSpan, out int id) ? id : null;
+    }
 
     /// <summary>Determines if a rating key represents an episode.</summary>
     /// <param name="ratingKey">The rating key to check.</param>

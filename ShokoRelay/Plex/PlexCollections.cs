@@ -52,32 +52,42 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient, ILogg
         if (!IsEnabled || string.IsNullOrWhiteSpace(collectionName) || target == null)
             return null;
 
-        // Find a collection ID by title
-        using var req = plexClient.CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/collections?title={Uri.EscapeDataString(collectionName)}&X-Plex-Container-Size=10", target.ServerUrl);
-        using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
-        var meta = (await PlexApi.ReadContainerAsync(resp, cancellationToken).ConfigureAwait(false))?.Metadata?.FirstOrDefault();
-        if (int.TryParse(meta?.RatingKey, out int id))
-            return id;
-
-        // Create a new collection in the specified target library
-        string path = $"/library/collections?title={Uri.EscapeDataString(collectionName)}&titleSort={Uri.EscapeDataString(collectionName)}&sectionId={target.SectionId}&type={(int)target.LibraryType}";
-        using var req2 = plexClient.CreateRequest(HttpMethod.Post, path, target.ServerUrl);
-        using var resp2 = await httpClient.SendAsync(req2, cancellationToken).ConfigureAwait(false);
-        if (!resp2.IsSuccessStatusCode)
+        try
         {
-            var body = await resp2.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-            logger.LogWarning(
-                "PlexCollections: Create collection failed with status {StatusCode} for title {Title} on {ServerUrl}/{SectionId}. Response: {Response}",
-                resp2.StatusCode,
-                collectionName,
-                target.ServerUrl,
-                target.SectionId,
-                body?.Length > 1024 ? body[..1024] + "..." : body
-            );
+            // Find a collection ID by title, enforcing an exact match to prevent Plex search fuzziness from merging unrelated collections
+            using var req = plexClient.CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/collections?title={Uri.EscapeDataString(collectionName)}&X-Plex-Container-Size=10", target.ServerUrl);
+            using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+            var container = await PlexApi.ReadContainerAsync(resp, cancellationToken).ConfigureAwait(false);
+            var meta = container?.Metadata?.FirstOrDefault(c => string.Equals(c.Title, collectionName, StringComparison.OrdinalIgnoreCase));
+            if (int.TryParse(meta?.RatingKey, out int id))
+                return id;
+
+            // Create a new collection in the specified target library
+            string path = $"/library/collections?title={Uri.EscapeDataString(collectionName)}&titleSort={Uri.EscapeDataString(collectionName)}&sectionId={target.SectionId}&type={(int)target.LibraryType}";
+            using var req2 = plexClient.CreateRequest(HttpMethod.Post, path, target.ServerUrl);
+            using var resp2 = await httpClient.SendAsync(req2, cancellationToken).ConfigureAwait(false);
+            if (!resp2.IsSuccessStatusCode)
+            {
+                var body = await resp2.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                logger.LogWarning(
+                    "PlexCollections: Create collection failed with status {StatusCode} for title {Title} on {ServerUrl}/{SectionId}. Response: {Response}",
+                    resp2.StatusCode,
+                    collectionName,
+                    target.ServerUrl,
+                    target.SectionId,
+                    body?.Length > 1024 ? body[..1024] + "..." : body
+                );
+                return null;
+            }
+            var container2 = await PlexApi.ReadContainerAsync(resp2, cancellationToken).ConfigureAwait(false);
+            var meta2 = container2?.Metadata?.FirstOrDefault(c => string.Equals(c.Title, collectionName, StringComparison.OrdinalIgnoreCase));
+            return int.TryParse(meta2?.RatingKey, out int id2) ? id2 : null;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            logger.LogWarning("PlexCollections: Network error during collection creation for {Title}: {Message}", collectionName, ex.Message);
             return null;
         }
-        var meta2 = (await PlexApi.ReadContainerAsync(resp2, cancellationToken).ConfigureAwait(false))?.Metadata?.FirstOrDefault();
-        return int.TryParse(meta2?.RatingKey, out int id2) ? id2 : null;
     }
 
     #endregion

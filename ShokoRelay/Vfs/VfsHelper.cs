@@ -347,7 +347,7 @@ public static class VfsHelper
                         try
                         {
                             foreach (string file in Directory.EnumerateFiles(root, "*.webm", SearchOption.AllDirectories))
-                                dict[Path.GetRelativePath(root, file).Replace('\\', '/').TrimStart('/')] = Path.GetFullPath(file);
+                                dict[Path.GetRelativePath(root, file).Replace('\\', '/').TrimLeadingSlashes()] = Path.GetFullPath(file);
                         }
                         catch { }
                     }
@@ -356,7 +356,7 @@ public static class VfsHelper
             )
             .Value;
 
-        string normalizedRel = relativePath.Replace('\\', '/').TrimStart('/');
+        string normalizedRel = relativePath.Replace('\\', '/').TrimLeadingSlashes();
         return cache.TryGetValue(normalizedRel, out string? absPath) ? absPath : null;
     }
 

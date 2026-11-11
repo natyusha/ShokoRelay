@@ -350,14 +350,20 @@ public class AnimeThemesController(
                     }
                 }
 
-                // Pre-calculate a fast lookup hashset for series that physically exist in the local collection
-                var localSeriesWithFiles = new HashSet<int>(MetadataService.GetAllShokoSeries()?.Where(s => s.Episodes.Any(e => e.Videos?.Count > 0)).Select(s => s.AnidbAnimeID) ?? []);
+                // Lazy lookup cache for series that physically exist in the local collection
+                var localSeriesWithFiles = new HashSet<int>();
 
                 foreach (var entry in entries)
                 {
-                    // Check if anime is NOT in Shoko, or if it is but has no physical files
+                    // Check if anime is in Shoko and has physical files without querying the entire database upfront
                     if (localSeriesWithFiles.Contains(entry.AniDbId))
                         continue;
+
+                    if (MetadataService.GetShokoSeriesByAnidbID(entry.AniDbId) is { } localSeries && localSeries.Episodes.Any(e => e.Videos?.Count > 0))
+                    {
+                        localSeriesWithFiles.Add(entry.AniDbId);
+                        continue;
+                    }
 
                     string normRel = entry.FilePath.TrimLeadingSlashes().Replace('\\', '/');
                     if (!physicalThemes.TryGetValue(normRel, out var absolutePath))

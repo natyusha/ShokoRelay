@@ -32,7 +32,7 @@ public static class PlexApi
             var wrapper = await JsonSerializer.DeserializeAsync<PlexMediaContainerWrapper>(stream, JsonOptions, cancellationToken).ConfigureAwait(false);
             return wrapper?.MediaContainer;
         }
-        catch (JsonException)
+        catch (Exception ex) when (ex is JsonException or IOException)
         {
             // Fail gracefully if Plex or a reverse proxy returns unexpected HTML/XML error pages instead of JSON.
             // This commonly happens if the backend metadata provider crashes due to API abstraction mismatches.

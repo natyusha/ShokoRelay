@@ -74,9 +74,26 @@ public class VfsWatcher(
             releaseService.ReleaseSaved -= OnVideoReleaseSaved;
 
             foreach (var cts in _pendingMetadataFixups.Values)
-                cts.Cancel();
+            {
+                try
+                {
+                    cts.Cancel();
+                    cts.Dispose();
+                }
+                catch { }
+            }
             foreach (var cts in _pendingLibraryScans.Values)
-                cts.Cancel();
+            {
+                try
+                {
+                    cts.Cancel();
+                    cts.Dispose();
+                }
+                catch { }
+            }
+
+            _pendingMetadataFixups.Clear();
+            _pendingLibraryScans.Clear();
         }
         catch { }
 
@@ -274,7 +291,14 @@ public class VfsWatcher(
     private void ScheduleDebouncedAction(int seriesId, int delaySeconds, ConcurrentDictionary<int, CancellationTokenSource> tracker, Func<CancellationToken, Task> action)
     {
         if (tracker.TryRemove(seriesId, out var oldCts))
-            oldCts.Cancel();
+        {
+            try
+            {
+                oldCts.Cancel();
+                oldCts.Dispose();
+            }
+            catch { }
+        }
 
         var cts = new CancellationTokenSource();
         tracker[seriesId] = cts;
@@ -306,8 +330,14 @@ public class VfsWatcher(
             }
             finally
             {
-                tracker.TryRemove(new KeyValuePair<int, CancellationTokenSource>(seriesId, cts));
-                cts.Dispose();
+                if (tracker.TryRemove(new KeyValuePair<int, CancellationTokenSource>(seriesId, cts)))
+                {
+                    try
+                    {
+                        cts.Dispose();
+                    }
+                    catch { }
+                }
             }
         });
     }

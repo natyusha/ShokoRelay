@@ -29,48 +29,56 @@
     } else if (!isLoading) btn.querySelector(".button-spinner")?.remove();
   }
 
+  let isTaskSyncing = false;
+
   /**
    * Polls the server for active tasks and completed results, synchronizing the UI button states and disabling sub-tasks during automation runs.
    * @returns {Promise<void>}
    */
   async function syncActiveTasks() {
-    const res = await fetchJson(base + "/tasks/active");
-    if (!res.ok) return;
-    const activeTasks = getData(res) || [];
-    const isAutoRunning = activeTasks.includes(window._sr.tasks.plexAutomationRun);
-    const isPlexLinked = !!window._sr.isPlexLinked;
+    if (isTaskSyncing) return;
+    isTaskSyncing = true;
+    try {
+      const res = await fetchJson(base + "/tasks/active");
+      if (!res.ok) return;
+      const activeTasks = getData(res) || [];
+      const isAutoRunning = activeTasks.includes(window._sr.tasks.plexAutomationRun);
+      const isPlexLinked = !!window._sr.isPlexLinked;
 
-    MANAGED_TASK_IDS.forEach((id) => {
-      const btn = el(id);
-      if (!btn) return;
+      MANAGED_TASK_IDS.forEach((id) => {
+        const btn = el(id);
+        if (!btn) return;
 
-      if (isAutoRunning && [window._sr.tasks.plexCollectionsBuild, window._sr.tasks.plexRatingsApply, window._sr.tasks.plexImagesSync].includes(id)) {
-        setButtonLoading(btn, false);
-        btn.disabled = true;
-      } else {
-        setButtonLoading(btn, activeTasks.includes(id) || btn.classList.contains("clicking"));
-        if (btn.classList.contains("plex-auth") && !isPlexLinked) {
+        if (isAutoRunning && [window._sr.tasks.plexCollectionsBuild, window._sr.tasks.plexRatingsApply, window._sr.tasks.plexImagesSync].includes(id)) {
+          setButtonLoading(btn, false);
           btn.disabled = true;
+        } else {
+          setButtonLoading(btn, activeTasks.includes(id) || btn.classList.contains("clicking"));
+          if (btn.classList.contains("plex-auth") && !isPlexLinked) {
+            btn.disabled = true;
+          }
         }
-      }
-    });
+      });
 
-    const completeRes = await fetchJson(base + "/tasks/completed");
-    const completeData = getData(completeRes);
-    if (completeRes.ok && completeData) {
-      let hasNewLogs = false;
-      for (const [taskName, result] of Object.entries(completeData)) {
-        const btn = el(taskName);
-        if (btn?.classList.contains("clicking")) continue;
-        const isOk = (result.status || result.Status || "").toLowerCase() === "ok";
-        const fInput = btn?.dataset.relayPersistIfEmpty ? document.querySelector(btn.dataset.relayPersistIfEmpty) : null;
+      const completeRes = await fetchJson(base + "/tasks/completed");
+      const completeData = getData(completeRes);
+      if (completeRes.ok && completeData) {
+        let hasNewLogs = false;
+        for (const [taskName, result] of Object.entries(completeData)) {
+          const btn = el(taskName);
+          if (btn?.classList.contains("clicking")) continue;
+          const isOk = (result.status || result.Status || "").toLowerCase() === "ok";
+          const fInput = btn?.dataset.relayPersistIfEmpty ? document.querySelector(btn.dataset.relayPersistIfEmpty) : null;
 
-        toastOperation({ ok: isOk, data: result }, taskName.replace(/-/g, " "), { hideOnSucceed: fInput?.value?.trim() ? TOAST_MS : 0 });
-        await fetch(base + `/tasks/clear/${taskName}`, { method: "POST" });
-        hasNewLogs = true;
-        if (taskName === window._sr.tasks.plexAuthRefresh) window._sr.refreshPlexState?.();
+          toastOperation({ ok: isOk, data: result }, taskName.replace(/-/g, " "), { hideOnSucceed: fInput?.value?.trim() ? TOAST_MS : 0 });
+          await fetch(base + `/tasks/clear/${taskName}`, { method: "POST" });
+          hasNewLogs = true;
+          if (taskName === window._sr.tasks.plexAuthRefresh) window._sr.refreshPlexState?.();
+        }
+        if (hasNewLogs) loadLogs();
       }
-      if (hasNewLogs) loadLogs();
+    } finally {
+      isTaskSyncing = false;
     }
   }
 

@@ -20,6 +20,20 @@ public static class ContentRatingHelper
 
     #endregion
 
+    #region Thread-Local State
+
+    /// <summary>Thread-local reusable state to prevent allocating new HashSets and Dictionaries for every series during a full library scan.</summary>
+    private sealed class RatingState
+    {
+        public readonly HashSet<string> TagSet = new(StringComparer.OrdinalIgnoreCase);
+        public readonly Dictionary<string, int> AniDbWeights = new(StringComparer.OrdinalIgnoreCase);
+    }
+
+    [ThreadStatic]
+    private static RatingState? s_ratingState;
+
+    #endregion
+
     #region Content Rating Logic
 
     /// <summary>Determine a combined rating string and an adult flag for a series or movie based on metadata, tags, and TMDB fallback.</summary>
@@ -28,7 +42,13 @@ public static class ContentRatingHelper
     /// <returns>A tuple of (Rating, IsAdult).</returns>
     public static (string? Rating, bool IsAdult) GetContentRatingAndAdult(ISeries? series, IWithContentRatings? fallback = null)
     {
-        var tagSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        s_ratingState ??= new RatingState();
+        var tagSet = s_ratingState.TagSet;
+        var anidbWeights = s_ratingState.AniDbWeights;
+
+        tagSet.Clear();
+        anidbWeights.Clear();
+
         var tags = (series as IShokoSeries)?.Tags;
         if (tags != null)
         {
@@ -48,7 +68,6 @@ public static class ContentRatingHelper
         }
 
         // Build AniDB weight dictionary and populate tagSet for precision-based decisions (defaults to 0 when not present).
-        var anidbWeights = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         if (series is IShokoSeries ss && ss.AnidbAnime?.Tags is IReadOnlyList<IAnidbTagForAnime> atags)
         {
             foreach (var t in atags)

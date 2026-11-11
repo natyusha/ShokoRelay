@@ -68,7 +68,14 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             string? rawPath = body?.Filename ?? Request.Query["filename"];
             string? title = body?.Title ?? Request.Query["title"];
             int? manual = body?.Manual ?? (int.TryParse(Request.Query["manual"], out var m) ? m : null);
-            int? id = string.IsNullOrWhiteSpace(rawPath) ? (manual == 1 && int.TryParse(title, out var manualId) ? manualId : null) : TextHelper.ExtractSeriesId(rawPath);
+            int? manualId = int.TryParse(title, out var mId)
+                ? mId
+                : (
+                    title?.StartsWith(PlexConstants.AniDbPrefix, StringComparison.OrdinalIgnoreCase) == true && int.TryParse(title[1..], out var aid)
+                        ? MetadataService.GetShokoSeriesByAnidbID(aid)?.LocalID
+                        : null
+                );
+            int? id = string.IsNullOrWhiteSpace(rawPath) ? (manual == 1 ? manualId : null) : TextHelper.ExtractSeriesId(rawPath);
 
             if (!id.HasValue)
                 return EmptyMatch();

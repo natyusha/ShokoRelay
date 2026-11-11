@@ -145,12 +145,12 @@ public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesAp
     private async Task<T?> PostGraphQlAsync<T>(string query, object variables, CancellationToken cancellationToken)
         where T : class
     {
-        await RateLimitAsync(cancellationToken).ConfigureAwait(false);
-
         string json = JsonSerializer.Serialize(new { query, variables }, _jsonOptions);
 
         for (int i = 0; i < 2; i++)
         {
+            await RateLimitAsync(cancellationToken).ConfigureAwait(false);
+
             using var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
             using var response = await _http.PostAsync(AnimeThemesHelper.AtApiBase, content, cancellationToken).ConfigureAwait(false);
 

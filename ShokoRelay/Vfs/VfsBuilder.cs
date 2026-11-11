@@ -113,7 +113,21 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
 
                         Interlocked.Increment(ref seriesChecked);
 
-                        foreach (var file in Directory.EnumerateFiles(seriesFolder, "*", SearchOption.AllDirectories))
+                        var filesToAudit = new List<string>();
+                        var subDirsToAudit = new List<string>();
+
+                        try
+                        {
+                            filesToAudit = [.. Directory.EnumerateFiles(seriesFolder, "*", SearchOption.AllDirectories)];
+                            subDirsToAudit = [.. Directory.GetDirectories(seriesFolder)];
+                        }
+                        catch (Exception ex)
+                        {
+                            errors.Add($"Failed to enumerate series folder {seriesFolder}: {ex.Message}");
+                            return;
+                        }
+
+                        foreach (var file in filesToAudit)
                         {
                             try
                             {
@@ -131,7 +145,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
                             }
                         }
 
-                        foreach (var subDir in Directory.GetDirectories(seriesFolder))
+                        foreach (var subDir in subDirsToAudit)
                         {
                             try
                             {
@@ -439,100 +453,108 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
 
             foreach (var mapping in fileData.Mappings.OrderBy(m => m.Coords.Season).ThenBy(m => m.Coords.Episode).ThenBy(m => m.PartIndex ?? 0))
             {
-                if (!TryResolveAndValidate(mapping, out var locInfo))
-                    continue;
-
-                string rootPath = Path.Combine(locInfo.ImportRoot, rootFolderName);
-                string seriesPath = Path.Combine(rootPath, folderId.ToString());
-                resolvedVfsSeriesPaths.Add(seriesPath);
-
-                EnsureDirectory(rootPath, session, true);
-                EnsureDirectory(seriesPath, session);
-
-                string seasonName = PlexMapping.GetSeasonFolder(mapping.Coords.Season);
-                string seasonPath = Path.Combine(seriesPath, VfsHelper.SanitizeName(seasonName));
-                EnsureDirectory(seasonPath, session);
-
-                var key = (mapping.Coords.Season, mapping.Coords.Episode, mapping.IsVariation);
-                bool hasPeer = coordCounts.TryGetValue(key, out var count) && count > 1;
-                int? vIdx = (hasPeer && !mapping.PartIndex.HasValue && versionCounters.TryGetValue(key, out var v)) ? (versionCounters[key] = v + 1) - 1 : null;
-
-                (string Folder, string Subtype) ex = PlexMapping.TryGetExtraSeason(mapping.Coords.Season, out var e) ? e : ("Featurettes", "featurette");
-
-                string fileName = VfsHelper.SanitizeName(
-                    PlexMapping.TryGetExtraSeason(mapping.Coords.Season, out _)
-                        ? VfsHelper.BuildExtrasFileName(
-                            mapping,
-                            ex,
-                            extraPad.GetValueOrDefault(mapping.Coords.Season, 1),
-                            Path.GetExtension(locInfo.Src),
-                            displayTitle,
-                            hasPeer ? mapping.PartIndex : null,
-                            hasPeer ? mapping.PartCount : 1,
-                            vIdx,
-                            mapping.IsVariation
-                        )
-                        : VfsHelper.BuildStandardFileName(
-                            mapping,
-                            epPad,
-                            Path.GetExtension(locInfo.Src),
-                            mapping.Video!.LocalID,
-                            mapping.PartCount > 1 && mapping.PartIndex.HasValue,
-                            hasPeer ? mapping.PartIndex : null,
-                            hasPeer ? mapping.PartCount : 1,
-                            vIdx,
-                            mapping.IsVariation
-                        )
-                );
-
-                var destFilePath = Path.Combine(seasonPath, fileName);
-
-                if (VfsShared.TryCreateLink(locInfo.Src, destFilePath, logger, skipExistenceCheck: skipCheck))
+                try
                 {
-                    created++;
-                    planned++;
+                    if (!TryResolveAndValidate(mapping, out var locInfo))
+                        continue;
 
-                    // Resolve Primary IDs to allow local asset linking for crossover files that have been consolidated via VFS Overrides.
-                    LocalOnLink(locInfo.ImportRoot, seasonName, fileName, locInfo.Src, destFilePath);
-                    bool isCrossover =
-                        mapping.Video?.CrossReferences is { Count: > 1 } xrefs
-                        && xrefs.Where(cr => cr.ShokoEpisode != null).Select(cr => OverrideHelper.GetPrimary(cr.ShokoEpisode!.ShokoSeriesID, metadataService)).Distinct().Count() > 1;
+                    string rootPath = Path.Combine(locInfo.ImportRoot, rootFolderName);
+                    string seriesPath = Path.Combine(rootPath, folderId.ToString());
+                    resolvedVfsSeriesPaths.Add(seriesPath);
 
-                    if (!isCrossover)
+                    EnsureDirectory(rootPath, session, true);
+                    EnsureDirectory(seriesPath, session);
+
+                    string seasonName = PlexMapping.GetSeasonFolder(mapping.Coords.Season);
+                    string seasonPath = Path.Combine(seriesPath, VfsHelper.SanitizeName(seasonName));
+                    EnsureDirectory(seasonPath, session);
+
+                    var key = (mapping.Coords.Season, mapping.Coords.Episode, mapping.IsVariation);
+                    bool hasPeer = coordCounts.TryGetValue(key, out var count) && count > 1;
+                    int? vIdx = (hasPeer && !mapping.PartIndex.HasValue && versionCounters.TryGetValue(key, out var v)) ? (versionCounters[key] = v + 1) - 1 : null;
+
+                    (string Folder, string Subtype) ex = PlexMapping.TryGetExtraSeason(mapping.Coords.Season, out var e) ? e : ("Featurettes", "featurette");
+
+                    string fileName = VfsHelper.SanitizeName(
+                        PlexMapping.TryGetExtraSeason(mapping.Coords.Season, out _)
+                            ? VfsHelper.BuildExtrasFileName(
+                                mapping,
+                                ex,
+                                extraPad.GetValueOrDefault(mapping.Coords.Season, 1),
+                                Path.GetExtension(locInfo.Src),
+                                displayTitle,
+                                hasPeer ? mapping.PartIndex : null,
+                                hasPeer ? mapping.PartCount : 1,
+                                vIdx,
+                                mapping.IsVariation
+                            )
+                            : VfsHelper.BuildStandardFileName(
+                                mapping,
+                                epPad,
+                                Path.GetExtension(locInfo.Src),
+                                mapping.Video!.LocalID,
+                                mapping.PartCount > 1 && mapping.PartIndex.HasValue,
+                                hasPeer ? mapping.PartIndex : null,
+                                hasPeer ? mapping.PartCount : 1,
+                                vIdx,
+                                mapping.IsVariation
+                            )
+                    );
+
+                    var destFilePath = Path.Combine(seasonPath, fileName);
+
+                    if (VfsShared.TryCreateLink(locInfo.Src, destFilePath, logger, skipExistenceCheck: skipCheck))
                     {
-                        string srcDir = Path.GetDirectoryName(locInfo.Src)!;
-                        if (linkedSeriesMetaDirs.Add(Path.Combine(srcDir, seriesPath)))
+                        created++;
+                        planned++;
+
+                        // Resolve Primary IDs to allow local asset linking for crossover files that have been consolidated via VFS Overrides.
+                        LocalOnLink(locInfo.ImportRoot, seasonName, fileName, locInfo.Src, destFilePath);
+                        bool isCrossover =
+                            mapping.Video?.CrossReferences is { Count: > 1 } xrefs
+                            && xrefs.Where(cr => cr.ShokoEpisode != null).Select(cr => OverrideHelper.GetPrimary(cr.ShokoEpisode!.ShokoSeriesID, metadataService)).Distinct().Count() > 1;
+
+                        if (!isCrossover)
                         {
-                            assetLinker.LinkSeriesMetadata(
+                            string srcDir = Path.GetDirectoryName(locInfo.Src)!;
+                            if (linkedSeriesMetaDirs.Add(Path.Combine(srcDir, seriesPath)))
+                            {
+                                assetLinker.LinkSeriesMetadata(
+                                    srcDir,
+                                    seriesPath,
+                                    videoBaseNames,
+                                    session.MetadataFileCache,
+                                    (name, s) => LocalOnLink(locInfo.ImportRoot, "", name, s, Path.Combine(seriesPath, name)),
+                                    skipCheck
+                                );
+                            }
+
+                            assetLinker.LinkEpisodeMetadata(
+                                locInfo.Src,
                                 srcDir,
-                                seriesPath,
-                                videoBaseNames,
-                                session.MetadataFileCache,
-                                (name, s) => LocalOnLink(locInfo.ImportRoot, "", name, s, Path.Combine(seriesPath, name)),
+                                Path.GetFileNameWithoutExtension(destFilePath),
+                                seasonPath,
+                                session.SubtitleFileCache,
+                                session.AttachmentDirCache,
+                                ref planned,
+                                ref skipped,
+                                errors,
+                                ref created,
+                                (name, s) => LocalOnLink(locInfo.ImportRoot, seasonName, name, s, Path.Combine(seasonPath, name)),
                                 skipCheck
                             );
                         }
-
-                        assetLinker.LinkEpisodeMetadata(
-                            locInfo.Src,
-                            srcDir,
-                            Path.GetFileNameWithoutExtension(destFilePath),
-                            seasonPath,
-                            session.SubtitleFileCache,
-                            session.AttachmentDirCache,
-                            ref planned,
-                            ref skipped,
-                            errors,
-                            ref created,
-                            (name, s) => LocalOnLink(locInfo.ImportRoot, seasonName, name, s, Path.Combine(seasonPath, name)),
-                            skipCheck
-                        );
+                    }
+                    else
+                    {
+                        skipped++;
+                        errors.Add($"Link failed: {locInfo.Src} -> {destFilePath}");
                     }
                 }
-                else
+                catch (Exception ex)
                 {
                     skipped++;
-                    errors.Add($"Link failed: {locInfo.Src} -> {destFilePath}");
+                    errors.Add($"Error processing mapping for {mapping.FileName}: {ex.Message}");
                 }
             }
 

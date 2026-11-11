@@ -59,7 +59,7 @@ internal static class VfsShared
         if (string.IsNullOrWhiteSpace(path))
             return null;
         string normalizedPath = NormalizeSeparators(path);
-        string relative = location.RelativePath.TrimLeadingSlashes();
+        string relative = location.RelativePath.TrimLeadingSlashes().Trim();
         if (!string.IsNullOrWhiteSpace(relative))
         {
             string normalizedRel = NormalizeSeparators(relative);

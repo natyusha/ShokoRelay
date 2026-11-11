@@ -70,6 +70,13 @@ public class PlexController(
     ILogger<PlexController> logger
 ) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary, logger)
 {
+    #region Setup
+
+    /// <summary>Cached serializer options for Plex webhooks to prevent duplicate reflection metadata construction.</summary>
+    private static readonly JsonSerializerOptions s_webhookJsonOptions = new() { PropertyNameCaseInsensitive = false };
+
+    #endregion
+
     #region Authentication
 
     /// <summary>Initiates the PIN‑based Plex authentication flow.</summary>
@@ -96,7 +103,7 @@ public class PlexController(
                 )
             );
         }
-        catch (InvalidOperationException ex)
+        catch (Exception ex)
         {
             return StatusCode(502, new RelayResponse<object>(Status: "error", Message: ex.Message));
         }
@@ -142,7 +149,7 @@ public class PlexController(
 
             return Ok(new RelayResponse<object>(Data: new { tokenSaved = true }));
         }
-        catch (InvalidOperationException ex)
+        catch (Exception ex)
         {
             return StatusCode(502, new RelayResponse<object>(Status: "error", Message: ex.Message));
         }
@@ -388,7 +395,7 @@ public class PlexController(
         try
         {
             // Case sensitive to prevent a type conflict between "guid" (string) and "Guid" (array)
-            evt = JsonSerializer.Deserialize<PlexWebhookPayload>(payloadJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = false });
+            evt = JsonSerializer.Deserialize<PlexWebhookPayload>(payloadJson, s_webhookJsonOptions);
         }
         catch (Exception ex)
         {

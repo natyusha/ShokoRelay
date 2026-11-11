@@ -39,13 +39,20 @@ public static class CastHelper
     }.SelectMany(kvp => kvp.Value.Select(tmdb => (Tmdb: tmdb, Anidb: kvp.Key))).ToFrozenDictionary(x => x.Tmdb, x => x.Anidb, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Global cache mapping normalized studio keys to their preferred display names and priority (1 = AniDB, 2 = TMDB).</summary>
-    private static readonly ConcurrentDictionary<string, (string Name, int Priority)> s_globalStudioNames = new(
-        s_studioMerges.Values.Distinct(StringComparer.OrdinalIgnoreCase).ToDictionary(NormalizeStudioKey, name => (name, 1), StringComparer.OrdinalIgnoreCase),
-        StringComparer.OrdinalIgnoreCase
-    );
+    private static readonly ConcurrentDictionary<string, (string Name, int Priority)> s_globalStudioNames = new();
 
     /// <summary>Global cache mapping normalized studio keys to resolved TMDB logo URLs to avoid AniDB image requests.</summary>
     private static readonly ConcurrentDictionary<string, string> s_globalStudioThumbs = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Statically initializes the global studio name cache by pre-seeding canonical AniDB names from explicit merge definitions.</summary>
+    static CastHelper()
+    {
+        foreach (var kvp in s_studioMerges)
+        {
+            string key = NormalizeStudioKey(kvp.Value);
+            s_globalStudioNames[key] = (kvp.Value, 1);
+        }
+    }
 
     #endregion
 
@@ -60,15 +67,10 @@ public static class CastHelper
     {
         if (item is ISeries seriesItem)
         {
-            // Seed global studio names from the current series' AniDB studios and crew companies (e.g. Original Work) without extra DB queries
+            // Seed global studio names from the current series' AniDB studios without extra DB queries
             foreach (var s in seriesItem.Studios ?? [])
                 if (s.ID.Source == MetadataSource.AniDB && !string.IsNullOrWhiteSpace(s.Name))
-                    s_globalStudioNames.TryAdd(NormalizeStudioKey(s.Name), (s.Name.Trim(), 1));
-
-            if (item.Crew != null)
-                foreach (var c in item.Crew)
-                    if ((c.Creator == null || c.Creator.ID.Source == MetadataSource.AniDB) && (c.Creator?.Title ?? c.Name) is { Length: > 0 } cName)
-                        s_globalStudioNames.TryAdd(NormalizeStudioKey(cName), (cName.Trim(), 1));
+                    s_globalStudioNames[NormalizeStudioKey(s.Name)] = (s.Name.Trim(), 1);
 
             // Pre-populate global studio thumbs from this series' TMDB studios so both crew and company listings can reference them
             foreach (var s in (seriesItem.Studios ?? []).Concat(tmdbSeries?.Studios ?? []))
@@ -92,6 +94,12 @@ public static class CastHelper
 
             var tmdbRoles = allRoles.Where(c => getCreator(c)?.ID.Source == MetadataSource.TMDB).ToList();
             var anidbRoles = allRoles.Where(c => getCreator(c) == null || getCreator(c)!.ID.Source != MetadataSource.TMDB).ToList();
+
+            // Passively register AniDB creator/company names into the global cache with Priority 1 to eliminate redundant passes over crew
+            foreach (var c in anidbRoles)
+                if (getCreator(c) == null || getCreator(c)!.ID.Source == MetadataSource.AniDB)
+                    if ((getCreator(c)?.Title ?? getName(c)) is { Length: > 0 } cName)
+                        s_globalStudioNames.TryAdd(NormalizeStudioKey(cName), (cName.Trim(), 1));
 
             if (tmdbRoles.Count == 0)
             {

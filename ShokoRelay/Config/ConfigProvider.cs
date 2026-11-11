@@ -177,6 +177,27 @@ public class ConfigProvider
 
     #region Settings Management
 
+    /// <summary>Reads a file with a brief retry mechanism to bypass transient file sharing locks.</summary>
+    /// <param name="path">The file path to read.</param>
+    /// <returns>The file contents.</returns>
+    private static string ReadFileWithRetry(string path)
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            try
+            {
+                return File.ReadAllText(path);
+            }
+            catch (IOException)
+            {
+                if (i == 2)
+                    throw;
+                Thread.Sleep(50);
+            }
+        }
+        return string.Empty;
+    }
+
     /// <summary>Return the current settings, loading from disk if not already cached.</summary>
     /// <returns>The current <see cref="RelayConfig"/> instance.</returns>
     public RelayConfig GetSettings()
@@ -193,13 +214,17 @@ public class ConfigProvider
             RelayConfig s;
             try
             {
-                s = File.Exists(_filePath) ? JsonSerializer.Deserialize<RelayConfig>(File.ReadAllText(_filePath), s_options) ?? new() : new();
+                s = File.Exists(_filePath) ? JsonSerializer.Deserialize<RelayConfig>(ReadFileWithRetry(_filePath), s_options) ?? new() : new();
             }
             catch (Exception ex)
             {
-                _logger?.LogWarning(ex, "Config: Invalid settings -> Using defaults");
-                s = new();
+                _logger?.LogWarning(ex, "Config: Failed to load settings -> Using defaults temporarily");
+                var fallback = new RelayConfig();
+                ApplyDefaultValues(fallback);
+                NormalizeVfsRoots(fallback);
+                return fallback;
             }
+
             ApplyDefaultValues(s);
             NormalizeVfsRoots(s);
             NormalizePathMappings(s);
@@ -361,12 +386,12 @@ public class ConfigProvider
             try
             {
                 return _cachedTokenFile = File.Exists(_tokenPath)
-                    ? JsonSerializer.Deserialize<TokenFile>(File.ReadAllText(_tokenPath), new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new()
+                    ? JsonSerializer.Deserialize<TokenFile>(ReadFileWithRetry(_tokenPath), new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new()
                     : new();
             }
             catch
             {
-                return _cachedTokenFile = new();
+                return new();
             }
         }
     }
