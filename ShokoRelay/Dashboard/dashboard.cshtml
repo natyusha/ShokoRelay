@@ -606,10 +606,10 @@
             </small>
             <h4>Tag Overrides</h4>
             <small>
-              Tags can easily be excluded or merged using this setting. Comma-separated tags will be blacklisted and hidden from Plex. You can also define custom merge rules by prefixing a new line with a
-              semicolon <code>;</code>. The first tag on a merge line becomes the target, with all subsequent tags merged into it: <code>;Target Tag, Source Tag 1, Source Tag 2</code>. There is a
-              <a href="https://raw.githubusercontent.com/natyusha/ShokoRelay/master/Data/default_tag_overrides.csv" title="Default Tag Overrides">large list of tags</a> which are already merged by default and
-              anything on a merge line which references one of them will supersede it.
+              Tags can easily be merged or blocked using this setting. The first tag on a new line becomes the target, with all subsequent tags merged into it:
+              <code>Target Tag, Source Tag 1, Source Tag 2</code>. You can also blacklist tags by prefixing a new line with a semicolon: <code>;Blocked Tag 1,Blocked Tag 2</code>. There is a
+              <a href="https://raw.githubusercontent.com/natyusha/ShokoRelay/master/Data/default_tag_overrides.csv" title="Default Tag Overrides">large list of tags</a> which are already blocked/merged by
+              default and anything on a merge line which references one of them will supersede it.
             </small>
           </section>
           <section>

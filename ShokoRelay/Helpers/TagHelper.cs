@@ -26,24 +26,6 @@ public static partial class TagHelper
     private static partial Regex NonEnglishTagRegex();
 
     // csharpier-ignore
-    /// <summary>A custom version of Shoko's default <c>TagBlacklistAniDBHelpers</c>: https://github.com/ShokoAnime/ShokoServer/blob/master/Shoko.Server/Utilities/TagFilter.cs#L37</summary>
-    private static readonly FrozenSet<string> s_tagBlacklistHelper = new[] {
-        // AniDB parent tags which only exist if a more specific child tag is present
-        "awards", "body and host", "breasts", "cast", "character related tags which need deleting or merging", "content indicators", "dynamic", "elements", "ending", "ending tags that need merging",
-        "family life", "fetishes", "maintenance tags", "meta tags", "motifs", "old animetags - op ed", "origin", "place", "pornography", "season", "setting", "speculative fiction", "storytelling",
-        "tales", "target audience", "technical aspects", "themes", "time", "tropes", "unsorted",
-        // AniDB maintenance tags: https://anidb.net/tag/30/animetb
-        "cast missing", "description missing", "description needs improvement", "no english subs available", "pic needs improvement", "staff missing", "to be moved to character", "to be moved to episode",
-        // AniDB parent tags which are too broad
-        "asia", "earth",
-        // TMDB genres/keywords which are too broad
-        "animation", "anime", "censored", "hentai", "television programme", "tv",
-        // TMDB keywords which violate the rules (mainly they are not english words) and will make it through the language filter. These can be removed once they are fixed on TMDB
-        "accion", "animacion", "art martial", "boxeo", "bukatsu", "chuanyue", "chuyển sinh", "dongfang", "donghua", "espionnage", "futuro postapocalíptico",
-        "gufeng", "guzhuang", "internete", "inzest", "magie", "samourai", "seadex", "sekai togou", "serie de tv"
-    }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
-
-    // csharpier-ignore
     /// <summary>Words to force lowercase in tags to follow AniDB capitalisation rules: https://wiki.anidb.net/Capitalisation</summary>
     private static readonly FrozenSet<string> s_forceLower = new[] {
         "a", "an", "the", "and", "but", "or", "nor", "at", "by", "for", "from", "in", "into", "of", "off", "on", "onto", "out",
@@ -64,8 +46,19 @@ public static partial class TagHelper
         "VTuber", "YouTuber"                                                                                                             // TMDB
     }.ToFrozenDictionary(s => s, s => s, StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Explicit tag merges mapping synonymous keywords/tags to a primary tag representation loaded from CSV.</summary>
-    private static readonly FrozenDictionary<string, string> s_defaultTagMerges = LoadDefaultTagMerges();
+    /// <summary>Default blacklisted tag keys loaded from the embedded CSV resource.</summary>
+    private static readonly FrozenSet<string> s_defaultTagBlacklist;
+
+    /// <summary>Default tag merges mapping synonymous keywords/tags to a primary tag representation loaded from the embedded CSV resource.</summary>
+    private static readonly FrozenDictionary<string, string> s_defaultTagMerges;
+
+    /// <summary>Statically initializes the default tag blacklist and merges from the embedded resource.</summary>
+    static TagHelper()
+    {
+        var (blacklist, merges, _) = LoadDefaultTagOverrides();
+        s_defaultTagBlacklist = blacklist.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+        s_defaultTagMerges = merges.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+    }
 
     /// <summary>Tracks tag variants and series counts across multiple series for cross-series deduplication.</summary>
     private sealed class TagCacheEntry
@@ -131,58 +124,84 @@ public static partial class TagHelper
 
     #endregion
 
-    #region Tag Merge Loading
+    #region Tag Override Loading
 
-    /// <summary>Loads default tag merge mappings directly from the embedded assembly resource.</summary>
-    /// <returns>A frozen dictionary mapping alias tags to target tags.</returns>
-    private static FrozenDictionary<string, string> LoadDefaultTagMerges()
+    /// <summary>Loads default tag blacklist and merge mappings directly from the embedded assembly resource.</summary>
+    /// <returns>A tuple containing default blacklisted keys, merge dictionary, and mentioned tag set.</returns>
+    private static (HashSet<string> Blacklist, Dictionary<string, string> Merges, HashSet<string> MergeMentioned) LoadDefaultTagOverrides()
     {
         try
         {
             var asm = typeof(TagHelper).Assembly;
             if (
-                asm.GetManifestResourceNames().FirstOrDefault(n => n.EndsWith(ShokoRelayConstants.FileDefaultTagMerges, StringComparison.OrdinalIgnoreCase)) is { } resName
+                asm.GetManifestResourceNames().FirstOrDefault(n => n.EndsWith(ShokoRelayConstants.FileDefaultTagOverrides, StringComparison.OrdinalIgnoreCase)) is { } resName
                 && asm.GetManifestResourceStream(resName) is { } stream
             )
             {
                 using (stream)
                 using (var reader = new StreamReader(stream, Encoding.UTF8))
-                    return ParseTagMerges(reader);
+                    return ParseTagOverrides(reader);
             }
         }
         catch { }
 
-        return FrozenDictionary<string, string>.Empty;
+        return (new HashSet<string>(StringComparer.OrdinalIgnoreCase), new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), new HashSet<string>(StringComparer.OrdinalIgnoreCase));
     }
 
-    /// <summary>Parses CSV lines from a stream into a frozen dictionary mapping aliases to target tags.</summary>
+    /// <summary>Parses CSV lines from a reader stream into blacklist and merge mappings.</summary>
     /// <param name="reader">The text reader stream containing the CSV content.</param>
-    /// <returns>A frozen dictionary of tag aliases mapped to their canonical target name.</returns>
-    private static FrozenDictionary<string, string> ParseTagMerges(TextReader reader)
+    /// <returns>A tuple of normalized blacklisted keys, merge mappings, and mentioned tag keys.</returns>
+    private static (HashSet<string> Blacklist, Dictionary<string, string> Merges, HashSet<string> MergeMentioned) ParseTagOverrides(TextReader reader)
     {
-        var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var blacklist = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var merges = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var mergeMentioned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         string? line;
         while ((line = reader.ReadLine()) != null)
         {
-            int commentIdx = line.IndexOf(';'); // Allow inline comments in the csv by using semicolons
+            int commentIdx = line.IndexOf("##", StringComparison.Ordinal);
             var trimmed = (commentIdx >= 0 ? line[..commentIdx] : line).Trim();
             if (trimmed.Length == 0 || trimmed.StartsWith('#'))
                 continue;
 
-            var parts = TextHelper.SplitCsvLine(trimmed);
-            if (parts.Length < 2)
-                continue;
+            if (trimmed.StartsWith(';'))
+            {
+                var parts = TextHelper.SplitCsvLine(trimmed.TrimStart(';'));
+                foreach (var part in parts)
+                {
+                    var tag = TextHelper.UnescapeUnicode(part.Trim());
+                    if (NormalizeTagKey(tag) is { Length: > 0 } normKey)
+                        blacklist.Add(normKey);
+                }
+            }
+            else
+            {
+                var parts = TextHelper.SplitCsvLine(trimmed);
+                if (parts.Length < 2)
+                    continue;
 
-            var target = TextHelper.UnescapeUnicode(parts[0].Trim());
-            if (string.IsNullOrWhiteSpace(target))
-                continue;
+                var target = TextHelper.UnescapeUnicode(parts[0].Trim());
+                if (string.IsNullOrWhiteSpace(target))
+                    continue;
 
-            for (int i = 1; i < parts.Length; i++)
-                if (TextHelper.UnescapeUnicode(parts[i].Trim()) is { Length: > 0 } alias)
-                    dict[alias] = target;
+                var normTarget = NormalizeTagKey(target);
+                if (normTarget.Length > 0)
+                    mergeMentioned.Add(normTarget);
+
+                for (int i = 1; i < parts.Length; i++)
+                {
+                    var source = TextHelper.UnescapeUnicode(parts[i].Trim());
+                    if (NormalizeTagKey(source) is { Length: > 0 } normSource)
+                    {
+                        merges[normSource] = target;
+                        mergeMentioned.Add(normSource);
+                    }
+                }
+            }
         }
 
-        return dict.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        return (blacklist, merges, mergeMentioned);
     }
 
     #endregion
@@ -202,53 +221,29 @@ public static partial class TagHelper
             if (s_lastTagConfig != null && string.Equals(s_lastTagConfig, rawConfig, StringComparison.Ordinal))
                 return (s_cachedBlacklist, s_cachedMerges);
 
-            var blacklistKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var userMerges = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            var userMentionedTags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            foreach (var line in rawConfig.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            {
-                if (line.StartsWith(';'))
-                {
-                    var parts = line.TrimStart(';').Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                    if (parts.Length > 0)
-                    {
-                        string target = parts[0];
-                        if (NormalizeTagKey(target) is { Length: > 0 } normTarget)
-                            userMentionedTags.Add(normTarget);
-
-                        for (int i = 1; i < parts.Length; i++)
-                        {
-                            if (NormalizeTagKey(parts[i]) is { Length: > 0 } normSource)
-                            {
-                                userMerges[normSource] = target;
-                                userMentionedTags.Add(normSource);
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    foreach (var tag in line.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-                        if (NormalizeTagKey(tag) is { Length: > 0 } normKey)
-                            blacklistKeys.Add(normKey);
-                }
-            }
+            using var reader = new StringReader(rawConfig);
+            var (userBlacklist, userMerges, userMergeMentioned) = ParseTagOverrides(reader);
 
             var activeMerges = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             foreach (var def in s_defaultTagMerges)
             {
                 var normKey = NormalizeTagKey(def.Key);
                 var normVal = NormalizeTagKey(def.Value);
-                // If a default source or target is mentioned in user overrides, drop the default rule entirely to allow the user to redefine it
-                if (!userMentionedTags.Contains(normKey) && !userMentionedTags.Contains(normVal))
+                // If a default source or target is mentioned on a user merge line, drop the default rule entirely to allow the user to redefine it
+                if (!userMergeMentioned.Contains(normKey) && !userMergeMentioned.Contains(normVal))
                     activeMerges[normKey] = def.Value;
             }
 
             foreach (var (normSource, target) in userMerges)
                 activeMerges[normSource] = target;
 
-            s_cachedBlacklist = blacklistKeys;
+            // Start with default blacklist, dropping any tag mentioned on a user merge line so user merges can unblock default blacklisted tags
+            var activeBlacklist = new HashSet<string>(s_defaultTagBlacklist.Where(b => !userMergeMentioned.Contains(b)), StringComparer.OrdinalIgnoreCase);
+
+            foreach (var b in userBlacklist)
+                activeBlacklist.Add(b);
+
+            s_cachedBlacklist = activeBlacklist;
             s_cachedMerges = activeMerges;
             s_lastTagConfig = rawConfig;
             s_globalTagCache.Clear(); // Invalidate cross-series cache when configuration changes
@@ -323,17 +318,18 @@ public static partial class TagHelper
         return tags
         // 1. Strip moderator notes / AniDB comments first
         .Select(t => (CleanName: TagCleanupRegex().Replace(t.Name, "").Trim(), t.Priority))
-            .Where(t => !string.IsNullOrWhiteSpace(t.CleanName) && !s_tagBlacklistHelper.Contains(t.CleanName))
+            .Where(t => !string.IsNullOrWhiteSpace(t.CleanName))
             // 2. Resolve merge rules using normalized keys
             .Select(t =>
             {
                 var normKey = NormalizeTagKey(t.CleanName);
-                var effectiveName = merges.TryGetValue(normKey, out var target) ? target : t.CleanName;
-                var effectiveKey = merges.ContainsKey(normKey) ? NormalizeTagKey(effectiveName) : normKey;
-                return (CleanName: effectiveName, NormKey: effectiveKey, t.Priority);
+                var isMerged = merges.TryGetValue(normKey, out var target);
+                var effectiveName = isMerged ? target! : t.CleanName;
+                var effectiveKey = isMerged ? NormalizeTagKey(effectiveName) : normKey;
+                return (CleanName: effectiveName, SourceKey: normKey, NormKey: effectiveKey, t.Priority);
             })
-            // 3. Blacklist filtering (checks both clean and merged keys) and AniDB broad blacklist helper
-            .Where(t => t.NormKey.Length > 0 && !s_tagBlacklistHelper.Contains(t.CleanName) && (blacklistKeys.Count == 0 || !blacklistKeys.Contains(t.NormKey)))
+            // 3. Blacklist filtering (checks both source and merged keys)
+            .Where(t => t.NormKey.Length > 0 && !blacklistKeys.Contains(t.NormKey) && !blacklistKeys.Contains(t.SourceKey))
             // 4. Deduplicate within this series (AniDB tags will beat TMDB because anidbNames precedes tmdbNames)
             .DistinctBy(t => t.NormKey)
             // 5. Update and retrieve preferred representation across series

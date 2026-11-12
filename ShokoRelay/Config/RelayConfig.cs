@@ -272,7 +272,7 @@ public class RelayConfig
     public MinimumTagWeight MinimumTagWeight { get; set; } = MinimumTagWeight.Zero;
 
     /// <summary>Comma-separated list of tags to exclude or merge.</summary>
-    [Display(Name = "Tag Overrides", Description = "A list of tags to exclude or merge, comma separated (see help for syntax)")]
+    [Display(Name = "Tag Overrides", Description = "A list of tags to merge or blacklist (see help for syntax)")]
     [DefaultValue("")]
     public string TagOverrides { get; set; } = "";
 }
