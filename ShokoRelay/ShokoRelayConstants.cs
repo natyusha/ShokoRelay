@@ -55,6 +55,9 @@ public static class ShokoRelayConstants
 
     #region System Filenames
 
+    /// <summary>Filename for the default credit and studio overrides CSV.</summary>
+    public const string FileDefaultCreditOverrides = "default_credit_overrides.csv";
+
     /// <summary>Filename for the default tag overrides CSV.</summary>
     public const string FileDefaultTagOverrides = "default_tag_overrides.csv";
 

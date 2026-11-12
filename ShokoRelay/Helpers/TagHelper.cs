@@ -140,68 +140,12 @@ public static partial class TagHelper
             {
                 using (stream)
                 using (var reader = new StreamReader(stream, Encoding.UTF8))
-                    return ParseTagOverrides(reader);
+                    return TextHelper.ParseOverrides(reader, NormalizeTagKey);
             }
         }
         catch { }
 
         return (new HashSet<string>(StringComparer.OrdinalIgnoreCase), new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), new HashSet<string>(StringComparer.OrdinalIgnoreCase));
-    }
-
-    /// <summary>Parses CSV lines from a reader stream into blacklist and merge mappings.</summary>
-    /// <param name="reader">The text reader stream containing the CSV content.</param>
-    /// <returns>A tuple of normalized blacklisted keys, merge mappings, and mentioned tag keys.</returns>
-    private static (HashSet<string> Blacklist, Dictionary<string, string> Merges, HashSet<string> MergeMentioned) ParseTagOverrides(TextReader reader)
-    {
-        var blacklist = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var merges = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var mergeMentioned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        string? line;
-        while ((line = reader.ReadLine()) != null)
-        {
-            int commentIdx = line.IndexOf("##", StringComparison.Ordinal);
-            var trimmed = (commentIdx >= 0 ? line[..commentIdx] : line).Trim();
-            if (trimmed.Length == 0 || trimmed.StartsWith('#'))
-                continue;
-
-            if (trimmed.StartsWith(';'))
-            {
-                var parts = TextHelper.SplitCsvLine(trimmed.TrimStart(';'));
-                foreach (var part in parts)
-                {
-                    var tag = TextHelper.UnescapeUnicode(part.Trim());
-                    if (NormalizeTagKey(tag) is { Length: > 0 } normKey)
-                        blacklist.Add(normKey);
-                }
-            }
-            else
-            {
-                var parts = TextHelper.SplitCsvLine(trimmed);
-                if (parts.Length < 2)
-                    continue;
-
-                var target = TextHelper.UnescapeUnicode(parts[0].Trim());
-                if (string.IsNullOrWhiteSpace(target))
-                    continue;
-
-                var normTarget = NormalizeTagKey(target);
-                if (normTarget.Length > 0)
-                    mergeMentioned.Add(normTarget);
-
-                for (int i = 1; i < parts.Length; i++)
-                {
-                    var source = TextHelper.UnescapeUnicode(parts[i].Trim());
-                    if (NormalizeTagKey(source) is { Length: > 0 } normSource)
-                    {
-                        merges[normSource] = target;
-                        mergeMentioned.Add(normSource);
-                    }
-                }
-            }
-        }
-
-        return (blacklist, merges, mergeMentioned);
     }
 
     #endregion
@@ -222,7 +166,7 @@ public static partial class TagHelper
                 return (s_cachedBlacklist, s_cachedMerges);
 
             using var reader = new StringReader(rawConfig);
-            var (userBlacklist, userMerges, userMergeMentioned) = ParseTagOverrides(reader);
+            var (userBlacklist, userMerges, userMergeMentioned) = TextHelper.ParseOverrides(reader, NormalizeTagKey);
 
             var activeMerges = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             foreach (var def in s_defaultTagMerges)

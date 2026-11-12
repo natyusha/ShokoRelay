@@ -64,9 +64,12 @@
     <Using Include="ShokoRelay.ShokoRelay" Static="true" />
   </ItemGroup>
 
-  <!-- Embed the plugin images for Shoko's WebUI and the tag overrides csv while also preserving dashboard static assets in the output directory -->
+  <!-- Embed the plugin images for Shoko's WebUI and the override csvs while preserving dashboard static assets in output -->
   <ItemGroup>
     <EmbeddedResource Include="Assets/shoko-relay-logo.png;Assets/shoko-relay-icon.png">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </EmbeddedResource>
+    <EmbeddedResource Include="../Data/default_credit_overrides.csv" Link="Data/default_credit_overrides.csv">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </EmbeddedResource>
     <EmbeddedResource Include="../Data/default_tag_overrides.csv" Link="Data/default_tag_overrides.csv">

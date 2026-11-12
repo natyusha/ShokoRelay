@@ -89,6 +89,63 @@ public static partial class TextHelper
     /// <returns>An array of fields.</returns>
     public static string[] SplitCsvLine(string line) => line?.Split(',') ?? [];
 
+    /// <summary>Parses CSV lines from a reader stream into blacklist and merge mappings using a key normalization function.</summary>
+    /// <param name="reader">The text reader stream containing the CSV content.</param>
+    /// <param name="normalizeKey">Function used to generate normalized lookup keys.</param>
+    /// <returns>A tuple containing blacklisted keys, merge mappings, and mentioned keys.</returns>
+    public static (HashSet<string> Blacklist, Dictionary<string, string> Merges, HashSet<string> MergeMentioned) ParseOverrides(TextReader reader, Func<string, string> normalizeKey)
+    {
+        var blacklist = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var merges = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var mergeMentioned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        string? line;
+        while ((line = reader.ReadLine()) != null)
+        {
+            int commentIdx = line.IndexOf("##", StringComparison.Ordinal);
+            var trimmed = (commentIdx >= 0 ? line[..commentIdx] : line).Trim();
+            if (trimmed.Length == 0 || trimmed.StartsWith('#'))
+                continue;
+
+            if (trimmed.StartsWith(';'))
+            {
+                var parts = SplitCsvLine(trimmed.TrimStart(';'));
+                foreach (var part in parts)
+                {
+                    var item = UnescapeUnicode(part.Trim());
+                    if (normalizeKey(item) is { Length: > 0 } normKey)
+                        blacklist.Add(normKey);
+                }
+            }
+            else
+            {
+                var parts = SplitCsvLine(trimmed);
+                if (parts.Length < 2)
+                    continue;
+
+                var target = UnescapeUnicode(parts[0].Trim());
+                if (string.IsNullOrWhiteSpace(target))
+                    continue;
+
+                var normTarget = normalizeKey(target);
+                if (normTarget.Length > 0)
+                    mergeMentioned.Add(normTarget);
+
+                for (int i = 1; i < parts.Length; i++)
+                {
+                    var source = UnescapeUnicode(parts[i].Trim());
+                    if (normalizeKey(source) is { Length: > 0 } normSource)
+                    {
+                        merges[normSource] = target;
+                        mergeMentioned.Add(normSource);
+                    }
+                }
+            }
+        }
+
+        return (blacklist, merges, mergeMentioned);
+    }
+
     #endregion
 
     #region Metadata Resolution

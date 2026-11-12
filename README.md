@@ -574,7 +574,7 @@ Due to this plugin relying on Plex's metadata provider feature (which is still u
 ## TODO
 
 - Ongoing
-  - Expand CastHelper.cs `s_studioMerges` to provide better deduplication for studios that are added to cast entries
+  - Expand [default_credit_overrides.csv](https://raw.githubusercontent.com/natyusha/ShokoRelay/master/Data/default_credit_overrides.csv) to provide better deduplication for studios that are added to cast entries
   - Expand [default_tag_overrides.csv](https://raw.githubusercontent.com/natyusha/ShokoRelay/master/Data/default_tag_overrides.csv) to provide better deduplication for tags (keywords) from TMDB
 - Once available in Plex metadata providers:
   - Switch enhanced collection metadata support from the Plex HTTP API "Generate Collections" button to the provider
