@@ -55,6 +55,9 @@ public static class ShokoRelayConstants
 
     #region System Filenames
 
+    /// <summary>Filename for the default tag merges CSV.</summary>
+    public const string FileDefaultTagMerges = "default_tag_overrides.csv";
+
     /// <summary>Filename for user preferences.</summary>
     public const string FilePreferences = "preferences.json";
 

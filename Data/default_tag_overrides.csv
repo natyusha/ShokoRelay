@@ -1,0 +1,274 @@
+### Shoko Relay Default Tag Overrides ###
+
+# This file will likely be expanded fairly often and can be quite subjective
+# If AniDB groups the tags via aliases they will often be grouped by the rules below
+# Outside of the stock AniDB groupings it is best to avoid merging things if there is any ambiguity
+# Any undesired merges can be removed or modified by adding them to the Tag Overrides provider setting
+
+## AniDB <- TMDB Mappings ##                                                                                                                                   # Generally uses the primary tag entry
+3d cg animation,3d animation,cg animated
+absurdist humour,absurd,absurdist
+afterlife,life after death,afterlife world                                                                                                                     ; AniDB separates 'afterlife world'
+age difference romance,age-gap relationship,age difference
+air combat,aerial combat
+all-boys school,boys' school
+all-girls school,girls' school
+android,humanoid robot
+anthropomorphism,anthropomorphic,anthropomorphic animal
+artificial intelligence,artificial intelligence (a.i.)
+asimov's three laws of robotics,three laws of robotics
+assassin,hitman
+association football,football (soccer)
+attempted rape,rape attempt
+aviation,airplane,aeroplane
+bad luck,misfortune
+bicycling,bicycle,cycling,bike
+bisexual,bisexuality
+bishoujo,bishojo
+black humour,black humor,dark comedy
+body swap,body exchange
+body takeover,possession,possessed
+boobjob,tit fucking,titty fuck
+brainwashing,mind control,hypnosis,mesmerization
+bukkake,bukakke
+cafe,coffee shop
+cat person,cat people,cat girl,catgirl,cat boy,catboy                                                                                                          ; AniDB groups both genders
+cheating,cheat
+chinese production,donghua
+combat,fight,fighting
+coming of age,growing up,becoming an adult
+communication with the dead,contacting spirits
+competitive beach volleyball,beach volleyball,beach volley
+corrupt,corruption
+cosplaying,cosplay,cosplayer
+countryside,rural,rural area,rural town                                                                                                                        ; AniDB separates 'rural town'
+creampie,nakadashi
+cross-dressing,cross dresser
+curse,cursed
+cute girls doing cute things,cgdct
+cyberpunk,cyber
+daikaijuu,kaiju,giant monster
+daily life,slice of life
+dancing,dance
+dark,dark atmosphere,dark mood
+dark-skinned girl,dark skin girl
+death game,deadly game,play or die
+deception,deceit
+deflowering,defloration
+deity,god,goddess                                                                                                                                              ; AniDB groups both genders
+delinquent,delinquency,juvenile delinquent,juvenile delinquency,furyo
+demon,youkai,Oni,Ogre
+devil,satan
+dildos - vibrators,dildo,dildos,vibrator
+dominatrix,femdom,female domination
+double-sided dildo,double dildo
+doujin,doujinshi
+dystopia,dystopian future
+elf,elves
+environmentalism,environmental,environment
+familiar spirit,familiar
+fate,destiny
+fellatio,blowjob,blow job
+footage reuse,recycled animation                                                                                                                               ; AniDB has 'recycled animation' marked as '-- TO BE SPLIT AND DELETED'
+genetic modification,genetic engineering
+ghosts,phantom
+hairdresser,hairstylist
+healthcare and medicine,healthcare
+heavy metal music,heavy metal
+hokkaido,hokkaido\u002C japan
+homemaker,housewife,housewives
+horse riding,horseback riding
+human cannibalism,eating of humans
+human-android love,human android relationship
+human-animal relationship,animal human friendship,animal friendship
+immortality,immortal
+insecure,insecurity
+inter-dimensional travel,dimensional travel
+introspection,introspective
+isekai,another world,other world,otherworld
+ishikawa,ishikawa\u002C japan
+journey,travel,traveling,voyage
+juujin,furry
+kidnapping,kidnapped
+kitsune,fox spirit
+korean-japanese co-production,japanese-korean coproduction
+kumamoto,kumamoto\u002C japan
+kyoto,kyoto\u002C japan
+large breasts,big tits,big boobs,big breast
+loli,lolis,loli type
+london,london\u002C england
+lonely,loneliness
+love between enemies,enemies to lovers
+mafia,yakuza,organized crime
+magic,wizard,sorcerer,mage,magician
+magical girl,magic girl
+magical realism,magical realism
+mars,planet mars
+maze,labyrinth
+mecha,mechs
+melancholic,melancholy
+melodrama,melodramatic
+middle school,junior high school
+mobile phone,cellphone,smartphone
+mountaineering,mountain climbing
+multi-segment episodes,multi-segment
+multiple personality disorder,multiple personality,double personality,split personality,dissociative identities
+mystery,mysteries
+nagasaki,nagasaki\u002C japan
+naive,naivety
+nazis,nazi
+netorare,netorare (ntr),ntr
+ninja,shinobi,female ninja,kunoichi                                                                                                                            ; AniDB groups both genders
+nostalgia,nostalgic
+obsessive,obsession                                                                                                                                            ; AniDB has it marked as '-- DO NOT USE -- TO BE SPLIT AND DELETED'
+occult,occultism
+office lady,office lady (ol)
+olympics,olympic games
+one thousand and one nights,arabian nights
+oral,oral sex
+osaka,osaka\u002C japan
+pantsu,panties
+parallel world,parallel universe
+paramilitary,paramilitary organization
+parenting,parenthood
+parenting,raising children
+paris,paris\u002C france
+perverted,pervert,pervertion
+point of view,pov (point of view)
+police,cop,police officer
+politics,political
+post-apocalyptic,post-apocalyptic future
+power suit,power armor
+prosthesis,prosthetic limb
+psychological,psychology
+racism,racist
+recruiting teammates,recruit,recruitment
+reincarnation,rebirth
+revenge,vengeance,revenge plot,revenge quest,revenge thriller
+rivalry,rival
+royal intrigue,court intrigue,court politics
+rpg,role playing game (rpg)
+salaryman,office worker
+science fiction,sci-fi,sci fi
+scissoring,tribadism
+secret identity,hidden identity
+secret organisation,secret organization
+seiyuu,voice acting
+self-harm,self mutilation
+sengoku period,warring states period
+sex change,gender swap
+sex slave,sex slavery
+sex,sexual intercourse
+sexual fantasies,sexual fantasy
+sexual humour,sexual humor
+shintoism,shinto
+shizuoka,shizuoka\u002C japan,numazu\u002C shizuoka\u002C japan
+short movie,short film
+shougi,shogi
+shoujo ai,girls' love (gl)
+shounen ai,boys' love (bl)
+shy,shyness
+slapstick,slapstick comedy
+small breasts,small tits,flat chest,flat,pettanko
+social class issues,social class,class system,class
+social outcast,outcast
+space,outer space
+spaceship,spacecraft
+special squads,special unit
+squirting,female ejaculation,female ejaculation (squirt)
+strap-on dildo,strap-on
+student,students                                                                                                                                               ; AniDB has a character tag called 'student'
+sumo wrestling,sumo
+super power,special ability,special power,superhuman,superhuman abilities
+surreal,surrealism
+swordplay,swordsplay
+table tennis,ping pong
+taishou period,taisho period
+tarot,tarot cards
+teacher x student,teacher student relationship,teacher-student love
+the chosen one!,chosen one
+thievery,thief
+time stop,time freeze
+tokugawa period,edo period
+tokyo,tokyo\u002C japan
+tragedy,tragic
+treasure hunting,treasure hunt
+unidentified flying object,ufo
+university,college
+urination,peeing,pissing
+vampire hunter,vampire hunter (slayer)
+victorian period,victorian england,victorian era,victorian
+violence,violent
+virgin,loss of virginity,virginity
+virtual world,virtual reality,vr
+voyeurism,voyeur
+water scarcity,water shortage
+wolf,wolves
+working life,work life,work-life balance,work
+yokohama,yokohama\u002C Kanagawa\u002C Japan
+
+## TMDB <- TMDB Mappings ##                                                                                                                                    # Generally in order of popularity/usage
+all girl band,girl band
+alternate dimension,another dimension,other dimension
+arms dealer,weapons dealer                                                                                                                                     ; AniDB has a character tag called 'arms dealer'
+big sister,older sister
+car racing,car race
+censored,censorship
+classmates,schoolmates
+con artist,con man                                                                                                                                             ; AniDB has a character tag called 'charlatan'
+dead father,death of father
+dead mother,death of mother
+disability,disabled person
+engagement,marriage engagement
+eroticism,erotism
+extraterrestrial technology,alien technology
+financial struggle,financial hardship
+forest,woods
+gay theme,male homosexuality
+hobby,hobbies
+horse racing,horse race
+hot spring,onsen                                                                                                                                               ; AniDB has an episode tag called 'hot springs visit'
+human relationship,interpersonal relationships
+inspirational,inspiring                                                                                                                                        ; AniDB has a character tag called 'inspirational'
+kiss,kissing
+lesbian,female homosexuality
+married life,marriage life
+medieval,medieval times
+megami tensei,megaten,shin megami tensei
+memories,memory
+military strategy,war strategy
+mixed martial arts (mma),mixed martial arts
+mother,mom
+mourning,grief
+murder mystery,whodunit
+near future,not too distant future
+online game,online gaming
+otome game,otome
+paranormal,paranormal activity,paranormal events,paranormal investigation,paranormal phenomena
+past life,past lives
+philosophical,philosophy
+psychic power,psychic powers
+railroad,railway
+romcom,love comedy
+roommates,flatmates,shared house,cohabitation,living together                                                                                                  ; AniDB has a NSFW tag called 'under one roof'
+sadism,sadist
+schoolgirl,student girl,female student,high school girl,jk                                                                                                     ; AniDB has a character tag called 'student'
+semen,cum
+shapeshifting,shapeshifter
+shopkeeper,store owner                                                                                                                                         ; AniDB has a character tag called 'shopkeeper'
+streamer,live streamer
+street racing,street race
+struggle to survive,struggle for survival
+superhuman strength,super strength
+supernatural power,supernatural ability
+suspense,suspenseful                                                                                                                                           ; AniDB has this as an alias for 'thriller'
+sword fight,sword duel
+teenager,teenage,adolescence,adolescent,youth                                                                                                                  ; AniDB has a character tag called 'adolescent'
+theatre company,theatrical troupe                                                                                                                              ; AniDB has a creator tag called 'theatrical company'
+transsexual,transsexuality
+unfaithful wife,wife cheating on husband
+university student,college student
+wealthy family,rich family
+wheelchair user,wheelchair                                                                                                                                         ; AniDB has a character tag called 'wheelchair'
+women fight,woman vs woman fight
+work relationship,co-workers relationship
