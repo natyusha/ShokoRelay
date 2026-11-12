@@ -243,13 +243,13 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
     /// <summary>Isolates paths and tags within segments by splitting on semicolons first, then stripping quotes and normalizing slashes.</summary>
     /// <param name="rawSegment">The raw string segment from the pipe-delimited file.</param>
     /// <returns>A tuple containing the cleaned relative path and a list of extracted tags.</returns>
-    private static (string Path, List<string> Tags) ExtractPathAndTags(string rawSegment)
-    {
-        var parts = rawSegment.Split(';');
-        string path = VfsShared.NormalizeSeparators(parts[0].Trim().Trim('"')).TrimStart(Path.DirectorySeparatorChar);
-        var tags = parts.Length > 2 ? [.. parts[2].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)] : (List<string>)[];
-        return (path, tags);
-    }
+    private static (string Path, List<string> Tags) ExtractPathAndTags(string rawSegment) =>
+        rawSegment.Split(';') is var parts
+            ? (
+                VfsShared.NormalizeSeparators(parts[0].Trim().Trim('"')).TrimStart(Path.DirectorySeparatorChar),
+                parts.Length > 2 ? [.. parts[2].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)] : []
+            )
+            : (string.Empty, []);
 
     #endregion
 }

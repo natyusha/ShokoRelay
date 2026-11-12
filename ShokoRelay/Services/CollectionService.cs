@@ -77,7 +77,7 @@ public class CollectionService(
 
         try
         {
-            var (created, uploaded, alreadyUploaded, errs, uniqueSeries) = (0, 0, 0, 0, new HashSet<int>());
+            var (created, uploaded, alreadyUploaded, errors, uniqueSeries) = (0, 0, 0, 0, new HashSet<int>());
             var (createdList, uploadedDetails, errorsList) = (new List<CollectionAssignmentDetail>(), new List<CollectionUploadDetail>(), new List<string>());
             var allowedIds = new HashSet<int>(seriesList?.Where(s => s != null).Select(s => OverrideHelper.GetPrimary(s!.LocalID, metadataService)) ?? []);
             var targets = plexClient.GetConfiguredTargets();
@@ -277,7 +277,7 @@ public class CollectionService(
                             }
                             else
                             {
-                                errs++;
+                                errors++;
                                 errorsList.Add($"Failed assignment: {sid.Value}");
                             }
                         }
@@ -419,7 +419,7 @@ public class CollectionService(
                 uploaded,
                 alreadyUploaded,
                 uniqueSeries.Count - created,
-                errs,
+                errors,
                 deletedList.Count,
                 createdList,
                 uploadedDetails,

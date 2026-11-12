@@ -91,8 +91,8 @@ public class ShokoController(
     /// <summary>Audits the VFS to find and remove orphaned series folders and broken symlinks.</summary>
     /// <returns>A task representing the result of the audit operation.</returns>
     [HttpGet("vfs/audit")]
-    public async Task<IActionResult> AuditVfs() =>
-        await ExecuteTrackedTaskAsync(ShokoRelayConstants.TaskVfsAudit, LogHelper.BuildVfsAuditReport, () => Task.Run(() => vfsBuilder.Audit(CancellationToken.None)), VfsShared.VfsLock).ConfigureAwait(false);
+    public Task<IActionResult> AuditVfs() =>
+        ExecuteTrackedTaskAsync(ShokoRelayConstants.TaskVfsAudit, LogHelper.BuildVfsAuditReport, () => Task.Run(() => vfsBuilder.Audit(CancellationToken.None)), VfsShared.VfsLock);
 
     /// <summary>Updates the local VFS overrides CSV file.</summary>
     /// <param name="content">Raw CSV text.</param>
@@ -383,13 +383,13 @@ public class ShokoController(
             : ExecuteTrackedTaskAsync(
                 ShokoRelayConstants.TaskMapSymlinks,
                 LogHelper.BuildSourceLinkReport,
-                async () =>
+                () =>
                 {
                     if (purgeLinks)
                         Logger.LogInformation("Shoko: Starting manual purge of library symlinks...");
                     else
                         Logger.LogInformation("Shoko: Starting source link processing using map {MapFile}", mapFile);
-                    return await sourceLinkService.ProcessLinksAsync(mapFile ?? string.Empty, purgeLinks).ConfigureAwait(false);
+                    return sourceLinkService.ProcessLinksAsync(mapFile ?? string.Empty, purgeLinks);
                 },
                 VfsShared.VfsLock
             );

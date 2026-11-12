@@ -166,10 +166,8 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
     /// <param name="metadata">The metadata item to embed.</param>
     /// <param name="identifier">Optional provider identifier override.</param>
     /// <returns>Plex-compatible JSON response.</returns>
-    protected IActionResult WrapInContainer(object metadata, string? identifier = null)
-    {
-        string defaultIdentifier = Request.Path.Value?.Contains("/movie", StringComparison.OrdinalIgnoreCase) == true ? ShokoRelayConstants.MovieAgentScheme : ShokoRelayConstants.AgentScheme;
-        return Ok(
+    protected IActionResult WrapInContainer(object metadata, string? identifier = null) =>
+        Ok(
             new
             {
                 MediaContainer = new
@@ -177,12 +175,11 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
                     size = 1,
                     totalSize = 1,
                     offset = 0,
-                    identifier = identifier ?? defaultIdentifier,
+                    identifier = identifier ?? (Request.Path.Value?.Contains("/movie", StringComparison.OrdinalIgnoreCase) == true ? ShokoRelayConstants.MovieAgentScheme : ShokoRelayConstants.AgentScheme),
                     Metadata = new[] { metadata },
                 },
             }
         );
-    }
 
     /// <summary>Wrap a list of metadata objects in a paged MediaContainer, honouring Plex pagination headers or query parameters.</summary>
     /// <param name="metadataList">Collection of metadata items to page.</param>

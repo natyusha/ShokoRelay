@@ -342,7 +342,7 @@ public class AnimeThemesMp3Generator(
                     .Animethemes.Where(t =>
                     {
                         if (string.IsNullOrEmpty(query.Slug))
-                            return t.Slug != null && (t.Slug.StartsWith("OP", StringComparison.OrdinalIgnoreCase) || t.Slug.StartsWith("ED", StringComparison.OrdinalIgnoreCase));
+                            return t.Slug != null && (AnimeThemesHelper.IsOp(t.Slug) || AnimeThemesHelper.IsEd(t.Slug));
                         var (baseSlug, _) = AnimeThemesHelper.ParseSlug(t.Slug ?? "");
                         var (queryBase, _) = AnimeThemesHelper.ParseSlug(query.Slug);
                         return string.Equals(baseSlug, queryBase, StringComparison.OrdinalIgnoreCase)
@@ -362,7 +362,7 @@ public class AnimeThemesMp3Generator(
                                 var (baseSlug, _) = AnimeThemesHelper.ParseSlug(s);
                                 int num = AnimeThemesHelper.ExtractSlugNumber(baseSlug);
 
-                                int group = baseSlug.StartsWith("OP", StringComparison.OrdinalIgnoreCase) ? 1 : (baseSlug.StartsWith("ED", StringComparison.OrdinalIgnoreCase) ? 2 : 3);
+                                int group = AnimeThemesHelper.IsOp(baseSlug) ? 1 : (AnimeThemesHelper.IsEd(baseSlug) ? 2 : 3);
                                 return (Theme: t, OriginalIndex: index, Group: group, Number: num);
                             }
                         )
@@ -570,14 +570,8 @@ public class AnimeThemesMp3Generator(
 
                             var anime = await _apiClient.FetchAnimeThemesAsync(s.AnidbAnimeID, token).ConfigureAwait(false);
                             var animethemes = anime?.FirstOrDefault()?.Animethemes ?? [];
-                            var op = animethemes
-                                .Where(t => t.Slug != null && t.Slug.StartsWith("OP", StringComparison.OrdinalIgnoreCase))
-                                .OrderBy(t => AnimeThemesHelper.ExtractSlugNumber(t.Slug!))
-                                .FirstOrDefault();
-                            var ed = animethemes
-                                .Where(t => t.Slug != null && t.Slug.StartsWith("ED", StringComparison.OrdinalIgnoreCase))
-                                .OrderBy(t => AnimeThemesHelper.ExtractSlugNumber(t.Slug!))
-                                .FirstOrDefault();
+                            var op = animethemes.Where(t => t.Slug != null && AnimeThemesHelper.IsOp(t.Slug)).OrderBy(t => AnimeThemesHelper.ExtractSlugNumber(t.Slug!)).FirstOrDefault();
+                            var ed = animethemes.Where(t => t.Slug != null && AnimeThemesHelper.IsEd(t.Slug)).OrderBy(t => AnimeThemesHelper.ExtractSlugNumber(t.Slug!)).FirstOrDefault();
 
                             bool isHigherEd = isEd && !isEd1;
 

@@ -107,9 +107,9 @@ public class Plugin : IPlugin
     /// <inheritdoc/>
     public IReadOnlyList<PluginPage> GetPages() =>
         [
-            new() { Name = "Dashboard", Url = "/api/plugin/ShokoRelay/dashboard" },
-            new() { Name = "VFS Browser", Url = "/api/plugin/ShokoRelay/browser" },
-            new() { Name = "AnimeThemes Player", Url = "/api/plugin/ShokoRelay/player" },
+            new() { Name = "Dashboard", Url = $"{ShokoRelayConstants.BasePath}/dashboard" },
+            new() { Name = "VFS Browser", Url = $"{ShokoRelayConstants.BasePath}/browser" },
+            new() { Name = "AnimeThemes Player", Url = $"{ShokoRelayConstants.BasePath}/player" },
         ];
 }
 

@@ -95,7 +95,7 @@ public static class ContentRatingHelper
             var descriptorV = tagSet.Contains("violence") ? "V" : string.Empty;
             var descriptor = (!string.IsNullOrEmpty(descriptorD) || !string.IsNullOrEmpty(descriptorS) || !string.IsNullOrEmpty(descriptorV)) ? "-" + descriptorD + descriptorS + descriptorV : string.Empty;
 
-            string? c_rating = null;
+            string? contentRating = null;
 
             // Iterate tags in order, check AniDB weight thresholds
             (string Rating, bool IsAdult)? ApplyWeightedChecks((string Key, int Tv14, int TvMa)[] checks)
@@ -107,8 +107,8 @@ public static class ContentRatingHelper
                     var w = anidbWeights.TryGetValue(key, out var ww) ? ww : 0;
                     if (w >= tvma)
                         return ("TV-MA" + descriptor, false);
-                    if (w >= tv14 && c_rating != "TV-MA")
-                        c_rating = "TV-14";
+                    if (w >= tv14 && contentRating != "TV-MA")
+                        contentRating = "TV-14";
                 }
                 return null;
             }
@@ -123,9 +123,9 @@ public static class ContentRatingHelper
 
             // Uses the AniDB "target audience" tags to select a baseline rating when no weighted content indicators apply: https://anidb.net/tag/2606/animetb
             // Check higher (more restrictive) ratings first and return immediately when matched.
-            if (string.IsNullOrEmpty(c_rating))
+            if (string.IsNullOrEmpty(contentRating))
             {
-                c_rating = tagSet switch
+                contentRating = tagSet switch
                 {
                     _ when tagSet.Contains("josei") || tagSet.Contains("seinen") => "TV-14" + descriptor,
                     _ when tagSet.Contains("shoujo") || tagSet.Contains("shounen") => "TV-PG" + descriptor,
@@ -134,11 +134,11 @@ public static class ContentRatingHelper
                     _ => null,
                 };
             }
-            else if (c_rating != "X")
-                c_rating += descriptor;
+            else if (contentRating != "X")
+                contentRating += descriptor;
 
-            if (!string.IsNullOrEmpty(c_rating))
-                return (c_rating, false);
+            if (!string.IsNullOrEmpty(contentRating))
+                return (contentRating, false);
         }
 
         // Fallback to TMDB content ratings when assumed ratings are disabled or undetermined

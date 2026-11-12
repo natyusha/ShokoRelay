@@ -264,16 +264,10 @@ public static class OverrideHelper
     {
         EnsureLoaded();
         if (s_coordOverrides.TryGetValue(anidbAnimeId, out var rules))
-        {
             foreach (var rule in rules)
-            {
                 if (rule.Type == type && episodeNumber >= rule.StartEp && episodeNumber <= rule.EndEp)
-                {
-                    int offset = episodeNumber - rule.StartEp;
-                    return (rule.TargetSeason, rule.TargetEpisodeStart + offset);
-                }
-            }
-        }
+                    return (rule.TargetSeason, rule.TargetEpisodeStart + (episodeNumber - rule.StartEp));
+
         return null;
     }
 

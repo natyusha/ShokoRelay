@@ -225,10 +225,8 @@ public class DashboardController(
     /// <summary>Returns a JSON list of all currently generated task logs that exist on disk.</summary>
     /// <returns>A list of log file metadata objects.</returns>
     [HttpGet("logs/list")]
-    public IActionResult GetLogsList()
-    {
-        string logsDir = Path.Combine(ConfigProvider.PluginDirectory, "logs");
-        return !Directory.Exists(logsDir)
+    public IActionResult GetLogsList() =>
+        Path.Combine(ConfigProvider.PluginDirectory, "logs") is var logsDir && !Directory.Exists(logsDir)
             ? Ok(new { logs = Array.Empty<object>() })
             : Ok(
                 Directory
@@ -239,7 +237,6 @@ public class DashboardController(
                     .Select(file => new { name = file, friendlyName = TagHelper.TitleCase(file.Replace("-report.log", "", StringComparison.Ordinal).Replace("-", " ", StringComparison.Ordinal)) })
                     .ToList()
             );
-    }
 
     /// <summary>Serves report files from the plugin's logs directory without allowing browser caching or directory traversal.</summary>
     /// <param name="fileName">The log filename.</param>

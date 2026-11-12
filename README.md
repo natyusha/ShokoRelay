@@ -40,7 +40,7 @@ Installation can be completed via Shoko's WebUI (Recommended) or Manually. Both 
   - Click `Install`
 - **Manual**
   - Navigate to Shoko Server's `plugins` directory and create a new subfolder called `ShokoRelay`
-  - Extract [the latest pre-release](https://github.com/natyusha/ShokoRelay/releases) into the `plugins/ShokoRelay` directory
+  - Extract [the latest release](https://github.com/natyusha/ShokoRelay/releases/latest) into the `plugins/ShokoRelay` directory
   - It may be necessary to create the `plugins` (all lowercase) folder in Shoko's root first
 - Restart Shoko Server after finishing either of the above installation methods
 
@@ -199,6 +199,7 @@ The button in the top right of the Automation Controls panel will run all three 
 - Click the `Generate Collections` button in the "Quick Actions" section of the dashboard to start this process
 - If `Advanced Settings > Plex Data Path` is configured this action will also clean up old collection images
 - The primary series description will be used as the collection's summary
+- Any collections matching keywords defined under `Advanced Settings > Collection Exclusions` will be ignored and protected from removal or item unassignment
 - _Requires Plex authentication_
 
 As a bonus this supports using the primary series images as the collection images (if configured under "Provider Settings"). Custom local posters can also be used by placing them in the configured `Collection Images Root Path` (default `!CollectionImages`) folder. These files are simply named after the Shoko group name (or ID) that you wish them to apply to. If the name of a file matches that of a smart collection the images will be applied to it too. Empty collections (excluding smart collections) will also be removed automatically during collection generation.

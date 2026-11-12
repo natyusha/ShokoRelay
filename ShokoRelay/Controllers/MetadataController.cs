@@ -283,21 +283,12 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     [HttpGet("metadata/{ratingKey}/children")]
     public IActionResult GetChildren(string ratingKey) =>
         SafeRequest(() =>
-        {
-            if (PlexHelper.IsMovieKey(ratingKey))
-                return EmptyMatch();
-
-            var ctx = mapper.GetSeriesContext(ratingKey);
-            if (ctx == null)
-                return NotFound();
-
-            int seasonIdx = ratingKey.IndexOf(PlexConstants.SeasonPrefix, StringComparison.OrdinalIgnoreCase);
-            if (seasonIdx >= 0)
-                return !int.TryParse(ratingKey[(seasonIdx + PlexConstants.SeasonPrefix.Length)..], out int sNum) ? NotFound() : WrapInPagedContainer(mapper.BuildEpisodeList(ctx, sNum));
-
-            var seasons = ctx.FileData.Seasons.Select(s => mapper.MapSeason(ctx, s)).ToList();
-            return WrapInPagedContainer(seasons);
-        });
+            PlexHelper.IsMovieKey(ratingKey) ? EmptyMatch()
+            : mapper.GetSeriesContext(ratingKey) is not { } ctx ? NotFound()
+            : ratingKey.IndexOf(PlexConstants.SeasonPrefix, StringComparison.OrdinalIgnoreCase) is var sIdx && sIdx >= 0
+                ? (!int.TryParse(ratingKey[(sIdx + PlexConstants.SeasonPrefix.Length)..], out int sNum) ? NotFound() : WrapInPagedContainer(mapper.BuildEpisodeList(ctx, sNum)))
+            : WrapInPagedContainer(ctx.FileData.Seasons.Select(s => mapper.MapSeason(ctx, s)))
+        );
 
     /// <summary>Lists the second-level children (episodes) for a show-level ratingKey.</summary>
     /// <remarks>See <c>/metadata/{ratingKey}</c> for supported ratingKey formats and resolution behavior.</remarks>
@@ -412,13 +403,10 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     [HttpGet("collections/{groupId}")]
     public IActionResult GetCollection(int groupId) =>
         SafeRequest(() =>
-        {
-            var group = MetadataService.GetShokoGroupByID(groupId);
-            if (group == null)
-                return NotFound();
-            var primarySeries = group.MainSeries ?? group.Series?.FirstOrDefault();
-            return primarySeries == null ? NotFound() : WrapInContainer(mapper.MapCollection(group, primarySeries));
-        });
+            MetadataService.GetShokoGroupByID(groupId) is { } group && (group.MainSeries ?? group.Series?.FirstOrDefault()) is { } primarySeries
+                ? WrapInContainer(mapper.MapCollection(group, primarySeries))
+                : NotFound()
+        );
 
     /// <summary>Serves the local image for a user-defined, automatically generated, or smart collection by matching its ID or name.</summary>
     /// <param name="groupId">The Shoko group ID (prefixed with 'sc' for smart collections) or Plex collection ID.</param>

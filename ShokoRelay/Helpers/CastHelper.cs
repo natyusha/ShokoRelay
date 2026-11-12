@@ -333,13 +333,10 @@ public static class CastHelper
     /// <summary>Strips department category prefixes from TMDB crew role names.</summary>
     /// <param name="role">The raw crew role string.</param>
     /// <returns>The cleaned role string.</returns>
-    private static string CleanCrewRole(string? role)
-    {
-        if (string.IsNullOrWhiteSpace(role))
-            return "";
-        int commaIdx = role.IndexOf(',');
-        return commaIdx > 0 && s_tmdbDepartments.Contains(role[..commaIdx].Trim()) ? role[(commaIdx + 1)..].Trim() : role.Trim();
-    }
+    private static string CleanCrewRole(string? role) =>
+        string.IsNullOrWhiteSpace(role) ? ""
+        : role.IndexOf(',') is var commaIdx && commaIdx > 0 && s_tmdbDepartments.Contains(role[..commaIdx].Trim()) ? role[(commaIdx + 1)..].Trim()
+        : role.Trim();
 
     /// <summary>Filters the crew by a specific predicate and returns a formatted array of tags.</summary>
     /// <param name="item">The media item containing cast and crew.</param>

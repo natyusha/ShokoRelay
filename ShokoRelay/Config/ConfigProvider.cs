@@ -80,8 +80,8 @@ public class ConfigProvider
 
                 var detectedUrl = $"{scheme}://{host}{request.PathBase}".TrimEnd('/');
 
-                var tf = ReadTokenFile();
-                if (tf.AutoShokoServerUrl != detectedUrl)
+                var tokenFile = ReadTokenFile();
+                if (tokenFile.AutoShokoServerUrl != detectedUrl)
                     UpdatePlexTokenInfo(autoUrl: detectedUrl);
 
                 return detectedUrl;
@@ -431,13 +431,13 @@ public class ConfigProvider
     /// <returns>The Plex client identifier string.</returns>
     public string GetPlexClientIdentifier()
     {
-        var tf = ReadTokenFile();
-        if (string.IsNullOrWhiteSpace(tf.ClientIdentifier))
+        var tokenFile = ReadTokenFile();
+        if (string.IsNullOrWhiteSpace(tokenFile.ClientIdentifier))
         {
-            tf.ClientIdentifier = Guid.NewGuid().ToString("N");
-            WriteTokenFile(tf.Token, tf.ClientIdentifier, tf.AdminUsername, tf.Servers, tf.Libraries);
+            tokenFile.ClientIdentifier = Guid.NewGuid().ToString("N");
+            WriteTokenFile(tokenFile.Token, tokenFile.ClientIdentifier, tokenFile.AdminUsername, tokenFile.Servers, tokenFile.Libraries);
         }
-        return tf.ClientIdentifier;
+        return tokenFile.ClientIdentifier;
     }
 
     /// <summary>Retrieves the list of discovered Plex servers from the token file.</summary>

@@ -157,16 +157,20 @@ public static partial class VfsHelper
         int? partCount = null,
         int? vIdx = null,
         bool isVariation = false
-    )
-    {
-        string epFormat = $"D{pad}";
-        string name =
+    ) =>
+        FormatVfsFileName(
             mapping.Coords.EndEpisode.HasValue && mapping.Coords.EndEpisode != mapping.Coords.Episode
-                ? $"S{mapping.Coords.Season:D2}E{mapping.Coords.Episode.ToString(epFormat)}-E{mapping.Coords.EndEpisode.Value.ToString(epFormat)}"
-                : $"S{mapping.Coords.Season:D2}E{mapping.Coords.Episode.ToString(epFormat)}";
-
-        return FormatVfsFileName(name, mapping, ext, fileId, omitFileId, partIdx, partCount, vIdx, isVariation);
-    }
+                ? $"S{mapping.Coords.Season:D2}E{mapping.Coords.Episode.ToString($"D{pad}")}-E{mapping.Coords.EndEpisode.Value.ToString($"D{pad}")}"
+                : $"S{mapping.Coords.Season:D2}E{mapping.Coords.Episode.ToString($"D{pad}")}",
+            mapping,
+            ext,
+            fileId,
+            omitFileId,
+            partIdx,
+            partCount,
+            vIdx,
+            isVariation
+        );
 
     /// <summary>Builds a movie filename based on part indexing, versioning, and variation status.</summary>
     /// <param name="mapping">The mapping containing coordinates and video data.</param>

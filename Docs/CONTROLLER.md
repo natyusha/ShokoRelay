@@ -195,6 +195,7 @@ GET  /plex/automation/run                                      -> RunPlexAutomat
   - `clean`: (default true) if true and `PlexMetadataPath` is configured, prunes old cached custom posters from Plex's local metadata directory.
   - Artwork is uploaded via direct file streaming to avoid loopback network restrictions on private IP addresses.
   - This will also scan Plex for smart collection names allowing their posters to be set.
+  - Collections matching keywords configured in `Advanced.CollectionExclusions` are protected from item unassignment and deletion.
 - `ApplyAudienceRatings` updates ratings for a comma-separated list of series IDs based on the configured source (TMDB/AniDB).
 - `SyncPlexImages` queries Plex for generated episode thumbnails and scans VFS/collection paths for all local images, uploading and marking them as preferred in Shoko.
   - The generated episode thumbnails will not be uploaded if `TmdbThumbnails` is enabled or a local thumbnail is present.

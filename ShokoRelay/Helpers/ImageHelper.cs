@@ -236,28 +236,29 @@ public static class ImageHelper
     /// <param name="imageLanguage">The prioritized language setting string.</param>
     /// <param name="seasonPosters">Optional pre-resolved URLs.</param>
     /// <returns>An array of ImageInfo objects.</returns>
-    public static ImageInfo[] BuildCoverPosterArray(IWithImages seriesImages, string alt, bool addEveryImage, string imageLanguage, IEnumerable<string>? seasonPosters = null)
-    {
-        return seasonPosters != null && seasonPosters.Any()
-            ? addEveryImage
-                ?
-                [
-                    .. seasonPosters.Select(url => new ImageInfo
-                    {
-                        Alt = alt,
-                        Type = "coverPoster",
-                        Url = url,
-                    }),
-                ]
-                :
-                [
-                    new ImageInfo
-                    {
-                        Alt = alt,
-                        Type = "coverPoster",
-                        Url = seasonPosters.First(),
-                    },
-                ]
+    public static ImageInfo[] BuildCoverPosterArray(IWithImages seriesImages, string alt, bool addEveryImage, string imageLanguage, IEnumerable<string>? seasonPosters = null) =>
+        seasonPosters != null && seasonPosters.Any()
+            ? (
+                addEveryImage
+                    ?
+                    [
+                        .. seasonPosters.Select(url => new ImageInfo
+                        {
+                            Alt = alt,
+                            Type = "coverPoster",
+                            Url = url,
+                        }),
+                    ]
+                    :
+                    [
+                        new ImageInfo
+                        {
+                            Alt = alt,
+                            Type = "coverPoster",
+                            Url = seasonPosters.First(),
+                        },
+                    ]
+            )
             :
             [
                 .. FilterImagesByLanguage(seriesImages.GetAvailableImages(ImageEntityType.Primary), imageLanguage, addEveryImage)
@@ -268,7 +269,6 @@ public static class ImageHelper
                         Url = GetImageUrl(i, forceRemote: addEveryImage),
                     }),
             ];
-    }
 
     /// <summary>Create a set of snapshot images specifically for an episode entry.</summary>
     /// <param name="images">The object providing images.</param>
@@ -276,9 +276,7 @@ public static class ImageHelper
     /// <param name="addEveryImage">Whether to include all images.</param>
     /// <param name="imageLanguage">The prioritized language setting string.</param>
     /// <returns>An array of ImageInfo objects.</returns>
-    public static ImageInfo[] BuildSnapshotArray(IWithImages images, string alt, bool addEveryImage, string imageLanguage)
-    {
-        return
+    public static ImageInfo[] BuildSnapshotArray(IWithImages images, string alt, bool addEveryImage, string imageLanguage) =>
         [
             .. FilterImagesByLanguage(images.GetAvailableImages(ImageEntityType.Backdrop), imageLanguage, addEveryImage)
                 .Select(i => new ImageInfo
@@ -288,7 +286,6 @@ public static class ImageHelper
                     Url = GetImageUrl(i, forceRemote: addEveryImage),
                 }),
         ];
-    }
 
     #endregion
 }

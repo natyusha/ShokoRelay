@@ -167,9 +167,8 @@ public class AnimeThemesController(
     /// <summary>Audits existing non-OP Theme.mp3 files to check if an OP upgrade is now available on AnimeThemes.</summary>
     /// <returns>A task representing the result of the audit.</returns>
     [HttpGet("animethemes/mp3/audit")]
-    public async Task<IActionResult> AuditAnimeThemesMp3() =>
-        await ExecuteTrackedTaskAsync(ShokoRelayConstants.TaskAtMp3Audit, LogHelper.BuildAtMp3AuditReport, () => animeThemesMp3Generator.AuditAsync(CancellationToken.None), VfsShared.VfsLock)
-            .ConfigureAwait(false);
+    public Task<IActionResult> AuditAnimeThemesMp3() =>
+        ExecuteTrackedTaskAsync(ShokoRelayConstants.TaskAtMp3Audit, LogHelper.BuildAtMp3AuditReport, () => animeThemesMp3Generator.AuditAsync(CancellationToken.None), VfsShared.VfsLock);
 
     /// <summary>Streams an existing Theme.mp3 with ID3 tags embedded in response headers.</summary>
     /// <param name="path">The folder path containing the Theme.mp3.</param>
@@ -370,7 +369,7 @@ public class AnimeThemesController(
                         continue;
 
                     // Parse series name gracefully directly from the file basename
-                    string pseudoTitle = $"{AnimeThemesHelper.GetTitleFromAnimeThemesFile(entry.FilePath)}";
+                    string pseudoTitle = AnimeThemesHelper.GetTitleFromAnimeThemesFile(entry.FilePath);
                     var lookup = new AnimeThemesVideoLookup(entry);
 
                     items.Add(
