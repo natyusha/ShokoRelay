@@ -148,6 +148,80 @@ public static partial class TextHelper
 
     #endregion
 
+    #region Global Name Cache
+
+    /// <summary>Tracks display name variants and series counts across multiple series for global cross-series deduplication.</summary>
+    internal sealed class GlobalNameEntry
+    {
+        /// <summary>Synchronization lock for thread-safe variant recording.</summary>
+        private readonly Lock _lock = new();
+
+        /// <summary>Lowest numerical priority recorded so far (1 = AniDB, 2 = TMDB, 3 = User).</summary>
+        private int _priority = int.MaxValue;
+
+        /// <summary>Current winning display name across all recorded series.</summary>
+        private string _bestDisplayName = string.Empty;
+
+        /// <summary>Number of series using the winning display name at the winning priority.</summary>
+        private int _bestCount;
+
+        /// <summary>Counts per distinct casing/spelling variant at the current priority level.</summary>
+        private readonly Dictionary<string, int> _variantCounts = new(StringComparer.Ordinal);
+
+        /// <summary>Resolves the preferred display name, optionally recording a new series observation or upgrading to a higher-priority source.</summary>
+        /// <param name="variant">The formatted display variant string.</param>
+        /// <param name="priority">The source priority value (lower numerical values indicate higher priority).</param>
+        /// <param name="record">True to record a new series observation; false to read the cached winner unless a higher-priority source arrives.</param>
+        /// <returns>The preferred display name for the normalized key.</returns>
+        public string ResolveDisplayName(string variant, int priority, bool record)
+        {
+            lock (_lock)
+                return (record || priority < _priority || string.IsNullOrEmpty(_bestDisplayName)) ? RecordLocked(variant, priority) : _bestDisplayName;
+        }
+
+        /// <summary>Records an incoming variant under lock and returns the updated winning display name.</summary>
+        /// <param name="variant">The formatted display variant string.</param>
+        /// <param name="priority">The source priority value (lower numerical values indicate higher priority).</param>
+        /// <returns>The preferred display name for the normalized key.</returns>
+        private string RecordLocked(string variant, int priority)
+        {
+            // Higher-priority source (e.g. AniDB 1 beats TMDB 2)
+            if (priority < _priority)
+            {
+                _priority = priority;
+                _variantCounts.Clear();
+                _variantCounts[variant] = 1;
+                _bestDisplayName = variant;
+                _bestCount = 1;
+                return _bestDisplayName;
+            }
+
+            // Same priority: choose the variant used on the highest number of series, breaking ties deterministically by length then ordinal order
+            if (priority == _priority)
+            {
+                int count = _variantCounts.GetValueOrDefault(variant, 0) + 1;
+                _variantCounts[variant] = count;
+                if (
+                    count > _bestCount
+                    || (
+                        count == _bestCount
+                        && (variant.Length < _bestDisplayName.Length || (variant.Length == _bestDisplayName.Length && string.Compare(variant, _bestDisplayName, StringComparison.Ordinal) < 0))
+                    )
+                )
+                {
+                    _bestDisplayName = variant;
+                    _bestCount = count;
+                }
+                return _bestDisplayName;
+            }
+
+            // Lower-priority source arriving when a higher-priority display name is already cached
+            return _bestDisplayName;
+        }
+    }
+
+    #endregion
+
     #region Metadata Resolution
 
     /// <summary>Set of ambiguous AniDB episode titles that should be overridden by the series title.</summary>

@@ -60,64 +60,22 @@ public static partial class TagHelper
         s_defaultTagMerges = merges.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
     }
 
-    /// <summary>Tracks tag variants and series counts across multiple series for cross-series deduplication.</summary>
-    private sealed class TagCacheEntry
+    /// <summary>Composite key identifying a unique tag configuration context (including per-library overrides).</summary>
+    private readonly record struct TagCacheKey(string Overrides, TagSources Sources, MinimumTagWeight MinWeight);
+
+    /// <summary>Holds compiled override rules and pre-warmed cross-series display name mappings for a single tag configuration.</summary>
+    private sealed class TagCacheState(HashSet<string> blacklist, Dictionary<string, string> merges)
     {
-        public readonly Lock Lock = new();
-        public int Priority = int.MaxValue;
-        public string BestDisplayName = string.Empty;
-        public int BestCount = 0;
-        public readonly Dictionary<string, int> VariantCounts = new(StringComparer.Ordinal);
-
-        /// <summary>Records an incoming tag variant and returns the preferred display name based on source priority and frequency.</summary>
-        /// <param name="variant">The title-cased tag variant string.</param>
-        /// <param name="priority">The source priority value (lower numerical values indicate higher priority).</param>
-        /// <returns>The preferred display name for the normalized tag key.</returns>
-        public string RecordAndGetDisplayName(string variant, int priority)
-        {
-            lock (Lock)
-            {
-                // Higher-priority source (e.g. AniDB 1 beats TMDB 2)
-                if (priority < Priority)
-                {
-                    Priority = priority;
-                    VariantCounts.Clear();
-                    VariantCounts[variant] = 1;
-                    BestDisplayName = variant;
-                    BestCount = 1;
-                    return BestDisplayName;
-                }
-
-                // Same priority (e.g. TMDB vs TMDB): choose the variant used on the highest number of series
-                if (priority == Priority)
-                {
-                    int count = VariantCounts.GetValueOrDefault(variant, 0) + 1;
-                    VariantCounts[variant] = count;
-                    if (count > BestCount)
-                    {
-                        BestDisplayName = variant;
-                        BestCount = count;
-                    }
-                    return BestDisplayName;
-                }
-
-                // Lower-priority source arriving when a higher-priority display name is already cached
-                return BestDisplayName;
-            }
-        }
+        public readonly HashSet<string> Blacklist = blacklist;
+        public readonly Dictionary<string, string> Merges = merges;
+        public readonly ConcurrentDictionary<string, TextHelper.GlobalNameEntry> DisplayNames = new();
+        public readonly ConcurrentDictionary<int, byte> RecordedSeriesIds = new();
+        public readonly Lock WarmLock = new();
+        public volatile bool IsWarmed;
     }
 
-    /// <summary>Global cache mapping normalized tag keys to their preferred display representations and priorities to ensure cross-series deduplication.</summary>
-    private static readonly ConcurrentDictionary<string, TagCacheEntry> s_globalTagCache = new();
-
-    /// <summary>State variable caching the raw configuration string to detect changes. Initialized to null so default rules are loaded on startup.</summary>
-    private static string? s_lastTagConfig;
-
-    /// <summary>Cached set of normalized blacklisted tag keys.</summary>
-    private static HashSet<string> s_cachedBlacklist = new(StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>Cached dictionary of active tag merges (combining defaults with user overrides), keyed by normalized source keys.</summary>
-    private static Dictionary<string, string> s_cachedMerges = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Cache mapping active tag configuration contexts to their compiled rules and global display name caches.</summary>
+    private static readonly ConcurrentDictionary<TagCacheKey, TagCacheState> s_tagCaches = new();
 
     /// <summary>Lock object for synchronizing tag configuration compilation.</summary>
     private static readonly Lock s_configLock = new();
@@ -152,20 +110,32 @@ public static partial class TagHelper
 
     #region Tag Filtering
 
-    /// <summary>Parses and caches the user's blacklist and merge rules, invalidating when the configuration changes.</summary>
-    /// <returns>A tuple containing the active normalized blacklist and active merge dictionary.</returns>
-    private static (HashSet<string> Blacklist, Dictionary<string, string> Merges) GetTagConfig()
+    /// <summary>Pre-warms the global tag display name cache across all series in Shoko for the current configuration.</summary>
+    /// <param name="metadataService">The Shoko metadata service used to enumerate all series.</param>
+    public static void WarmCache(IMetadataService metadataService)
     {
-        var rawConfig = Settings.TagOverrides ?? string.Empty;
-        if (s_lastTagConfig != null && (ReferenceEquals(s_lastTagConfig, rawConfig) || string.Equals(s_lastTagConfig, rawConfig, StringComparison.Ordinal)))
-            return (s_cachedBlacklist, s_cachedMerges);
+        var key = new TagCacheKey(Settings.TagOverrides ?? string.Empty, Settings.TagSources, Settings.MinimumTagWeight);
+        EnsureWarmed(GetOrCreateTagCacheState(key), key, metadataService);
+    }
+
+    /// <summary>Retrieves or compiles the cached blacklist, merge rules, and display-name state for the given configuration key.</summary>
+    /// <param name="key">The active tag configuration key.</param>
+    /// <returns>A <see cref="TagCacheState"/> containing active rules and display name caches.</returns>
+    private static TagCacheState GetOrCreateTagCacheState(TagCacheKey key)
+    {
+        if (s_tagCaches.TryGetValue(key, out var existing))
+            return existing;
 
         lock (s_configLock)
         {
-            if (s_lastTagConfig != null && string.Equals(s_lastTagConfig, rawConfig, StringComparison.Ordinal))
-                return (s_cachedBlacklist, s_cachedMerges);
+            if (s_tagCaches.TryGetValue(key, out existing))
+                return existing;
 
-            using var reader = new StringReader(rawConfig);
+            // Cap cached configurations to prevent unbounded growth during iterative settings edits
+            if (s_tagCaches.Count >= 4)
+                s_tagCaches.Clear();
+
+            using var reader = new StringReader(key.Overrides);
             var (userBlacklist, userMerges, userMergeMentioned) = TextHelper.ParseOverrides(reader, NormalizeTagKey);
 
             var activeMerges = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -187,49 +157,94 @@ public static partial class TagHelper
             foreach (var b in userBlacklist)
                 activeBlacklist.Add(b);
 
-            s_cachedBlacklist = activeBlacklist;
-            s_cachedMerges = activeMerges;
-            s_lastTagConfig = rawConfig;
-            s_globalTagCache.Clear(); // Invalidate cross-series cache when configuration changes
-
-            return (s_cachedBlacklist, s_cachedMerges);
+            return s_tagCaches[key] = new TagCacheState(activeBlacklist, activeMerges);
         }
     }
 
-    /// <summary>Return an array of tag objects derived from a series, applying filters and sources.</summary>
+    /// <summary>Ensures the tag display name cache for the specified configuration has been populated across all Shoko series.</summary>
+    /// <param name="state">The target cache state.</param>
+    /// <param name="key">The configuration key governing tag collection.</param>
+    /// <param name="metadataService">Optional metadata service to enumerate all series.</param>
+    private static void EnsureWarmed(TagCacheState state, TagCacheKey key, IMetadataService? metadataService)
+    {
+        if (state.IsWarmed || metadataService == null)
+            return;
+
+        lock (state.WarmLock)
+        {
+            if (state.IsWarmed)
+                return;
+
+            foreach (var series in metadataService.GetAllShokoSeries() ?? [])
+                if (state.RecordedSeriesIds.TryAdd(series.LocalID, 0))
+                    foreach (var (cleanName, normKey, priority) in ExtractNormalizedTags(CollectRawTags(series, null, key.Sources, key.MinWeight), state))
+                        state.DisplayNames.GetOrAdd(normKey, _ => new TextHelper.GlobalNameEntry()).ResolveDisplayName(TitleCase(cleanName), priority, record: true);
+
+            state.IsWarmed = true;
+        }
+    }
+
+    /// <summary>Return an array of tag objects derived from a series, applying filters, global deduplication, and configured sources.</summary>
     /// <param name="series">The Shoko series metadata.</param>
     /// <param name="tmdbSeries">Optional pre-resolved TMDB series metadata object.</param>
+    /// <param name="metadataService">Optional metadata service used to pre-warm cross-series deduplication.</param>
     /// <returns>An array of tag metadata objects.</returns>
-    public static object[] GetFilteredTags(ISeries series, ISeries? tmdbSeries = null)
+    public static object[] GetFilteredTags(ISeries series, ISeries? tmdbSeries = null, IMetadataService? metadataService = null)
+    {
+        var key = new TagCacheKey(Settings.TagOverrides ?? string.Empty, Settings.TagSources, Settings.MinimumTagWeight);
+        var state = GetOrCreateTagCacheState(key);
+        EnsureWarmed(state, key, metadataService);
+
+        bool shouldRecord = series is IShokoSeries ss && state.RecordedSeriesIds.TryAdd(ss.LocalID, 0);
+
+        return
+        [
+            .. ExtractNormalizedTags(CollectRawTags(series, tmdbSeries, key.Sources, key.MinWeight), state)
+                .Select(t => state.DisplayNames.GetOrAdd(t.NormKey, _ => new TextHelper.GlobalNameEntry()).ResolveDisplayName(TitleCase(t.CleanName), t.Priority, shouldRecord))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Select(displayName => (object)new { tag = displayName }),
+        ];
+    }
+
+    /// <summary>Collects raw tag names and source priorities for a series according to the configured tag sources and minimum weight.</summary>
+    /// <param name="series">The series metadata.</param>
+    /// <param name="tmdbSeries">Optional pre-resolved TMDB series metadata object.</param>
+    /// <param name="sources">Configured tag source filter.</param>
+    /// <param name="minWeight">Minimum AniDB tag weight threshold.</param>
+    /// <returns>An enumerable of raw tag names paired with source priorities.</returns>
+    private static IEnumerable<(string Name, int Priority)> CollectRawTags(ISeries series, ISeries? tmdbSeries, TagSources sources, MinimumTagWeight minWeight)
     {
         var shokoSeries = series as IShokoSeries;
         var shokoTags = shokoSeries?.Tags;
-        if (shokoTags == null)
-            return [];
 
-        var (blacklistKeys, merges) = GetTagConfig();
-        var sourceSetting = Settings.TagSources;
+        IEnumerable<(string Name, int Priority)> userNames =
+            shokoTags != null ? shokoTags.Where(t => t != null && t.ID.Source == MetadataSource.User && !string.IsNullOrWhiteSpace(t.Name)).Select(t => (t.Name, Priority: 3)) : [];
 
-        var shokoNames = shokoTags.Select(t => t.Name).Where(n => !string.IsNullOrWhiteSpace(n)).Select(n => (Name: n, Priority: 3));
-
-        if (sourceSetting == TagSources.UserOnly)
-            return [.. FilterAndFormat(shokoNames, blacklistKeys, merges)];
+        if (sources == TagSources.UserOnly)
+            return userNames;
 
         IEnumerable<(string Name, int Priority)> anidbNames = [];
-        int minWeight = (int)Settings.MinimumTagWeight;
-        if ((sourceSetting is TagSources.Combined or TagSources.AniDB) && shokoSeries?.AnidbAnime?.Tags is IReadOnlyList<IAnidbTagForAnime> anidbTags)
-            anidbNames = anidbTags.Where(t => !string.IsNullOrWhiteSpace(t.Name) && (minWeight <= 0 || t.Weight >= minWeight)).Select(t => (t.Name, Priority: 1));
+        if ((sources is TagSources.Combined or TagSources.AniDB) && shokoSeries?.AnidbAnime?.Tags is IReadOnlyList<IAnidbTagForAnime> anidbTags)
+            anidbNames = anidbTags.Where(t => !string.IsNullOrWhiteSpace(t.Name) && ((int)minWeight <= 0 || t.Weight >= (int)minWeight)).Select(t => (t.Name, Priority: 1));
 
         IEnumerable<(string Name, int Priority)> tmdbNames = [];
-        if ((sourceSetting is TagSources.Combined or TagSources.TMDB) && (tmdbSeries ?? shokoSeries?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault()) is { } tmdb)
+        if (
+            (sources is TagSources.Combined or TagSources.TMDB)
+            && (tmdbSeries ?? shokoSeries?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() ?? (series.ID.Source == MetadataSource.TMDB ? series : null)) is { } tmdb
+        )
             tmdbNames = tmdb
                 .Tags.Where(t => !string.IsNullOrWhiteSpace(t.Name) && (t.Kind is TagKind.Genre || (t.Kind is TagKind.Keyword && !NonEnglishTagRegex().IsMatch(t.Name))))
                 .Select(t => (t.Name, Priority: 2));
 
-        return [.. FilterAndFormat(anidbNames.Concat(tmdbNames).Concat(shokoNames), blacklistKeys, merges)];
+        return sources switch
+        {
+            TagSources.AniDB => anidbNames,
+            TagSources.TMDB => tmdbNames,
+            _ => anidbNames.Concat(tmdbNames).Concat(userNames),
+        };
     }
 
-    /// <summary>Generates a normalized comparison key ignoring case, spacing, punctuation, and diacritics.</summary>
+    /// <summary>Generates a normalized comparison key ignoring case, spacing, punctuation, diacritics, and common English plurals.</summary>
     /// <param name="text">The raw tag name string.</param>
     /// <returns>A normalized alphanumeric ASCII lowercase string.</returns>
     private static string NormalizeTagKey(string text)
@@ -246,20 +261,24 @@ public static partial class TagHelper
         string key = sb.ToString();
 
         // Simple plural stemming for deduplication keys (preserves display names)
-        if (key.Length > 3 && key.EndsWith('s') && key[^2] is not ('s' or 'u' or 'i' or 'o'))
+        if (key.Length > 4 && key.EndsWith("ies", StringComparison.Ordinal))
+            key = key[..^3] + "y";
+        else if (key.Length > 4 && key.EndsWith("ie", StringComparison.Ordinal))
+            key = key[..^2] + "y";
+        else if (key.Length > 5 && key.EndsWith("sses", StringComparison.Ordinal))
+            key = key[..^2];
+        else if (key.Length > 3 && key.EndsWith('s') && key[^2] is not ('s' or 'u' or 'i' or 'o'))
             key = key[..^1];
 
         return key;
     }
 
-    /// <summary>Filters the raw tag strings against the user blacklist, deduplicates across punctuation and diacritics, and normalizes them into title case.</summary>
-    /// <param name="tags">The raw collection of tag name strings to process along with their source priority.</param>
-    /// <param name="blacklistKeys">The set of normalized blacklisted tag keys to filter out.</param>
-    /// <param name="merges">The active dictionary of tag merges mapping normalized source keys to primary target names.</param>
-    /// <returns>An enumerable collection of formatted anonymous objects containing the sanitized tags.</returns>
-    private static IEnumerable<object> FilterAndFormat(IEnumerable<(string Name, int Priority)> tags, HashSet<string> blacklistKeys, Dictionary<string, string> merges)
-    {
-        return tags
+    /// <summary>Strips notes, applies merge rules and blacklists, and deduplicates normalized tags within a single series.</summary>
+    /// <param name="tags">The raw collection of tag names paired with source priority.</param>
+    /// <param name="state">The active tag cache state containing blacklists and merge mappings.</param>
+    /// <returns>An enumerable of cleaned, merged, and deduplicated tag entries.</returns>
+    private static IEnumerable<(string CleanName, string NormKey, int Priority)> ExtractNormalizedTags(IEnumerable<(string Name, int Priority)> tags, TagCacheState state) =>
+        tags
         // 1. Strip moderator notes / AniDB comments first
         .Select(t => (CleanName: TagCleanupRegex().Replace(t.Name, "").Trim(), t.Priority))
             .Where(t => !string.IsNullOrWhiteSpace(t.CleanName))
@@ -267,24 +286,16 @@ public static partial class TagHelper
             .Select(t =>
             {
                 var normKey = NormalizeTagKey(t.CleanName);
-                var isMerged = merges.TryGetValue(normKey, out var target);
+                var isMerged = state.Merges.TryGetValue(normKey, out var target);
                 var effectiveName = isMerged ? target! : t.CleanName;
                 var effectiveKey = isMerged ? NormalizeTagKey(effectiveName) : normKey;
                 return (CleanName: effectiveName, SourceKey: normKey, NormKey: effectiveKey, t.Priority);
             })
             // 3. Blacklist filtering (checks both source and merged keys)
-            .Where(t => t.NormKey.Length > 0 && !blacklistKeys.Contains(t.NormKey) && !blacklistKeys.Contains(t.SourceKey))
+            .Where(t => t.NormKey.Length > 0 && !state.Blacklist.Contains(t.NormKey) && !state.Blacklist.Contains(t.SourceKey))
             // 4. Deduplicate within this series (AniDB tags will beat TMDB because anidbNames precedes tmdbNames)
             .DistinctBy(t => t.NormKey)
-            // 5. Update and retrieve preferred representation across series
-            .Select(t =>
-            {
-                string titleCased = TitleCase(t.CleanName);
-                var entry = s_globalTagCache.GetOrAdd(t.NormKey, _ => new TagCacheEntry());
-                string displayName = entry.RecordAndGetDisplayName(titleCased, t.Priority);
-                return (object)new { tag = displayName };
-            });
-    }
+            .Select(t => (t.CleanName, t.NormKey, t.Priority));
 
     #endregion
 

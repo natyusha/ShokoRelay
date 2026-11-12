@@ -36,9 +36,6 @@ public class PlexMetadata(IMetadataService metadataService)
         _contextCache.TryRemove(primaryId, out _);
     }
 
-    /// <summary>Clears the entire SeriesContext cache.</summary>
-    public void ClearCache() => _contextCache.Clear();
-
     /// <summary>Aggregates relevant information about a Shoko series for controller responses.</summary>
     /// <param name="Series">The primary series metadata.</param>
     /// <param name="TmdbSeries">The linked TMDB series metadata, if present.</param>
@@ -197,13 +194,13 @@ public class PlexMetadata(IMetadataService metadataService)
 
             ["Image"]                 = ImageHelper.GenerateImageArray(images, ctx.Titles.DisplayTitle, Settings.AddEveryImage, Settings.TmdbImageLanguage),
             //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
-            ["Genre"]                 = TagHelper.GetFilteredTags(series, tmdbSeries),
+            ["Genre"]                 = TagHelper.GetFilteredTags(series, tmdbSeries, metadataService),
             ["Guid"]                  = BuildXrefGuidArray(series, tmdbSeries, tmdbMovie),
             ["Country"]               = BuildCountryArray(series, tmdbSeries, tmdbMovie),
             ["Role"]                  = CastHelper.GetCastAndCrew(series, metadataService, tmdbSeries),
-            ["Director"]              = CastHelper.GetDirectors(series),
-            ["Producer"]              = CastHelper.GetProducers(series),
-            ["Writer"]                = CastHelper.GetWriters(series),
+            ["Director"]              = CastHelper.GetDirectors(series, metadataService),
+            ["Producer"]              = CastHelper.GetProducers(series, metadataService),
+            ["Writer"]                = CastHelper.GetWriters(series, metadataService),
             ["Similar"]               = BuildSimilarArray(series),
             ["Studio"]                = studios,
             ["Collection"]            = GetCollectionName(series) is string c ? new[] { new { tag = c } } : null,
@@ -268,13 +265,13 @@ public class PlexMetadata(IMetadataService metadataService)
 
             ["Image"]                 = imagesArray,
             //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
-            ["Genre"]                 = TagHelper.GetFilteredTags(series, tmdbSeries),
+            ["Genre"]                 = TagHelper.GetFilteredTags(series, tmdbSeries, metadataService),
             ["Guid"]                  = BuildXrefGuidArray(series, tmdbSeries, tmdbMovie),
             ["Country"]               = BuildCountryArray(series, tmdbSeries),
             ["Role"]                  = CastHelper.GetCastAndCrew(series, metadataService, tmdbSeries),
-            ["Director"]              = CastHelper.GetDirectors(series),
-            ["Producer"]              = CastHelper.GetProducers(series),
-            ["Writer"]                = CastHelper.GetWriters(series),
+            ["Director"]              = CastHelper.GetDirectors(series, metadataService),
+            ["Producer"]              = CastHelper.GetProducers(series, metadataService),
+            ["Writer"]                = CastHelper.GetWriters(series, metadataService),
             ["Similar"]               = BuildSimilarArray(series),
             ["Studio"]                = studios,
             ["Collection"]            = GetCollectionName(series) is string c ? new[] { new { tag = c } } : null,
@@ -451,10 +448,10 @@ public class PlexMetadata(IMetadataService metadataService)
             ["Image"]                 = Settings.TmdbThumbnails ? ImageHelper.BuildSnapshotArray(images, epTitle, Settings.AddEveryImage, Settings.TmdbImageLanguage) : [],
             ["Guid"]                  = BuildEpisodeXrefGuidArray(tmdbEp, tmdbMovie, tmdbEps),
             //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
-            //["Role"]                = CastHelper.GetCastAndCrew(episode), // Large array not used by Plex clients and present in grandparent series metadata
-            ["Director"]              = CastHelper.GetDirectors(episode),
-            ["Producer"]              = CastHelper.GetProducers(episode),
-            ["Writer"]                = CastHelper.GetWriters(episode),
+            //["Role"]                = CastHelper.GetCastAndCrew(episode, metadataService), // Large array not used by Plex clients and present in grandparent
+            ["Director"]              = CastHelper.GetDirectors(episode, metadataService),
+            ["Producer"]              = CastHelper.GetProducers(episode, metadataService),
+            ["Writer"]                = CastHelper.GetWriters(episode, metadataService),
             ["Rating"]                = BuildRatingArray(epTmdbRating, epAnidbRating)
         };
     }

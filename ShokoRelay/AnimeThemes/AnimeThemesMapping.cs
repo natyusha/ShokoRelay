@@ -400,16 +400,6 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
         return (entry, null, genFileName, true, changedFields);
     }
 
-    /// <summary>Test the mapping process for a single webm filename without adding it to the CSV.</summary>
-    /// <param name="webmFileName">The webm filename to test.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A result containing the entry, error, and generated filename.</returns>
-    public async Task<(AnimeThemesMappingEntry? entry, string? error, string filename)> TestMappingEntryAsync(string webmFileName, CancellationToken cancellationToken = default)
-    {
-        var (entry, error, gen, _, _) = await ProcessSingleMappingAsync(webmFileName, false, null, cancellationToken).ConfigureAwait(false);
-        return (entry, error, gen);
-    }
-
     /// <summary>Read a previously built mapping file and create/update VFS links for matching theme files.</summary>
     /// <remarks>
     /// Prioritizes BD sources: if a filename collision occurs and a BD source is available, non-BD sources are skipped.

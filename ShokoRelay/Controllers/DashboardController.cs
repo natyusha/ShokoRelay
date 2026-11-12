@@ -227,7 +227,7 @@ public class DashboardController(
     [HttpGet("logs/list")]
     public IActionResult GetLogsList() =>
         Path.Combine(ConfigProvider.PluginDirectory, "logs") is var logsDir && !Directory.Exists(logsDir)
-            ? Ok(new { logs = Array.Empty<object>() })
+            ? Ok(Array.Empty<object>())
             : Ok(
                 Directory
                     .EnumerateFiles(logsDir, "*-report.log")

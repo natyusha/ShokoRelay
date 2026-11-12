@@ -135,6 +135,7 @@ public class ShokoRelay : BackgroundService
     private readonly VfsWatcher _watcher;
     private readonly ISystemService _systemService;
     private readonly IScheduledActionService _scheduledActionService;
+    private readonly IMetadataService _metadataService;
 
     /// <summary>Generates ParallelOptions pre-configured with the maximum degree of parallelism (clamped to at least 1) and an optional cancellation token.</summary>
     /// <param name="token">Optional cancellation token.</param>
@@ -150,6 +151,7 @@ public class ShokoRelay : BackgroundService
     /// <param name="httpContextAccessor">Access to the current HTTP request context.</param>
     /// <param name="systemService">Shoko system state service.</param>
     /// <param name="scheduledActionService">Shoko scheduled action service.</param>
+    /// <param name="metadataService">Shoko metadata service.</param>
     /// <param name="logger">Logger instance.</param>
     public ShokoRelay(
         VfsWatcher watcher,
@@ -157,6 +159,7 @@ public class ShokoRelay : BackgroundService
         IHttpContextAccessor httpContextAccessor,
         ISystemService systemService,
         IScheduledActionService scheduledActionService,
+        IMetadataService metadataService,
         ILogger<ShokoRelay> logger
     )
     {
@@ -165,6 +168,7 @@ public class ShokoRelay : BackgroundService
         s_configProvider.HttpContextAccessor = httpContextAccessor;
         _systemService = systemService;
         _scheduledActionService = scheduledActionService;
+        _metadataService = metadataService;
         _logger = logger;
         _logger.LogInformation("ShokoRelay v{Version} initialized", ShokoRelayConstants.Version);
     }
@@ -186,6 +190,8 @@ public class ShokoRelay : BackgroundService
 
             _logger.LogInformation("Shoko Server started -> Caching overrides & initializing native scheduled actions...");
             OverrideHelper.Reload(); // Warm up the VFS override cache.
+            TagHelper.WarmCache(_metadataService);
+            CastHelper.WarmCache(_metadataService);
 
             // Sync triggers from current configuration
             ActionScheduleHelper.SyncTriggers(Settings, _scheduledActionService);

@@ -37,8 +37,17 @@ public static class CastHelper
     /// <summary>Explicit studio and credit name merges mapping variant names to canonical names.</summary>
     private static readonly FrozenDictionary<string, string> s_creditMerges;
 
-    /// <summary>Global cache mapping normalized studio keys to their preferred display names and priority (1 = AniDB, 2 = TMDB).</summary>
-    private static readonly ConcurrentDictionary<string, (string Name, int Priority)> s_globalStudioNames = new();
+    /// <summary>Global cache mapping normalized credit/studio keys to their preferred display names across all series.</summary>
+    private static readonly ConcurrentDictionary<string, TextHelper.GlobalNameEntry> s_globalCreditCache = new();
+
+    /// <summary>Tracks Shoko series IDs already recorded into the global credit cache to prevent repeated-request count inflation.</summary>
+    private static readonly ConcurrentDictionary<int, byte> s_recordedSeriesIds = new();
+
+    /// <summary>Lock object for synchronizing initial credit cache warm-up.</summary>
+    private static readonly Lock s_warmLock = new();
+
+    /// <summary>Tracks whether the global credit cache has been warmed across all series.</summary>
+    private static volatile bool s_isWarmed;
 
     /// <summary>Global cache mapping normalized studio keys to resolved TMDB logo URLs to avoid AniDB image requests.</summary>
     private static readonly ConcurrentDictionary<string, string> s_globalStudioThumbs = new(StringComparer.OrdinalIgnoreCase);
@@ -50,10 +59,11 @@ public static class CastHelper
         s_creditBlacklist = blacklist.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
         s_creditMerges = merges.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var kvp in s_creditMerges)
+        foreach (var target in s_creditMerges.Values.Distinct(StringComparer.Ordinal))
         {
-            string key = NormalizeCreditKey(kvp.Value);
-            s_globalStudioNames[key] = (kvp.Value, 1);
+            string key = NormalizeCreditKey(target);
+            if (key.Length > 0)
+                s_globalCreditCache.GetOrAdd(key, _ => new TextHelper.GlobalNameEntry()).ResolveDisplayName(target, 1, record: true);
         }
     }
 
@@ -83,6 +93,70 @@ public static class CastHelper
         return (new HashSet<string>(StringComparer.OrdinalIgnoreCase), new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), new HashSet<string>(StringComparer.OrdinalIgnoreCase));
     }
 
+    /// <summary>Pre-warms the global credit, cast, crew, and studio display name cache across all series in Shoko.</summary>
+    /// <param name="metadataService">The Shoko metadata service used to enumerate all series.</param>
+    public static void WarmCache(IMetadataService metadataService) => EnsureWarmed(metadataService);
+
+    /// <summary>Ensures the global credit cache has been populated across all Shoko series.</summary>
+    /// <param name="metadataService">Optional metadata service to enumerate all series.</param>
+    private static void EnsureWarmed(IMetadataService? metadataService)
+    {
+        if (s_isWarmed || metadataService == null)
+            return;
+
+        lock (s_warmLock)
+        {
+            if (s_isWarmed)
+                return;
+
+            foreach (var series in metadataService.GetAllShokoSeries() ?? [])
+                if (s_recordedSeriesIds.TryAdd(series.LocalID, 0))
+                    RecordSeriesCredits(series, null, metadataService);
+
+            s_isWarmed = true;
+        }
+    }
+
+    /// <summary>Records all cast, crew, and studio display name variants from a single series into the global cache once per series.</summary>
+    /// <param name="series">The series metadata to inspect.</param>
+    /// <param name="tmdbSeries">Optional pre-resolved TMDB series metadata.</param>
+    /// <param name="metadataService">Optional metadata service to resolve merged studios.</param>
+    private static void RecordSeriesCredits(ISeries series, ISeries? tmdbSeries, IMetadataService? metadataService)
+    {
+        var seenInSeries = new HashSet<(string NormKey, int Priority)>();
+
+        void Record(string? rawName, int priority)
+        {
+            if (string.IsNullOrWhiteSpace(rawName) || IsCreditBlacklisted(rawName))
+                return;
+
+            string trimmed = rawName.Trim();
+            string norm = NormalizeCreditKey(trimmed);
+            if (norm.Length == 0 || s_creditMerges.ContainsKey(norm))
+                return;
+
+            if (seenInSeries.Add((norm, priority)))
+                s_globalCreditCache.GetOrAdd(norm, _ => new TextHelper.GlobalNameEntry()).ResolveDisplayName(trimmed, priority, record: true);
+        }
+
+        foreach (var c in series.Cast ?? [])
+            Record(GetName(c.Creator, c.Name), c.Creator?.ID.Source == MetadataSource.TMDB ? 2 : 1);
+
+        foreach (var c in series.Crew ?? [])
+            Record(GetName(c.Creator, c.Name), c.Creator?.ID.Source == MetadataSource.TMDB ? 2 : 1);
+
+        foreach (var s in series.Studios ?? [])
+            Record(s.Name, s.ID.Source == MetadataSource.AniDB ? 1 : 2);
+
+        var resolvedTmdb = tmdbSeries ?? (series as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault();
+        foreach (var s in resolvedTmdb?.Studios ?? [])
+            Record(s.Name, 2);
+
+        if (metadataService != null && series is IShokoSeries { AnidbAnimeID: > 0 } ss)
+            foreach (var s in metadataService.GetMergedStudios(ss.AnidbAnimeID))
+                Record(s.Name, s.ID.Source == MetadataSource.AniDB ? 1 : 2);
+    }
+
     #endregion
 
     #region Cast and Crew Logic
@@ -94,18 +168,18 @@ public static class CastHelper
     /// <returns>An array of anonymous cast, crew, studio, and company objects suitable for Plex metadata responses.</returns>
     public static object[] GetCastAndCrew(IWithCastAndCrew item, IMetadataService? metadataService = null, ISeries? tmdbSeries = null)
     {
+        EnsureWarmed(metadataService);
+
         if (item is ISeries seriesItem)
         {
-            // Seed global studio names from the current series' AniDB studios without extra DB queries
-            foreach (var s in seriesItem.Studios ?? [])
-                if (s.ID.Source == MetadataSource.AniDB && !string.IsNullOrWhiteSpace(s.Name))
-                    s_globalStudioNames[NormalizeCreditKey(s.Name)] = (s.Name.Trim(), 1);
+            if (seriesItem is IShokoSeries ss && s_recordedSeriesIds.TryAdd(ss.LocalID, 0))
+                RecordSeriesCredits(seriesItem, tmdbSeries, metadataService);
 
             // Pre-populate global studio thumbs from this series' TMDB studios so both crew and company listings can reference them
             foreach (var s in (seriesItem.Studios ?? []).Concat(tmdbSeries?.Studios ?? []))
                 if (s.ID.Source == MetadataSource.TMDB && s is IWithImages withImages && !string.IsNullOrWhiteSpace(s.Name))
                 {
-                    string sKey = NormalizeCreditKey(s_creditMerges.TryGetValue(NormalizeCreditKey(s.Name.Trim()), out var m) ? m : s.Name.Trim());
+                    string sKey = NormalizeCreditKey(ResolvePreferredCreditName(s.Name, 2));
                     if (!s_globalStudioThumbs.ContainsKey(sKey) && withImages.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, forceRemote: true) is { } logoUrl)
                         s_globalStudioThumbs[sKey] = logoUrl;
                 }
@@ -123,65 +197,33 @@ public static class CastHelper
 
             var tmdbRoles = allRoles.Where(c => getCreator(c)?.ID.Source == MetadataSource.TMDB).ToList();
             var anidbRoles = allRoles.Where(c => getCreator(c) == null || getCreator(c)!.ID.Source != MetadataSource.TMDB).ToList();
-
-            // Passively register AniDB creator/company names into the global cache with Priority 1 to eliminate redundant passes over crew
-            foreach (var c in anidbRoles)
-                if (getCreator(c) == null || getCreator(c)!.ID.Source == MetadataSource.AniDB)
-                    if ((getCreator(c)?.Title ?? getName(c)) is { Length: > 0 } cName)
-                        s_globalStudioNames.TryAdd(NormalizeCreditKey(cName), (cName.Trim(), 1));
-
-            if (tmdbRoles.Count == 0)
-            {
-                foreach (var c in anidbRoles)
-                {
-                    string? tag = GetName(getCreator(c), getName(c));
-                    string? role = getRole(c);
-                    if (!string.Equals(tag, role, StringComparison.Ordinal) && !IsCreditBlacklisted(tag))
-                    {
-                        string? thumb = null;
-                        if (Settings.TmdbCastImages && !string.IsNullOrEmpty(tag) && s_globalStudioThumbs.TryGetValue(NormalizeCreditKey(tag), out var cachedLogo))
-                            thumb = cachedLogo;
-                        else if (getCreator(c)?.PrimaryImage is { } img)
-                            thumb = ImageHelper.GetImageUrl(img, forceRemote: true);
-
-                        finalRoles.Add(
-                            new
-                            {
-                                order = order++,
-                                tag,
-                                role,
-                                thumb,
-                            }
-                        );
-                    }
-                }
-                return;
-            }
-
-            var index = new TmdbRoleIndex<T>(tmdbRoles, getCreator, getName);
-            var matchedTmdb = new HashSet<T>();
+            var index = tmdbRoles.Count > 0 ? new TmdbRoleIndex<T>(tmdbRoles, getCreator, getName) : null;
+            var matchedTmdb = index != null ? new HashSet<T>() : null;
+            var seenRolePairs = new HashSet<(string Key, string Role)>();
 
             foreach (var c in anidbRoles)
             {
-                string? tag = GetName(getCreator(c), getName(c));
+                string? rawTag = GetName(getCreator(c), getName(c));
                 string? role = getRole(c);
 
-                // Filter out non-person entries (characters, vehicles, mecha, etc.) where actor matches role or credit is blacklisted
-                if (string.Equals(tag, role, StringComparison.Ordinal) || IsCreditBlacklisted(tag))
+                // Filter out non-person entries (characters, vehicles, mecha, etc.) where the actor name matches the role name.
+                if (string.IsNullOrWhiteSpace(rawTag) || string.Equals(rawTag, role, StringComparison.Ordinal) || IsCreditBlacklisted(rawTag))
                     continue;
 
-                var match = index.FindMatch(getCreator(c), getName(c) ?? "");
-                var thumbImg = getCreator(c)?.PrimaryImage;
+                string tag = ResolvePreferredCreditName(rawTag, 1);
+                if (string.Equals(tag, role, StringComparison.Ordinal) || IsCreditBlacklisted(tag) || !seenRolePairs.Add((NormalizeCreditKey(tag), (role ?? string.Empty).Trim().ToUpperInvariant())))
+                    continue;
 
-                if (match != null)
+                var thumbImg = getCreator(c)?.PrimaryImage;
+                if (index?.FindMatch(getCreator(c), getName(c) ?? "") is { } match)
                 {
-                    matchedTmdb.Add(match);
+                    matchedTmdb!.Add(match);
                     if (Settings.TmdbCastImages && getCreator(match)?.PrimaryImage != null)
                         thumbImg = getCreator(match)!.PrimaryImage;
                 }
 
                 string? thumb = null;
-                if (Settings.TmdbCastImages && !string.IsNullOrEmpty(tag) && s_globalStudioThumbs.TryGetValue(NormalizeCreditKey(tag), out var cachedLogo))
+                if (Settings.TmdbCastImages && s_globalStudioThumbs.TryGetValue(NormalizeCreditKey(tag), out var cachedLogo))
                     thumb = cachedLogo;
                 else if (thumbImg != null)
                     thumb = ImageHelper.GetImageUrl(thumbImg, forceRemote: true);
@@ -197,15 +239,22 @@ public static class CastHelper
                 );
             }
 
+            if (matchedTmdb == null)
+                return;
+
             foreach (var c in tmdbRoles)
             {
                 if (matchedTmdb.Contains(c))
                     continue;
 
-                string? tag = GetName(getCreator(c), getName(c));
+                string? rawTag = GetName(getCreator(c), getName(c));
                 string? role = getRole(c);
 
-                if (string.Equals(tag, role, StringComparison.Ordinal) || IsCreditBlacklisted(tag))
+                if (string.IsNullOrWhiteSpace(rawTag) || string.Equals(rawTag, role, StringComparison.Ordinal) || IsCreditBlacklisted(rawTag))
+                    continue;
+
+                string tag = ResolvePreferredCreditName(rawTag, 2);
+                if (string.Equals(tag, role, StringComparison.Ordinal) || IsCreditBlacklisted(tag) || !seenRolePairs.Add((NormalizeCreditKey(tag), (role ?? string.Empty).Trim().ToUpperInvariant())))
                     continue;
 
                 finalRoles.Add(
@@ -249,7 +298,7 @@ public static class CastHelper
                 bool isAniDb = s.ID.Source == MetadataSource.AniDB;
                 int priority = isAniDb ? 1 : 2;
                 bool isAnimation = animationStudioNames.Contains(rawName);
-                string preferredName = ResolvePreferredStudioName(rawName, priority);
+                string preferredName = ResolvePreferredCreditName(rawName, priority);
                 string key = NormalizeCreditKey(preferredName);
 
                 if (!studioGroups.TryGetValue(key, out var existing))
@@ -283,18 +332,22 @@ public static class CastHelper
 
     /// <summary>Return director credits for the given item.</summary>
     /// <param name="item">Item with cast/crew data.</param>
+    /// <param name="metadataService">Optional metadata service used to pre-warm cross-series deduplication.</param>
     /// <returns>An array of anonymous objects containing director names.</returns>
-    public static object[] GetDirectors(IWithCastAndCrew item) => FilterCrew(item, c => c.RoleType == CrewRoleType.Director);
+    public static object[] GetDirectors(IWithCastAndCrew item, IMetadataService? metadataService = null) => FilterCrew(item, c => c.RoleType == CrewRoleType.Director, metadataService);
 
     /// <summary>Retrieve writing credits (series composers or source work) for the item.</summary>
     /// <param name="item">Source item.</param>
+    /// <param name="metadataService">Optional metadata service used to pre-warm cross-series deduplication.</param>
     /// <returns>An array of anonymous objects containing writer names.</returns>
-    public static object[] GetWriters(IWithCastAndCrew item) => FilterCrew(item, c => c.RoleType is CrewRoleType.SeriesComposer or CrewRoleType.SourceWork);
+    public static object[] GetWriters(IWithCastAndCrew item, IMetadataService? metadataService = null) =>
+        FilterCrew(item, c => c.RoleType is CrewRoleType.SeriesComposer or CrewRoleType.SourceWork, metadataService);
 
     /// <summary>Retrieve producer credits for the given item.</summary>
     /// <param name="item">Item with cast/crew data.</param>
+    /// <param name="metadataService">Optional metadata service used to pre-warm cross-series deduplication.</param>
     /// <returns>An array of anonymous objects containing producer names.</returns>
-    public static object[] GetProducers(IWithCastAndCrew item) => FilterCrew(item, c => c.RoleType == CrewRoleType.Producer);
+    public static object[] GetProducers(IWithCastAndCrew item, IMetadataService? metadataService = null) => FilterCrew(item, c => c.RoleType == CrewRoleType.Producer, metadataService);
 
     #endregion
 
@@ -307,17 +360,17 @@ public static class CastHelper
         !string.IsNullOrWhiteSpace(name)
         && (s_creditBlacklist.Contains(NormalizeCreditKey(name)) || (s_creditMerges.TryGetValue(NormalizeCreditKey(name), out var target) && s_creditBlacklist.Contains(NormalizeCreditKey(target))));
 
-    /// <summary>Resolves the preferred studio name using explicit merges and the global AniDB studio name cache.</summary>
-    /// <param name="rawName">The raw studio or company name.</param>
+    /// <summary>Resolves the preferred global credit or studio display name using explicit merges and the global credit cache.</summary>
+    /// <param name="rawName">The raw studio, company, or creator name.</param>
     /// <param name="priority">The source priority (1 = AniDB, 2 = TMDB).</param>
-    /// <returns>The globally preferred studio name.</returns>
-    private static string ResolvePreferredStudioName(string rawName, int priority = 2)
+    /// <returns>The globally preferred display name.</returns>
+    private static string ResolvePreferredCreditName(string rawName, int priority = 2)
     {
-        string norm = NormalizeCreditKey(rawName);
-        string name = s_creditMerges.TryGetValue(norm, out var mapped) ? mapped : rawName;
-        string key = NormalizeCreditKey(name);
-        var (cachedName, _) = s_globalStudioNames.AddOrUpdate(key, _ => (name, priority), (_, existing) => priority <= existing.Priority ? (name, priority) : existing);
-        return cachedName;
+        string trimmed = rawName.Trim();
+        string norm = NormalizeCreditKey(trimmed);
+        return norm.Length == 0 ? trimmed
+            : s_creditMerges.TryGetValue(norm, out var mapped) ? mapped
+            : s_globalCreditCache.GetOrAdd(norm, _ => new TextHelper.GlobalNameEntry()).ResolveDisplayName(trimmed, priority, record: false);
     }
 
     /// <summary>Normalizes a studio, company, or creator name for comparison by stripping diacritics, spaces, punctuation, and standardizing long Japanese vowels.</summary>
@@ -341,10 +394,26 @@ public static class CastHelper
     /// <param name="series">The Shoko series metadata.</param>
     /// <param name="metadataService">The metadata service used to invoke cross-source merging.</param>
     /// <returns>An array of <see cref="TagItem"/> instances, one per distinct studio.</returns>
-    public static TagItem[] GetStudioTags(ISeries series, IMetadataService metadataService) =>
-        series is IShokoSeries { AnidbAnimeID: > 0 } ss && metadataService.GetMergedStudios(ss.AnidbAnimeID) is { Count: > 0 } studios
-            ? [.. studios.Where(s => !IsCreditBlacklisted(s.Name)).Select(s => new TagItem { Tag = ResolvePreferredStudioName(s.Name, s.ID.Source == MetadataSource.AniDB ? 1 : 2) })]
-            : [];
+    public static TagItem[] GetStudioTags(ISeries series, IMetadataService metadataService)
+    {
+        EnsureWarmed(metadataService);
+
+        if (series is not IShokoSeries { AnidbAnimeID: > 0 } ss || metadataService.GetMergedStudios(ss.AnidbAnimeID) is not { Count: > 0 } studios)
+            return [];
+
+        if (s_recordedSeriesIds.TryAdd(ss.LocalID, 0))
+            RecordSeriesCredits(ss, null, metadataService);
+
+        return
+        [
+            .. studios
+                .Where(s => !string.IsNullOrWhiteSpace(s.Name) && !IsCreditBlacklisted(s.Name))
+                .Select(s => ResolvePreferredCreditName(s.Name, s.ID.Source == MetadataSource.AniDB ? 1 : 2))
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .DistinctBy(NormalizeCreditKey)
+                .Select(name => new TagItem { Tag = name }),
+        ];
+    }
 
     #endregion
 
@@ -378,15 +447,25 @@ public static class CastHelper
     /// <summary>Filters the crew by a specific predicate and returns a formatted array of tags.</summary>
     /// <param name="item">The media item containing cast and crew.</param>
     /// <param name="predicate">Filter predicate to evaluate each crew member against.</param>
+    /// <param name="metadataService">Optional metadata service used to pre-warm cross-series deduplication.</param>
     /// <returns>An array of anonymous objects containing crew tags.</returns>
-    private static object[] FilterCrew(IWithCastAndCrew item, Func<ICrew, bool> predicate) =>
+    private static object[] FilterCrew(IWithCastAndCrew item, Func<ICrew, bool> predicate, IMetadataService? metadataService = null)
+    {
+        EnsureWarmed(metadataService);
+
+        return
         [
             .. DeduplicateCrew(item.Crew?.Where(predicate))
-                .Select(c => GetName(c.Creator, c.Name))
-                .Where(name => !string.IsNullOrWhiteSpace(name) && !IsCreditBlacklisted(name))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Select(c =>
+                {
+                    string? rawName = GetName(c.Creator, c.Name);
+                    return string.IsNullOrWhiteSpace(rawName) || IsCreditBlacklisted(rawName) ? null : ResolvePreferredCreditName(rawName, c.Creator?.ID.Source == MetadataSource.TMDB ? 2 : 1);
+                })
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .DistinctBy(name => NormalizeCreditKey(name!))
                 .Select(name => (object)new { tag = name }),
         ];
+    }
 
     /// <summary>Deduplicates a collection of crew members per role type, preferring AniDB entries over matching TMDB entries.</summary>
     /// <param name="crewItems">The raw collection of crew items.</param>
