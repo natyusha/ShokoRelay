@@ -608,6 +608,11 @@ public class ConfigProvider
             (s.Advanced.ManagedFolderExclusions ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase)
         );
 
+        s.Advanced.CollectionExclusions = string.Join(
+            Environment.NewLine,
+            (s.Advanced.CollectionExclusions ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase)
+        );
+
         s.TagOverrides = string.Join(
             Environment.NewLine,
             (s.TagOverrides ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase)

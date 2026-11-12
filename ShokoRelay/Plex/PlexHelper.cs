@@ -271,6 +271,26 @@ public static partial class PlexHelper
 
     #region Internal Helpers
 
+    /// <summary>Determines if a collection title matches any user-configured exclusion keywords.</summary>
+    /// <param name="collectionTitle">The collection title to evaluate.</param>
+    /// <param name="excludedKeywords">Optional pre-split array of exclusion keywords.</param>
+    /// <returns>True if the collection matches an exclusion keyword and should be protected.</returns>
+    public static bool IsCollectionExcluded(string? collectionTitle, string[]? excludedKeywords = null)
+    {
+        if (string.IsNullOrWhiteSpace(collectionTitle))
+            return false;
+
+        var keywords = excludedKeywords ?? (Settings.Advanced.CollectionExclusions ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (keywords.Length == 0)
+            return false;
+
+        for (int i = 0; i < keywords.Length; i++)
+            if (collectionTitle.Contains(keywords[i], StringComparison.OrdinalIgnoreCase))
+                return true;
+
+        return false;
+    }
+
     /// <summary>Determines if a filename base matches a specific ID and suffix.</summary>
     /// <param name="value">The base filename string.</param>
     /// <param name="id">The expected numeric ID.</param>

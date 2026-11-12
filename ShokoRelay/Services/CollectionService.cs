@@ -85,6 +85,8 @@ public class CollectionService(
             if (targets.Count == 0)
                 return new BuildCollectionsResult(0, 0, 0, 0, 0, 0, 0, createdList, uploadedDetails, [], errorsList, sw.Elapsed);
 
+            var excludedKeywords = (Settings.Advanced.CollectionExclusions ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
             List<string> globalRoots = [.. (videoService.GetAllManagedFolders() ?? []).Select(f => f.Path).Where(p => !string.IsNullOrEmpty(p)).Distinct()];
 
             string cachePath = Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FilePlexCollectionsCache);
@@ -248,6 +250,9 @@ public class CollectionService(
 
                         foreach (var staleName in currentPlexCollections)
                         {
+                            if (PlexHelper.IsCollectionExcluded(staleName, excludedKeywords))
+                                continue;
+
                             // Remove if the series belongs to a different group (rename) or is now a solo group (null)
                             if (collectionName == null || !string.Equals(staleName, collectionName, StringComparison.OrdinalIgnoreCase))
                             {

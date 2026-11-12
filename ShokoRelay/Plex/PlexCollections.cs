@@ -201,6 +201,8 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient, ILogg
         if (!IsEnabled)
             return deleted;
 
+        var excludedKeywords = (Settings.Advanced.CollectionExclusions ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
         foreach (var target in plexClient.GetConfiguredTargets())
         {
             bool isMovie = target.LibraryType == PlexLibraryType.Movie;
@@ -213,6 +215,9 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient, ILogg
             {
                 // Exclude smart collections from automatic empty collection deletion
                 if (TextHelper.IsPlexTrue(m.Smart))
+                    continue;
+
+                if (PlexHelper.IsCollectionExcluded(m.Title, excludedKeywords))
                     continue;
 
                 // Delete a custom collection from the specified Plex library target

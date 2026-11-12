@@ -415,6 +415,11 @@ public class AdvancedConfig
     [VfsRebuild]
     public string ManagedFolderExclusions { get; set; } = "";
 
+    /// <summary>Plex collection names or keywords to ignore and protect from automated removal.</summary>
+    [Display(Name = "Collection Exclusions", Description = "Per line collection keywords to ignore and protect from deletion")]
+    [DefaultValue("")]
+    public string CollectionExclusions { get; set; } = "";
+
     /// <summary>Whether to defer initial VFS creation until the metadata fixup.</summary>
     [Display(Name = "Defer VFS Creation", Description = "Enable to wait for the configured Plex Fixup Delay before generating VFS links")]
     [DefaultValue(false)]

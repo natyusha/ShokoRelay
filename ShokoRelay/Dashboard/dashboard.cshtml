@@ -609,7 +609,8 @@
               Tags can easily be merged or blocked using this setting. The first tag on a new line becomes the target, with all subsequent tags merged into it:
               <code>Target Tag, Source Tag 1, Source Tag 2</code>. You can also blacklist tags by prefixing a new line with a semicolon: <code>;Blocked Tag 1,Blocked Tag 2</code>. There is a
               <a href="https://raw.githubusercontent.com/natyusha/ShokoRelay/master/Data/default_tag_overrides.csv" title="Default Tag Overrides">large list of tags</a> which are already blocked/merged by
-              default and anything on a merge line which references one of them will supersede it.
+              default. Anything on a merge or block line which references one of them will supersede it. It should also be noted that this allows custom tag names to be assigned as the target tag name does not
+              have to exist in Shoko.
             </small>
           </section>
           <section>
@@ -637,6 +638,11 @@
             <small>
               Allows specific Shoko Managed Folders to be excluded from VFS generation. You can enter the exact Name or ID of the managed folder. Unlike "Folder Exclusions", this will not hide the media files
               inside from Shoko Server.
+            </small>
+            <h4>Collection Exclusions</h4>
+            <small>
+              Any Plex collection matching these entries will never be deleted or have items automatically unassigned from it. You can enter the exact collection name or a unique keyword that covers multiple
+              similar collections.
             </small>
             <h4>Defer VFS Creation</h4>
             <small>
