@@ -69,7 +69,7 @@ public static class CastHelper
 
     #endregion
 
-    #region Credit Override Loading
+    #region Credit Overrides
 
     /// <summary>Loads default credit blacklist and merge mappings directly from the embedded assembly resource.</summary>
     /// <returns>A tuple containing default blacklisted keys, merge dictionary, and mentioned key set.</returns>

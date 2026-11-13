@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
-using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace ShokoRelay.Config;
@@ -51,7 +50,7 @@ public enum CriticRatingMode
 
 /// <summary>Preferred source(s) for genre/tag information when populating Plex.</summary>
 [Flags]
-[JsonConverter(typeof(TagSourcesJsonConverter))]
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum TagSources
 {
     /// <summary>Do not include any tags.</summary>
@@ -68,29 +67,6 @@ public enum TagSources
 
     /// <summary>Combine all sources.</summary>
     All = AniDB | TMDB | User,
-}
-
-/// <summary>JSON converter for <see cref="TagSources"/> supporting both flags strings and legacy integer values.</summary>
-public sealed class TagSourcesJsonConverter : JsonConverter<TagSources>
-{
-    /// <inheritdoc/>
-    public override TagSources Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
-        reader.TokenType switch
-        {
-            JsonTokenType.String => Enum.TryParse<TagSources>(reader.GetString(), true, out var parsed) ? parsed : TagSources.All,
-            JsonTokenType.Number when reader.TryGetInt32(out int num) => num switch
-            {
-                0 => TagSources.All,
-                1 => TagSources.AniDB,
-                2 => TagSources.TMDB,
-                3 => TagSources.User,
-                _ => (TagSources)num,
-            },
-            _ => TagSources.All,
-        };
-
-    /// <inheritdoc/>
-    public override void Write(Utf8JsonWriter writer, TagSources value, JsonSerializerOptions options) => writer.WriteStringValue(value.ToString());
 }
 
 /// <summary>AniDB tag weight thresholds used to filter tags exposed to Plex.</summary>
