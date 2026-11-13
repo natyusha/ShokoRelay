@@ -349,6 +349,86 @@ public static class CastHelper
     /// <returns>An array of anonymous objects containing producer names.</returns>
     public static object[] GetProducers(IWithCastAndCrew item, IMetadataService? metadataService = null) => FilterCrew(item, c => c.RoleType == CrewRoleType.Producer, metadataService);
 
+    /// <summary>Builds a diagnostic CSV report of all cast, crew, and studio credits across Shoko series after applying default credit overrides.</summary>
+    /// <param name="metadataService">The Shoko metadata service used to enumerate all series.</param>
+    /// <returns>A CSV-formatted string listing source, credit, and series count.</returns>
+    public static string BuildCreditReport(IMetadataService metadataService)
+    {
+        var stats = new Dictionary<(int SourceOrder, string Source, string NormKey), (TextHelper.GlobalNameEntry Entry, int Count)>();
+
+        foreach (var series in metadataService.GetAllShokoSeries() ?? [])
+        {
+            var seenInSeries = new HashSet<(string Source, string NormKey)>();
+            var tmdbSeries = series.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault();
+            var networkNames = tmdbSeries?.Networks?.Select(n => n.Name).Where(n => !string.IsNullOrWhiteSpace(n)).ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
+
+            void RecordCredit(MetadataSource? src, string? rawName)
+            {
+                if (string.IsNullOrWhiteSpace(rawName))
+                    return;
+
+                bool isTmdb = src == MetadataSource.TMDB;
+                string source = isTmdb ? "tmdb" : "anidb";
+                int sourceOrder = isTmdb ? 1 : 0;
+
+                string trimmed = rawName.Trim();
+                string origNorm = NormalizeCreditKey(trimmed);
+                bool isMerged = s_creditMerges.TryGetValue(origNorm, out var target);
+                string effectiveName = isMerged ? target! : trimmed;
+                string normKey = isMerged ? NormalizeCreditKey(effectiveName) : origNorm;
+
+                if (normKey.Length == 0 || s_creditBlacklist.Contains(normKey) || s_creditBlacklist.Contains(origNorm) || !seenInSeries.Add((source, normKey)))
+                    return;
+
+                var key = (sourceOrder, source, normKey);
+                if (!stats.TryGetValue(key, out var item))
+                    item = (new TextHelper.GlobalNameEntry(), 0);
+
+                item.Entry.ResolveDisplayName(effectiveName, 1, record: true);
+                stats[key] = (item.Entry, item.Count + 1);
+            }
+
+            foreach (var c in series.Cast ?? [])
+            {
+                string? name = GetName(c.Creator, c.Name);
+                string? role = c.Character?.Title ?? c.Name;
+                if (!string.Equals(name, role, StringComparison.Ordinal))
+                    RecordCredit(c.Creator?.ID.Source, name);
+            }
+
+            foreach (var c in series.Crew ?? [])
+                RecordCredit(c.Creator?.ID.Source, GetName(c.Creator, c.Name));
+
+            foreach (var s in series.Studios ?? [])
+                if (!string.IsNullOrWhiteSpace(s.Name) && !networkNames.Contains(s.Name))
+                    RecordCredit(s.ID.Source, s.Name);
+
+            foreach (var s in tmdbSeries?.Studios ?? [])
+                if (!string.IsNullOrWhiteSpace(s.Name) && !networkNames.Contains(s.Name))
+                    RecordCredit(MetadataSource.TMDB, s.Name);
+
+            if (series.AnidbAnimeID > 0)
+                foreach (var s in metadataService.GetMergedStudios(series.AnidbAnimeID))
+                    if (!string.IsNullOrWhiteSpace(s.Name) && !networkNames.Contains(s.Name))
+                        RecordCredit(s.ID.Source, s.Name);
+        }
+
+        var sb = new StringBuilder();
+        sb.AppendLine("## Credit Report ##").AppendLine();
+        sb.AppendLine("#source,credit,count");
+
+        foreach (
+            var (sourceOrder, source, name, count) in stats
+                .Select(kvp => (kvp.Key.SourceOrder, kvp.Key.Source, Name: kvp.Value.Entry.ResolveDisplayName(string.Empty, int.MaxValue, false), kvp.Value.Count))
+                .OrderBy(r => r.SourceOrder)
+                .ThenByDescending(r => r.Count)
+                .ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+        )
+            sb.AppendLine($"{source},{TextHelper.EscapeCsvCommas(name)},{count}");
+
+        return sb.ToString();
+    }
+
     #endregion
 
     #region Studio Logic

@@ -370,6 +370,20 @@ public class ShokoController(
 
     #endregion
 
+    #region Reports
+
+    /// <summary>Generates a CSV report of all tags across Shoko series after applying default tag overrides.</summary>
+    /// <returns>A plain-text CSV report listing source, tag, and series count.</returns>
+    [HttpGet("reports/tags")]
+    public IActionResult GetTagReport() => Content(TagHelper.BuildTagReport(MetadataService), "text/plain; charset=utf-8");
+
+    /// <summary>Generates a CSV report of all credits and studios across Shoko series after applying default credit overrides.</summary>
+    /// <returns>A plain-text CSV report listing source, credit, and series count.</returns>
+    [HttpGet("reports/credits")]
+    public IActionResult GetCreditReport() => Content(CastHelper.BuildCreditReport(MetadataService), "text/plain; charset=utf-8");
+
+    #endregion
+
     #region Source Linking
 
     /// <summary>Processes pending source symlinks or purges existing links from import roots.</summary>
