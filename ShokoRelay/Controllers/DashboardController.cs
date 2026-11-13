@@ -324,6 +324,7 @@ public class DashboardController(
 
             if (propType.IsEnum)
             {
+                bool isFlags = propType.IsDefined(typeof(FlagsAttribute), false);
                 var values = Enum.GetValues(propType)
                     .Cast<object>()
                     .Select(v =>
@@ -332,8 +333,9 @@ public class DashboardController(
                         string memberName = Enum.GetName(propType, v) ?? iv.ToString();
                         return new { name = propType.GetField(memberName)?.GetCustomAttribute<DisplayAttribute>()?.Name ?? memberName, value = iv };
                     })
+                    .Where(x => !isFlags || (x.value > 0 && (x.value & (x.value - 1)) == 0))
                     .ToArray();
-                props.Add(new ConfigPropertySchema(path, "enum", display?.Name, display?.Description, defaultValue, values, isAdvanced, needsRebuild));
+                props.Add(new ConfigPropertySchema(path, isFlags ? "flags" : "enum", display?.Name, display?.Description, defaultValue, values, isAdvanced, needsRebuild));
             }
             else if (propType == typeof(bool))
                 props.Add(new ConfigPropertySchema(path, "bool", display?.Name, display?.Description, defaultValue, null, isAdvanced, needsRebuild));

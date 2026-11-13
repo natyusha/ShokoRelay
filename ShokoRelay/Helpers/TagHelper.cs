@@ -115,7 +115,8 @@ public static partial class TagHelper
     public static void WarmCache(IMetadataService metadataService)
     {
         var key = new TagCacheKey(Settings.TagOverrides ?? string.Empty, Settings.TagSources, Settings.MinimumTagWeight);
-        EnsureWarmed(GetOrCreateTagCacheState(key), key, metadataService);
+        if (key.Sources != TagSources.None)
+            EnsureWarmed(GetOrCreateTagCacheState(key), key, metadataService);
     }
 
     /// <summary>Retrieves or compiles the cached blacklist, merge rules, and display-name state for the given configuration key.</summary>
@@ -192,6 +193,9 @@ public static partial class TagHelper
     public static object[] GetFilteredTags(ISeries series, ISeries? tmdbSeries = null, IMetadataService? metadataService = null)
     {
         var key = new TagCacheKey(Settings.TagOverrides ?? string.Empty, Settings.TagSources, Settings.MinimumTagWeight);
+        if (key.Sources == TagSources.None)
+            return [];
+
         var state = GetOrCreateTagCacheState(key);
         EnsureWarmed(state, key, metadataService);
 
@@ -209,39 +213,29 @@ public static partial class TagHelper
     /// <summary>Collects raw tag names and source priorities for a series according to the configured tag sources and minimum weight.</summary>
     /// <param name="series">The series metadata.</param>
     /// <param name="tmdbSeries">Optional pre-resolved TMDB series metadata object.</param>
-    /// <param name="sources">Configured tag source filter.</param>
+    /// <param name="sources">Configured tag source flags.</param>
     /// <param name="minWeight">Minimum AniDB tag weight threshold.</param>
     /// <returns>An enumerable of raw tag names paired with source priorities.</returns>
     private static IEnumerable<(string Name, int Priority)> CollectRawTags(ISeries series, ISeries? tmdbSeries, TagSources sources, MinimumTagWeight minWeight)
     {
+        if (sources == TagSources.None)
+            return [];
+
         var shokoSeries = series as IShokoSeries;
-        var shokoTags = shokoSeries?.Tags;
+        IEnumerable<(string Name, int Priority)> result = [];
 
-        IEnumerable<(string Name, int Priority)> userNames =
-            shokoTags != null ? shokoTags.Where(t => t != null && t.ID.Source == MetadataSource.User && !string.IsNullOrWhiteSpace(t.Name)).Select(t => (t.Name, Priority: 3)) : [];
+        if (sources.HasFlag(TagSources.AniDB) && shokoSeries?.AnidbAnime?.Tags is IReadOnlyList<IAnidbTagForAnime> anidbTags)
+            result = result.Concat(anidbTags.Where(t => !string.IsNullOrWhiteSpace(t.Name) && ((int)minWeight <= 0 || t.Weight >= (int)minWeight)).Select(t => (t.Name, Priority: 1)));
 
-        if (sources == TagSources.UserOnly)
-            return userNames;
+        if (sources.HasFlag(TagSources.TMDB) && (tmdbSeries ?? shokoSeries?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() ?? (series.ID.Source == MetadataSource.TMDB ? series : null)) is { } tmdb)
+            result = result.Concat(
+                tmdb.Tags.Where(t => !string.IsNullOrWhiteSpace(t.Name) && (t.Kind is TagKind.Genre || (t.Kind is TagKind.Keyword && !NonEnglishTagRegex().IsMatch(t.Name)))).Select(t => (t.Name, Priority: 2))
+            );
 
-        IEnumerable<(string Name, int Priority)> anidbNames = [];
-        if ((sources is TagSources.Combined or TagSources.AniDB) && shokoSeries?.AnidbAnime?.Tags is IReadOnlyList<IAnidbTagForAnime> anidbTags)
-            anidbNames = anidbTags.Where(t => !string.IsNullOrWhiteSpace(t.Name) && ((int)minWeight <= 0 || t.Weight >= (int)minWeight)).Select(t => (t.Name, Priority: 1));
+        if (sources.HasFlag(TagSources.User) && shokoSeries?.Tags is { } shokoTags)
+            result = result.Concat(shokoTags.Where(t => t != null && t.ID.Source == MetadataSource.User && !string.IsNullOrWhiteSpace(t.Name)).Select(t => (t.Name, Priority: 3)));
 
-        IEnumerable<(string Name, int Priority)> tmdbNames = [];
-        if (
-            (sources is TagSources.Combined or TagSources.TMDB)
-            && (tmdbSeries ?? shokoSeries?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() ?? (series.ID.Source == MetadataSource.TMDB ? series : null)) is { } tmdb
-        )
-            tmdbNames = tmdb
-                .Tags.Where(t => !string.IsNullOrWhiteSpace(t.Name) && (t.Kind is TagKind.Genre || (t.Kind is TagKind.Keyword && !NonEnglishTagRegex().IsMatch(t.Name))))
-                .Select(t => (t.Name, Priority: 2));
-
-        return sources switch
-        {
-            TagSources.AniDB => anidbNames,
-            TagSources.TMDB => tmdbNames,
-            _ => anidbNames.Concat(tmdbNames).Concat(userNames),
-        };
+        return result;
     }
 
     /// <summary>Generates a normalized comparison key ignoring case, spacing, punctuation, diacritics, and common English plurals.</summary>

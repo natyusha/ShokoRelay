@@ -79,6 +79,92 @@
   };
 
   /**
+   * Parses a flags enum value (bitmask integer or comma-separated string) into a numeric bitmask.
+   * @param {number|string} val - The raw value from the configuration payload.
+   * @param {Array<{name: string, value: number}>} enumValues - The single-bit flag schema definitions.
+   * @returns {number} The resolved integer bitmask.
+   */
+  function parseFlagsValue(val, enumValues) {
+    if (typeof val === "number") return val;
+    if (typeof val !== "string" || !val.trim()) return 0;
+    const trimmed = val.trim();
+    if (/^\d+$/.test(trimmed)) return Number(trimmed);
+    if (trimmed.toLowerCase() === "all") return enumValues.reduce((acc, ev) => acc | ev.value, 0);
+    if (trimmed.toLowerCase() === "none") return 0;
+    return trimmed.split(",").reduce((acc, part) => {
+      const match = enumValues.find((ev) => ev.name.toLowerCase() === part.trim().toLowerCase());
+      return match ? acc | match.value : acc;
+    }, 0);
+  }
+
+  /**
+   * Generates a multiselect checkbox dropdown for Flags enum properties and binds it to the configuration state.
+   * @param {HTMLElement} wrap - The container element to append to.
+   * @param {Object} p - The property schema object.
+   * @param {Object} config - The active configuration object.
+   * @param {number|string} value - The current property value.
+   * @returns {void}
+   */
+  function createFlagsMultiselect(wrap, p, config, value) {
+    const label = document.createElement("label");
+    label.innerHTML = `<span>${p.Display || p.Path.split(".").pop()}</span>${p.Description ? `<small>${p.Description}</small>` : ""}`;
+    wrap.appendChild(label);
+
+    const enumValues = p.EnumValues || [];
+    let mask = parseFlagsValue(value, enumValues);
+
+    const container = document.createElement("div");
+    container.className = "multiselect";
+
+    const trigger = document.createElement("button");
+    trigger.type = "button";
+    trigger.className = "multiselect-trigger";
+    const textSpan = document.createElement("span");
+    textSpan.className = "multiselect-text";
+    trigger.appendChild(textSpan);
+
+    const menu = document.createElement("div");
+    menu.className = "multiselect-menu";
+
+    const updateSummary = () => {
+      const activeNames = enumValues.filter((ev) => (mask & ev.value) === ev.value).map((ev) => ev.name);
+      textSpan.textContent = activeNames.length ? activeNames.join(", ") : "None";
+    };
+
+    enumValues.forEach((ev) => {
+      const itemLabel = document.createElement("label");
+      itemLabel.className = "shoko-checkbox";
+      itemLabel.innerHTML = `<input type="checkbox" value="${ev.value}">
+        <span class="shoko-checkbox-icon" aria-hidden="true"><svg class="unchecked"><use href="img/icons.svg#checkbox-blank-circle-outline"></use></svg><svg class="checked"><use href="img/icons.svg#checkbox-marked-circle-outline"></use></svg></span>
+        <span class="shoko-checkbox-text"><span class="shoko-checkbox-title">${ev.name}</span></span>`;
+      const cb = itemLabel.querySelector("input");
+      cb.checked = (mask & ev.value) === ev.value;
+      cb.onchange = async () => {
+        mask = cb.checked ? mask | ev.value : mask & ~ev.value;
+        updateSummary();
+        setValueByPath(config, p.Path, mask);
+        await saveSettings(config);
+      };
+      menu.appendChild(itemLabel);
+    });
+
+    trigger.onclick = (e) => {
+      e.stopPropagation();
+      const willOpen = !container.classList.contains("open");
+      document.querySelectorAll(".multiselect.open").forEach((elOpen) => elOpen.classList.remove("open"));
+      if (willOpen) container.classList.add("open");
+    };
+
+    menu.onclick = (e) => e.stopPropagation();
+
+    updateSummary();
+    container.append(trigger, menu);
+    wrap.appendChild(container);
+  }
+
+  document.addEventListener("click", () => document.querySelectorAll(".multiselect.open").forEach((elOpen) => elOpen.classList.remove("open")));
+
+  /**
    * Generates a dual-textarea UI for mapping dictionaries and binds it to the configuration state.
    * @param {HTMLElement} wrap - The container element to append to.
    * @param {Object} p - The property schema object.
@@ -182,6 +268,8 @@
 
         // Re-evaluate the overrides button state when either relevant setting is toggled.
         if (overridesBtn && ["Advanced.TmdbEpNumbering", "Advanced.MergeTmdbSeries"].includes(p.Path)) input.addEventListener("change", () => window._sr.updateControlStates(config));
+      } else if (p.Type === "flags") {
+        createFlagsMultiselect(wrap, p, config, value);
       } else if (p.Path.endsWith("PathMappings")) {
         createDualTextareaMapping(wrap, p, config, value, "Working Base Paths", "Shoko Base Paths", false);
       } else if (p.Path.endsWith("SubtitleLanguageMappings")) {

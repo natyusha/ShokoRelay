@@ -349,6 +349,82 @@ label.shoko-checkbox input[type="checkbox"]:checked + .shoko-checkbox-icon .chec
 }
 /* #endregion */
 
+/* #region MARK: Multiselect
+*/
+.multiselect {
+  position: relative;
+  margin: 2px 0 6px;
+}
+.multiselect-trigger {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.3s ease-in-out;
+  cursor: pointer;
+  box-sizing: border-box;
+  border: 1px solid var(--bg-color);
+  border-radius: 0.25em;
+  background: var(--inset-color);
+  padding: 6px 10px 6px 8px;
+  width: 100%;
+  height: 2.5em;
+  color: var(--text-color);
+  font-weight: 400;
+  font-size: 0.9em;
+  font-family: "Sora", sans-serif;
+  text-align: left;
+}
+.multiselect-trigger:hover {
+  background: var(--inset-color);
+}
+.multiselect.open .multiselect-trigger {
+  box-shadow: 0 0 4px 2px var(--glow);
+  border-color: var(--highlight-color);
+}
+.multiselect-trigger::after {
+  display: inline-block;
+  flex-shrink: 0;
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 0.2s ease;
+  margin-left: 8px;
+  border: solid var(--text-color);
+  border-width: 0 2px 2px 0;
+  padding: 3px;
+  content: "";
+}
+.multiselect.open .multiselect-trigger::after {
+  transform: translateY(2px) rotate(-135deg);
+}
+.multiselect-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.multiselect-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 2px);
+  right: 0;
+  left: 0;
+  flex-direction: column;
+  z-index: 100;
+  box-shadow: 0 6px 18px var(--black-t60);
+  border: 1px solid var(--highlight-color);
+  border-radius: 0.25em;
+  background: var(--inset-color);
+  padding: 4px 6px;
+}
+.multiselect.open .multiselect-menu {
+  display: flex;
+}
+.multiselect-menu .shoko-checkbox {
+  align-items: center;
+  margin: 0;
+  padding: 4px 2px;
+  width: 100%;
+}
+/* #endregion */
+
 /* #region MARK: Disabled Controls
 */
 .dsbld-wrap {
