@@ -131,7 +131,7 @@ internal static partial class AnimeThemesHelper
     internal static partial Regex SlugRegex();
 
     /// <summary>Regex for identifying Opening themes.</summary>
-    [GeneratedRegex(@"^(?:OP|Opening)\b", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^(?:OP|Opening)(?![a-z])", RegexOptions.IgnoreCase)]
     internal static partial Regex OpRegex();
 
     /// <summary>Regex for identifying default Opening 1 themes (including their alternate names and suffixes).</summary>
@@ -139,7 +139,7 @@ internal static partial class AnimeThemesHelper
     internal static partial Regex Op1Regex();
 
     /// <summary>Regex for identifying Ending themes.</summary>
-    [GeneratedRegex(@"^(?:ED|Ending)\b", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^(?:ED|Ending)(?![a-z])", RegexOptions.IgnoreCase)]
     internal static partial Regex EdRegex();
 
     /// <summary>Regex for identifying default Ending 1 themes (including their alternate names and suffixes).</summary>
@@ -378,9 +378,7 @@ internal static partial class AnimeThemesHelper
         if (match.Success)
         {
             string type = match.Groups[1].Value.StartsWith("O", StringComparison.OrdinalIgnoreCase) ? "OP" : "ED";
-            string num = match.Groups[2].Value;
-            if (string.IsNullOrEmpty(num) && (s.StartsWith("OP", StringComparison.OrdinalIgnoreCase) || s.StartsWith("ED", StringComparison.OrdinalIgnoreCase)))
-                num = "1";
+            string num = string.IsNullOrEmpty(match.Groups[2].Value) ? "1" : match.Groups[2].Value;
             return type + num;
         }
         return s;

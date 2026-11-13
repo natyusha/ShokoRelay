@@ -237,7 +237,7 @@ public class RelayConfig
     public bool TmdbSeasonPosters { get; set; } = true;
 
     /// <summary>Whether to prefer TMDB cast and crew images.</summary>
-    [Display(Name = "TMDB Cast & Crew Images", Description = "Enable to prefer TMDB cast & crew images over the ones from AniDB")]
+    [Display(Name = "TMDB Cast & Crew Images", Description = "Enable to prefer TMDB cast & crew images over the ones from AniDB *recommended")]
     [DefaultValue(true)]
     public bool TmdbCastImages { get; set; } = true;
 

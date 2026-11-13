@@ -7,14 +7,20 @@ using static ShokoRelay.Plex.PlexMapping;
 namespace ShokoRelay.Plex;
 
 /// <summary>Converts Shoko series/episode/season/movie metadata into Plex-compatible property dictionaries.</summary>
-public class PlexMetadata(IMetadataService metadataService)
+/// <param name="metadataService">Shoko metadata service.</param>
+/// <param name="configProvider">Configuration provider.</param>
+public class PlexMetadata(IMetadataService metadataService, ConfigProvider configProvider)
 {
     #region Series Context
 
-    /// <summary>Cache container storing a lazily-evaluated context alongside its post-build expiration timestamp.</summary>
+    /// <summary>Cache container storing a lazily-evaluated context alongside its originating config reference and post-build expiration timestamp.</summary>
+    /// <param name="config">The global configuration instance active when this entry was constructed.</param>
     /// <param name="factory">The factory delegate used to generate the series context.</param>
-    private sealed class ContextCacheEntry(Func<SeriesContext> factory)
+    private sealed class ContextCacheEntry(RelayConfig config, Func<SeriesContext> factory)
     {
+        /// <summary>The global configuration instance active when this entry was constructed.</summary>
+        public RelayConfig Config { get; } = config;
+
         /// <summary>Expiration timestamp in UTC ticks after which the cached entry is considered stale.</summary>
         public long ExpirationTicks { get; set; } = DateTime.UtcNow.Ticks + TimeSpan.FromMinutes(1).Ticks;
 
@@ -66,36 +72,42 @@ public class PlexMetadata(IMetadataService metadataService)
             return null;
 
         int primaryId = OverrideHelper.GetPrimary(series.LocalID, metadataService);
+
+        SeriesContext CreateSeriesContext()
+        {
+            var primarySeries = metadataService.GetShokoSeriesByID(primaryId) ?? series;
+            var tmdbSeries = primarySeries.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() ?? primarySeries.AsTmdb();
+            var tmdbMovie = primarySeries.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault() ?? primarySeries.Episodes.FirstOrDefault()?.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault();
+            var fileData = MapHelper.GetConsolidatedSeriesFileData(primarySeries, metadataService);
+            var prefId = MapHelper.GetPreferredTmdbOrderingId(primarySeries);
+            var (rating, isAdult) = ContentRatingHelper.GetContentRatingAndAdult(primarySeries, tmdbMovie ?? (tmdbSeries as IWithContentRatings));
+            return new SeriesContext(primarySeries, tmdbSeries, tmdbMovie, TextHelper.ResolveFullSeriesTitles(primarySeries), rating ?? "", isAdult, fileData, prefId);
+        }
+
+        var globalSettings = configProvider.GetSettings();
+
+        // Bypass the shared cache when per-request /options/ or query overrides are active
+        if (!ReferenceEquals(Settings, globalSettings))
+            return CreateSeriesContext();
+
         long now = DateTime.UtcNow.Ticks;
 
         // Purge stale cache entries to prevent unbounded growth during extended uptime
         if (_contextCache.Count > 50)
             foreach (var kvp in _contextCache)
-                if (kvp.Value.ExpirationTicks < now)
+                if (!ReferenceEquals(kvp.Value.Config, globalSettings) || kvp.Value.ExpirationTicks < now)
                     _contextCache.TryRemove(kvp.Key, out _);
 
-        ContextCacheEntry CreateEntry() =>
-            new(() =>
-            {
-                var primarySeries = metadataService.GetShokoSeriesByID(primaryId) ?? series;
-                var tmdbSeries = primarySeries.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() ?? primarySeries.AsTmdb();
-                var tmdbMovie = primarySeries.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault() ?? primarySeries.Episodes.FirstOrDefault()?.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault();
-                var fileData = MapHelper.GetConsolidatedSeriesFileData(primarySeries, metadataService);
-                var prefId = MapHelper.GetPreferredTmdbOrderingId(primarySeries);
-                var (rating, isAdult) = ContentRatingHelper.GetContentRatingAndAdult(primarySeries, tmdbMovie ?? (tmdbSeries as IWithContentRatings));
-                return new SeriesContext(primarySeries, tmdbSeries, tmdbMovie, TextHelper.ResolveFullSeriesTitles(primarySeries), rating ?? "", isAdult, fileData, prefId);
-            });
+        var cached = _contextCache.GetOrAdd(primaryId, _ => new ContextCacheEntry(globalSettings, CreateSeriesContext));
 
-        var cached = _contextCache.GetOrAdd(primaryId, _ => CreateEntry());
-
-        if (cached.ExpirationTicks < now)
+        if (!ReferenceEquals(cached.Config, globalSettings) || cached.ExpirationTicks < now)
         {
             lock (_cacheLock)
             {
-                if (_contextCache.TryGetValue(primaryId, out var fresh) && fresh.ExpirationTicks >= now)
+                if (_contextCache.TryGetValue(primaryId, out var fresh) && ReferenceEquals(fresh.Config, globalSettings) && fresh.ExpirationTicks >= now)
                     cached = fresh;
                 else
-                    _contextCache[primaryId] = cached = CreateEntry();
+                    _contextCache[primaryId] = cached = new ContextCacheEntry(globalSettings, CreateSeriesContext);
             }
         }
 

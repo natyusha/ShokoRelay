@@ -43,9 +43,18 @@ public interface IPlexAutomationService
 /// <param name="criticRatingService">Plex critic rating service.</param>
 /// <param name="imageSyncService">Shoko image sync service.</param>
 /// <param name="plexClient">Plex client.</param>
+/// <param name="configProvider">Configuration provider.</param>
 /// <param name="metadataService">Shoko metadata service.</param>
-public class PlexAutomationService(ICollectionService collectionService, ICriticRatingService criticRatingService, IImageSyncService imageSyncService, PlexClient plexClient, IMetadataService metadataService)
-    : IPlexAutomationService
+/// <param name="logger">Logger instance.</param>
+public class PlexAutomationService(
+    ICollectionService collectionService,
+    ICriticRatingService criticRatingService,
+    IImageSyncService imageSyncService,
+    PlexClient plexClient,
+    ConfigProvider configProvider,
+    IMetadataService metadataService,
+    ILogger<PlexAutomationService> logger
+) : IPlexAutomationService
 {
     #region Public API
 
@@ -59,11 +68,13 @@ public class PlexAutomationService(ICollectionService collectionService, ICritic
         var swCollections = Stopwatch.StartNew();
         var collectionRes = await collectionService.BuildCollectionsAsync(allSeries, cancellationToken: token).ConfigureAwait(false);
         swCollections.Stop();
+        LogHelper.WriteReport(configProvider.PluginDirectory, $"{ShokoRelayConstants.TaskPlexCollectionsBuild}-report.log", collectionRes, LogHelper.BuildCollectionsReport, logger);
         progress?.Report(40);
 
         var swRatings = Stopwatch.StartNew();
         var ratingRes = await criticRatingService.ApplyRatingsAsync(null, token).ConfigureAwait(false);
         swRatings.Stop();
+        LogHelper.WriteReport(configProvider.PluginDirectory, $"{ShokoRelayConstants.TaskPlexRatingsApply}-report.log", ratingRes, LogHelper.BuildRatingsReport, logger);
         progress?.Report(70);
 
         TimeSpan? imageSyncElapsed = null;
@@ -74,6 +85,7 @@ public class PlexAutomationService(ICollectionService collectionService, ICritic
             imageSyncRes = await imageSyncService.SyncImagesAsync(cancellationToken: token).ConfigureAwait(false);
             swImages.Stop();
             imageSyncElapsed = swImages.Elapsed;
+            LogHelper.WriteReport(configProvider.PluginDirectory, $"{ShokoRelayConstants.TaskPlexImagesSync}-report.log", imageSyncRes, LogHelper.BuildImageSyncReport, logger);
         }
         progress?.Report(90);
 
