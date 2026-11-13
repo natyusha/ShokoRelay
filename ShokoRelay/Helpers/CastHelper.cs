@@ -362,39 +362,21 @@ public static class CastHelper
             var tmdbSeries = series.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault();
             var networkNames = tmdbSeries?.Networks?.Select(n => n.Name).Where(n => !string.IsNullOrWhiteSpace(n)).ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
 
-            void RecordCredit(MetadataSource? src, string? rawName)
-            {
-                if (string.IsNullOrWhiteSpace(rawName))
-                    return;
-
-                bool isTmdb = src == MetadataSource.TMDB;
-                string source = isTmdb ? "tmdb" : "anidb";
-                int sourceOrder = isTmdb ? 1 : 0;
-
-                string trimmed = rawName.Trim();
-                string origNorm = NormalizeCreditKey(trimmed);
-                bool isMerged = s_creditMerges.TryGetValue(origNorm, out var target);
-                string effectiveName = isMerged ? target! : trimmed;
-                string normKey = isMerged ? NormalizeCreditKey(effectiveName) : origNorm;
-
-                if (normKey.Length == 0 || s_creditBlacklist.Contains(normKey) || s_creditBlacklist.Contains(origNorm) || !seenInSeries.Add((source, normKey)))
-                    return;
-
-                var key = (sourceOrder, source, normKey);
-                if (!stats.TryGetValue(key, out var item))
-                    item = (new TextHelper.GlobalNameEntry(), 0);
-
-                item.Entry.ResolveDisplayName(effectiveName, 1, record: true);
-                stats[key] = (item.Entry, item.Count + 1);
-            }
+            void RecordCredit(MetadataSource? src, string? rawName) =>
+                TextHelper.RecordReportItem(
+                    stats,
+                    seenInSeries,
+                    src == MetadataSource.TMDB ? "TMDB" : "AniDB",
+                    src == MetadataSource.TMDB ? 1 : 0,
+                    rawName,
+                    NormalizeCreditKey,
+                    s_creditMerges,
+                    s_creditBlacklist
+                );
 
             foreach (var c in series.Cast ?? [])
-            {
-                string? name = GetName(c.Creator, c.Name);
-                string? role = c.Character?.Title ?? c.Name;
-                if (!string.Equals(name, role, StringComparison.Ordinal))
+                if (GetName(c.Creator, c.Name) is { Length: > 0 } name)
                     RecordCredit(c.Creator?.ID.Source, name);
-            }
 
             foreach (var c in series.Crew ?? [])
                 RecordCredit(c.Creator?.ID.Source, GetName(c.Creator, c.Name));
@@ -406,27 +388,9 @@ public static class CastHelper
             foreach (var s in tmdbSeries?.Studios ?? [])
                 if (!string.IsNullOrWhiteSpace(s.Name) && !networkNames.Contains(s.Name))
                     RecordCredit(MetadataSource.TMDB, s.Name);
-
-            if (series.AnidbAnimeID > 0)
-                foreach (var s in metadataService.GetMergedStudios(series.AnidbAnimeID))
-                    if (!string.IsNullOrWhiteSpace(s.Name) && !networkNames.Contains(s.Name))
-                        RecordCredit(s.ID.Source, s.Name);
         }
 
-        var sb = new StringBuilder();
-        sb.AppendLine("## Credit Report ##").AppendLine();
-        sb.AppendLine("#source,credit,count");
-
-        foreach (
-            var (sourceOrder, source, name, count) in stats
-                .Select(kvp => (kvp.Key.SourceOrder, kvp.Key.Source, Name: kvp.Value.Entry.ResolveDisplayName(string.Empty, int.MaxValue, false), kvp.Value.Count))
-                .OrderBy(r => r.SourceOrder)
-                .ThenByDescending(r => r.Count)
-                .ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
-        )
-            sb.AppendLine($"{source},{TextHelper.EscapeCsvCommas(name)},{count}");
-
-        return sb.ToString();
+        return TextHelper.FormatCsvReport("Credit", "credit", stats);
     }
 
     #endregion

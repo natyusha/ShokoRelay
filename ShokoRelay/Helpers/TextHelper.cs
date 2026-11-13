@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using System.Text;
 using System.Text.RegularExpressions;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Enums;
@@ -218,6 +219,76 @@ public static partial class TextHelper
             // Lower-priority source arriving when a higher-priority display name is already cached
             return _bestDisplayName;
         }
+    }
+
+    #endregion
+
+    #region Report Generation
+
+    /// <summary>Records a candidate item into the diagnostic report stats dictionary, applying normalization, merge rules, and blacklist checks.</summary>
+    /// <param name="stats">Dictionary tracking unique entries and counts across all series.</param>
+    /// <param name="seenInSeries">Set tracking unique entries already counted for the current series.</param>
+    /// <param name="source">Display name of the metadata source (e.g., "AniDB", "TMDB", "User").</param>
+    /// <param name="sourceOrder">Numerical sort order for the source.</param>
+    /// <param name="rawName">The raw candidate name string.</param>
+    /// <param name="normalizeKey">Function generating a normalized lookup key from a name string.</param>
+    /// <param name="merges">Dictionary mapping alias keys to canonical target names.</param>
+    /// <param name="blacklist">Set of normalized blacklisted keys to exclude.</param>
+    /// <param name="formatDisplayName">Optional formatting function for the display name (e.g. TitleCase).</param>
+    internal static void RecordReportItem(
+        Dictionary<(int SourceOrder, string Source, string NormKey), (GlobalNameEntry Entry, int Count)> stats,
+        HashSet<(string Source, string NormKey)> seenInSeries,
+        string source,
+        int sourceOrder,
+        string? rawName,
+        Func<string, string> normalizeKey,
+        IReadOnlyDictionary<string, string> merges,
+        IReadOnlySet<string> blacklist,
+        Func<string, string>? formatDisplayName = null
+    )
+    {
+        if (string.IsNullOrWhiteSpace(rawName))
+            return;
+
+        string trimmed = rawName.Trim();
+        string origNorm = normalizeKey(trimmed);
+        bool isMerged = merges.TryGetValue(origNorm, out var target);
+        string effectiveName = isMerged ? target! : trimmed;
+        string normKey = isMerged ? normalizeKey(effectiveName) : origNorm;
+
+        if (normKey.Length == 0 || blacklist.Contains(normKey) || blacklist.Contains(origNorm) || !seenInSeries.Add((source, normKey)))
+            return;
+
+        var key = (sourceOrder, source, normKey);
+        if (!stats.TryGetValue(key, out var item))
+            item = (new GlobalNameEntry(), 0);
+
+        string displayName = formatDisplayName != null ? formatDisplayName(effectiveName) : effectiveName;
+        item.Entry.ResolveDisplayName(displayName, 1, record: true);
+        stats[key] = (item.Entry, item.Count + 1);
+    }
+
+    /// <summary>Formats aggregated name stats into a sorted CSV report string.</summary>
+    /// <param name="title">Report title banner (e.g. "Tag" or "Credit").</param>
+    /// <param name="columnName">Name of the item column (e.g. "tag" or "credit").</param>
+    /// <param name="stats">The dictionary containing source order, source name, and name entries with series counts.</param>
+    /// <returns>A CSV-formatted report string.</returns>
+    internal static string FormatCsvReport(string title, string columnName, Dictionary<(int SourceOrder, string Source, string NormKey), (GlobalNameEntry Entry, int Count)> stats)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"## {title} Report ##").AppendLine();
+        sb.AppendLine($"#source,{columnName},count");
+
+        foreach (
+            var (sourceOrder, source, name, count) in stats
+                .Select(kvp => (kvp.Key.SourceOrder, kvp.Key.Source, Name: kvp.Value.Entry.ResolveDisplayName(string.Empty, int.MaxValue, false), kvp.Value.Count))
+                .OrderBy(r => r.SourceOrder)
+                .ThenByDescending(r => r.Count)
+                .ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+        )
+            sb.AppendLine($"{source},{EscapeCsvCommas(name)},{count}");
+
+        return sb.ToString();
     }
 
     #endregion

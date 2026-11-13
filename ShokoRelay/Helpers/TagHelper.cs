@@ -302,59 +302,34 @@ public static partial class TagHelper
         {
             var seenInSeries = new HashSet<(string Source, string NormKey)>();
 
-            void RecordTag(string source, int sourceOrder, string? rawName)
-            {
-                if (string.IsNullOrWhiteSpace(rawName))
-                    return;
-
-                string cleanName = TagCleanupRegex().Replace(rawName, "").Trim();
-                if (string.IsNullOrWhiteSpace(cleanName))
-                    return;
-
-                string origNorm = NormalizeTagKey(cleanName);
-                bool isMerged = s_defaultTagMerges.TryGetValue(origNorm, out var target);
-                string effectiveName = (isMerged ? target! : cleanName).ToLowerInvariant();
-                string normKey = isMerged ? NormalizeTagKey(effectiveName) : origNorm;
-
-                if (normKey.Length == 0 || s_defaultTagBlacklist.Contains(normKey) || s_defaultTagBlacklist.Contains(origNorm) || !seenInSeries.Add((source, normKey)))
-                    return;
-
-                var key = (sourceOrder, source, normKey);
-                if (!stats.TryGetValue(key, out var item))
-                    item = (new TextHelper.GlobalNameEntry(), 0);
-
-                item.Entry.ResolveDisplayName(effectiveName, 1, record: true);
-                stats[key] = (item.Entry, item.Count + 1);
-            }
+            void RecordTag(string source, int sourceOrder, string? rawName) =>
+                TextHelper.RecordReportItem(
+                    stats,
+                    seenInSeries,
+                    source,
+                    sourceOrder,
+                    string.IsNullOrWhiteSpace(rawName) ? null : TagCleanupRegex().Replace(rawName, ""),
+                    NormalizeTagKey,
+                    s_defaultTagMerges,
+                    s_defaultTagBlacklist,
+                    TitleCase
+                );
 
             if (series.AnidbAnime?.Tags is IReadOnlyList<IAnidbTagForAnime> anidbTags)
                 foreach (var t in anidbTags)
-                    RecordTag("anidb", 0, t.Name);
+                    RecordTag("AniDB", 0, t.Name);
 
             if (series.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() is { } tmdb)
                 foreach (var t in tmdb.Tags)
                     if (t.Kind is TagKind.Genre || (t.Kind is TagKind.Keyword && !NonEnglishTagRegex().IsMatch(t.Name)))
-                        RecordTag("tmdb", 1, t.Name);
+                        RecordTag("TMDB", 1, t.Name);
 
             foreach (var t in series.Tags ?? [])
                 if (t != null && t.ID.Source == MetadataSource.User)
-                    RecordTag("user", 2, t.Name);
+                    RecordTag("User", 2, t.Name);
         }
 
-        var sb = new StringBuilder();
-        sb.AppendLine("## Tag Report ##").AppendLine();
-        sb.AppendLine("#source,tag,count");
-
-        foreach (
-            var (sourceOrder, source, name, count) in stats
-                .Select(kvp => (kvp.Key.SourceOrder, kvp.Key.Source, Name: kvp.Value.Entry.ResolveDisplayName(string.Empty, int.MaxValue, false), kvp.Value.Count))
-                .OrderBy(r => r.SourceOrder)
-                .ThenByDescending(r => r.Count)
-                .ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
-        )
-            sb.AppendLine($"{source},{TextHelper.EscapeCsvCommas(name)},{count}");
-
-        return sb.ToString();
+        return TextHelper.FormatCsvReport("Tag", "tag", stats);
     }
 
     #endregion
