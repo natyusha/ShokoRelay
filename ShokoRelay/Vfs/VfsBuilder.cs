@@ -252,7 +252,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         {
             // Group by primary ID and count how many secondary series are being merged
             var grouped = seriesList.GroupBy(s => OverrideHelper.GetPrimary(s.LocalID, metadataService)).ToList();
-            seriesList = [.. grouped.Select(g => g.FirstOrDefault(s => s.LocalID == g.Key) ?? g.First())];
+            seriesList = [.. grouped.Select(g => metadataService.GetShokoSeriesByID(g.Key) ?? g.First())];
             consolidatedCount = totalInScope - seriesList.Count();
         }
 
@@ -439,7 +439,7 @@ public class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLi
         // Evaluates the categorization logic to determine if the series should be processed as a movie
         var (doTv, doMovie) = MapHelper.GetGenerationModes(MapHelper.IsMovie(series), Settings.Advanced.MovieGenerationMode);
 
-        if (!doTv && !doMovie)
+        if (!doTv && !skipCheck)
             PruneSeries(rootFolderName, folderId, errors.Add);
 
         if (doTv)

@@ -414,7 +414,7 @@ public class PlexController(
         if (user == null)
             return Ok(new { status = "ignored", reason = "no_shoko_user" });
 
-        bool isMovie = PlexHelper.IsMovieKey(evt.Metadata.Guid ?? "");
+        bool isMovie = string.Equals(evt.Metadata.Type, "movie", StringComparison.OrdinalIgnoreCase);
         string typeLabel = isMovie ? "movie" : "episode";
         string itemTitle = isMovie ? (evt.Metadata.Title ?? shokoEpisode.Series?.GetDisplayTitle() ?? "Unknown") : $"S{evt.Metadata.ParentIndex ?? 0:D2}E{evt.Metadata.Index ?? 0:D2}";
         string seriesName = evt.Metadata.GrandparentTitle ?? shokoEpisode.Series?.GetDisplayTitle() ?? "Unknown Series";

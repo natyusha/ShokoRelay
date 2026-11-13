@@ -224,62 +224,70 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
         if (newFiles.Count == 0)
             return 0;
 
-        string mapPath = Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FileAtMapping);
-        var entries = new List<AnimeThemesMappingEntry>();
-        var existingComments = new List<string>();
-        var existing = new Dictionary<string, AnimeThemesMappingEntry>(StringComparer.OrdinalIgnoreCase);
-
-        if (File.Exists(mapPath))
+        await VfsShared.VfsLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            try
-            {
-                (existingComments, entries) = AnimeThemesHelper.ParseMappingContentWithComments(await File.ReadAllTextAsync(mapPath, cancellationToken).ConfigureAwait(false));
-                foreach (var e in entries)
-                    existing.TryAdd(e.FilePath, e);
-            }
-            catch { }
-        }
+            string mapPath = Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FileAtMapping);
+            var entries = new List<AnimeThemesMappingEntry>();
+            var existingComments = new List<string>();
+            var existing = new Dictionary<string, AnimeThemesMappingEntry>(StringComparer.OrdinalIgnoreCase);
 
-        int addedCount = 0;
-        foreach (var (relPath, fileName) in newFiles)
-        {
-            if (existing.TryGetValue(relPath, out var oldEntry) && oldEntry.AniDbId > 0)
-                continue;
-
-            try
+            if (File.Exists(mapPath))
             {
-                var (lookup, idMissing) = await FetchMetadataAsync(fileName, null, cancellationToken).ConfigureAwait(false);
-                if (lookup != null)
+                try
                 {
-                    var entry = new AnimeThemesMappingEntry(relPath, lookup);
-                    if (oldEntry != null)
-                        entries.Remove(oldEntry);
-
-                    entries.Add(entry);
-                    existing[relPath] = entry;
-                    addedCount++;
-                    if (lookup.AniDbId > 0)
-                        logger.LogInformation("AnimeThemes Map: Auto-mapped '{Path}' -> VideoID: {VideoId}, AniDB ID: {AnidbId}", relPath, lookup.VideoId, lookup.AniDbId);
-                    else
-                        logger.LogWarning("AnimeThemes Map: Recorded '{Path}' with missing AniDB ID", relPath);
+                    (existingComments, entries) = AnimeThemesHelper.ParseMappingContentWithComments(await File.ReadAllTextAsync(mapPath, cancellationToken).ConfigureAwait(false));
+                    foreach (var e in entries)
+                        existing.TryAdd(e.FilePath, e);
                 }
-                else
-                    logger.LogWarning("AnimeThemes Map: Failed to auto-map '{Path}' -> Metadata missing", relPath);
+                catch { }
             }
-            catch (Exception ex)
+
+            int addedCount = 0;
+            foreach (var (relPath, fileName) in newFiles)
             {
-                logger.LogWarning(ex, "AnimeThemes Map: Exception auto-mapping '{Path}'", relPath);
+                if (existing.TryGetValue(relPath, out var oldEntry) && oldEntry.AniDbId > 0)
+                    continue;
+
+                try
+                {
+                    var (lookup, idMissing) = await FetchMetadataAsync(fileName, null, cancellationToken).ConfigureAwait(false);
+                    if (lookup != null)
+                    {
+                        var entry = new AnimeThemesMappingEntry(relPath, lookup);
+                        if (oldEntry != null)
+                            entries.Remove(oldEntry);
+
+                        entries.Add(entry);
+                        existing[relPath] = entry;
+                        addedCount++;
+                        if (lookup.AniDbId > 0)
+                            logger.LogInformation("AnimeThemes Map: Auto-mapped '{Path}' -> VideoID: {VideoId}, AniDB ID: {AnidbId}", relPath, lookup.VideoId, lookup.AniDbId);
+                        else
+                            logger.LogWarning("AnimeThemes Map: Recorded '{Path}' with missing AniDB ID", relPath);
+                    }
+                    else
+                        logger.LogWarning("AnimeThemes Map: Failed to auto-map '{Path}' -> Metadata missing", relPath);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "AnimeThemes Map: Exception auto-mapping '{Path}'", relPath);
+                }
             }
-        }
 
-        if (addedCount > 0)
+            if (addedCount > 0)
+            {
+                var finalEntries = entries.DistinctBy(e => e.FilePath).OrderBy(e => AnimeThemesHelper.GetYearForSort(e.FilePath)).ThenBy(e => e.FilePath).ToList();
+                await File.WriteAllTextAsync(mapPath, AnimeThemesHelper.SerializeMapping(existingComments, finalEntries), cancellationToken).ConfigureAwait(false);
+                logger.LogInformation("AnimeThemes Map: Appended {Count} new entries to mapping file.", addedCount);
+            }
+
+            return addedCount;
+        }
+        finally
         {
-            var finalEntries = entries.DistinctBy(e => e.FilePath).OrderBy(e => AnimeThemesHelper.GetYearForSort(e.FilePath)).ThenBy(e => e.FilePath).ToList();
-            await File.WriteAllTextAsync(mapPath, AnimeThemesHelper.SerializeMapping(existingComments, finalEntries), cancellationToken).ConfigureAwait(false);
-            logger.LogInformation("AnimeThemes Map: Appended {Count} new entries to mapping file.", addedCount);
+            VfsShared.VfsLock.Release();
         }
-
-        return addedCount;
     }
 
     /// <summary>Tests, resolves, or updates mapping fields for a specific webm filename without redownloading, with optional persistence and AniDB ID override.</summary>

@@ -237,7 +237,7 @@ public class SyncToShoko(
                         prefIdCache[ep.ShokoSeriesID] = prefId = MapHelper.GetPreferredTmdbOrderingId(ep.Series);
 
                     var coords = PlexMapping.GetPlexCoordinates(ep, prefId);
-                    string typeLabel = PlexHelper.IsMovieKey(item.RatingKey!) ? "movie" : "episode";
+                    string typeLabel = target.LibraryType == PlexLibraryType.Movie ? "movie" : "episode";
 
                     if (wouldMark)
                     {

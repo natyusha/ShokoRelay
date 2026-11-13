@@ -296,8 +296,11 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
                 if (videoBaseNames.Contains(name) || videoService.GetVideoFileByAbsolutePath(file)?.Video?.CrossReferences?.Any(cr => cr.ShokoEpisode != null) == true)
                     continue;
 
-                string parentBase = PlexConstants.LocalExtraSuffixes.Select(s => name.Split(s)[0]).OrderByDescending(s => s.Length).FirstOrDefault(videoBaseNames.Contains) ?? string.Empty;
-                if (string.IsNullOrEmpty(parentBase) || parentBase.Length >= name.Length)
+                if (!VfsHelper.IsLocalExtraFile(name, out int suffixIndex) || suffixIndex <= 0)
+                    continue;
+
+                string parentBase = name[..suffixIndex];
+                if (!videoBaseNames.Contains(parentBase))
                     continue;
 
                 foreach (var m in fileData.Mappings.Where(m => Path.GetFileNameWithoutExtension(m.FileName).Equals(parentBase, StringComparison.OrdinalIgnoreCase)))

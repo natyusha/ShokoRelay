@@ -195,7 +195,7 @@ public class CollectionService(
 
                 // Map collection names to their Plex RatingKeys (IDs)
                 var collectionIdMap = collections
-                    .Where(c => !string.IsNullOrEmpty(c.Title) && !string.IsNullOrEmpty(c.RatingKey))
+                    .Where(c => !string.IsNullOrEmpty(c.Title) && int.TryParse(c.RatingKey, out _))
                     .GroupBy(c => c.Title!, StringComparer.OrdinalIgnoreCase)
                     .ToDictionary(g => g.Key, g => int.Parse(g.First().RatingKey!), StringComparer.OrdinalIgnoreCase);
 
