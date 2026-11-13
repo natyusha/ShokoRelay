@@ -556,6 +556,9 @@ button.float-link {
   #header-logo {
     margin-right: 0;
   }
+  #header-chevron {
+    margin: 0 -0.6rem 0 -1.2rem;
+  }
   #header-title {
     margin-left: 0;
   }

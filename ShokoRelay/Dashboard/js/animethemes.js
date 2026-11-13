@@ -74,9 +74,16 @@
           type: isNoTheme ? "warning" : undefined,
         });
 
-        // Trigger playback side effect if a theme exists locally
+        // Trigger playback side effect if a theme exists locally (or play first downloaded theme from a batch)
         if (!isBatch && (status === "ok" || (status === "skipped" && message === "Theme.mp3 already exists."))) {
           const playPath = d?.Folder || d?.folder || ps.get("path");
+          if (playPath) playThemeMp3(playPath);
+        } else if (isBatch) {
+          const items = d?.Items || d?.items || [];
+          const playItem =
+            items.find((i) => (i.Status || i.status) === "ok") ||
+            (items.length === 1 && (items[0].Status || items[0].status) === "skipped" && (items[0].Message || items[0].message) === "Theme.mp3 already exists." ? items[0] : null);
+          const playPath = playItem?.Folder || playItem?.folder;
           if (playPath) playThemeMp3(playPath);
         }
       } else {
