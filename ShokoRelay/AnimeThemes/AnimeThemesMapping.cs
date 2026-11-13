@@ -21,11 +21,6 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
 
     #region Public API
 
-    /// <summary>Serialize a single AnimeThemesMappingEntry to a CSV line.</summary>
-    /// <param name="entry">The entry to serialize.</param>
-    /// <returns>A comma-separated string.</returns>
-    public static string SerializeMappingEntry(AnimeThemesMappingEntry entry) => AnimeThemesHelper.SerializeEntry(entry);
-
     /// <summary>Loads and groups the AnimeThemes mapping entries, resolving their expected VFS filenames.</summary>
     /// <param name="configDirectory">The plugin configuration directory path.</param>
     /// <returns>A dictionary mapping AniDB ID to their expected VFS theme items.</returns>
@@ -485,9 +480,10 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
                                     .Select(entry =>
                                     {
                                         string relPath = entry.FilePath.TrimLeadingSlashes();
-                                        string? src = AnimeThemesHelper.ResolveThemeSourcePath(relPath, root, themeRootName);
-                                        if (src == null)
+                                        string candidateSrc = Path.Combine(root, themeRootName, VfsShared.NormalizeSeparators(relPath));
+                                        if (!File.Exists(candidateSrc))
                                             return null;
+                                        string src = Path.GetFullPath(candidateSrc);
                                         var lookup = new AnimeThemesVideoLookup(entry);
                                         return new
                                         {
@@ -525,10 +521,23 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
                                 {
                                     if (!Settings.Advanced.DisableVfsGeneration)
                                         Directory.CreateDirectory(shortsDir);
-                                    if (VfsShared.TryCreateLink(item.SourcePath, destPath, logger, targetOverride: AnimeThemesHelper.BuildThemeRelativeTarget(item.RelativePath, themeRootName)))
+                                    string relTarget = VfsShared.NormalizeSeparators(Path.Combine("..", "..", "..", themeRootName, item.RelativePath));
+                                    if (VfsShared.TryCreateLink(item.SourcePath, destPath, logger, targetOverride: relTarget))
                                     {
+                                        int bitmask =
+                                            (item.Entry.NC ? 1 : 0)
+                                            | (item.Entry.Lyrics ? 2 : 0)
+                                            | (item.Entry.Subbed ? 4 : 0)
+                                            | (item.Entry.Uncen ? 8 : 0)
+                                            | (item.Entry.NSFW ? 16 : 0)
+                                            | (item.Entry.Spoiler ? 32 : 0)
+                                            | (
+                                                item.Entry.Overlap == "Transition" ? 64
+                                                : item.Entry.Overlap == "Over" ? 128
+                                                : 0
+                                            );
                                         Interlocked.Increment(ref state.Created);
-                                        state.CacheEntries.Add(new WebmCacheEntry(destPath, item.Entry.VideoId, AnimeThemesHelper.CalculateBitmask(item.Entry)));
+                                        state.CacheEntries.Add(new WebmCacheEntry(destPath, item.Entry.VideoId, bitmask));
                                     }
                                     else
                                         state.Errors.Add($"Link failed: {destPath}");

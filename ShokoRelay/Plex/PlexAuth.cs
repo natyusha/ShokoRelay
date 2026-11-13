@@ -57,9 +57,9 @@ public sealed record PlexHomeUser(
 
 /// <summary>Handles authentication with Plex.tv, utilizing modern v2 JSON endpoints and legacy XML for user switching.</summary>
 /// <param name="httpClient">HTTP client.</param>
-/// <param name="config">Plex authentication configuration.</param>
+/// <param name="configProvider">Configuration provider.</param>
 /// <param name="logger">Logger instance.</param>
-public class PlexAuth(HttpClient httpClient, PlexAuthConfig config, ILogger<PlexAuth> logger)
+public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILogger<PlexAuth> logger)
 {
     #region Setup
 
@@ -94,7 +94,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config, ILogger<Plex
     public string BuildAuthUrl(string pinCode, string productName, string? forwardUrl = null) =>
         pinCode.Length <= 4
             ? $"https://plex.tv/link/?pin={Uri.EscapeDataString(pinCode)}"
-            : $"https://app.plex.tv/auth#?clientID={Uri.EscapeDataString(config.ClientIdentifier)}&code={Uri.EscapeDataString(pinCode)}&context%5Bdevice%5D%5Bproduct%5D={Uri.EscapeDataString(productName)}{(string.IsNullOrWhiteSpace(forwardUrl) ? "" : $"&forwardUrl={Uri.EscapeDataString(forwardUrl)}")}";
+            : $"https://app.plex.tv/auth#?clientID={Uri.EscapeDataString(configProvider.GetPlexClientIdentifier())}&code={Uri.EscapeDataString(pinCode)}&context%5Bdevice%5D%5Bproduct%5D={Uri.EscapeDataString(productName)}{(string.IsNullOrWhiteSpace(forwardUrl) ? "" : $"&forwardUrl={Uri.EscapeDataString(forwardUrl)}")}";
 
     /// <summary>Retrieve the status for a specific Plex PIN from the v2 API.</summary>
     /// <param name="pinId">The PIN identifier.</param>
@@ -349,7 +349,7 @@ public class PlexAuth(HttpClient httpClient, PlexAuthConfig config, ILogger<Plex
     private HttpRequestMessage CreateRequest(HttpMethod method, Uri url, string? token = null, string? cid = null)
     {
         var req = new HttpRequestMessage(method, url);
-        req.Headers.TryAddWithoutValidation("X-Plex-Client-Identifier", cid ?? config.ClientIdentifier);
+        req.Headers.TryAddWithoutValidation("X-Plex-Client-Identifier", cid ?? configProvider.GetPlexClientIdentifier());
         req.Headers.TryAddWithoutValidation("X-Plex-Device-Name", "Shoko Server"); // Title (Line 1)
         req.Headers.TryAddWithoutValidation("X-Plex-Version", ShokoRelayConstants.Version); // Label (Line 2)
         req.Headers.TryAddWithoutValidation("X-Plex-Product", ShokoRelayConstants.Name); // Label (Line 3)

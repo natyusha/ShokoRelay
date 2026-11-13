@@ -1,4 +1,3 @@
-using System.Text.Json.Serialization;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Enums;
 
@@ -201,26 +200,6 @@ public static partial class PlexHelper
         return null;
     }
 
-    #endregion
-
-    #region Path Resolution
-
-    /// <summary>Determine the filesystem import roots for a series.</summary>
-    /// <param name="series">The Shoko series metadata.</param>
-    /// <param name="metadataService">Metadata service used for root and override resolution.</param>
-    /// <returns>Unique set of root paths.</returns>
-    public static HashSet<string> ResolveImportRoots(IShokoSeries series, IMetadataService metadataService)
-    {
-        var roots = new HashSet<string>(VfsShared.PathComparer);
-        foreach (var video in MapHelper.GetActiveVideos(series, metadataService))
-        {
-            foreach (var file in video.Files ?? [])
-                if (file != null && VfsShared.ResolveImportRootPath(file) is string importRoot)
-                    roots.Add(importRoot);
-        }
-        return roots;
-    }
-
     /// <summary>Build a filesystem path for a collection image (poster, logo, or backdrop).</summary>
     /// <param name="series">The Shoko series metadata.</param>
     /// <param name="collectionName">Collection name.</param>
@@ -271,24 +250,20 @@ public static partial class PlexHelper
 
     #region Internal Helpers
 
-    /// <summary>Determines if a collection title matches any user-configured exclusion keywords.</summary>
-    /// <param name="collectionTitle">The collection title to evaluate.</param>
-    /// <param name="excludedKeywords">Optional pre-split array of exclusion keywords.</param>
-    /// <returns>True if the collection matches an exclusion keyword and should be protected.</returns>
-    public static bool IsCollectionExcluded(string? collectionTitle, string[]? excludedKeywords = null)
+    /// <summary>Determine the filesystem import roots for a series.</summary>
+    /// <param name="series">The Shoko series metadata.</param>
+    /// <param name="metadataService">Metadata service used for root and override resolution.</param>
+    /// <returns>Unique set of root paths.</returns>
+    private static HashSet<string> ResolveImportRoots(IShokoSeries series, IMetadataService metadataService)
     {
-        if (string.IsNullOrWhiteSpace(collectionTitle))
-            return false;
-
-        var keywords = excludedKeywords ?? (Settings.Advanced.CollectionExclusions ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (keywords.Length == 0)
-            return false;
-
-        for (int i = 0; i < keywords.Length; i++)
-            if (collectionTitle.Contains(keywords[i], StringComparison.OrdinalIgnoreCase))
-                return true;
-
-        return false;
+        var roots = new HashSet<string>(VfsShared.PathComparer);
+        foreach (var video in MapHelper.GetActiveVideos(series, metadataService))
+        {
+            foreach (var file in video.Files ?? [])
+                if (file != null && VfsShared.ResolveImportRootPath(file) is string importRoot)
+                    roots.Add(importRoot);
+        }
+        return roots;
     }
 
     /// <summary>Determines if a filename base matches a specific ID and suffix.</summary>
@@ -324,105 +299,25 @@ public static partial class PlexHelper
             ? cleaned.ToLowerInvariant()
             : null;
 
+    /// <summary>Determines if a collection title matches any user-configured exclusion keywords.</summary>
+    /// <param name="collectionTitle">The collection title to evaluate.</param>
+    /// <param name="excludedKeywords">Optional pre-split array of exclusion keywords.</param>
+    /// <returns>True if the collection matches an exclusion keyword and should be protected.</returns>
+    public static bool IsCollectionExcluded(string? collectionTitle, string[]? excludedKeywords = null)
+    {
+        if (string.IsNullOrWhiteSpace(collectionTitle))
+            return false;
+
+        var keywords = excludedKeywords ?? (Settings.Advanced.CollectionExclusions ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (keywords.Length == 0)
+            return false;
+
+        for (int i = 0; i < keywords.Length; i++)
+            if (collectionTitle.Contains(keywords[i], StringComparison.OrdinalIgnoreCase))
+                return true;
+
+        return false;
+    }
+
     #endregion
 }
-
-#region Webhook Models
-
-/// <summary>Payload delivered by Plex webhooks.</summary>
-public class PlexWebhookPayload
-{
-    /// <summary>Information about the Plex server.</summary>
-    [JsonPropertyName("Server")]
-    public PlexServer? Server { get; set; }
-
-    /// <summary>Plex server identity details.</summary>
-    public class PlexServer
-    {
-        /// <summary>Server title.</summary>
-        [JsonPropertyName("title")]
-        public string? Title { get; set; }
-
-        /// <summary>Server unique UUID.</summary>
-        [JsonPropertyName("uuid")]
-        public string? Uuid { get; set; }
-    }
-
-    /// <summary>The event type.</summary>
-    [JsonPropertyName("event")]
-    public string? Event { get; set; }
-
-    /// <summary>True if triggered by a user.</summary>
-    [JsonPropertyName("user")]
-    public bool? User { get; set; }
-
-    /// <summary>True if triggered by the server owner.</summary>
-    [JsonPropertyName("owner")]
-    public bool? Owner { get; set; }
-
-    /// <summary>Account info.</summary>
-    [JsonPropertyName("Account")]
-    public PlexAccount? Account { get; set; }
-
-    /// <summary>Metadata associated with the item.</summary>
-    [JsonPropertyName("Metadata")]
-    public PlexMetadata? Metadata { get; set; }
-
-    /// <summary>Plex user account info.</summary>
-    public class PlexAccount
-    {
-        /// <summary>User account title.</summary>
-        [JsonPropertyName("title")]
-        public string? Title { get; set; }
-    }
-
-    /// <summary>Metadata section of a Plex webhook payload.</summary>
-    public class PlexMetadata
-    {
-        /// <summary>Unique metadata GUID.</summary>
-        [JsonPropertyName("guid")]
-        public string? Guid { get; set; }
-
-        /// <summary>Grandparent (Show) title.</summary>
-        [JsonPropertyName("grandparentTitle")]
-        public string? GrandparentTitle { get; set; }
-
-        /// <summary>Parent (Season) index.</summary>
-        [JsonPropertyName("parentIndex")]
-        public int? ParentIndex { get; set; }
-
-        /// <summary>Item title.</summary>
-        [JsonPropertyName("title")]
-        public string? Title { get; set; }
-
-        /// <summary>Item index (episode number).</summary>
-        [JsonPropertyName("index")]
-        public int? Index { get; set; }
-
-        /// <summary>Unix timestamp of viewing.</summary>
-        [JsonPropertyName("lastViewedAt")]
-        public long? LastViewedAt { get; set; }
-
-        /// <summary>The current playback position in milliseconds.</summary>
-        [JsonPropertyName("viewOffset")]
-        public long? ViewOffset { get; set; }
-
-        /// <summary>The total duration of the item in milliseconds.</summary>
-        [JsonPropertyName("duration")]
-        public long? Duration { get; set; }
-
-        /// <summary>Library section numeric ID.</summary>
-        [JsonPropertyName("librarySectionID")]
-        public int? LibrarySectionId { get; set; }
-
-        /// <summary>Metadata type string.</summary>
-        [JsonPropertyName("type")]
-        public string? Type { get; set; }
-
-        /// <summary>Rating value from 0-10.</summary>
-        [JsonPropertyName("userRating")]
-        public double? UserRating { get; set; }
-    }
-}
-
-#endregion

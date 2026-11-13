@@ -56,11 +56,11 @@ public class ServiceRegistration : IPluginServiceRegistration
         serviceCollection.AddSingleton<VfsAssetLinker>();
         serviceCollection.AddSingleton<VfsBuilder>();
         serviceCollection.AddSingleton<VfsWatcher>();
-        serviceCollection.AddSingleton<ICollectionService, CollectionService>();
-        serviceCollection.AddSingleton<ICriticRatingService, CriticRatingService>();
-        serviceCollection.AddSingleton<IImageSyncService, ImageSyncService>();
-        serviceCollection.AddSingleton<IPlexAutomationService, PlexAutomationService>();
-        serviceCollection.AddSingleton<IShokoImportService, ShokoImportService>();
+        serviceCollection.AddSingleton<CollectionService>();
+        serviceCollection.AddSingleton<CriticRatingService>();
+        serviceCollection.AddSingleton<ImageSyncService>();
+        serviceCollection.AddSingleton<PlexAutomationService>();
+        serviceCollection.AddSingleton<ShokoImportService>();
         serviceCollection.AddSingleton<SourceLinkService>();
         serviceCollection.AddSingleton(provider =>
         {
@@ -69,12 +69,7 @@ public class ServiceRegistration : IPluginServiceRegistration
         });
         serviceCollection.AddSingleton<SyncToShoko>();
         serviceCollection.AddSingleton<SyncToPlex>();
-        serviceCollection.AddSingleton(provider =>
-        {
-            var cp = provider.GetRequiredService<ConfigProvider>();
-            var plexAuthConfig = new PlexAuthConfig { ClientIdentifier = cp.GetPlexClientIdentifier() };
-            return new PlexAuth(provider.GetRequiredService<HttpClient>(), plexAuthConfig, provider.GetRequiredService<ILogger<PlexAuth>>());
-        });
+        serviceCollection.AddSingleton<PlexAuth>();
         serviceCollection.AddSingleton<PlexClient>();
         serviceCollection.AddSingleton<PlexCollections>();
 

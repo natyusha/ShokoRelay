@@ -3,17 +3,7 @@ using System.Globalization;
 
 namespace ShokoRelay.Services;
 
-#region Interface and Models
-
-/// <summary>Service for applying critic ratings from Shoko metadata to Plex libraries.</summary>
-public interface ICriticRatingService
-{
-    /// <summary>Compute and push ratings for shows and episodes, optionally restricted to a subset of series IDs.</summary>
-    /// <param name="allowedSeriesIds">Optional collection of series IDs to limit processing to.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>An <see cref="ApplyRatingsResult"/> with counters and error details.</returns>
-    Task<ApplyRatingsResult> ApplyRatingsAsync(IEnumerable<int>? allowedSeriesIds = null, CancellationToken cancellationToken = default);
-}
+#region Models
 
 /// <summary>Represents a specific rating update for the report log.</summary>
 /// <param name="Title">Display title of the item.</param>
@@ -23,7 +13,7 @@ public interface ICriticRatingService
 /// <param name="NewRating">New rating applied from Shoko.</param>
 public sealed record RatingChange(string Title, string Type, string RatingKey, double? OldRating, double? NewRating);
 
-/// <summary>Aggregated status returned by <see cref="ICriticRatingService.ApplyRatingsAsync"/>.</summary>
+/// <summary>Aggregated status returned by <see cref="CriticRatingService.ApplyRatingsAsync"/>.</summary>
 /// <param name="ProcessedShows">Total shows processed.</param>
 /// <param name="UpdatedShows">Count of shows where ratings changed.</param>
 /// <param name="ProcessedEpisodes">Total episodes processed.</param>
@@ -45,15 +35,18 @@ public sealed record ApplyRatingsResult(
 
 #endregion
 
-/// <summary>Default implementation of <see cref="ICriticRatingService"/>.</summary>
+/// <summary>Service for applying critic ratings from Shoko metadata to Plex libraries.</summary>
 /// <param name="plexClient">Plex client.</param>
 /// <param name="metadataService">Shoko metadata service.</param>
 /// <param name="logger">Logger instance.</param>
-public class CriticRatingService(PlexClient plexClient, IMetadataService metadataService, ILogger<CriticRatingService> logger) : ICriticRatingService
+public class CriticRatingService(PlexClient plexClient, IMetadataService metadataService, ILogger<CriticRatingService> logger)
 {
     #region Public API
 
-    /// <inheritdoc/>
+    /// <summary>Compute and push ratings for shows and episodes, optionally restricted to a subset of series IDs.</summary>
+    /// <param name="allowedSeriesIds">Optional collection of series IDs to limit processing to.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>An <see cref="ApplyRatingsResult"/> with counters and error details.</returns>
     public async Task<ApplyRatingsResult> ApplyRatingsAsync(IEnumerable<int>? allowedSeriesIds = null, CancellationToken cancellationToken = default)
     {
         const string TaskName = ShokoRelayConstants.TaskPlexRatingsApply;

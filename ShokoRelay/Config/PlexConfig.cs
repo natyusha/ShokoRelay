@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using System.ComponentModel.DataAnnotations;
 
 namespace ShokoRelay.Config;
 
@@ -19,19 +18,6 @@ public enum PlexLibraryType
 
     /// <summary>Photo library.</summary>
     Photo = 13,
-}
-
-#endregion
-
-#region Configuration
-
-/// <summary>Credentials required to initiate Plex authentication flows from the dashboard.</summary>
-public class PlexAuthConfig
-{
-    /// <summary>Plex client identifier.</summary>
-    [Display(Name = "Client Identifier", Description = "Plex client identifier.")]
-    [DefaultValue("")]
-    public string ClientIdentifier { get; set; } = "";
 }
 
 #endregion

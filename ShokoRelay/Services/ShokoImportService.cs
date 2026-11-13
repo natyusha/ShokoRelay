@@ -2,32 +2,16 @@ using Shoko.Abstractions.Video.Services;
 
 namespace ShokoRelay.Services;
 
-#region Interface
-
 /// <summary>Service responsible for triggering server-side import and housekeeping actions.</summary>
-public interface IShokoImportService
-{
-    /// <summary>Trigger import scans for every managed folder to find new or unrecognized files.</summary>
-    /// <returns>A read-only list of folder names that were scheduled for scanning.</returns>
-    Task<IReadOnlyList<string>> TriggerImportAsync();
-
-    /// <summary>Scan for video file entries whose physical file has disappeared or is now in an ignored location, and optionally remove those records.</summary>
-    /// <param name="dryRun">When <c>true</c>, list missing files without deleting them.</param>
-    /// <returns>A read-only list of paths for files that were identified as missing or ignored.</returns>
-    Task<IReadOnlyList<string>> PurgeMissingFilesAsync(bool dryRun = false);
-}
-
-#endregion
-
-/// <summary>Default implementation of <see cref="IShokoImportService"/>.</summary>
 /// <param name="videoService">Shoko video service.</param>
 /// <param name="releaseService">Shoko video release service.</param>
 /// <param name="logger">Logger instance.</param>
-public class ShokoImportService(IVideoService videoService, IVideoReleaseService releaseService, ILogger<ShokoImportService> logger) : IShokoImportService
+public class ShokoImportService(IVideoService videoService, IVideoReleaseService releaseService, ILogger<ShokoImportService> logger)
 {
     #region Import Logic
 
-    /// <inheritdoc/>
+    /// <summary>Trigger import scans for every managed folder to find new or unrecognized files.</summary>
+    /// <returns>A read-only list of folder names that were scheduled for scanning.</returns>
     public async Task<IReadOnlyList<string>> TriggerImportAsync()
     {
         List<string> folders = [];
@@ -57,7 +41,9 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
 
     #region Housekeeping Logic
 
-    /// <inheritdoc/>
+    /// <summary>Scan for video file entries whose physical file has disappeared or is now in an ignored location, and optionally remove those records.</summary>
+    /// <param name="dryRun">When <c>true</c>, list missing files without deleting them.</param>
+    /// <returns>A read-only list of paths for files that were identified as missing or ignored.</returns>
     public async Task<IReadOnlyList<string>> PurgeMissingFilesAsync(bool dryRun = false)
     {
         const string TaskName = ShokoRelayConstants.TaskShokoPurgeMissing;

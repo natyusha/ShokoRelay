@@ -13,20 +13,6 @@ public static class LogHelper
 {
     #region Logging Interface
 
-    /// <summary>Write content to a log file inside the plugin's logs directory.</summary>
-    /// <param name="pluginDir">Root plugin directory.</param>
-    /// <param name="fileName">Target filename.</param>
-    /// <param name="content">Text content.</param>
-    /// <returns>Absolute path to the created file.</returns>
-    public static string WriteLog(string pluginDir, string fileName, string content)
-    {
-        string dir = Path.Combine(pluginDir, "logs");
-        Directory.CreateDirectory(dir);
-        string path = Path.Combine(dir, fileName);
-        File.WriteAllText(path, content, Encoding.UTF8);
-        return path;
-    }
-
     /// <summary>Generates and writes a report to the plugin's logs directory using the provided builder logic.</summary>
     /// <typeparam name="T">The type of data being reported.</typeparam>
     /// <param name="pluginDir">Root plugin directory.</param>
@@ -40,7 +26,9 @@ public static class LogHelper
         {
             var sb = new StringBuilder();
             builder(sb, data);
-            WriteLog(pluginDir, fileName, sb.ToString());
+            string dir = Path.Combine(pluginDir, "logs");
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(Path.Combine(dir, fileName), sb.ToString(), Encoding.UTF8);
         }
         catch (Exception ex)
         {

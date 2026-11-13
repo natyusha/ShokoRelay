@@ -146,13 +146,13 @@ internal static partial class AnimeThemesHelper
     [GeneratedRegex(@"^(?:ED|Ending)\s*(?:1\b|-|\(|$)", RegexOptions.IgnoreCase)]
     internal static partial Regex Ed1Regex();
 
+    /// <summary>Regex for inserting spaces into PascalCase strings accounting for numbers.</summary>
+    [GeneratedRegex(@"(?<=[a-z])(?=[A-Z])|(?<=[a-z])(?=\d)|(?<=\d)(?=[A-Za-z])")]
+    internal static partial Regex PascalCaseRegex();
+
     /// <summary>Regex for extracting digits from a theme slug.</summary>
     [GeneratedRegex(@"\d+")]
     private static partial Regex NumberRegex();
-
-    /// <summary>Regex for inserting spaces into PascalCase strings accounting for numbers.</summary>
-    [GeneratedRegex(@"(?<=[a-z])(?=[A-Z])|(?<=[a-z])(?=\d)|(?<=\d)(?=[A-Za-z])")]
-    private static partial Regex PascalCaseRegex();
 
     /// <summary>Regex for standardizing Opening and Ending slugs.</summary>
     [GeneratedRegex(@"^(Opening|Ending|OP|ED)\s*(\d*)", RegexOptions.IgnoreCase)]
@@ -384,21 +384,6 @@ internal static partial class AnimeThemesHelper
         return s;
     }
 
-    /// <summary>Calculates the start and end dates for the current anime season, including a one-month early buffer.</summary>
-    /// <param name="date">The current date context.</param>
-    /// <returns>A tuple containing the start and end dates of the season.</returns>
-    internal static (DateTime Start, DateTime End) GetCurrentSeasonRange(DateTime date)
-    {
-        int year = date.Year;
-        return date.Month switch
-        {
-            >= 1 and <= 3 => (new DateTime(year - 1, 12, 1), new DateTime(year, 3, 31)),
-            >= 4 and <= 6 => (new DateTime(year, 3, 1), new DateTime(year, 6, 30)),
-            >= 7 and <= 9 => (new DateTime(year, 6, 1), new DateTime(year, 9, 30)),
-            _ => (new DateTime(year, 9, 1), new DateTime(year, 12, 31)),
-        };
-    }
-
     /// <summary>Extracts the numeric year or decade from a file path for chronological sorting.</summary>
     /// <param name="path">The relative file path.</param>
     /// <returns>An integer representing the chronological year.</returns>
@@ -415,22 +400,6 @@ internal static partial class AnimeThemesHelper
         }
         return 9999;
     }
-
-    /// <summary>Calculates a bitmask for metadata flags used in the webm cache.</summary>
-    /// <param name="e">The mapping entry.</param>
-    /// <returns>An integer bitmask.</returns>
-    internal static int CalculateBitmask(AnimeThemesMappingEntry e) =>
-        (e.NC ? 1 : 0)
-        | (e.Lyrics ? 2 : 0)
-        | (e.Subbed ? 4 : 0)
-        | (e.Uncen ? 8 : 0)
-        | (e.NSFW ? 16 : 0)
-        | (e.Spoiler ? 32 : 0)
-        | (
-            e.Overlap == "Transition" ? 64
-            : e.Overlap == "Over" ? 128
-            : 0
-        );
 
     /// <summary>Constructs a sanitized filename from theme metadata.</summary>
     /// <param name="lookup">The metadata lookup object.</param>
@@ -485,16 +454,6 @@ internal static partial class AnimeThemesHelper
         return VfsHelper.CleanEpisodeTitleForFilename($"{overridePrefix}{nc}{slug}{ver}{title}{slugTag}{artistStr}{attrStr}{extension}");
     }
 
-    /// <summary>Extracts and formats the anime title from an AnimeThemes filename by inserting spaces into the PascalCase base name.</summary>
-    /// <param name="filePath">The original file path or name.</param>
-    /// <returns>A spaced title string.</returns>
-    internal static string GetTitleFromAnimeThemesFile(string filePath)
-    {
-        string rawFileName = Path.GetFileNameWithoutExtension(filePath);
-        int dashIndex = rawFileName.IndexOf('-');
-        return PascalCaseRegex().Replace(dashIndex > 0 ? rawFileName[..dashIndex] : rawFileName, " ");
-    }
-
     /// <summary>Parses a theme slug into base and suffix components.</summary>
     /// <param name="slug">The raw slug from AnimeThemes.</param>
     /// <returns>A tuple containing the base slug and suffix.</returns>
@@ -511,21 +470,6 @@ internal static partial class AnimeThemesHelper
     /// <param name="suffix">The slug suffix (e.g. BD, TV).</param>
     /// <returns>A formatted string tag.</returns>
     internal static string FormatSlugTag(string? suffix) => string.IsNullOrWhiteSpace(suffix) ? "" : $" ({(s_slugFormatting.TryGetValue(suffix.Trim(), out var f) ? f : suffix)})";
-
-    /// <summary>Resolves the absolute source path for a theme file.</summary>
-    /// <param name="relativeFilePath">Relative path from the theme root.</param>
-    /// <param name="importRoot">The Shoko import root.</param>
-    /// <param name="themeRootFolder">The AnimeThemes folder name.</param>
-    /// <returns>The full path or null if missing.</returns>
-    internal static string? ResolveThemeSourcePath(string relativeFilePath, string importRoot, string themeRootFolder) =>
-        Path.Combine(importRoot, themeRootFolder, VfsShared.NormalizeSeparators(relativeFilePath.TrimLeadingSlashes())) is var path && File.Exists(path) ? Path.GetFullPath(path) : null;
-
-    /// <summary>Builds the relative target path for a symlink to point back to the theme root.</summary>
-    /// <param name="relativeFilePath">Relative path to the theme file.</param>
-    /// <param name="themeRootFolder">The name of the AnimeThemes folder.</param>
-    /// <returns>A relative path string.</returns>
-    internal static string BuildThemeRelativeTarget(string relativeFilePath, string themeRootFolder) =>
-        VfsShared.NormalizeSeparators(Path.Combine("..", "..", "..", themeRootFolder, relativeFilePath.TrimLeadingSlashes()));
 
     #endregion
 }

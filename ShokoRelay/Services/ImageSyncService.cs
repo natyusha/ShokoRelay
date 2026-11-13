@@ -8,17 +8,7 @@ using Shoko.Abstractions.Metadata.Image.Options;
 
 namespace ShokoRelay.Services;
 
-#region Interface & Models
-
-/// <summary>Service responsible for syncing Plex-generated episode thumbnails and local metadata assets (posters, backdrops, logos) back to Shoko.</summary>
-public interface IImageSyncService
-{
-    /// <summary>Scans all configured Plex libraries and local VFS paths to upload missing or updated screenshots, posters, backdrops, and logos back to Shoko.</summary>
-    /// <param name="allowedSeriesIds">Optional collection of series IDs to limit processing to.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A summary result containing statistics on the synchronization run.</returns>
-    Task<ImageSyncResult> SyncImagesAsync(IEnumerable<int>? allowedSeriesIds = null, CancellationToken cancellationToken = default);
-}
+#region Models
 
 /// <summary>Represents the final result of an image synchronization task.</summary>
 /// <param name="Processed">Total number of images evaluated.</param>
@@ -32,12 +22,12 @@ public sealed record ImageSyncResult(int Processed, int Uploaded, int Skipped, i
 
 #endregion
 
-/// <summary>Default implementation of <see cref="IImageSyncService"/>.</summary>
+/// <summary>Service responsible for syncing Plex-generated episode thumbnails and local metadata assets (posters, backdrops, logos) back to Shoko.</summary>
 /// <param name="plexClient">Plex client.</param>
 /// <param name="metadataService">Shoko metadata service.</param>
 /// <param name="imageManager">Shoko image manager.</param>
 /// <param name="logger">Logger instance.</param>
-public class ImageSyncService(PlexClient plexClient, IMetadataService metadataService, IImageManager imageManager, ILogger<ImageSyncService> logger) : IImageSyncService
+public class ImageSyncService(PlexClient plexClient, IMetadataService metadataService, IImageManager imageManager, ILogger<ImageSyncService> logger)
 {
     #region Setup
 
@@ -55,7 +45,10 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
 
     #region Public API
 
-    /// <inheritdoc/>
+    /// <summary>Scans all configured Plex libraries and local VFS paths to upload missing or updated screenshots, posters, backdrops, and logos back to Shoko.</summary>
+    /// <param name="allowedSeriesIds">Optional collection of series IDs to limit processing to.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A summary result containing statistics on the synchronization run.</returns>
     public async Task<ImageSyncResult> SyncImagesAsync(IEnumerable<int>? allowedSeriesIds = null, CancellationToken cancellationToken = default)
     {
         var sw = Stopwatch.StartNew();

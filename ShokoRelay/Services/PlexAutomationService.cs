@@ -2,7 +2,7 @@ using System.Diagnostics;
 
 namespace ShokoRelay.Services;
 
-#region Interface & Models
+#region Models
 
 /// <summary>Result of a full Plex automation run containing elapsed times and individual sub-task results.</summary>
 /// <param name="TotalElapsed">The total elapsed time for the entire automation run.</param>
@@ -26,19 +26,9 @@ public sealed record PlexAutomationRunResult(
     List<string>? TrashMessages
 );
 
-/// <summary>Service responsible for orchestrating Plex collections, critic ratings, image sync, and empty trash automations.</summary>
-public interface IPlexAutomationService
-{
-    /// <summary>Executes the collection generation, critic rating application, image synchronization, and Plex trash emptying automations back-to-back.</summary>
-    /// <param name="progress">Optional progress reporter.</param>
-    /// <param name="token">Cancellation token.</param>
-    /// <returns>A <see cref="PlexAutomationRunResult"/> containing the aggregated execution metrics.</returns>
-    Task<PlexAutomationRunResult> RunAutomationAsync(IProgress<decimal>? progress = null, CancellationToken token = default);
-}
-
 #endregion
 
-/// <summary>Default implementation of <see cref="IPlexAutomationService"/>.</summary>
+/// <summary>Service responsible for orchestrating Plex collections, critic ratings, image sync, and empty trash automations.</summary>
 /// <param name="collectionService">Plex collection service.</param>
 /// <param name="criticRatingService">Plex critic rating service.</param>
 /// <param name="imageSyncService">Shoko image sync service.</param>
@@ -47,18 +37,21 @@ public interface IPlexAutomationService
 /// <param name="metadataService">Shoko metadata service.</param>
 /// <param name="logger">Logger instance.</param>
 public class PlexAutomationService(
-    ICollectionService collectionService,
-    ICriticRatingService criticRatingService,
-    IImageSyncService imageSyncService,
+    CollectionService collectionService,
+    CriticRatingService criticRatingService,
+    ImageSyncService imageSyncService,
     PlexClient plexClient,
     ConfigProvider configProvider,
     IMetadataService metadataService,
     ILogger<PlexAutomationService> logger
-) : IPlexAutomationService
+)
 {
     #region Public API
 
-    /// <inheritdoc/>
+    /// <summary>Executes the collection generation, critic rating application, image synchronization, and Plex trash emptying automations back-to-back.</summary>
+    /// <param name="progress">Optional progress reporter.</param>
+    /// <param name="token">Cancellation token.</param>
+    /// <returns>A <see cref="PlexAutomationRunResult"/> containing the aggregated execution metrics.</returns>
     public async Task<PlexAutomationRunResult> RunAutomationAsync(IProgress<decimal>? progress = null, CancellationToken token = default)
     {
         var sw = Stopwatch.StartNew();

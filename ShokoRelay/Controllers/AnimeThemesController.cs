@@ -74,7 +74,7 @@ public class AnimeThemesController(
                             saved = wasSaved,
                             generatedFilename = gen,
                             changedFields,
-                            csvLine = entry != null ? AnimeThemesMapping.SerializeMappingEntry(entry) : null,
+                            csvLine = entry != null ? AnimeThemesHelper.SerializeEntry(entry) : null,
                             entry,
                         }
                     )
@@ -369,7 +369,9 @@ public class AnimeThemesController(
                         continue;
 
                     // Parse series name gracefully directly from the file basename
-                    string pseudoTitle = AnimeThemesHelper.GetTitleFromAnimeThemesFile(entry.FilePath);
+                    string rawFileName = Path.GetFileNameWithoutExtension(entry.FilePath);
+                    int dashIndex = rawFileName.IndexOf('-');
+                    string pseudoTitle = AnimeThemesHelper.PascalCaseRegex().Replace(dashIndex > 0 ? rawFileName[..dashIndex] : rawFileName, " ");
                     var lookup = new AnimeThemesVideoLookup(entry);
 
                     items.Add(

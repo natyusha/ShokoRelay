@@ -18,9 +18,6 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
     /// <summary>True when a Plex token exists and at least one library target has been discovered.</summary>
     public bool IsEnabled => !string.IsNullOrWhiteSpace(Token) && GetConfiguredTargets().Count > 0;
 
-    /// <summary>Expose the configuration setting controlling automatic library scans.</summary>
-    public bool ScanOnVfsRefresh => Settings.Automation.ScanOnVfsRefresh;
-
     /// <summary>Cached array of prioritized Shoko-to-Plex path mappings.</summary>
     private (string In, string Out)[] _shokoToPlexMappings = [];
 

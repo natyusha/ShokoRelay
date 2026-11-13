@@ -35,7 +35,7 @@ public class ShokoController(
     IMetadataService metadataService,
     PlexClient plexLibrary,
     VfsBuilder vfsBuilder,
-    IShokoImportService shokoImportService,
+    ShokoImportService shokoImportService,
     SyncToShoko watchedSyncService,
     SyncToPlex syncToPlexService,
     SourceLinkService sourceLinkService,

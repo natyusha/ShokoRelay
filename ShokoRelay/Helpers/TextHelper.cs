@@ -428,22 +428,6 @@ public static partial class TextHelper
     /// <returns>A normalized path string.</returns>
     public static string NormalizePathForPlex(string? path) => string.IsNullOrWhiteSpace(path) ? string.Empty : path.Replace('\\', '/').TrimEnd('/');
 
-    /// <summary>Extracts the numeric Series or Episode ID from a path or string value.</summary>
-    /// <param name="text">The string or path to parse.</param>
-    /// <returns>The extracted integer ID, or null if none found.</returns>
-    public static int? ExtractSeriesId(string? text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-            return null;
-
-        var segments = NormalizePathForPlex(text).Split('/', StringSplitOptions.RemoveEmptyEntries);
-        for (int i = segments.Length - 1; i >= 0; i--)
-            if (int.TryParse(segments[i], out int id))
-                return id;
-
-        return null;
-    }
-
     /// <summary>Checks if a Plex string value (which mimics a boolean, e.g. "1") represents true.</summary>
     /// <param name="value">The Plex string value to check.</param>
     /// <returns>True if the string equals "1"; otherwise, false.</returns>

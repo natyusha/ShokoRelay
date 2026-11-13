@@ -311,7 +311,15 @@ public class AnimeThemesMp3Generator(
         // Season Filter: Only applied when Batch is true. Ignored for individual folder requests.
         if (query.Batch && query.Seasonal)
         {
-            var (start, end) = AnimeThemesHelper.GetCurrentSeasonRange(DateTime.Now);
+            var now = DateTime.Now;
+            int year = now.Year;
+            var (start, end) = now.Month switch
+            {
+                >= 1 and <= 3 => (new DateTime(year - 1, 12, 1), new DateTime(year, 3, 31)),
+                >= 4 and <= 6 => (new DateTime(year, 3, 1), new DateTime(year, 6, 30)),
+                >= 7 and <= 9 => (new DateTime(year, 6, 1), new DateTime(year, 9, 30)),
+                _ => (new DateTime(year, 9, 1), new DateTime(year, 12, 31)),
+            };
             if (!series.AirDate.HasValue || series.AirDate.Value < start || series.AirDate.Value > end)
             {
                 string skipMsg = "Series does not match the current season filter.";

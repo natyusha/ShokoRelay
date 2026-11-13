@@ -191,4 +191,100 @@ public class PlexPart
     public string? File { get; set; }
 }
 
+/// <summary>Payload delivered by Plex webhooks.</summary>
+public class PlexWebhookPayload
+{
+    /// <summary>Information about the Plex server.</summary>
+    [JsonPropertyName("Server")]
+    public PlexServer? Server { get; set; }
+
+    /// <summary>Plex server identity details.</summary>
+    public class PlexServer
+    {
+        /// <summary>Server title.</summary>
+        [JsonPropertyName("title")]
+        public string? Title { get; set; }
+
+        /// <summary>Server unique UUID.</summary>
+        [JsonPropertyName("uuid")]
+        public string? Uuid { get; set; }
+    }
+
+    /// <summary>The event type.</summary>
+    [JsonPropertyName("event")]
+    public string? Event { get; set; }
+
+    /// <summary>True if triggered by a user.</summary>
+    [JsonPropertyName("user")]
+    public bool? User { get; set; }
+
+    /// <summary>True if triggered by the server owner.</summary>
+    [JsonPropertyName("owner")]
+    public bool? Owner { get; set; }
+
+    /// <summary>Account info.</summary>
+    [JsonPropertyName("Account")]
+    public PlexAccount? Account { get; set; }
+
+    /// <summary>Metadata associated with the item.</summary>
+    [JsonPropertyName("Metadata")]
+    public PlexMetadata? Metadata { get; set; }
+
+    /// <summary>Plex user account info.</summary>
+    public class PlexAccount
+    {
+        /// <summary>User account title.</summary>
+        [JsonPropertyName("title")]
+        public string? Title { get; set; }
+    }
+
+    /// <summary>Metadata section of a Plex webhook payload.</summary>
+    public class PlexMetadata
+    {
+        /// <summary>Unique metadata GUID.</summary>
+        [JsonPropertyName("guid")]
+        public string? Guid { get; set; }
+
+        /// <summary>Grandparent (Show) title.</summary>
+        [JsonPropertyName("grandparentTitle")]
+        public string? GrandparentTitle { get; set; }
+
+        /// <summary>Parent (Season) index.</summary>
+        [JsonPropertyName("parentIndex")]
+        public int? ParentIndex { get; set; }
+
+        /// <summary>Item title.</summary>
+        [JsonPropertyName("title")]
+        public string? Title { get; set; }
+
+        /// <summary>Item index (episode number).</summary>
+        [JsonPropertyName("index")]
+        public int? Index { get; set; }
+
+        /// <summary>Unix timestamp of viewing.</summary>
+        [JsonPropertyName("lastViewedAt")]
+        public long? LastViewedAt { get; set; }
+
+        /// <summary>The current playback position in milliseconds.</summary>
+        [JsonPropertyName("viewOffset")]
+        public long? ViewOffset { get; set; }
+
+        /// <summary>The total duration of the item in milliseconds.</summary>
+        [JsonPropertyName("duration")]
+        public long? Duration { get; set; }
+
+        /// <summary>Library section numeric ID.</summary>
+        [JsonPropertyName("librarySectionID")]
+        public int? LibrarySectionId { get; set; }
+
+        /// <summary>Metadata type string.</summary>
+        [JsonPropertyName("type")]
+        public string? Type { get; set; }
+
+        /// <summary>Rating value from 0-10.</summary>
+        [JsonPropertyName("userRating")]
+        public double? UserRating { get; set; }
+    }
+}
+
 #endregion

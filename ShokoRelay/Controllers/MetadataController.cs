@@ -75,7 +75,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
                         ? MetadataService.GetShokoSeriesByAnidbID(aid)?.LocalID
                         : null
                 );
-            int? id = (manual == 1 && manualId.HasValue) ? manualId : (string.IsNullOrWhiteSpace(rawPath) ? null : TextHelper.ExtractSeriesId(rawPath));
+            int? id = (manual == 1 && manualId.HasValue) ? manualId : (string.IsNullOrWhiteSpace(rawPath) ? null : ExtractSeriesId(rawPath));
 
             if (!id.HasValue)
                 return EmptyMatch();
@@ -531,6 +531,22 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
         var tmdbMovie = ep?.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault();
 
         return (ep, ctx, tmdbMovie);
+    }
+
+    /// <summary>Extracts the numeric Series or Episode ID from a file path string.</summary>
+    /// <param name="text">The path string to parse.</param>
+    /// <returns>The extracted integer ID, or null if none found.</returns>
+    private static int? ExtractSeriesId(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+
+        var segments = TextHelper.NormalizePathForPlex(text).Split('/', StringSplitOptions.RemoveEmptyEntries);
+        for (int i = segments.Length - 1; i >= 0; i--)
+            if (int.TryParse(segments[i], out int id))
+                return id;
+
+        return null;
     }
 
     /// <summary>Extracts the Image array from a mapped metadata object.</summary>

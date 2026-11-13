@@ -3,21 +3,9 @@ using Shoko.Abstractions.Video.Services;
 
 namespace ShokoRelay.Services;
 
-#region Interface and Models
+#region Models
 
-/// <summary>Service responsible for building and managing Plex collections based on Shoko series metadata.</summary>
-public interface ICollectionService
-{
-    /// <summary>Create or update Plex collections and their images for the supplied series list.</summary>
-    /// <param name="seriesList">The collection of series to process.</param>
-    /// <param name="applyAssignment">If true, perform metadata assignment; otherwise, only refresh collection image assets.</param>
-    /// <param name="clean">If true, prunes old cached custom posters from Plex's local metadata directory.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A result object containing statistics on the operation.</returns>
-    Task<BuildCollectionsResult> BuildCollectionsAsync(IEnumerable<IShokoSeries?> seriesList, bool applyAssignment = true, bool clean = true, CancellationToken cancellationToken = default);
-}
-
-/// <summary>Result returned by <see cref="ICollectionService.BuildCollectionsAsync"/>.</summary>
+/// <summary>Result returned by <see cref="CollectionService.BuildCollectionsAsync"/>.</summary>
 /// <param name="Processed">Number of series processed.</param>
 /// <param name="Created">Number of collections successfully assigned.</param>
 /// <param name="Uploaded">Number of posters uploaded.</param>
@@ -47,7 +35,7 @@ public sealed record BuildCollectionsResult(
 
 #endregion
 
-/// <summary>Default implementation of <see cref="ICollectionService"/>.</summary>
+/// <summary>Service responsible for building and managing Plex collections based on Shoko series metadata.</summary>
 /// <param name="plexClient">Plex client.</param>
 /// <param name="plexCollections">Plex collection service.</param>
 /// <param name="metadataService">Shoko metadata service.</param>
@@ -63,11 +51,16 @@ public class CollectionService(
     IVideoService videoService,
     ConfigProvider configProvider,
     ILogger<CollectionService> logger
-) : ICollectionService
+)
 {
     #region Collection Building
 
-    /// <inheritdoc/>
+    /// <summary>Create or update Plex collections and their images for the supplied series list.</summary>
+    /// <param name="seriesList">The collection of series to process.</param>
+    /// <param name="applyAssignment">If true, perform metadata assignment; otherwise, only refresh collection image assets.</param>
+    /// <param name="clean">If true, prunes old cached custom posters from Plex's local metadata directory.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A result object containing statistics on the operation.</returns>
     public async Task<BuildCollectionsResult> BuildCollectionsAsync(IEnumerable<IShokoSeries?> seriesList, bool applyAssignment = true, bool clean = true, CancellationToken cancellationToken = default)
     {
         const string TaskName = ShokoRelayConstants.TaskPlexCollectionsBuild;

@@ -39,12 +39,12 @@ public class PlexController(
     IMetadataService metadataService,
     PlexClient plexLibrary,
     PlexAuth plexAuth,
-    ICollectionService collectionService,
-    ICriticRatingService criticRatingService,
+    CollectionService collectionService,
+    CriticRatingService criticRatingService,
     IUserService userService,
     IUserDataService userDataService,
-    IImageSyncService imageSyncService,
-    IPlexAutomationService plexAutomationService,
+    ImageSyncService imageSyncService,
+    PlexAutomationService plexAutomationService,
     PlexMetadata plexMetadata,
     ILogger<PlexController> logger
 ) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary, logger)

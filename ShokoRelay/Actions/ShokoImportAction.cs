@@ -5,7 +5,7 @@ using ShokoRelay.Services;
 namespace ShokoRelay.Actions;
 
 /// <summary>Scheduled action to trigger Shoko to scan managed folders for new or unrecognized files.</summary>
-public class ShokoImportAction(IShokoImportService shokoImportService, ILogger<ShokoImportAction> logger) : IScheduledAction
+public class ShokoImportAction(ShokoImportService shokoImportService, ILogger<ShokoImportAction> logger) : IScheduledAction
 {
     /// <inheritdoc/>
     public string Name => "Shoko Relay: Auto Import";

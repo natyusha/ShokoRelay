@@ -25,10 +25,10 @@ public class VfsWatcher(
     VfsBuilder builder,
     IMetadataService metadataService,
     PlexClient plexLibrary,
-    ICollectionService collectionService,
+    CollectionService collectionService,
     AnimeThemesMapping atMapping,
-    ICriticRatingService criticRatingService,
-    IImageSyncService imageSyncService,
+    CriticRatingService criticRatingService,
+    ImageSyncService imageSyncService,
     PlexMetadata plexMetadata,
     ILogger<VfsWatcher> logger
 )
@@ -346,7 +346,7 @@ public class VfsWatcher(
     /// <param name="series">The Shoko series metadata.</param>
     private void ScheduleLibraryScan(IShokoSeries series)
     {
-        if (!plexLibrary.ScanOnVfsRefresh)
+        if (!Settings.Automation.ScanOnVfsRefresh)
             return;
 
         ScheduleDebouncedAction(
@@ -397,7 +397,7 @@ public class VfsWatcher(
 
             // If partial scans are enabled, trigger them now: In deferred mode this serves as the primary scan / In standard mode it acts as a fallback for the initial scan
             var vfsPaths = VfsShared.ResolveSeriesVfsPaths(series, metadataService).ToList();
-            if (plexLibrary.ScanOnVfsRefresh)
+            if (Settings.Automation.ScanOnVfsRefresh)
             {
                 foreach (var path in vfsPaths)
                     await plexLibrary.RefreshSectionPathAsync(path, token).ConfigureAwait(false);
@@ -442,7 +442,7 @@ public class VfsWatcher(
                 foreach (var ratingKey in ratingKeys)
                 {
                     foundInAnyTarget = true;
-                    if (!isDeferred || plexLibrary.ScanOnVfsRefresh)
+                    if (!isDeferred || Settings.Automation.ScanOnVfsRefresh)
                     {
                         // Shoko may have been missing data (e.g. TMDB IDs) when the VFS was instantly generated necessitating a forced metadata refresh
                         logger.LogInformation(
