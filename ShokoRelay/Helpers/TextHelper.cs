@@ -349,14 +349,24 @@ public static partial class TextHelper
         return (!string.IsNullOrEmpty(tmdbTitle) && DefaultTitleRegex().IsMatch(raw) && !DefaultTitleRegex().IsMatch(tmdbTitle)) ? tmdbTitle : raw;
     }
 
-    /// <summary>Compute the best title to display for a standalone movie, omitting the episode title if the series only contains one main episode or if the episode title is ambiguous.</summary>
+    /// <summary>Determines if a movie episode shares its physical video file with multiple non-hidden main episodes of the same series.</summary>
+    /// <param name="ep">The movie episode to inspect.</param>
+    /// <returns>True if at least one video file linked to this episode also contains other main episodes from the same series.</returns>
+    public static bool IsMultiEpisodeMovieFile(IEpisode ep) =>
+        ep is IShokoEpisode { Videos: { Count: > 0 } vids } shokoEp
+        && vids.Any(v => v.Episodes.Where(e => e.Type == EpisodeType.Episode && e.ShokoSeriesID == shokoEp.ShokoSeriesID && !MapHelper.IsHidden(e)).Select(e => e.LocalID).Distinct().Skip(1).Any());
+
+    /// <summary>Compute the best title to display for a standalone movie, omitting the episode title if the series only contains one main episode, the file spans multiple episodes, or the episode title is ambiguous.</summary>
     /// <param name="ep">The movie episode metadata.</param>
     /// <param name="series">The parent series metadata.</param>
     /// <param name="tmdbMovie">The optional TMDB movie metadata.</param>
+    /// <param name="isStandaloneMovie">True when resolving for a standalone Movie library entry where multi-episode files collapse into one item.</param>
+    /// <param name="seriesTitle">Optional pre-resolved series display title to avoid redundant lookups.</param>
+    /// <param name="isMultiEpFile">Optional pre-computed flag indicating whether the file spans multiple main episodes.</param>
     /// <returns>The resolved movie title string.</returns>
-    public static string ResolveMovieTitle(IEpisode ep, ISeries series, IMovie? tmdbMovie)
+    public static string ResolveMovieTitle(IEpisode ep, ISeries series, IMovie? tmdbMovie, bool isStandaloneMovie = false, string? seriesTitle = null, bool? isMultiEpFile = null)
     {
-        var (sTitle, _, _) = ResolveFullSeriesTitles(series);
+        string sTitle = !string.IsNullOrWhiteSpace(seriesTitle) ? seriesTitle : ResolveFullSeriesTitles(series).DisplayTitle;
         if (string.IsNullOrWhiteSpace(sTitle) && tmdbMovie is IWithTitles mt)
             sTitle = GetTitleByLanguage(mt, Settings.SeriesTitleLanguage);
         if (string.IsNullOrWhiteSpace(sTitle))
@@ -365,6 +375,10 @@ public static partial class TextHelper
         // Fast-path: Check if there is more than 1 main episode by skipping the first match. This avoids iterating over the entire episode list.
         bool hasMultipleMainEpisodes = series.Episodes.Where(e => e.Type == EpisodeType.Episode).Skip(1).Any();
         if (!hasMultipleMainEpisodes)
+            return sTitle;
+
+        // In standalone movie libraries, omit the episode subtitle when a single video file spans multiple main episodes
+        if (isStandaloneMovie && (isMultiEpFile ?? IsMultiEpisodeMovieFile(ep)))
             return sTitle;
 
         string raw = GetTitleByLanguage(ep, Settings.EpisodeTitleLanguage);

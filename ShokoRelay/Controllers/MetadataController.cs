@@ -160,7 +160,8 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             if (ep == null)
                 return EmptyMatch();
 
-            var tmdbMovie = ep.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault() ?? series.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault();
+            var movieCtx = mapper.GetSeriesContext(series.ID.ID);
+            var tmdbMovie = ep.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault() ?? movieCtx?.TmdbMovie;
 
             return Ok(
                 new
@@ -175,7 +176,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
                             {
                                 guid = ep.GetPlexMovieGuid(),
                                 type = "movie",
-                                title = TextHelper.ResolveMovieTitle(ep, series, tmdbMovie),
+                                title = TextHelper.ResolveMovieTitle(ep, series, tmdbMovie, isStandaloneMovie: true, seriesTitle: movieCtx?.Titles.DisplayTitle),
                                 year = ep.AirDate?.Year ?? tmdbMovie?.ReleaseDate?.Year ?? series.AirDate?.Year,
                                 score = 100,
                                 thumb = (ep.EpisodeNumber > 1 && tmdbMovie != null ? tmdbMovie.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, true) : null)
@@ -229,24 +230,17 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
         {
             if (PlexHelper.IsMovieKey(ratingKey))
             {
-                var (ep, series, tmdbMovie) = TryResolveMovieContext(ratingKey);
-                if (ep == null || series == null)
-                    return NotFound();
-                var titles = TextHelper.ResolveFullSeriesTitles(series);
-                return WrapInContainer(mapper.MapMovie(ep, series, tmdbMovie, titles), ShokoRelayConstants.MovieAgentScheme);
+                var (ep, movieCtx, tmdbMovie) = TryResolveMovieContext(ratingKey);
+                return ep == null || movieCtx == null ? NotFound() : WrapInContainer(mapper.MapMovie(ep, movieCtx, tmdbMovie), ShokoRelayConstants.MovieAgentScheme);
             }
 
             var ctx = mapper.GetSeriesContext(ratingKey);
             if (ctx == null)
             {
                 // Fallback for numeric rating keys passed for a standalone movie episode
-                if (int.TryParse(ratingKey, out int numId) && MetadataService.GetShokoEpisodeByID(numId) is { } movieEp && movieEp.Series != null)
-                {
-                    var tmdbMovie = movieEp.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault() ?? movieEp.Series.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault();
-                    var titles = TextHelper.ResolveFullSeriesTitles(movieEp.Series);
-                    return WrapInContainer(mapper.MapMovie(movieEp, movieEp.Series, tmdbMovie, titles), ShokoRelayConstants.MovieAgentScheme);
-                }
-                return NotFound();
+                return int.TryParse(ratingKey, out int numId) && MetadataService.GetShokoEpisodeByID(numId) is { } movieEp && mapper.GetSeriesContext(movieEp.ShokoSeriesID.ToString()) is { } movieCtx
+                    ? WrapInContainer(mapper.MapMovie(movieEp, movieCtx, movieEp.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault()), ShokoRelayConstants.MovieAgentScheme)
+                    : NotFound();
             }
 
             if (PlexHelper.IsEpisodeKey(ratingKey))
@@ -336,8 +330,8 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             object[] images;
             if (PlexHelper.IsMovieKey(ratingKey))
             {
-                var (ep, series, tmdbMovie) = TryResolveMovieContext(ratingKey);
-                images = (ep != null && series != null) ? ExtractImages(mapper.MapMovie(ep, series, tmdbMovie, TextHelper.ResolveFullSeriesTitles(series))) : [];
+                var (ep, movieCtx, tmdbMovie) = TryResolveMovieContext(ratingKey);
+                images = (ep != null && movieCtx != null) ? ExtractImages(mapper.MapMovie(ep, movieCtx, tmdbMovie)) : [];
                 return Ok(
                     new
                     {
@@ -517,10 +511,10 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
         return (episode, partIdx, mapping);
     }
 
-    /// <summary>Parses the ratingKey and resolves the corresponding episode, series, and TMDB movie metadata for a standalone movie.</summary>
+    /// <summary>Parses the ratingKey and resolves the corresponding episode, series context, and TMDB movie metadata for a standalone movie.</summary>
     /// <param name="ratingKey">The custom Plex rating key for the movie.</param>
-    /// <returns>A tuple containing the resolved episode, series, and TMDB movie metadata.</returns>
-    private (IShokoEpisode? Episode, IShokoSeries? Series, IMovie? TmdbMovie) TryResolveMovieContext(string ratingKey)
+    /// <returns>A tuple containing the resolved episode, series context, and TMDB movie metadata.</returns>
+    private (IShokoEpisode? Episode, PlexMetadata.SeriesContext? Context, IMovie? TmdbMovie) TryResolveMovieContext(string ratingKey)
     {
         if (!PlexHelper.IsMovieKey(ratingKey))
             return (null, null, null);
@@ -533,10 +527,10 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             return (null, null, null);
 
         var ep = MetadataService.GetShokoEpisodeByID(id);
-        var series = ep?.Series;
-        var tmdbMovie = ep?.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault() ?? series?.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault();
+        var ctx = ep != null ? mapper.GetSeriesContext(ep.ShokoSeriesID.ToString()) : null;
+        var tmdbMovie = ep?.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault();
 
-        return (ep, series, tmdbMovie);
+        return (ep, ctx, tmdbMovie);
     }
 
     /// <summary>Extracts the Image array from a mapped metadata object.</summary>

@@ -81,6 +81,10 @@ public static class ImageHelper
 
         var imgs = entity.GetImages(options).ToList();
 
+        // Exclude Plex-synced generated thumbnails from episode metadata responses so TMDB Thumbnails remain distinct
+        if (entity is IEpisode && type == ImageEntityType.Backdrop)
+            imgs = [.. imgs.Where(i => i.CrossReference?.Source != ServiceRegistration.RelayPlexSource)];
+
         if (entity is ISeries)
         {
             // Push TMDB Season type posters to the end of the array to prioritize TMDB Series posters
