@@ -110,4 +110,60 @@ public sealed class VfsBuildSession
     public ConcurrentDictionary<string, Lazy<Dictionary<string, string>>> PhysicalThemeCaches { get; } = new(VfsShared.PathComparer);
 }
 
+/// <summary>Holds per-series build state shared across TV and Movie VFS generation helpers.</summary>
+/// <param name="series">Primary Shoko series metadata.</param>
+/// <param name="rootFolderName">Standard VFS root folder name.</param>
+/// <param name="movieRootName">Standalone Movie VFS root folder name.</param>
+/// <param name="displayTitle">Resolved display title for the series.</param>
+/// <param name="folderId">Resolved primary series folder ID.</param>
+/// <param name="skipCheck">Whether to bypass symlink existence checks.</param>
+/// <param name="ignoredFolders">Ignored folder names.</param>
+/// <param name="session">Active build session context.</param>
+/// <param name="fileData">Consolidated file mappings for the series.</param>
+/// <param name="videoBaseNames">Base filenames of all indexed video files.</param>
+/// <param name="coordCounts">Counts per coordinate/variation bucket.</param>
+/// <param name="epPad">Episode padding digit count.</param>
+/// <param name="extraPad">Extra padding digit counts per season.</param>
+/// <param name="onLink">Optional callback for recording blueprint entries.</param>
+internal sealed class SeriesBuildState(
+    IShokoSeries series,
+    string rootFolderName,
+    string movieRootName,
+    string displayTitle,
+    int folderId,
+    bool skipCheck,
+    HashSet<string> ignoredFolders,
+    VfsBuildSession session,
+    MapHelper.SeriesFileData fileData,
+    HashSet<string> videoBaseNames,
+    Dictionary<(int Season, int Episode, bool IsVariation), int> coordCounts,
+    int epPad,
+    Dictionary<int, int> extraPad,
+    Action<string, string, string, string?>? onLink
+)
+{
+    public IShokoSeries Series { get; } = series;
+    public string RootFolderName { get; } = rootFolderName;
+    public string MovieRootName { get; } = movieRootName;
+    public string DisplayTitle { get; } = displayTitle;
+    public int FolderId { get; } = folderId;
+    public bool SkipCheck { get; } = skipCheck;
+    public HashSet<string> IgnoredFolders { get; } = ignoredFolders;
+    public VfsBuildSession Session { get; } = session;
+    public MapHelper.SeriesFileData FileData { get; } = fileData;
+    public HashSet<string> VideoBaseNames { get; } = videoBaseNames;
+    public Dictionary<(int Season, int Episode, bool IsVariation), int> CoordCounts { get; } = coordCounts;
+    public int EpPad { get; } = epPad;
+    public Dictionary<int, int> ExtraPad { get; } = extraPad;
+    public Action<string, string, string, string?>? OnLink { get; } = onLink;
+    public int Created;
+    public int Skipped;
+    public int Planned;
+    public List<string> Errors { get; } = [];
+    public List<string> SkippedDetails { get; } = [];
+    public HashSet<string> ResolvedVfsSeriesPaths { get; } = new(VfsShared.PathComparer);
+    public HashSet<string> ExpectedFiles { get; } = new(VfsShared.PathComparer);
+    public HashSet<string> LinkedSeriesMetaDirs { get; } = new(VfsShared.PathComparer);
+}
+
 #endregion
