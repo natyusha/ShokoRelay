@@ -16,6 +16,34 @@
   "icon_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-icon.png",
   "releases": [
     {
+      "version": "0.22.0",
+      "tag": "v0.22.0",
+      "source_revision": "500a4df76bedd733769f20f17a9a06d5d999acb5",
+      "released_at": "2026-11-13T11:16:56Z",
+      "channel": "Dev",
+      "release_notes": "Technically the largest set of changes ever for this repository, the goal of this version is to be ready for the rapidly approaching Shoko v6.0.0 stable. This includes: some decent performance gains, bugfixes, hardening/safety checks and the inclusion of external csv files into the main repository.\r\n\r\n**Notes:**\r\n- Force refreshing the dashboard (`Ctrl-F5`) may be required for all of the front end changes to take effect\r\n- For those who use them the \"Tag Blacklist\" (now under \"Tag Overrides\") and \"Tag Sources\" settings will also need to be reconfigured\r\n\r\n**Changes:**\r\n- Migrated AnimeThemes integration from the legacy REST API (soon to be deprecated) to their new GraphQL API\r\n- Added automatic and manual backfilling for missing AniDB IDs and metadata on existing AnimeThemes WebM files without redownloading\r\n- Improved AnimeThemes slug detection, added cleanup for failed WebM downloads, and made batch MP3 generation automatically play the first downloaded theme when the miniplayer is enabled\r\n- Changed Tag Sources to a multiselect dropdown supporting any combination of AniDB, TMDB, User, or no tags while migrating existing configurations automatically\r\n- Replaced Tag Blacklist with Tag Overrides to support custom merges and blacklists, and moved default tag and studio/credit overrides into built-in CSV files\r\n- Fixed global deduplication for genres, studios, cast, and crew so plurals, punctuation, and naming stay consistent across all series\r\n- Added Company Listings to include studios and production companies in Cast and Crew with TMDB logo support while excluding broadcast networks\r\n- Added the \"Spoof AniDB Ratings\" option to display AniDB ratings using the Rotten Tomatoes audience rating icon\r\n- Added Collection Exclusions to protect third-party Plex collections from item removal or automatic deletion, and enforced exact title matching when finding collections\r\n- Improved movie metadata support for films in TV libraries as well as multi-episode movie files stored in a single video file\r\n- Prevented previously synced Plex thumbnails from appearing in metadata responses when TMDB Thumbnails is enabled\r\n- Fixed metadata provider caching so provider settings changes take effect immediately\r\n- Improved startup speed when Auto Merge TMDB Series is enabled and sped up AnimeThemes video player tree loading\r\n- Fixed missing individual sub-task report logs when running full Plex automation and fixed missing direction labels in scheduled watch sync logs\r\n- Added extra safety checks for Plex trash emptying, VFS folder cleanup, IPv6 server URLs, and case-insensitive local extra filenames\r\n- Included the curated VFS overrides and AnimeThemes mapping files directly in the repository instead of external gists\r\n- Polished the narrow dashboard header layout, added a resizable Tag Overrides input, and updated help docs\r\n- Bumped Shoko.Abstractions to v6.0.0-alpha.130\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.21.5...v0.22.0",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.22.0/ShokoRelay-v0.22.0-dev_linux-arm64.zip",
+          "checksum": "sha256:c0268a201c03a814616b75abc5780a61b5ffa3264be4f36ac33df65056210d6b"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.22.0/ShokoRelay-v0.22.0-dev_linux-x64.zip",
+          "checksum": "sha256:62eb219d185efe17751a16648628edf6bc512692fcffa3655a0e8a4609e0b04f"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.22.0/ShokoRelay-v0.22.0-dev_win-x64.zip",
+          "checksum": "sha256:2974c2a8716862e8cb898b3fb67161430cf0373dcdcbb82b7489eed7f93e66f0"
+        }
+      ]
+    },
+    {
       "version": "0.21.5",
       "tag": "v0.21.5",
       "source_revision": "423f8e49c4300f12d4ebb0478d0182d9e6b3d7c9",
