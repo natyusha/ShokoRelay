@@ -68,7 +68,7 @@ public static partial class TagHelper
     {
         public readonly HashSet<string> Blacklist = blacklist;
         public readonly Dictionary<string, string> Merges = merges;
-        public readonly ConcurrentDictionary<string, TextHelper.GlobalNameEntry> DisplayNames = new();
+        public readonly ConcurrentDictionary<string, CacheHelper.GlobalNameEntry> DisplayNames = new();
         public readonly ConcurrentDictionary<int, byte> RecordedSeriesIds = new();
         public readonly Lock WarmLock = new();
         public volatile bool IsWarmed;
@@ -110,13 +110,22 @@ public static partial class TagHelper
 
     #region Tag Filtering
 
+    /// <summary>Thread-local accumulation state used during parallel tag cache warming.</summary>
+    private sealed class WarmThreadState
+    {
+        public readonly Dictionary<string, (string NormKey, string TitleCased, bool Skip)> ResolveCache = new(StringComparer.Ordinal);
+        public readonly Dictionary<(string NormKey, int Priority, string TitleCased), int> Counts = [];
+        public readonly Dictionary<string, (int Priority, string TitleCased)> BestInSeries = new(StringComparer.OrdinalIgnoreCase);
+    }
+
     /// <summary>Pre-warms the global tag display name cache across all series in Shoko for the current configuration.</summary>
     /// <param name="metadataService">The Shoko metadata service used to enumerate all series.</param>
-    public static void WarmCache(IMetadataService metadataService)
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    public static void WarmCache(IMetadataService metadataService, CancellationToken cancellationToken = default)
     {
         var key = new TagCacheKey(Settings.TagOverrides ?? string.Empty, Settings.TagSources, Settings.MinimumTagWeight);
         if (key.Sources != TagSources.None)
-            EnsureWarmed(GetOrCreateTagCacheState(key), key, metadataService);
+            EnsureWarmed(GetOrCreateTagCacheState(key), key, metadataService, cancellationToken);
     }
 
     /// <summary>Retrieves or compiles the cached blacklist, merge rules, and display-name state for the given configuration key.</summary>
@@ -166,7 +175,8 @@ public static partial class TagHelper
     /// <param name="state">The target cache state.</param>
     /// <param name="key">The configuration key governing tag collection.</param>
     /// <param name="metadataService">Optional metadata service to enumerate all series.</param>
-    private static void EnsureWarmed(TagCacheState state, TagCacheKey key, IMetadataService? metadataService)
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    private static void EnsureWarmed(TagCacheState state, TagCacheKey key, IMetadataService? metadataService, CancellationToken cancellationToken = default)
     {
         if (state.IsWarmed || metadataService == null)
             return;
@@ -176,10 +186,49 @@ public static partial class TagHelper
             if (state.IsWarmed)
                 return;
 
-            foreach (var series in metadataService.GetAllShokoSeries() ?? [])
-                if (state.RecordedSeriesIds.TryAdd(series.LocalID, 0))
-                    foreach (var (cleanName, normKey, priority) in ExtractNormalizedTags(CollectRawTags(series, null, key.Sources, key.MinWeight), state))
-                        state.DisplayNames.GetOrAdd(normKey, _ => new TextHelper.GlobalNameEntry()).ResolveDisplayName(TitleCase(cleanName), priority, record: true);
+            CacheHelper.WarmSeriesCache<WarmThreadState>(
+                metadataService,
+                state.RecordedSeriesIds,
+                (series, local) =>
+                {
+                    local.BestInSeries.Clear();
+                    foreach (var (rawName, priority) in CollectRawTags(series, null, key.Sources, key.MinWeight))
+                    {
+                        if (string.IsNullOrWhiteSpace(rawName))
+                            continue;
+
+                        if (!local.ResolveCache.TryGetValue(rawName, out var resolved))
+                        {
+                            string clean = TagCleanupRegex().Replace(rawName, "").Trim();
+                            if (clean.Length == 0)
+                            {
+                                local.ResolveCache[rawName] = (string.Empty, string.Empty, true);
+                                continue;
+                            }
+
+                            string origNorm = NormalizeTagKey(clean);
+                            bool isMerged = state.Merges.TryGetValue(origNorm, out var target);
+                            string effectiveName = isMerged ? target! : clean;
+                            string normKey = isMerged ? NormalizeTagKey(effectiveName) : origNorm;
+                            bool skip = normKey.Length == 0 || state.Blacklist.Contains(normKey) || state.Blacklist.Contains(origNorm);
+
+                            resolved = local.ResolveCache[rawName] = (normKey, skip ? string.Empty : TitleCase(effectiveName), skip);
+                        }
+
+                        if (!resolved.Skip && !local.BestInSeries.ContainsKey(resolved.NormKey))
+                            local.BestInSeries[resolved.NormKey] = (priority, resolved.TitleCased);
+                    }
+
+                    foreach (var (normKey, (priority, titleCased)) in local.BestInSeries)
+                        local.Counts[(normKey, priority, titleCased)] = local.Counts.GetValueOrDefault((normKey, priority, titleCased), 0) + 1;
+                },
+                local =>
+                {
+                    foreach (var ((normKey, priority, titleCased), count) in local.Counts)
+                        state.DisplayNames.GetOrAdd(normKey, _ => new CacheHelper.GlobalNameEntry()).ResolveDisplayName(titleCased, priority, record: true, count);
+                },
+                cancellationToken
+            );
 
             state.IsWarmed = true;
         }
@@ -204,7 +253,7 @@ public static partial class TagHelper
         return
         [
             .. ExtractNormalizedTags(CollectRawTags(series, tmdbSeries, key.Sources, key.MinWeight), state)
-                .Select(t => state.DisplayNames.GetOrAdd(t.NormKey, _ => new TextHelper.GlobalNameEntry()).ResolveDisplayName(TitleCase(t.CleanName), t.Priority, shouldRecord))
+                .Select(t => state.DisplayNames.GetOrAdd(t.NormKey, _ => new CacheHelper.GlobalNameEntry()).ResolveDisplayName(TitleCase(t.CleanName), t.Priority, shouldRecord))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Select(displayName => (object)new { tag = displayName }),
         ];

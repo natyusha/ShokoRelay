@@ -185,13 +185,29 @@ public class ShokoRelay : BackgroundService
 
             _logger.LogInformation("Shoko Server started -> Caching overrides & initializing native scheduled actions...");
             OverrideHelper.Reload(); // Warm up the VFS override cache.
-            TagHelper.WarmCache(_metadataService);
-            CastHelper.WarmCache(_metadataService);
 
             // Sync triggers from current configuration
             ActionScheduleHelper.SyncTriggers(Settings, _scheduledActionService);
 
             _watcher.Start();
+
+            // Warm tag and credit caches asynchronously after VfsWatcher is active so file monitoring is never delayed
+            _ = Task.Run(
+                () =>
+                {
+                    try
+                    {
+                        TagHelper.WarmCache(_metadataService, stoppingToken);
+                        CastHelper.WarmCache(_metadataService, stoppingToken);
+                    }
+                    catch (OperationCanceledException) { }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Relay: Failed to warm tag/credit caches");
+                    }
+                },
+                stoppingToken
+            );
 
             // Keep the BackgroundService alive to hold VfsWatcher
             try

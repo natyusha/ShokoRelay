@@ -38,10 +38,10 @@ public static class CastHelper
     private static readonly FrozenDictionary<string, string> s_creditMerges;
 
     /// <summary>Global cache mapping normalized AniDB credit keys (separated by Person vs. Company) to their preferred display names.</summary>
-    private static readonly ConcurrentDictionary<(bool IsPerson, string NormKey), TextHelper.GlobalNameEntry> s_anidbCreditNames = new();
+    private static readonly ConcurrentDictionary<(bool IsPerson, string NormKey), CacheHelper.GlobalNameEntry> s_anidbCreditNames = new();
 
     /// <summary>Global cache mapping normalized TMDB-only credit keys (separated by Person vs. Company) to their preferred display names.</summary>
-    private static readonly ConcurrentDictionary<(bool IsPerson, string NormKey), TextHelper.GlobalNameEntry> s_tmdbCreditNames = new();
+    private static readonly ConcurrentDictionary<(bool IsPerson, string NormKey), CacheHelper.GlobalNameEntry> s_tmdbCreditNames = new();
 
     /// <summary>Tracks Shoko series IDs already recorded into the global credit cache to prevent repeated-request count inflation.</summary>
     private static readonly ConcurrentDictionary<int, byte> s_recordedSeriesIds = new();
@@ -89,13 +89,23 @@ public static class CastHelper
         return (new HashSet<string>(StringComparer.OrdinalIgnoreCase), new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), new HashSet<string>(StringComparer.OrdinalIgnoreCase));
     }
 
+    /// <summary>Thread-local accumulation state used during parallel credit cache warming.</summary>
+    private sealed class WarmThreadState
+    {
+        public readonly Dictionary<string, (string Trimmed, string NormKey, bool Skip)> ResolveCache = new(StringComparer.Ordinal);
+        public readonly Dictionary<(bool IsPerson, bool IsAnidb, string NormKey, string Trimmed), int> Counts = [];
+        public readonly HashSet<(bool IsPerson, bool IsAnidb, string NormKey)> SeenInSeries = [];
+    }
+
     /// <summary>Pre-warms the global credit, cast, crew, and studio display name cache across all series in Shoko.</summary>
     /// <param name="metadataService">The Shoko metadata service used to enumerate all series.</param>
-    public static void WarmCache(IMetadataService metadataService) => EnsureWarmed(metadataService);
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    public static void WarmCache(IMetadataService metadataService, CancellationToken cancellationToken = default) => EnsureWarmed(metadataService, cancellationToken);
 
     /// <summary>Ensures the global credit cache has been populated across all Shoko series.</summary>
     /// <param name="metadataService">Optional metadata service to enumerate all series.</param>
-    private static void EnsureWarmed(IMetadataService? metadataService)
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    private static void EnsureWarmed(IMetadataService? metadataService, CancellationToken cancellationToken = default)
     {
         if (s_isWarmed || metadataService == null)
             return;
@@ -105,9 +115,46 @@ public static class CastHelper
             if (s_isWarmed)
                 return;
 
-            foreach (var series in metadataService.GetAllShokoSeries() ?? [])
-                if (s_recordedSeriesIds.TryAdd(series.LocalID, 0))
-                    RecordSeriesCredits(series, null);
+            CacheHelper.WarmSeriesCache<WarmThreadState>(
+                metadataService,
+                s_recordedSeriesIds,
+                (series, local) =>
+                {
+                    local.SeenInSeries.Clear();
+                    EnumerateSeriesCredits(
+                        series,
+                        null,
+                        (rawName, isPerson, isAnidb) =>
+                        {
+                            if (string.IsNullOrWhiteSpace(rawName))
+                                return;
+
+                            if (!local.ResolveCache.TryGetValue(rawName, out var resolved))
+                            {
+                                string trimmed = rawName.Trim();
+                                string norm = NormalizeCreditKey(trimmed);
+                                bool skip = norm.Length == 0 || s_creditMerges.ContainsKey(norm) || IsCreditBlacklisted(trimmed);
+                                resolved = local.ResolveCache[rawName] = (trimmed, norm, skip);
+                            }
+
+                            if (resolved.Skip || !local.SeenInSeries.Add((isPerson, isAnidb, resolved.NormKey)))
+                                return;
+
+                            var key = (isPerson, isAnidb, resolved.NormKey, resolved.Trimmed);
+                            local.Counts[key] = local.Counts.GetValueOrDefault(key, 0) + 1;
+                        }
+                    );
+                },
+                local =>
+                {
+                    foreach (var ((isPerson, isAnidb, normKey, trimmed), count) in local.Counts)
+                    {
+                        var targetCache = isAnidb ? s_anidbCreditNames : s_tmdbCreditNames;
+                        targetCache.GetOrAdd((isPerson, normKey), _ => new CacheHelper.GlobalNameEntry()).ResolveDisplayName(trimmed, isAnidb ? 1 : 2, record: true, count);
+                    }
+                },
+                cancellationToken
+            );
 
             s_isWarmed = true;
         }
@@ -120,37 +167,49 @@ public static class CastHelper
     {
         var seenInSeries = new HashSet<(bool IsPerson, string NormKey, int Priority)>();
 
-        void Record(string? rawName, bool isPerson, int priority)
-        {
-            if (string.IsNullOrWhiteSpace(rawName) || IsCreditBlacklisted(rawName))
-                return;
-
-            string trimmed = rawName.Trim();
-            string norm = NormalizeCreditKey(trimmed);
-            if (norm.Length == 0 || s_creditMerges.ContainsKey(norm))
-                return;
-
-            if (seenInSeries.Add((isPerson, norm, priority)))
+        EnumerateSeriesCredits(
+            series,
+            tmdbSeries,
+            (rawName, isPerson, isAnidb) =>
             {
-                var targetCache = priority == 1 ? s_anidbCreditNames : s_tmdbCreditNames;
-                targetCache.GetOrAdd((isPerson, norm), _ => new TextHelper.GlobalNameEntry()).ResolveDisplayName(trimmed, priority, record: true);
-            }
-        }
+                if (string.IsNullOrWhiteSpace(rawName) || IsCreditBlacklisted(rawName))
+                    return;
 
+                string trimmed = rawName.Trim();
+                string norm = NormalizeCreditKey(trimmed);
+                if (norm.Length == 0 || s_creditMerges.ContainsKey(norm))
+                    return;
+
+                int priority = isAnidb ? 1 : 2;
+                if (seenInSeries.Add((isPerson, norm, priority)))
+                {
+                    var targetCache = isAnidb ? s_anidbCreditNames : s_tmdbCreditNames;
+                    targetCache.GetOrAdd((isPerson, norm), _ => new CacheHelper.GlobalNameEntry()).ResolveDisplayName(trimmed, priority, record: true);
+                }
+            }
+        );
+    }
+
+    /// <summary>Enumerates all valid cast, crew, and studio credits for a series, yielding raw name, person flag, and AniDB ownership.</summary>
+    /// <param name="series">The series metadata to inspect.</param>
+    /// <param name="tmdbSeries">Optional pre-resolved TMDB series metadata.</param>
+    /// <param name="onCredit">Callback invoked with (rawName, isPerson, isAnidb) for each credit entry.</param>
+    private static void EnumerateSeriesCredits(ISeries series, ISeries? tmdbSeries, Action<string?, bool, bool> onCredit)
+    {
         foreach (var c in series.Cast ?? [])
-            if (c.Creator != null)
-                Record(c.Creator.Title, c.Creator.Type == CreatorType.Person, c.Source == MetadataSource.TMDB ? 2 : 1);
+            if (c.CreatorID != null && c.Creator is { } creator)
+                onCredit(creator.Title, creator.Type == CreatorType.Person, c.Source != MetadataSource.TMDB);
 
         foreach (var c in series.Crew ?? [])
-            if (c.Creator != null)
-                Record(c.Creator.Title, c.Creator.Type == CreatorType.Person, c.Source == MetadataSource.TMDB ? 2 : 1);
+            if (c.Creator is { } creator)
+                onCredit(creator.Title, creator.Type == CreatorType.Person, c.Source != MetadataSource.TMDB);
 
         foreach (var s in series.Studios ?? [])
-            Record(s.Name, false, s.ID.Source == MetadataSource.AniDB ? 1 : 2);
+            onCredit(s.Name, false, s.ID.Source != MetadataSource.TMDB);
 
         var resolvedTmdb = tmdbSeries ?? (series as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault();
         foreach (var s in resolvedTmdb?.Studios ?? [])
-            Record(s.Name, false, 2);
+            onCredit(s.Name, false, false);
     }
 
     /// <summary>Builds a diagnostic CSV report of all cast, crew, and studio credits across Shoko series after applying default credit overrides.</summary>
@@ -410,7 +469,7 @@ public static class CastHelper
             : s_creditMerges.TryGetValue(norm, out var mapped) ? mapped
             : priority == 1 ? trimmed
             : s_anidbCreditNames.TryGetValue((isPerson, norm), out var anidbEntry) ? anidbEntry.ResolveDisplayName(trimmed, 1, record: false)
-            : s_tmdbCreditNames.GetOrAdd((isPerson, norm), _ => new TextHelper.GlobalNameEntry()).ResolveDisplayName(trimmed, 2, record: false);
+            : s_tmdbCreditNames.GetOrAdd((isPerson, norm), _ => new CacheHelper.GlobalNameEntry()).ResolveDisplayName(trimmed, 2, record: false);
     }
 
     /// <summary>Normalizes a studio, company, or creator name for comparison by stripping trailing (JP) tags, diacritics, spaces, and punctuation.</summary>
