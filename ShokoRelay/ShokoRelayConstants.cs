@@ -33,9 +33,6 @@ public static class ShokoRelayConstants
 
     #region Paths & Folders
 
-    /// <summary>Plugin identifier used in filesystem paths.</summary>
-    public const string FolderPluginSubfolder = "ShokoRelay";
-
     /// <summary>Directory name for configuration files.</summary>
     public const string FolderConfigSubfolder = "config";
 
@@ -60,6 +57,12 @@ public static class ShokoRelayConstants
 
     /// <summary>Filename for the default tag overrides CSV.</summary>
     public const string FileDefaultTagOverrides = "default_tag_overrides.csv";
+
+    /// <summary>Filename for the diagnostic tags CSV report.</summary>
+    public const string FileTagsReport = "tags-report.csv";
+
+    /// <summary>Filename for the diagnostic credits CSV report.</summary>
+    public const string FileCreditsReport = "credits-report.csv";
 
     /// <summary>Filename for user preferences.</summary>
     public const string FilePreferences = "preferences.json";

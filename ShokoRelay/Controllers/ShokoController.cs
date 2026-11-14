@@ -377,7 +377,7 @@ public class ShokoController(
     [HttpGet("reports/tags")]
     public IActionResult GetTagReport()
     {
-        Response.Headers.ContentDisposition = "inline; filename=\"tags-report.csv\"";
+        Response.Headers.ContentDisposition = $"inline; filename=\"{ShokoRelayConstants.FileTagsReport}\"";
         return Content(TagHelper.BuildTagReport(MetadataService), "text/csv; charset=utf-8");
     }
 
@@ -386,7 +386,7 @@ public class ShokoController(
     [HttpGet("reports/credits")]
     public IActionResult GetCreditReport()
     {
-        Response.Headers.ContentDisposition = "inline; filename=\"credits-report.csv\"";
+        Response.Headers.ContentDisposition = $"inline; filename=\"{ShokoRelayConstants.FileCreditsReport}\"";
         return Content(CastHelper.BuildCreditReport(MetadataService), "text/csv; charset=utf-8");
     }
 
