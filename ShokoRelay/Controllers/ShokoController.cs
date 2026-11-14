@@ -375,12 +375,20 @@ public class ShokoController(
     /// <summary>Generates a CSV report of all tags across Shoko series after applying default tag overrides.</summary>
     /// <returns>A plain-text CSV report listing source, tag, and series count.</returns>
     [HttpGet("reports/tags")]
-    public IActionResult GetTagReport() => Content(TagHelper.BuildTagReport(MetadataService), "text/plain; charset=utf-8");
+    public IActionResult GetTagReport()
+    {
+        Response.Headers.ContentDisposition = "inline; filename=\"tags-report.csv\"";
+        return Content(TagHelper.BuildTagReport(MetadataService), "text/csv; charset=utf-8");
+    }
 
     /// <summary>Generates a CSV report of all credits and studios across Shoko series after applying default credit overrides.</summary>
     /// <returns>A plain-text CSV report listing source, credit, and series count.</returns>
     [HttpGet("reports/credits")]
-    public IActionResult GetCreditReport() => Content(CastHelper.BuildCreditReport(MetadataService), "text/plain; charset=utf-8");
+    public IActionResult GetCreditReport()
+    {
+        Response.Headers.ContentDisposition = "inline; filename=\"credits-report.csv\"";
+        return Content(CastHelper.BuildCreditReport(MetadataService), "text/csv; charset=utf-8");
+    }
 
     #endregion
 
