@@ -282,16 +282,16 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
 
     /// <summary>Pushes a rating value to a specific Plex metadata item.</summary>
     /// <param name="key">The Plex rating key.</param>
-    /// <param name="val">The rating value to apply.</param>
+    /// <param name="value">The rating value to apply.</param>
     /// <param name="target">The target Plex library.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>True if the rating was successfully applied.</returns>
-    private async Task<bool> ApplyRatingAsync(string key, double? val, PlexLibraryTarget target, CancellationToken cancellationToken)
+    private async Task<bool> ApplyRatingAsync(string key, double? value, PlexLibraryTarget target, CancellationToken cancellationToken)
     {
         string path =
-            (val == null || Settings.CriticRatingMode == CriticRatingMode.None)
+            (value == null || Settings.CriticRatingMode == CriticRatingMode.None)
                 ? $"/library/metadata/{key}?rating=0&rating.locked=0"
-                : $"/library/metadata/{key}?rating={val.Value.ToString(CultureInfo.InvariantCulture)}&rating.locked=1";
+                : $"/library/metadata/{key}?rating={value.Value.ToString(CultureInfo.InvariantCulture)}&rating.locked=1";
 
         try
         {

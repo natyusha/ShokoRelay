@@ -1,5 +1,4 @@
 using System.Collections.Frozen;
-using System.Text;
 using System.Text.RegularExpressions;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Enums;
@@ -223,191 +222,6 @@ public static partial class TextHelper
 
     #endregion
 
-    #region Report Generation
-
-    /// <summary>Parallelized, per-thread memoized aggregator for building diagnostic CSV reports grouped by normalized key with merged variants appended after semicolons.</summary>
-    /// <param name="title">Report title banner (e.g., "Tag" or "Credit").</param>
-    /// <param name="columnName">Name of the item column (e.g., "tag" or "credit").</param>
-    /// <param name="normalizeKey">Function generating a normalized lookup key from a raw name string.</param>
-    /// <param name="merges">Dictionary mapping alias keys to canonical target names.</param>
-    /// <param name="blacklist">Set of normalized blacklisted keys to exclude.</param>
-    /// <param name="formatDisplayName">Optional formatting function for display names (e.g., TitleCase).</param>
-    /// <param name="cleanRaw">Optional pre-cleaning function applied before normalization (e.g., stripping moderator notes).</param>
-    internal sealed class CsvReportBuilder(
-        string title,
-        string columnName,
-        Func<string, string> normalizeKey,
-        IReadOnlyDictionary<string, string> merges,
-        IReadOnlySet<string> blacklist,
-        Func<string, string>? formatDisplayName = null,
-        Func<string, string>? cleanRaw = null
-    )
-    {
-        private readonly record struct ResolvedItem(string NormKey, string DisplayName, string? MergeTarget, bool IsBlacklisted);
-
-        private sealed class VariantStats
-        {
-            public int Count;
-        }
-
-        private sealed class GroupStats
-        {
-            public string? MergeTarget;
-            public readonly HashSet<int> SeriesIds = [];
-            public readonly Dictionary<(int SourceOrder, string Source, string DisplayName), VariantStats> Variants = [];
-        }
-
-        private sealed class ThreadState
-        {
-            public readonly Dictionary<string, ResolvedItem> ResolveCache = new(StringComparer.Ordinal);
-            public readonly Dictionary<string, GroupStats> Groups = new(StringComparer.OrdinalIgnoreCase);
-            public readonly HashSet<(string Source, string NormKey, string DisplayName)> SeenInSeries = [];
-        }
-
-        private readonly Lock _mergeLock = new();
-        private readonly Dictionary<string, GroupStats> _globalGroups = new(StringComparer.OrdinalIgnoreCase);
-
-        /// <summary>Scans all supplied Shoko series in parallel and formats the aggregated results into a sorted CSV report string.</summary>
-        /// <param name="seriesList">All Shoko series to evaluate.</param>
-        /// <param name="collectSeries">Callback invoked per series to record its items via the supplied recorder delegate.</param>
-        /// <returns>A CSV-formatted report string.</returns>
-        public string Build(IEnumerable<IShokoSeries> seriesList, Action<IShokoSeries, Action<string, int, string?>> collectSeries)
-        {
-            Parallel.ForEach(
-                seriesList,
-                DefaultParallelOptions(),
-                () => new ThreadState(),
-                (series, _, local) =>
-                {
-                    local.SeenInSeries.Clear();
-                    collectSeries(series, (source, sourceOrder, rawName) => RecordLocal(local, series.LocalID, source, sourceOrder, rawName));
-                    return local;
-                },
-                local =>
-                {
-                    lock (_mergeLock)
-                    {
-                        foreach (var (normKey, localGroup) in local.Groups)
-                        {
-                            if (!_globalGroups.TryGetValue(normKey, out var globalGroup))
-                                _globalGroups[normKey] = globalGroup = new GroupStats();
-
-                            globalGroup.MergeTarget ??= localGroup.MergeTarget;
-                            foreach (var sid in localGroup.SeriesIds)
-                                globalGroup.SeriesIds.Add(sid);
-
-                            foreach (var (vKey, vStats) in localGroup.Variants)
-                            {
-                                if (!globalGroup.Variants.TryGetValue(vKey, out var gv))
-                                    globalGroup.Variants[vKey] = gv = new VariantStats();
-                                gv.Count += vStats.Count;
-                            }
-                        }
-                    }
-                }
-            );
-
-            return FormatReport();
-        }
-
-        /// <summary>Resolves and records a single item into thread-local storage using per-thread memoization.</summary>
-        private void RecordLocal(ThreadState local, int seriesId, string source, int sourceOrder, string? rawName)
-        {
-            if (string.IsNullOrWhiteSpace(rawName))
-                return;
-
-            if (!local.ResolveCache.TryGetValue(rawName, out var resolved))
-            {
-                string trimmed = (cleanRaw != null ? cleanRaw(rawName) : rawName).Trim();
-                if (trimmed.Length == 0)
-                {
-                    local.ResolveCache[rawName] = new ResolvedItem(string.Empty, string.Empty, null, true);
-                    return;
-                }
-
-                string origNorm = normalizeKey(trimmed);
-                bool isMerged = merges.TryGetValue(origNorm, out var target);
-                string targetStr = isMerged ? target! : trimmed;
-                string normKey = isMerged ? normalizeKey(targetStr) : origNorm;
-                bool isBlacklisted = normKey.Length == 0 || blacklist.Contains(normKey) || blacklist.Contains(origNorm);
-
-                string displayName = !isBlacklisted && formatDisplayName != null ? formatDisplayName(trimmed) : trimmed;
-                string? formattedTarget = !isBlacklisted && isMerged ? (formatDisplayName != null ? formatDisplayName(targetStr) : targetStr) : null;
-
-                resolved = local.ResolveCache[rawName] = new ResolvedItem(normKey, displayName, formattedTarget, isBlacklisted);
-            }
-
-            if (resolved.IsBlacklisted || !local.SeenInSeries.Add((source, resolved.NormKey, resolved.DisplayName)))
-                return;
-
-            if (!local.Groups.TryGetValue(resolved.NormKey, out var group))
-                local.Groups[resolved.NormKey] = group = new GroupStats();
-
-            group.MergeTarget ??= resolved.MergeTarget;
-            group.SeriesIds.Add(seriesId);
-
-            var vKey = (sourceOrder, source, resolved.DisplayName);
-            if (!group.Variants.TryGetValue(vKey, out var vStats))
-                group.Variants[vKey] = vStats = new VariantStats();
-            vStats.Count++;
-        }
-
-        /// <summary>Orders normalized groups and formats each line with merged variants separated by semicolons.</summary>
-        private string FormatReport()
-        {
-            var rows = new List<(int SourceOrder, string Name, int Count, string Line)>(_globalGroups.Count);
-
-            foreach (var group in _globalGroups.Values)
-            {
-                if (group.Variants.Count == 0)
-                    continue;
-
-                var ordered = group
-                    .Variants.Select(kvp => (kvp.Key.SourceOrder, kvp.Key.Source, kvp.Key.DisplayName, kvp.Value.Count))
-                    .OrderByDescending(v => group.MergeTarget != null && string.Equals(v.DisplayName, group.MergeTarget, StringComparison.OrdinalIgnoreCase))
-                    .ThenBy(v => v.SourceOrder)
-                    .ThenByDescending(v => v.Count)
-                    .ThenBy(v => v.DisplayName.Length)
-                    .ThenBy(v => v.DisplayName, StringComparer.Ordinal)
-                    .ToList();
-
-                var sbLine = new StringBuilder();
-                int primaryOrder = ordered[0].SourceOrder;
-                string primaryName = ordered[0].DisplayName;
-                int primaryCount = ordered[0].Count;
-
-                // If an explicit CSV merge target has no direct raw occurrences, prepend it as an Override entry
-                if (group.MergeTarget != null && !ordered.Any(v => string.Equals(v.DisplayName, group.MergeTarget, StringComparison.OrdinalIgnoreCase)))
-                {
-                    primaryName = group.MergeTarget;
-                    primaryCount = group.SeriesIds.Count;
-                    sbLine.Append($"Override,{EscapeCsvCommas(primaryName)},{primaryCount}");
-                    foreach (var (sourceOrder, source, displayName, count) in ordered)
-                        sbLine.Append($";{source},{EscapeCsvCommas(displayName)},{count}");
-                }
-                else
-                {
-                    sbLine.Append($"{ordered[0].Source},{EscapeCsvCommas(ordered[0].DisplayName)},{ordered[0].Count}");
-                    for (int i = 1; i < ordered.Count; i++)
-                        sbLine.Append($";{ordered[i].Source},{EscapeCsvCommas(ordered[i].DisplayName)},{ordered[i].Count}");
-                }
-
-                rows.Add((primaryOrder, primaryName, primaryCount, sbLine.ToString()));
-            }
-
-            var sb = new StringBuilder();
-            sb.AppendLine($"## {title} Report ##").AppendLine();
-            sb.AppendLine($"#source,{columnName},count");
-
-            foreach (var (sourceOrder, name, count, line) in rows.OrderBy(r => r.SourceOrder).ThenByDescending(r => r.Count).ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase))
-                sb.AppendLine(line);
-
-            return sb.ToString();
-        }
-    }
-
-    #endregion
-
     #region Metadata Resolution
 
     /// <summary>Set of ambiguous AniDB episode titles that should be overridden by the series title.</summary>
@@ -493,29 +307,24 @@ public static partial class TextHelper
         return (display, sortTitle, finalAlt);
     }
 
-    /// <summary>Resolves the configured display title for a series respecting plugin language preferences.</summary>
-    /// <param name="series">The series metadata.</param>
-    /// <returns>The resolved display title string, or null if series is null.</returns>
-    public static string? GetDisplayTitle(this ISeries? series) => series != null ? ResolveFullSeriesTitles(series).DisplayTitle : null;
-
     /// <summary>Compute the best title to display for an episode, handling ambiguous names and TMDB reassignments.</summary>
-    /// <param name="ep">Episode metadata.</param>
+    /// <param name="episode">Episode metadata.</param>
     /// <param name="displaySeriesTitle">Resolved series title for fallback.</param>
     /// <param name="tmdbEp">Optional pre-resolved TMDB episode override.</param>
     /// <returns>The resolved episode title string.</returns>
-    public static string ResolveEpisodeTitle(IEpisode ep, string displaySeriesTitle, IEpisode? tmdbEp = null)
+    public static string ResolveEpisodeTitle(IEpisode episode, string displaySeriesTitle, IEpisode? tmdbEp = null)
     {
-        string raw = GetTitleByLanguage(ep, Settings.EpisodeTitleLanguage);
-        string? tmdbTitle = tmdbEp?.PreferredTitle?.Value ?? (ep as IShokoEpisode)?.GetLinkedEpisodes(MetadataSource.TMDB)?.FirstOrDefault()?.PreferredTitle?.Value;
+        string raw = GetTitleByLanguage(episode, Settings.EpisodeTitleLanguage);
+        string? tmdbTitle = tmdbEp?.PreferredTitle?.Value ?? (episode as IShokoEpisode)?.GetLinkedEpisodes(MetadataSource.TMDB)?.FirstOrDefault()?.PreferredTitle?.Value;
 
         // Replace ambiguous single entry titles (like "OVA") with the series title
-        if (ep.EpisodeNumber == 1 && s_ambiguousTitles.Contains(raw))
+        if (episode.EpisodeNumber == 1 && s_ambiguousTitles.Contains(raw))
         {
             string title = displaySeriesTitle;
 
             // Fallback to TMDB title or English series title as a last resort
             if (title == raw)
-                title = tmdbTitle ?? (ep.Series != null ? GetTitleByLanguage(ep.Series, "en") : raw);
+                title = tmdbTitle ?? (episode.Series != null ? GetTitleByLanguage(episode.Series, "en") : raw);
 
             // Append ambiguous title to series title if not already present
             if (title != raw && !title.Contains(raw))
@@ -528,7 +337,7 @@ public static partial class TextHelper
         }
 
         // If TMDB episode group names enabled and multiple links exist, prefer TMDB titles
-        if (Settings.TmdbEpGroupNames && ep is IShokoEpisode tmdbGrouped && tmdbGrouped.GetLinkedEpisodes(MetadataSource.TMDB) is { Count: > 1 } && !string.IsNullOrEmpty(tmdbTitle))
+        if (Settings.TmdbEpGroupNames && episode is IShokoEpisode tmdbGrouped && tmdbGrouped.GetLinkedEpisodes(MetadataSource.TMDB) is { Count: > 1 } && !string.IsNullOrEmpty(tmdbTitle))
             return tmdbTitle;
 
         // Standard enumeration override (e.g. "Episode 1" -> "Actual Title")
@@ -536,21 +345,21 @@ public static partial class TextHelper
     }
 
     /// <summary>Determines if a movie episode shares its physical video file with multiple non-hidden main episodes of the same series.</summary>
-    /// <param name="ep">The movie episode to inspect.</param>
+    /// <param name="episode">The movie episode to inspect.</param>
     /// <returns>True if at least one video file linked to this episode also contains other main episodes from the same series.</returns>
-    public static bool IsMultiEpisodeMovieFile(IEpisode ep) =>
-        ep is IShokoEpisode { Videos: { Count: > 0 } vids } shokoEp
+    public static bool IsMultiEpisodeMovieFile(IEpisode episode) =>
+        episode is IShokoEpisode { Videos: { Count: > 0 } vids } shokoEp
         && vids.Any(v => v.Episodes.Where(e => e.Type == EpisodeType.Episode && e.ShokoSeriesID == shokoEp.ShokoSeriesID && !MapHelper.IsHidden(e)).Select(e => e.LocalID).Distinct().Skip(1).Any());
 
     /// <summary>Compute the best title to display for a standalone movie, omitting the episode title if the series only contains one main episode, the file spans multiple episodes, or the episode title is ambiguous.</summary>
-    /// <param name="ep">The movie episode metadata.</param>
+    /// <param name="episode">The movie episode metadata.</param>
     /// <param name="series">The parent series metadata.</param>
     /// <param name="tmdbMovie">The optional TMDB movie metadata.</param>
     /// <param name="isStandaloneMovie">True when resolving for a standalone Movie library entry where multi-episode files collapse into one item.</param>
     /// <param name="seriesTitle">Optional pre-resolved series display title to avoid redundant lookups.</param>
     /// <param name="isMultiEpFile">Optional pre-computed flag indicating whether the file spans multiple main episodes.</param>
     /// <returns>The resolved movie title string.</returns>
-    public static string ResolveMovieTitle(IEpisode ep, ISeries series, IMovie? tmdbMovie, bool isStandaloneMovie = false, string? seriesTitle = null, bool? isMultiEpFile = null)
+    public static string ResolveMovieTitle(IEpisode episode, ISeries series, IMovie? tmdbMovie, bool isStandaloneMovie = false, string? seriesTitle = null, bool? isMultiEpFile = null)
     {
         string sTitle = !string.IsNullOrWhiteSpace(seriesTitle) ? seriesTitle : ResolveFullSeriesTitles(series).DisplayTitle;
         if (string.IsNullOrWhiteSpace(sTitle) && tmdbMovie is IWithTitles mt)
@@ -564,10 +373,10 @@ public static partial class TextHelper
             return sTitle;
 
         // In standalone movie libraries, omit the episode subtitle when a single video file spans multiple main episodes
-        if (isStandaloneMovie && (isMultiEpFile ?? IsMultiEpisodeMovieFile(ep)))
+        if (isStandaloneMovie && (isMultiEpFile ?? IsMultiEpisodeMovieFile(episode)))
             return sTitle;
 
-        string raw = GetTitleByLanguage(ep, Settings.EpisodeTitleLanguage);
+        string raw = GetTitleByLanguage(episode, Settings.EpisodeTitleLanguage);
 
         // Append non-ambiguous episode title to series/movie title if not already present
         return !string.IsNullOrWhiteSpace(raw) && !s_ambiguousTitles.Contains(raw) && sTitle != raw && !sTitle.Contains(raw) ? $"{sTitle} — {raw}" : sTitle;
@@ -582,42 +391,28 @@ public static partial class TextHelper
         SummarySanitizer(summary, mode) is var result && !string.IsNullOrWhiteSpace(result) ? result : SummarySanitizer(tmdbSummary, mode);
 
     /// <summary>Clean up a summary string according to the configured sanitization mode (stripping notes, indicators, etc).</summary>
-    /// <param name="s">The string to sanitize.</param>
+    /// <param name="result">The string to sanitize.</param>
     /// <param name="mode">The sanitization mode.</param>
     /// <returns>A sanitized summary string.</returns>
-    public static string SummarySanitizer(string? s, SummaryMode mode)
+    public static string SummarySanitizer(string? result, SummaryMode mode)
     {
-        if (string.IsNullOrWhiteSpace(s))
+        if (string.IsNullOrWhiteSpace(result))
             return "";
-        s = mode switch
+        result = mode switch
         {
-            SummaryMode.FullySanitize => ListIndicatorRegex().Replace(SourceNoteSummaryRegex().Replace(s, ""), ""),
-            SummaryMode.AllowInfoLines => ListIndicatorRegex().Replace(s, ""),
-            SummaryMode.AllowMiscLines => SourceNoteSummaryRegex().Replace(s, ""),
-            _ => s,
+            SummaryMode.FullySanitize => ListIndicatorRegex().Replace(SourceNoteSummaryRegex().Replace(result, ""), ""),
+            SummaryMode.AllowInfoLines => ListIndicatorRegex().Replace(result, ""),
+            SummaryMode.AllowMiscLines => SourceNoteSummaryRegex().Replace(result, ""),
+            _ => result,
         };
 
         // Remove AniDB-specific artifacts and bugs
-        s = AniDBLinkRegex().Replace(s, "$1"); // Resolve [Link] tags
-        s = BbCodeItalicBugRegex().Replace(s, ""); // Cleanup known AniDB API italic bug content
-        s = BbCodeSolitaryRegex().Replace(s, ""); // Strip leftover BBCode tags
+        result = AniDBLinkRegex().Replace(result, "$1"); // Resolve [Link] tags
+        result = BbCodeItalicBugRegex().Replace(result, ""); // Cleanup known AniDB API italic bug content
+        result = BbCodeSolitaryRegex().Replace(result, ""); // Strip leftover BBCode tags
 
-        return CondenseSpacesRegex().Replace(CondenseLinesRegex().Replace(s, Environment.NewLine), " ").Trim(' ', '\r', '\n');
+        return CondenseSpacesRegex().Replace(CondenseLinesRegex().Replace(result, Environment.NewLine), " ").Trim(' ', '\r', '\n');
     }
-
-    #endregion
-
-    #region Plex Utils
-
-    /// <summary>Normalizes directory separators to forward slashes and trims trailing slashes for Plex-compatible path comparison.</summary>
-    /// <param name="path">The filesystem path to normalize.</param>
-    /// <returns>A normalized path string.</returns>
-    public static string NormalizePathForPlex(string? path) => string.IsNullOrWhiteSpace(path) ? string.Empty : path.Replace('\\', '/').TrimEnd('/');
-
-    /// <summary>Checks if a Plex string value (which mimics a boolean, e.g. "1") represents true.</summary>
-    /// <param name="value">The Plex string value to check.</param>
-    /// <returns>True if the string equals "1"; otherwise, false.</returns>
-    public static bool IsPlexTrue(string? value) => string.Equals(value, "1", StringComparison.Ordinal);
 
     #endregion
 }

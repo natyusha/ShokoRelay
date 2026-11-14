@@ -353,7 +353,7 @@ public static class CastHelper
     /// <param name="metadataService">The Shoko metadata service used to enumerate all series.</param>
     /// <returns>A CSV-formatted string listing source, credit, and series count, with merged variants appended after semicolons.</returns>
     public static string BuildCreditReport(IMetadataService metadataService) =>
-        new TextHelper.CsvReportBuilder("Credit", "credit", NormalizeCreditKey, s_creditMerges, s_creditBlacklist).Build(
+        new ReportHelper.CsvReportBuilder("Credit", "credit", NormalizeCreditKey, s_creditMerges, s_creditBlacklist).Build(
             metadataService.GetAllShokoSeries() ?? [],
             (series, record) =>
             {
@@ -412,7 +412,7 @@ public static class CastHelper
             : s_globalCreditCache.GetOrAdd(norm, _ => new TextHelper.GlobalNameEntry()).ResolveDisplayName(trimmed, priority, record: false);
     }
 
-    /// <summary>Normalizes a studio, company, or creator name for comparison by stripping diacritics, spaces, punctuation, and standardizing long Japanese vowels.</summary>
+    /// <summary>Normalizes a studio, company, or creator name for comparison by stripping trailing (JP) tags, diacritics, spaces, punctuation, and standardizing long Japanese vowels.</summary>
     /// <param name="name">The name to normalize.</param>
     /// <returns>A normalized key string.</returns>
     private static string NormalizeCreditKey(string name)
@@ -420,7 +420,11 @@ public static class CastHelper
         if (string.IsNullOrWhiteSpace(name))
             return string.Empty;
 
-        var normalized = name.Normalize(NormalizationForm.FormD);
+        string trimmed = name.Trim();
+        if (trimmed.EndsWith(" (JP)", StringComparison.OrdinalIgnoreCase))
+            trimmed = trimmed[..^5].TrimEnd();
+
+        var normalized = trimmed.Normalize(NormalizationForm.FormD);
         var sb = new StringBuilder(normalized.Length);
         foreach (char c in normalized)
             if (CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark && char.IsLetterOrDigit(c))

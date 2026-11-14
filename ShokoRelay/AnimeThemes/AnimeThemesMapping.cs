@@ -356,8 +356,8 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
                 changedFields.Add($"SongTitle: \"{match.SongTitle}\" -> \"{entry.SongTitle}\"");
             if (!string.Equals(match.ArtistName, entry.ArtistName, StringComparison.Ordinal))
                 changedFields.Add($"ArtistName: \"{match.ArtistName}\" -> \"{entry.ArtistName}\"");
-            if (match.NC != entry.NC)
-                changedFields.Add($"NC: {match.NC} -> {entry.NC}");
+            if (match.Nc != entry.Nc)
+                changedFields.Add($"NC: {match.Nc} -> {entry.Nc}");
             if (!string.Equals(match.Slug, entry.Slug, StringComparison.Ordinal))
                 changedFields.Add($"Slug: {match.Slug} -> {entry.Slug}");
             if (match.Version != entry.Version)
@@ -508,7 +508,7 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
                             var sourceSurvivors = hasBD ? [.. sigGroup.Where(x => x!.Entry.Source == "BD")] : sigGroup.ToList();
 
                             // NC Filtering: If enabled, prefer versions without credits over those with credits
-                            var finalSurvivors = (Settings.Advanced.AnimeThemesPreferNc && sourceSurvivors.Any(x => x!.Entry.NC)) ? [.. sourceSurvivors.Where(x => x!.Entry.NC)] : sourceSurvivors;
+                            var finalSurvivors = (Settings.Advanced.AnimeThemesPreferNc && sourceSurvivors.Any(x => x!.Entry.Nc)) ? [.. sourceSurvivors.Where(x => x!.Entry.Nc)] : sourceSurvivors;
 
                             int counter = 1;
                             foreach (var item in finalSurvivors)
@@ -525,7 +525,7 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
                                     if (VfsShared.TryCreateLink(item.SourcePath, destPath, logger, targetOverride: relTarget))
                                     {
                                         int bitmask =
-                                            (item.Entry.NC ? 1 : 0)
+                                            (item.Entry.Nc ? 1 : 0)
                                             | (item.Entry.Lyrics ? 2 : 0)
                                             | (item.Entry.Subbed ? 4 : 0)
                                             | (item.Entry.Uncen ? 8 : 0)

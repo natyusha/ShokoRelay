@@ -214,7 +214,7 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient, ILogg
             foreach (var m in (await PlexApi.ReadContainerAsync(response, cancellationToken).ConfigureAwait(false))?.Metadata ?? [])
             {
                 // Exclude smart collections from automatic empty collection deletion
-                if (TextHelper.IsPlexTrue(m.Smart))
+                if (PlexHelper.IsPlexTrue(m.Smart))
                     continue;
 
                 if (PlexHelper.IsCollectionExcluded(m.Title, excludedKeywords))

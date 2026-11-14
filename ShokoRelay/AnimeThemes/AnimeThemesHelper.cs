@@ -10,7 +10,7 @@ namespace ShokoRelay.AnimeThemes;
 /// <param name="FilePath">Relative path to the theme file.</param>
 /// <param name="VideoId">AnimeThemes video identifier.</param>
 /// <param name="AniDbId">AniDB anime identifier.</param>
-/// <param name="NC">No Credits flag.</param>
+/// <param name="Nc">No Credits flag.</param>
 /// <param name="Slug">Theme type slug (e.g., OP1, ED2).</param>
 /// <param name="Version">Version number of the theme entry.</param>
 /// <param name="ArtistName">Name of the performing artist.</param>
@@ -28,7 +28,7 @@ public sealed record AnimeThemesMappingEntry(
     string FilePath,
     int VideoId,
     int AniDbId,
-    bool NC,
+    bool Nc,
     string Slug,
     int Version,
     string ArtistName,
@@ -97,7 +97,7 @@ internal sealed record AnimeThemesVideoLookup(
 {
     /// <summary>Constructs a lookup entry from an existing mapping entry.</summary>
     internal AnimeThemesVideoLookup(AnimeThemesMappingEntry e)
-        : this(e.VideoId, 0, e.AniDbId, e.NC, e.Slug, e.Version, e.ArtistName, e.SongTitle, e.Lyrics, e.Subbed, e.Uncen, e.NSFW, e.Spoiler, e.Source, e.Resolution, e.Episodes, e.Overlap) { }
+        : this(e.VideoId, 0, e.AniDbId, e.Nc, e.Slug, e.Version, e.ArtistName, e.SongTitle, e.Lyrics, e.Subbed, e.Uncen, e.NSFW, e.Spoiler, e.Source, e.Resolution, e.Episodes, e.Overlap) { }
 }
 
 /// <summary>Represents a mapped theme item resolved for VFS linking.</summary>
@@ -328,14 +328,14 @@ internal static partial class AnimeThemesHelper
     }
 
     /// <summary>Serialize a single AnimeThemesMappingEntry to a comma-separated line.</summary>
-    /// <param name="e">The entry to serialize.</param>
+    /// <param name="entry">The entry to serialize.</param>
     /// <returns>A CSV formatted string line.</returns>
-    internal static string SerializeEntry(AnimeThemesMappingEntry e) =>
-        $"{e.FilePath},{e.VideoId},{e.AniDbId},{(e.NC ? "1" : "0")},{e.Slug},{e.Version},"
-        + $"{TextHelper.EscapeCsvCommas(e.SongTitle)},{TextHelper.EscapeCsvCommas(e.ArtistName)},"
-        + $"{(e.Lyrics ? "1" : "0")},{(e.Subbed ? "1" : "0")},{(e.Uncen ? "1" : "0")},"
-        + $"{(e.NSFW ? "1" : "0")},{(e.Spoiler ? "1" : "0")},{e.Source},{e.Resolution},"
-        + $"{TextHelper.EscapeCsvCommas(e.Episodes)},{e.Overlap}";
+    internal static string SerializeEntry(AnimeThemesMappingEntry entry) =>
+        $"{entry.FilePath},{entry.VideoId},{entry.AniDbId},{(entry.Nc ? "1" : "0")},{entry.Slug},{entry.Version},"
+        + $"{TextHelper.EscapeCsvCommas(entry.SongTitle)},{TextHelper.EscapeCsvCommas(entry.ArtistName)},"
+        + $"{(entry.Lyrics ? "1" : "0")},{(entry.Subbed ? "1" : "0")},{(entry.Uncen ? "1" : "0")},"
+        + $"{(entry.NSFW ? "1" : "0")},{(entry.Spoiler ? "1" : "0")},{entry.Source},{entry.Resolution},"
+        + $"{TextHelper.EscapeCsvCommas(entry.Episodes)},{entry.Overlap}";
 
     #endregion
 

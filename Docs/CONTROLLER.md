@@ -320,8 +320,12 @@ GET /reports/tags                                              -> GetTagReport
 GET /reports/credits                                           -> GetCreditReport
 ```
 
-- `GetTagReport` generates an in-memory CSV report of all tags across Shoko series after applying the default tag overrides (`default_tag_overrides.csv`), grouped by normalized key with merged variants appended after `;`.
-- `GetCreditReport` generates an in-memory CSV report of all cast, crew, and studio credits across Shoko series after applying the default credit overrides (`default_credit_overrides.csv`), grouped by normalized key with merged variants appended after `;`.
+- `GetTagReport` generates an in-memory CSV report of all tags across Shoko series after applying the default tag overrides (`default_tag_overrides.csv`).
+- `GetCreditReport` generates an in-memory CSV report of all cast, crew, and studio credits across Shoko series after applying the default credit overrides (`default_credit_overrides.csv`).
+
+**Notes:**
+
+- Each report is grouped by normalized key with merged variants appended after `;`.
 
 ---
 

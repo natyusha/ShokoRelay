@@ -541,7 +541,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
         if (string.IsNullOrWhiteSpace(text))
             return null;
 
-        var segments = TextHelper.NormalizePathForPlex(text).Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var segments = PlexHelper.NormalizePathForPlex(text).Split('/', StringSplitOptions.RemoveEmptyEntries);
         for (int i = segments.Length - 1; i >= 0; i--)
             if (int.TryParse(segments[i], out int id))
                 return id;

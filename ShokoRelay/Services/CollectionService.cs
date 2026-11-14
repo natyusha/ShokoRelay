@@ -344,7 +344,7 @@ public class CollectionService(
                 // Apply custom images to smart collections
                 foreach (var col in collections)
                 {
-                    if (TextHelper.IsPlexTrue(col.Smart) && int.TryParse(col.RatingKey, out int cid) && !string.IsNullOrEmpty(col.Title))
+                    if (PlexHelper.IsPlexTrue(col.Smart) && int.TryParse(col.RatingKey, out int cid) && !string.IsNullOrEmpty(col.Title))
                     {
                         foreach (var (prefix, suffix, suffixes, label, _) in PlexConstants.CollectionImageConfigs)
                         {

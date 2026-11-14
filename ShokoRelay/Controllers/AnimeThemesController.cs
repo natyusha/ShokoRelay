@@ -385,7 +385,7 @@ public class AnimeThemesController(
                             relPath = entry.FilePath,
                             path = absolutePath.Replace('\\', '/').Trim(),
                             videoId = entry.VideoId,
-                            nc = entry.NC,
+                            nc = entry.Nc,
                             lyrics = entry.Lyrics,
                             subs = entry.Subbed,
                             uncen = entry.Uncen,

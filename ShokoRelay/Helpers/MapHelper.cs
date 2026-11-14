@@ -98,9 +98,9 @@ public static class MapHelper
     }
 
     /// <summary>Indicates whether an episode should be treated as hidden.</summary>
-    /// <param name="e">The episode to check.</param>
+    /// <param name="episode">The episode to check.</param>
     /// <returns>True if hidden.</returns>
-    public static bool IsHidden(IEpisode e) => e.IsHidden;
+    public static bool IsHidden(IEpisode episode) => episode.IsHidden;
 
     /// <summary>Indicates whether a series is considered a movie.</summary>
     /// <param name="series">The Shoko series to check.</param>

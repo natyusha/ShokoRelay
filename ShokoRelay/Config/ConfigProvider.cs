@@ -157,19 +157,19 @@ public class ConfigProvider
         };
 
     /// <summary>Recursively converts a <see cref="JsonElement"/> into plain primitive or dictionary types.</summary>
-    /// <param name="je">The JSON element to convert.</param>
+    /// <param name="element">The JSON element to convert.</param>
     /// <returns>A converted object containing standard CLR types.</returns>
-    private object SanitizeConfigElement(JsonElement je) =>
-        je.ValueKind switch
+    private object SanitizeConfigElement(JsonElement element) =>
+        element.ValueKind switch
         {
-            JsonValueKind.String => je.GetString()!,
-            JsonValueKind.Number => je.TryGetInt32(out var i) ? i
-            : je.TryGetInt64(out var l) ? l
-            : je.GetDouble(),
+            JsonValueKind.String => element.GetString()!,
+            JsonValueKind.Number => element.TryGetInt32(out var i) ? i
+            : element.TryGetInt64(out var l) ? l
+            : element.GetDouble(),
             JsonValueKind.True => true,
             JsonValueKind.False => false,
-            JsonValueKind.Object => je.EnumerateObject().ToDictionary(p => p.Name, p => SanitizeConfigObject(p.Value)),
-            JsonValueKind.Array => je.EnumerateArray().Select(x => SanitizeConfigObject(x)).ToList(),
+            JsonValueKind.Object => element.EnumerateObject().ToDictionary(p => p.Name, p => SanitizeConfigObject(p.Value)),
+            JsonValueKind.Array => element.EnumerateArray().Select(x => SanitizeConfigObject(x)).ToList(),
             _ => null!,
         };
 
@@ -562,7 +562,7 @@ public class ConfigProvider
             }
             catch { }
 
-            string val = (TextHelper.NormalizePathForPlex(kvp.Value.Trim()) is var p && !p.StartsWith('/') && !p.Contains(':') && !p.StartsWith("//", StringComparison.Ordinal)) ? "/" + p : p;
+            string val = (PlexHelper.NormalizePathForPlex(kvp.Value.Trim()) is var p && !p.StartsWith('/') && !p.Contains(':') && !p.StartsWith("//", StringComparison.Ordinal)) ? "/" + p : p;
             return (Key: key, Value: val);
         });
 
@@ -586,36 +586,36 @@ public class ConfigProvider
     }
 
     /// <summary>Normalizes comma-separated and newline-separated settings fields by trimming and removing duplicates.</summary>
-    /// <param name="s">The relay configuration instance to normalize.</param>
-    private static void NormalizeCsvFields(RelayConfig s)
+    /// <param name="settings">The relay configuration instance to normalize.</param>
+    private static void NormalizeCsvFields(RelayConfig settings)
     {
         static string Norm(string? r, char separator) =>
             string.Join(separator + " ", (r ?? "").Split(separator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase));
 
-        s.Automation.ExtraPlexUsers = Norm(s.Automation.ExtraPlexUsers, ',');
+        settings.Automation.ExtraPlexUsers = Norm(settings.Automation.ExtraPlexUsers, ',');
 
-        s.Advanced.FolderExclusions = string.Join(
+        settings.Advanced.FolderExclusions = string.Join(
             Environment.NewLine,
-            (s.Advanced.FolderExclusions ?? "")
+            (settings.Advanced.FolderExclusions ?? "")
                 .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .Select(x => x.TrimSlashes())
                 .Where(x => x.Length > 0)
                 .Distinct(VfsShared.PathComparer)
         );
 
-        s.Advanced.ManagedFolderExclusions = string.Join(
+        settings.Advanced.ManagedFolderExclusions = string.Join(
             Environment.NewLine,
-            (s.Advanced.ManagedFolderExclusions ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase)
+            (settings.Advanced.ManagedFolderExclusions ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase)
         );
 
-        s.Advanced.CollectionExclusions = string.Join(
+        settings.Advanced.CollectionExclusions = string.Join(
             Environment.NewLine,
-            (s.Advanced.CollectionExclusions ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase)
+            (settings.Advanced.CollectionExclusions ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase)
         );
 
-        s.TagOverrides = string.Join(
+        settings.TagOverrides = string.Join(
             Environment.NewLine,
-            (s.TagOverrides ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase)
+            (settings.TagOverrides ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase)
         );
     }
 

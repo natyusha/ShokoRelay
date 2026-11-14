@@ -106,32 +106,32 @@ public class VfsWatcher(
 
     /// <summary>Handles Shoko video file relocation and rename events, queueing affected series for VFS updates.</summary>
     /// <param name="sender">Event sender.</param>
-    /// <param name="e">Event parameters containing file information.</param>
-    private void OnVideoFileRelocated(object? sender, VideoFileRelocatedEventArgs e)
+    /// <param name="event">Event parameters containing file information.</param>
+    private void OnVideoFileRelocated(object? sender, VideoFileRelocatedEventArgs @event)
     {
-        logger.LogDebug("VFS: File relocated/renamed -> {FileName}", Path.GetFileName(e.RelativePath));
-        HandleFileEvent(e);
+        logger.LogDebug("VFS: File relocated/renamed -> {FileName}", Path.GetFileName(@event.RelativePath));
+        HandleFileEvent(@event);
     }
 
     /// <summary>Handles Shoko video file deletion events, queueing affected series for VFS updates.</summary>
     /// <param name="sender">Event sender.</param>
-    /// <param name="e">Event parameters containing file information.</param>
-    private void OnVideoFileDeleted(object? sender, VideoFileEventArgs e)
+    /// <param name="event">Event parameters containing file information.</param>
+    private void OnVideoFileDeleted(object? sender, VideoFileEventArgs @event)
     {
-        logger.LogDebug("VFS: File deleted -> {FileName}", Path.GetFileName(e.RelativePath));
-        HandleFileEvent(e);
+        logger.LogDebug("VFS: File deleted -> {FileName}", Path.GetFileName(@event.RelativePath));
+        HandleFileEvent(@event);
     }
 
     /// <summary>Handles Shoko release matching events, queueing affected series for VFS updates when a video is assigned.</summary>
     /// <param name="sender">Event sender.</param>
-    /// <param name="e">Event parameters containing release associations.</param>
-    private void OnVideoReleaseSaved(object? sender, VideoReleaseSavedEventArgs e)
+    /// <param name="event">Event parameters containing release associations.</param>
+    private void OnVideoReleaseSaved(object? sender, VideoReleaseSavedEventArgs @event)
     {
-        if (e.Video?.Series == null || e.Video.Series.Count == 0)
+        if (@event.Video?.Series == null || @event.Video.Series.Count == 0)
             return;
-        logger.LogDebug("VFS: Release saved for video '{FileName}'", Path.GetFileName(e.Video.EarliestKnownName ?? "Unknown File"));
+        logger.LogDebug("VFS: Release saved for video '{FileName}'", Path.GetFileName(@event.Video.EarliestKnownName ?? "Unknown File"));
 
-        foreach (var series in e.Video.Series)
+        foreach (var series in @event.Video.Series)
         {
             int primaryId = series.GetPrimaryId(metadataService);
             logger.LogDebug("VFS: Adding series -> {Title} [{LocalId}] (Primary: {PrimaryId}) to pending queue due to release save", series.GetDisplayTitle(), series.LocalID, primaryId);
@@ -142,10 +142,10 @@ public class VfsWatcher(
     }
 
     /// <summary>Aggregates multiple video file events into the pending processing queue.</summary>
-    /// <param name="e">The video file event arguments.</param>
-    private void HandleFileEvent(VideoFileEventArgs? e)
+    /// <param name="args">The video file event arguments.</param>
+    private void HandleFileEvent(VideoFileEventArgs? args)
     {
-        var seriesList = e?.Series ?? e?.Video?.Series;
+        var seriesList = args?.Series ?? args?.Video?.Series;
         if (seriesList == null || !seriesList.Any())
             return;
 

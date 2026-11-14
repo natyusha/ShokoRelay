@@ -295,7 +295,7 @@ public static partial class TagHelper
     /// <param name="metadataService">The Shoko metadata service used to enumerate all series.</param>
     /// <returns>A CSV-formatted string listing source, tag, and series count, with merged variants appended after semicolons.</returns>
     public static string BuildTagReport(IMetadataService metadataService) =>
-        new TextHelper.CsvReportBuilder("Tag", "tag", NormalizeTagKey, s_defaultTagMerges, s_defaultTagBlacklist, TitleCase, s => TagCleanupRegex().Replace(s, "")).Build(
+        new ReportHelper.CsvReportBuilder("Tag", "tag", NormalizeTagKey, s_defaultTagMerges, s_defaultTagBlacklist, TitleCase, s => TagCleanupRegex().Replace(s, "")).Build(
             metadataService.GetAllShokoSeries() ?? [],
             (series, record) =>
             {

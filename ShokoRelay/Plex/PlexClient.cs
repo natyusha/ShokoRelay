@@ -56,10 +56,10 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
             return results;
 
         string mapped = MapShokoPathToPlexPath(path);
-        string normMapped = TextHelper.NormalizePathForPlex(mapped);
+        string normMapped = PlexHelper.NormalizePathForPlex(mapped);
         var allTargets = GetConfiguredTargets();
 
-        var exactMatches = allTargets.Where(target => target.Locations.Any(loc => normMapped.StartsWith(TextHelper.NormalizePathForPlex(loc), StringComparison.OrdinalIgnoreCase)));
+        var exactMatches = allTargets.Where(target => target.Locations.Any(loc => normMapped.StartsWith(PlexHelper.NormalizePathForPlex(loc), StringComparison.OrdinalIgnoreCase)));
         if (exactMatches.Any())
             return [.. exactMatches.Select(t => (t, mapped))];
 
@@ -86,7 +86,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
             {
                 foreach (var loc in target.Locations)
                 {
-                    string normLoc = TextHelper.NormalizePathForPlex(loc);
+                    string normLoc = PlexHelper.NormalizePathForPlex(loc);
                     string locSuffix = $"/{activeRootName}";
 
                     if (normLoc.EndsWith(locSuffix, StringComparison.OrdinalIgnoreCase) || string.Equals(normLoc, activeRootName, StringComparison.OrdinalIgnoreCase))
@@ -151,7 +151,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
         if (!anyOk && targets.Count == 0)
             logger.LogWarning(
                 "PlexClient: Path '{Path}' does not match any known Plex library locations! If Plex and Shoko run on different filesystems, please configure Path Mappings in the Shoko Relay dashboard.",
-                TextHelper.NormalizePathForPlex(MapShokoPathToPlexPath(path))
+                PlexHelper.NormalizePathForPlex(MapShokoPathToPlexPath(path))
             );
 
         return anyOk;
@@ -625,7 +625,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
         {
             if (!ReferenceEquals(_lastCachedMappings, currentMappings))
             {
-                var pairs = currentMappings.Select(m => new { Shoko = TextHelper.NormalizePathForPlex(m.Key), Plex = TextHelper.NormalizePathForPlex(m.Value) }).ToList();
+                var pairs = currentMappings.Select(m => new { Shoko = PlexHelper.NormalizePathForPlex(m.Key), Plex = PlexHelper.NormalizePathForPlex(m.Value) }).ToList();
                 _shokoToPlexMappings = [.. pairs.Select(p => (p.Shoko, p.Plex)).OrderByDescending(p => p.Shoko.Length)];
                 _plexToShokoMappings = [.. pairs.Select(p => (p.Plex, p.Shoko)).OrderByDescending(p => p.Plex.Length)];
                 _lastCachedMappings = currentMappings;
@@ -636,7 +636,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
         if (list.Length == 0)
             return path;
 
-        string input = TextHelper.NormalizePathForPlex(path);
+        string input = PlexHelper.NormalizePathForPlex(path);
         var (matchIn, matchOut) = list.FirstOrDefault(m => input.StartsWith(m.In, StringComparison.OrdinalIgnoreCase));
         if (matchIn == null)
             return path;

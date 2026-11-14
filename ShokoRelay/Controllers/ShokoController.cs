@@ -170,7 +170,7 @@ public class ShokoController(
                 {
                     // Safely merge TV and Movie blueprint entries sharing the same Shoko Series ID within a unified root tab
                     var mergedSeries = g.SelectMany(x => x.Series)
-                        .GroupBy(s => s.Id)
+                        .GroupBy(s => s.SeriesId)
                         .Select(sg =>
                         {
                             var first = sg.First();

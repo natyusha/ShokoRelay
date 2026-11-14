@@ -68,13 +68,13 @@ public record VfsBlueprintSeason(
 );
 
 /// <summary>Represents a full series entity inside the VFS Blueprint.</summary>
-/// <param name="Id">The Shoko Series ID.</param>
+/// <param name="SeriesId">The Shoko Series ID.</param>
 /// <param name="AnidbId">The AniDB Series ID.</param>
 /// <param name="Title">The formatted display title of the series.</param>
 /// <param name="RootFiles">Files located in the root of the series folder.</param>
 /// <param name="Seasons">The collection of season folders.</param>
 public record VfsBlueprintSeries(
-    [property: JsonPropertyName("id")] int Id,
+    [property: JsonPropertyName("id")] int SeriesId,
     [property: JsonPropertyName("anidbId")] int AnidbId,
     [property: JsonPropertyName("title")] string Title,
     [property: JsonPropertyName("rootFiles")] IEnumerable<VfsBlueprintFile> RootFiles,

@@ -221,7 +221,7 @@ public static partial class VfsHelper
 
     /// <summary>Builds a filename for extra content (trailers, credits, etc.) using special type prefixes and title metadata.</summary>
     /// <param name="mapping">The mapping containing coordinates and metadata.</param>
-    /// <param name="ex">A tuple containing the target folder and the Plex extra subtype.</param>
+    /// <param name="extra">A tuple containing the target folder and the Plex extra subtype.</param>
     /// <param name="pad">The number of digits to pad the extra number with.</param>
     /// <param name="ext">The file extension (including the dot).</param>
     /// <param name="seriesTitle">The display title of the parent series used for name resolution.</param>
@@ -232,7 +232,7 @@ public static partial class VfsHelper
     /// <returns>A sanitized and formatted filename string for Plex extras (e.g., "C01 ❯ Episode Title [variation].mkv").</returns>
     public static string BuildExtrasFileName(
         MapHelper.FileMapping mapping,
-        (string Folder, string Subtype) ex,
+        (string Folder, string Subtype) extra,
         int pad,
         string ext,
         string seriesTitle,
@@ -242,7 +242,7 @@ public static partial class VfsHelper
         bool isVariation = false
     )
     {
-        string ep = s_extraTypePrefixes.TryGetValue(ex.Subtype, out var pref) ? pref + mapping.Coords.Episode.ToString($"D{pad}") : mapping.Coords.Episode.ToString($"D{pad}");
+        string ep = s_extraTypePrefixes.TryGetValue(extra.Subtype, out var pref) ? pref + mapping.Coords.Episode.ToString($"D{pad}") : mapping.Coords.Episode.ToString($"D{pad}");
         int totalParts = partCount ?? mapping.PartCount;
         string part = totalParts > 1 ? $"-pt{partIdx ?? mapping.PartIndex}" : (vIdx.HasValue ? $"-dup{vIdx}" : "");
 

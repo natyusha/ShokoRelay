@@ -41,50 +41,50 @@ public static class LogHelper
     #region Generic Builder
 
     /// <summary>Builds a standardized report with a header, a aligned stats block, and an optional list of details.</summary>
-    /// <param name="sb">Target builder.</param>
+    /// <param name="builder">Target builder.</param>
     /// <param name="title">The title for the report header.</param>
     /// <param name="stats">A dictionary of key-value pairs to display in the stats block.</param>
     /// <param name="listHeader">Optional header for the details list.</param>
     /// <param name="items">Optional collection of detail strings.</param>
-    public static void BuildReport(StringBuilder sb, string title, Dictionary<string, object> stats, string? listHeader = null, IEnumerable<string>? items = null)
+    public static void BuildReport(StringBuilder builder, string title, Dictionary<string, object> stats, string? listHeader = null, IEnumerable<string>? items = null)
     {
-        AppendHeader(sb, title);
+        AppendHeader(builder, title);
         foreach (var stat in stats)
-            sb.AppendLine($"  {stat.Key.PadRight(25)}: {stat.Value}");
+            builder.AppendLine($"  {stat.Key.PadRight(25)}: {stat.Value}");
 
         if (items?.Any() == true)
         {
-            sb.AppendLine();
+            builder.AppendLine();
             if (!string.IsNullOrEmpty(listHeader))
-                sb.AppendLine(listHeader);
+                builder.AppendLine(listHeader);
             foreach (var item in items)
-                sb.AppendLine($"  {item}");
+                builder.AppendLine($"  {item}");
         }
     }
 
     /// <summary>Appends a standardized header to a report string builder.</summary>
-    /// <param name="sb">The string builder to append to.</param>
+    /// <param name="builder">The string builder to append to.</param>
     /// <param name="title">The title for the report header.</param>
-    private static void AppendHeader(StringBuilder sb, string title) =>
-        sb.AppendLine($"{title} - {DateTime.Now:yyyy-MM-dd HH:mm:ss} - {ShokoRelayConstants.Name} v{ShokoRelayConstants.Version}").AppendLine(new string('-', 90)).AppendLine();
+    private static void AppendHeader(StringBuilder builder, string title) =>
+        builder.AppendLine($"{title} - {DateTime.Now:yyyy-MM-dd HH:mm:ss} - {ShokoRelayConstants.Name} v{ShokoRelayConstants.Version}").AppendLine(new string('-', 90)).AppendLine();
 
     #endregion
 
     #region Report Builders
 
     /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskPlexAuthRefresh"/>.</summary>
-    /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
-    /// <param name="r">Plex discovery result data.</param>
-    public static void BuildDiscoveryReport(StringBuilder sb, PlexDiscoveryResult r)
+    /// <param name="builder"><inheritdoc cref="BuildReport" path="/param[@name='builder']" /></param>
+    /// <param name="result">Plex discovery result data.</param>
+    public static void BuildDiscoveryReport(StringBuilder builder, PlexDiscoveryResult result)
     {
-        var libs = r.Libraries;
-        string? customUrl = !string.IsNullOrWhiteSpace(r.CustomUrl) ? r.CustomUrl.Trim().TrimEnd('/') : null;
+        var libs = result.Libraries;
+        string? customUrl = !string.IsNullOrWhiteSpace(result.CustomUrl) ? result.CustomUrl.Trim().TrimEnd('/') : null;
 
-        AppendHeader(sb, "Plex Discovery Report");
-        sb.AppendLine($"  Libraries Found          : {libs.Count}");
+        AppendHeader(builder, "Plex Discovery Report");
+        builder.AppendLine($"  Libraries Found          : {libs.Count}");
 
         if (customUrl != null)
-            sb.AppendLine($"  Configured Override URL  : {customUrl}");
+            builder.AppendLine($"  Configured Override URL  : {customUrl}");
 
         var tvLibs = libs.Where(l => !string.Equals(l.Type, "movie", StringComparison.OrdinalIgnoreCase)).ToList();
         var movieLibs = libs.Where(l => string.Equals(l.Type, "movie", StringComparison.OrdinalIgnoreCase)).ToList();
@@ -92,51 +92,51 @@ public static class LogHelper
         void PrintLib(PlexAvailableLibrary l)
         {
             string urlLabel = (customUrl != null && string.Equals(l.ServerUrl.TrimEnd('/'), customUrl, StringComparison.OrdinalIgnoreCase)) ? " [Override]" : "";
-            sb.AppendLine($"  - [{l.ServerName}] {l.Title}");
-            sb.AppendLine($"    URL   : {l.ServerUrl}{urlLabel}");
-            sb.AppendLine($"    Agent : {l.Agent}");
+            builder.AppendLine($"  - [{l.ServerName}] {l.Title}");
+            builder.AppendLine($"    URL   : {l.ServerUrl}{urlLabel}");
+            builder.AppendLine($"    Agent : {l.Agent}");
             if (l.Locations.Count > 0)
-                sb.AppendLine($"    Paths : {string.Join(", ", l.Locations)}");
+                builder.AppendLine($"    Paths : {string.Join(", ", l.Locations)}");
         }
 
         if (tvLibs.Count > 0)
         {
-            sb.AppendLine().AppendLine("TV Shows Libraries:");
+            builder.AppendLine().AppendLine("TV Shows Libraries:");
             foreach (var l in tvLibs)
                 PrintLib(l);
         }
 
         if (movieLibs.Count > 0)
         {
-            sb.AppendLine().AppendLine("Movie Libraries:");
+            builder.AppendLine().AppendLine("Movie Libraries:");
             foreach (var l in movieLibs)
                 PrintLib(l);
         }
     }
 
     /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskPlexCollectionsBuild"/>.</summary>
-    /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
-    /// <param name="r">Build result data.</param>
-    public static void BuildCollectionsReport(StringBuilder sb, BuildCollectionsResult r)
+    /// <param name="builder"><inheritdoc cref="BuildReport" path="/param[@name='builder']" /></param>
+    /// <param name="result">Build result data.</param>
+    public static void BuildCollectionsReport(StringBuilder builder, BuildCollectionsResult result)
     {
         var stats = new Dictionary<string, object>
         {
-            ["Elapsed Time"] = $"{r.TotalElapsed.TotalSeconds:F2}s",
-            ["Series Processed"] = r.Processed,
-            ["Collections Assigned"] = r.Created,
-            ["Images Uploaded"] = r.Uploaded,
-            ["Images Already Uploaded"] = r.AlreadyUploaded,
-            ["Empty Collections Deleted"] = r.DeletedEmptyCollections,
-            ["Errors"] = r.Errors,
+            ["Elapsed Time"] = $"{result.TotalElapsed.TotalSeconds:F2}s",
+            ["Series Processed"] = result.Processed,
+            ["Collections Assigned"] = result.Created,
+            ["Images Uploaded"] = result.Uploaded,
+            ["Images Already Uploaded"] = result.AlreadyUploaded,
+            ["Empty Collections Deleted"] = result.DeletedEmptyCollections,
+            ["Errors"] = result.Errors,
         };
 
         var items = new List<string>();
 
         void AddItems(string header, bool isMovie)
         {
-            var assigned = r.CreatedCollections.Where(c => c.IsMovie == isMovie).OrderBy(c => c.TargetTitle).ThenBy(c => c.CollectionName).ToList();
-            var uploaded = r.UploadedDetails.Where(u => u.IsMovie == isMovie).OrderBy(u => u.TargetTitle).ThenBy(u => u.CollectionName).ToList();
-            var deleted = r.DeletedCollections.Where(d => d.IsMovie == isMovie).OrderBy(d => d.TargetTitle).ThenBy(d => d.CollectionName).ToList();
+            var assigned = result.CreatedCollections.Where(c => c.IsMovie == isMovie).OrderBy(c => c.TargetTitle).ThenBy(c => c.CollectionName).ToList();
+            var uploaded = result.UploadedDetails.Where(u => u.IsMovie == isMovie).OrderBy(u => u.TargetTitle).ThenBy(u => u.CollectionName).ToList();
+            var deleted = result.DeletedCollections.Where(d => d.IsMovie == isMovie).OrderBy(d => d.TargetTitle).ThenBy(d => d.CollectionName).ToList();
 
             if (assigned.Count == 0 && uploaded.Count == 0 && deleted.Count == 0)
                 return;
@@ -151,19 +151,19 @@ public static class LogHelper
         AddItems("TV Shows Libraries:", false);
         AddItems("Movie Libraries:", true);
 
-        if (r.ErrorsList.Count > 0)
+        if (result.ErrorsList.Count > 0)
         {
             items.Add("Errors:");
-            items.AddRange(r.ErrorsList.Select(e => $"  ERROR: {e}"));
+            items.AddRange(result.ErrorsList.Select(e => $"  ERROR: {e}"));
         }
 
-        BuildReport(sb, "Collection Build Report", stats, "Details:", items);
+        BuildReport(builder, "Collection Build Report", stats, "Details:", items);
     }
 
     /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskPlexRatingsApply"/>.</summary>
-    /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
+    /// <param name="builder"><inheritdoc cref="BuildReport" path="/param[@name='builder']" /></param>
     /// <param name="result">Rating result data.</param>
-    public static void BuildRatingsReport(StringBuilder sb, ApplyRatingsResult result)
+    public static void BuildRatingsReport(StringBuilder builder, ApplyRatingsResult result)
     {
         var stats = new Dictionary<string, object>
         {
@@ -198,85 +198,85 @@ public static class LogHelper
             items.AddRange(result.ErrorsList.Select(e => $"  ERROR: {e}"));
         }
 
-        BuildReport(sb, "Audience Rating Report", stats, "Details:", items);
+        BuildReport(builder, "Audience Rating Report", stats, "Details:", items);
     }
 
     /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskPlexImagesSync"/>.</summary>
-    /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
-    /// <param name="r">Image sync result data.</param>
-    public static void BuildImageSyncReport(StringBuilder sb, ImageSyncResult r)
+    /// <param name="builder"><inheritdoc cref="BuildReport" path="/param[@name='builder']" /></param>
+    /// <param name="result">Image sync result data.</param>
+    public static void BuildImageSyncReport(StringBuilder builder, ImageSyncResult result)
     {
         var stats = new Dictionary<string, object>
         {
-            ["Elapsed Time"] = $"{r.TotalElapsed.TotalSeconds:F2}s",
-            ["Images Processed"] = r.Processed,
-            ["Images Uploaded"] = r.Uploaded,
-            ["Images Already Uploaded"] = r.Skipped,
-            ["Errors"] = r.Errors,
+            ["Elapsed Time"] = $"{result.TotalElapsed.TotalSeconds:F2}s",
+            ["Images Processed"] = result.Processed,
+            ["Images Uploaded"] = result.Uploaded,
+            ["Images Already Uploaded"] = result.Skipped,
+            ["Errors"] = result.Errors,
         };
-        var items = r.UploadedDetails.OrderBy(u => u).Select(u => $"UPLOADED: {u}").ToList();
-        items.AddRange(r.ErrorsList.OrderBy(e => e).Select(e => $"ERROR: {e}"));
-        BuildReport(sb, "Plex Image Sync Report", stats, "Details:", items);
+        var items = result.UploadedDetails.OrderBy(u => u).Select(u => $"UPLOADED: {u}").ToList();
+        items.AddRange(result.ErrorsList.OrderBy(e => e).Select(e => $"ERROR: {e}"));
+        BuildReport(builder, "Plex Image Sync Report", stats, "Details:", items);
     }
 
     /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskPlexAutomationRun"/>.</summary>
-    /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
-    /// <param name="r">Automation run result data.</param>
+    /// <param name="builder"><inheritdoc cref="BuildReport" path="/param[@name='builder']" /></param>
+    /// <param name="result">Automation run result data.</param>
     /// <param name="apiBase">The base API URL for report links.</param>
-    public static void BuildPlexAutomationReport(StringBuilder sb, PlexAutomationRunResult r, string apiBase)
+    public static void BuildPlexAutomationReport(StringBuilder builder, PlexAutomationRunResult result, string apiBase)
     {
-        AppendHeader(sb, "Plex Automation Run Report");
-        sb.AppendLine($"  Total Elapsed Time         : {r.TotalElapsed.TotalSeconds:F2}s");
-        sb.AppendLine();
-        sb.AppendLine("Tasks Executed:");
-        sb.AppendLine($"  - Collection Generation    : {r.CollectionsElapsed.TotalSeconds:F2}s");
-        sb.AppendLine($"    Log File URL             : {apiBase}/logs/{ShokoRelayConstants.TaskPlexCollectionsBuild}-report.log");
-        sb.AppendLine($"  - Critic Rating Application: {r.RatingsElapsed.TotalSeconds:F2}s");
-        sb.AppendLine($"    Log File URL             : {apiBase}/logs/{ShokoRelayConstants.TaskPlexRatingsApply}-report.log");
+        AppendHeader(builder, "Plex Automation Run Report");
+        builder.AppendLine($"  Total Elapsed Time         : {result.TotalElapsed.TotalSeconds:F2}s");
+        builder.AppendLine();
+        builder.AppendLine("Tasks Executed:");
+        builder.AppendLine($"  - Collection Generation    : {result.CollectionsElapsed.TotalSeconds:F2}s");
+        builder.AppendLine($"    Log File URL             : {apiBase}/logs/{ShokoRelayConstants.TaskPlexCollectionsBuild}-report.log");
+        builder.AppendLine($"  - Critic Rating Application: {result.RatingsElapsed.TotalSeconds:F2}s");
+        builder.AppendLine($"    Log File URL             : {apiBase}/logs/{ShokoRelayConstants.TaskPlexRatingsApply}-report.log");
 
-        if (r.ImageSyncElapsed.HasValue)
+        if (result.ImageSyncElapsed.HasValue)
         {
-            sb.AppendLine($"  - Plex Image Sync          : {r.ImageSyncElapsed.Value.TotalSeconds:F2}s");
-            sb.AppendLine($"    Log File URL             : {apiBase}/logs/{ShokoRelayConstants.TaskPlexImagesSync}-report.log");
+            builder.AppendLine($"  - Plex Image Sync          : {result.ImageSyncElapsed.Value.TotalSeconds:F2}s");
+            builder.AppendLine($"    Log File URL             : {apiBase}/logs/{ShokoRelayConstants.TaskPlexImagesSync}-report.log");
         }
 
-        if (r.TrashElapsed.HasValue)
+        if (result.TrashElapsed.HasValue)
         {
-            sb.AppendLine($"  - Empty Plex Trash         : {r.TrashElapsed.Value.TotalSeconds:F2}s");
-            foreach (var msg in r.TrashMessages ?? [])
-                sb.AppendLine($"    -> {msg}");
+            builder.AppendLine($"  - Empty Plex Trash         : {result.TrashElapsed.Value.TotalSeconds:F2}s");
+            foreach (var msg in result.TrashMessages ?? [])
+                builder.AppendLine($"    -> {msg}");
         }
     }
 
     /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskVfsBuild"/>.</summary>
-    /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
-    /// <param name="r">Build result data.</param>
-    public static void BuildVfsReport(StringBuilder sb, VfsBuildResult r)
+    /// <param name="builder"><inheritdoc cref="BuildReport" path="/param[@name='builder']" /></param>
+    /// <param name="result">Build result data.</param>
+    public static void BuildVfsReport(StringBuilder builder, VfsBuildResult result)
     {
         var mode = Settings.Advanced.MovieGenerationMode;
         string modeName = typeof(MovieGenerationMode).GetField(mode.ToString())?.GetCustomAttribute<DisplayAttribute>()?.Name ?? mode.ToString();
 
         var stats = new Dictionary<string, object>
         {
-            ["Elapsed Time"] = $"{r.TotalElapsed.TotalSeconds:F2}s",
+            ["Elapsed Time"] = $"{result.TotalElapsed.TotalSeconds:F2}s",
             ["Movie Generation Mode"] = modeName,
-            ["Series Processed"] = r.SeriesProcessed,
-            ["Consolidated (Overrides)"] = r.ConsolidatedSeries,
-            ["Links Created"] = r.CreatedLinks,
-            ["Links Skipped"] = r.Skipped,
-            ["Errors"] = r.Errors.Count,
+            ["Series Processed"] = result.SeriesProcessed,
+            ["Consolidated (Overrides)"] = result.ConsolidatedSeries,
+            ["Links Created"] = result.CreatedLinks,
+            ["Links Skipped"] = result.Skipped,
+            ["Errors"] = result.Errors.Count,
         };
 
         var items = new List<string>();
-        if (r.CleanupDetails.Any())
+        if (result.CleanupDetails.Any())
         {
             items.Add("Cleanup Details:");
-            items.AddRange(r.CleanupDetails.OrderBy(c => c.Path).Select(c => $"[{c.ElapsedMs, 5}ms] {c.Path}"));
+            items.AddRange(result.CleanupDetails.OrderBy(c => c.Path).Select(c => $"[{c.ElapsedMs, 5}ms] {c.Path}"));
             items.Add("");
         }
 
-        var tvSeries = r.SeriesDetails.Where(d => !d.IsMovie).ToList();
-        var movies = r.SeriesDetails.Where(d => d.IsMovie).ToList();
+        var tvSeries = result.SeriesDetails.Where(d => !d.IsMovie).ToList();
+        var movies = result.SeriesDetails.Where(d => d.IsMovie).ToList();
 
         if (tvSeries.Count > 0)
         {
@@ -292,21 +292,21 @@ public static class LogHelper
             items.AddRange(movies.OrderByDescending(x => x.ElapsedMs).ThenBy(x => x.Name).Select(d => $"[{d.ElapsedMs, 5}ms] {d.Name} ({d.CreatedLinks} links)"));
         }
 
-        if (r.SkippedDetails.Any())
+        if (result.SkippedDetails.Any())
         {
             items.Add("");
             items.Add("Skipped Items:");
-            items.AddRange(r.SkippedDetails.OrderBy(s => s).Select(s => $"SKIPPED: {s}"));
+            items.AddRange(result.SkippedDetails.OrderBy(s => s).Select(s => $"SKIPPED: {s}"));
         }
-        items.AddRange(r.Errors.OrderBy(e => e).Select(e => $"ERROR: {e}"));
+        items.AddRange(result.Errors.OrderBy(e => e).Select(e => $"ERROR: {e}"));
 
-        BuildReport(sb, "VFS Generation Report", stats, "Report Details:", items);
+        BuildReport(builder, "VFS Generation Report", stats, "Report Details:", items);
     }
 
     /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskVfsAudit"/>.</summary>
-    /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
+    /// <param name="builder"><inheritdoc cref="BuildReport" path="/param[@name='builder']" /></param>
     /// <param name="result">Audit result data.</param>
-    public static void BuildVfsAuditReport(StringBuilder sb, VfsAuditResult result)
+    public static void BuildVfsAuditReport(StringBuilder builder, VfsAuditResult result)
     {
         var stats = new Dictionary<string, object>
         {
@@ -317,16 +317,16 @@ public static class LogHelper
         };
         var items = result.RemovedItems.OrderBy(i => i).ToList();
         items.AddRange(result.Errors.OrderBy(e => e).Select(e => $"ERROR: {e}"));
-        BuildReport(sb, "VFS Audit Report", stats, "Details:", items);
+        BuildReport(builder, "VFS Audit Report", stats, "Details:", items);
     }
 
     /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskShokoPurgeMissing"/>.</summary>
-    /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
+    /// <param name="builder"><inheritdoc cref="BuildReport" path="/param[@name='builder']" /></param>
     /// <param name="dryRun">Dry run flag.</param>
     /// <param name="removed">List of removed paths.</param>
     /// <param name="plexRemoved">List of Plex trashed paths.</param>
     /// <param name="plexMessages">List of Plex trash status messages.</param>
-    public static void BuildPurgeMissingReport(StringBuilder sb, bool dryRun, IReadOnlyList<string>? removed, IReadOnlyList<string>? plexRemoved, IReadOnlyList<string>? plexMessages)
+    public static void BuildPurgeMissingReport(StringBuilder builder, bool dryRun, IReadOnlyList<string>? removed, IReadOnlyList<string>? plexRemoved, IReadOnlyList<string>? plexMessages)
     {
         var stats = new Dictionary<string, object>
         {
@@ -354,16 +354,16 @@ public static class LogHelper
             items.AddRange(plexRemoved.OrderBy(p => p).Select(p => $"  {p}"));
         }
 
-        BuildReport(sb, "Purge Missing Files Report", stats, "Details:", items);
+        BuildReport(builder, "Purge Missing Files Report", stats, "Details:", items);
     }
 
     /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskShokoSyncWatched"/>.</summary>
-    /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
+    /// <param name="builder"><inheritdoc cref="BuildReport" path="/param[@name='builder']" /></param>
     /// <param name="result">Sync result data.</param>
     /// <param name="dir">Sync direction string.</param>
     /// <param name="dry">Dry run flag.</param>
     /// <param name="ratings">Whether ratings were synced.</param>
-    public static void BuildSyncWatchedReport(StringBuilder sb, PlexWatchedSyncResult result, string dir, bool dry, bool ratings)
+    public static void BuildSyncWatchedReport(StringBuilder builder, PlexWatchedSyncResult result, string dir, bool dry, bool ratings)
     {
         var stats = new Dictionary<string, object>
         {
@@ -399,14 +399,14 @@ public static class LogHelper
             }
         }
 
-        BuildReport(sb, "Sync Watched Report", stats, "Change Details:", items);
+        BuildReport(builder, "Sync Watched Report", stats, "Change Details:", items);
     }
 
     /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskAtVfsBuild"/>.</summary>
-    /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
+    /// <param name="builder"><inheritdoc cref="BuildReport" path="/param[@name='builder']" /></param>
     /// <param name="result">Build result data.</param>
     /// <param name="filter">Optional comma-separated list of Shoko or AniDB series IDs to filter the operation.</param>
-    public static void BuildAtVfsBuildReport(StringBuilder sb, AnimeThemesMappingApplyResult result, List<int> filter)
+    public static void BuildAtVfsBuildReport(StringBuilder builder, AnimeThemesMappingApplyResult result, List<int> filter)
     {
         var stats = new Dictionary<string, object>
         {
@@ -420,22 +420,22 @@ public static class LogHelper
         var items = result.CacheEntries.OrderBy(ce => ce.VfsPath).Select(ce => $"{ce.VfsPath} (VideoID: {ce.VideoId})").ToList();
         items.AddRange(result.Errors.OrderBy(e => e).Select(e => $"ERROR: {e}"));
 
-        BuildReport(sb, "AnimeThemes: VFS Build Report", stats, "Planned Links & Errors:", items);
+        BuildReport(builder, "AnimeThemes: VFS Build Report", stats, "Planned Links & Errors:", items);
     }
 
     /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskAtMapBuild"/>.</summary>
-    /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
+    /// <param name="builder"><inheritdoc cref="BuildReport" path="/param[@name='builder']" /></param>
     /// <param name="result">Map result data.</param>
-    public static void BuildAtVfsMapReport(StringBuilder sb, AnimeThemesMappingBuildResult result)
+    public static void BuildAtVfsMapReport(StringBuilder builder, AnimeThemesMappingBuildResult result)
     {
         var stats = new Dictionary<string, object> { ["Entries Written"] = result.EntriesWritten, ["Reused"] = result.Reused };
-        BuildReport(sb, "AnimeThemes: Mapping Build Report", stats, "Messages:", result.Messages);
+        BuildReport(builder, "AnimeThemes: Mapping Build Report", stats, "Messages:", result.Messages);
     }
 
     /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskAtMp3Build"/>.</summary>
-    /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
+    /// <param name="builder"><inheritdoc cref="BuildReport" path="/param[@name='builder']" /></param>
     /// <param name="result">Batch result data.</param>
-    public static void BuildAtMp3Report(StringBuilder sb, ThemeMp3BatchResult result)
+    public static void BuildAtMp3Report(StringBuilder builder, ThemeMp3BatchResult result)
     {
         var stats = new Dictionary<string, object>
         {
@@ -459,13 +459,13 @@ public static class LogHelper
             })
             .ToList();
 
-        BuildReport(sb, "AnimeThemes: MP3 Batch Report", stats, "Item Details:", items);
+        BuildReport(builder, "AnimeThemes: MP3 Batch Report", stats, "Item Details:", items);
     }
 
     /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskAtMp3Audit"/>.</summary>
-    /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
+    /// <param name="builder"><inheritdoc cref="BuildReport" path="/param[@name='builder']" /></param>
     /// <param name="result">Audit result data.</param>
-    public static void BuildAtMp3AuditReport(StringBuilder sb, ThemeMp3AuditResult result)
+    public static void BuildAtMp3AuditReport(StringBuilder builder, ThemeMp3AuditResult result)
     {
         var stats = new Dictionary<string, object>
         {
@@ -505,13 +505,13 @@ public static class LogHelper
             items.AddRange(result.ErrorsList.OrderBy(e => e).Select(e => $"ERROR: {e}"));
         }
 
-        BuildReport(sb, "AnimeThemes: MP3 Audit Report", stats, "Details:", items);
+        BuildReport(builder, "AnimeThemes: MP3 Audit Report", stats, "Details:", items);
     }
 
     /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskAtWebmDownload"/>.</summary>
-    /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
+    /// <param name="builder"><inheritdoc cref="BuildReport" path="/param[@name='builder']" /></param>
     /// <param name="result">Download result data.</param>
-    public static void BuildWebmDownloadReport(StringBuilder sb, WebmDownloadResult result)
+    public static void BuildWebmDownloadReport(StringBuilder builder, WebmDownloadResult result)
     {
         var stats = new Dictionary<string, object>
         {
@@ -521,16 +521,16 @@ public static class LogHelper
         };
         var items = result.Downloads.OrderBy(d => d).Select(d => $"DOWNLOADED: {d}").ToList();
         items.AddRange(result.Messages.OrderBy(m => m).Select(m => $"MESSAGE: {m}"));
-        BuildReport(sb, "AnimeThemes: WebM Download Report", stats, "Details:", items);
+        BuildReport(builder, "AnimeThemes: WebM Download Report", stats, "Details:", items);
     }
 
     /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskMapSymlinks"/>.</summary>
-    /// <param name="sb"><inheritdoc cref="BuildReport" path="/param[@name='sb']" /></param>
-    /// <param name="r">Map result data.</param>
-    public static void BuildSourceLinkReport(StringBuilder sb, SourceLinkResult r)
+    /// <param name="builder"><inheritdoc cref="BuildReport" path="/param[@name='builder']" /></param>
+    /// <param name="result">Map result data.</param>
+    public static void BuildSourceLinkReport(StringBuilder builder, SourceLinkResult result)
     {
-        var stats = new Dictionary<string, object> { ["Mode"] = r.IsPurge ? "Purge" : "Map", ["Operations Completed"] = r.Count };
-        BuildReport(sb, "Source Link Report", stats, r.IsPurge ? null : "Links Created:", r.Details.OrderBy(d => d));
+        var stats = new Dictionary<string, object> { ["Mode"] = result.IsPurge ? "Purge" : "Map", ["Operations Completed"] = result.Count };
+        BuildReport(builder, "Source Link Report", stats, result.IsPurge ? null : "Links Created:", result.Details.OrderBy(d => d));
     }
 
     #endregion

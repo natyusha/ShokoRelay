@@ -298,7 +298,7 @@ public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesAp
     public sealed record AudioLink(string? Link);
 
     /// <summary>Minimal anime metadata associated with a video theme entry.</summary>
-    /// <param name="Id">Anime identifier.</param>
+    /// <param name="Id">Anime ID.</param>
     /// <param name="Title">Title of the anime.</param>
     /// <param name="Season">Airing season name.</param>
     /// <param name="Year">Airing broadcast year.</param>
@@ -306,7 +306,7 @@ public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesAp
     public sealed record VideoAnimeOnly(int Id, TitleInfo? Title, string? Season, int? Year, ResourceConnection? Resources);
 
     /// <summary>Detailed theme metadata including song information and series context.</summary>
-    /// <param name="Id">Theme identifier.</param>
+    /// <param name="Id">Theme ID.</param>
     /// <param name="Slug">Theme type slug.</param>
     /// <param name="Song">Song metadata details.</param>
     /// <param name="Anime">Associated anime details.</param>
@@ -325,7 +325,7 @@ public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesAp
     public sealed record VideoThemeEntryConnection(List<VideoThemeEntryWrapper>? Nodes);
 
     /// <summary>Entry representing a video file and its associated technical attributes and audio links.</summary>
-    /// <param name="Id">The unique video identifier.</param>
+    /// <param name="Id">The unique video ID.</param>
     /// <param name="Basename">Physical basename of the video file.</param>
     /// <param name="Nc">No Credits status flag.</param>
     /// <param name="Subbed">Subtitles present flag.</param>
@@ -351,18 +351,18 @@ public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesAp
     );
 
     /// <summary>Minimal theme information containing identifiers.</summary>
-    /// <param name="Id">Theme identifier.</param>
+    /// <param name="Id">Theme ID.</param>
     /// <param name="Slug">Theme type slug.</param>
     public sealed record AnimeTheme(int Id, string? Slug);
 
     /// <summary>Entry representing an anime and its available themes.</summary>
     /// <param name="Title">Romanized anime title.</param>
-    /// <param name="Slug">Anime URL slug identifier.</param>
+    /// <param name="Slug">Anime URL slug ID.</param>
     /// <param name="Animethemes">List of themes associated with the anime.</param>
     public sealed record AnimeThemesEntry(TitleInfo? Title, string? Slug, List<AnimeTheme>? Animethemes);
 
     /// <summary>Entry representing a video and its audio link within a theme.</summary>
-    /// <param name="Id">Video identifier.</param>
+    /// <param name="Id">Video ID.</param>
     /// <param name="Basename">The original physical filename of the video.</param>
     /// <param name="Link">The direct video resource URL.</param>
     /// <param name="Audio">Associated audio stream link.</param>
@@ -381,14 +381,14 @@ public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesAp
     public sealed record ThemeAudioEntry(int Version, string? Episodes, bool Nsfw, bool Spoiler, ThemeVideoConnection? Videos);
 
     /// <summary>Wrapper for theme metadata including song info and video entries.</summary>
-    /// <param name="Id">Theme identifier.</param>
+    /// <param name="Id">Theme ID.</param>
     /// <param name="Slug">Theme type slug.</param>
     /// <param name="Song">Song composition details.</param>
     /// <param name="Animethemeentries">List of theme entry versions and associations.</param>
     public sealed record ThemeWithAudioWrapper(int Id, string? Slug, SongInfo? Song, List<ThemeAudioEntry>? Animethemeentries);
 
     /// <summary>Anime entity containing themes for pagination listings.</summary>
-    /// <param name="Id">Anime identifier.</param>
+    /// <param name="Id">Anime ID.</param>
     /// <param name="Title">Title of the anime.</param>
     /// <param name="Season">Airing season.</param>
     /// <param name="Year">Airing broadcast year.</param>

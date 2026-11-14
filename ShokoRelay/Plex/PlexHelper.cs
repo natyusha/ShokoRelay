@@ -110,6 +110,20 @@ public static partial class PlexHelper
 
     #endregion
 
+    #region Path & String Utils
+
+    /// <summary>Normalizes directory separators to forward slashes and trims trailing slashes for Plex-compatible path comparison.</summary>
+    /// <param name="path">The filesystem path to normalize.</param>
+    /// <returns>A normalized path string.</returns>
+    public static string NormalizePathForPlex(string? path) => string.IsNullOrWhiteSpace(path) ? string.Empty : path.Replace('\\', '/').TrimEnd('/');
+
+    /// <summary>Checks if a Plex string value (which mimics a boolean, e.g. "1") represents true.</summary>
+    /// <param name="value">The Plex string value to check.</param>
+    /// <returns>True if the string equals "1"; otherwise, false.</returns>
+    public static bool IsPlexTrue(string? value) => string.Equals(value, "1", StringComparison.Ordinal);
+
+    #endregion
+
     #region Poster Discovery
 
     /// <summary>Locate a local custom image for a collection by matching against its name or ID across active roots, considering optional suffixes.</summary>
