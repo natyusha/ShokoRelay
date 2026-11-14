@@ -15,6 +15,7 @@ public static class ReportHelper
     /// <param name="blacklist">Set of normalized blacklisted keys to exclude.</param>
     /// <param name="formatDisplayName">Optional formatting function for display names (e.g., TitleCase).</param>
     /// <param name="cleanRaw">Optional pre-cleaning function applied before normalization (e.g., stripping moderator notes).</param>
+    /// <param name="allowSamePrimaryMerge">True to allow distinct primary-source (AniDB) entries sharing a normalized key to merge; false to keep unconfigured AniDB entries separate.</param>
     internal sealed class CsvReportBuilder(
         string title,
         string columnName,
@@ -22,9 +23,17 @@ public static class ReportHelper
         IReadOnlyDictionary<string, string> merges,
         IReadOnlySet<string> blacklist,
         Func<string, string>? formatDisplayName = null,
-        Func<string, string>? cleanRaw = null
+        Func<string, string>? cleanRaw = null,
+        bool allowSamePrimaryMerge = true
     )
     {
+        /// <summary>Delegate for recording a single candidate item from a series into the report builder.</summary>
+        /// <param name="source">Display name of the metadata source (e.g., "AniDB", "TMDB", "User").</param>
+        /// <param name="sourceOrder">Numerical sort order for the source.</param>
+        /// <param name="rawName">The raw candidate name string.</param>
+        /// <param name="category">Optional isolation category (e.g., "Person" vs "Company") preventing cross-category merges.</param>
+        public delegate void RecordDelegate(string source, int sourceOrder, string? rawName, string category = "");
+
         private readonly record struct ResolvedItem(string NormKey, string DisplayName, string? MergeTarget, bool IsBlacklisted);
 
         private sealed class VariantStats
@@ -42,18 +51,18 @@ public static class ReportHelper
         private sealed class ThreadState
         {
             public readonly Dictionary<string, ResolvedItem> ResolveCache = new(StringComparer.Ordinal);
-            public readonly Dictionary<string, GroupStats> Groups = new(StringComparer.OrdinalIgnoreCase);
-            public readonly HashSet<(string Source, string NormKey, string DisplayName)> SeenInSeries = [];
+            public readonly Dictionary<(string Category, string NormKey), GroupStats> Groups = [];
+            public readonly HashSet<(string Category, string Source, string NormKey, string DisplayName)> SeenInSeries = [];
         }
 
         private readonly Lock _mergeLock = new();
-        private readonly Dictionary<string, GroupStats> _globalGroups = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<(string Category, string NormKey), GroupStats> _globalGroups = [];
 
         /// <summary>Scans all supplied Shoko series in parallel and formats the aggregated results into a sorted CSV report string.</summary>
         /// <param name="seriesList">All Shoko series to evaluate.</param>
         /// <param name="collectSeries">Callback invoked per series to record its items via the supplied recorder delegate.</param>
         /// <returns>A CSV-formatted report string.</returns>
-        public string Build(IEnumerable<IShokoSeries> seriesList, Action<IShokoSeries, Action<string, int, string?>> collectSeries)
+        public string Build(IEnumerable<IShokoSeries> seriesList, Action<IShokoSeries, RecordDelegate> collectSeries)
         {
             Parallel.ForEach(
                 seriesList,
@@ -62,17 +71,17 @@ public static class ReportHelper
                 (series, _, local) =>
                 {
                     local.SeenInSeries.Clear();
-                    collectSeries(series, (source, sourceOrder, rawName) => RecordLocal(local, series.LocalID, source, sourceOrder, rawName));
+                    collectSeries(series, (source, sourceOrder, rawName, category) => RecordLocal(local, series.LocalID, category, source, sourceOrder, rawName));
                     return local;
                 },
                 local =>
                 {
                     lock (_mergeLock)
                     {
-                        foreach (var (normKey, localGroup) in local.Groups)
+                        foreach (var (gKey, localGroup) in local.Groups)
                         {
-                            if (!_globalGroups.TryGetValue(normKey, out var globalGroup))
-                                _globalGroups[normKey] = globalGroup = new GroupStats();
+                            if (!_globalGroups.TryGetValue(gKey, out var globalGroup))
+                                _globalGroups[gKey] = globalGroup = new GroupStats();
 
                             globalGroup.MergeTarget ??= localGroup.MergeTarget;
                             foreach (var sid in localGroup.SeriesIds)
@@ -95,10 +104,11 @@ public static class ReportHelper
         /// <summary>Resolves and records a single item into thread-local storage using per-thread memoization.</summary>
         /// <param name="local">Thread-local report accumulation state.</param>
         /// <param name="seriesId">The Shoko series identifier being evaluated.</param>
+        /// <param name="category">Isolation category preventing cross-category merges.</param>
         /// <param name="source">Display name of the metadata source (e.g., "AniDB", "TMDB", "User").</param>
         /// <param name="sourceOrder">Numerical sort order for the source.</param>
         /// <param name="rawName">The raw candidate name string.</param>
-        private void RecordLocal(ThreadState local, int seriesId, string source, int sourceOrder, string? rawName)
+        private void RecordLocal(ThreadState local, int seriesId, string category, string source, int sourceOrder, string? rawName)
         {
             if (string.IsNullOrWhiteSpace(rawName))
                 return;
@@ -124,11 +134,12 @@ public static class ReportHelper
                 resolved = local.ResolveCache[rawName] = new ResolvedItem(normKey, displayName, formattedTarget, isBlacklisted);
             }
 
-            if (resolved.IsBlacklisted || !local.SeenInSeries.Add((source, resolved.NormKey, resolved.DisplayName)))
+            if (resolved.IsBlacklisted || !local.SeenInSeries.Add((category, source, resolved.NormKey, resolved.DisplayName)))
                 return;
 
-            if (!local.Groups.TryGetValue(resolved.NormKey, out var group))
-                local.Groups[resolved.NormKey] = group = new GroupStats();
+            var gKey = (category, resolved.NormKey);
+            if (!local.Groups.TryGetValue(gKey, out var group))
+                local.Groups[gKey] = group = new GroupStats();
 
             group.MergeTarget ??= resolved.MergeTarget;
             group.SeriesIds.Add(seriesId);
@@ -163,6 +174,30 @@ public static class ReportHelper
                     .ThenBy(v => v.DisplayName.Length)
                     .ThenBy(v => v.DisplayName, StringComparer.Ordinal)
                     .ToList();
+
+                // When distinct primary-source (AniDB) entries are not explicitly merged by CSV rules, emit each as its own line and attach secondary-source matches
+                if (!allowSamePrimaryMerge && group.MergeTarget == null && ordered.Count(v => v.SourceOrder == 0) > 1)
+                {
+                    var primaries = ordered.Where(v => v.SourceOrder == 0).ToList();
+                    var secondaries = ordered.Where(v => v.SourceOrder > 0).ToList();
+                    var attached = primaries.Select(_ => new List<(int SourceOrder, string Source, string DisplayName, int Count)>()).ToList();
+
+                    foreach (var sec in secondaries)
+                    {
+                        int matchIdx = primaries.FindIndex(p => string.Equals(p.DisplayName, sec.DisplayName, StringComparison.OrdinalIgnoreCase));
+                        attached[matchIdx >= 0 ? matchIdx : 0].Add(sec);
+                    }
+
+                    for (int i = 0; i < primaries.Count; i++)
+                    {
+                        var (sourceOrder, source, displayName, count) = primaries[i];
+                        var sbSplit = new StringBuilder($"{source},{TextHelper.EscapeCsvCommas(displayName)},{count}");
+                        foreach (var (_, sourceAtch, displayNameAtch, countAtch) in attached[i])
+                            sbSplit.Append($";{sourceAtch},{TextHelper.EscapeCsvCommas(displayNameAtch)},{countAtch}");
+                        rows.Add((sourceOrder, displayName, count, sbSplit.ToString()));
+                    }
+                    continue;
+                }
 
                 var sbLine = new StringBuilder();
                 int primaryOrder = ordered[0].SourceOrder;

@@ -37,8 +37,11 @@ public static class CastHelper
     /// <summary>Explicit studio and credit name merges mapping variant names to canonical names.</summary>
     private static readonly FrozenDictionary<string, string> s_creditMerges;
 
-    /// <summary>Global cache mapping normalized credit/studio keys to their preferred display names across all series.</summary>
-    private static readonly ConcurrentDictionary<string, TextHelper.GlobalNameEntry> s_globalCreditCache = new();
+    /// <summary>Global cache mapping normalized AniDB credit keys (separated by Person vs. Company) to their preferred display names.</summary>
+    private static readonly ConcurrentDictionary<(bool IsPerson, string NormKey), TextHelper.GlobalNameEntry> s_anidbCreditNames = new();
+
+    /// <summary>Global cache mapping normalized TMDB-only credit keys (separated by Person vs. Company) to their preferred display names.</summary>
+    private static readonly ConcurrentDictionary<(bool IsPerson, string NormKey), TextHelper.GlobalNameEntry> s_tmdbCreditNames = new();
 
     /// <summary>Tracks Shoko series IDs already recorded into the global credit cache to prevent repeated-request count inflation.</summary>
     private static readonly ConcurrentDictionary<int, byte> s_recordedSeriesIds = new();
@@ -58,13 +61,6 @@ public static class CastHelper
         var (blacklist, merges, _) = LoadDefaultCreditOverrides();
         s_creditBlacklist = blacklist.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
         s_creditMerges = merges.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var target in s_creditMerges.Values.Distinct(StringComparer.Ordinal))
-        {
-            string key = NormalizeCreditKey(target);
-            if (key.Length > 0)
-                s_globalCreditCache.GetOrAdd(key, _ => new TextHelper.GlobalNameEntry()).ResolveDisplayName(target, 1, record: true);
-        }
     }
 
     #endregion
@@ -122,9 +118,9 @@ public static class CastHelper
     /// <param name="tmdbSeries">Optional pre-resolved TMDB series metadata.</param>
     private static void RecordSeriesCredits(ISeries series, ISeries? tmdbSeries)
     {
-        var seenInSeries = new HashSet<(string NormKey, int Priority)>();
+        var seenInSeries = new HashSet<(bool IsPerson, string NormKey, int Priority)>();
 
-        void Record(string? rawName, int priority)
+        void Record(string? rawName, bool isPerson, int priority)
         {
             if (string.IsNullOrWhiteSpace(rawName) || IsCreditBlacklisted(rawName))
                 return;
@@ -134,25 +130,66 @@ public static class CastHelper
             if (norm.Length == 0 || s_creditMerges.ContainsKey(norm))
                 return;
 
-            if (seenInSeries.Add((norm, priority)))
-                s_globalCreditCache.GetOrAdd(norm, _ => new TextHelper.GlobalNameEntry()).ResolveDisplayName(trimmed, priority, record: true);
+            if (seenInSeries.Add((isPerson, norm, priority)))
+            {
+                var targetCache = priority == 1 ? s_anidbCreditNames : s_tmdbCreditNames;
+                targetCache.GetOrAdd((isPerson, norm), _ => new TextHelper.GlobalNameEntry()).ResolveDisplayName(trimmed, priority, record: true);
+            }
         }
 
         foreach (var c in series.Cast ?? [])
             if (c.Creator != null)
-                Record(c.Creator.Title, c.Source == MetadataSource.TMDB ? 2 : 1);
+                Record(c.Creator.Title, c.Creator.Type == CreatorType.Person, c.Source == MetadataSource.TMDB ? 2 : 1);
 
         foreach (var c in series.Crew ?? [])
             if (c.Creator != null)
-                Record(c.Creator.Title, c.Source == MetadataSource.TMDB ? 2 : 1);
+                Record(c.Creator.Title, c.Creator.Type == CreatorType.Person, c.Source == MetadataSource.TMDB ? 2 : 1);
 
         foreach (var s in series.Studios ?? [])
-            Record(s.Name, s.ID.Source == MetadataSource.AniDB ? 1 : 2);
+            Record(s.Name, false, s.ID.Source == MetadataSource.AniDB ? 1 : 2);
 
         var resolvedTmdb = tmdbSeries ?? (series as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault();
         foreach (var s in resolvedTmdb?.Studios ?? [])
-            Record(s.Name, 2);
+            Record(s.Name, false, 2);
     }
+
+    /// <summary>Builds a diagnostic CSV report of all cast, crew, and studio credits across Shoko series after applying default credit overrides.</summary>
+    /// <param name="metadataService">The Shoko metadata service used to enumerate all series.</param>
+    /// <returns>A CSV-formatted string listing source, credit, and series count, with merged variants appended after semicolons.</returns>
+    public static string BuildCreditReport(IMetadataService metadataService) =>
+        new ReportHelper.CsvReportBuilder("Credit", "credit", NormalizeCreditKey, s_creditMerges, s_creditBlacklist, allowSamePrimaryMerge: false).Build(
+            metadataService.GetAllShokoSeries() ?? [],
+            (series, record) =>
+            {
+                var tmdbSeries = series.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault();
+                var networkNames = tmdbSeries?.Networks?.Select(n => n.Name).Where(n => !string.IsNullOrWhiteSpace(n)).ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
+
+                void Record(MetadataSource source, string? name, bool isPerson)
+                {
+                    if (string.IsNullOrWhiteSpace(name))
+                        return;
+
+                    bool isTmdb = source == MetadataSource.TMDB;
+                    record(isTmdb ? "TMDB" : "AniDB", isTmdb ? 1 : 0, name, isPerson ? "Person" : "Company");
+                }
+
+                foreach (var c in series.Cast ?? [])
+                    if (c.Creator != null)
+                        Record(c.Source, c.Creator.Title, c.Creator.Type == CreatorType.Person);
+
+                foreach (var c in series.Crew ?? [])
+                    if (c.Creator != null)
+                        Record(c.Source, c.Creator.Title, c.Creator.Type == CreatorType.Person);
+
+                foreach (var s in series.Studios ?? [])
+                    if (!string.IsNullOrWhiteSpace(s.Name) && !networkNames.Contains(s.Name))
+                        Record(s.ID.Source, s.Name, false);
+
+                foreach (var s in tmdbSeries?.Studios ?? [])
+                    if (!string.IsNullOrWhiteSpace(s.Name) && !networkNames.Contains(s.Name))
+                        Record(MetadataSource.TMDB, s.Name, false);
+            }
+        );
 
     #endregion
 
@@ -176,7 +213,7 @@ public static class CastHelper
             foreach (var s in (seriesItem.Studios ?? []).Concat(tmdbSeries?.Studios ?? []))
                 if (s.ID.Source == MetadataSource.TMDB && s is IWithImages withImages && !string.IsNullOrWhiteSpace(s.Name))
                 {
-                    string sKey = NormalizeCreditKey(ResolvePreferredCreditName(s.Name, 2));
+                    string sKey = NormalizeCreditKey(ResolvePreferredCreditName(s.Name, false, 2));
                     if (!s_globalStudioThumbs.ContainsKey(sKey) && withImages.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, forceRemote: true) is { } logoUrl)
                         s_globalStudioThumbs[sKey] = logoUrl;
                 }
@@ -201,13 +238,14 @@ public static class CastHelper
             foreach (var c in anidbRoles)
             {
                 var creator = getCreator(c)!;
+                bool isPerson = creator.Type == CreatorType.Person;
                 string? rawTag = creator.Title;
                 string? role = getRole(c);
 
                 if (string.IsNullOrWhiteSpace(rawTag) || IsCreditBlacklisted(rawTag))
                     continue;
 
-                string tag = ResolvePreferredCreditName(rawTag, 1);
+                string tag = ResolvePreferredCreditName(rawTag, isPerson, 1);
                 if (IsCreditBlacklisted(tag) || !seenRolePairs.Add((NormalizeCreditKey(tag), (role ?? string.Empty).Trim().ToUpperInvariant())))
                     continue;
 
@@ -220,7 +258,7 @@ public static class CastHelper
                 }
 
                 string? thumb = null;
-                if (Settings.TmdbCastImages && s_globalStudioThumbs.TryGetValue(NormalizeCreditKey(tag), out var cachedLogo))
+                if (Settings.TmdbCastImages && !isPerson && s_globalStudioThumbs.TryGetValue(NormalizeCreditKey(tag), out var cachedLogo))
                     thumb = cachedLogo;
                 else if (thumbImg != null)
                     thumb = ImageHelper.GetImageUrl(thumbImg, forceRemote: true);
@@ -245,13 +283,14 @@ public static class CastHelper
                     continue;
 
                 var creator = getCreator(c)!;
+                bool isPerson = creator.Type == CreatorType.Person;
                 string? rawTag = creator.Title;
                 string? role = getRole(c);
 
                 if (string.IsNullOrWhiteSpace(rawTag) || IsCreditBlacklisted(rawTag))
                     continue;
 
-                string tag = ResolvePreferredCreditName(rawTag, 2);
+                string tag = ResolvePreferredCreditName(rawTag, isPerson, 2);
                 if (IsCreditBlacklisted(tag) || !seenRolePairs.Add((NormalizeCreditKey(tag), (role ?? string.Empty).Trim().ToUpperInvariant())))
                     continue;
 
@@ -296,7 +335,7 @@ public static class CastHelper
                 bool isAniDb = s.ID.Source == MetadataSource.AniDB;
                 int priority = isAniDb ? 1 : 2;
                 bool isAnimation = animationStudioNames.Contains(rawName);
-                string preferredName = ResolvePreferredCreditName(rawName, priority);
+                string preferredName = ResolvePreferredCreditName(rawName, false, priority);
                 string key = NormalizeCreditKey(preferredName);
 
                 if (!studioGroups.TryGetValue(key, out var existing))
@@ -347,44 +386,6 @@ public static class CastHelper
     /// <returns>An array of anonymous objects containing producer names.</returns>
     public static object[] GetProducers(IWithCastAndCrew item, IMetadataService? metadataService = null) => FilterCrew(item, c => c.RoleType == CrewRoleType.Producer, metadataService);
 
-    /// <summary>Builds a diagnostic CSV report of all cast, crew, and studio credits across Shoko series after applying default credit overrides.</summary>
-    /// <param name="metadataService">The Shoko metadata service used to enumerate all series.</param>
-    /// <returns>A CSV-formatted string listing source, credit, and series count, with merged variants appended after semicolons.</returns>
-    public static string BuildCreditReport(IMetadataService metadataService) =>
-        new ReportHelper.CsvReportBuilder("Credit", "credit", NormalizeCreditKey, s_creditMerges, s_creditBlacklist).Build(
-            metadataService.GetAllShokoSeries() ?? [],
-            (series, record) =>
-            {
-                var tmdbSeries = series.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault();
-                var networkNames = tmdbSeries?.Networks?.Select(n => n.Name).Where(n => !string.IsNullOrWhiteSpace(n)).ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
-
-                void Record(MetadataSource source, string? name)
-                {
-                    if (string.IsNullOrWhiteSpace(name))
-                        return;
-
-                    bool isTmdb = source == MetadataSource.TMDB;
-                    record(isTmdb ? "TMDB" : "AniDB", isTmdb ? 1 : 0, name);
-                }
-
-                foreach (var c in series.Cast ?? [])
-                    if (c.Creator != null)
-                        Record(c.Source, c.Creator.Title);
-
-                foreach (var c in series.Crew ?? [])
-                    if (c.Creator != null)
-                        Record(c.Source, c.Creator.Title);
-
-                foreach (var s in series.Studios ?? [])
-                    if (!string.IsNullOrWhiteSpace(s.Name) && !networkNames.Contains(s.Name))
-                        Record(s.ID.Source, s.Name);
-
-                foreach (var s in tmdbSeries?.Studios ?? [])
-                    if (!string.IsNullOrWhiteSpace(s.Name) && !networkNames.Contains(s.Name))
-                        Record(MetadataSource.TMDB, s.Name);
-            }
-        );
-
     #endregion
 
     #region Studio Logic
@@ -396,17 +397,20 @@ public static class CastHelper
         !string.IsNullOrWhiteSpace(name)
         && (s_creditBlacklist.Contains(NormalizeCreditKey(name)) || (s_creditMerges.TryGetValue(NormalizeCreditKey(name), out var target) && s_creditBlacklist.Contains(NormalizeCreditKey(target))));
 
-    /// <summary>Resolves the preferred global credit or studio display name using explicit merges and the global credit cache.</summary>
+    /// <summary>Resolves the preferred global credit or studio display name using explicit merges, AniDB priority, and TMDB frequency.</summary>
     /// <param name="rawName">The raw studio, company, or creator name.</param>
+    /// <param name="isPerson">True for Person creators; false for Studios/Companies.</param>
     /// <param name="priority">The source priority (1 = AniDB, 2 = TMDB).</param>
     /// <returns>The globally preferred display name.</returns>
-    private static string ResolvePreferredCreditName(string rawName, int priority = 2)
+    private static string ResolvePreferredCreditName(string rawName, bool isPerson, int priority = 2)
     {
         string trimmed = rawName.Trim();
         string norm = NormalizeCreditKey(trimmed);
         return norm.Length == 0 ? trimmed
             : s_creditMerges.TryGetValue(norm, out var mapped) ? mapped
-            : s_globalCreditCache.GetOrAdd(norm, _ => new TextHelper.GlobalNameEntry()).ResolveDisplayName(trimmed, priority, record: false);
+            : priority == 1 ? trimmed
+            : s_anidbCreditNames.TryGetValue((isPerson, norm), out var anidbEntry) ? anidbEntry.ResolveDisplayName(trimmed, 1, record: false)
+            : s_tmdbCreditNames.GetOrAdd((isPerson, norm), _ => new TextHelper.GlobalNameEntry()).ResolveDisplayName(trimmed, 2, record: false);
     }
 
     /// <summary>Normalizes a studio, company, or creator name for comparison by stripping trailing (JP) tags, diacritics, spaces, and punctuation.</summary>
@@ -448,7 +452,7 @@ public static class CastHelper
         [
             .. studios
                 .Where(s => !string.IsNullOrWhiteSpace(s.Name) && !IsCreditBlacklisted(s.Name))
-                .Select(s => ResolvePreferredCreditName(s.Name, s.ID.Source == MetadataSource.AniDB ? 1 : 2))
+                .Select(s => ResolvePreferredCreditName(s.Name, false, s.ID.Source == MetadataSource.AniDB ? 1 : 2))
                 .Where(name => !string.IsNullOrWhiteSpace(name))
                 .DistinctBy(NormalizeCreditKey)
                 .Select(name => new TagItem { Tag = name }),
@@ -495,7 +499,9 @@ public static class CastHelper
                     if (c.Creator == null)
                         return null;
                     string? rawName = c.Creator.Title;
-                    return string.IsNullOrWhiteSpace(rawName) || IsCreditBlacklisted(rawName) ? null : ResolvePreferredCreditName(rawName, c.Source == MetadataSource.TMDB ? 2 : 1);
+                    return string.IsNullOrWhiteSpace(rawName) || IsCreditBlacklisted(rawName)
+                        ? null
+                        : ResolvePreferredCreditName(rawName, c.Creator.Type == CreatorType.Person, c.Source == MetadataSource.TMDB ? 2 : 1);
                 })
                 .Where(name => !string.IsNullOrWhiteSpace(name))
                 .DistinctBy(name => NormalizeCreditKey(name!))
