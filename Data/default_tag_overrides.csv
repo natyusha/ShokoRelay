@@ -24,8 +24,8 @@
 ;animation,anime,censored,hentai,television programme,tv
 
 # TMDB keywords which violate the rules (mainly they are not english words) and will make it through the language filter
-;accion,animacion,art martial,boxeo,bukatsu,chuanyue,chuyển sinh,dongfang,donghua,espionnage,futuro postapocalíptico
-;gufeng,guzhuang,internete,inzest,magie,samourai,seadex,sekai togou,serie de tv
+# Many of these can also be merged below but it isn't reliable to do so as non english keywords are subject to removal on TMDB
+;animacion,chuanyue,dongfang,donghua,gufeng,guzhuang,seadex,sekai togou,serie de tv
 
 
 ## Tag Merges ##
@@ -33,9 +33,11 @@
 # AniDB <- TMDB Mappings #                                                                                                                                     ## Generally uses the primary tag entry
 3d cg animation,3d animation,cg animated
 absurdist humour,absurd,absurdist
+action,accion
 afterlife,life after death,afterlife world                                                                                                                     ## AniDB separates 'afterlife world'
 age difference romance,age-gap relationship,age difference
 air combat,aerial combat
+alien invasion,alien attack
 all-boys school,boys' school
 all-girls school,girls' school
 amnesia,memory loss
@@ -49,6 +51,7 @@ association football,football (soccer)
 attempted rape,rape attempt
 aviation,airplane,aeroplane
 bad luck,misfortune
+bakumatsu - meiji period,bakumatsu,meiji period
 based on real events,based on true story
 bicycling,cycling,biking,bicycle,bike
 bisexual,bisexuality
@@ -57,11 +60,13 @@ black humour,black humor,dark comedy
 body swap,body exchange
 body takeover,possession,possessed
 boobjob,tit fucking,titty fuck
+boxing,boxeo
 brainwashing,mind control,hypnosis,mesmerization
 bukkake,bukakke
 cafe,coffee shop
 cat person,cat people,cat girl,catgirl,cat boy,catboy                                                                                                          ## AniDB groups both genders
 cheating,cheat
+cheerleading,cheerleader                                                                                                                                       ## AniDB has a character tag called 'cheerleader'
 chinese production,donghua
 chinese zodiac,chinese zodiac signs
 combat,fight,fighting
@@ -71,6 +76,7 @@ competitive beach volleyball,beach volleyball,beach volley
 corrupt,corruption
 cosplaying,cosplay,cosplayer
 countryside,rural,rural area,rural town                                                                                                                        ## AniDB separates 'rural town'
+coup d'etat,military coup
 creampie,nakadashi
 cross-dressing,cross dresser
 curse,cursed
@@ -96,6 +102,7 @@ dystopia,dystopian future
 elf,elves
 entertainment industry,show business
 environmentalism,environmental,environment
+espionage,espionnage
 familiar spirit,familiar
 fate,destiny
 fellatio,blowjob,blow job
@@ -110,18 +117,22 @@ heavy metal music,heavy metal
 hokkaido,hokkaido\u002C japan
 homemaker,housewife,housewives
 horse riding,horseback riding,equestrian
+huge breasts,very large breasts
 human cannibalism,eating of humans
 human-android love,human android relationship
 human-animal relationship,animal human friendship,animal friendship
 immortality,immortal
+incest,inzest
 inconclusive romantic plot,unresolved romance                                                                                                                  ## Separate on AniDB but one is marked 'ending tags that need merging'
 insecure,insecurity
 inter-dimensional travel,dimensional travel
+internet,internete
 introspection,introspective,self reflection
 isekai,another world,other world,otherworld
+isekai,chuyển sinh
 ishikawa,ishikawa\u002C japan
 journey,travel,traveling,voyage
-juujin,furry
+juujin,furry,beastmen
 kidnapping,kidnapped
 kitsune,fox spirit
 korean-japanese co-production,japanese-korean coproduction
@@ -133,12 +144,13 @@ london,london\u002C england
 lonely,loneliness
 love between enemies,enemies to lovers
 mafia,yakuza,organized crime
-magic,witch,wizard,sorcery,sorcerer,sorceress,mage,magician                                                                                                    ## AniDB groups both genders
+magic,witch,wizard,sorcery,sorcerer,sorceress,mage,magician,magie                                                                                              ## AniDB groups both genders
 magical girl,magic girl
 magical realism,magic realism
 mars,planet mars
 maze,labyrinth
 mecha,mechs
+medium awareness,breaking the fourth wall
 melancholic,melancholy
 melodrama,melodramatic
 middle school,junior high school
@@ -157,7 +169,9 @@ obsessive,obsession                                                             
 occult,occultism
 office lady,office lady (ol)
 olympics,olympic games
+omiai,arranged marriage
 one thousand and one nights,arabian nights
+onmyoudou,onmyōji
 oral,oral sex
 osaka,osaka\u002C japan
 pantsu,panties
@@ -170,7 +184,7 @@ perverted,pervert,pervertion
 point of view,pov (point of view)
 police,cop,police officer
 politics,political
-post-apocalyptic,post-apocalyptic future
+post-apocalyptic,post-apocalyptic future,futuro postapocalíptico
 post-credits scene,aftercreditsstinger
 power suit,power armor
 prosthesis,prosthetic limb
@@ -185,6 +199,8 @@ rome,rome\u002C italy
 royal intrigue,court intrigue,court politics
 rpg,role playing game (rpg)
 salaryman,office worker
+samurai,samourai
+school clubs,bukatsu
 science fiction,sci-fi,sci fi
 scissoring,tribadism
 secret identity,hidden identity
@@ -214,10 +230,12 @@ south korean production,korean animation,aeni
 space,outer space
 spaceship,spacecraft
 special squads,special unit
+spellcasting,magic spell
 spy,secret agent
 squirting,female ejaculation,female ejaculation (squirt)
 stomach stretch,stomach bulge
 strap-on dildo,strap-on
+summoning,summons,summoning spell
 sumo wrestling,sumo
 super deformed,chibi                                                                                                                                           ## AniDB has a character tag called 'chibi'
 super power,special ability,special power,superhuman,superhuman abilities
@@ -253,6 +271,7 @@ yokohama,yokohama\u002C kanagawa\u002C japan
 # TMDB <- TMDB Mappings #                                                                                                                                      ## Generally in order of popularity/usage
 all girl band,girl band
 alternate dimension,another dimension,other dimension
+ancient china,gufeng
 arms dealer,weapons dealer                                                                                                                                     ## AniDB has a character tag called 'arms dealer'
 banishment,exile
 big sister,older sister
@@ -280,7 +299,7 @@ married life,marriage life
 medieval,medieval times
 megami tensei,megaten,shin megami tensei
 military strategy,war strategy
-mixed martial arts (mma),mixed martial arts
+mixed martial arts (mma),mixed martial arts,art martial
 mother,mom
 mourning,grief
 murder mystery,whodunit

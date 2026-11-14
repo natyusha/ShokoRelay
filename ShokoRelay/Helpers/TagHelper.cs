@@ -293,44 +293,26 @@ public static partial class TagHelper
 
     /// <summary>Builds a diagnostic CSV report of all tags across Shoko series after applying default tag overrides.</summary>
     /// <param name="metadataService">The Shoko metadata service used to enumerate all series.</param>
-    /// <returns>A CSV-formatted string listing source, tag, and series count.</returns>
-    public static string BuildTagReport(IMetadataService metadataService)
-    {
-        var stats = new Dictionary<(int SourceOrder, string Source, string NormKey), (TextHelper.GlobalNameEntry Entry, int Count)>();
+    /// <returns>A CSV-formatted string listing source, tag, and series count, with merged variants appended after semicolons.</returns>
+    public static string BuildTagReport(IMetadataService metadataService) =>
+        new TextHelper.CsvReportBuilder("Tag", "tag", NormalizeTagKey, s_defaultTagMerges, s_defaultTagBlacklist, TitleCase, s => TagCleanupRegex().Replace(s, "")).Build(
+            metadataService.GetAllShokoSeries() ?? [],
+            (series, record) =>
+            {
+                if (series.AnidbAnime?.Tags is IReadOnlyList<IAnidbTagForAnime> anidbTags)
+                    foreach (var t in anidbTags)
+                        record("AniDB", 0, t.Name);
 
-        foreach (var series in metadataService.GetAllShokoSeries() ?? [])
-        {
-            var seenInSeries = new HashSet<(string Source, string NormKey)>();
+                if (series.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() is { } tmdb)
+                    foreach (var t in tmdb.Tags)
+                        if (t.Kind is TagKind.Genre || (t.Kind is TagKind.Keyword && !NonEnglishTagRegex().IsMatch(t.Name)))
+                            record("TMDB", 1, t.Name);
 
-            void RecordTag(string source, int sourceOrder, string? rawName) =>
-                TextHelper.RecordReportItem(
-                    stats,
-                    seenInSeries,
-                    source,
-                    sourceOrder,
-                    string.IsNullOrWhiteSpace(rawName) ? null : TagCleanupRegex().Replace(rawName, ""),
-                    NormalizeTagKey,
-                    s_defaultTagMerges,
-                    s_defaultTagBlacklist,
-                    TitleCase
-                );
-
-            if (series.AnidbAnime?.Tags is IReadOnlyList<IAnidbTagForAnime> anidbTags)
-                foreach (var t in anidbTags)
-                    RecordTag("AniDB", 0, t.Name);
-
-            if (series.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() is { } tmdb)
-                foreach (var t in tmdb.Tags)
-                    if (t.Kind is TagKind.Genre || (t.Kind is TagKind.Keyword && !NonEnglishTagRegex().IsMatch(t.Name)))
-                        RecordTag("TMDB", 1, t.Name);
-
-            foreach (var t in series.Tags ?? [])
-                if (t != null && t.ID.Source == MetadataSource.User)
-                    RecordTag("User", 2, t.Name);
-        }
-
-        return TextHelper.FormatCsvReport("Tag", "tag", stats);
-    }
+                foreach (var t in series.Tags ?? [])
+                    if (t != null && t.ID.Source == MetadataSource.User)
+                        record("User", 2, t.Name);
+            }
+        );
 
     #endregion
 

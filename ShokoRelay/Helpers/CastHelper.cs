@@ -351,47 +351,42 @@ public static class CastHelper
 
     /// <summary>Builds a diagnostic CSV report of all cast, crew, and studio credits across Shoko series after applying default credit overrides.</summary>
     /// <param name="metadataService">The Shoko metadata service used to enumerate all series.</param>
-    /// <returns>A CSV-formatted string listing source, credit, and series count.</returns>
-    public static string BuildCreditReport(IMetadataService metadataService)
-    {
-        var stats = new Dictionary<(int SourceOrder, string Source, string NormKey), (TextHelper.GlobalNameEntry Entry, int Count)>();
+    /// <returns>A CSV-formatted string listing source, credit, and series count, with merged variants appended after semicolons.</returns>
+    public static string BuildCreditReport(IMetadataService metadataService) =>
+        new TextHelper.CsvReportBuilder("Credit", "credit", NormalizeCreditKey, s_creditMerges, s_creditBlacklist).Build(
+            metadataService.GetAllShokoSeries() ?? [],
+            (series, record) =>
+            {
+                var tmdbSeries = series.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault();
+                var networkNames = tmdbSeries?.Networks?.Select(n => n.Name).Where(n => !string.IsNullOrWhiteSpace(n)).ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
 
-        foreach (var series in metadataService.GetAllShokoSeries() ?? [])
-        {
-            var seenInSeries = new HashSet<(string Source, string NormKey)>();
-            var tmdbSeries = series.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault();
-            var networkNames = tmdbSeries?.Networks?.Select(n => n.Name).Where(n => !string.IsNullOrWhiteSpace(n)).ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
+                void RecordCreator(ICreator? creator, string? fallbackName)
+                {
+                    if (GetName(creator, fallbackName) is { Length: > 0 } name)
+                    {
+                        bool isTmdb = creator?.ID.Source == MetadataSource.TMDB;
+                        record(isTmdb ? "TMDB" : "AniDB", isTmdb ? 1 : 0, name);
+                    }
+                }
 
-            void RecordCredit(MetadataSource? src, string? rawName) =>
-                TextHelper.RecordReportItem(
-                    stats,
-                    seenInSeries,
-                    src == MetadataSource.TMDB ? "TMDB" : "AniDB",
-                    src == MetadataSource.TMDB ? 1 : 0,
-                    rawName,
-                    NormalizeCreditKey,
-                    s_creditMerges,
-                    s_creditBlacklist
-                );
+                foreach (var c in series.Cast ?? [])
+                    RecordCreator(c.Creator, c.Name);
 
-            foreach (var c in series.Cast ?? [])
-                if (GetName(c.Creator, c.Name) is { Length: > 0 } name)
-                    RecordCredit(c.Creator?.ID.Source, name);
+                foreach (var c in series.Crew ?? [])
+                    RecordCreator(c.Creator, c.Name);
 
-            foreach (var c in series.Crew ?? [])
-                RecordCredit(c.Creator?.ID.Source, GetName(c.Creator, c.Name));
+                foreach (var s in series.Studios ?? [])
+                    if (!string.IsNullOrWhiteSpace(s.Name) && !networkNames.Contains(s.Name))
+                    {
+                        bool isTmdb = s.ID.Source == MetadataSource.TMDB;
+                        record(isTmdb ? "TMDB" : "AniDB", isTmdb ? 1 : 0, s.Name);
+                    }
 
-            foreach (var s in series.Studios ?? [])
-                if (!string.IsNullOrWhiteSpace(s.Name) && !networkNames.Contains(s.Name))
-                    RecordCredit(s.ID.Source, s.Name);
-
-            foreach (var s in tmdbSeries?.Studios ?? [])
-                if (!string.IsNullOrWhiteSpace(s.Name) && !networkNames.Contains(s.Name))
-                    RecordCredit(MetadataSource.TMDB, s.Name);
-        }
-
-        return TextHelper.FormatCsvReport("Credit", "credit", stats);
-    }
+                foreach (var s in tmdbSeries?.Studios ?? [])
+                    if (!string.IsNullOrWhiteSpace(s.Name) && !networkNames.Contains(s.Name))
+                        record("TMDB", 1, s.Name);
+            }
+        );
 
     #endregion
 
