@@ -150,6 +150,11 @@ public static class ReportHelper
                 if (group.Variants.Count == 0)
                     continue;
 
+                // Sort variants so the primary winner comes first matching GlobalNameEntry tiebreaking:
+                // 1. Explicit CSV merge target match
+                // 2. Source priority (AniDB = 0, TMDB = 1, User = 2)
+                // 3. Highest series count
+                // 4. Shorter name, then alphabetical
                 var ordered = group
                     .Variants.Select(kvp => (kvp.Key.SourceOrder, kvp.Key.Source, kvp.Key.DisplayName, kvp.Value.Count))
                     .OrderByDescending(v => group.MergeTarget != null && string.Equals(v.DisplayName, group.MergeTarget, StringComparison.OrdinalIgnoreCase))
@@ -164,15 +169,16 @@ public static class ReportHelper
                 string primaryName = ordered[0].DisplayName;
                 int primaryCount = ordered[0].Count;
 
-                // If an explicit CSV merge target has no direct raw occurrences, prepend it as an Override entry
+                // Case A: The entry has an explicit CSV merge target that no series used directly -> output Override entry first, then all variants
                 if (group.MergeTarget != null && !ordered.Any(v => string.Equals(v.DisplayName, group.MergeTarget, StringComparison.OrdinalIgnoreCase)))
                 {
                     primaryName = group.MergeTarget;
                     primaryCount = group.SeriesIds.Count;
                     sbLine.Append($"Override,{TextHelper.EscapeCsvCommas(primaryName)},{primaryCount}");
-                    foreach (var (sourceOrder, source, displayName, count) in ordered)
+                    foreach (var (_, source, displayName, count) in ordered)
                         sbLine.Append($";{source},{TextHelper.EscapeCsvCommas(displayName)},{count}");
                 }
+                // Case B: Has a natural winner (or target match) as ordered[0], append any subsequent variants/plurals/sources after ';'
                 else
                 {
                     sbLine.Append($"{ordered[0].Source},{TextHelper.EscapeCsvCommas(ordered[0].DisplayName)},{ordered[0].Count}");
@@ -187,7 +193,7 @@ public static class ReportHelper
             sb.AppendLine($"## {title} Report ##").AppendLine();
             sb.AppendLine($"#source,{columnName},count");
 
-            foreach (var (sourceOrder, name, count, line) in rows.OrderBy(r => r.SourceOrder).ThenByDescending(r => r.Count).ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase))
+            foreach (var (_, _, _, line) in rows.OrderBy(r => r.SourceOrder).ThenByDescending(r => r.Count).ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase))
                 sb.AppendLine(line);
 
             return sb.ToString();
