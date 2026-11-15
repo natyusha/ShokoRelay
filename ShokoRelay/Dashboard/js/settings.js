@@ -3,7 +3,7 @@
  * @description Dedicated logic for building and persisting the Provider Settings form on the Shoko Relay dashboard.
  */
 (() => {
-  const { configUrl, el, fetchJson, showToast, getValueByPath, setValueByPath, openModal, bindConfig, unwrapConfig, saveSettings } = window._sr;
+  const { configUrl, el, esc, fetchJson, showToast, getValueByPath, setValueByPath, openModal, bindConfig, unwrapConfig, saveSettings } = window._sr;
 
   // #region Config Helpers
   /**

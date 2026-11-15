@@ -33,9 +33,6 @@ public static class ShokoRelayConstants
 
     #region Paths & Folders
 
-    /// <summary>Directory name for configuration files.</summary>
-    public const string FolderConfigSubfolder = "config";
-
     /// <summary>Default folder name for the AnimeThemes local repository.</summary>
     public const string FolderAnimeThemesDefault = "!AnimeThemes";
 

@@ -3,7 +3,7 @@
  * @description Dedicated logic for AnimeThemes VFS and Theme.mp3 generation on the Shoko Relay dashboard.
  */
 (() => {
-  const { base, el, TOAST_MS, fetchJson, showToast, toastOperation, initToggle, updatePlaybackTooltip, getData, summarizeResult } = window._sr;
+  const { base, el, esc, TOAST_MS, fetchJson, showToast, toastOperation, initToggle, updatePlaybackTooltip, getData, summarizeResult } = window._sr;
 
   // #region Param Providers
   /**
