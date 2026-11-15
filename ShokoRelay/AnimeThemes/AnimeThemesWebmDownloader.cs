@@ -71,13 +71,13 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
         logger.LogInformation("AnimeThemes WebM: Starting download operation to -> {Path}", baseThemePath);
 
         // Build a cache of existing files to prevent downloading duplicates already organized in different folders
-        var existingFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var existingFiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         if (Directory.Exists(baseThemePath))
         {
             try
             {
                 foreach (var file in Directory.EnumerateFiles(baseThemePath, "*.webm", SearchOption.AllDirectories))
-                    existingFiles.Add(Path.GetFileName(file));
+                    existingFiles.TryAdd(Path.GetFileName(file), "/" + Path.GetRelativePath(baseThemePath, file).Replace('\\', '/'));
             }
             catch { }
         }
@@ -135,7 +135,7 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
                         string targetPath = Path.Combine(baseThemePath, yearFolder, seasonFolder, video.Basename);
                         string relPath = $"/{yearFolder}/{seasonFolder}/{video.Basename}";
 
-                        if (!query.Force && existingFiles.Contains(video.Basename))
+                        if (!query.Force && existingFiles.TryGetValue(video.Basename, out var existingRelPath))
                         {
                             if (mappedFilesWithAnidb.Contains(video.Basename))
                             {
@@ -144,7 +144,7 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
                                 continue;
                             }
 
-                            downloadedItems.Add((relPath, video.Basename));
+                            downloadedItems.Add((existingRelPath, video.Basename));
                             logger.LogInformation("AnimeThemes WebM: Found unmapped local theme -> {Basename}, checking for AniDB ID...", video.Basename);
                             continue;
                         }
@@ -162,7 +162,7 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
 
                             downloads.Add(video.Basename);
                             downloadedItems.Add((relPath, video.Basename));
-                            existingFiles.Add(video.Basename); // Add to cache so it isn't downloaded again if it appears in another anime
+                            existingFiles[video.Basename] = relPath; // Add to cache so it isn't downloaded again if it appears in another anime
                             downloaded++;
                         }
                         catch (HttpRequestException ex) when (ex.StatusCode is HttpStatusCode.ServiceUnavailable or HttpStatusCode.TooManyRequests)
@@ -187,7 +187,7 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
 
                                 downloads.Add(video.Basename);
                                 downloadedItems.Add((relPath, video.Basename));
-                                existingFiles.Add(video.Basename);
+                                existingFiles[video.Basename] = relPath;
                                 downloaded++;
                             }
                             catch (Exception retryEx)

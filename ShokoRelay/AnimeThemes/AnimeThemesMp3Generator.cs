@@ -331,6 +331,9 @@ public class AnimeThemesMp3Generator(
             }
         }
 
+        if (batchProcessedSeries != null && !batchProcessedSeries.TryAdd(series.LocalID, 0))
+            return new(folder, "skipped", "Theme already processed for this series in another directory.");
+
         string? temp = null;
         try
         {
@@ -449,7 +452,7 @@ public class AnimeThemesMp3Generator(
             }
 
             // After a successful VFS link is created, trigger a Plex metadata refresh to ensure the new Theme.mp3 is picked up by the server.
-            if (!string.IsNullOrEmpty(vfsLink) && plexClient.IsEnabled)
+            if (!string.IsNullOrEmpty(vfsLink) && plexClient.IsEnabled && !Settings.Advanced.DisableVfsGeneration)
             {
                 _ = Task.Run(async () =>
                 {
@@ -557,6 +560,7 @@ public class AnimeThemesMp3Generator(
                     bool isOp1 = AnimeThemesHelper.IsOp1(slug);
                     bool isEd = AnimeThemesHelper.IsEd(slug);
                     bool isEd1 = AnimeThemesHelper.IsEd1(slug);
+                    int currentSlugNum = AnimeThemesHelper.ExtractSlugNumber(slug);
 
                     if (isOp && !isOp1)
                         overriddenOps.Add($"{folder} | {slug}");
@@ -584,18 +588,28 @@ public class AnimeThemesMp3Generator(
                             var op = animethemes.Where(t => t.Slug != null && AnimeThemesHelper.IsOp(t.Slug)).OrderBy(t => AnimeThemesHelper.ExtractSlugNumber(t.Slug!)).FirstOrDefault();
                             var ed = animethemes.Where(t => t.Slug != null && AnimeThemesHelper.IsEd(t.Slug)).OrderBy(t => AnimeThemesHelper.ExtractSlugNumber(t.Slug!)).FirstOrDefault();
 
-                            bool isHigherEd = isEd && !isEd1;
+                            int? opNum = op?.Slug != null ? AnimeThemesHelper.ExtractSlugNumber(op.Slug) : null;
+                            int? edNum = ed?.Slug != null ? AnimeThemesHelper.ExtractSlugNumber(ed.Slug) : null;
 
-                            if (op != null || (isHigherEd && ed != null))
+                            bool hasOpUpgrade = op != null && (isEd || (isOp && opNum.HasValue && opNum.Value < currentSlugNum));
+                            bool hasEdUpgrade = !isOp && isEd && !isEd1 && op == null && ed != null && edNum.HasValue && edNum.Value < currentSlugNum;
+
+                            if (hasOpUpgrade || hasEdUpgrade)
                             {
-                                string newUpgrade = (op ?? ed!).Slug!;
+                                string newUpgrade = (hasOpUpgrade ? op!.Slug : ed!.Slug)!;
                                 if (newUpgrade != upgrade)
                                 {
                                     upgrade = newUpgrade;
                                     _themeMp3Cache![folder] = $"{slug}|{upgrade}";
                                     Interlocked.Exchange(ref cacheUpdated, 1);
                                 }
-                                upgrades.Add($"{s.GetDisplayTitle() ?? s.LocalID.ToString()} [{s.LocalID}] (Currently: {slug})");
+                                upgrades.Add($"{s.GetDisplayTitle() ?? s.LocalID.ToString()} [{s.LocalID}] (Currently: {slug}, Available: {newUpgrade})");
+                            }
+                            else if (!string.IsNullOrEmpty(upgrade))
+                            {
+                                upgrade = "";
+                                _themeMp3Cache![folder] = $"{slug}|";
+                                Interlocked.Exchange(ref cacheUpdated, 1);
                             }
                         }
                         catch (Exception ex)

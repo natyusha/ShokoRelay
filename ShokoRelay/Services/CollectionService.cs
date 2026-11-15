@@ -142,7 +142,7 @@ public class CollectionService(
 
                             try
                             {
-                                var files = new DirectoryInfo(imagesPath).EnumerateFiles().OrderBy(f => f.CreationTimeUtc).ToList();
+                                var files = new DirectoryInfo(imagesPath).EnumerateFiles().OrderBy(f => f.LastWriteTimeUtc).ToList();
                                 if (files.Count > 1)
                                     foreach (var file in files.SkipLast(1))
                                         try
@@ -299,8 +299,10 @@ public class CollectionService(
                         {
                             if (posted.Add((cid, "metadata")))
                             {
-                                var desc = TextHelper.GetDescriptionByLanguage(series!, Settings.DescriptionLanguage);
-                                var tmdbDesc = series!.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault()?.PreferredOverview?.Value;
+                                var group = metadataService.GetShokoGroupByID(series!.TopLevelGroupID);
+                                var primarySeries = group?.MainSeries ?? group?.Series?.FirstOrDefault() ?? series!;
+                                var desc = TextHelper.GetDescriptionByLanguage(primarySeries, Settings.DescriptionLanguage);
+                                var tmdbDesc = primarySeries.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault()?.PreferredOverview?.Value;
                                 var summary = TextHelper.SanitizeSummaryWithFallback(desc, tmdbDesc, Settings.SummaryMode);
                                 await plexCollections.UpdateCollectionMetadataAsync(cid, collectionName, summary, target, cancellationToken).ConfigureAwait(false);
                             }

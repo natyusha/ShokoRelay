@@ -27,8 +27,8 @@ public class ServiceRegistration : IPluginServiceRegistration
     /// <inheritdoc/>
     public static void RegisterServices(IServiceCollection serviceCollection, IApplicationPaths applicationPaths)
     {
-        RelaySource = MetadataSource.Register("Shoko Relay (Local)", ShokoRelayConstants.RelaySourceId, description: "Local images uploaded and managed by Shoko Relay.");
-        RelayPlexSource = MetadataSource.Register("Shoko Relay (Plex)", ShokoRelayConstants.RelayPlexSourceId, description: "Plex thumbnails uploaded and managed by Shoko Relay.");
+        RelaySource = MetadataSource.Register("Shoko Relay (Local)", ShokoRelayConstants.RelaySourceId, local: true, description: "Local images uploaded and managed by Shoko Relay.");
+        RelayPlexSource = MetadataSource.Register("Shoko Relay (Plex)", ShokoRelayConstants.RelayPlexSourceId, local: true, description: "Plex thumbnails uploaded and managed by Shoko Relay.");
 
         serviceCollection.AddHttpContextAccessor();
 

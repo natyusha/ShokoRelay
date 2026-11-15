@@ -22,6 +22,7 @@ public class ShokoImportAction(ShokoImportService shokoImportService, ILogger<Sh
     /// <inheritdoc/>
     public async Task Execute(IProgress<decimal> progress, CancellationToken token)
     {
+        progress.Report(0);
         progress.Report(10);
         await shokoImportService.TriggerImportAsync().ConfigureAwait(false);
         progress.Report(100);

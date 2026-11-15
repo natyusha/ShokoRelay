@@ -291,7 +291,7 @@ public class PlexController(
     /// <returns>A task representing the result of the image synchronization run.</returns>
     [HttpGet("plex/images/sync")]
     public Task<IActionResult> SyncPlexImages([FromQuery] string? filter = null) =>
-        ValidatePlexFilterRequest(filter, out var seriesList, out var filterIds) is { } guard
+        ValidatePlexFilterRequest(filter, out _, out var filterIds) is { } guard
             ? Task.FromResult(guard)
             : ExecuteTrackedTaskAsync(
                 ShokoRelayConstants.TaskPlexImagesSync,
@@ -412,7 +412,7 @@ public class PlexController(
         if (shokoEpisode == null)
             return Ok(new { status = "ignored", reason = "episode_not_found" });
 
-        var user = userService.GetUsers().FirstOrDefault();
+        var user = userService.GetUsers().OrderBy(u => u.LocalID).FirstOrDefault();
         if (user == null)
             return Ok(new { status = "ignored", reason = "no_shoko_user" });
 
@@ -425,15 +425,9 @@ public class PlexController(
         {
             if (evt.Metadata.UserRating.HasValue)
             {
-                await userDataService.RateEpisode(shokoEpisode, user, evt.Metadata.UserRating.Value).ConfigureAwait(false);
-                Logger.LogInformation(
-                    "Plex: Rating applied -> user='{User}', series='{Series}', {Type}='{Item}', rating={Rating}",
-                    evt.Account?.Title,
-                    seriesName,
-                    typeLabel,
-                    itemTitle,
-                    evt.Metadata.UserRating.Value
-                );
+                double clampedRating = Math.Clamp(evt.Metadata.UserRating.Value, 1.0, 10.0);
+                await userDataService.RateEpisode(shokoEpisode, user, clampedRating).ConfigureAwait(false);
+                Logger.LogInformation("Plex: Rating applied -> user='{User}', series='{Series}', {Type}='{Item}', rating={Rating}", evt.Account?.Title, seriesName, typeLabel, itemTitle, clampedRating);
             }
             return Ok(new { status = "ok", rated = true });
         }

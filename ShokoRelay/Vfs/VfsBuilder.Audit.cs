@@ -127,7 +127,7 @@ public partial class VfsBuilder
                             }
                         }
 
-                        foreach (var subDir in subDirsToAudit)
+                        foreach (var subDir in Directory.EnumerateDirectories(seriesFolder, "*", SearchOption.AllDirectories).OrderByDescending(d => d.Length))
                         {
                             try
                             {

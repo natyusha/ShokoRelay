@@ -287,7 +287,7 @@
           });
         } else if (p.Type === "number") {
           input.type = "number";
-        } else {
+        } else if (input.tagName === "INPUT") {
           input.type = "text";
           if (p.Path.endsWith("ShokoServerUrl")) input.placeholder = "e.g. http://localhost:8111";
           if (p.Path.endsWith("PlexServerUrl")) input.placeholder = "e.g. http://localhost:32400";

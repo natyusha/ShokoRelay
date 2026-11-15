@@ -267,7 +267,16 @@ public static partial class VfsHelper
     public static bool IsInVfsRoot(string path, out string vfsRoot)
     {
         vfsRoot = VfsShared.ResolveRootFolderName();
-        return path.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries).Contains(vfsRoot, StringComparer.OrdinalIgnoreCase);
+        string movieRoot = VfsShared.ResolveMovieRootFolderName();
+        var segments = path.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Contains(vfsRoot, StringComparer.OrdinalIgnoreCase))
+            return true;
+        if (segments.Contains(movieRoot, StringComparer.OrdinalIgnoreCase))
+        {
+            vfsRoot = movieRoot;
+            return true;
+        }
+        return false;
     }
 
     /// <summary>Determine if a filename contains a Plex-style split tag (e.g. "pt1").</summary>

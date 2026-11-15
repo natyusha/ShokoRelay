@@ -23,9 +23,7 @@ public class PlexAutomationAction(PlexAutomationService plexAutomationService, C
     /// <inheritdoc/>
     public async Task Execute(IProgress<decimal> progress, CancellationToken token)
     {
-        var settings = configProvider.GetSettings();
-        if (settings.Automation.PlexAutomationFrequencyHours == 0)
-            return;
+        progress.Report(0);
 
         await SyncHelper.SyncLock.WaitAsync(token).ConfigureAwait(false);
         try

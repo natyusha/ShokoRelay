@@ -59,7 +59,13 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
         string normMapped = PlexHelper.NormalizePathForPlex(mapped);
         var allTargets = GetConfiguredTargets();
 
-        var exactMatches = allTargets.Where(target => target.Locations.Any(loc => normMapped.StartsWith(PlexHelper.NormalizePathForPlex(loc), StringComparison.OrdinalIgnoreCase)));
+        var exactMatches = allTargets.Where(target =>
+            target.Locations.Any(loc =>
+            {
+                string normLoc = PlexHelper.NormalizePathForPlex(loc);
+                return normMapped.Equals(normLoc, StringComparison.OrdinalIgnoreCase) || normMapped.StartsWith(normLoc + "/", StringComparison.OrdinalIgnoreCase);
+            })
+        );
         if (exactMatches.Any())
             return [.. exactMatches.Select(t => (t, mapped))];
 
@@ -458,7 +464,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
                     return [];
 
                 var keys = new List<int>();
-                foreach (var ep in series.Episodes.Where(e => e.Type == EpisodeType.Episode))
+                foreach (var ep in series.Episodes.Where(e => e.Type == EpisodeType.Episode && e.Videos.Count > 0 && !MapHelper.IsHidden(e)))
                 {
                     string guid = $"{ShokoRelayConstants.MovieAgentScheme}://movie/{PlexConstants.MoviePrefix}{ep.LocalID}";
                     using var req = CreateRequest(

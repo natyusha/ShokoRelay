@@ -22,16 +22,17 @@ public class PlexWatchedSyncAction(SyncToShoko watchedSyncService, ConfigProvide
     /// <inheritdoc/>
     public async Task Execute(IProgress<decimal> progress, CancellationToken token)
     {
+        progress.Report(0);
+
         var settings = configProvider.GetSettings();
         var freq = settings.Automation.ShokoSyncWatchedFrequencyHours;
-        if (freq == 0)
-            return;
+        int lookback = freq > 0 ? freq + 1 : 25;
 
         await SyncHelper.SyncLock.WaitAsync(token).ConfigureAwait(false);
         try
         {
             progress.Report(10);
-            var result = await watchedSyncService.SyncWatchedAsync(false, freq + 1, cancellationToken: token).ConfigureAwait(false);
+            var result = await watchedSyncService.SyncWatchedAsync(false, lookback, cancellationToken: token).ConfigureAwait(false);
             progress.Report(100);
 
             LogHelper.WriteReport(

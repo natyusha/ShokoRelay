@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using Shoko.Abstractions.Metadata.Enums;
 using Shoko.Abstractions.Video.Services;
 
 namespace ShokoRelay.Vfs;
@@ -505,6 +506,7 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
             return;
 
         List<string> roots = [.. (videoService.GetAllManagedFolders() ?? []).Select(f => f.Path).Where(p => !string.IsNullOrEmpty(p)).Distinct(VfsShared.PathComparer)];
+        string movieRoot = VfsShared.ResolveMovieRootFolderName();
 
         foreach (var root in roots)
         {
@@ -521,6 +523,27 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
             {
                 onError($"Prune failed {path}: {ex.Message}");
                 logger.LogWarning(ex, "VFS: Failed to prune series path -> {Path}", path);
+            }
+
+            if (metadataService.GetShokoSeriesByID(folderId) is { Episodes: { } eps })
+            {
+                foreach (var ep in eps.Where(e => e.Type == EpisodeType.Episode))
+                {
+                    string mPath = Path.Combine(root, movieRoot, ep.LocalID.ToString());
+                    try
+                    {
+                        if (Directory.Exists(mPath))
+                        {
+                            Directory.Delete(mPath, true);
+                            logger.LogInformation("VFS: Pruned empty/orphaned movie folder -> {Path}", mPath);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        onError($"Prune failed {mPath}: {ex.Message}");
+                        logger.LogWarning(ex, "VFS: Failed to prune movie path -> {Path}", mPath);
+                    }
+                }
             }
         }
     }

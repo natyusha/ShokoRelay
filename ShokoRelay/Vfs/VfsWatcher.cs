@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using Shoko.Abstractions.Metadata.Events;
 using Shoko.Abstractions.Video.Events;
 using Shoko.Abstractions.Video.Services;
 using ShokoRelay.AnimeThemes;
@@ -68,7 +69,10 @@ public class VfsWatcher(
 
         videoService.VideoFileRelocated += OnVideoFileRelocated;
         videoService.VideoFileDeleted += OnVideoFileDeleted;
+        videoService.VideoUpdated += OnVideoUpdated;
         releaseService.ReleaseSaved += OnVideoReleaseSaved;
+        releaseService.ReleaseDeleted += OnVideoReleaseDeleted;
+        metadataService.SeriesRemoved += OnSeriesRemoved;
 
         logger.LogInformation("VFS: VfsWatcher -> Started (listening for relocation, matching and deletion events)");
     }
@@ -80,7 +84,10 @@ public class VfsWatcher(
         {
             videoService.VideoFileRelocated -= OnVideoFileRelocated;
             videoService.VideoFileDeleted -= OnVideoFileDeleted;
+            videoService.VideoUpdated -= OnVideoUpdated;
             releaseService.ReleaseSaved -= OnVideoReleaseSaved;
+            releaseService.ReleaseDeleted -= OnVideoReleaseDeleted;
+            metadataService.SeriesRemoved -= OnSeriesRemoved;
 
             lock (_gate)
                 _stopCts?.Cancel();
@@ -132,6 +139,24 @@ public class VfsWatcher(
         HandleFileEvent(@event);
     }
 
+    /// <summary>Handles Shoko video variation or ignored status updates, queueing affected series for VFS updates.</summary>
+    /// <param name="sender">Event sender.</param>
+    /// <param name="event">Event parameters containing video information.</param>
+    private void OnVideoUpdated(object? sender, VideoUpdatedEventArgs @event)
+    {
+        if (@event.Video?.Series == null || @event.Video.Series.Count == 0)
+            return;
+        logger.LogDebug("VFS: Video updated for '{FileName}'", Path.GetFileName(@event.Video.EarliestKnownName ?? "Unknown File"));
+
+        foreach (var series in @event.Video.Series)
+        {
+            int primaryId = series.GetPrimaryId(metadataService);
+            _pending[primaryId] = 1;
+        }
+
+        KickProcessLoop();
+    }
+
     /// <summary>Handles Shoko release matching events, queueing affected series for VFS updates when a video is assigned.</summary>
     /// <param name="sender">Event sender.</param>
     /// <param name="event">Event parameters containing release associations.</param>
@@ -149,6 +174,38 @@ public class VfsWatcher(
         }
 
         KickProcessLoop();
+    }
+
+    /// <summary>Handles Shoko release unlinking events, queueing affected series for VFS updates when a release is removed.</summary>
+    /// <param name="sender">Event sender.</param>
+    /// <param name="event">Event parameters containing release associations.</param>
+    private void OnVideoReleaseDeleted(object? sender, VideoReleaseDeletedEventArgs @event)
+    {
+        if (@event.Video?.Series == null || @event.Video.Series.Count == 0)
+            return;
+        logger.LogDebug("VFS: Release deleted for video '{FileName}'", Path.GetFileName(@event.Video.EarliestKnownName ?? "Unknown File"));
+
+        foreach (var series in @event.Video.Series)
+        {
+            int primaryId = series.GetPrimaryId(metadataService);
+            _pending[primaryId] = 1;
+        }
+
+        KickProcessLoop();
+    }
+
+    /// <summary>Handles Shoko series deletion events, immediately pruning VFS directories and blueprint entries.</summary>
+    /// <param name="sender">Event sender.</param>
+    /// <param name="event">Event parameters containing removed series information.</param>
+    private void OnSeriesRemoved(object? sender, SeriesInfoUpdatedEventArgs @event)
+    {
+        if (@event.SeriesInfo is not IShokoSeries series)
+            return;
+
+        int primaryId = series.GetPrimaryId(metadataService);
+        logger.LogInformation("VFS: Series removed -> {Title} [{LocalId}] ... Pruning VFS", series.GetDisplayTitle(), series.LocalID);
+
+        builder.Build([primaryId], cleanRoot: false);
     }
 
     /// <summary>Aggregates multiple video file events into the pending processing queue.</summary>
@@ -324,16 +381,19 @@ public class VfsWatcher(
             cts = CancellationTokenSource.CreateLinkedTokenSource(stopCts.Token);
         }
 
-        if (tracker.TryRemove(seriesId, out var oldCts))
-        {
-            try
+        tracker.AddOrUpdate(
+            seriesId,
+            cts,
+            (_, existing) =>
             {
-                oldCts.Cancel();
+                try
+                {
+                    existing.Cancel();
+                }
+                catch { }
+                return cts;
             }
-            catch { }
-        }
-
-        tracker[seriesId] = cts;
+        );
 
         _ = Task.Run(async () =>
         {
@@ -341,18 +401,11 @@ public class VfsWatcher(
             {
                 if (delaySeconds > 0)
                     await Task.Delay(TimeSpan.FromSeconds(delaySeconds), cts.Token).ConfigureAwait(false);
-                await VfsShared.VfsLock.WaitAsync(cts.Token).ConfigureAwait(false); // Acquire lock to prevent Plex update during VFS build.
-                try
-                {
-                    // If the series is currently sitting in the build queue, skip the individual update to avoid redundant API calls.
-                    if (_pending.ContainsKey(seriesId))
-                        return;
-                    await action(cts.Token).ConfigureAwait(false);
-                }
-                finally
-                {
-                    VfsShared.VfsLock.Release();
-                }
+
+                if (_pending.ContainsKey(seriesId))
+                    return;
+
+                await action(cts.Token).ConfigureAwait(false);
             }
             catch (OperationCanceledException) { }
             catch (Exception ex)
@@ -409,14 +462,22 @@ public class VfsWatcher(
             // Invalidate cached metadata so Plex receives the fresh, updated series context upon refresh
             plexMetadata.InvalidateCache(series.LocalID);
 
-            // Regenerate the VFS to account for cases where the episode/season numbering was updated in Shoko after the initial file event was processed
-            var vfsResult = builder.Build(series.LocalID, cleanRoot: false);
-            if (vfsResult.CreatedLinks > 0)
-                logger.LogInformation("VFS: {Action} links -> {Title} [{LocalId}] during fixup phase", isDeferred ? "Created" : "Re-generated", series.GetDisplayTitle(), series.LocalID);
+            await VfsShared.VfsLock.WaitAsync(token).ConfigureAwait(false);
+            try
+            {
+                // Regenerate the VFS to account for cases where the episode/season numbering was updated in Shoko after the initial file event was processed
+                var vfsResult = builder.Build(series.LocalID, cleanRoot: false);
+                if (vfsResult.CreatedLinks > 0)
+                    logger.LogInformation("VFS: {Action} links -> {Title} [{LocalId}] during fixup phase", isDeferred ? "Created" : "Re-generated", series.GetDisplayTitle(), series.LocalID);
 
-            // Restore AnimeThemes links for this specific series if a mapping file exists to prevent the pruned folder from losing them
-            if (File.Exists(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileAtMapping)))
-                await atMapping.ApplyMappingAsync([series.LocalID], token).ConfigureAwait(false);
+                // Restore AnimeThemes links for this specific series if a mapping file exists to prevent the pruned folder from losing them
+                if (File.Exists(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileAtMapping)))
+                    await atMapping.ApplyMappingAsync([series.LocalID], token).ConfigureAwait(false);
+            }
+            finally
+            {
+                VfsShared.VfsLock.Release();
+            }
 
             // If Plex is not linked exit since VFS creation is complete and the Plex APIs called below cannot be used
             if (!plexLibrary.IsEnabled)

@@ -59,7 +59,7 @@ public class SyncToShoko(
         bool actualVotes = includeVotes ?? auto.ShokoSyncWatchedIncludeRatings;
         bool actualProgress = includeProgress ?? auto.ShokoSyncWatchedIncludeProgress;
 
-        if (!plexClient.IsEnabled || userService.GetUsers().FirstOrDefault() is not { } defaultUser)
+        if (!plexClient.IsEnabled || userService.GetUsers().OrderBy(u => u.LocalID).FirstOrDefault() is not { } defaultUser)
             return result;
 
         var extraEntries = configProvider.GetExtraPlexUserEntries();
@@ -316,10 +316,11 @@ public class SyncToShoko(
                     if (actualVotes && item.UserRating.HasValue)
                     {
                         result = SyncHelper.IncVotesFound(result);
-                        if (epUserData?.UserRating == null || Math.Abs(epUserData.UserRating.Value - item.UserRating.Value) > 0.05)
+                        double clampedRating = Math.Clamp(item.UserRating.Value, 1.0, 10.0);
+                        if (epUserData?.UserRating == null || Math.Abs(epUserData.UserRating.Value - clampedRating) > 0.05)
                         {
                             if (!dryRun)
-                                await userDataService.RateEpisode(ep, defaultUser, item.UserRating.Value).ConfigureAwait(false);
+                                await userDataService.RateEpisode(ep, defaultUser, clampedRating).ConfigureAwait(false);
                             result = SyncHelper.IncVotesUpdated(result);
                         }
                         else

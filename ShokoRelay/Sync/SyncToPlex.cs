@@ -51,7 +51,7 @@ public class SyncToPlex(
         var logPrefix = (result = result with { DryRun = dryRun }).DryRun ? "[DRYRUN] " : "";
         bool actualVotes = includeVotes ?? auto.ShokoSyncWatchedIncludeRatings;
 
-        if (!plexClient.IsEnabled || userService.GetUsers().FirstOrDefault() is not { } shokoUser)
+        if (!plexClient.IsEnabled || userService.GetUsers().OrderBy(u => u.LocalID).FirstOrDefault() is not { } shokoUser)
             return result;
         var targets = plexClient.GetConfiguredTargets();
         if (targets.Count == 0)
@@ -121,7 +121,10 @@ public class SyncToPlex(
                             using var req = plexClient.CreateRequest(HttpMethod.Get, $"/:/scrobble?identifier=com.plexapp.plugins.library&key={plexItem.RatingKey}", target.ServerUrl, uToken);
                             using var resp = await plexClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
                             if (!resp.IsSuccessStatusCode)
+                            {
+                                result = SyncHelper.RecordError(result, result.PerUser, uName, $"Failed to scrobble RatingKey {plexItem.RatingKey} on {target.ServerName}");
                                 continue;
+                            }
                         }
 
                         string? prefId = null;
@@ -175,7 +178,7 @@ public class SyncToPlex(
                                     target.ServerUrl,
                                     uToken
                                 );
-                                await plexClient.SendAsync(rateReq, cancellationToken).ConfigureAwait(false);
+                                using var rateResp = await plexClient.SendAsync(rateReq, cancellationToken).ConfigureAwait(false);
                             }
                             result = SyncHelper.IncVotesUpdated(result);
                         }

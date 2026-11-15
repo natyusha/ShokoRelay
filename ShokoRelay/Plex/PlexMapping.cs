@@ -67,7 +67,15 @@ public static class PlexMapping
             {
                 var first = tmdbEps[0];
                 if (tmdbOrderingLookup.TryGetValue(first.ID, out var c))
-                    return new PlexCoords { Season = c.Season, Episode = c.Episode };
+                {
+                    int? endEp = tmdbEps.Count > 1 && tmdbOrderingLookup.TryGetValue(tmdbEps[^1].ID, out var last) && last.Season == c.Season ? last.Episode : null;
+                    return new PlexCoords
+                    {
+                        Season = c.Season,
+                        Episode = c.Episode,
+                        EndEpisode = endEp,
+                    };
+                }
             }
 
             var tmdbEpisodes = string.IsNullOrWhiteSpace(seriesPreferredOrderingId)

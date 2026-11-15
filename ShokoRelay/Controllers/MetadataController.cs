@@ -231,10 +231,23 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     public IActionResult GetMetadata(string ratingKey, [FromQuery] int includeChildren = 0) =>
         SafeRequest(() =>
         {
-            if (PlexHelper.IsMovieKey(ratingKey))
+            bool isMovieEndpoint = Request.Path.Value?.Contains("/movie", StringComparison.OrdinalIgnoreCase) == true;
+            if (
+                PlexHelper.IsMovieKey(ratingKey)
+                || (
+                    isMovieEndpoint
+                    && int.TryParse(ratingKey, out int movieEpId)
+                    && MetadataService.GetShokoEpisodeByID(movieEpId) is { } directMovieEp
+                    && mapper.GetSeriesContext(directMovieEp.ShokoSeriesID.ToString()) is { } directMovieCtx
+                )
+            )
             {
                 var (ep, movieCtx, tmdbMovie) = TryResolveMovieContext(ratingKey);
-                return ep == null || movieCtx == null ? NotFound() : WrapInContainer(mapper.MapMovie(ep, movieCtx, tmdbMovie), ShokoRelayConstants.MovieAgentScheme);
+                return ep == null || movieCtx == null
+                    ? int.TryParse(ratingKey, out int numId) && MetadataService.GetShokoEpisodeByID(numId) is { } fEp && mapper.GetSeriesContext(fEp.ShokoSeriesID.ToString()) is { } fCtx
+                        ? WrapInContainer(mapper.MapMovie(fEp, fCtx, fEp.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault()), ShokoRelayConstants.MovieAgentScheme)
+                        : NotFound()
+                    : WrapInContainer(mapper.MapMovie(ep, movieCtx, tmdbMovie), ShokoRelayConstants.MovieAgentScheme);
             }
 
             var ctx = mapper.GetSeriesContext(ratingKey);
@@ -504,12 +517,24 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             return (episode, partIdx, null);
 
         // Handle Episode Groups (One Shoko ID mapped to multiple TMDB IDs)
-        if (EnforceTmdbNumbering && episode.GetLinkedEpisodes(MetadataSource.TMDB) is { Count: > 1 } tmdbEps && int.TryParse(Request.Query["index"], out int reqIndex))
+        if (EnforceTmdbNumbering && episode.GetLinkedEpisodes(MetadataSource.TMDB) is { Count: > 1 } tmdbEps)
         {
             string? prefId = MapHelper.GetPreferredTmdbOrderingId(ctx.Series);
-            var matchedTmdbEp = SelectPreferredTmdbOrdering(tmdbEps, prefId).FirstOrDefault(te => GetOrderingCoords(te, prefId).Episode == reqIndex);
+            var tmdbEpisodes = SelectPreferredTmdbOrdering(tmdbEps, prefId);
+            int targetIndex = int.TryParse(Request.Query["index"], out int reqIndex)
+                ? reqIndex
+                : (partIdx.HasValue && partIdx.Value > 0 && partIdx.Value <= tmdbEpisodes.Count ? GetOrderingCoords(tmdbEpisodes[partIdx.Value - 1], prefId).Episode : -1);
+
+            var matchedTmdbEp = tmdbEpisodes.FirstOrDefault(te => GetOrderingCoords(te, prefId).Episode == targetIndex);
             if (matchedTmdbEp != null)
-                mapping = mapping with { TmdbEpisode = matchedTmdbEp };
+            {
+                var (s, e) = GetOrderingCoords(matchedTmdbEp, prefId);
+                mapping = mapping with
+                {
+                    TmdbEpisode = matchedTmdbEp,
+                    Coords = new PlexCoords { Season = s ?? mapping.Coords.Season, Episode = e },
+                };
+            }
         }
         return (episode, partIdx, mapping);
     }

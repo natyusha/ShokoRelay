@@ -185,6 +185,9 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
         var tmdbMovie = ctx.TmdbMovie;
         var description = TextHelper.GetDescriptionByLanguage(series, Settings.DescriptionLanguage);
         var tmdbDescription = tmdbSeries?.PreferredOverview?.Value ?? tmdbMovie?.PreferredOverview?.Value;
+        var duration = series.Episodes is { Count: > 0 } eps
+            ? (int?)Math.Min(int.MaxValue, eps.Sum(e => e.Runtime.TotalMilliseconds))
+            : (tmdbMovie?.Runtime.HasValue == true ? (int?)Math.Min(int.MaxValue, tmdbMovie.Runtime.Value.TotalMilliseconds) : null);
         var studios = CastHelper.GetStudioTags(series, metadataService);
         double? tmdbRating =
             tmdbSeries?.Rating > 0 ? tmdbSeries.Rating
@@ -208,7 +211,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
             ["year"]                  = series.AirDate?.Year ?? tmdbMovie?.ReleaseDate?.Year,
             ["summary"]               = TextHelper.SanitizeSummaryWithFallback(description, tmdbDescription, Settings.SummaryMode),
             ["isAdult"]               = ctx.IsAdult,
-            ["duration"]              = series.Episodes is { Count: > 0 } eps ? (int)eps.Sum(e => e.Runtime.TotalMilliseconds) : (tmdbMovie?.Runtime.HasValue == true ? (int)tmdbMovie.Runtime.Value.TotalMilliseconds : null),
+            ["duration"]              = duration,
             //["tagline"]             = TMDB has this but it is not exposed
             ["studio"]                = studios.FirstOrDefault()?.Tag,
             ["theme"]                 = Settings.PlexThemeMusic && tmdbSeries?.GetCrossSourceID("tvdb", MetadataEntityType.Series) is { } tvdb ? $"https://tvthemes.plexapp.com/{tvdb}.mp3" : null,
@@ -418,7 +421,15 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
 
         string? parentThumb = null;
         if (Settings.TmdbSeasonPosters && mapped.Season >= 0 && string.IsNullOrEmpty(ctx.PreferredOrderingId))
-            parentThumb = series.GetLinkedSeasons(MetadataSource.TMDB)?.FirstOrDefault(ts => ts.SeasonNumber == mapped.Season)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage);
+        {
+            var groupIds = OverrideHelper.GetGroup(series.LocalID, metadataService);
+            parentThumb = groupIds
+                .Select(metadataService.GetShokoSeriesByID)
+                .OfType<IShokoSeries>()
+                .SelectMany(s => s.GetLinkedSeasons(MetadataSource.TMDB) ?? [])
+                .FirstOrDefault(ts => ts.SeasonNumber == mapped.Season)
+                ?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage);
+        }
 
         string? thumb = Settings.TmdbThumbnails
             ? (images.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage) ?? tmdbMovie?.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage))
