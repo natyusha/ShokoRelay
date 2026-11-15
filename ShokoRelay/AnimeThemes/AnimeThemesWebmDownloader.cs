@@ -85,15 +85,23 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
         // Cache files that already have a valid AniDB ID mapping to avoid redundant processing
         var mappedFilesWithAnidb = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         string mapPath = Path.Combine(ConfigDirectory, ShokoRelayConstants.FileAtMapping);
-        if (File.Exists(mapPath))
+        await VfsShared.VfsLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            try
+            if (File.Exists(mapPath))
             {
-                var parsed = AnimeThemesHelper.ParseMappingContentWithComments(File.ReadAllText(mapPath)).Entries;
-                foreach (var e in parsed.Where(e => e.AniDbId > 0))
-                    mappedFilesWithAnidb.Add(Path.GetFileName(e.FilePath));
+                try
+                {
+                    var parsed = AnimeThemesHelper.ParseMappingContentWithComments(await File.ReadAllTextAsync(mapPath, cancellationToken).ConfigureAwait(false)).Entries;
+                    foreach (var e in parsed.Where(e => e.AniDbId > 0))
+                        mappedFilesWithAnidb.Add(Path.GetFileName(e.FilePath));
+                }
+                catch { }
             }
-            catch { }
+        }
+        finally
+        {
+            VfsShared.VfsLock.Release();
         }
 
         int page = 1;

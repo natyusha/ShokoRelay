@@ -30,11 +30,11 @@
 
 ## Tag Merges ##
 
-# AniDB <- TMDB Mappings #                                                                                                                                     ## Generally uses the primary tag entry
+# AniDB <- TMDB Mappings #                                                                                                           ## Generally uses the primary tag entry
 3d cg animation,3d animation,cg animated
 absurdist humour,absurd,absurdist
 action,accion
-afterlife,life after death,afterlife world                                                                                                                     ## AniDB separates 'afterlife world'
+afterlife,life after death,afterlife world                                                                                           ## AniDB separates 'afterlife world'
 age difference romance,age-gap relationship,age difference
 air combat,aerial combat
 alien invasion,alien attack
@@ -64,9 +64,9 @@ boxing,boxeo
 brainwashing,mind control,hypnosis,mesmerization
 bukkake,bukakke
 cafe,coffee shop
-cat person,cat people,cat girl,catgirl,cat boy,catboy                                                                                                          ## AniDB groups both genders
+cat person,cat people,cat girl,catgirl,cat boy,catboy                                                                                ## AniDB groups both genders
 cheating,cheat
-cheerleading,cheerleader                                                                                                                                       ## AniDB has a character tag called 'cheerleader'
+cheerleading,cheerleader                                                                                                             ## AniDB has a character tag called 'cheerleader'
 chinese production,donghua
 chinese zodiac,chinese zodiac signs
 combat,fight,fighting
@@ -75,7 +75,7 @@ communication with the dead,contacting spirits
 competitive beach volleyball,beach volleyball,beach volley
 corrupt,corruption
 cosplaying,cosplay,cosplayer
-countryside,rural,rural area,rural town                                                                                                                        ## AniDB separates 'rural town'
+countryside,rural,rural area,rural town                                                                                              ## AniDB separates 'rural town'
 coup d'etat,military coup
 creampie,nakadashi
 cross-dressing,cross dresser
@@ -90,7 +90,7 @@ dark,dark atmosphere,dark mood
 death game,deadly game,play or die
 deception,deceit
 deflowering,defloration
-deity,god,goddess                                                                                                                                              ## AniDB groups both genders
+deity,god,goddess                                                                                                                    ## AniDB groups both genders
 delinquent,delinquency,juvenile delinquent,juvenile delinquency,furyo
 demon,youkai,Oni,Ogre
 devil,satan
@@ -107,7 +107,7 @@ familiar spirit,familiar
 fate,destiny
 fellatio,blowjob,blow job
 following one's dream,chasing dreams,dream pursuit
-footage reuse,recycled animation                                                                                                                               ## AniDB has 'recycled animation' marked as '-- TO BE SPLIT AND DELETED'
+footage reuse,recycled animation                                                                                                     ## AniDB has 'recycled animation' marked as '-- TO BE SPLIT AND DELETED'
 genetic modification,genetic engineering
 ghosts,phantom
 grimoire,magic book
@@ -123,7 +123,7 @@ human-android love,human android relationship
 human-animal relationship,animal human friendship,animal friendship
 immortality,immortal
 incest,inzest
-inconclusive romantic plot,unresolved romance                                                                                                                  ## Separate on AniDB but one is marked 'ending tags that need merging'
+inconclusive romantic plot,unresolved romance                                                                                        ## Separate on AniDB but one is marked 'ending tags that need merging'
 insecure,insecurity
 inter-dimensional travel,dimensional travel
 internet,internete
@@ -144,7 +144,7 @@ london,london\u002C england
 lonely,loneliness
 love between enemies,enemies to lovers
 mafia,yakuza,organized crime
-magic,witch,wizard,sorcery,sorcerer,sorceress,mage,magician,magie                                                                                              ## AniDB groups both genders
+magic,witch,wizard,sorcery,sorcerer,sorceress,mage,magician,magie                                                                    ## AniDB groups both genders
 magical girl,magic girl
 magical realism,magic realism
 mars,planet mars
@@ -163,9 +163,9 @@ naive,naivety
 nazis,nazi
 netorare,netorare (ntr),ntr
 new york,new york city
-ninja,shinobi,female ninja,kunoichi                                                                                                                            ## AniDB groups both genders
+ninja,shinobi,female ninja,kunoichi                                                                                                  ## AniDB groups both genders
 nostalgia,nostalgic
-obsessive,obsession                                                                                                                                            ## AniDB has it marked as '-- DO NOT USE -- TO BE SPLIT AND DELETED'
+obsessive,obsession                                                                                                                  ## AniDB has it marked as '-- DO NOT USE -- TO BE SPLIT AND DELETED'
 occult,occultism
 office lady,office lady (ol)
 olympics,olympic games
@@ -237,7 +237,7 @@ stomach stretch,stomach bulge
 strap-on dildo,strap-on
 summoning,summons,summoning spell
 sumo wrestling,sumo
-super deformed,chibi                                                                                                                                           ## AniDB has a character tag called 'chibi'
+super deformed,chibi                                                                                                                 ## AniDB has a character tag called 'chibi'
 super power,special ability,special power,superhuman,superhuman abilities
 surreal,surrealism
 swordplay,swordsplay
@@ -268,17 +268,17 @@ wolf,wolves
 working life,work life,work-life balance,work
 yokohama,yokohama\u002C kanagawa\u002C japan
 
-# TMDB <- TMDB Mappings #                                                                                                                                      ## Generally in order of popularity/usage
+# TMDB <- TMDB Mappings #                                                                                                            ## Generally in order of popularity/usage
 all girl band,girl band
 alternate dimension,another dimension,other dimension
 ancient china,gufeng
-arms dealer,weapons dealer                                                                                                                                     ## AniDB has a character tag called 'arms dealer'
+arms dealer,weapons dealer                                                                                                           ## AniDB has a character tag called 'arms dealer'
 banishment,exile
 big sister,older sister
 car racing,car race
 censored,censorship
 classmates,schoolmates
-con artist,con man                                                                                                                                             ## AniDB has a character tag called 'charlatan'
+con artist,con man                                                                                                                   ## AniDB has a character tag called 'charlatan'
 dead father,death of father
 dead mother,death of mother
 disability,disabled person
@@ -287,12 +287,12 @@ eroticism,erotism
 extraterrestrial technology,alien technology
 financial struggle,financial hardship
 forest,woods
-fugitive,on the run                                                                                                                                            ## AniDB has a character tag called 'fugitive'
+fugitive,on the run                                                                                                                  ## AniDB has a character tag called 'fugitive'
 gay theme,male homosexuality
 horse racing,horse race
-hot spring,onsen                                                                                                                                               ## AniDB has an episode tag called 'hot springs visit'
+hot spring,onsen                                                                                                                     ## AniDB has an episode tag called 'hot springs visit'
 human relationship,interpersonal relationships
-inspirational,inspiring                                                                                                                                        ## AniDB has a character tag called 'inspirational'
+inspirational,inspiring                                                                                                              ## AniDB has a character tag called 'inspirational'
 kiss,kissing
 lesbian,female homosexuality
 married life,marriage life
@@ -311,28 +311,28 @@ past life,past lives
 philosophical,philosophy
 railroad,railway
 romcom,love comedy
-roommates,flatmates,shared house,cohabitation,living together                                                                                                  ## AniDB has a NSFW tag called 'under one roof'
+roommates,flatmates,shared house,cohabitation,living together                                                                        ## AniDB has a NSFW tag called 'under one roof'
 sadism,sadist
-schoolgirl,student girl,female student,high school girl,jk                                                                                                     ## AniDB has a character tag called 'student'
+schoolgirl,student girl,female student,high school girl,jk                                                                           ## AniDB has a character tag called 'student'
 semen,cum
 shapeshifting,shapeshifter
-shopkeeper,store owner                                                                                                                                         ## AniDB has a character tag called 'shopkeeper'
+shopkeeper,store owner                                                                                                               ## AniDB has a character tag called 'shopkeeper'
 streamer,live streamer
 street racing,street race
 struggle to survive,struggle for survival
 superhuman strength,super strength
 supernatural power,supernatural ability
-suspense,suspenseful                                                                                                                                           ## AniDB has this as an alias for 'thriller'
+suspense,suspenseful                                                                                                                 ## AniDB has this as an alias for 'thriller'
 sword fight,sword duel
-teenager,teenage,adolescence,adolescent,youth                                                                                                                  ## AniDB has a character tag called 'adolescent'
-theatre company,theatrical troupe                                                                                                                              ## AniDB has a creator tag called 'theatrical company'
+teenager,teenage,adolescence,adolescent,youth                                                                                        ## AniDB has a character tag called 'adolescent'
+theatre company,theatrical troupe                                                                                                    ## AniDB has a creator tag called 'theatrical company'
 transsexual,transsexuality
 unfaithful wife,wife cheating on husband
 university student,college student
 wealthy family,rich family
-wheelchair user,wheelchair                                                                                                                                     ## AniDB has a character tag called 'wheelchair'
+wheelchair user,wheelchair                                                                                                           ## AniDB has a character tag called 'wheelchair'
 women fight,woman vs woman fight
 work relationship,co-workers relationship
 workplace romance,office romance
 
-# Custom <- TMDB Mappings #                                                                                                                                    ## Generally to fix spelling/formatting
+# Custom <- TMDB Mappings #                                                                                                          ## Generally to fix spelling/formatting

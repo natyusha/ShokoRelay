@@ -50,6 +50,9 @@ public class VfsWatcher(
     /// <summary>Lock object for synchronizing the processing loop state.</summary>
     private readonly Lock _gate = new();
 
+    /// <summary>Cancellation source signaled when the watcher stops.</summary>
+    private CancellationTokenSource? _stopCts;
+
     #endregion
 
     #region Lifecycle Management
@@ -57,6 +60,12 @@ public class VfsWatcher(
     /// <summary>Subscribe to Shoko video-file events and begin watching for changes.</summary>
     public void Start()
     {
+        lock (_gate)
+        {
+            _stopCts?.Dispose();
+            _stopCts = new CancellationTokenSource();
+        }
+
         videoService.VideoFileRelocated += OnVideoFileRelocated;
         videoService.VideoFileDeleted += OnVideoFileDeleted;
         releaseService.ReleaseSaved += OnVideoReleaseSaved;
@@ -73,12 +82,14 @@ public class VfsWatcher(
             videoService.VideoFileDeleted -= OnVideoFileDeleted;
             releaseService.ReleaseSaved -= OnVideoReleaseSaved;
 
+            lock (_gate)
+                _stopCts?.Cancel();
+
             foreach (var cts in _pendingMetadataFixups.Values)
             {
                 try
                 {
                     cts.Cancel();
-                    cts.Dispose();
                 }
                 catch { }
             }
@@ -87,7 +98,6 @@ public class VfsWatcher(
                 try
                 {
                     cts.Cancel();
-                    cts.Dispose();
                 }
                 catch { }
             }
@@ -166,18 +176,20 @@ public class VfsWatcher(
     {
         lock (_gate)
         {
-            if (_processing)
+            if (_processing || _stopCts is not { IsCancellationRequested: false } stopCts)
                 return;
             _processing = true;
-            Task.Run(ProcessQueueAsync);
+            var stopToken = stopCts.Token;
+            _ = Task.Run(() => ProcessQueueAsync(stopToken));
         }
     }
 
     /// <summary>Asynchronously processes queued series, re-generating VFS structures and scheduling Plex notifications.</summary>
+    /// <param name="stopToken">Cancellation token signaled when the watcher stops.</param>
     /// <returns>A task representing the queue processing operation.</returns>
-    private async Task ProcessQueueAsync()
+    private async Task ProcessQueueAsync(CancellationToken stopToken)
     {
-        while (true)
+        while (!stopToken.IsCancellationRequested)
         {
             var seriesIds = new List<int>();
 
@@ -189,7 +201,7 @@ public class VfsWatcher(
             if (seriesIds.Count == 0)
             {
                 lock (_gate)
-                    if (_pending.IsEmpty)
+                    if (_pending.IsEmpty || stopToken.IsCancellationRequested)
                     {
                         _processing = false;
                         return;
@@ -207,7 +219,7 @@ public class VfsWatcher(
                 }
                 else
                 {
-                    await VfsShared.VfsLock.WaitAsync().ConfigureAwait(false); // Wait for any active dashboard VFS operations to complete before processing the automated queue
+                    await VfsShared.VfsLock.WaitAsync(stopToken).ConfigureAwait(false); // Wait for any active dashboard VFS operations to complete before processing the automated queue
                     try
                     {
                         var sw = Stopwatch.StartNew();
@@ -215,7 +227,7 @@ public class VfsWatcher(
 
                         // Restore AnimeThemes links for the affected series if a mapping file exists
                         if (File.Exists(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileAtMapping)))
-                            await atMapping.ApplyMappingAsync(seriesIds, CancellationToken.None).ConfigureAwait(false);
+                            await atMapping.ApplyMappingAsync(seriesIds, stopToken).ConfigureAwait(false);
 
                         sw.Stop();
                         logger.LogInformation(
@@ -241,13 +253,27 @@ public class VfsWatcher(
                     }
                 }
             }
+            catch (OperationCanceledException) when (stopToken.IsCancellationRequested)
+            {
+                break;
+            }
             catch (Exception ex)
             {
                 logger.LogWarning(ex, "VFS: Batch refresh failed");
             }
 
-            await Task.Delay(400).ConfigureAwait(false);
+            try
+            {
+                await Task.Delay(400, stopToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (stopToken.IsCancellationRequested)
+            {
+                break;
+            }
         }
+
+        lock (_gate)
+            _processing = false;
     }
 
     #endregion
@@ -290,17 +316,23 @@ public class VfsWatcher(
     /// <param name="action">The asynchronous action to execute after the delay.</param>
     private void ScheduleDebouncedAction(int seriesId, int delaySeconds, ConcurrentDictionary<int, CancellationTokenSource> tracker, Func<CancellationToken, Task> action)
     {
+        CancellationTokenSource cts;
+        lock (_gate)
+        {
+            if (_stopCts is not { IsCancellationRequested: false } stopCts)
+                return;
+            cts = CancellationTokenSource.CreateLinkedTokenSource(stopCts.Token);
+        }
+
         if (tracker.TryRemove(seriesId, out var oldCts))
         {
             try
             {
                 oldCts.Cancel();
-                oldCts.Dispose();
             }
             catch { }
         }
 
-        var cts = new CancellationTokenSource();
         tracker[seriesId] = cts;
 
         _ = Task.Run(async () =>
@@ -330,14 +362,12 @@ public class VfsWatcher(
             }
             finally
             {
-                if (tracker.TryRemove(new KeyValuePair<int, CancellationTokenSource>(seriesId, cts)))
+                tracker.TryRemove(new KeyValuePair<int, CancellationTokenSource>(seriesId, cts));
+                try
                 {
-                    try
-                    {
-                        cts.Dispose();
-                    }
-                    catch { }
+                    cts.Dispose();
                 }
+                catch { }
             }
         });
     }

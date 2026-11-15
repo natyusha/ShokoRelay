@@ -205,8 +205,11 @@ public class AnimeThemesMp3Generator(
     {
         try
         {
-            if (_themeMp3Cache != null)
-                File.WriteAllLines(ThemeCacheFilePath, _themeMp3Cache.Select(kvp => string.IsNullOrEmpty(kvp.Value) ? kvp.Key : $"{kvp.Key}|{kvp.Value}"));
+            if (_themeMp3Cache == null)
+                return;
+            string tmpPath = ThemeCacheFilePath + ".tmp";
+            File.WriteAllLines(tmpPath, _themeMp3Cache.Select(kvp => string.IsNullOrEmpty(kvp.Value) ? kvp.Key : $"{kvp.Key}|{kvp.Value}"));
+            File.Move(tmpPath, ThemeCacheFilePath, overwrite: true);
         }
         catch { }
     }
@@ -510,9 +513,9 @@ public class AnimeThemesMp3Generator(
         var overriddenEds = new ConcurrentBag<string>();
         var errors = new ConcurrentBag<string>();
         var (processed, fixes) = (0, 0);
+        int cacheUpdated = 0;
 
         var cache = GetCachedThemeMp3s();
-        bool cacheUpdated = false;
 
         logger.LogInformation("AnimeThemes MP3: Starting audit of {Count} cached themes...", cache.Count);
 
@@ -540,7 +543,7 @@ public class AnimeThemesMp3Generator(
                             slug = AnimeThemesHelper.StandardizeSlug(t);
                             _themeMp3Cache![folder] = $"{slug}|{upgrade}";
                             Interlocked.Increment(ref fixes);
-                            cacheUpdated = true;
+                            Interlocked.Exchange(ref cacheUpdated, 1);
                         }
                     }
                     catch { }
@@ -590,7 +593,7 @@ public class AnimeThemesMp3Generator(
                                 {
                                     upgrade = newUpgrade;
                                     _themeMp3Cache![folder] = $"{slug}|{upgrade}";
-                                    cacheUpdated = true;
+                                    Interlocked.Exchange(ref cacheUpdated, 1);
                                 }
                                 upgrades.Add($"{s.GetDisplayTitle() ?? s.LocalID.ToString()} [{s.LocalID}] (Currently: {slug})");
                             }
@@ -605,8 +608,9 @@ public class AnimeThemesMp3Generator(
             }
         );
 
-        if (cacheUpdated)
-            SaveCacheToFile();
+        if (cacheUpdated != 0)
+            lock (_cacheLock)
+                SaveCacheToFile();
 
         logger.LogInformation("AnimeThemes MP3: Audit complete -> {Processed} non-default themes checked, {Upgrades} upgrades found, {Fixes} missing slugs fixed", processed, upgrades.Count, fixes);
         return new ThemeMp3AuditResult(processed, upgrades.Count, fixes, [.. upgrades], [.. overriddenOps], [.. overriddenEds], [.. errors]);

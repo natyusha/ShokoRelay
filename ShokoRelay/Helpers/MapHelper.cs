@@ -57,8 +57,11 @@ public static class MapHelper
     /// <param name="series">The Shoko series metadata.</param>
     /// <param name="metadataService">Metadata service used for override resolution.</param>
     /// <returns>A SeriesFileData object.</returns>
-    public static SeriesFileData GetSeriesFileData(ISeries series, IMetadataService metadataService) =>
-        BuildFileMappings(series, metadataService) is var mappings ? new SeriesFileData(mappings, [.. mappings.Select(m => m.Coords.Season).Distinct().OrderBy(s => s)]) : null;
+    public static SeriesFileData GetSeriesFileData(ISeries series, IMetadataService metadataService)
+    {
+        var mappings = BuildFileMappings(series, metadataService);
+        return new SeriesFileData(mappings, [.. mappings.Select(m => m.Coords.Season).Distinct().OrderBy(s => s)]);
+    }
 
     /// <summary>Generate consolidated SeriesFileData for the given series, automatically handling TMDB enforcement and VFS override groupings.</summary>
     /// <param name="series">The Shoko series metadata.</param>

@@ -550,6 +550,8 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     }
 
     /// <summary>Extracts the Image array from a mapped metadata object.</summary>
+    /// <param name="metadata">The mapped metadata dictionary.</param>
+    /// <returns>An array of image metadata objects.</returns>
     private static object[] ExtractImages(object metadata) => metadata is IDictionary<string, object?> dict && dict.TryGetValue("Image", out var img) && img is object[] arr ? arr : [];
 
     #endregion

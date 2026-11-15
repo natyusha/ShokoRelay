@@ -250,6 +250,7 @@ public sealed class FfmpegService(string pluginDirectory, string applicationPath
 
             tasks.Add(process.WaitForExitAsync(cancellationToken));
             await Task.WhenAll(tasks).ConfigureAwait(false);
+            process.WaitForExit();
 
             if (process.ExitCode != 0)
                 throw new InvalidOperationException($"{fileName} exited with code {process.ExitCode}: {stderr.ToString().Trim()}");
@@ -291,6 +292,7 @@ public sealed class FfmpegService(string pluginDirectory, string applicationPath
 
             string output = await process.StandardOutput.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
             await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            process.WaitForExit();
 
             return process.ExitCode != 0 ? throw new InvalidOperationException($"{fileName} exited with code {process.ExitCode}: {stderr.ToString().Trim()}") : output;
         }

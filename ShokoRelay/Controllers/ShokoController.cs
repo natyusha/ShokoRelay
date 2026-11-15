@@ -103,7 +103,10 @@ public class ShokoController(
         try
         {
             Logger.LogInformation("Shoko: Updating VFS overrides file...");
-            IoFile.WriteAllText(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileVfsOverrides), content ?? string.Empty);
+            string path = Path.Combine(ConfigDirectory, ShokoRelayConstants.FileVfsOverrides);
+            string tmpPath = path + ".tmp";
+            IoFile.WriteAllText(tmpPath, content ?? string.Empty);
+            IoFile.Move(tmpPath, path, overwrite: true);
             OverrideHelper.Reload();
             return Ok(new RelayResponse<object>());
         }
@@ -344,6 +347,9 @@ public class ShokoController(
     [HttpGet("sync-watched/start")]
     public async Task<IActionResult> StartWatchedSyncNow()
     {
+        if (!await SyncHelper.SyncLock.WaitAsync(0).ConfigureAwait(false))
+            return Conflict(new RelayResponse<object>(Status: "busy", Message: "A conflicting operation is already in progress. Please wait for it to complete."));
+
         try
         {
             var settings = ConfigProvider.GetSettings();
@@ -365,6 +371,10 @@ public class ShokoController(
         catch (Exception ex)
         {
             return StatusCode(500, new RelayResponse<object>(Status: "error", Message: ex.Message));
+        }
+        finally
+        {
+            SyncHelper.SyncLock.Release();
         }
     }
 
@@ -426,13 +436,18 @@ public class ShokoController(
     public async Task<IActionResult> PurgeLocalImages()
     {
         Logger.LogInformation("Shoko: Starting a manual purge of all Relay-owned images...");
-        var xrefs = imageManager.GetAllImageCrossReferences(new ImageCrossReferenceFilteringOptions()).Where(x => x.Source == ServiceRegistration.RelaySource || x.Source == ServiceRegistration.RelayPlexSource);
-        var distinctImageIds = xrefs.Select(x => x.ImageID).Distinct().ToList();
+        var xrefs = imageManager
+            .GetAllImageCrossReferences(new ImageCrossReferenceFilteringOptions())
+            .Where(x => x.Source == ServiceRegistration.RelaySource || x.Source == ServiceRegistration.RelayPlexSource)
+            .ToList();
         int purgedCount = 0;
 
-        foreach (var imageId in distinctImageIds)
-            if (imageManager.GetImageByID(imageId) is { } img && await imageManager.PurgeImage(img).ConfigureAwait(false))
+        foreach (var xref in xrefs)
+        {
+            imageManager.RemoveImageCrossReference(xref);
+            if (imageManager.GetImageByID(xref.ImageID) is { } img && img.GetCrossReferences().Count == 0 && await imageManager.PurgeImage(img).ConfigureAwait(false))
                 purgedCount++;
+        }
 
         Logger.LogInformation("Shoko: Purging complete. Purged {Count} images.", purgedCount);
         return Ok(new RelayResponse<object>(Data: new { purged = purgedCount }));

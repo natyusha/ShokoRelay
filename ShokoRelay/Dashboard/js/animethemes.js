@@ -36,7 +36,10 @@
 
   // #region Actions Registry
   Object.assign(window._sr.actions, {
-    /** Action for generating series Theme.mp3 files and triggering playback. */
+    /**
+     * Action for generating series Theme.mp3 files and triggering playback.
+     * @returns {Promise<void>}
+     */
     atMp3Build: async () => {
       const ps = window._sr.getAtParams();
       const isBatch = ps.get("batch") === "true";
@@ -145,7 +148,10 @@
     }
   }
 
-  /** Dismiss the currently active 'Now Playing' toast notification if it exists. */
+  /**
+   * Dismiss the currently active 'Now Playing' toast notification if it exists.
+   * @returns {void}
+   */
   function dismissNowPlaying() {
     if (nowPlayingToast) {
       nowPlayingToast.click();
@@ -174,7 +180,10 @@
     } catch {}
   }
 
-  /** Synchronizes the MP3 playback UI states with the audio object. */
+  /**
+   * Synchronizes the MP3 playback UI states with the audio object.
+   * @returns {void}
+   */
   function syncPlaybackUI() {
     const isE = el("at-playback")?.getAttribute("aria-pressed") === "true";
     const isA = isE && atAudio?.src && !atAudio.ended;
@@ -204,6 +213,7 @@
   /**
    * Stream and play a Theme.mp3 in the background.
    * @param {string} folderPath - The folder containing the Theme.mp3 to stream.
+   * @returns {void}
    */
   function playThemeMp3(folderPath) {
     if (el("at-playback")?.getAttribute("aria-pressed") !== "true" || !folderPath) return;
@@ -234,6 +244,7 @@
    * Initialize AnimeThemes config bindings.
    * @param {Object} cfg - The current config object.
    * @param {Function} persist - Async function to save config changes.
+   * @returns {void}
    */
   window._sr.initAtConfig = (cfg, persist) => {
     const playback = el("at-playback");

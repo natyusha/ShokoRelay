@@ -270,14 +270,9 @@ public class SyncToShoko(
                     {
                         if (!dryRun)
                         {
+                            var update = new VideoUserDataUpdate { ProgressPosition = TimeSpan.FromMilliseconds(item.ViewOffset!.Value), LastUpdatedAt = DateTime.UtcNow };
                             foreach (var video in ep.Videos!)
-                            {
-                                var videoData = userDataService.GetVideoUserData(video, defaultUser);
-                                var update = videoData != null ? new VideoUserDataUpdate(videoData) : new VideoUserDataUpdate();
-                                update.ProgressPosition = TimeSpan.FromMilliseconds(item.ViewOffset!.Value);
-                                update.LastUpdatedAt = DateTime.UtcNow;
                                 await userDataService.SaveVideoUserData(video, defaultUser, update, VideoUserDataSaveReason.PlaybackProgress).ConfigureAwait(false);
-                            }
                         }
                         appliedIds.Add(ep.LocalID);
                         result = SyncHelper.IncProgressUpdated(result, result.PerUser, uName);

@@ -99,6 +99,8 @@ public static class SyncHelper
     #region Collection Helpers
 
     /// <summary>Create result buckets for users.</summary>
+    /// <param name="extraUserNames">Configured extra Plex usernames.</param>
+    /// <returns>A case-insensitive dictionary initialized with user result buckets.</returns>
     public static Dictionary<string, PlexWatchedUserResult> CreatePerUserBuckets(IEnumerable<string> extraUserNames)
     {
         var perUser = new Dictionary<string, PlexWatchedUserResult>(StringComparer.OrdinalIgnoreCase) { ["admin"] = new() };
@@ -108,6 +110,9 @@ public static class SyncHelper
     }
 
     /// <summary>Add a change to the tracker.</summary>
+    /// <param name="dict">The per-user change dictionary.</param>
+    /// <param name="plexUser">The Plex username.</param>
+    /// <param name="change">The change record to append.</param>
     public static void AddPerUserChange(Dictionary<string, List<PlexWatchedChange>> dict, string plexUser, PlexWatchedChange change)
     {
         if (change == null || !change.WouldMark)
@@ -118,6 +123,22 @@ public static class SyncHelper
     }
 
     /// <summary>Factory for watched changes.</summary>
+    /// <param name="plexUser">Plex username.</param>
+    /// <param name="libraryName">Plex library section title.</param>
+    /// <param name="shokoEpisodeId">Shoko episode ID.</param>
+    /// <param name="seriesTitle">Series title.</param>
+    /// <param name="seasonNumber">Season number.</param>
+    /// <param name="episodeNumber">Episode number.</param>
+    /// <param name="ratingKey">Plex rating key.</param>
+    /// <param name="guid">Metadata GUID.</param>
+    /// <param name="filePath">Physical file path.</param>
+    /// <param name="lastViewedAt">Last viewed timestamp.</param>
+    /// <param name="wouldMark">Whether it would be marked.</param>
+    /// <param name="alreadyWatchedInShoko">Existing state in Shoko.</param>
+    /// <param name="reason">Status reason string.</param>
+    /// <param name="plexUserRating">Plex user rating.</param>
+    /// <param name="shokoUserRating">Shoko user rating.</param>
+    /// <returns>A populated <see cref="PlexWatchedChange"/> record.</returns>
     public static PlexWatchedChange MakeChange(
         string plexUser,
         string? libraryName = null,
@@ -158,6 +179,13 @@ public static class SyncHelper
 
     #region Stat Counters
 
+    /// <summary>Updates global and per-user sync counters.</summary>
+    /// <param name="res">Current sync result.</param>
+    /// <param name="perUser">Per-user counter dictionary.</param>
+    /// <param name="user">Target Plex username.</param>
+    /// <param name="global">Transform applied to the global sync result.</param>
+    /// <param name="usr">Transform applied to the user's result.</param>
+    /// <returns>The updated <see cref="PlexWatchedSyncResult"/>.</returns>
     private static PlexWatchedSyncResult UpdateStat(
         PlexWatchedSyncResult res,
         Dictionary<string, PlexWatchedUserResult>? perUser,
@@ -173,31 +201,58 @@ public static class SyncHelper
     }
 
     /// <summary>Increment processed count.</summary>
+    /// <param name="r">Current sync result.</param>
+    /// <param name="pu">Per-user counter dictionary.</param>
+    /// <param name="u">Target Plex username.</param>
+    /// <returns>The updated <see cref="PlexWatchedSyncResult"/>.</returns>
     public static PlexWatchedSyncResult IncProcessed(PlexWatchedSyncResult r, Dictionary<string, PlexWatchedUserResult>? pu, string? u = null) =>
         UpdateStat(r, pu, u, x => x with { Processed = x.Processed + 1 }, x => x with { Processed = x.Processed + 1 });
 
     /// <summary>Increment marked count.</summary>
+    /// <param name="r">Current sync result.</param>
+    /// <param name="pu">Per-user counter dictionary.</param>
+    /// <param name="u">Target Plex username.</param>
+    /// <returns>The updated <see cref="PlexWatchedSyncResult"/>.</returns>
     public static PlexWatchedSyncResult IncMarkedWatched(PlexWatchedSyncResult r, Dictionary<string, PlexWatchedUserResult>? pu, string? u = null) =>
         UpdateStat(r, pu, u, x => x with { MarkedWatched = x.MarkedWatched + 1 }, x => x with { MarkedWatched = x.MarkedWatched + 1 });
 
     /// <summary>Increment progress update count.</summary>
+    /// <param name="r">Current sync result.</param>
+    /// <param name="pu">Per-user counter dictionary.</param>
+    /// <param name="u">Target Plex username.</param>
+    /// <returns>The updated <see cref="PlexWatchedSyncResult"/>.</returns>
     public static PlexWatchedSyncResult IncProgressUpdated(PlexWatchedSyncResult r, Dictionary<string, PlexWatchedUserResult>? pu, string? u = null) =>
         UpdateStat(r, pu, u, x => x with { ProgressUpdated = x.ProgressUpdated + 1 }, x => x with { ProgressUpdated = x.ProgressUpdated + 1 });
 
     /// <summary>Increment skip count.</summary>
+    /// <param name="r">Current sync result.</param>
+    /// <param name="pu">Per-user counter dictionary.</param>
+    /// <param name="u">Target Plex username.</param>
+    /// <returns>The updated <see cref="PlexWatchedSyncResult"/>.</returns>
     public static PlexWatchedSyncResult IncSkipped(PlexWatchedSyncResult r, Dictionary<string, PlexWatchedUserResult>? pu, string? u = null) =>
         UpdateStat(r, pu, u, x => x with { Skipped = x.Skipped + 1 }, x => x with { Skipped = x.Skipped + 1 });
 
     /// <summary>Increment found votes.</summary>
+    /// <param name="res">Current sync result.</param>
+    /// <returns>The updated <see cref="PlexWatchedSyncResult"/>.</returns>
     public static PlexWatchedSyncResult IncVotesFound(PlexWatchedSyncResult res) => res with { VotesFound = res.VotesFound + 1 };
 
     /// <summary>Increment updated votes.</summary>
+    /// <param name="res">Current sync result.</param>
+    /// <returns>The updated <see cref="PlexWatchedSyncResult"/>.</returns>
     public static PlexWatchedSyncResult IncVotesUpdated(PlexWatchedSyncResult res) => res with { VotesUpdated = res.VotesUpdated + 1 };
 
     /// <summary>Increment skipped votes.</summary>
+    /// <param name="res">Current sync result.</param>
+    /// <returns>The updated <see cref="PlexWatchedSyncResult"/>.</returns>
     public static PlexWatchedSyncResult IncVotesSkipped(PlexWatchedSyncResult res) => res with { VotesSkipped = res.VotesSkipped + 1 };
 
     /// <summary>Record a sync error.</summary>
+    /// <param name="res">Current sync result.</param>
+    /// <param name="perUser">Per-user counter dictionary.</param>
+    /// <param name="user">Target Plex username.</param>
+    /// <param name="message">Optional error message to append.</param>
+    /// <returns>The updated <see cref="PlexWatchedSyncResult"/>.</returns>
     public static PlexWatchedSyncResult RecordError(PlexWatchedSyncResult res, Dictionary<string, PlexWatchedUserResult>? perUser = null, string? user = null, string? message = null)
     {
         if (!string.IsNullOrWhiteSpace(message))

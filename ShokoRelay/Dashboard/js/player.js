@@ -243,7 +243,10 @@
     });
   };
 
-  /** Resets the navigation stack and history tracking. */
+  /**
+   * Resets the navigation stack and history tracking.
+   * @returns {void}
+   */
   const resetNavigationHistory = () => {
     shuffleHistory.clear();
     navigationStack = [];
@@ -476,7 +479,10 @@
     playerTree.appendChild(rootUl);
   }
 
-  /** Locates the currently playing theme and scrolls it into center view while expanding its parent folder. */
+  /**
+   * Locates the currently playing theme and scrolls it into center view while expanding its parent folder.
+   * @returns {void}
+   */
   function locateCurrentInTree() {
     if (!currentWebmPath) return;
 

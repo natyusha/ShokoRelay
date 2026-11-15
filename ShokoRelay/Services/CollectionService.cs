@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Shoko.Abstractions.Extensions;
 using Shoko.Abstractions.Video.Services;
 
 namespace ShokoRelay.Services;
@@ -53,6 +54,13 @@ public class CollectionService(
     ILogger<CollectionService> logger
 )
 {
+    #region Setup
+
+    /// <summary>Semaphore serializing collection build operations across manual, scheduled, and debounced fixup triggers.</summary>
+    private readonly SemaphoreSlim _buildLock = new(1, 1);
+
+    #endregion
+
     #region Collection Building
 
     /// <summary>Create or update Plex collections and their images for the supplied series list.</summary>
@@ -68,11 +76,12 @@ public class CollectionService(
         logger.LogInformation("CollectionService: Starting task...");
         var sw = Stopwatch.StartNew();
 
+        await _buildLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var (created, uploaded, alreadyUploaded, errors, uniqueSeries) = (0, 0, 0, 0, new HashSet<int>());
             var (createdList, uploadedDetails, errorsList) = (new List<CollectionAssignmentDetail>(), new List<CollectionUploadDetail>(), new List<string>());
-            var allowedIds = new HashSet<int>(seriesList?.Where(s => s != null).Select(s => OverrideHelper.GetPrimary(s!.LocalID, metadataService)) ?? []);
+            var allowedIds = new HashSet<int>(seriesList?.WhereNotNull().Select(s => OverrideHelper.GetPrimary(s.LocalID, metadataService)) ?? []);
             var targets = plexClient.GetConfiguredTargets();
 
             if (targets.Count == 0)
@@ -399,7 +408,9 @@ public class CollectionService(
             {
                 try
                 {
-                    File.WriteAllLines(cachePath, cache.Select(kvp => $"{kvp.Key}|{kvp.Value}"));
+                    string tmpPath = cachePath + ".tmp";
+                    File.WriteAllLines(tmpPath, cache.Select(kvp => $"{kvp.Key}|{kvp.Value}"));
+                    File.Move(tmpPath, cachePath, overwrite: true);
                 }
                 catch { }
             }
@@ -423,6 +434,7 @@ public class CollectionService(
         }
         finally
         {
+            _buildLock.Release();
             TaskHelper.FinishTask(TaskName);
         }
     }

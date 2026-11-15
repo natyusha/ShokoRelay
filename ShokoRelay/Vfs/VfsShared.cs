@@ -53,6 +53,8 @@ internal static class VfsShared
         );
 
     /// <summary>Determines the root import path for a video file.</summary>
+    /// <param name="location">The video file location.</param>
+    /// <returns>The resolved import root path, or <c>null</c> if unavailable.</returns>
     public static string? ResolveImportRootPath(IVideoFile location)
     {
         string path = location.Path;
@@ -75,6 +77,9 @@ internal static class VfsShared
     }
 
     /// <summary>Resolves the source file path.</summary>
+    /// <param name="location">The video file location.</param>
+    /// <param name="importRoot">The resolved import root path.</param>
+    /// <returns>The existing physical file path, or <c>null</c> if not found.</returns>
     public static string? ResolveSourcePath(IVideoFile location, string importRoot)
     {
         string original = location.Path;
@@ -145,15 +150,19 @@ internal static class VfsShared
     }
 
     /// <summary>Resolves the VFS root folder name.</summary>
+    /// <returns>The sanitized VFS root folder name.</returns>
     public static string ResolveRootFolderName() => ResolveFolderName(Settings.Advanced.VfsRootPath, ShokoRelayConstants.FolderVfsDefault);
 
     /// <summary>Resolves the standalone Movies VFS root folder name.</summary>
+    /// <returns>The sanitized standalone movies VFS root folder name.</returns>
     public static string ResolveMovieRootFolderName() => ResolveFolderName(Settings.Advanced.MovieVfsRootPath, ShokoRelayConstants.FolderMoviesDefault);
 
     /// <summary>Resolves the anime themes folder name.</summary>
+    /// <returns>The sanitized AnimeThemes folder name.</returns>
     public static string ResolveAnimeThemesFolderName() => ResolveFolderName(Settings.Advanced.AnimeThemesRootPath, ShokoRelayConstants.FolderAnimeThemesDefault);
 
     /// <summary>Resolves the collection posters folder name.</summary>
+    /// <returns>The sanitized collection images folder name.</returns>
     public static string ResolveCollectionImagesFolderName() => ResolveFolderName(Settings.Advanced.CollectionImagesRootPath, ShokoRelayConstants.FolderCollectionImagesDefault);
 
     /// <summary>Assembles a unique set of folder names that should be ignored by VFS and Link operations based on current settings.</summary>

@@ -162,6 +162,12 @@
     runAction,
     initToggle,
     setButtonLoading,
+    /**
+     * Binds an async click handler to a button element wrapped with loading state management.
+     * @param {HTMLElement|string} btn - The button element or its DOM id.
+     * @param {Function} handler - The async action handler to execute on click.
+     * @returns {void}
+     */
     withButtonAction: (btn, handler) => {
       const elBtn = typeof btn === "string" ? el(btn) : btn;
       if (elBtn) elBtn.onclick = () => runAction(elBtn, handler);

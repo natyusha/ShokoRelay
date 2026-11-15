@@ -139,11 +139,8 @@ public static class ImageHelper
             {
                 var matches = remaining
                     .Where(i =>
-                    {
-                        var prop = i.GetType().GetProperty("LanguageCode") ?? i.GetType().GetProperty("Language");
-                        var code = prop?.GetValue(i)?.ToString() ?? "";
-                        return code.Equals(lang, StringComparison.OrdinalIgnoreCase) || (lang.Equals("none", StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(code));
-                    })
+                        (i.LanguageCode ?? "") is var code && (code.Equals(lang, StringComparison.OrdinalIgnoreCase) || (lang.Equals("none", StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(code)))
+                    )
                     .ToList();
 
                 foreach (var match in matches)

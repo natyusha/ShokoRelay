@@ -35,6 +35,19 @@ public class AnimeThemesController(
     /// <summary>Semaphore to prevent concurrent WebM download operations.</summary>
     private static readonly SemaphoreSlim s_webmDownloadLock = new(1, 1);
 
+    /// <summary>Lock object synchronizing reads and writes to the AnimeThemes favourites file.</summary>
+    private static readonly Lock s_favsLock = new();
+
+    /// <summary>Checks whether a normalized full path resides within any configured Shoko managed folder.</summary>
+    /// <param name="fullPath">The full filesystem path to validate.</param>
+    /// <returns><c>true</c> if the path is inside a managed folder; otherwise, <c>false</c>.</returns>
+    private bool IsInsideManagedFolders(string fullPath) =>
+        (videoService.GetAllManagedFolders() ?? [])
+            .Select(mf => mf.Path)
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Select(p => Path.GetFullPath(p).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar)
+            .Any(root => fullPath.StartsWith(root, VfsShared.PathComparison));
+
     #endregion
 
     #region VFS Mapping & Build
@@ -182,7 +195,7 @@ public class AnimeThemesController(
             return BadRequest();
         string themePath = Path.Combine(Path.GetFullPath(PlexLibrary.MapPlexPathToShokoPath(path)), "Theme.mp3");
 
-        if (!IoFile.Exists(themePath))
+        if (!IsInsideManagedFolders(themePath) || !IoFile.Exists(themePath))
             return NotFound();
 
         try
@@ -418,7 +431,7 @@ public class AnimeThemesController(
             return BadRequest();
 
         string fullPath = Path.GetFullPath(PlexLibrary.MapPlexPathToShokoPath(path));
-        return !string.Equals(Path.GetExtension(fullPath), ".webm", StringComparison.OrdinalIgnoreCase) || !IoFile.Exists(fullPath)
+        return !IsInsideManagedFolders(fullPath) || !string.Equals(Path.GetExtension(fullPath), ".webm", StringComparison.OrdinalIgnoreCase) || !IoFile.Exists(fullPath)
             ? NotFound()
             : File(new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read), "video/webm", enableRangeProcessing: true);
     }
@@ -429,15 +442,18 @@ public class AnimeThemesController(
     public IActionResult GetAnimeThemesFavourites()
     {
         string path = Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileAtFavsCache);
-        if (!IoFile.Exists(path))
-            return Ok(new RelayResponse<List<int>>(Data: []));
-        try
+        lock (s_favsLock)
         {
-            return Ok(new RelayResponse<List<int>>(Data: [.. IoFile.ReadAllLines(path).Select(l => l.Trim()).Where(l => !l.StartsWith("#") && int.TryParse(l, out _)).Select(int.Parse)]));
-        }
-        catch
-        {
-            return Ok(new RelayResponse<List<int>>(Data: []));
+            if (!IoFile.Exists(path))
+                return Ok(new RelayResponse<List<int>>(Data: []));
+            try
+            {
+                return Ok(new RelayResponse<List<int>>(Data: [.. IoFile.ReadAllLines(path).Select(l => l.Trim()).Where(l => !l.StartsWith('#') && int.TryParse(l, out _)).Select(int.Parse)]));
+            }
+            catch
+            {
+                return Ok(new RelayResponse<List<int>>(Data: []));
+            }
         }
     }
 
@@ -451,23 +467,28 @@ public class AnimeThemesController(
             return BadRequest(new RelayResponse<object>(Status: "error", Message: "Invalid videoId"));
 
         string path = Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileAtFavsCache);
-        var ids = new HashSet<int>();
-        if (IoFile.Exists(path))
-            foreach (var l in IoFile.ReadAllLines(path))
-                if (int.TryParse(l.Trim(), out int id))
-                    ids.Add(id);
-
-        if (!ids.Remove(videoId))
-            ids.Add(videoId);
-
-        try
+        lock (s_favsLock)
         {
-            IoFile.WriteAllLines(path, ids.Select(i => i.ToString()));
-            return Ok(new RelayResponse<object>(Data: new { videoId, isFavourite = ids.Contains(videoId) }));
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new RelayResponse<object>(Status: "error", Message: ex.Message));
+            var ids = new HashSet<int>();
+            if (IoFile.Exists(path))
+                foreach (var l in IoFile.ReadAllLines(path))
+                    if (int.TryParse(l.Trim(), out int id))
+                        ids.Add(id);
+
+            if (!ids.Remove(videoId))
+                ids.Add(videoId);
+
+            try
+            {
+                string tmpPath = path + ".tmp";
+                IoFile.WriteAllLines(tmpPath, ids.Select(i => i.ToString()));
+                IoFile.Move(tmpPath, path, overwrite: true);
+                return Ok(new RelayResponse<object>(Data: new { videoId, isFavourite = ids.Contains(videoId) }));
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new RelayResponse<object>(Status: "error", Message: ex.Message));
+            }
         }
     }
 

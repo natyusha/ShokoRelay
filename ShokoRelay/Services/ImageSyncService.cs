@@ -587,7 +587,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
             {
                 imageManager.RemoveImageCrossReference(xref);
                 // Only purge the underlying image if no other entities are actively referencing it
-                if (imageManager.GetImageByID(xref.ImageID) is { } oldImg && !imageManager.GetAllImageCrossReferences(filterOpts).Any(x => x.ImageID == oldImg.ID && x.ID != xref.ID))
+                if (imageManager.GetImageByID(xref.ImageID) is { } oldImg && oldImg.GetCrossReferences().Count == 0)
                     await imageManager.PurgeImage(oldImg).ConfigureAwait(false);
             }
         }

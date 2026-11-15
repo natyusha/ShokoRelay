@@ -1,7 +1,7 @@
 ﻿using System.Net;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Shoko.Abstractions.Core.Exceptions;
 using Shoko.Abstractions.Core.Services;
 using Shoko.Abstractions.Plugin;
 using Shoko.Abstractions.Plugin.Models;
@@ -47,7 +47,7 @@ public class ServiceRegistration : IPluginServiceRegistration
             );
 
         serviceCollection.AddSingleton(provider => provider.GetRequiredService<IHttpClientFactory>().CreateClient(clientName));
-        serviceCollection.AddSingleton(provider => new ConfigProvider(applicationPaths, provider.GetRequiredService<ILogger<ConfigProvider>>()));
+        serviceCollection.AddSingleton<ConfigProvider>();
         serviceCollection.AddSingleton(provider => new AnimeThemesApi(provider.GetRequiredService<HttpClient>(), provider.GetRequiredService<ILogger<AnimeThemesApi>>()));
         serviceCollection.AddSingleton<AnimeThemesMp3Generator>();
         serviceCollection.AddSingleton<AnimeThemesMapping>();
@@ -143,7 +143,6 @@ public class ShokoRelay : BackgroundService
     /// <summary>Initializes the Relay hosted service.</summary>
     /// <param name="watcher">VFS filesystem event watcher.</param>
     /// <param name="configProvider">Configuration provider.</param>
-    /// <param name="httpContextAccessor">Access to the current HTTP request context.</param>
     /// <param name="systemService">Shoko system state service.</param>
     /// <param name="scheduledActionService">Shoko scheduled action service.</param>
     /// <param name="metadataService">Shoko metadata service.</param>
@@ -151,7 +150,6 @@ public class ShokoRelay : BackgroundService
     public ShokoRelay(
         VfsWatcher watcher,
         ConfigProvider configProvider,
-        IHttpContextAccessor httpContextAccessor,
         ISystemService systemService,
         IScheduledActionService scheduledActionService,
         IMetadataService metadataService,
@@ -160,7 +158,6 @@ public class ShokoRelay : BackgroundService
     {
         _watcher = watcher;
         s_configProvider = configProvider;
-        s_configProvider.HttpContextAccessor = httpContextAccessor;
         _systemService = systemService;
         _scheduledActionService = scheduledActionService;
         _metadataService = metadataService;
@@ -178,11 +175,20 @@ public class ShokoRelay : BackgroundService
         try
         {
             _logger.LogInformation("Relay waiting for Shoko Server to reach 'Started' state...");
-            while (!_systemService.IsStarted && !stoppingToken.IsCancellationRequested)
-                await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken);
-            if (stoppingToken.IsCancellationRequested)
-                return;
+            await _systemService.WaitForStartupAsync().WaitAsync(stoppingToken).ConfigureAwait(false);
+        }
+        catch (StartupFailedException ex)
+        {
+            _logger.LogError(ex, "Shoko Server failed to start -> Relay exiting.");
+            return;
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            return;
+        }
 
+        try
+        {
             _logger.LogInformation("Shoko Server started -> Caching overrides & initializing native scheduled actions...");
             OverrideHelper.Reload(); // Warm up the VFS override cache.
 

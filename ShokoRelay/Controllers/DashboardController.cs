@@ -109,10 +109,17 @@ public class DashboardController(
     {
         if (config == null)
             return BadRequest(new { status = "error", message = "Config payload is required." });
-        Logger.LogInformation("Dashboard: Saving updated provider settings...");
-        ConfigProvider.SaveSettings(config);
-        ActionScheduleHelper.SyncTriggers(config, scheduledActionService);
-        return Ok(new { status = "ok" });
+        try
+        {
+            Logger.LogInformation("Dashboard: Saving updated provider settings...");
+            ConfigProvider.SaveSettings(config);
+            ActionScheduleHelper.SyncTriggers(config, scheduledActionService);
+            return Ok(new { status = "ok" });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { status = "error", message = ex.Message });
+        }
     }
 
     /// <summary>Builds and returns a JSON schema representation of the configuration properties.</summary>
@@ -202,15 +209,18 @@ public class DashboardController(
     #region Tasks
 
     /// <summary>Returns a list of currently running tasks for the dashboard UI.</summary>
+    /// <returns>A collection of active task identifiers.</returns>
     [HttpGet("tasks/active")]
     public IActionResult GetActiveTasks() => Ok(TaskHelper.ActiveTasks.Keys);
 
     /// <summary>Returns results of tasks completed since the last check.</summary>
+    /// <returns>A dictionary of completed task results keyed by task name.</returns>
     [HttpGet("tasks/completed")]
     public IActionResult GetCompletedTasks() => Ok(TaskHelper.TaskResults);
 
     /// <summary>Acknowledges and clears a completed task result so it isn't displayed again.</summary>
     /// <param name="taskName">The unique identifier for the task.</param>
+    /// <returns>An empty 200 OK response.</returns>
     [HttpPost("tasks/clear/{taskName}")]
     public IActionResult ClearTaskResult(string taskName)
     {
@@ -248,10 +258,11 @@ public class DashboardController(
             return BadRequest(new { status = "error", message = "fileName is required" });
 
         string logsDir = Path.GetFullPath(Path.Combine(ConfigProvider.PluginDirectory, "logs"));
+        string logsDirWithSep = logsDir.EndsWith(Path.DirectorySeparatorChar) ? logsDir : logsDir + Path.DirectorySeparatorChar;
         string safeFileName = Path.GetFileName(fileName);
         string requested = Path.GetFullPath(Path.Combine(logsDir, safeFileName));
 
-        if (!requested.StartsWith(logsDir, StringComparison.OrdinalIgnoreCase) || !safeFileName.EndsWith("-report.log", StringComparison.OrdinalIgnoreCase) || !IoFile.Exists(requested))
+        if (!requested.StartsWith(logsDirWithSep, StringComparison.OrdinalIgnoreCase) || !safeFileName.EndsWith("-report.log", StringComparison.OrdinalIgnoreCase) || !IoFile.Exists(requested))
             return NotFound(new { status = "error", message = "log not found" });
 
         Response.Headers["Cache-Control"] = "no-cache, no-store, must-revalidate";

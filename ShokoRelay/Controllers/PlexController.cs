@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
+using Shoko.Abstractions.Extensions;
 using Shoko.Abstractions.User.Enums;
 using Shoko.Abstractions.User.Services;
 using Shoko.Abstractions.User.Update;
@@ -135,6 +136,7 @@ public class PlexController(
     }
 
     /// <summary>Forces a rediscovery of servers and libraries.</summary>
+    /// <returns>A discovery report response.</returns>
     [HttpPost("plex/auth/refresh")]
     public Task<IActionResult> RefreshPlexLibraries() =>
         string.IsNullOrWhiteSpace(ConfigProvider.GetPlexToken())
@@ -280,7 +282,7 @@ public class PlexController(
             : ExecuteTrackedTaskAsync(
                 ShokoRelayConstants.TaskPlexRatingsApply,
                 LogHelper.BuildRatingsReport,
-                () => criticRatingService.ApplyRatingsAsync(seriesList.Where(s => s != null).Select(s => s!.LocalID), CancellationToken.None),
+                () => criticRatingService.ApplyRatingsAsync(seriesList.WhereNotNull().Select(s => s.LocalID), CancellationToken.None),
                 SyncHelper.SyncLock
             );
 
@@ -445,14 +447,10 @@ public class PlexController(
 
             if (evt.Metadata.ViewOffset.HasValue && evt.Metadata.ViewOffset.Value > 0)
             {
+                var update = new VideoUserDataUpdate { ProgressPosition = TimeSpan.FromMilliseconds(evt.Metadata.ViewOffset.Value), LastUpdatedAt = DateTime.UtcNow };
                 foreach (var video in shokoEpisode.Videos ?? [])
-                {
-                    var videoData = userDataService.GetVideoUserData(video, user);
-                    var update = videoData != null ? new VideoUserDataUpdate(videoData) : new VideoUserDataUpdate();
-                    update.ProgressPosition = TimeSpan.FromMilliseconds(evt.Metadata.ViewOffset.Value);
-                    update.LastUpdatedAt = DateTime.UtcNow;
                     await userDataService.SaveVideoUserData(video, user, update, VideoUserDataSaveReason.PlaybackProgress).ConfigureAwait(false);
-                }
+
                 Logger.LogInformation(
                     "Plex: Progress updated -> user='{User}', series='{Series}', {Type}='{Item}', offset={Offset}",
                     evt.Account?.Title,

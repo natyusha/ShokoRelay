@@ -10,12 +10,15 @@ namespace ShokoRelay.Config;
 
 /// <summary>Manages loading, saving, validation and normalization of the plugin configuration and Plex token/secrets file.</summary>
 /// <remarks>Watches for external config changes to auto-invalidate the cache.</remarks>
-public class ConfigProvider
+public class ConfigProvider : IDisposable
 {
     #region Setup & State
 
     /// <summary>Logger instance for configuration management operations.</summary>
     private readonly ILogger<ConfigProvider>? _logger;
+
+    /// <summary>Service for accessing the current HTTP context, used for URL discovery.</summary>
+    private readonly IHttpContextAccessor? _httpContextAccessor;
 
     /// <summary>Shared JSON serializer options for reading and writing configuration files.</summary>
     private static readonly JsonSerializerOptions s_options = new() { AllowTrailingCommas = true, WriteIndented = true };
@@ -52,14 +55,23 @@ public class ConfigProvider
     /// <summary>Cached contents of the Plex token file to prevent continuous disk I/O.</summary>
     private TokenFile? _cachedTokenFile;
 
+    /// <summary>File system watcher monitoring changes to preferences.json.</summary>
+    private readonly FileSystemWatcher _settingsWatcher;
+
+    /// <summary>File system watcher monitoring changes to plex.token.</summary>
+    private readonly FileSystemWatcher _tokenWatcher;
+
+    /// <summary>Monotonic timestamp in milliseconds until which self-initiated settings watcher events are suppressed.</summary>
+    private long _suppressSettingsWatcherUntil;
+
+    /// <summary>Monotonic timestamp in milliseconds until which self-initiated token watcher events are suppressed.</summary>
+    private long _suppressTokenWatcherUntil;
+
     /// <summary>The absolute path to the plugin's base directory.</summary>
     public string PluginDirectory { get; }
 
     /// <summary>The absolute path to the plugin's configuration directory.</summary>
     public string ConfigDirectory { get; }
-
-    /// <summary>Service for accessing the current HTTP context, used for URL discovery.</summary>
-    public IHttpContextAccessor? HttpContextAccessor { get; set; }
 
     /// <summary>The externally-reachable base URL of Shoko server. Priority: 1. Advanced.ShokoServerUrl setting, 2. Current HTTP Context, 3. Last discovered value, 4. Localhost fallback.</summary>
     public string ServerBaseUrl
@@ -70,7 +82,7 @@ public class ConfigProvider
             if (!string.IsNullOrWhiteSpace(settings.Advanced.ShokoServerUrl))
                 return settings.Advanced.ShokoServerUrl.Trim().TrimEnd('/');
 
-            if (HttpContextAccessor?.HttpContext is { } ctx)
+            if (_httpContextAccessor?.HttpContext is { } ctx)
             {
                 var request = ctx.Request;
 
@@ -94,9 +106,11 @@ public class ConfigProvider
 
     /// <summary>Creates a new ConfigProvider using the specified paths provided by the host application.</summary>
     /// <param name="applicationPaths">Shoko application paths.</param>
+    /// <param name="httpContextAccessor">Optional HTTP context accessor for URL discovery.</param>
     /// <param name="logger">Logger instance.</param>
-    public ConfigProvider(IApplicationPaths applicationPaths, ILogger<ConfigProvider>? logger = null)
+    public ConfigProvider(IApplicationPaths applicationPaths, IHttpContextAccessor? httpContextAccessor = null, ILogger<ConfigProvider>? logger = null)
     {
+        _httpContextAccessor = httpContextAccessor;
         _logger = logger;
         PluginDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? string.Empty;
 
@@ -110,8 +124,8 @@ public class ConfigProvider
         _filePath = Path.Combine(ConfigDirectory, ShokoRelayConstants.FilePreferences);
         _tokenPath = Path.Combine(ConfigDirectory, ShokoRelayConstants.FilePlexToken);
 
-        SetupWatcher(_filePath);
-        SetupWatcher(_tokenPath);
+        _settingsWatcher = SetupWatcher(_filePath, () => Environment.TickCount64 > Volatile.Read(ref _suppressSettingsWatcherUntil), InvalidateSettings);
+        _tokenWatcher = SetupWatcher(_tokenPath, () => Environment.TickCount64 > Volatile.Read(ref _suppressTokenWatcherUntil), InvalidateTokenInfo);
     }
 
     #endregion
@@ -120,25 +134,54 @@ public class ConfigProvider
 
     /// <summary>Initializes a file system watcher to detect external changes to configuration files.</summary>
     /// <param name="path">The file path to monitor.</param>
-    private void SetupWatcher(string path)
+    /// <param name="shouldHandle">Predicate evaluated before invalidating to skip self-initiated writes.</param>
+    /// <param name="onChanged">Callback invoked when an external file modification is detected.</param>
+    /// <returns>The configured <see cref="FileSystemWatcher"/> instance.</returns>
+    private static FileSystemWatcher SetupWatcher(string path, Func<bool> shouldHandle, Action onChanged)
     {
-        var watcher = new FileSystemWatcher(Path.GetDirectoryName(path)!, Path.GetFileName(path)) { NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName };
-        watcher.Changed += (_, _) => InvalidateSettings();
+        var watcher = new FileSystemWatcher(Path.GetDirectoryName(path)!, Path.GetFileName(path)) { NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.CreationTime };
+        void HandleEvent(object _, FileSystemEventArgs __)
+        {
+            if (shouldHandle())
+                onChanged();
+        }
+        watcher.Changed += HandleEvent;
+        watcher.Created += HandleEvent;
+        watcher.Deleted += HandleEvent;
+        watcher.Renamed += HandleEvent;
         watcher.EnableRaisingEvents = true;
+        return watcher;
     }
 
-    /// <summary>Invalidates cached settings and secrets in memory, forcing a reload on next access.</summary>
+    /// <summary>Invalidates cached settings in memory, forcing a reload on next access.</summary>
     private void InvalidateSettings()
     {
         lock (_settingsLock)
         {
             _settings = null;
             _cachedExtraUsers = null;
+        }
+        _logger?.LogInformation("Config: Settings invalidated due to external file change");
+    }
+
+    /// <summary>Invalidates cached Plex token and discovery details in memory, forcing a reload on next access.</summary>
+    private void InvalidateTokenInfo()
+    {
+        lock (_settingsLock)
+        {
             _cachedServers = null;
             _cachedAdminUsername = null;
             _cachedTokenFile = null;
         }
-        _logger?.LogInformation("Config: Settings invalidated due to external file change");
+        _logger?.LogInformation("Config: Plex token cache invalidated due to external file change");
+    }
+
+    /// <summary>Disposes the file system watchers monitoring configuration files.</summary>
+    public void Dispose()
+    {
+        _settingsWatcher.Dispose();
+        _tokenWatcher.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     #endregion
@@ -240,7 +283,7 @@ public class ConfigProvider
     public RelayConfig GetEffectiveSettings()
     {
         var settings = GetSettings();
-        var ctx = HttpContextAccessor?.HttpContext;
+        var ctx = _httpContextAccessor?.HttpContext;
         if (ctx == null || ctx.Request.Method != HttpMethods.Get)
             return settings;
 
@@ -305,6 +348,16 @@ public class ConfigProvider
         return SanitizeConfigObject(dict);
     }
 
+    /// <summary>Atomically writes text content to a target file via a temporary file move.</summary>
+    /// <param name="path">The target file path.</param>
+    /// <param name="content">The text content to write.</param>
+    private static void WriteTextAtomic(string path, string content)
+    {
+        string tmpPath = path + ".tmp";
+        File.WriteAllText(tmpPath, content);
+        File.Move(tmpPath, path, overwrite: true);
+    }
+
     /// <summary>Validate, normalize and persist the supplied <paramref name="settings"/> to disk.</summary>
     /// <param name="settings">The <see cref="RelayConfig"/> instance to save.</param>
     public void SaveSettings(RelayConfig settings)
@@ -324,9 +377,12 @@ public class ConfigProvider
         NormalizeSubtitleMappings(settings);
         NormalizeCsvFields(settings);
         lock (_settingsLock)
-            File.WriteAllText(_filePath, JsonSerializer.Serialize(settings, s_options));
-        _settings = settings;
-        _cachedExtraUsers = null; // Clear the cached extra users so they are re-parsed on the next sync after settings changes
+        {
+            Volatile.Write(ref _suppressSettingsWatcherUntil, Environment.TickCount64 + 500);
+            WriteTextAtomic(_filePath, JsonSerializer.Serialize(settings, s_options));
+            _settings = settings;
+            _cachedExtraUsers = null; // Clear the cached extra users so they are re-parsed on the next sync after settings changes
+        }
     }
 
     #endregion
@@ -362,6 +418,7 @@ public class ConfigProvider
         {
             lock (_settingsLock)
             {
+                Volatile.Write(ref _suppressTokenWatcherUntil, Environment.TickCount64 + 500);
                 if (File.Exists(_tokenPath))
                     File.Delete(_tokenPath);
                 _cachedTokenFile = null;
@@ -416,7 +473,8 @@ public class ConfigProvider
         };
         lock (_settingsLock)
         {
-            File.WriteAllText(_tokenPath, JsonSerializer.Serialize(tf, s_options));
+            Volatile.Write(ref _suppressTokenWatcherUntil, Environment.TickCount64 + 500);
+            WriteTextAtomic(_tokenPath, JsonSerializer.Serialize(tf, s_options));
             _cachedTokenFile = tf;
             _cachedServers = tf.Servers;
             _cachedAdminUsername = tf.AdminUsername;
@@ -431,13 +489,16 @@ public class ConfigProvider
     /// <returns>The Plex client identifier string.</returns>
     public string GetPlexClientIdentifier()
     {
-        var tokenFile = ReadTokenFile();
-        if (string.IsNullOrWhiteSpace(tokenFile.ClientIdentifier))
+        lock (_settingsLock)
         {
-            tokenFile.ClientIdentifier = Guid.NewGuid().ToString("N");
-            WriteTokenFile(tokenFile.Token, tokenFile.ClientIdentifier, tokenFile.AdminUsername, tokenFile.Servers, tokenFile.Libraries);
+            var tokenFile = ReadTokenFile();
+            if (string.IsNullOrWhiteSpace(tokenFile.ClientIdentifier))
+            {
+                tokenFile.ClientIdentifier = Guid.NewGuid().ToString("N");
+                WriteTokenFile(tokenFile.Token, tokenFile.ClientIdentifier, tokenFile.AdminUsername, tokenFile.Servers, tokenFile.Libraries, tokenFile.AutoShokoServerUrl);
+            }
+            return tokenFile.ClientIdentifier;
         }
-        return tokenFile.ClientIdentifier;
     }
 
     /// <summary>Retrieves the list of discovered Plex servers from the token file.</summary>
@@ -489,15 +550,18 @@ public class ConfigProvider
         string? autoUrl = null
     )
     {
-        var existing = ReadTokenFile();
-        WriteTokenFile(
-            token ?? existing.Token,
-            clientIdentifier ?? existing.ClientIdentifier,
-            adminName ?? existing.AdminUsername,
-            servers ?? existing.Servers,
-            libraries ?? existing.Libraries,
-            autoUrl ?? existing.AutoShokoServerUrl
-        );
+        lock (_settingsLock)
+        {
+            var existing = ReadTokenFile();
+            WriteTokenFile(
+                token ?? existing.Token,
+                clientIdentifier ?? existing.ClientIdentifier,
+                adminName ?? existing.AdminUsername,
+                servers ?? existing.Servers,
+                libraries ?? existing.Libraries,
+                autoUrl ?? existing.AutoShokoServerUrl
+            );
+        }
     }
 
     /// <summary>Checks if the provided server UUID matches a managed server known to the provider.</summary>

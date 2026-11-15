@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Globalization;
+using Shoko.Abstractions.Extensions;
 using Shoko.Abstractions.Metadata.CrossReferences;
 using Shoko.Abstractions.Metadata.Enums;
 
@@ -19,16 +20,16 @@ public static class OverrideHelper
     #region Setup & Constants
 
     /// <summary>Cached dictionary of primary to secondary series ID manual mappings.</summary>
-    private static IReadOnlyDictionary<int, List<int>> s_groups = new Dictionary<int, List<int>>();
+    private static volatile IReadOnlyDictionary<int, List<int>> s_groups = new Dictionary<int, List<int>>();
 
     /// <summary>Cached dictionary of custom episode coordinate overrides for specific secondary series.</summary>
-    private static IReadOnlyDictionary<int, List<CustomCoordRule>> s_coordOverrides = new Dictionary<int, List<CustomCoordRule>>();
+    private static volatile IReadOnlyDictionary<int, List<CustomCoordRule>> s_coordOverrides = new Dictionary<int, List<CustomCoordRule>>();
 
     /// <summary>JIT Cache for automatically merged TMDB series groups.</summary>
     private static readonly ConcurrentDictionary<string, List<int>> s_tmdbGroups = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Tracks whether the override groups have been initialized.</summary>
-    private static bool s_isInitialized;
+    private static volatile bool s_isInitialized;
 
     /// <summary>Lock object for synchronizing override initialization.</summary>
     private static readonly Lock s_loadLock = new();
@@ -144,19 +145,7 @@ public static class OverrideHelper
                         continue;
 
                     string tStr = match.Groups[1].Value;
-                    EpisodeType eType = EpisodeType.Episode;
-                    if (!string.IsNullOrEmpty(tStr))
-                    {
-                        eType = tStr.ToUpperInvariant() switch
-                        {
-                            "C" => EpisodeType.Credits,
-                            "S" => EpisodeType.Special,
-                            "T" => EpisodeType.Trailer,
-                            "P" => EpisodeType.Parody,
-                            "O" => EpisodeType.Other,
-                            _ => EpisodeType.Episode,
-                        };
-                    }
+                    EpisodeType eType = EpisodeType.FromPrefix(tStr.ToUpperInvariant());
 
                     int startEp = match.Groups[2].Success ? int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture) : 1;
                     int endEp = match.Groups[3].Success ? int.Parse(match.Groups[3].Value, CultureInfo.InvariantCulture) : (match.Groups[2].Success ? startEp : int.MaxValue);

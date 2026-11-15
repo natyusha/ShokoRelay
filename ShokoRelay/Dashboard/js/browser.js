@@ -209,9 +209,20 @@
     const li = document.createElement("li");
     const leaf = document.createElement("div");
     leaf.className = "leaf";
-    leaf.innerHTML =
-      `<span title="${esc(f.name)}" data-tooltip-overflow-only="true">${f.name}</span>` +
-      `<span class="source-path" title="${esc(f.source || "Unknown")}" data-tooltip-overflow-only="true">${f.source || "Unknown"}</span>`;
+
+    const nameSpan = document.createElement("span");
+    nameSpan.textContent = f.name;
+    nameSpan.title = f.name;
+    nameSpan.dataset.tooltipOverflowOnly = "true";
+
+    const src = f.source || "Unknown";
+    const sourceSpan = document.createElement("span");
+    sourceSpan.className = "source-path";
+    sourceSpan.textContent = src;
+    sourceSpan.title = src;
+    sourceSpan.dataset.tooltipOverflowOnly = "true";
+
+    leaf.append(nameSpan, sourceSpan);
     li.appendChild(leaf);
     return li;
   };
