@@ -36,7 +36,6 @@ public class PlexWatchedSyncAction(SyncToShoko watchedSyncService, ConfigProvide
             progress.Report(100);
 
             LogHelper.WriteReport(
-                configProvider.PluginDirectory,
                 $"{ShokoRelayConstants.TaskShokoSyncWatched}-report.log",
                 result,
                 (sb, r) => LogHelper.BuildSyncWatchedReport(sb, r, r.Direction, r.DryRun, settings.Automation.ShokoSyncWatchedIncludeRatings),

@@ -15,20 +15,19 @@ public static class LogHelper
 
     /// <summary>Generates and writes a report to the plugin's logs directory using the provided builder logic.</summary>
     /// <typeparam name="T">The type of data being reported.</typeparam>
-    /// <param name="pluginDir">Root plugin directory.</param>
     /// <param name="fileName">Target filename.</param>
     /// <param name="data">Data object to process.</param>
     /// <param name="builder">Logic to format the data into the StringBuilder.</param>
     /// <param name="logger">Optional logger for reporting write failures.</param>
-    public static void WriteReport<T>(string pluginDir, string fileName, T data, Action<StringBuilder, T> builder, ILogger? logger = null)
+    public static void WriteReport<T>(string fileName, T data, Action<StringBuilder, T> builder, ILogger? logger = null)
     {
         try
         {
             var sb = new StringBuilder();
             builder(sb, data);
-            string dir = Path.Combine(pluginDir, "logs");
-            Directory.CreateDirectory(dir);
-            File.WriteAllText(Path.Combine(dir, fileName), sb.ToString(), Encoding.UTF8);
+            string logsDir = LogsDirectory;
+            Directory.CreateDirectory(logsDir);
+            File.WriteAllText(Path.Combine(logsDir, fileName), sb.ToString(), Encoding.UTF8);
         }
         catch (Exception ex)
         {

@@ -184,8 +184,8 @@
       const artist = getHeader("X-Theme-Artist");
       const album = getHeader("X-Theme-Album");
       let html = `<span class="np-line title">${esc(title)}</span>${artist ? `<span class="np-line artist">${esc(artist)}</span>` : ""}`;
-      const meta = [album, slug].filter(Boolean).join(" \u2014 ");
-      if (meta) html += `<small class="np-line">${esc(meta)}</small>`;
+      const meta = [album, slug].filter(Boolean).map(esc).join(" \u2014 ");
+      if (meta) html += `<small class="np-line">${meta}</small>`;
       dismissNowPlaying();
       nowPlayingToast = showToast(html, "info", 0);
     } catch {}

@@ -73,6 +73,9 @@ public class ConfigProvider : IDisposable
     /// <summary>The absolute path to the plugin's configuration directory.</summary>
     public string ConfigDirectory { get; }
 
+    /// <summary>The absolute path to the plugin's task logs directory.</summary>
+    public string LogsDirectory => Path.Combine(ConfigDirectory, "logs");
+
     /// <summary>The externally-reachable base URL of Shoko server. Priority: 1. Advanced.ShokoServerUrl setting, 2. Current HTTP Context, 3. Last discovered value, 4. Localhost fallback.</summary>
     public string ServerBaseUrl
     {
@@ -87,13 +90,20 @@ public class ConfigProvider : IDisposable
                 var request = ctx.Request;
 
                 // Inspect standard proxy headers to accurately detect HTTPS scheme and external hostname
-                var scheme = request.Headers["X-Forwarded-Proto"].FirstOrDefault()?.Split(',')[0].Trim() ?? (request.IsHttps ? "https" : request.Scheme);
-                var host = request.Headers["X-Forwarded-Host"].FirstOrDefault()?.Split(',')[0].Trim() ?? request.Host.ToString();
+                var scheme = request.Headers["X-Forwarded-Proto"].FirstOrDefault()?.Split(',')[0].Trim();
+                if (string.IsNullOrEmpty(scheme) || (!scheme.Equals("http", StringComparison.OrdinalIgnoreCase) && !scheme.Equals("https", StringComparison.OrdinalIgnoreCase)))
+                    scheme = request.IsHttps ? "https" : request.Scheme;
+
+                var rawHost = request.Headers["X-Forwarded-Host"].FirstOrDefault()?.Split(',')[0].Trim();
+                var host = !string.IsNullOrEmpty(rawHost) && System.Text.RegularExpressions.Regex.IsMatch(rawHost, @"^[a-zA-Z0-9.\-_]+(:\d+)?$|^\[[a-fA-F0-9:]+\](:\d+)?$") ? rawHost : request.Host.ToString();
 
                 var detectedUrl = $"{scheme}://{host}{request.PathBase}".TrimEnd('/');
 
                 var tokenFile = ReadTokenFile();
-                if (tokenFile.AutoShokoServerUrl != detectedUrl)
+                if (
+                    tokenFile.AutoShokoServerUrl != detectedUrl
+                    && (string.IsNullOrWhiteSpace(tokenFile.AutoShokoServerUrl) || request.Path.StartsWithSegments(ShokoRelayConstants.BasePath + "/dashboard", StringComparison.OrdinalIgnoreCase))
+                )
                     UpdatePlexTokenInfo(autoUrl: detectedUrl);
 
                 return detectedUrl;
@@ -114,12 +124,9 @@ public class ConfigProvider : IDisposable
         _logger = logger;
         PluginDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? string.Empty;
 
-        var legacyConfig = Path.Combine(PluginDirectory, ShokoRelayConstants.FolderConfigSubfolder);
-        var modernConfig = Path.Combine(applicationPaths.ConfigurationsPath, ShokoRelayConstants.PluginId);
-
-        // Prioritize existing legacy configuration for manual installs. Fallback to the standard Shoko configuration directory for new installs
-        ConfigDirectory = Directory.Exists(legacyConfig) ? legacyConfig : modernConfig;
+        ConfigDirectory = Path.Combine(applicationPaths.ConfigurationsPath, ShokoRelayConstants.PluginId);
         Directory.CreateDirectory(ConfigDirectory);
+        Directory.CreateDirectory(LogsDirectory);
 
         _filePath = Path.Combine(ConfigDirectory, ShokoRelayConstants.FilePreferences);
         _tokenPath = Path.Combine(ConfigDirectory, ShokoRelayConstants.FilePlexToken);

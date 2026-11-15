@@ -127,6 +127,12 @@ public class ShokoRelay : BackgroundService
     /// <summary>Access the plugin config directory.</summary>
     public static string ConfigDirectory => s_configProvider?.ConfigDirectory ?? string.Empty;
 
+    /// <summary>Access the plugin logs directory.</summary>
+    public static string LogsDirectory => s_configProvider?.LogsDirectory ?? string.Empty;
+
+    /// <summary>Access the Shoko image manager service.</summary>
+    public static IImageManager ImageManager { get; private set; } = null!;
+
     private readonly VfsWatcher _watcher;
     private readonly ISystemService _systemService;
     private readonly IScheduledActionService _scheduledActionService;
@@ -146,6 +152,7 @@ public class ShokoRelay : BackgroundService
     /// <param name="systemService">Shoko system state service.</param>
     /// <param name="scheduledActionService">Shoko scheduled action service.</param>
     /// <param name="metadataService">Shoko metadata service.</param>
+    /// <param name="imageManager">Shoko image manager service.</param>
     /// <param name="logger">Logger instance.</param>
     public ShokoRelay(
         VfsWatcher watcher,
@@ -153,11 +160,13 @@ public class ShokoRelay : BackgroundService
         ISystemService systemService,
         IScheduledActionService scheduledActionService,
         IMetadataService metadataService,
+        IImageManager imageManager,
         ILogger<ShokoRelay> logger
     )
     {
         _watcher = watcher;
         s_configProvider = configProvider;
+        ImageManager = imageManager;
         _systemService = systemService;
         _scheduledActionService = scheduledActionService;
         _metadataService = metadataService;

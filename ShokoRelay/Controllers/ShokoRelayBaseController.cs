@@ -30,7 +30,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
     protected readonly PlexClient PlexLibrary = plexLibrary;
 
     /// <summary>Returns the absolute base URL of the plugin's API on the current host.</summary>
-    protected string ApiBase => $"{Request.Scheme}://{Request.Host}{ShokoRelayConstants.BasePath}";
+    protected string ApiBase => $"{Request.Scheme}://{Request.Host}{Request.PathBase}{ShokoRelayConstants.BasePath}";
 
     #endregion
 
@@ -64,7 +64,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
         try
         {
             T result = await action().ConfigureAwait(false);
-            LogHelper.WriteReport(ConfigProvider.PluginDirectory, $"{taskName}-report.log", result, reportBuilder, Logger);
+            LogHelper.WriteReport($"{taskName}-report.log", result, reportBuilder, Logger);
             IActionResult actionResult = Ok(new RelayResponse<T>(Data: result, LogUrl: $"{ApiBase}/logs/{taskName}-report.log"));
             TaskHelper.CompleteTask(taskName, (actionResult as OkObjectResult)?.Value!);
             return actionResult;

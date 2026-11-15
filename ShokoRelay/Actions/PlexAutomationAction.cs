@@ -30,7 +30,7 @@ public class PlexAutomationAction(PlexAutomationService plexAutomationService, C
         {
             var result = await plexAutomationService.RunAutomationAsync(progress, token).ConfigureAwait(false);
             string apiBase = $"{configProvider.ServerBaseUrl}{ShokoRelayConstants.BasePath}";
-            LogHelper.WriteReport(configProvider.PluginDirectory, $"{ShokoRelayConstants.TaskPlexAutomationRun}-report.log", result, (sb, r) => LogHelper.BuildPlexAutomationReport(sb, r, apiBase), logger);
+            LogHelper.WriteReport($"{ShokoRelayConstants.TaskPlexAutomationRun}-report.log", result, (sb, r) => LogHelper.BuildPlexAutomationReport(sb, r, apiBase), logger);
         }
         finally
         {

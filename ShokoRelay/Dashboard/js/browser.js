@@ -426,7 +426,7 @@
 
       const titleHtml =
         `<a href="${shokoBase}/webui/collection/series/${g.id}/overview" class="vfs-link vfs-id-link" target="_blank" rel="noopener noreferrer">${g.id}</a><span class="vfs-sep">❯</span>` +
-        `<span class="vfs-title" title="${esc(g.title)}" data-tooltip-overflow-only="true">${g.title}</span>` +
+        `<span class="vfs-title" title="${esc(g.title)}" data-tooltip-overflow-only="true">${esc(g.title)}</span>` +
         `<a href="https://anidb.net/a${g.anidbId}" class="vfs-link small" target="_blank" rel="noopener noreferrer">[a${g.anidbId}]</a>` +
         `<a href="${base}/metadata/${g.id}?includeChildren=1" class="vfs-link small" target="_blank" rel="noopener noreferrer">[m${g.id}]</a>`;
 

@@ -288,7 +288,7 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
             var content = await resp.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             if (string.IsNullOrWhiteSpace(content))
                 return null;
-            var doc = new XmlDocument();
+            var doc = new XmlDocument { XmlResolver = null };
             doc.LoadXml(content);
             var node = doc.SelectSingleNode("//user") ?? doc.DocumentElement;
             return node?.Attributes?["authToken"]?.Value ?? node?.Attributes?["authenticationToken"]?.Value;

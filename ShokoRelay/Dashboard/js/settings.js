@@ -107,7 +107,7 @@
    */
   function createFlagsMultiselect(wrap, p, config, value) {
     const label = document.createElement("label");
-    label.innerHTML = `<span>${p.Display || p.Path.split(".").pop()}</span>${p.Description ? `<small>${p.Description}</small>` : ""}`;
+    label.innerHTML = `<span>${esc(p.Display || p.Path.split(".").pop())}</span>${p.Description ? `<small>${esc(p.Description)}</small>` : ""}`;
     wrap.appendChild(label);
 
     const enumValues = p.EnumValues || [];
@@ -177,7 +177,7 @@
    */
   function createDualTextareaMapping(wrap, p, config, value, leftHeader, rightHeader, keyOnLeft) {
     const label = document.createElement("label");
-    label.innerHTML = `<span>${p.Display || p.Path.split(".").pop()}</span>${p.Description ? `<small>${p.Description}</small>` : ""}`;
+    label.innerHTML = `<span>${esc(p.Display || p.Path.split(".").pop())}</span>${p.Description ? `<small>${esc(p.Description)}</small>` : ""}`;
     wrap.appendChild(label);
 
     const mappingContainer = document.createElement("div");
@@ -275,7 +275,7 @@
       } else if (p.Path.endsWith("SubtitleLanguageMappings")) {
         createDualTextareaMapping(wrap, p, config, value, "Original Tags", "Mapped Tags", true);
       } else {
-        label.innerHTML = `<span>${p.Display || p.Path.split(".").pop()}</span>${p.Description ? `<small>${p.Description}</small>` : ""}`;
+        label.innerHTML = `<span>${esc(p.Display || p.Path.split(".").pop())}</span>${p.Description ? `<small>${esc(p.Description)}</small>` : ""}`;
         wrap.appendChild(label);
         input = document.createElement(p.Type === "enum" ? "select" : p.Type === "json" || p.Path.endsWith("TagOverrides") || p.Path.endsWith("Exclusions") ? "textarea" : "input");
         if (p.Path === "TagOverrides") input.id = "resizable";

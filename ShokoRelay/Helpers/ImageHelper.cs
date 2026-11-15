@@ -37,19 +37,9 @@ public static class ImageHelper
     /// <returns>A full URL string.</returns>
     public static string GetImageUrl(IImage image, bool forceRemote = false)
     {
-        if (forceRemote && !string.IsNullOrEmpty(image.ResourceID))
-        {
-            if (image.Source == MetadataSource.TMDB)
-            {
-                string path = image.ResourceID.Replace('\\', '/');
-                if (!path.StartsWith('/'))
-                    path = "/" + path;
-                return $"https://image.tmdb.org/t/p/original{path}";
-            }
-            if (image.Source == MetadataSource.AniDB)
-                return $"https://cdn.anidb.net/images/main/{image.ResourceID}";
-        }
-        return $"{ServerBaseUrl}/api/v3/Image/{image.ID}";
+        return forceRemote && !string.IsNullOrEmpty(image.ResourceID) && ImageManager.GetTemplateUrlForSource(image.Source) is { Length: > 0 } template
+            ? string.Format(template, image.ResourceID.Replace('\\', '/').TrimStart('/'))
+            : $"{ServerBaseUrl}/api/v3/Image/{image.ID}";
     }
 
     #endregion

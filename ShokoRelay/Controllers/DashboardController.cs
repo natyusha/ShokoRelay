@@ -249,11 +249,11 @@ public class DashboardController(
     /// <returns>A list of log file metadata objects.</returns>
     [HttpGet("logs/list")]
     public IActionResult GetLogsList() =>
-        Path.Combine(ConfigProvider.PluginDirectory, "logs") is var logsDir && !Directory.Exists(logsDir)
+        !Directory.Exists(ConfigProvider.LogsDirectory)
             ? Ok(Array.Empty<object>())
             : Ok(
                 Directory
-                    .EnumerateFiles(logsDir, "*-report.log")
+                    .EnumerateFiles(ConfigProvider.LogsDirectory, "*-report.log")
                     .Select(Path.GetFileName)
                     .OfType<string>()
                     .OrderBy(f => f)
@@ -270,7 +270,7 @@ public class DashboardController(
         if (string.IsNullOrWhiteSpace(fileName))
             return BadRequest(new { status = "error", message = "fileName is required" });
 
-        string logsDir = Path.GetFullPath(Path.Combine(ConfigProvider.PluginDirectory, "logs"));
+        string logsDir = Path.GetFullPath(ConfigProvider.LogsDirectory);
         string logsDirWithSep = logsDir.EndsWith(Path.DirectorySeparatorChar) ? logsDir : logsDir + Path.DirectorySeparatorChar;
         string safeFileName = Path.GetFileName(fileName);
         string requested = Path.GetFullPath(Path.Combine(logsDir, safeFileName));

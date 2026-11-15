@@ -5,22 +5,26 @@
 (() => {
   /** @type {string} Base path for API requests determined dynamically from the location. */
   const base = location.pathname.split(/\/(?:dashboard|player|browser)/i)[0];
+
   /** @type {string} Root base URL for Shoko Server, safe for reverse-proxy sub-paths. */
   const shokoBase = location.origin + base.split(/\/api\//i)[0];
+
   /** @type {string} URL endpoint for configuration data. */
   const configUrl = base + "/config";
+
   /**
    * Shorthand helper for document.getElementById.
    * @param {string} id - The ID of the element to retrieve.
    * @returns {HTMLElement|null} The DOM element.
    */
   const el = (id) => document.getElementById(id);
+
   /**
-   * Escapes double quotes inside a string to prevent HTML attribute syntax corruption.
+   * Escapes characters in a string to prevent HTML attribute and content syntax corruption.
    * @param {string} str - The raw string to escape.
    * @returns {string} The HTML-safe escaped string.
    */
-  const esc = (str) => (str || "").replace(/"/g, "&quot;");
+  const esc = (str) => (str ?? "").toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
   /** @type {number} Default auto-dismiss duration (ms) for transient toasts. Use 0 for persistent toasts. */
   const TOAST_MS = 5000;
@@ -147,10 +151,10 @@
       const display = summary || res.data?.message || res.data?.Message || (res.data?.status !== "ok" ? res.data?.status : null) || text || "Complete";
       const toastType = type || (errorCount > 0 ? "error" : "success");
       const persistence = errorCount > 0 ? 0 : (hideOnSucceed ?? (logUrl ? 0 : TOAST_MS)); // Always persist if there are errors. Otherwise, respect the hideOnSucceed override.
-      showToast(`${label}: ${display} ${logLink}`, toastType, persistence);
+      showToast(`${esc(label)}: ${esc(display)} ${logLink}`, toastType, persistence);
     } else {
       const display = summary || res.data?.message || res.data?.Message || text || (typeof res.data === "string" ? res.data : JSON.stringify(res.data));
-      showToast(`${label} Failed: ${display} ${logLink}`, "error", 0);
+      showToast(`${esc(label)} Failed: ${esc(display)} ${logLink}`, "error", 0);
     }
   }
 
