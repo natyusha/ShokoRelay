@@ -202,7 +202,7 @@ public class AnimeThemesController(
         {
             var tags = AnimeThemesHelper.ReadId3v2Tags(themePath);
             foreach (var tag in tags)
-                Response.Headers[$"X-Theme-{tag.Key}"] = tag.Value;
+                Response.Headers[$"X-Theme-{tag.Key}"] = Uri.EscapeDataString(tag.Value);
             Response.Headers["Access-Control-Expose-Headers"] = "X-Theme-Title, X-Theme-Slug, X-Theme-Artist, X-Theme-Album";
         }
         catch { }

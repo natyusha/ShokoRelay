@@ -130,9 +130,9 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
                                 File.Delete(targetPath);
                             Directory.CreateDirectory(targetPath);
                             foreach (var subFile in Directory.EnumerateFiles(entry))
-                                VfsShared.TryCreateLink(subFile, Path.Combine(targetPath, Path.GetFileName(subFile)), logger);
+                                VfsShared.TryCreateLink(subFile, Path.Combine(targetPath, Path.GetFileName(subFile)), logger, checkVfsDisabled: false);
                         }
-                        else if (VfsShared.TryCreateLink(entry, targetPath, logger))
+                        else if (VfsShared.TryCreateLink(entry, targetPath, logger, checkVfsDisabled: false))
                         {
                             if (videoService.IsAllowedVideoExtension(targetPath))
                                 dirsToScan.Add(destDir);

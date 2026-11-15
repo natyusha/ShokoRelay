@@ -204,10 +204,11 @@ internal static class VfsShared
     /// <param name="targetOverride">Optional specific target string.</param>
     /// <param name="useRelativeTarget">Whether to resolve the target path relatively.</param>
     /// <param name="skipExistenceCheck">If true, bypasses the filesystem check and writes the link directly.</param>
+    /// <param name="checkVfsDisabled">Whether to skip link creation if VFS generation is disabled in settings.</param>
     /// <returns>True if the link exists and is correct, or was successfully created.</returns>
-    public static bool TryCreateLink(string source, string dest, ILogger logger, string? targetOverride = null, bool useRelativeTarget = true, bool skipExistenceCheck = false)
+    public static bool TryCreateLink(string source, string dest, ILogger logger, string? targetOverride = null, bool useRelativeTarget = true, bool skipExistenceCheck = false, bool checkVfsDisabled = true)
     {
-        if (Settings.Advanced.DisableVfsGeneration)
+        if (checkVfsDisabled && Settings.Advanced.DisableVfsGeneration)
             return true;
 
         string linkDir = Path.GetDirectoryName(dest) ?? string.Empty;
@@ -285,11 +286,42 @@ internal static class VfsShared
     /// <param name="videoService">Shoko video service to check for valid extensions when validating inline extras.</param>
     /// <param name="settings">The current relay configuration.</param>
     /// <param name="ignoredNames">Optional pre-computed set of ignored folder names for performance.</param>
+    /// <param name="relativeTo">Optional managed folder root used to isolate relative path segments.</param>
+    /// <param name="isDirectory">Whether the path represents a directory rather than a file.</param>
     /// <returns>True if any segment of the path or the filename matches an ignore rule.</returns>
-    public static bool IsPathIgnored(string path, IVideoService videoService, RelayConfig settings, HashSet<string>? ignoredNames = null)
+    public static bool IsPathIgnored(string path, IVideoService videoService, RelayConfig settings, HashSet<string>? ignoredNames = null, string? relativeTo = null, bool isDirectory = false)
     {
         if (string.IsNullOrEmpty(path))
             return false;
+
+        if (!string.IsNullOrEmpty(relativeTo))
+        {
+            try
+            {
+                string rel = Path.GetRelativePath(relativeTo, path);
+                if (!rel.StartsWith("..", StringComparison.Ordinal) && !Path.IsPathRooted(rel))
+                    path = rel;
+            }
+            catch { }
+        }
+        else if (Path.IsPathRooted(path))
+        {
+            var matchedRoot = (videoService.GetAllManagedFolders() ?? [])
+                .Select(mf => mf.Path)
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .FirstOrDefault(p => path.StartsWith(p.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar, PathComparison));
+
+            if (matchedRoot != null)
+            {
+                try
+                {
+                    string rel = Path.GetRelativePath(matchedRoot, path);
+                    if (!rel.StartsWith("..", StringComparison.Ordinal) && !Path.IsPathRooted(rel))
+                        path = rel;
+                }
+                catch { }
+            }
+        }
 
         var plexLocalExtras = settings.Advanced.PlexLocalExtras;
         var names = ignoredNames ?? GetIgnoredFolderNames(settings);
@@ -313,7 +345,7 @@ internal static class VfsShared
                 lastSlash = end;
         }
 
-        if (plexLocalExtras)
+        if (plexLocalExtras && !isDirectory)
         {
             var fileSpan = path.AsSpan(lastSlash >= 0 ? lastSlash + 1 : 0);
             int lastDot = fileSpan.LastIndexOf('.');

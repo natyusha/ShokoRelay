@@ -167,14 +167,25 @@
   async function showNowPlaying(folderPath) {
     try {
       const res = await fetch(`${base}/animethemes/mp3/stream?path=${encodeURIComponent(folderPath)}`, { method: "HEAD" });
-      const title = res.headers.get("X-Theme-Title");
+      const getHeader = (k) => {
+        const v = res.headers.get(k);
+        if (!v) return "";
+        try {
+          return decodeURIComponent(v);
+        } catch {
+          return v;
+        }
+      };
+      const title = getHeader("X-Theme-Title");
       if (!title) return;
-      const slug = (res.headers.get("X-Theme-Slug") || "").replace(/\bOpening\s?/gi, "OP").replace(/\bEnding\s?/gi, "ED");
-      const artist = res.headers.get("X-Theme-Artist");
-      const album = res.headers.get("X-Theme-Album");
-      let html = `<span class="np-line title">${title}</span>${artist ? `<span class="np-line artist">${artist}</span>` : ""}`;
+      const slug = getHeader("X-Theme-Slug")
+        .replace(/\bOpening\s?/gi, "OP")
+        .replace(/\bEnding\s?/gi, "ED");
+      const artist = getHeader("X-Theme-Artist");
+      const album = getHeader("X-Theme-Album");
+      let html = `<span class="np-line title">${esc(title)}</span>${artist ? `<span class="np-line artist">${esc(artist)}</span>` : ""}`;
       const meta = [album, slug].filter(Boolean).join(" \u2014 ");
-      if (meta) html += `<small class="np-line">${meta}</small>`;
+      if (meta) html += `<small class="np-line">${esc(meta)}</small>`;
       dismissNowPlaying();
       nowPlayingToast = showToast(html, "info", 0);
     } catch {}

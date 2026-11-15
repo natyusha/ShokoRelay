@@ -1,3 +1,4 @@
+using Shoko.Abstractions.Video;
 using Shoko.Abstractions.Video.Services;
 
 namespace ShokoRelay.Services;
@@ -56,9 +57,25 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
         {
             var all = videoService.GetAllVideoFiles() ?? [];
             var ignoredNames = VfsShared.GetIgnoredFolderNames(Settings);
+            var managedFolderStatus = new Dictionary<int, bool>();
 
-            // A file is considered "missing" if it doesn't exist on disk OR if its path is now blocked by Relay ignore rules.
-            var toDelete = all.Where(f => !File.Exists(f.Path) || VfsShared.IsPathIgnored(f.Path, videoService, Settings, ignoredNames)).ToList();
+            bool IsFolderOnline(IManagedFolder? folder)
+            {
+                if (folder == null || string.IsNullOrWhiteSpace(folder.Path))
+                    return false;
+                if (!managedFolderStatus.TryGetValue(folder.ID, out bool online))
+                {
+                    online = folder.AvailableFreeSpace != -1 && Directory.Exists(folder.Path);
+                    if (!online)
+                        logger.LogWarning("ShokoImportService: Managed folder '{FolderName}' [{FolderId}] is offline/unmounted -> Skipping missing file checks for its contents.", folder.Name, folder.ID);
+                    managedFolderStatus[folder.ID] = online;
+                }
+                return online;
+            }
+
+            // A file is considered "missing" if its managed folder is online and it doesn't exist on disk OR if its path is blocked by Relay ignore rules.
+            var toDelete = all.Where(f => IsFolderOnline(f.ManagedFolder) && (!File.Exists(f.Path) || VfsShared.IsPathIgnored(f.Path, videoService, Settings, ignoredNames, relativeTo: f.ManagedFolder.Path)))
+                .ToList();
 
             if (!dryRun && toDelete.Count > 0)
             {

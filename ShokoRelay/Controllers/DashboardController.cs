@@ -173,10 +173,23 @@ public class DashboardController(
         try
         {
             string cssPath = Path.Combine(applicationPaths.ThemesPath, $"{themeId}.css");
-            return !IoFile.Exists(cssPath)
+            string cssContent = string.Empty;
+
+            if (IoFile.Exists(cssPath))
+                cssContent = IoFile.ReadAllText(cssPath);
+            else if (webThemeService.GetTheme(themeId) is { } themeDef && (themeDef.Values.Count > 0 || !string.IsNullOrWhiteSpace(themeDef.CssContent)))
+            {
+                var valuesCss =
+                    themeDef.Values.Count > 0
+                        ? $":root {{\n{string.Join("\n", themeDef.Values.Select(v => $"  --{(v.Key.StartsWith("--", StringComparison.Ordinal) ? v.Key[2..] : v.Key)}: {v.Value};"))}\n}}\n"
+                        : string.Empty;
+                cssContent = $"{valuesCss}{themeDef.CssContent ?? string.Empty}";
+            }
+
+            return string.IsNullOrWhiteSpace(cssContent)
                 ? Content(string.Empty, "text/css")
                 : Content(
-                    IoFile.ReadAllText(cssPath)
+                    cssContent
                         + """
 
                         /* Shoko Relay Theme Variable Mapping */

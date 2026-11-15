@@ -465,7 +465,7 @@ GET  /animethemes/mp3/random?refresh={true|false}              -> AnimeThemesMp3
 - `GetAnimeThemesMp3Cache` returns the dictionary of cached `Theme.mp3` folder paths mapped to their respective theme slugs.
 - `AuditAnimeThemesMp3` audits existing non-OP `Theme.mp3` files to check if an OP is available on AnimeThemes. It also repairs missing local cache slugs via ID3 tags.
 - `AnimeThemesMp3Stream` embeds ID3v2 tags in response headers.
-  - Headers: `X-Theme-Title`, `X-Theme-Slug`, `X-Theme-Artist`, `X-Theme-Album`.
+  - Headers: `X-Theme-Title`, `X-Theme-Slug`, `X-Theme-Artist`, `X-Theme-Album` (URI-encoded).
 - `AnimeThemesMp3Random` uses a startup cache persisted in `mp3_animethemes.cache`.
   - `refresh`: (default false) set to true to force a re-scan of managed roots for existing themes.
 

@@ -357,7 +357,7 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
             locInfoValue = default;
             return false;
         }
-        if (VfsShared.IsPathIgnored(loc.Value.Src, videoService, Settings, state.IgnoredFolders))
+        if (VfsShared.IsPathIgnored(loc.Value.Src, videoService, Settings, state.IgnoredFolders, relativeTo: loc.Value.ImportRoot))
         {
             state.Skipped++;
             state.SkippedDetails.Add($"[Excluded Path] {state.Series.GetDisplayTitle()} [{state.Series.LocalID}] S{mapping.Coords.Season}E{mapping.Coords.Episode} - {mapping.FileName}");

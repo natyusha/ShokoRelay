@@ -10,5 +10,6 @@ public class VfsIgnoreRule(IVideoService videoService, ConfigProvider configProv
     public string Name => "Shoko Relay Ignore Rule";
 
     /// <inheritdoc/>
-    public bool ShouldIgnore(IManagedFolder folder, FileSystemInfo fileSystemInfo) => VfsShared.IsPathIgnored(fileSystemInfo.FullName, videoService, configProvider.GetSettings());
+    public bool ShouldIgnore(IManagedFolder folder, FileSystemInfo fileSystemInfo) =>
+        VfsShared.IsPathIgnored(fileSystemInfo.FullName, videoService, configProvider.GetSettings(), relativeTo: folder?.Path, isDirectory: fileSystemInfo is DirectoryInfo);
 }

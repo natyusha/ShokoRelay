@@ -470,10 +470,18 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
             // Pre-index entries by AniDB ID for instant bucket lookups per series
             var entriesByAniDb = entries.Where(e => e.AniDbId > 0).ToLookup(e => e.AniDbId);
 
-            var folderGroups = (seriesFilter?.Count > 0 ? seriesFilter.Distinct().Select(metadataService.GetShokoSeriesByID) : metadataService.GetAllShokoSeries())
-                .Where(s => s?.AnidbAnimeID > 0)
-                .GroupBy(s => OverrideHelper.GetPrimary(s!.LocalID, metadataService))
-                .ToList();
+            var seriesToQuery =
+                seriesFilter?.Count > 0
+                    ? seriesFilter
+                        .Distinct()
+                        .Select(id => OverrideHelper.GetPrimary(id, metadataService))
+                        .Distinct()
+                        .SelectMany(pid => OverrideHelper.GetGroup(pid, metadataService))
+                        .Distinct()
+                        .Select(metadataService.GetShokoSeriesByID)
+                    : metadataService.GetAllShokoSeries();
+
+            var folderGroups = seriesToQuery.Where(s => s?.AnidbAnimeID > 0).GroupBy(s => OverrideHelper.GetPrimary(s!.LocalID, metadataService)).ToList();
 
             Parallel.ForEach(
                 folderGroups,

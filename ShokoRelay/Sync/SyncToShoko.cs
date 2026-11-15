@@ -177,12 +177,13 @@ public class SyncToShoko(
             {
                 // Pre-resolve and filter which episodes will actually be marked watched to group by SeriesID
                 var epsToMark = new List<IShokoEpisode>();
+                var seenEpIds = new HashSet<int>();
                 foreach (var item in items)
                 {
                     if (item.LibrarySectionId.HasValue && item.LibrarySectionId != target.SectionId)
                         continue;
 
-                    if (GetCachedEpisode(item) is not { } ep || appliedIds.Contains(ep.LocalID))
+                    if (GetCachedEpisode(item) is not { } ep || appliedIds.Contains(ep.LocalID) || !seenEpIds.Add(ep.LocalID))
                         continue;
 
                     var epUserData = GetCachedUserData(ep);
