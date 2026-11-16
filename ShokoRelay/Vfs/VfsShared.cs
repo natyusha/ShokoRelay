@@ -294,6 +294,7 @@ internal static class VfsShared
         if (string.IsNullOrEmpty(path))
             return false;
 
+        string originalPath = path;
         if (!string.IsNullOrEmpty(relativeTo))
         {
             try
@@ -353,7 +354,7 @@ internal static class VfsShared
 
             if (nameWithoutExt.Length > 0 && VfsHelper.IsLocalExtraFile(nameWithoutExt, out int suffixIndex))
             {
-                string? dir = Path.GetDirectoryName(path);
+                string? dir = Path.GetDirectoryName(originalPath);
                 if (string.IsNullOrEmpty(dir))
                     dir = ".";
 
@@ -374,7 +375,55 @@ internal static class VfsShared
 
     #endregion
 
-    #region Blueprint Cache
+    #region File Writes & Blueprint
+
+    /// <summary>Atomically writes a file via a temporary path move using the supplied writer callback.</summary>
+    /// <param name="path">The target file path.</param>
+    /// <param name="writeTmp">Callback that writes the contents to the temporary file path.</param>
+    public static void WriteAtomic(string path, Action<string> writeTmp)
+    {
+        string tmpPath = path + ".tmp";
+        writeTmp(tmpPath);
+        File.Move(tmpPath, path, overwrite: true);
+    }
+
+    /// <summary>Asynchronously and atomically writes a file via a temporary path move using the supplied writer callback.</summary>
+    /// <param name="path">The target file path.</param>
+    /// <param name="writeTmp">Asynchronous callback that writes the contents to the temporary file path.</param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    /// <returns>A task representing the asynchronous write operation.</returns>
+    public static async Task WriteAtomicAsync(string path, Func<string, CancellationToken, Task> writeTmp, CancellationToken cancellationToken = default)
+    {
+        string tmpPath = path + ".tmp";
+        await writeTmp(tmpPath, cancellationToken).ConfigureAwait(false);
+        File.Move(tmpPath, path, overwrite: true);
+    }
+
+    /// <summary>Atomically writes text content to a target file via a temporary file move.</summary>
+    /// <param name="path">The target file path.</param>
+    /// <param name="content">The text content to write.</param>
+    public static void WriteTextAtomic(string path, string content) => WriteAtomic(path, tmp => File.WriteAllText(tmp, content));
+
+    /// <summary>Asynchronously and atomically writes text content to a target file via a temporary file move.</summary>
+    /// <param name="path">The target file path.</param>
+    /// <param name="content">The text content to write.</param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    /// <returns>A task representing the asynchronous write operation.</returns>
+    public static Task WriteTextAtomicAsync(string path, string content, CancellationToken cancellationToken = default) =>
+        WriteAtomicAsync(path, (tmp, ct) => File.WriteAllTextAsync(tmp, content, ct), cancellationToken);
+
+    /// <summary>Atomically writes lines of text to a target file via a temporary file move.</summary>
+    /// <param name="path">The target file path.</param>
+    /// <param name="lines">The lines to write.</param>
+    public static void WriteLinesAtomic(string path, IEnumerable<string> lines) => WriteAtomic(path, tmp => File.WriteAllLines(tmp, lines));
+
+    /// <summary>Asynchronously and atomically writes lines of text to a target file via a temporary file move.</summary>
+    /// <param name="path">The target file path.</param>
+    /// <param name="lines">The lines to write.</param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    /// <returns>A task representing the asynchronous write operation.</returns>
+    public static Task WriteLinesAtomicAsync(string path, IEnumerable<string> lines, CancellationToken cancellationToken = default) =>
+        WriteAtomicAsync(path, (tmp, ct) => File.WriteAllLinesAsync(tmp, lines, ct), cancellationToken);
 
     /// <summary>Loads the VFS blueprint cache from disk.</summary>
     /// <returns>The deserialized concurrent dictionary representing the blueprint cache.</returns>
@@ -405,10 +454,14 @@ internal static class VfsShared
     {
         try
         {
-            string tmpPath = BlueprintFilePath + ".tmp";
-            using (var fs = new FileStream(tmpPath, FileMode.Create, FileAccess.Write, FileShare.None))
-                JsonSerializer.Serialize(fs, blueprint);
-            File.Move(tmpPath, BlueprintFilePath, overwrite: true);
+            WriteAtomic(
+                BlueprintFilePath,
+                tmp =>
+                {
+                    using var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None);
+                    JsonSerializer.Serialize(fs, blueprint);
+                }
+            );
         }
         catch { }
     }

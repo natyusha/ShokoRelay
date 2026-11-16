@@ -70,20 +70,21 @@
 
   /**
    * Constructs a standard folder details node with deferred child rendering, wrapping the title in a flex-safe span.
-   * @param {string} name - The display text or HTML for the folder summary.
+   * @param {string} name - The plain display text for the folder summary.
    * @param {HTMLUListElement} ul - The container element to append items to.
    * @param {Function} renderFn - The callback function that generates and appends children.
    * @param {boolean} isOpen - If true, forces children to render immediately.
+   * @param {string} [extraHtml=""] - Optional HTML appended after the escaped title span.
    * @returns {HTMLDetailsElement} The completed folder details node.
    */
-  window._sr.createLazyDetails = (name, ul, renderFn, isOpen) => {
+  window._sr.createLazyDetails = (name, ul, renderFn, isOpen, extraHtml = "") => {
     const det = document.createElement("details");
     const sum = document.createElement("summary");
     det.open = isOpen;
-    sum.title = name.replace(/<[^>]*>/g, ""); // strip HTML tags for tooltip title attribute
+    sum.title = name || "";
     sum.dataset.tooltipOverflowOnly = "true";
-    const titleSpan = name ? `<span class="vfs-title" data-tooltip-overflow-only="true">${name}</span>` : "";
-    sum.innerHTML = `<span class="tree-icon expand"></span><span class="tree-icon collapse"></span>${titleSpan}`;
+    const titleSpan = name ? `<span class="vfs-title" data-tooltip-overflow-only="true">${window._sr.esc(name)}</span>` : "";
+    sum.innerHTML = `<span class="tree-icon expand"></span><span class="tree-icon collapse"></span>${titleSpan}${extraHtml}`;
     det.appendChild(sum);
 
     if (isOpen) {

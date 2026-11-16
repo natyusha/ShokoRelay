@@ -58,6 +58,10 @@ public static partial class TextHelper
     [GeneratedRegex(@"^(?:([CSTPO])?(\d+)(?:-(\d+))?)?[S](\d+)[E](\d+)$", RegexOptions.IgnoreCase)]
     public static partial Regex CustomCoordRegex();
 
+    /// <summary>Regex validating host headers extracted from proxy forwarding headers.</summary>
+    [GeneratedRegex(@"^[a-zA-Z0-9.\-_]+(:\d+)?$|^\[[a-fA-F0-9:]+\](:\d+)?$")]
+    public static partial Regex ForwardedHostRegex();
+
     #endregion
 
     #region General Text Helpers

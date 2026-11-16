@@ -1,8 +1,37 @@
 using System.Text;
 using Asp.Versioning;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.Extensions.DependencyInjection;
+using Shoko.Abstractions.User.Services;
 
 namespace ShokoRelay.Controllers;
+
+/// <summary>Enforces Shoko administrator authorization on decorated controllers or actions when <c>Advanced.RequireAuth</c> is enabled.</summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
+public sealed class RelayAdminAuthorizeAttribute : Attribute, IAuthorizationFilter
+{
+    /// <summary>Evaluates whether the current request is permitted under the configured authentication settings.</summary>
+    /// <param name="context">The authorization filter context.</param>
+    public void OnAuthorization(AuthorizationFilterContext context)
+    {
+        if (context.ActionDescriptor.EndpointMetadata.OfType<IAllowAnonymous>().Any())
+            return;
+
+        var configProvider = context.HttpContext.RequestServices.GetRequiredService<ConfigProvider>();
+        if (!configProvider.GetSettings().Advanced.RequireAuth)
+            return;
+
+        var userService = context.HttpContext.RequestServices.GetRequiredService<IUserService>();
+        var user = userService.GetUserFromHttpContext(context.HttpContext);
+        if (user == null)
+            context.Result = new UnauthorizedObjectResult(new { status = "error", message = "Authentication required." });
+        else if (!user.IsAdmin)
+            context.Result = new ObjectResult(new { status = "error", message = "Administrator privileges required." }) { StatusCode = StatusCodes.Status403Forbidden };
+    }
+}
 
 /// <summary>Provides the foundational infrastructure for all Shoko Relay controllers.</summary>
 /// <remarks>Contains shared logic for logging, validation, response formatting, and Plex discovery.</remarks>

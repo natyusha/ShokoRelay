@@ -134,9 +134,9 @@
     enumValues.forEach((ev) => {
       const itemLabel = document.createElement("label");
       itemLabel.className = "shoko-checkbox";
-      itemLabel.innerHTML = `<input type="checkbox" value="${ev.value}">
+      itemLabel.innerHTML = `<input type="checkbox" value="${esc(ev.value)}">
         <span class="shoko-checkbox-icon" aria-hidden="true"><svg class="unchecked"><use href="img/icons.svg#checkbox-blank-circle-outline"></use></svg><svg class="checked"><use href="img/icons.svg#checkbox-marked-circle-outline"></use></svg></span>
-        <span class="shoko-checkbox-text"><span class="shoko-checkbox-title">${ev.name}</span></span>`;
+        <span class="shoko-checkbox-text"><span class="shoko-checkbox-title">${esc(ev.name)}</span></span>`;
       const cb = itemLabel.querySelector("input");
       cb.checked = (mask & ev.value) === ev.value;
       cb.onchange = async () => {
@@ -181,7 +181,7 @@
     wrap.appendChild(label);
 
     const mappingContainer = document.createElement("div");
-    mappingContainer.innerHTML = `<div class="full"><div><small>${leftHeader}</small><textarea class="mapping-left"></textarea></div><div><small>${rightHeader}</small><textarea class="mapping-right"></textarea></div></div>`;
+    mappingContainer.innerHTML = `<div class="full"><div><small>${esc(leftHeader)}</small><textarea class="mapping-left"></textarea></div><div><small>${esc(rightHeader)}</small><textarea class="mapping-right"></textarea></div></div>`;
     wrap.appendChild(mappingContainer);
 
     const l = mappingContainer.querySelector(".mapping-left");
@@ -238,7 +238,7 @@
       let input;
 
       if (p.Path.endsWith("SelectedTheme")) {
-        label.innerHTML = `<span>${p.Display || p.Path.split(".").pop()}</span>${p.Description ? `<small>${p.Description}</small>` : ""}`;
+        label.innerHTML = `<span>${esc(p.Display || p.Path.split(".").pop())}</span>${p.Description ? `<small>${esc(p.Description)}</small>` : ""}`;
         wrap.appendChild(label);
         input = document.createElement("select");
         input.add(new Option("Default", "default"));
@@ -262,9 +262,14 @@
       } else if (p.Type === "bool") {
         wrap.innerHTML = `<label class="shoko-checkbox"><input type="checkbox">
           <span class="shoko-checkbox-icon" aria-hidden="true"><svg class="unchecked"><use href="img/icons.svg#checkbox-blank-circle-outline"></use></svg><svg class="checked"><use href="img/icons.svg#checkbox-marked-circle-outline"></use></svg></span>
-          <span class="shoko-checkbox-text"><span class="shoko-checkbox-title">${p.Display || p.Path}</span><small class="shoko-checkbox-desc" style="display:block">${p.Description || ""}</small></span></label>`;
+          <span class="shoko-checkbox-text"><span class="shoko-checkbox-title">${esc(p.Display || p.Path)}</span><small class="shoko-checkbox-desc" style="display:block">${esc(p.Description || "")}</small></span></label>`;
         input = wrap.querySelector("input");
         bindConfig(input, p.Path, config, saveSettings, "check");
+
+        if (p.Path === "Advanced.RequireAuth")
+          input.addEventListener("change", async () => {
+            if (input.checked && !localStorage.getItem(window._sr.AUTH_KEY)) await window._sr.ensureAuth?.();
+          });
 
         // Re-evaluate the overrides button state when either relevant setting is toggled.
         if (overridesBtn && ["Advanced.TmdbEpNumbering", "Advanced.MergeTmdbSeries"].includes(p.Path)) input.addEventListener("change", () => window._sr.updateControlStates(config));

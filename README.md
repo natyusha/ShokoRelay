@@ -51,7 +51,7 @@ Installation can be completed via Shoko's WebUI (Recommended) or Manually. Both 
 - **Mandatory:**
   - Click the `Generate VFS` button in the "Shoko: VFS" section to initialize your collection
     - First time generation may take several minutes to complete with a large library
-  - A report of the run will be written to `logs/shoko-vfs-build-report.log` inside the plugin directory
+  - A report of the run will be written to `logs/shoko-vfs-build-report.log` inside the plugin's configuration directory
     - You can download the report via the dashboard's "Task Logs" section or a toast that will appear on task completion
   - The VFS will automatically update when it detects files have been added, renamed, moved or deleted
 - **Recommended:**
@@ -268,7 +268,7 @@ The plugin will look for '.webm' theme files in a folder called `!AnimeThemes` (
 
 ### Themes as Series BGM
 
-There is also support for generating `Theme.mp3` files as local metadata. This will add them to the VFS automatically and can be run for either a single series or as a batch operation. This process requires Shoko Relay to have access to [FFmpeg/FFprobe](https://ffmpeg.org/download.html). Place system appropriate binaries in one of the following locations: Shoko Server's `Utilities` folder in a subfolder named `FFmpeg` (case sensitive), the ShokoRelay plugin folder, or the system PATH. This is required due to AnimeThemes not providing the '.mp3' files that Plex requires for this feature (they use '.ogg').
+There is also support for generating `Theme.mp3` files as local metadata. This will add them to the VFS automatically and can be run for either a single series or as a batch operation. This process requires Shoko Relay to have access to [FFmpeg/FFprobe](https://ffmpeg.org/download.html). Place system appropriate binaries in one of the following locations: Shoko Server's `Utilities` folder in a subfolder named `FFmpeg` (case sensitive), or the system PATH. This is required due to AnimeThemes not providing the '.mp3' files that Plex requires for this feature (they use '.ogg').
 
 - This is available under the "AnimeThemes: MP3" section of the dashboard
 - Input the path (relative to Shoko or a mapping) to a folder containing an anime series and then click `Generate`
@@ -363,7 +363,7 @@ Crossover episodes are files which are linked to multiple episodes spanning sepa
 
 #### VFS Audit
 
-The VFS includes built-in audit functionality that scans existing VFS directories to find and prune orphaned folders, empty subdirectories, and broken symlinks whose source files were deleted or moved. It also updates the VFS Browser blueprint and generates a report at `logs/shoko-vfs-audit-report.log` in the plugin directory. It can be accessed via the `VFS Audit` button (database checkmark) in the "Shoko: VFS" section of the dashboard.
+The VFS includes built-in audit functionality that scans existing VFS directories to find and prune orphaned folders, empty subdirectories, and broken symlinks whose source files were deleted or moved. It also updates the VFS Browser blueprint and generates a report at `logs/shoko-vfs-audit-report.log` in the plugin's configuration directory. It can be accessed via the `VFS Audit` button (database checkmark) in the "Shoko: VFS" section of the dashboard.
 
 #### VFS Browser
 
@@ -548,7 +548,7 @@ Most manual actions performed via the dashboard (as well as some direct API requ
 
 #### How Logs Work
 
-- Logs are stored in the `logs/` subfolder within the plugin directory.
+- Logs are stored in the `logs/` subfolder within the plugin's configuration directory.
 - When a task completes, a toast notification appears on the dashboard with a `[view log]` link.
 - These files are overwritten each time the corresponding task is run.
 - To save a specific report, you must download or copy the text before running that task again.

@@ -393,8 +393,8 @@ public static class CastHelper
                 string rawName = s.Name.Trim();
                 bool isAniDb = s.ID.Source == MetadataSource.AniDB;
                 int priority = isAniDb ? 1 : 2;
-                bool isAnimation = animationStudioNames.Contains(rawName);
                 string preferredName = ResolvePreferredCreditName(rawName, false, priority);
+                bool isAnimation = animationStudioNames.Contains(rawName) || animationStudioNames.Contains(preferredName);
                 string key = NormalizeCreditKey(preferredName);
 
                 if (!studioGroups.TryGetValue(key, out var existing))

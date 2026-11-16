@@ -157,7 +157,7 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
                             using var videoResp = await httpClient.GetAsync(video.Link, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
                             videoResp.EnsureSuccessStatusCode();
 
-                            using var fs = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
+                            await using var fs = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
                             await videoResp.Content.CopyToAsync(fs, cancellationToken).ConfigureAwait(false);
 
                             downloads.Add(video.Basename);
@@ -182,7 +182,7 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
                                 using var retryResp = await httpClient.GetAsync(video.Link, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
                                 retryResp.EnsureSuccessStatusCode();
 
-                                using var fs = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
+                                await using var fs = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
                                 await retryResp.Content.CopyToAsync(fs, cancellationToken).ConfigureAwait(false);
 
                                 downloads.Add(video.Basename);

@@ -38,7 +38,7 @@
     const res = await fetchJson(`${base}/vfs?run=true&clean=false&filter=${id}`);
 
     // Immediately clear the task result on the server. This prevents syncActiveTasks in script.js from showing a redundant fallback toast for this operation.
-    if (taskName) await fetch(`${base}/tasks/clear/${taskName}`, { method: "POST" });
+    if (taskName) await fetchJson(`${base}/tasks/clear/${taskName}`, { method: "POST" }, false);
 
     toastOperation(res, label, { hideOnSucceed: TOAST_MS });
 
@@ -293,12 +293,13 @@
           : "";
 
       const sDet = window._sr.createLazyDetails(
-        `${displayName} ${seasonLink}`,
+        displayName,
         sUl,
         (container) => {
           renderSeasonContents(s, container);
         },
         forceRender,
+        seasonLink ? ` ${seasonLink}` : "",
       );
 
       sLi.appendChild(sDet);

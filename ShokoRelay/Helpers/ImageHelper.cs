@@ -35,12 +35,10 @@ public static class ImageHelper
     /// <param name="image">Image metadata object.</param>
     /// <param name="forceRemote">If true, forces the returned URL to point to the remote CDN (TMDB/AniDB), bypassing the local Shoko Server API.</param>
     /// <returns>A full URL string.</returns>
-    public static string GetImageUrl(IImage image, bool forceRemote = false)
-    {
-        return forceRemote && !string.IsNullOrEmpty(image.ResourceID) && ImageManager.GetTemplateUrlForSource(image.Source) is { Length: > 0 } template
-            ? string.Format(template, image.ResourceID.Replace('\\', '/').TrimStart('/'))
+    public static string GetImageUrl(IImage image, bool forceRemote = false) =>
+        forceRemote && !string.IsNullOrEmpty(image.ResourceID) && ImageManager?.GetTemplateUrlForSource(image.Source) is { Length: > 0 } template
+            ? string.Format(template, template.EndsWith("/{0}", StringComparison.Ordinal) ? image.ResourceID.Replace('\\', '/').TrimStart('/') : image.ResourceID.Replace('\\', '/'))
             : $"{ServerBaseUrl}/api/v3/Image/{image.ID}";
-    }
 
     #endregion
 

@@ -3,7 +3,7 @@
  * @description Logic for the Shoko Relay stand-alone AnimeThemes VFS video player.
  */
 (() => {
-  const { base, shokoBase, configUrl, el, esc, fetchJson, unwrapConfig, setValueByPath, openModal, updatePlaybackTooltip, saveSettings, getData, initSearchInteractions } = window._sr;
+  const { base, shokoBase, configUrl, AUTH_KEY, el, esc, fetchJson, fetchBlobUrl, unwrapConfig, setValueByPath, openModal, updatePlaybackTooltip, saveSettings, getData, initSearchInteractions } = window._sr;
 
   // DOM Elements - UI Indicators
   /** @type {HTMLElement} */ const playerTime = el("time-display");
@@ -190,7 +190,7 @@
 
   /**
    * Evaluates the full list of themes against active search terms, heart status, and metadata tags.
-   * @returns {WebmEntry[]} The filtered list of theme entries.
+   * @returns {Object[]} The filtered list of theme entries.
    */
   const getFilteredItems = () => {
     const rawFt = (uiFilter?.value || "").toLowerCase().trim();
@@ -295,10 +295,11 @@
       isFav ? favourites.add(videoId) : favourites.delete(videoId);
 
       if (heartEl) heartEl.classList.toggle("favourited", isFav);
-      const treeHeart = playerTree.querySelector(`.leaf[data-path="${CSS.escape(currentWebmPath)}"] .fav-icon`);
+      const isCurrentVideo = webmTreeData.find((i) => i.path === currentWebmPath)?.videoId === videoId;
+      const treeHeart = isCurrentVideo ? playerTree.querySelector(`.leaf[data-path="${CSS.escape(currentWebmPath)}"] .fav-icon`) : null;
       if (treeHeart) treeHeart.classList.toggle("favourited", isFav);
 
-      if (playerNowPlayingFav && webmTreeData.find((i) => i.path === currentWebmPath)?.videoId === videoId) playerNowPlayingFav.classList.toggle("favourited", isFav);
+      if (playerNowPlayingFav && isCurrentVideo) playerNowPlayingFav.classList.toggle("favourited", isFav);
       if (uiFilter?.value.toLowerCase().includes("favs")) renderTree(getFilteredItems());
     }
   }
@@ -369,10 +370,9 @@
     const createFolderNode = (name, renderFn, isOpen, isMissing = false, extraHtml = "") => {
       const li = document.createElement("li");
       const ul = document.createElement("ul");
-      const det = window._sr.createLazyDetails(name, ul, renderFn, isOpen);
+      const det = window._sr.createLazyDetails(name, ul, renderFn, isOpen, extraHtml);
       const sum = det.querySelector("summary");
       if (isMissing) sum.querySelector(".vfs-title")?.classList.add("tree-missing");
-      if (extraHtml) sum.insertAdjacentHTML("beforeend", extraHtml);
       li.appendChild(det);
       return li;
     };
@@ -428,7 +428,7 @@
         });
 
         const sortedFiles = node.files.sort((a, b) => a.file.localeCompare(b.file, undefined, { numeric: true }));
-        sortedFiles.forEach((item) => container.appendChild(createFileNode(item, decodeUnicode(item.file))));
+        sortedFiles.forEach((item) => container.appendChild(createFileLeaf(item, decodeUnicode(item.file))));
       };
 
       renderFolderTree(rootNode, true, rootUl);
@@ -458,7 +458,7 @@
             const seriesFiles = sMap.get(sName);
             const firstFile = seriesFiles[0];
             const extraHtml = buildSeriesLinks(firstFile.seriesId, firstFile.anidbId);
-            const renderFiles = (fContainer) => seriesFiles.forEach((f) => fContainer.appendChild(createFileNode(f, decodeUnicode(f.file))));
+            const renderFiles = (fContainer) => seriesFiles.forEach((f) => fContainer.appendChild(createFileLeaf(f, decodeUnicode(f.file))));
             container.appendChild(createFolderNode(sName, renderFiles, ft, isMissing, extraHtml));
           });
         };
@@ -468,7 +468,7 @@
           const seriesFiles = sMap.get(sName);
           const firstFile = seriesFiles[0];
           const extraHtml = buildSeriesLinks(firstFile.seriesId, firstFile.anidbId);
-          const renderFiles = (container) => seriesFiles.forEach((f) => container.appendChild(createFileNode(f, decodeUnicode(f.file))));
+          const renderFiles = (container) => seriesFiles.forEach((f) => container.appendChild(createFileLeaf(f, decodeUnicode(f.file))));
           rootUl.appendChild(createFolderNode(sName, renderFiles, ft, isMissing, extraHtml));
         } else {
           rootUl.appendChild(createFolderNode(gName, renderSeriesFolders, ft, isMissing));
@@ -523,6 +523,9 @@
   // #endregion
 
   // #region Player Engine
+  /** @type {string|null} Active Object URL for Blob-fallback video playback. */
+  let playerBlobUrl = null;
+
   /**
    * Sets the video source, updates header metadata, highlights, and saves the active path.
    * @param {string} path - The relative VFS path to the WebM file.
@@ -532,7 +535,23 @@
     if (!playerVideo) return;
     currentWebmPath = path;
     localStorage.setItem(PATH_KEY, path);
-    playerVideo.src = `${base}/animethemes/webm/stream?path=${encodeURIComponent(path)}`;
+    if (playerBlobUrl) {
+      URL.revokeObjectURL(playerBlobUrl);
+      playerBlobUrl = null;
+    }
+    const streamUrl = `${base}/animethemes/webm/stream?path=${encodeURIComponent(path)}`;
+    const token = localStorage.getItem(AUTH_KEY);
+    playerVideo.onerror = async () => {
+      playerVideo.onerror = null;
+      if (playerBlobUrl) return;
+      const blobUrl = await fetchBlobUrl(streamUrl);
+      if (blobUrl && currentWebmPath === path) {
+        playerBlobUrl = blobUrl;
+        playerVideo.src = blobUrl;
+        playerVideo.play().catch(() => {});
+      }
+    };
+    playerVideo.src = token ? `${streamUrl}&apikey=${encodeURIComponent(token)}` : streamUrl;
     playerVideo.play().catch(() => {});
 
     const item = webmTreeData.find((i) => i.path === path);
@@ -786,6 +805,10 @@
         playerVideo.pause();
         playerVideo.removeAttribute("src");
         playerVideo.load();
+        if (playerBlobUrl) {
+          URL.revokeObjectURL(playerBlobUrl);
+          playerBlobUrl = null;
+        }
         localStorage.removeItem(PATH_KEY);
         currentWebmPath = "";
 

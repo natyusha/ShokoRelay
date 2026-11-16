@@ -206,12 +206,7 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient, ILogg
         foreach (var target in plexClient.GetConfiguredTargets())
         {
             bool isMovie = target.LibraryType == PlexLibraryType.Movie;
-            using var request = plexClient.CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?type={PlexConstants.TypeCollection}&X-Plex-Container-Size=500", target.ServerUrl);
-            using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-            if (!response.IsSuccessStatusCode)
-                continue;
-
-            foreach (var m in (await PlexApi.ReadContainerAsync(response, cancellationToken).ConfigureAwait(false))?.Metadata ?? [])
+            foreach (var m in await plexClient.GetSectionCollectionsAsync(target, cancellationToken).ConfigureAwait(false))
             {
                 // Exclude smart collections from automatic empty collection deletion
                 if (PlexHelper.IsPlexTrue(m.Smart))

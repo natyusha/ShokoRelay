@@ -3,7 +3,7 @@
  * @description Dedicated logic for AnimeThemes VFS and Theme.mp3 generation on the Shoko Relay dashboard.
  */
 (() => {
-  const { base, el, esc, TOAST_MS, fetchJson, showToast, toastOperation, initToggle, updatePlaybackTooltip, getData, summarizeResult } = window._sr;
+  const { base, el, esc, TOAST_MS, authHeaders, fetchJson, fetchBlobUrl, showToast, toastOperation, initToggle, updatePlaybackTooltip, getData, summarizeResult } = window._sr;
 
   // #region Param Providers
   /**
@@ -59,15 +59,15 @@
       // Handle specific skip scenarios for user-friendly feedback
       if (status === "skipped") {
         if (message === "Theme.mp3 already exists.") {
-          summary = `Skipped: "${folder}" already contains a Theme.mp3`;
+          summary = `Skipped: "${esc(folder)}" already contains a Theme.mp3`;
         } else if (message === "Entry not found." || (message && message.includes("No entry"))) {
           summary = `Skipped: No theme found for this series`;
           isNoTheme = true;
         } else {
-          summary = message || "Skipped";
+          summary = esc(message) || "Skipped";
         }
       } else if (status === "error") {
-        summary = message || "Unknown error";
+        summary = esc(message) || "Unknown error";
       }
 
       if (res.ok || status === "skipped") {
@@ -113,6 +113,8 @@
 
   /** @type {HTMLAudioElement|null} Reference to the active HTML5 Audio element. */
   let atAudio = null;
+  /** @type {string|null} Active Object URL for the currently loaded MP3 stream. */
+  let atAudioBlobUrl = null;
   /** @type {HTMLElement|null} Reference to the active 'Now Playing' toast element. */
   let nowPlayingToast = null;
   /** @type {string|null} The folder path of the currently playing theme. */
@@ -166,7 +168,7 @@
    */
   async function showNowPlaying(folderPath) {
     try {
-      const res = await fetch(`${base}/animethemes/mp3/stream?path=${encodeURIComponent(folderPath)}`, { method: "HEAD" });
+      const res = await fetch(`${base}/animethemes/mp3/stream?path=${encodeURIComponent(folderPath)}`, { method: "HEAD", headers: authHeaders() });
       const getHeader = (k) => {
         const v = res.headers.get(k);
         if (!v) return "";
@@ -224,9 +226,9 @@
   /**
    * Stream and play a Theme.mp3 in the background.
    * @param {string} folderPath - The folder containing the Theme.mp3 to stream.
-   * @returns {void}
+   * @returns {Promise<void>}
    */
-  function playThemeMp3(folderPath) {
+  async function playThemeMp3(folderPath) {
     if (el("at-playback")?.getAttribute("aria-pressed") !== "true" || !folderPath) return;
     if (!atAudio) {
       atAudio = new Audio();
@@ -242,7 +244,11 @@
         } else dismissNowPlaying();
       };
     }
-    atAudio.src = `${base}/animethemes/mp3/stream?path=${encodeURIComponent(folderPath)}`;
+    const blobUrl = await fetchBlobUrl(`${base}/animethemes/mp3/stream?path=${encodeURIComponent(folderPath)}`);
+    if (!blobUrl) return;
+    if (atAudioBlobUrl) URL.revokeObjectURL(atAudioBlobUrl);
+    atAudioBlobUrl = blobUrl;
+    atAudio.src = blobUrl;
     atAudio.loop = el("at-mode")?.getAttribute("data-mode") === "loop";
     atAudio.play().catch(() => {});
     atCurrentFolder = folderPath;
@@ -284,6 +290,10 @@
           atAudio.pause();
           atAudio.removeAttribute("src");
           atAudio.load();
+          if (atAudioBlobUrl) {
+            URL.revokeObjectURL(atAudioBlobUrl);
+            atAudioBlobUrl = null;
+          }
           atCurrentFolder = null;
           dismissNowPlaying();
         }

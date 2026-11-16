@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Asp.Versioning;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Shoko.Abstractions.Extensions;
 using Shoko.Abstractions.User.Enums;
@@ -32,6 +33,7 @@ public sealed record PlexDiscoveryResult(List<PlexAvailableLibrary> Libraries, s
 /// <param name="plexAutomationService">Plex automation service.</param>
 /// <param name="plexMetadata">Plex metadata mapper.</param>
 /// <param name="logger">Logger instance.</param>
+[RelayAdminAuthorize]
 [ApiController]
 [ApiVersion(ShokoRelayConstants.ApiVersion)]
 [Route(ShokoRelayConstants.BasePath)]
@@ -319,6 +321,7 @@ public class PlexController(
 
     /// <summary>Handles scrobble, rating, and progress events from Plex webhooks.</summary>
     /// <returns>Webhook result status.</returns>
+    [AllowAnonymous]
     [HttpPost("plex/webhook")]
     public async Task<IActionResult> PluginPlexWebhook()
     {

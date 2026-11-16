@@ -45,6 +45,8 @@ public sealed record AnimeThemesMappingEntry(
 )
 {
     /// <summary>Constructs a mapping entry from a relative filepath and resolved video metadata.</summary>
+    /// <param name="filePath">Relative path to the theme file.</param>
+    /// <param name="l">Resolved video metadata lookup entry.</param>
     internal AnimeThemesMappingEntry(string filePath, AnimeThemesVideoLookup l)
         : this(filePath, l.VideoId, l.AniDbId, l.NC, l.Slug, l.Version, l.ArtistName, l.SongTitle, l.Lyrics, l.Subbed, l.Uncen, l.NSFW, l.Spoiler, l.Source, l.Resolution, l.Episodes, l.Overlap) { }
 }
@@ -96,6 +98,7 @@ internal sealed record AnimeThemesVideoLookup(
 )
 {
     /// <summary>Constructs a lookup entry from an existing mapping entry.</summary>
+    /// <param name="e">The existing mapping entry.</param>
     internal AnimeThemesVideoLookup(AnimeThemesMappingEntry e)
         : this(e.VideoId, 0, e.AniDbId, e.Nc, e.Slug, e.Version, e.ArtistName, e.SongTitle, e.Lyrics, e.Subbed, e.Uncen, e.NSFW, e.Spoiler, e.Source, e.Resolution, e.Episodes, e.Overlap) { }
 }

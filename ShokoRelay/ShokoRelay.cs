@@ -62,11 +62,7 @@ public class ServiceRegistration : IPluginServiceRegistration
         serviceCollection.AddSingleton<PlexAutomationService>();
         serviceCollection.AddSingleton<ShokoImportService>();
         serviceCollection.AddSingleton<SourceLinkService>();
-        serviceCollection.AddSingleton(provider =>
-        {
-            var cp = provider.GetRequiredService<ConfigProvider>();
-            return new FfmpegService(cp.PluginDirectory, applicationPaths.ApplicationPath, applicationPaths.DataPath, provider.GetRequiredService<ILogger<FfmpegService>>());
-        });
+        serviceCollection.AddSingleton(provider => new FfmpegService(applicationPaths.ApplicationPath, applicationPaths.DataPath, provider.GetRequiredService<ILogger<FfmpegService>>()));
         serviceCollection.AddSingleton<SyncToShoko>();
         serviceCollection.AddSingleton<SyncToPlex>();
         serviceCollection.AddSingleton<PlexAuth>();

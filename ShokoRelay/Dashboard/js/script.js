@@ -1,6 +1,6 @@
 /**
  * @file script.js
- * @description Core shared layout utilities for the Shoko Relay client interface.
+ * @description Core shared layout utilities, authentication token management, and fetch wrappers for the Shoko Relay client interface.
  */
 (() => {
   /** @type {string} Base path for API requests determined dynamically from the location. */
@@ -11,6 +11,15 @@
 
   /** @type {string} URL endpoint for configuration data. */
   const configUrl = base + "/config";
+
+  /** @type {string} LocalStorage key storing the Shoko admin API key for authenticated dashboard requests. */
+  const AUTH_KEY = "shoko-relay-api-key";
+
+  /** @type {Promise<string|null>|null} Shared in-flight promise preventing duplicate auth modals. */
+  let authPromptPromise = null;
+
+  /** @type {boolean} Tracks whether the user dismissed the auth modal to avoid repeated background polling prompts. */
+  let authCancelled = false;
 
   /**
    * Shorthand helper for document.getElementById.
@@ -32,26 +41,124 @@
   /** @type {Object<string, string>} Standardized labels for playback controls used by both MP3 and Video players. */
   const PLAYBACK_LABELS = { loop: "Loop", shuffle: "Shuffle", next: "Next", off: "Once", idle: "Play", playing: "Next" };
 
-  // #region Helpers
+  // #region Auth Helpers
+  /**
+   * Prompts the user for a Shoko administrator API key and validates it against the server.
+   * @param {boolean} [forceReset=false] - If true, clears any previously stored key before prompting.
+   * @returns {Promise<string|null>} A verified API key, or null if dismissed.
+   */
+  function ensureAuth(forceReset = false) {
+    if (forceReset) localStorage.removeItem(AUTH_KEY);
+    const existing = localStorage.getItem(AUTH_KEY);
+    if (existing) return Promise.resolve(existing);
+    if (authPromptPromise) return authPromptPromise;
+
+    authPromptPromise = new Promise((resolve) => {
+      let overlay = el("auth-modal");
+      if (!overlay) {
+        overlay = document.createElement("div");
+        overlay.id = "auth-modal";
+        overlay.className = "modal-overlay";
+        overlay.setAttribute("role", "dialog");
+        overlay.setAttribute("aria-modal", "true");
+        overlay.innerHTML = `<div class="modal" role="document">
+          <header>Admin Authentication</header>
+          <div class="modal-body">
+            <label for="auth-api-key">Shoko Admin API Key</label>
+            <input id="auth-api-key" type="password" autocomplete="current-password" placeholder="Paste your Shoko API key" />
+            <small>Find or generate an API key in Shoko WebUI under User Settings. Required when Require Auth is enabled.</small>
+          </div>
+          <footer>
+            <button id="auth-cancel" class="cancel" type="button">Cancel</button>
+            <button id="auth-submit" type="button">Authenticate</button>
+          </footer>
+        </div>`;
+        document.body.appendChild(overlay);
+      }
+
+      const input = el("auth-api-key");
+      const submitBtn = el("auth-submit");
+      const cancelBtn = el("auth-cancel");
+      input.value = "";
+
+      const close = openModal(overlay);
+      const finish = (val) => {
+        authPromptPromise = null;
+        authCancelled = val === null;
+        close();
+        resolve(val);
+      };
+
+      cancelBtn.onclick = () => finish(null);
+      submitBtn.onclick = async () => {
+        const key = input.value.trim();
+        if (!key) return;
+        submitBtn.disabled = true;
+        try {
+          const check = await fetch(`${base}/auth/verify`, { headers: { Authorization: `Bearer ${key}` } });
+          if (check.ok) {
+            localStorage.setItem(AUTH_KEY, key);
+            finish(key);
+          } else {
+            showToast(check.status === 403 ? "Admin privileges required." : "Invalid API key.", "error", TOAST_MS);
+            input.focus();
+          }
+        } catch {
+          showToast("Failed to verify API key.", "error", TOAST_MS);
+        } finally {
+          submitBtn.disabled = false;
+        }
+      };
+      input.onkeydown = (ev) => ev.key === "Enter" && submitBtn.click();
+    });
+
+    return authPromptPromise;
+  }
+  // #endregion
+
+  // #region Network Helpers
   /**
    * Fetch a URL and parse the response as JSON, returning a normalized result object.
    * @param {string} url - The URL to fetch.
    * @param {RequestInit} [opts] - Optional fetch options.
-   * @returns {Promise<{ok: boolean, data: *}>} The normalized fetch response object.
+   * @param {boolean} [allowPrompt=true] - Whether to prompt for authentication on 401/403 responses.
+   * @returns {Promise<{ok: boolean, status: number, data: *}>} The normalized fetch response object.
    */
-  async function fetchJson(url, opts) {
+  async function fetchJson(url, opts = {}, allowPrompt = true) {
     try {
-      const res = await fetch(url, opts);
+      const headers = Object.assign({}, authHeaders(), opts.headers || {});
+      const res = await fetch(url, { ...opts, headers });
+      if ((res.status === 401 || res.status === 403) && allowPrompt) {
+        authCancelled = false;
+        const key = await ensureAuth(true);
+        if (key) return fetchJson(url, opts, false);
+      }
       const text = await res.text();
       try {
-        return { ok: res.ok, data: JSON.parse(text) };
+        return { ok: res.ok, status: res.status, data: JSON.parse(text) };
       } catch {
-        return { ok: res.ok, data: text };
+        return { ok: res.ok, status: res.status, data: text };
       }
     } catch (e) {
       console.error("fetchJson error for", url, e);
-      return { ok: false, data: { error: String(e), message: e?.message ?? String(e), url } };
+      return { ok: false, status: 0, data: { error: String(e), message: e?.message ?? String(e), url } };
     }
+  }
+
+  /**
+   * Fetches a protected binary or text resource with authorization headers and returns an Object URL.
+   * @param {string} url - The resource URL to fetch.
+   * @returns {Promise<string|null>} An Object URL for the fetched blob, or null on failure.
+   */
+  async function fetchBlobUrl(url) {
+    let res = await fetch(url, { headers: authHeaders() });
+    if (res.status === 401 || res.status === 403) {
+      const key = await ensureAuth(true);
+      if (key) res = await fetch(url, { headers: authHeaders() });
+    }
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return URL.createObjectURL(blob);
   }
 
   /**
@@ -62,7 +169,9 @@
   function getData(res) {
     return res?.data?.Data ?? res?.data?.data ?? res?.data;
   }
+  // #endregion
 
+  // #region UI Helpers
   /**
    * Build a human-readable summary string and error count from common API response fields.
    * @param {Object} res - The normalized fetch response object.
@@ -145,7 +254,7 @@
     const { summary, hideOnSucceed, type } = opts;
     const { text, errorCount } = summarizeResult(res);
     const logUrl = res.data?.logUrl || res.data?.LogUrl;
-    const logLink = logUrl ? `[<a href="${logUrl}" target="_blank" class="log-link">view log</a>]` : "";
+    const logLink = logUrl ? `[<a href="${esc(logUrl)}" target="_blank" rel="noopener noreferrer" class="log-link">view log</a>]` : "";
 
     if (res.ok) {
       const display = summary || res.data?.message || res.data?.Message || (res.data?.status !== "ok" ? res.data?.status : null) || text || "Complete";
@@ -224,10 +333,15 @@
     base,
     shokoBase,
     configUrl,
+    AUTH_KEY,
     el,
     esc,
     TOAST_MS,
+    authHeaders,
+    ensureAuth,
+    isAuthCancelled: () => authCancelled,
     fetchJson,
+    fetchBlobUrl,
     showToast,
     toastOperation,
     openModal,
@@ -363,6 +477,19 @@
     }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["title", "href"] });
   }
   // #endregion
+
+  // Intercept log link clicks so protected log endpoints receive Authorization headers via Blob URLs
+  document.addEventListener("click", async (e) => {
+    const link = e.target.closest("a.log-link");
+    if (!link) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const blobUrl = await fetchBlobUrl(link.href);
+    if (blobUrl) {
+      window.open(blobUrl, "_blank", "noopener,noreferrer");
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+    }
+  });
 
   // Lifecycle Execution
   initTooltips();

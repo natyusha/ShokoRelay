@@ -23,6 +23,7 @@ public class PlexWatchedSyncAction(SyncToShoko watchedSyncService, ConfigProvide
     public async Task Execute(IProgress<decimal> progress, CancellationToken token)
     {
         progress.Report(0);
+        TaskHelper.StartTask(ShokoRelayConstants.TaskShokoSyncWatched);
 
         var settings = configProvider.GetSettings();
         var freq = settings.Automation.ShokoSyncWatchedFrequencyHours;
@@ -45,6 +46,7 @@ public class PlexWatchedSyncAction(SyncToShoko watchedSyncService, ConfigProvide
         finally
         {
             SyncHelper.SyncLock.Release();
+            TaskHelper.FinishTask(ShokoRelayConstants.TaskShokoSyncWatched);
         }
     }
 }

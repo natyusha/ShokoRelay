@@ -24,7 +24,7 @@ public class PlexAutomationAction(PlexAutomationService plexAutomationService, C
     public async Task Execute(IProgress<decimal> progress, CancellationToken token)
     {
         progress.Report(0);
-
+        TaskHelper.StartTask(ShokoRelayConstants.TaskPlexAutomationRun);
         await SyncHelper.SyncLock.WaitAsync(token).ConfigureAwait(false);
         try
         {
@@ -35,6 +35,7 @@ public class PlexAutomationAction(PlexAutomationService plexAutomationService, C
         finally
         {
             SyncHelper.SyncLock.Release();
+            TaskHelper.FinishTask(ShokoRelayConstants.TaskPlexAutomationRun);
         }
     }
 }

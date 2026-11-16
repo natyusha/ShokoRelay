@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -115,7 +116,7 @@ public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesAp
         if (!string.IsNullOrWhiteSpace(season))
             filters.Add($"{{ column: SEASON, operator: EQ, value: {season.ToUpperInvariant()} }}");
         if (!string.IsNullOrWhiteSpace(name))
-            filters.Add($"{{ column: TITLE_ROMAJI, operator: LIKE, value: \"%{name.Replace("\"", "\\\"")}%\" }}");
+            filters.Add($"{{ column: TITLE_ROMAJI, operator: LIKE, value: \"%{name.Replace("\\", "\\\\").Replace("\"", "\\\"")}%\" }}");
 
         string whereClause = filters.Count > 0 ? $"where: {{ AND: [{string.Join(", ", filters)}] }}" : "";
         string query =
@@ -151,7 +152,7 @@ public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesAp
         {
             await RateLimitAsync(cancellationToken).ConfigureAwait(false);
 
-            using var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+            using var content = new StringContent(json, Encoding.UTF8, "application/json");
             using var response = await _http.PostAsync(AnimeThemesHelper.AtApiBase, content, cancellationToken).ConfigureAwait(false);
 
             UpdateRateLimits(response);

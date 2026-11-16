@@ -27,6 +27,7 @@ namespace ShokoRelay.Controllers;
 /// <param name="vfsWatcher">VFS filesystem event watcher.</param>
 /// <param name="scheduledActionService">Shoko scheduled action service.</param>
 /// <param name="logger">Logger instance.</param>
+[RelayAdminAuthorize]
 [ApiController]
 [ApiVersion(ShokoRelayConstants.ApiVersion)]
 [Route(ShokoRelayConstants.BasePath)]
@@ -103,10 +104,7 @@ public class ShokoController(
         try
         {
             Logger.LogInformation("Shoko: Updating VFS overrides file...");
-            string path = Path.Combine(ConfigDirectory, ShokoRelayConstants.FileVfsOverrides);
-            string tmpPath = path + ".tmp";
-            IoFile.WriteAllText(tmpPath, content ?? string.Empty);
-            IoFile.Move(tmpPath, path, overwrite: true);
+            VfsShared.WriteTextAtomic(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileVfsOverrides), content ?? string.Empty);
             OverrideHelper.Reload();
             return Ok(new RelayResponse<object>());
         }

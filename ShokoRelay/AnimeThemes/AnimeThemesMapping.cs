@@ -50,30 +50,6 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
         return mappings;
     }
 
-    /// <summary>Atomically writes text content to a target file via a temporary file move.</summary>
-    /// <param name="path">The target file path.</param>
-    /// <param name="content">The text content to write.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A task representing the asynchronous write operation.</returns>
-    private static async Task WriteTextAtomicAsync(string path, string content, CancellationToken cancellationToken)
-    {
-        string tmpPath = path + ".tmp";
-        await File.WriteAllTextAsync(tmpPath, content, cancellationToken).ConfigureAwait(false);
-        File.Move(tmpPath, path, overwrite: true);
-    }
-
-    /// <summary>Atomically writes lines of text to a target file via a temporary file move.</summary>
-    /// <param name="path">The target file path.</param>
-    /// <param name="lines">The lines to write.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A task representing the asynchronous write operation.</returns>
-    private static async Task WriteLinesAtomicAsync(string path, IEnumerable<string> lines, CancellationToken cancellationToken)
-    {
-        string tmpPath = path + ".tmp";
-        await File.WriteAllLinesAsync(tmpPath, lines, cancellationToken).ConfigureAwait(false);
-        File.Move(tmpPath, path, overwrite: true);
-    }
-
     /// <summary>Download the mapping file from a direct raw URL and save it.</summary>
     /// <param name="rawUrl">Raw URL to download from.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
@@ -89,7 +65,7 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
             await VfsShared.VfsLock.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                await WriteTextAtomicAsync(Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FileAtMapping), content, cancellationToken).ConfigureAwait(false);
+                await VfsShared.WriteTextAtomicAsync(Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FileAtMapping), content, cancellationToken).ConfigureAwait(false);
             }
             finally
             {
@@ -228,7 +204,7 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
 
             var finalEntries = entries.DistinctBy(e => e.FilePath).OrderBy(e => AnimeThemesHelper.GetYearForSort(e.FilePath)).ThenBy(e => e.FilePath).ToList();
 
-            await WriteTextAtomicAsync(mapPath, AnimeThemesHelper.SerializeMapping(existingComments, finalEntries), cancellationToken).ConfigureAwait(false);
+            await VfsShared.WriteTextAtomicAsync(mapPath, AnimeThemesHelper.SerializeMapping(existingComments, finalEntries), cancellationToken).ConfigureAwait(false);
             logger.LogInformation("AnimeThemes Map: Finished mapping task -> {Count} entries written.", finalEntries.Count);
             List<string> finalMessages =
             [
@@ -306,7 +282,7 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
             if (addedCount > 0)
             {
                 var finalEntries = entries.DistinctBy(e => e.FilePath).OrderBy(e => AnimeThemesHelper.GetYearForSort(e.FilePath)).ThenBy(e => e.FilePath).ToList();
-                await WriteTextAtomicAsync(mapPath, AnimeThemesHelper.SerializeMapping(existingComments, finalEntries), cancellationToken).ConfigureAwait(false);
+                await VfsShared.WriteTextAtomicAsync(mapPath, AnimeThemesHelper.SerializeMapping(existingComments, finalEntries), cancellationToken).ConfigureAwait(false);
                 logger.LogInformation("AnimeThemes Map: Appended {Count} new entries to mapping file.", addedCount);
             }
 
@@ -425,7 +401,7 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
             entries.Add(entry);
 
             var finalEntries = entries.DistinctBy(e => e.FilePath).OrderBy(e => AnimeThemesHelper.GetYearForSort(e.FilePath)).ThenBy(e => e.FilePath).ToList();
-            await WriteTextAtomicAsync(mapPath, AnimeThemesHelper.SerializeMapping(existingComments, finalEntries), cancellationToken).ConfigureAwait(false);
+            await VfsShared.WriteTextAtomicAsync(mapPath, AnimeThemesHelper.SerializeMapping(existingComments, finalEntries), cancellationToken).ConfigureAwait(false);
 
             if (changedFields.Count > 0)
                 logger.LogInformation("AnimeThemes Map: Updated {Count} field(s) for '{Path}': {Fields}", changedFields.Count, relPath, string.Join(", ", changedFields));
@@ -433,8 +409,8 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
                 logger.LogInformation("AnimeThemes Map: Saved mapping for '{Path}' -> VideoID: {VideoId}, AniDB ID: {AnidbId}", relPath, effectiveLookup.VideoId, effectiveLookup.AniDbId);
 
             // If the entry has a valid AniDB ID, refresh the VFS symlink immediately so the renamed file is visible in Plex
-            if (entry.AniDbId > 0)
-                await ApplyMappingAsync([entry.AniDbId], cancellationToken).ConfigureAwait(false);
+            if (entry.AniDbId > 0 && metadataService.GetShokoSeriesByAnidbID(entry.AniDbId) is { } shokoSeries)
+                await ApplyMappingAsync([shokoSeries.LocalID], cancellationToken).ConfigureAwait(false);
 
             return (entry, null, genFileName, true, changedFields);
         }
@@ -645,7 +621,7 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
                 if (seriesFilter == null || seriesFilter.Count == 0)
                 {
                     var cacheLines = state.CacheEntries.Select(ce => $"{ce.VfsPath.Replace('\\', '/')}|{ce.VideoId}|{ce.Bitmask}");
-                    await WriteLinesAtomicAsync(cachePath, cacheLines, cancellationToken).ConfigureAwait(false);
+                    await VfsShared.WriteLinesAtomicAsync(cachePath, cacheLines, cancellationToken).ConfigureAwait(false);
                 }
                 else
                 {
@@ -699,7 +675,7 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
                     }
 
                     newCacheLines.AddRange(state.CacheEntries.Select(ce => $"{ce.VfsPath.Replace('\\', '/')}|{ce.VideoId}|{ce.Bitmask}"));
-                    await WriteLinesAtomicAsync(cachePath, newCacheLines, cancellationToken).ConfigureAwait(false);
+                    await VfsShared.WriteLinesAtomicAsync(cachePath, newCacheLines, cancellationToken).ConfigureAwait(false);
                 }
             }
             catch (Exception ex)

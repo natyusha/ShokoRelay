@@ -3,7 +3,7 @@
  * @description Dedicated logic for Shoko VFS and Automation tasks on the Shoko Relay dashboard.
  */
 (() => {
-  const { base, shokoBase, configUrl, el, fetchJson, showToast, toastOperation, summarizeResult, initToggle, openModal, setButtonLoading, getData } = window._sr;
+  const { base, shokoBase, configUrl, el, esc, fetchJson, showToast, toastOperation, summarizeResult, initToggle, openModal, setButtonLoading, getData } = window._sr;
 
   // #region Helpers
   /**
@@ -24,7 +24,7 @@
   };
   resolveSystemLinks();
 
-  /** @type {string} Placeholder text for the VFS Overrides Editor, concatenated to stay under the column limit. */
+  /** @type {string} Placeholder text for the VFS Overrides Editor. */
   const OVERRIDES_PLACEHOLDER =
     "This allows shows which are separated on AniDB but part of the same TMDB listing to be combined into a single entry in Plex.\n" +
     "Each line should contain a comma separated list of AniDB IDs you wish to merge.\n" +
@@ -175,7 +175,7 @@
         startToast?.remove();
         setButtonLoading(targetBtn, false);
 
-        await fetch(`${base}/tasks/clear/shoko-sync-watched`, { method: "POST" }); // Clear the task immediately on the server to prevent the background poller from firing a duplicate toast
+        await fetchJson(`${base}/tasks/clear/shoko-sync-watched`, { method: "POST" }, false); // Clear the task immediately on the server to prevent the background poller from firing a duplicate toast
         if (res.ok) {
           const d = getData(res);
 

@@ -5,11 +5,10 @@ using System.Text;
 namespace ShokoRelay.Services;
 
 /// <summary>Wrapper around FFmpeg/FFprobe CLI tools used by the AnimeThemes subsystem.</summary>
-/// <param name="pluginDirectory">The root directory for the plugin.</param>
 /// <param name="applicationPath">The parent directory of the Shoko Server executable.</param>
 /// <param name="dataPath">The Shoko Server data directory.</param>
 /// <param name="logger">Logger instance.</param>
-public sealed class FfmpegService(string pluginDirectory, string applicationPath, string dataPath, ILogger<FfmpegService> logger)
+public sealed class FfmpegService(string applicationPath, string dataPath, ILogger<FfmpegService> logger)
 {
     #region Setup & State
 
@@ -24,9 +23,6 @@ public sealed class FfmpegService(string pluginDirectory, string applicationPath
 
     /// <summary>The resolved path to the FFprobe executable.</summary>
     private string _ffprobePath = "ffprobe";
-
-    /// <summary>The root directory of the plugin.</summary>
-    private readonly string _pluginDirectory = pluginDirectory;
 
     /// <summary>The parent directory of the Shoko Server executable.</summary>
     private readonly string _applicationPath = applicationPath;
@@ -143,9 +139,6 @@ public sealed class FfmpegService(string pluginDirectory, string applicationPath
             if (!string.IsNullOrWhiteSpace(_dataPath) && Path.Combine(_dataPath, "Utilities", "FFmpeg") is { } dataUtil && Directory.Exists(dataUtil))
                 candidates.Add(dataUtil);
 
-            if (Directory.Exists(_pluginDirectory))
-                candidates.Add(_pluginDirectory);
-
             foreach (string dir in candidates)
             {
                 if (!ffmpegFound)
@@ -158,13 +151,13 @@ public sealed class FfmpegService(string pluginDirectory, string applicationPath
 
             if (ffmpegFound || ffprobeFound)
             {
-                _workingDirectory = DetermineWorkingDirectory(locatedDir ?? _pluginDirectory);
+                _workingDirectory = DetermineWorkingDirectory(locatedDir ?? _dataPath);
                 logger.LogInformation("FfmpegService: FFmpeg binaries configured at {Location}", locatedDir ?? "multiple locations");
             }
             else
             {
-                _workingDirectory = DetermineWorkingDirectory(_pluginDirectory);
-                logger.LogWarning("FfmpegService: FFmpeg binaries not found in priority folders -> falling back to system PATH");
+                _workingDirectory = DetermineWorkingDirectory(_dataPath);
+                logger.LogWarning("FfmpegService: FFmpeg binaries not found in Utilities folders -> falling back to system PATH");
             }
 
             _ffmpegConfigured = true;
@@ -193,7 +186,7 @@ public sealed class FfmpegService(string pluginDirectory, string applicationPath
     private string DetermineWorkingDirectory(string preferred) =>
         File.Exists(preferred) && Path.GetDirectoryName(preferred) is string dir && Directory.Exists(dir) ? dir
         : Directory.Exists(preferred) ? preferred
-        : _pluginDirectory;
+        : (!string.IsNullOrWhiteSpace(_dataPath) && Directory.Exists(_dataPath) ? _dataPath : Environment.CurrentDirectory);
 
     #endregion
 
@@ -321,7 +314,7 @@ public sealed class FfmpegService(string pluginDirectory, string applicationPath
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
-            WorkingDirectory = workingDir ?? (!string.IsNullOrEmpty(_workingDirectory) ? _workingDirectory : _pluginDirectory),
+            WorkingDirectory = workingDir ?? (!string.IsNullOrEmpty(_workingDirectory) ? _workingDirectory : _dataPath),
         };
 
         foreach (var arg in args)

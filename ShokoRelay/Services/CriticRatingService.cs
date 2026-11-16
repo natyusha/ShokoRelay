@@ -296,7 +296,7 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
         try
         {
             using var req = plexClient.CreateRequest(HttpMethod.Put, path, target.ServerUrl);
-            using var resp = await plexClient.SendAsync(req, cancellationToken);
+            using var resp = await plexClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
             return resp.IsSuccessStatusCode;
         }
         catch

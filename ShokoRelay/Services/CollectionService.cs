@@ -410,9 +410,7 @@ public class CollectionService(
             {
                 try
                 {
-                    string tmpPath = cachePath + ".tmp";
-                    File.WriteAllLines(tmpPath, cache.Select(kvp => $"{kvp.Key}|{kvp.Value}"));
-                    File.Move(tmpPath, cachePath, overwrite: true);
+                    VfsShared.WriteLinesAtomic(cachePath, cache.Select(kvp => $"{kvp.Key}|{kvp.Value}"));
                 }
                 catch { }
             }

@@ -16,6 +16,7 @@ namespace ShokoRelay.Controllers;
 /// <param name="webmDownloader">AnimeThemes WebM downloader.</param>
 /// <param name="videoService">Shoko video service.</param>
 /// <param name="logger">Logger instance.</param>
+[RelayAdminAuthorize]
 [ApiController]
 [ApiVersion(ShokoRelayConstants.ApiVersion)]
 [Route(ShokoRelayConstants.BasePath)]
@@ -193,7 +194,16 @@ public class AnimeThemesController(
     {
         if (string.IsNullOrWhiteSpace(path))
             return BadRequest();
-        string themePath = Path.Combine(Path.GetFullPath(PlexLibrary.MapPlexPathToShokoPath(path)), "Theme.mp3");
+
+        string themePath;
+        try
+        {
+            themePath = Path.Combine(Path.GetFullPath(PlexLibrary.MapPlexPathToShokoPath(path)), "Theme.mp3");
+        }
+        catch (ArgumentException)
+        {
+            return BadRequest();
+        }
 
         if (!IsInsideManagedFolders(themePath) || !IoFile.Exists(themePath))
             return NotFound();
@@ -430,7 +440,16 @@ public class AnimeThemesController(
         if (string.IsNullOrWhiteSpace(path))
             return BadRequest();
 
-        string fullPath = Path.GetFullPath(PlexLibrary.MapPlexPathToShokoPath(path));
+        string fullPath;
+        try
+        {
+            fullPath = Path.GetFullPath(PlexLibrary.MapPlexPathToShokoPath(path));
+        }
+        catch (ArgumentException)
+        {
+            return BadRequest();
+        }
+
         return !IsInsideManagedFolders(fullPath) || !string.Equals(Path.GetExtension(fullPath), ".webm", StringComparison.OrdinalIgnoreCase) || !IoFile.Exists(fullPath)
             ? NotFound()
             : File(new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read), "video/webm", enableRangeProcessing: true);
@@ -480,9 +499,7 @@ public class AnimeThemesController(
 
             try
             {
-                string tmpPath = path + ".tmp";
-                IoFile.WriteAllLines(tmpPath, ids.Select(i => i.ToString()));
-                IoFile.Move(tmpPath, path, overwrite: true);
+                VfsShared.WriteLinesAtomic(path, ids.Select(i => i.ToString()));
                 return Ok(new RelayResponse<object>(Data: new { videoId, isFavourite = ids.Contains(videoId) }));
             }
             catch (Exception ex)

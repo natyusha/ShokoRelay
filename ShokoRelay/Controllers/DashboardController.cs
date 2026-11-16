@@ -5,6 +5,7 @@ using System.Net;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using Asp.Versioning;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.StaticFiles;
 using Shoko.Abstractions.Plugin;
@@ -23,6 +24,7 @@ namespace ShokoRelay.Controllers;
 /// <param name="applicationPaths">Shoko application paths.</param>
 /// <param name="scheduledActionService">Shoko scheduled action service.</param>
 /// <param name="logger">Logger instance.</param>
+[RelayAdminAuthorize]
 [ApiController]
 [ApiVersion(ShokoRelayConstants.ApiVersion)]
 [Route(ShokoRelayConstants.BasePath)]
@@ -42,26 +44,35 @@ public class DashboardController(
 
     #endregion
 
-    #region Pages & Assets
+    #region Auth & Pages
+
+    /// <summary>Verifies that the caller satisfies the configured administrator authorization check.</summary>
+    /// <returns>An authenticated confirmation payload.</returns>
+    [HttpGet("auth/verify")]
+    public IActionResult VerifyAuth() => Ok(new { authenticated = true });
 
     /// <summary>Serves the main settings dashboard page.</summary>
     /// <returns>The settings dashboard HTML content.</returns>
+    [AllowAnonymous]
     [HttpGet("dashboard")]
     public IActionResult GetDashboardPage() => ServePage("dashboard.cshtml");
 
     /// <summary>Serves the standalone VFS browser page.</summary>
     /// <returns>The VFS browser HTML content.</returns>
+    [AllowAnonymous]
     [HttpGet("browser")]
     public IActionResult GetBrowserPage() => ServePage("browser.cshtml");
 
     /// <summary>Serves the standalone AnimeThemes video player page.</summary>
     /// <returns>The video player HTML content.</returns>
+    [AllowAnonymous]
     [HttpGet("player")]
     public IActionResult GetPlayerPage() => ServePage("player.cshtml");
 
     /// <summary>Serves the static assets (JS, CSS, fonts, images) from the dashboard folder.</summary>
     /// <param name="path">The relative asset path.</param>
     /// <returns>The physical asset file.</returns>
+    [AllowAnonymous]
     [HttpGet("dashboard/{*path}")]
     public IActionResult GetAssetFile([FromRoute] string? path = null)
     {
@@ -129,6 +140,7 @@ public class DashboardController(
 
     /// <summary>Generates and serves a dynamically mapped CSS file combining the selected Shoko WebUI theme with custom Relay variables.</summary>
     /// <returns>A dynamic CSS stylesheet content result.</returns>
+    [AllowAnonymous]
     [HttpGet("theme.css")]
     public IActionResult GetDynamicThemeCss()
     {
@@ -172,12 +184,8 @@ public class DashboardController(
 
         try
         {
-            string cssPath = Path.Combine(applicationPaths.ThemesPath, $"{themeId}.css");
             string cssContent = string.Empty;
-
-            if (IoFile.Exists(cssPath))
-                cssContent = IoFile.ReadAllText(cssPath);
-            else if (webThemeService.GetTheme(themeId) is { } themeDef && (themeDef.Values.Count > 0 || !string.IsNullOrWhiteSpace(themeDef.CssContent)))
+            if (webThemeService.GetTheme(themeId) is { } themeDef && (themeDef.Values.Count > 0 || !string.IsNullOrWhiteSpace(themeDef.CssContent)))
             {
                 var valuesCss =
                     themeDef.Values.Count > 0
@@ -185,6 +193,8 @@ public class DashboardController(
                         : string.Empty;
                 cssContent = $"{valuesCss}{themeDef.CssContent ?? string.Empty}";
             }
+            else if (Path.Combine(applicationPaths.ThemesPath, $"{themeId}.css") is var cssPath && IoFile.Exists(cssPath))
+                cssContent = IoFile.ReadAllText(cssPath);
 
             return string.IsNullOrWhiteSpace(cssContent)
                 ? Content(string.Empty, "text/css")

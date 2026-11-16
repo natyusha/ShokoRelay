@@ -194,7 +194,7 @@ public class VfsWatcher(
         KickProcessLoop();
     }
 
-    /// <summary>Handles Shoko series deletion events, immediately pruning VFS directories and blueprint entries.</summary>
+    /// <summary>Handles Shoko series deletion events, queueing the series for locked VFS pruning and cache invalidation.</summary>
     /// <param name="sender">Event sender.</param>
     /// <param name="event">Event parameters containing removed series information.</param>
     private void OnSeriesRemoved(object? sender, SeriesInfoUpdatedEventArgs @event)
@@ -203,9 +203,10 @@ public class VfsWatcher(
             return;
 
         int primaryId = series.GetPrimaryId(metadataService);
-        logger.LogInformation("VFS: Series removed -> {Title} [{LocalId}] ... Pruning VFS", series.GetDisplayTitle(), series.LocalID);
-
-        builder.Build([primaryId], cleanRoot: false);
+        logger.LogInformation("VFS: Series removed -> {Title} [{LocalId}] ... Queueing VFS prune", series.GetDisplayTitle(), series.LocalID);
+        plexMetadata.InvalidateCache(primaryId);
+        _pending[primaryId] = 1;
+        KickProcessLoop();
     }
 
     /// <summary>Aggregates multiple video file events into the pending processing queue.</summary>

@@ -3,7 +3,7 @@
  * @description Dashboard-exclusive task synchronization, lockouts, and endpoint routing.
  */
 (() => {
-  if (window.self === window.top) document.documentElement.style.scrollbarGutter = "stable"; // prevent layout shifts when scrollbars appear/disappear on the dashboard
+  if (window.self === window.top) document.documentElement.style.scrollbarGutter = "stable";
 
   const { base, el, TOAST_MS, fetchJson, showToast, toastOperation, getData, openModal } = window._sr;
 
@@ -39,7 +39,7 @@
     if (isTaskSyncing) return;
     isTaskSyncing = true;
     try {
-      const res = await fetchJson(base + "/tasks/active");
+      const res = await fetchJson(base + "/tasks/active", {}, false);
       if (!res.ok) return;
       const activeTasks = getData(res) || [];
       const isAutoRunning = activeTasks.includes(window._sr.tasks.plexAutomationRun);
@@ -60,7 +60,7 @@
         }
       });
 
-      const completeRes = await fetchJson(base + "/tasks/completed");
+      const completeRes = await fetchJson(base + "/tasks/completed", {}, false);
       const completeData = getData(completeRes);
       if (completeRes.ok && completeData) {
         let hasNewLogs = false;
@@ -71,7 +71,7 @@
           const fInput = btn?.dataset.relayPersistIfEmpty ? document.querySelector(btn.dataset.relayPersistIfEmpty) : null;
 
           toastOperation({ ok: isOk, data: result }, taskName.replace(/-/g, " "), { hideOnSucceed: fInput?.value?.trim() ? TOAST_MS : 0 });
-          await fetch(base + `/tasks/clear/${taskName}`, { method: "POST" });
+          await fetchJson(base + `/tasks/clear/${taskName}`, { method: "POST" }, false);
           hasNewLogs = true;
           if (taskName === window._sr.tasks.plexAuthRefresh) window._sr.refreshPlexState?.();
         }
@@ -133,7 +133,7 @@
     const taskId = btn.id;
     try {
       await handler(btn);
-      if (taskId && MANAGED_TASK_IDS.includes(taskId)) await fetch(base + `/tasks/clear/${taskId}`, { method: "POST" });
+      if (taskId && MANAGED_TASK_IDS.includes(taskId)) await fetchJson(base + `/tasks/clear/${taskId}`, { method: "POST" }, false);
     } finally {
       btn.classList.remove("clicking");
       if (taskId && !MANAGED_TASK_IDS.includes(taskId)) setTimeout(() => setButtonLoading(btn, false), TOAST_MS);

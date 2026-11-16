@@ -81,7 +81,12 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
             // Prune series that were completely deleted from Shoko's database
             foreach (var (id, series) in resolved.Where(x => x.Series == null))
             {
-                PruneSeries(rootName, id, errorsBag.Add);
+                var blueprintMovieIds = blueprint
+                    .Values.SelectMany(d => d.TryGetValue(id, out var entry) ? entry.Seasons : [])
+                    .Select(s => s.Name.StartsWith("Movie ❯ ", StringComparison.Ordinal) && int.TryParse(s.Name.AsSpan(8), out int epId) ? epId : 0)
+                    .Where(epId => epId > 0)
+                    .ToHashSet();
+                PruneSeries(rootName, id, errorsBag.Add, blueprintMovieIds);
                 foreach (var rootDict in blueprint.Values)
                     rootDict.TryRemove(id, out _);
             }
@@ -500,13 +505,18 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
     /// <param name="rootFolderName">The name of the VFS root folder.</param>
     /// <param name="folderId">The folder ID representation of the series to prune.</param>
     /// <param name="onError">Callback to invoke if an exception occurs during pruning.</param>
-    private void PruneSeries(string rootFolderName, int folderId, Action<string> onError)
+    /// <param name="extraMovieEpIds">Optional pre-resolved movie episode IDs (e.g. from the blueprint cache when the series is already deleted).</param>
+    private void PruneSeries(string rootFolderName, int folderId, Action<string> onError, HashSet<int>? extraMovieEpIds = null)
     {
         if (Settings.Advanced.DisableVfsGeneration)
             return;
 
         List<string> roots = [.. (videoService.GetAllManagedFolders() ?? []).Select(f => f.Path).Where(p => !string.IsNullOrEmpty(p)).Distinct(VfsShared.PathComparer)];
         string movieRoot = VfsShared.ResolveMovieRootFolderName();
+        var movieEpIds = new HashSet<int>(extraMovieEpIds ?? []);
+        if (metadataService.GetShokoSeriesByID(folderId) is { Episodes: { } eps })
+            foreach (var ep in eps.Where(e => e.Type == EpisodeType.Episode))
+                movieEpIds.Add(ep.LocalID);
 
         foreach (var root in roots)
         {
@@ -525,24 +535,21 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
                 logger.LogWarning(ex, "VFS: Failed to prune series path -> {Path}", path);
             }
 
-            if (metadataService.GetShokoSeriesByID(folderId) is { Episodes: { } eps })
+            foreach (var epId in movieEpIds)
             {
-                foreach (var ep in eps.Where(e => e.Type == EpisodeType.Episode))
+                string mPath = Path.Combine(root, movieRoot, epId.ToString());
+                try
                 {
-                    string mPath = Path.Combine(root, movieRoot, ep.LocalID.ToString());
-                    try
+                    if (Directory.Exists(mPath))
                     {
-                        if (Directory.Exists(mPath))
-                        {
-                            Directory.Delete(mPath, true);
-                            logger.LogInformation("VFS: Pruned empty/orphaned movie folder -> {Path}", mPath);
-                        }
+                        Directory.Delete(mPath, true);
+                        logger.LogInformation("VFS: Pruned empty/orphaned movie folder -> {Path}", mPath);
                     }
-                    catch (Exception ex)
-                    {
-                        onError($"Prune failed {mPath}: {ex.Message}");
-                        logger.LogWarning(ex, "VFS: Failed to prune movie path -> {Path}", mPath);
-                    }
+                }
+                catch (Exception ex)
+                {
+                    onError($"Prune failed {mPath}: {ex.Message}");
+                    logger.LogWarning(ex, "VFS: Failed to prune movie path -> {Path}", mPath);
                 }
             }
         }

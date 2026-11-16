@@ -423,6 +423,11 @@ public class AdvancedConfig
     [DefaultValue("")]
     public string CollectionExclusions { get; set; } = "";
 
+    /// <summary>Whether administrative plugin endpoints require a Shoko administrator API key.</summary>
+    [Display(Name = "Require Auth", Description = "Require a Shoko administrator API key for dashboard, config, logs, and task endpoints")]
+    [DefaultValue(false)]
+    public bool RequireAuth { get; set; } = false;
+
     /// <summary>Whether to defer initial VFS creation until the metadata fixup.</summary>
     [Display(Name = "Defer VFS Creation", Description = "Enable to wait for the configured Plex Fixup Delay before generating VFS links")]
     [DefaultValue(false)]
@@ -504,7 +509,7 @@ public class AdvancedConfig
     public string PlexMetadataPath { get; set; } = "";
 
     /// <summary>Path to FFmpeg binaries.</summary>
-    [Display(Name = "FFmpeg Path", Description = "Leave empty to use 'Utilities/FFmpeg', or the plugin root / PATH")]
+    [Display(Name = "FFmpeg Path", Description = "Leave empty to use 'Utilities/FFmpeg' or the system PATH")]
     [DefaultValue("")]
     public string FFmpegPath { get; set; } = "";
 

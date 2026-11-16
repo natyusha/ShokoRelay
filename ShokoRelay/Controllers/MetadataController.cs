@@ -237,8 +237,8 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
                 || (
                     isMovieEndpoint
                     && int.TryParse(ratingKey, out int movieEpId)
-                    && MetadataService.GetShokoEpisodeByID(movieEpId) is { } directMovieEp
-                    && mapper.GetSeriesContext(directMovieEp.ShokoSeriesID.ToString()) is { } directMovieCtx
+                    && MetadataService.GetShokoEpisodeByID(movieEpId) is { ShokoSeriesID: var movieSeriesId }
+                    && mapper.GetSeriesContext(movieSeriesId.ToString()) is not null
                 )
             )
             {

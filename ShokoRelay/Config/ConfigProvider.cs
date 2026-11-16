@@ -10,7 +10,7 @@ namespace ShokoRelay.Config;
 
 /// <summary>Manages loading, saving, validation and normalization of the plugin configuration and Plex token/secrets file.</summary>
 /// <remarks>Watches for external config changes to auto-invalidate the cache.</remarks>
-public class ConfigProvider : IDisposable
+public partial class ConfigProvider : IDisposable
 {
     #region Setup & State
 
@@ -95,7 +95,7 @@ public class ConfigProvider : IDisposable
                     scheme = request.IsHttps ? "https" : request.Scheme;
 
                 var rawHost = request.Headers["X-Forwarded-Host"].FirstOrDefault()?.Split(',')[0].Trim();
-                var host = !string.IsNullOrEmpty(rawHost) && System.Text.RegularExpressions.Regex.IsMatch(rawHost, @"^[a-zA-Z0-9.\-_]+(:\d+)?$|^\[[a-fA-F0-9:]+\](:\d+)?$") ? rawHost : request.Host.ToString();
+                var host = !string.IsNullOrEmpty(rawHost) && TextHelper.ForwardedHostRegex().IsMatch(rawHost) ? rawHost : request.Host.ToString();
 
                 var detectedUrl = $"{scheme}://{host}{request.PathBase}".TrimEnd('/');
 
@@ -355,16 +355,6 @@ public class ConfigProvider : IDisposable
         return SanitizeConfigObject(dict);
     }
 
-    /// <summary>Atomically writes text content to a target file via a temporary file move.</summary>
-    /// <param name="path">The target file path.</param>
-    /// <param name="content">The text content to write.</param>
-    private static void WriteTextAtomic(string path, string content)
-    {
-        string tmpPath = path + ".tmp";
-        File.WriteAllText(tmpPath, content);
-        File.Move(tmpPath, path, overwrite: true);
-    }
-
     /// <summary>Validate, normalize and persist the supplied <paramref name="settings"/> to disk.</summary>
     /// <param name="settings">The <see cref="RelayConfig"/> instance to save.</param>
     public void SaveSettings(RelayConfig settings)
@@ -386,7 +376,7 @@ public class ConfigProvider : IDisposable
         lock (_settingsLock)
         {
             Volatile.Write(ref _suppressSettingsWatcherUntil, Environment.TickCount64 + 500);
-            WriteTextAtomic(_filePath, JsonSerializer.Serialize(settings, s_options));
+            VfsShared.WriteTextAtomic(_filePath, JsonSerializer.Serialize(settings, s_options));
             _settings = settings;
             _cachedExtraUsers = null; // Clear the cached extra users so they are re-parsed on the next sync after settings changes
         }
@@ -481,7 +471,7 @@ public class ConfigProvider : IDisposable
         lock (_settingsLock)
         {
             Volatile.Write(ref _suppressTokenWatcherUntil, Environment.TickCount64 + 500);
-            WriteTextAtomic(_tokenPath, JsonSerializer.Serialize(tf, s_options));
+            VfsShared.WriteTextAtomic(_tokenPath, JsonSerializer.Serialize(tf, s_options));
             _cachedTokenFile = tf;
             _cachedServers = tf.Servers;
             _cachedAdminUsername = tf.AdminUsername;

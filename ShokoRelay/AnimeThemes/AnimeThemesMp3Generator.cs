@@ -207,9 +207,7 @@ public class AnimeThemesMp3Generator(
         {
             if (_themeMp3Cache == null)
                 return;
-            string tmpPath = ThemeCacheFilePath + ".tmp";
-            File.WriteAllLines(tmpPath, _themeMp3Cache.Select(kvp => string.IsNullOrEmpty(kvp.Value) ? kvp.Key : $"{kvp.Key}|{kvp.Value}"));
-            File.Move(tmpPath, ThemeCacheFilePath, overwrite: true);
+            VfsShared.WriteLinesAtomic(ThemeCacheFilePath, _themeMp3Cache.Select(kvp => string.IsNullOrEmpty(kvp.Value) ? kvp.Key : $"{kvp.Key}|{kvp.Value}"));
         }
         catch { }
     }
@@ -301,9 +299,6 @@ public class AnimeThemesMp3Generator(
             logger.LogWarning("AnimeThemes MP3: Series lookup failed for video -> {Video} in {Folder}", vid, folder);
             return new(folder, "error", vf == null ? "Video not recognized." : "Series lookup failed.");
         }
-
-        if (batchProcessedSeries != null && !batchProcessedSeries.TryAdd(series.LocalID, 0))
-            return new(folder, "skipped", "Theme already processed for this series in another directory.");
 
         string themePath = Path.Combine(folder, "Theme.mp3");
         if (!query.Force && File.Exists(themePath))
@@ -427,8 +422,8 @@ public class AnimeThemesMp3Generator(
             {
                 resp.EnsureSuccessStatusCode();
                 temp = Path.Combine(Path.GetTempPath(), $"at-{Guid.NewGuid():N}{Path.GetExtension(audioUrl)}");
-                using var i = await resp.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-                using var o = File.Create(temp);
+                await using var i = await resp.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+                await using var o = File.Create(temp);
                 await i.CopyToAsync(o, cancellationToken).ConfigureAwait(false);
             }
 

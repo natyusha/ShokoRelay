@@ -96,12 +96,10 @@ public partial class VfsBuilder
                         Interlocked.Increment(ref seriesChecked);
 
                         var filesToAudit = new List<string>();
-                        var subDirsToAudit = new List<string>();
 
                         try
                         {
                             filesToAudit = [.. Directory.EnumerateFiles(seriesFolder, "*", SearchOption.AllDirectories)];
-                            subDirsToAudit = [.. Directory.GetDirectories(seriesFolder)];
                         }
                         catch (Exception ex)
                         {
