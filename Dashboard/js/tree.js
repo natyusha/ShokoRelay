@@ -60,7 +60,7 @@
 
     // Global Key Listener for search focus (shared across browser and player)
     window.addEventListener("keydown", (e) => {
-      if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA") return;
+      if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA" || document.querySelector(".modal-overlay.open")) return;
       if (e.key === "/") {
         e.preventDefault();
         input.focus();

@@ -267,15 +267,23 @@
         if (p.Path === "Advanced.RequireAuth") {
           input.checked = !!value;
           input.onchange = async () => {
-            if (input.checked && !localStorage.getItem(window._sr.AUTH_KEY)) {
-              const key = await window._sr.ensureAuth?.();
+            if (input.checked) {
+              let key = localStorage.getItem(window._sr.AUTH_KEY);
+              if (key) {
+                const verifyRes = await fetchJson(`${window._sr.base}/auth/verify?force=true`, {}, false);
+                if (!verifyRes.ok) key = null;
+              }
               if (!key) {
-                input.checked = false;
-                return;
+                key = await window._sr.ensureAuth?.(true, { dismissable: true, forceVerify: true });
+                if (!key) {
+                  input.checked = false;
+                  return;
+                }
               }
             }
             setValueByPath(config, p.Path, input.checked);
-            await saveSettings(config);
+            const saveRes = await saveSettings(config);
+            if (!input.checked && saveRes?.ok) localStorage.removeItem(window._sr.AUTH_KEY);
           };
         } else {
           bindConfig(input, p.Path, config, saveSettings, "check");
@@ -381,7 +389,10 @@
       openModal(modal);
     };
 
-  loadConfig();
+  (async () => {
+    await window._sr.authReady;
+    loadConfig();
+  })();
 
   const logsDetails = document.querySelector("#logs-list")?.closest(".details-anim");
   const logsContent = logsDetails?.querySelector(".details-content");

@@ -29,7 +29,7 @@
   function setPlexStartAction() {
     stopPlexPolling();
     const authAction = el("plex-auth-action");
-    if (authAction) authAction.querySelectorAll(".plex-auth-state").forEach((e) => (e.style.display = e.tagName === "BUTTON" ? "" : "none"));
+    if (authAction) authAction.querySelectorAll(".plex-auth-state").forEach((e) => (e.hidden = e.tagName !== "BUTTON"));
     el("plex-login")?.remove();
     withButtonAction("plex-start", startPlexAuth);
   }
@@ -50,7 +50,7 @@
     const authAction = el("plex-auth-action");
     if (authAction) {
       // Hide the initial buttons while the login link is active
-      authAction.querySelectorAll(".plex-auth-state").forEach((e) => (e.style.display = "none"));
+      authAction.querySelectorAll(".plex-auth-state").forEach((e) => (e.hidden = true));
 
       // Create or update the login link
       let loginLink = el("plex-login");
@@ -101,7 +101,7 @@
     b("plex-scrobble", "Automation.AutoScrobble", "check");
 
     const authAction = el("plex-auth-action");
-    if (authAction) authAction.querySelectorAll(".plex-auth-state").forEach((e) => (e.style.display = (isLinked ? e.tagName === "DIV" : e.tagName === "BUTTON") ? "" : "none"));
+    if (authAction) authAction.querySelectorAll(".plex-auth-state").forEach((e) => (e.hidden = !(isLinked ? e.tagName === "DIV" : e.tagName === "BUTTON")));
 
     if (!isLinked) {
       withButtonAction("plex-start", startPlexAuth);
@@ -141,5 +141,8 @@
 
   // Initialization
   window._sr.refreshPlexState = refreshPlexState;
-  refreshPlexState();
+  (async () => {
+    await window._sr.authReady;
+    refreshPlexState();
+  })();
 })();

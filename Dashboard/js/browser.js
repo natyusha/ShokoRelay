@@ -448,6 +448,7 @@
   initSearchInteractions(uiFilter, uiFilterClear, () => renderActiveRoot());
 
   (async () => {
+    await window._sr.authReady;
     await loadVfsTree(true);
   })();
   // #endregion

@@ -849,7 +849,7 @@
     }
 
     window.addEventListener("keydown", (e) => {
-      if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA") return;
+      if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA" || document.querySelector(".modal-overlay.open")) return;
       // prettier-ignore
       const handledKeys = [
         " ", "k", "K", "ArrowLeft", "ArrowRight", "j", "J", "l", "L", ",", ".", "b", "B", "n", "N", ";", "'",
@@ -885,6 +885,7 @@
     });
 
     (async () => {
+      await window._sr.authReady;
       if (playerTree) playerTree.innerHTML = '<div class="placeholder"><svg class="loading-spinner"><use href="img/icons.svg#loading"></use></svg><div>Loading video tree...</div></div>';
       const [treeRes, cfgRes, favRes] = await Promise.all([fetchJson(base + "/animethemes/webm/tree"), fetchJson(configUrl), fetchJson(base + "/animethemes/webm/favourites")]);
       if (favRes.ok) favourites = new Set(getData(favRes) || []);

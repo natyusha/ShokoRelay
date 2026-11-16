@@ -52,11 +52,36 @@
   };
 
   /**
+   * Enables or disables interactive dashboard controls while waiting for authentication.
+   * @param {boolean} locked - True to grey out and disable dashboard controls; false to restore them.
+   * @returns {void}
+   */
+  function setAuthLocked(locked) {
+    const dash = el("dashboard");
+    if (!dash) return;
+    dash.classList.toggle("auth-locked", locked);
+    dash.querySelectorAll("button, input, select, textarea").forEach((ctrl) => {
+      if (locked) {
+        if (!ctrl.disabled) {
+          ctrl.dataset.authLockedDisabled = "true";
+          ctrl.disabled = true;
+        }
+      } else if (ctrl.dataset.authLockedDisabled === "true") {
+        ctrl.disabled = false;
+        delete ctrl.dataset.authLockedDisabled;
+      }
+    });
+  }
+
+  /**
    * Prompts the user for a Shoko administrator API key and validates it against the server.
    * @param {boolean} [forceReset=false] - If true, clears any previously stored key before prompting.
+   * @param {Object} [opts] - Modal behavior options.
+   * @param {boolean} [opts.dismissable=true] - Whether the modal can be dismissed via Cancel, Escape, or backdrop click.
+   * @param {boolean} [opts.forceVerify=false] - Whether to validate the key even if Require Auth is not yet enabled on the server.
    * @returns {Promise<string|null>} A verified API key, or null if dismissed.
    */
-  function ensureAuth(forceReset = false) {
+  function ensureAuth(forceReset = false, { dismissable = true, forceVerify = false } = {}) {
     if (forceReset) localStorage.removeItem(AUTH_KEY);
     const existing = localStorage.getItem(AUTH_KEY);
     if (existing) return Promise.resolve(existing);
@@ -71,11 +96,12 @@
         overlay.setAttribute("role", "dialog");
         overlay.setAttribute("aria-modal", "true");
         overlay.innerHTML = `<div class="modal" role="document">
-          <header>Admin Authentication</header>
+          <header>Authentication</header>
           <div class="modal-body">
-            <label for="auth-api-key">Shoko Admin API Key</label>
+            <label for="auth-api-key">Shoko API Key</label>
             <input id="auth-api-key" type="password" autocomplete="current-password" placeholder="Paste your Shoko API key" />
-            <small>Find or generate an API key in Shoko WebUI under User Settings. Required when Require Auth is enabled.</small>
+            <small>Use an existing API Key or generate one in Shoko:</small>
+            <code>WebUI > Core Settings &gt; API Keys</code>
           </div>
           <footer>
             <button id="auth-cancel" class="cancel" type="button">Cancel</button>
@@ -89,8 +115,15 @@
       const submitBtn = el("auth-submit");
       const cancelBtn = el("auth-cancel");
       input.value = "";
+      cancelBtn.hidden = !dismissable;
 
       let close = () => {};
+      /**
+       * Completes the authentication prompt and resolves the pending promise.
+       * @param {string|null} val - The verified API key, or null if dismissed.
+       * @param {boolean} [fromModalClose=false] - Whether invoked from the modal close callback.
+       * @returns {void}
+       */
       const finish = (val, fromModalClose = false) => {
         if (!authPromptPromise) return;
         authPromptPromise = null;
@@ -98,15 +131,17 @@
         if (!fromModalClose) close();
         resolve(val);
       };
-      close = openModal(overlay, () => finish(null, true));
+      close = openModal(overlay, () => finish(null, true), dismissable);
+      setTimeout(() => input.focus(), 15);
 
-      cancelBtn.onclick = () => finish(null);
+      cancelBtn.onclick = () => dismissable && finish(null);
       submitBtn.onclick = async () => {
         const key = input.value.trim();
         if (!key) return;
         submitBtn.disabled = true;
         try {
-          const check = await fetch(`${base}/auth/verify`, { headers: { Authorization: `Bearer ${key}` } });
+          const verifyUrl = forceVerify ? `${base}/auth/verify?force=true` : `${base}/auth/verify`;
+          const check = await fetch(verifyUrl, { headers: { Authorization: `Bearer ${key}` } });
           if (check.ok) {
             localStorage.setItem(AUTH_KEY, key);
             finish(key);
@@ -120,10 +155,36 @@
           submitBtn.disabled = false;
         }
       };
-      input.onkeydown = (ev) => ev.key === "Enter" && submitBtn.click();
+      input.onkeydown = (ev) => {
+        if (ev.key === "Enter") submitBtn.click();
+      };
     });
 
     return authPromptPromise;
+  }
+
+  /**
+   * Verifies initial page authentication state, locking controls and prompting non-dismissably if required.
+   * @returns {Promise<boolean>} True once the session is authorized or auth is not required.
+   */
+  async function checkInitialAuth() {
+    setAuthLocked(true);
+    try {
+      const res = await fetch(`${base}/auth/verify`, { headers: authHeaders() });
+      if (res.ok) {
+        setAuthLocked(false);
+        return true;
+      }
+      if (res.status === 401 || res.status === 403) {
+        const key = await ensureAuth(true, { dismissable: false, forceVerify: false });
+        if (key) {
+          setAuthLocked(false);
+          return true;
+        }
+      }
+    } catch {}
+    setAuthLocked(false);
+    return true;
   }
   // #endregion
 
@@ -144,8 +205,12 @@
         const currentKey = localStorage.getItem(AUTH_KEY);
         if (currentKey && currentKey !== usedKey) return fetchJson(url, opts, false);
         authCancelled = false;
-        const key = await ensureAuth(true);
-        if (key) return fetchJson(url, opts, false);
+        setAuthLocked(true);
+        const key = await ensureAuth(true, { dismissable: false, forceVerify: false });
+        if (key) {
+          setAuthLocked(false);
+          return fetchJson(url, opts, false);
+        }
       }
       const text = await res.text();
       try {
@@ -169,7 +234,12 @@
     let res = await fetch(url, { headers: authHeaders() });
     if (res.status === 401 || res.status === 403) {
       const currentKey = localStorage.getItem(AUTH_KEY);
-      const key = currentKey && currentKey !== usedKey ? currentKey : await ensureAuth(true);
+      let key = currentKey && currentKey !== usedKey ? currentKey : null;
+      if (!key) {
+        setAuthLocked(true);
+        key = await ensureAuth(true, { dismissable: false, forceVerify: false });
+        if (key) setAuthLocked(false);
+      }
       if (key) res = await fetch(url, { headers: authHeaders() });
     }
     if (!res.ok) return null;
@@ -287,9 +357,10 @@
    * Opens a modal and attaches automated close handlers.
    * @param {HTMLElement} modal - The modal element.
    * @param {Function|null} [onClose=null] - Optional callback invoked when the modal closes.
+   * @param {boolean} [dismissable=true] - Whether clicking outside or pressing Escape can close the modal.
    * @returns {Function} Close function.
    */
-  function openModal(modal, onClose = null) {
+  function openModal(modal, onClose = null, dismissable = true) {
     if (!modal) return () => {};
     modal.setAttribute("aria-hidden", "false");
     modal.classList.add("open");
@@ -298,15 +369,19 @@
       modal.setAttribute("aria-hidden", "true");
       modal.classList.remove("open");
       document.body.style.overflow = "";
-      modal.removeEventListener("click", onOverlay);
-      document.removeEventListener("keydown", onKey);
+      if (dismissable) {
+        modal.removeEventListener("click", onOverlay);
+        document.removeEventListener("keydown", onKey);
+      }
       onClose?.();
     };
     const onOverlay = (ev) => ev.target === modal && close();
     const onKey = (ev) => ev.key === "Escape" && close();
-    modal.addEventListener("click", onOverlay);
-    document.addEventListener("keydown", onKey);
-    const firstInput = modal.querySelector("button, textarea, input:not([type='hidden'])");
+    if (dismissable) {
+      modal.addEventListener("click", onOverlay);
+      document.addEventListener("keydown", onKey);
+    }
+    const firstInput = modal.querySelector("button:not([hidden]), textarea, input:not([type='hidden'])");
     setTimeout(() => firstInput?.focus(), 10);
     return close;
   }
@@ -346,12 +421,15 @@
   // #endregion
 
   // #region Global Object
+  const authReady = checkInitialAuth();
+
   // Populate shared global object IMMEDIATELY so feature scripts can destructure it
   window._sr = Object.assign(window._sr || {}, {
     base,
     shokoBase,
     configUrl,
     AUTH_KEY,
+    authReady,
     el,
     esc,
     TOAST_MS,

@@ -21,7 +21,7 @@ Endpoints managed by `DashboardController`
 ---
 
 ```
-GET  /auth/verify                                              -> VerifyAuth
+GET  /auth/verify?force={true|false}                           -> VerifyAuth
 GET  /dashboard                                                -> GetDashboardPage
 GET  /browser                                                  -> GetBrowserPage
 GET  /player                                                   -> GetPlayerPage
@@ -41,7 +41,7 @@ GET  /logs/list                                                -> GetLogsList
 GET  /logs/{fileName}                                          -> GetLog
 ```
 
-- `VerifyAuth` checks that the caller presents a valid Shoko administrator API key (always enforced, regardless of `Advanced.RequireAuth`).
+- `VerifyAuth` checks that the caller satisfies administrator authorization when `Advanced.RequireAuth` is enabled (or unconditionally when `force=true`, used before enabling auth).
 - `GetDashboardPage` Serves the main settings dashboard (`dashboard.cshtml`).
 - `GetBrowserPage` Serves the stand-alone VFS browser (`browser.cshtml`).
 - `GetPlayerPage` Serves the stand-alone AnimeThemes video player (`player.cshtml`).

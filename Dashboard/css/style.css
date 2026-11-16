@@ -140,6 +140,9 @@ textarea {
   font-size: 0.9em;
   font-family: "Sora", sans-serif;
 }
+[hidden] {
+  display: none !important;
+}
 .clear label {
   white-space: nowrap;
 }
@@ -495,6 +498,10 @@ code {
   background: var(--bg-color);
   min-width: 40px;
   color: var(--text-color);
+}
+#auth-modal code {
+  display: inline-block;
+  margin-top: 6px;
 }
 .modal em {
   color: var(--ok-color);

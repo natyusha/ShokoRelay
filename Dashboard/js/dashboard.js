@@ -236,7 +236,10 @@
   // #endregion
 
   // Lifecycle Execution
-  setInterval(syncActiveTasks, 3000);
-  syncActiveTasks();
-  loadLogs();
+  (async () => {
+    await window._sr.authReady;
+    setInterval(syncActiveTasks, 3000);
+    syncActiveTasks();
+    loadLogs();
+  })();
 })();

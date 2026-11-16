@@ -435,6 +435,12 @@ label.shoko-checkbox input[type="checkbox"]:checked + .shoko-checkbox-icon .chec
 .full .dsbld-wrap > button {
   width: 100%;
 }
+#dashboard.auth-locked button,
+#dashboard.auth-locked input,
+#dashboard.auth-locked select,
+#dashboard.auth-locked textarea,
+#dashboard.auth-locked label.shoko-checkbox,
+#dashboard.auth-locked .img-btn,
 .plex-auth:disabled,
 .sync-user:disabled,
 .tmdb-ep-num:disabled {

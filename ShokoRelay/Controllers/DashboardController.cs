@@ -50,14 +50,16 @@ public class DashboardController(
 
     #region Auth & Pages
 
-    /// <summary>Verifies that the caller presents a valid Shoko administrator API key, even before <c>Advanced.RequireAuth</c> is enabled.</summary>
+    /// <summary>Verifies whether the caller is authorized, optionally enforcing an administrator API key even before <c>Advanced.RequireAuth</c> is enabled.</summary>
+    /// <param name="force">When <c>true</c>, validates an administrator API key regardless of <c>Advanced.RequireAuth</c>.</param>
     /// <returns>An authenticated confirmation payload, or 401/403 if the caller is unauthenticated or not an administrator.</returns>
     [AllowAnonymous]
     [HttpGet("auth/verify")]
-    public IActionResult VerifyAuth() =>
-        userService.GetUserFromHttpContext(HttpContext) is not { } user ? Unauthorized(new { status = "error", message = "Authentication required." })
+    public IActionResult VerifyAuth([FromQuery] bool force = false) =>
+        !force && !Settings.Advanced.RequireAuth ? Ok(new { authenticated = true, required = false })
+        : userService.GetUserFromHttpContext(HttpContext) is not { } user ? Unauthorized(new { status = "error", message = "Authentication required." })
         : !user.IsAdmin ? StatusCode(StatusCodes.Status403Forbidden, new { status = "error", message = "Administrator privileges required." })
-        : Ok(new { authenticated = true });
+        : Ok(new { authenticated = true, required = Settings.Advanced.RequireAuth });
 
     /// <summary>Serves the main settings dashboard page.</summary>
     /// <returns>The settings dashboard HTML content.</returns>
