@@ -12,8 +12,8 @@
     "plex-metadata-provider",
     "animethemes"
   ],
-  "thumbnail_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-logo.png",
-  "icon_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/ShokoRelay/Assets/shoko-relay-icon.png",
+  "thumbnail_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/Assets/shoko-relay-logo.png",
+  "icon_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/Assets/shoko-relay-icon.png",
   "releases": [
     {
       "version": "0.22.0",
