@@ -430,6 +430,15 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
     #region Core Processing Logic
 
     /// <summary>Universal method for caching, purging, and uploading local image assets.</summary>
+    /// <param name="foundFile">The candidate local file path, or <c>null</c> if none was found.</param>
+    /// <param name="entity">The Shoko metadata entity receiving the image.</param>
+    /// <param name="imageType">The target image entity type.</param>
+    /// <param name="label">Human-readable asset label for log messages.</param>
+    /// <param name="entityName">Human-readable entity label for log messages.</param>
+    /// <param name="userSubmitted">Whether the uploaded image should be marked as user-submitted.</param>
+    /// <param name="uploadDetail">Optional detail label logged on successful upload.</param>
+    /// <param name="errorsBag">Thread-safe collection for recording upload errors.</param>
+    /// <returns>A tuple indicating whether the file exists, was uploaded, was skipped, or errored.</returns>
     private async Task<(bool FileExists, bool Uploaded, bool Skipped, bool Error)> ProcessLocalAssetAsync(
         string? foundFile,
         IWithImages entity,
@@ -510,6 +519,14 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
     }
 
     /// <summary>Downloads and processes Plex-generated thumbnails.</summary>
+    /// <param name="thumbUrl">The Plex-relative thumbnail path to download.</param>
+    /// <param name="episode">The Shoko episode receiving the thumbnail.</param>
+    /// <param name="epLogName">Human-readable episode label for log messages.</param>
+    /// <param name="target">The source Plex library target.</param>
+    /// <param name="errorsBag">Thread-safe collection for recording download or upload errors.</param>
+    /// <param name="uploadedBag">Thread-safe collection for recording uploaded thumbnail details.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A tuple indicating whether the thumbnail was handled, uploaded, skipped, or errored.</returns>
     private async Task<(bool Handled, bool Uploaded, bool Skipped, bool Error)> ProcessPlexThumbnailAsync(
         string thumbUrl,
         IShokoEpisode episode,

@@ -72,11 +72,11 @@ public class CollectionService(
     public async Task<BuildCollectionsResult> BuildCollectionsAsync(IEnumerable<IShokoSeries?> seriesList, bool applyAssignment = true, bool clean = true, CancellationToken cancellationToken = default)
     {
         const string TaskName = ShokoRelayConstants.TaskPlexCollectionsBuild;
+        await _buildLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         TaskHelper.StartTask(TaskName);
         logger.LogInformation("CollectionService: Starting task...");
         var sw = Stopwatch.StartNew();
 
-        await _buildLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var (created, uploaded, alreadyUploaded, errors, uniqueSeries) = (0, 0, 0, 0, new HashSet<int>());

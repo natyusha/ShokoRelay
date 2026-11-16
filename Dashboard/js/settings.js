@@ -264,15 +264,24 @@
           <span class="shoko-checkbox-icon" aria-hidden="true"><svg class="unchecked"><use href="img/icons.svg#checkbox-blank-circle-outline"></use></svg><svg class="checked"><use href="img/icons.svg#checkbox-marked-circle-outline"></use></svg></span>
           <span class="shoko-checkbox-text"><span class="shoko-checkbox-title">${esc(p.Display || p.Path)}</span><small class="shoko-checkbox-desc" style="display:block">${esc(p.Description || "")}</small></span></label>`;
         input = wrap.querySelector("input");
-        bindConfig(input, p.Path, config, saveSettings, "check");
-
-        if (p.Path === "Advanced.RequireAuth")
-          input.addEventListener("change", async () => {
-            if (input.checked && !localStorage.getItem(window._sr.AUTH_KEY)) await window._sr.ensureAuth?.();
-          });
-
-        // Re-evaluate the overrides button state when either relevant setting is toggled.
-        if (overridesBtn && ["Advanced.TmdbEpNumbering", "Advanced.MergeTmdbSeries"].includes(p.Path)) input.addEventListener("change", () => window._sr.updateControlStates(config));
+        if (p.Path === "Advanced.RequireAuth") {
+          input.checked = !!value;
+          input.onchange = async () => {
+            if (input.checked && !localStorage.getItem(window._sr.AUTH_KEY)) {
+              const key = await window._sr.ensureAuth?.();
+              if (!key) {
+                input.checked = false;
+                return;
+              }
+            }
+            setValueByPath(config, p.Path, input.checked);
+            await saveSettings(config);
+          };
+        } else {
+          bindConfig(input, p.Path, config, saveSettings, "check");
+          // Re-evaluate the overrides button state when either relevant setting is toggled.
+          if (overridesBtn && ["Advanced.TmdbEpNumbering", "Advanced.MergeTmdbSeries"].includes(p.Path)) input.addEventListener("change", () => window._sr.updateControlStates(config));
+        }
       } else if (p.Type === "flags") {
         createFlagsMultiselect(wrap, p, config, value);
       } else if (p.Path.endsWith("PathMappings")) {

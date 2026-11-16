@@ -133,6 +133,15 @@ public class AnimeThemesMp3Generator(
         }
     }
 
+    /// <summary>Updates a folder entry in the Theme.mp3 cache under the cache lock.</summary>
+    /// <param name="folderPath">Absolute path of the folder to update.</param>
+    /// <param name="value">The serialized slug and upgrade metadata value.</param>
+    private void SetCacheEntry(string folderPath, string value)
+    {
+        lock (_cacheLock)
+            _themeMp3Cache?[folderPath] = value;
+    }
+
     /// <summary>Forces a re-scan of all managed folder roots and rebuilds the dictionary cache.</summary>
     private void RefreshThemeMp3CacheInternal()
     {
@@ -539,7 +548,7 @@ public class AnimeThemesMp3Generator(
                         if (tags.TryGetValue("Slug", out var t) && !string.IsNullOrEmpty(t))
                         {
                             slug = AnimeThemesHelper.StandardizeSlug(t);
-                            _themeMp3Cache![folder] = $"{slug}|{upgrade}";
+                            SetCacheEntry(folder, $"{slug}|{upgrade}");
                             Interlocked.Increment(ref fixes);
                             Interlocked.Exchange(ref cacheUpdated, 1);
                         }
@@ -595,7 +604,7 @@ public class AnimeThemesMp3Generator(
                                 if (newUpgrade != upgrade)
                                 {
                                     upgrade = newUpgrade;
-                                    _themeMp3Cache![folder] = $"{slug}|{upgrade}";
+                                    SetCacheEntry(folder, $"{slug}|{upgrade}");
                                     Interlocked.Exchange(ref cacheUpdated, 1);
                                 }
                                 upgrades.Add($"{s.GetDisplayTitle() ?? s.LocalID.ToString()} [{s.LocalID}] (Currently: {slug}, Available: {newUpgrade})");
@@ -603,7 +612,7 @@ public class AnimeThemesMp3Generator(
                             else if (!string.IsNullOrEmpty(upgrade))
                             {
                                 upgrade = "";
-                                _themeMp3Cache![folder] = $"{slug}|";
+                                SetCacheEntry(folder, $"{slug}|");
                                 Interlocked.Exchange(ref cacheUpdated, 1);
                             }
                         }

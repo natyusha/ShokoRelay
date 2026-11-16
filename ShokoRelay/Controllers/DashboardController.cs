@@ -6,10 +6,12 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.StaticFiles;
 using Shoko.Abstractions.Plugin;
 using Shoko.Abstractions.ScheduledActions.Services;
+using Shoko.Abstractions.User.Services;
 using Shoko.Abstractions.Web.Services;
 using ShokoRelay.Actions;
 using IoFile = System.IO.File;
@@ -23,6 +25,7 @@ namespace ShokoRelay.Controllers;
 /// <param name="webThemeService">Shoko web theme service.</param>
 /// <param name="applicationPaths">Shoko application paths.</param>
 /// <param name="scheduledActionService">Shoko scheduled action service.</param>
+/// <param name="userService">Shoko user service.</param>
 /// <param name="logger">Logger instance.</param>
 [RelayAdminAuthorize]
 [ApiController]
@@ -35,6 +38,7 @@ public class DashboardController(
     IWebThemeService webThemeService,
     IApplicationPaths applicationPaths,
     IScheduledActionService scheduledActionService,
+    IUserService userService,
     ILogger<DashboardController> logger
 ) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary, logger)
 {
@@ -46,10 +50,14 @@ public class DashboardController(
 
     #region Auth & Pages
 
-    /// <summary>Verifies that the caller satisfies the configured administrator authorization check.</summary>
-    /// <returns>An authenticated confirmation payload.</returns>
+    /// <summary>Verifies that the caller presents a valid Shoko administrator API key, even before <c>Advanced.RequireAuth</c> is enabled.</summary>
+    /// <returns>An authenticated confirmation payload, or 401/403 if the caller is unauthenticated or not an administrator.</returns>
+    [AllowAnonymous]
     [HttpGet("auth/verify")]
-    public IActionResult VerifyAuth() => Ok(new { authenticated = true });
+    public IActionResult VerifyAuth() =>
+        userService.GetUserFromHttpContext(HttpContext) is not { } user ? Unauthorized(new { status = "error", message = "Authentication required." })
+        : !user.IsAdmin ? StatusCode(StatusCodes.Status403Forbidden, new { status = "error", message = "Administrator privileges required." })
+        : Ok(new { authenticated = true });
 
     /// <summary>Serves the main settings dashboard page.</summary>
     /// <returns>The settings dashboard HTML content.</returns>

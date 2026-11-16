@@ -1,24 +1,12 @@
 namespace ShokoRelay;
 
 /// <summary>Centralized constants for plugin identity, task identifiers, logging, and system filenames.</summary>
-public static class ShokoRelayConstants
+public static partial class ShokoRelayConstants
 {
     #region Plugin Identity
 
-    /// <summary>Display name of the plugin.</summary>
-    public const string Name = "Shoko Relay";
-
-    /// <summary>Description of the plugin.</summary>
-    public const string Description = "A custom metadata provider and automation toolset for integrating Plex and AnimeThemes with Shoko Server.";
-
-    /// <summary>Current version string.</summary>
-    public const string Version = "0.22.1";
-
     /// <summary>Internal API version.</summary>
     public const string ApiVersion = "1";
-
-    /// <summary>Unique plugin ID used for configuration storage.</summary>
-    public const string PluginId = "2b0f5a7e-3d2b-4f3d-9e6b-7f0a6b2d8c9a";
 
     /// <summary>Plex TV agent URI scheme identifier.</summary>
     public const string AgentScheme = "tv.plex.agents.custom.shoko";

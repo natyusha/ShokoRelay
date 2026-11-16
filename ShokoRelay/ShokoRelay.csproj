@@ -1,49 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <RepositoryUrl>https://github.com/natyusha/ShokoRelay</RepositoryUrl>
-    <PackageTags>plex-metadata-provider, hosted-service, animethemes, plex, vfs</PackageTags>
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
-    <Deterministic>true</Deterministic>
-    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
   </PropertyGroup>
-
-  <PropertyGroup>
-    <Authors>natyusha</Authors>
-
-    <NameRegex>Name\s*=\s*"([^"]+)"</NameRegex>
-    <VersionRegex>Version\s*=\s*"([^"]+)"</VersionRegex>
-    <DescriptionRegex>Description\s*=\s*"([^"]+)"</DescriptionRegex>
-    <PluginIdRegex>PluginId\s*=\s*"([^"]+)"</PluginIdRegex>
-    <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
-    <ShokoRelayConstantsFile>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/ShokoRelayConstants.cs'))</ShokoRelayConstantsFile>
-    <Title>$([System.Text.RegularExpressions.Regex]::Match($(ShokoRelayConstantsFile), $(NameRegex)).Groups[1].Value)</Title>
-    <Version>$([System.Text.RegularExpressions.Regex]::Match($(ShokoRelayConstantsFile), $(VersionRegex)).Groups[1].Value)</Version>
-    <Description>$([System.Text.RegularExpressions.Regex]::Match($(ShokoRelayConstantsFile), $(DescriptionRegex)).Groups[1].Value)</Description>
-    <PluginId>$([System.Text.RegularExpressions.Regex]::Match($(ShokoRelayConstantsFile), $(PluginIdRegex)).Groups[1].Value)</PluginId>
-
-    <ReleaseChannel Condition="'$(RELEASE_CHANNEL)' != ''">$(RELEASE_CHANNEL)</ReleaseChannel>
-    <ReleaseChannel Condition="'$(RELEASE_CHANNEL)' == ''">Dev</ReleaseChannel>
-
-    <!-- Default to Stable (0) and If the Release Channel is Dev (set via GitHub Actions), use revision 1 to trigger Shoko's Dev Channel detection -->
-    <BuildRevision>0</BuildRevision>
-    <BuildRevision Condition="'$(ReleaseChannel)' == 'Dev'">1</BuildRevision>
-
-    <AssemblyVersion>$(Version).0</AssemblyVersion>
-    <FileVersion>$(Version).0</FileVersion>
-    <InformationalVersion Condition="'$(BuildRevision)' == '1'">$(Version)-dev.1</InformationalVersion>
-  </PropertyGroup>
-
-  <!-- Embed Identity Metadata manually to satisfy Shoko Server's pre-load checks -->
-  <ItemGroup>
-    <AssemblyMetadata Include="PackageID" Value="$(PluginId)" />
-    <AssemblyMetadata Include="PackageName" Value="$(Title)" />
-    <AssemblyMetadata Include="PackageOverview" Value="$(Description)" />
-  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" Version="10.0.0" ExcludeAssets="runtime" />
@@ -64,7 +23,7 @@
     <Using Include="ShokoRelay.ShokoRelay" Static="true" />
   </ItemGroup>
 
-  <!-- Embed the plugin images for Shoko's WebUI and the override csvs while preserving dashboard static assets in output -->
+  <!-- Embed plugin images and override CSVs from solution root while preserving dashboard static assets in output -->
   <ItemGroup>
     <EmbeddedResource Include="../Assets/shoko-relay-logo.png;../Assets/shoko-relay-icon.png" Link="Assets/%(Filename)%(Extension)" LogicalName="ShokoRelay.Assets.%(Filename)%(Extension)">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>

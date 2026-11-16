@@ -59,15 +59,15 @@
       // Handle specific skip scenarios for user-friendly feedback
       if (status === "skipped") {
         if (message === "Theme.mp3 already exists.") {
-          summary = `Skipped: "${esc(folder)}" already contains a Theme.mp3`;
+          summary = `Skipped: "${folder}" already contains a Theme.mp3`;
         } else if (message === "Entry not found." || (message && message.includes("No entry"))) {
-          summary = `Skipped: No theme found for this series`;
+          summary = "Skipped: No theme found for this series";
           isNoTheme = true;
         } else {
-          summary = esc(message) || "Skipped";
+          summary = message || "Skipped";
         }
       } else if (status === "error") {
-        summary = esc(message) || "Unknown error";
+        summary = message || "Unknown error";
       }
 
       if (res.ok || status === "skipped") {

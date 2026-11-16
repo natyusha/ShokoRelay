@@ -664,7 +664,11 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
                                         if (endIdx > startIdx)
                                         {
                                             string epIdStr = parts[0][startIdx..endIdx];
-                                            if (int.TryParse(epIdStr, out int epId) && metadataService.GetShokoEpisodeByID(epId) is { ShokoSeriesID: var sid } && primaryIdsToPurge.Contains(sid.ToString()))
+                                            if (
+                                                int.TryParse(epIdStr, out int epId)
+                                                && metadataService.GetShokoEpisodeByID(epId) is { ShokoSeriesID: var sid }
+                                                && primaryIdsToPurge.Contains((EnforceTmdbNumbering ? OverrideHelper.GetPrimary(sid, metadataService) : sid).ToString())
+                                            )
                                                 continue;
                                         }
                                     }

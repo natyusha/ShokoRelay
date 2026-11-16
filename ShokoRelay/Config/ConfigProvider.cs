@@ -102,7 +102,11 @@ public partial class ConfigProvider : IDisposable
                 var tokenFile = ReadTokenFile();
                 if (
                     tokenFile.AutoShokoServerUrl != detectedUrl
-                    && (string.IsNullOrWhiteSpace(tokenFile.AutoShokoServerUrl) || request.Path.StartsWithSegments(ShokoRelayConstants.BasePath + "/dashboard", StringComparison.OrdinalIgnoreCase))
+                    && (
+                        string.IsNullOrWhiteSpace(tokenFile.AutoShokoServerUrl)
+                        || request.Path.StartsWithSegments(ShokoRelayConstants.BasePath + "/dashboard", StringComparison.OrdinalIgnoreCase)
+                        || request.Path.StartsWithSegments(ShokoRelayConstants.BasePath + "/config", StringComparison.OrdinalIgnoreCase)
+                    )
                 )
                     UpdatePlexTokenInfo(autoUrl: detectedUrl);
 

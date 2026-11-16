@@ -179,6 +179,11 @@ public class SyncToPlex(
                                     uToken
                                 );
                                 using var rateResp = await plexClient.SendAsync(rateReq, cancellationToken).ConfigureAwait(false);
+                                if (!rateResp.IsSuccessStatusCode)
+                                {
+                                    result = SyncHelper.RecordError(result, result.PerUser, uName, $"Failed to rate RatingKey {plexItem.RatingKey} on {target.ServerName}");
+                                    continue;
+                                }
                             }
                             result = SyncHelper.IncVotesUpdated(result);
                         }

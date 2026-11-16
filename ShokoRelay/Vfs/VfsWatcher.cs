@@ -271,9 +271,27 @@ public class VfsWatcher(
             {
                 if (Settings.Advanced.DeferVfsCreationUntilFixup)
                 {
-                    logger.LogInformation("VFS: Deferring VFS creation for {Count} series until fixup ({Delay}m delay)", seriesIds.Count, Settings.Advanced.PlexFixupDelay);
-                    foreach (var seriesId in seriesIds)
-                        TriggerPlexUpdates(seriesId, deferScan: true);
+                    var removedIds = seriesIds.Where(id => metadataService.GetShokoSeriesByID(id) == null).ToList();
+                    if (removedIds.Count > 0)
+                    {
+                        await VfsShared.VfsLock.WaitAsync(stopToken).ConfigureAwait(false);
+                        try
+                        {
+                            builder.Build(removedIds, cleanRoot: false);
+                        }
+                        finally
+                        {
+                            VfsShared.VfsLock.Release();
+                        }
+                    }
+
+                    var activeIds = seriesIds.Where(id => !removedIds.Contains(id)).ToList();
+                    if (activeIds.Count > 0)
+                    {
+                        logger.LogInformation("VFS: Deferring VFS creation for {Count} series until fixup ({Delay}m delay)", activeIds.Count, Settings.Advanced.PlexFixupDelay);
+                        foreach (var seriesId in activeIds)
+                            TriggerPlexUpdates(seriesId, deferScan: true);
+                    }
                 }
                 else
                 {
@@ -490,10 +508,8 @@ public class VfsWatcher(
             // If partial scans are enabled, trigger them now: In deferred mode this serves as the primary scan / In standard mode it acts as a fallback for the initial scan
             var vfsPaths = VfsShared.ResolveSeriesVfsPaths(series, metadataService).ToList();
             if (Settings.Automation.ScanOnVfsRefresh)
-            {
                 foreach (var path in vfsPaths)
                     await plexLibrary.RefreshSectionPathAsync(path, token).ConfigureAwait(false);
-            }
 
             var targets = plexLibrary.GetConfiguredTargets();
             bool foundInAnyTarget = false;

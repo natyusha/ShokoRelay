@@ -98,10 +98,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
                 typeInt = PlexConstants.TypeMovie;
 
             var ep = MetadataService.GetShokoEpisodeByID(id.Value); // In case the extracted ID was a movie episode ID
-            var series =
-                (typeInt == PlexConstants.TypeMovie && ep?.Series != null && (manual != 1 || rawPath?.Contains(Settings.Advanced.MovieVfsRootPath, StringComparison.OrdinalIgnoreCase) == true))
-                    ? ep.Series
-                    : MetadataService.GetShokoSeriesByID(id.Value);
+            var series = (typeInt == PlexConstants.TypeMovie && ep?.Series != null && manual != 1) ? ep.Series : MetadataService.GetShokoSeriesByID(id.Value);
 
             if (series == null && ep?.Series != null)
             {

@@ -644,6 +644,10 @@
               Any Plex collection matching these entries will never be deleted or have items automatically unassigned from it. You can enter the exact collection name or a unique keyword that covers multiple
               similar collections.
             </small>
+            <h4>Require Auth</h4>
+            <small>
+              Will cause a valid Shoko API key to be required for all dashboard config, log, and task endpoints. Static UI assets, the Plex metadata provider routes, and the Plex webhook are exempt.
+            </small>
             <h4>Defer VFS Creation</h4>
             <small>
               Delays the creation of VFS links until the configured "Plex Fixup Delay" has elapsed. This should ensure that Shoko has completely finished downloading all metadata before Plex ever sees the

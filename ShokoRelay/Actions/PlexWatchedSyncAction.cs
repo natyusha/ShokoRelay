@@ -8,7 +8,7 @@ namespace ShokoRelay.Actions;
 public class PlexWatchedSyncAction(SyncToShoko watchedSyncService, ConfigProvider configProvider, ILogger<PlexWatchedSyncAction> logger) : IScheduledAction
 {
     /// <inheritdoc/>
-    public string Name => "Shoko Relay: Watch Sync (Plex to Shoko)";
+    public string Name => $"{ShokoRelayConstants.Name}: Watch Sync (Plex to Shoko)";
 
     /// <inheritdoc/>
     public string Description => "Synchronizes watched states, ratings, and playback progress from Plex into Shoko.";
@@ -23,13 +23,13 @@ public class PlexWatchedSyncAction(SyncToShoko watchedSyncService, ConfigProvide
     public async Task Execute(IProgress<decimal> progress, CancellationToken token)
     {
         progress.Report(0);
-        TaskHelper.StartTask(ShokoRelayConstants.TaskShokoSyncWatched);
 
         var settings = configProvider.GetSettings();
         var freq = settings.Automation.ShokoSyncWatchedFrequencyHours;
         int lookback = freq > 0 ? freq + 1 : 25;
 
         await SyncHelper.SyncLock.WaitAsync(token).ConfigureAwait(false);
+        TaskHelper.StartTask(ShokoRelayConstants.TaskShokoSyncWatched);
         try
         {
             progress.Report(10);
@@ -45,8 +45,8 @@ public class PlexWatchedSyncAction(SyncToShoko watchedSyncService, ConfigProvide
         }
         finally
         {
-            SyncHelper.SyncLock.Release();
             TaskHelper.FinishTask(ShokoRelayConstants.TaskShokoSyncWatched);
+            SyncHelper.SyncLock.Release();
         }
     }
 }

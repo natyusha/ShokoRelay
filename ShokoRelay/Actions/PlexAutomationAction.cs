@@ -9,7 +9,7 @@ namespace ShokoRelay.Actions;
 public class PlexAutomationAction(PlexAutomationService plexAutomationService, ConfigProvider configProvider, ILogger<PlexAutomationAction> logger) : IScheduledAction
 {
     /// <inheritdoc/>
-    public string Name => "Shoko Relay: Plex Automation";
+    public string Name => $"{ShokoRelayConstants.Name}: Plex Automation";
 
     /// <inheritdoc/>
     public string Description => "Generates Plex Collections, applies Critic Ratings, syncs Plex Images, and safely empties Plex trash.";
@@ -24,8 +24,8 @@ public class PlexAutomationAction(PlexAutomationService plexAutomationService, C
     public async Task Execute(IProgress<decimal> progress, CancellationToken token)
     {
         progress.Report(0);
-        TaskHelper.StartTask(ShokoRelayConstants.TaskPlexAutomationRun);
         await SyncHelper.SyncLock.WaitAsync(token).ConfigureAwait(false);
+        TaskHelper.StartTask(ShokoRelayConstants.TaskPlexAutomationRun);
         try
         {
             var result = await plexAutomationService.RunAutomationAsync(progress, token).ConfigureAwait(false);
@@ -34,8 +34,8 @@ public class PlexAutomationAction(PlexAutomationService plexAutomationService, C
         }
         finally
         {
-            SyncHelper.SyncLock.Release();
             TaskHelper.FinishTask(ShokoRelayConstants.TaskPlexAutomationRun);
+            SyncHelper.SyncLock.Release();
         }
     }
 }

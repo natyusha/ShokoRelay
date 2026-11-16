@@ -8,7 +8,7 @@ namespace ShokoRelay.Actions;
 public class ShokoImportAction(ShokoImportService shokoImportService, ILogger<ShokoImportAction> logger) : IScheduledAction
 {
     /// <inheritdoc/>
-    public string Name => "Shoko Relay: Auto Import";
+    public string Name => $"{ShokoRelayConstants.Name}: Auto Import";
 
     /// <inheritdoc/>
     public string Description => "Triggers Shoko to scan managed folders for new or unrecognized files.";

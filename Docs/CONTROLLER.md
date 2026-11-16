@@ -41,7 +41,7 @@ GET  /logs/list                                                -> GetLogsList
 GET  /logs/{fileName}                                          -> GetLog
 ```
 
-- `VerifyAuth` checks that the caller satisfies administrator authorization when `Advanced.RequireAuth` is enabled.
+- `VerifyAuth` checks that the caller presents a valid Shoko administrator API key (always enforced, regardless of `Advanced.RequireAuth`).
 - `GetDashboardPage` Serves the main settings dashboard (`dashboard.cshtml`).
 - `GetBrowserPage` Serves the stand-alone VFS browser (`browser.cshtml`).
 - `GetPlayerPage` Serves the stand-alone AnimeThemes video player (`player.cshtml`).
@@ -65,9 +65,9 @@ GET  /logs/{fileName}                                          -> GetLog
 
 **Notes:**
 
-- Authentication: All endpoints under DashboardController, ShokoController, PlexController, and AnimeThemesController require a Shoko administrator API key
-  - This excludes static UI pages/assets (/dashboard, /browser, /player, /dashboard/{\*path}, /theme.css), MetadataController (Plex agent protocol)
-  - The following endpoints are also excluded: POST /plex/webhook (validated by server UUID and user rules).
+- Authentication: When `Advanced.RequireAuth` is enabled, all endpoints under `DashboardController`, `ShokoController`, `PlexController`, and `AnimeThemesController` require a Shoko API key
+  - This excludes static UI pages/assets (`/dashboard`, `/browser`, `/player`, `/dashboard/{\*path}`, `/theme.css`) and `MetadataController` (Plex requirement)
+  - The following endpoint is also excluded: `POST /plex/webhook` (validated via server UUID and user rules).
 
 All automation endpoints utilize the `LogAndReturn` helper (via `ExecuteTrackedTaskAsync`) to provide a direct `logUrl` in the response. Reports include:
 

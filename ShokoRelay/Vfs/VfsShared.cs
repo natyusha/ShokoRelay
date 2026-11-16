@@ -294,34 +294,51 @@ internal static class VfsShared
         if (string.IsNullOrEmpty(path))
             return false;
 
+        static bool TryMakeRelative(string rootPath, string fullPath, out string relative)
+        {
+            relative = string.Empty;
+            try
+            {
+                string rel = Path.GetRelativePath(rootPath, fullPath);
+                if (
+                    rel != ".."
+                    && !rel.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+                    && !rel.StartsWith(".." + Path.AltDirectorySeparatorChar, StringComparison.Ordinal)
+                    && !Path.IsPathRooted(rel)
+                )
+                {
+                    relative = rel;
+                    return true;
+                }
+            }
+            catch { }
+            return false;
+        }
+
         string originalPath = path;
         if (!string.IsNullOrEmpty(relativeTo))
         {
-            try
-            {
-                string rel = Path.GetRelativePath(relativeTo, path);
-                if (!rel.StartsWith("..", StringComparison.Ordinal) && !Path.IsPathRooted(rel))
-                    path = rel;
-            }
-            catch { }
+            if (TryMakeRelative(relativeTo, path, out var rel))
+                path = rel;
         }
         else if (Path.IsPathRooted(path))
         {
+            string normPath = NormalizeSeparators(path);
+            if (normPath.Length > 1)
+                normPath = normPath.TrimEnd(Path.DirectorySeparatorChar);
+
             var matchedRoot = (videoService.GetAllManagedFolders() ?? [])
                 .Select(mf => mf.Path)
                 .Where(p => !string.IsNullOrWhiteSpace(p))
-                .FirstOrDefault(p => path.StartsWith(p.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar, PathComparison));
-
-            if (matchedRoot != null)
-            {
-                try
+                .Select(p =>
                 {
-                    string rel = Path.GetRelativePath(matchedRoot, path);
-                    if (!rel.StartsWith("..", StringComparison.Ordinal) && !Path.IsPathRooted(rel))
-                        path = rel;
-                }
-                catch { }
-            }
+                    string norm = NormalizeSeparators(p);
+                    return norm.Length > 1 ? norm.TrimEnd(Path.DirectorySeparatorChar) : norm;
+                })
+                .FirstOrDefault(p => string.Equals(normPath, p, PathComparison) || normPath.StartsWith(p.EndsWith(Path.DirectorySeparatorChar) ? p : p + Path.DirectorySeparatorChar, PathComparison));
+
+            if (matchedRoot != null && TryMakeRelative(matchedRoot, path, out var rel))
+                path = rel;
         }
 
         var plexLocalExtras = settings.Advanced.PlexLocalExtras;

@@ -43,6 +43,15 @@
 
   // #region Auth Helpers
   /**
+   * Builds authorization headers containing the stored Shoko API key if available.
+   * @returns {Object<string, string>} Header key-value map.
+   */
+  const authHeaders = () => {
+    const key = localStorage.getItem(AUTH_KEY);
+    return key ? { Authorization: `Bearer ${key}` } : {};
+  };
+
+  /**
    * Prompts the user for a Shoko administrator API key and validates it against the server.
    * @param {boolean} [forceReset=false] - If true, clears any previously stored key before prompting.
    * @returns {Promise<string|null>} A verified API key, or null if dismissed.
@@ -81,13 +90,15 @@
       const cancelBtn = el("auth-cancel");
       input.value = "";
 
-      const close = openModal(overlay);
-      const finish = (val) => {
+      let close = () => {};
+      const finish = (val, fromModalClose = false) => {
+        if (!authPromptPromise) return;
         authPromptPromise = null;
         authCancelled = val === null;
-        close();
+        if (!fromModalClose) close();
         resolve(val);
       };
+      close = openModal(overlay, () => finish(null, true));
 
       cancelBtn.onclick = () => finish(null);
       submitBtn.onclick = async () => {
@@ -126,9 +137,12 @@
    */
   async function fetchJson(url, opts = {}, allowPrompt = true) {
     try {
+      const usedKey = localStorage.getItem(AUTH_KEY);
       const headers = Object.assign({}, authHeaders(), opts.headers || {});
       const res = await fetch(url, { ...opts, headers });
       if ((res.status === 401 || res.status === 403) && allowPrompt) {
+        const currentKey = localStorage.getItem(AUTH_KEY);
+        if (currentKey && currentKey !== usedKey) return fetchJson(url, opts, false);
         authCancelled = false;
         const key = await ensureAuth(true);
         if (key) return fetchJson(url, opts, false);
@@ -151,9 +165,11 @@
    * @returns {Promise<string|null>} An Object URL for the fetched blob, or null on failure.
    */
   async function fetchBlobUrl(url) {
+    const usedKey = localStorage.getItem(AUTH_KEY);
     let res = await fetch(url, { headers: authHeaders() });
     if (res.status === 401 || res.status === 403) {
-      const key = await ensureAuth(true);
+      const currentKey = localStorage.getItem(AUTH_KEY);
+      const key = currentKey && currentKey !== usedKey ? currentKey : await ensureAuth(true);
       if (key) res = await fetch(url, { headers: authHeaders() });
     }
     if (!res.ok) return null;
@@ -270,9 +286,10 @@
   /**
    * Opens a modal and attaches automated close handlers.
    * @param {HTMLElement} modal - The modal element.
+   * @param {Function|null} [onClose=null] - Optional callback invoked when the modal closes.
    * @returns {Function} Close function.
    */
-  function openModal(modal) {
+  function openModal(modal, onClose = null) {
     if (!modal) return () => {};
     modal.setAttribute("aria-hidden", "false");
     modal.classList.add("open");
@@ -283,6 +300,7 @@
       document.body.style.overflow = "";
       modal.removeEventListener("click", onOverlay);
       document.removeEventListener("keydown", onKey);
+      onClose?.();
     };
     const onOverlay = (ev) => ev.target === modal && close();
     const onKey = (ev) => ev.key === "Escape" && close();
