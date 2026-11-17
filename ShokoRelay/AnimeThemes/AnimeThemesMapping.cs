@@ -617,7 +617,7 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
             // Handle WebM Cache Updates (Global vs Incremental)
             try
             {
-                string cachePath = Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FileAtWebmCache);
+                string cachePath = Path.Combine(configProvider.CacheDirectory, ShokoRelayConstants.FileAtWebmCache);
                 if (seriesFilter == null || seriesFilter.Count == 0)
                 {
                     var cacheLines = state.CacheEntries.Select(ce => $"{ce.VfsPath.Replace('\\', '/')}|{ce.VideoId}|{ce.Bitmask}");

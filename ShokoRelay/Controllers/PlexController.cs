@@ -358,6 +358,7 @@ public class PlexController(
         // Validate the incoming webhook request source against known servers and authorized users
         bool allowed = false;
         string reason = "";
+        string? mappedShokoUser = null;
 
         if (!ConfigProvider.IsManagedServer(evt.Server?.Uuid))
             reason = "unrecognized_server_uuid";
@@ -369,33 +370,32 @@ public class PlexController(
             else
             {
                 var userType = Settings.Automation.ShokoSyncWatchedUserType;
+                string? adminName = ConfigProvider.GetAdminUsername();
+                if (string.IsNullOrEmpty(adminName) && (evt.Owner == true || ConfigProvider.GetAdvancedUserMappingEntries().Count > 0))
+                {
+                    await ConfigProvider.RefreshAdminUsername(plexAuth, HttpContext.RequestAborted).ConfigureAwait(false);
+                    adminName = ConfigProvider.GetAdminUsername();
+                }
+
+                string? accountIdStr = evt.Account?.Id is > 0 ? evt.Account.Id.Value.ToString() : null;
+                mappedShokoUser =
+                    ConfigProvider.ResolveMappedShokoUsername(plexUser, adminName, evt.Owner == true)
+                    ?? (accountIdStr != null ? ConfigProvider.ResolveMappedShokoUsername(accountIdStr, adminName, evt.Owner == true) : null);
+                bool isExtra = ConfigProvider
+                    .GetExtraPlexUserEntries()
+                    .Any(e => string.Equals(e.Name, plexUser, StringComparison.OrdinalIgnoreCase) || (accountIdStr != null && string.Equals(e.Name, accountIdStr, StringComparison.OrdinalIgnoreCase)));
+                bool isAdvanced = mappedShokoUser != null;
+
                 if (userType == SyncUserType.None)
                     reason = "sync_users_set_to_none";
-                else if ((userType is SyncUserType.All or SyncUserType.Extra) && ConfigProvider.GetExtraPlexUserEntries().Any(e => string.Equals(e.Name, plexUser, StringComparison.OrdinalIgnoreCase)))
-                    allowed = true;
-                else if (evt.Owner == true)
+                else if (evt.Owner == true && (string.IsNullOrEmpty(adminName) || string.Equals(plexUser, adminName, StringComparison.OrdinalIgnoreCase)))
                 {
-                    bool adminAllowed = userType is SyncUserType.All or SyncUserType.Admin;
-                    string? adminName = ConfigProvider.GetAdminUsername();
-                    if (string.IsNullOrEmpty(adminName))
-                    {
-                        await ConfigProvider.RefreshAdminUsername(plexAuth, HttpContext.RequestAborted).ConfigureAwait(false);
-                        adminName = ConfigProvider.GetAdminUsername();
-                    }
-
-                    if (string.IsNullOrEmpty(adminName))
-                    {
-                        allowed = adminAllowed;
-                        reason = !adminAllowed ? "admin_excluded_identity_unknown" : "allowed_owner_identity_assumed";
-                    }
-                    else if (string.Equals(plexUser, adminName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        allowed = adminAllowed;
-                        reason = !adminAllowed ? "admin_excluded_by_config" : "allowed_admin";
-                    }
-                    else
-                        reason = $"unauthorized_managed_user ({plexUser})";
+                    bool adminAllowed = userType is SyncUserType.All or SyncUserType.Admin || (userType == SyncUserType.Advanced && isAdvanced);
+                    allowed = adminAllowed;
+                    reason = !adminAllowed ? "admin_excluded_by_config" : (string.IsNullOrEmpty(adminName) ? "allowed_owner_identity_assumed" : "allowed_admin");
                 }
+                else if ((userType is SyncUserType.All or SyncUserType.Extra && isExtra) || (userType is SyncUserType.All or SyncUserType.Advanced && isAdvanced))
+                    allowed = true;
                 else
                     reason = $"user_not_authorized ({plexUser})";
             }
@@ -415,9 +415,16 @@ public class PlexController(
         if (shokoEpisode == null)
             return Ok(new { status = "ignored", reason = "episode_not_found" });
 
-        var user = userService.GetUsers().OrderBy(u => u.LocalID).FirstOrDefault();
+        var user = !string.IsNullOrWhiteSpace(mappedShokoUser) ? userService.GetUserByUsername(mappedShokoUser) : userService.GetUsers().OrderBy(u => u.LocalID).FirstOrDefault();
         if (user == null)
+        {
+            if (!string.IsNullOrWhiteSpace(mappedShokoUser))
+            {
+                Logger.LogWarning("Plex: Webhook ignored -> mapped Shoko user '{ShokoUser}' not found for Plex user '{PlexUser}'", mappedShokoUser, evt.Account?.Title);
+                return Ok(new { status = "ignored", reason = "mapped_shoko_user_not_found" });
+            }
             return Ok(new { status = "ignored", reason = "no_shoko_user" });
+        }
 
         bool isMovie = string.Equals(evt.Metadata.Type, "movie", StringComparison.OrdinalIgnoreCase);
         string typeLabel = isMovie ? "movie" : "episode";

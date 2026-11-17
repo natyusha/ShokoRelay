@@ -123,7 +123,8 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
         CancellationToken cancellationToken
     )
     {
-        var processedInRun = new HashSet<int>();
+        var processedInRun = new ConcurrentDictionary<int, byte>();
+        var fileDataCache = new ConcurrentDictionary<int, MapHelper.SeriesFileData?>();
         var orderedTargets = targets.OrderBy(t => t.LibraryType == PlexLibraryType.Movie ? 1 : 0).ToList();
 
         foreach (var target in orderedTargets)
@@ -131,9 +132,9 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                async Task ProcessThumbnailItem(PlexMetadataItem item)
+                async ValueTask ProcessThumbnailItem(PlexMetadataItem item, CancellationToken itemToken)
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
+                    itemToken.ThrowIfCancellationRequested();
                     if (string.IsNullOrWhiteSpace(item.Guid))
                         return;
 
@@ -141,7 +142,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
 
                     // Ensure each Shoko Episode (including specials and movies) is only processed once globally per run
                     // Ordering TV targets first ensures Movie libraries skip episodes/specials already synced from TV libraries
-                    if (!epId.HasValue || !processedInRun.Add(epId.Value))
+                    if (!epId.HasValue || !processedInRun.TryAdd(epId.Value, 0))
                         return;
 
                     var episode = metadataService.GetShokoEpisodeByID(epId.Value);
@@ -152,8 +153,19 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                     if (allowedSet != null && !allowedSet.Contains(primarySeriesId))
                         return;
 
-                    string? prefId = episode.Series != null ? prefIdCache.GetOrAdd(episode.ShokoSeriesID, _ => MapHelper.GetPreferredTmdbOrderingId(episode.Series)) : null;
-                    var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
+                    var fileData = fileDataCache.GetOrAdd(primarySeriesId, id => metadataService.GetShokoSeriesByID(id) is { } ps ? MapHelper.GetConsolidatedSeriesFileData(ps, metadataService) : null);
+                    var matchingMappings = fileData?.Mappings.Where(m => m.Episodes.Any(e => e.ID == episode.ID)).ToList() ?? [];
+                    var mappedCoords = matchingMappings.FirstOrDefault()?.Coords;
+
+                    PlexMapping.PlexCoords coords;
+                    if (mappedCoords.HasValue)
+                        coords = mappedCoords.Value;
+                    else
+                    {
+                        string? prefId = episode.Series != null ? prefIdCache.GetOrAdd(episode.ShokoSeriesID, _ => MapHelper.GetPreferredTmdbOrderingId(episode.Series)) : null;
+                        coords = PlexMapping.GetPlexCoordinates(episode, prefId);
+                    }
+
                     bool isMovie = target.LibraryType == PlexLibraryType.Movie;
                     string labelType = isMovie ? "Movie" : "Episode";
                     string coordsStr = $"S{coords.Season:D2}E{coords.Episode:D2}";
@@ -179,14 +191,19 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                     // Coordinate Alignment Guard: Detect when Plex's metadata is in a transient or mismatched state
                     if (!isMovie && item.ParentIndex.HasValue && item.Index.HasValue)
                     {
-                        bool isMismatch = item.ParentIndex.Value != coords.Season || item.Index.Value != coords.Episode;
+                        bool MatchesCoords(PlexMapping.PlexCoords c) =>
+                            item.ParentIndex.Value == c.Season && (item.Index.Value == c.Episode || (c.EndEpisode.HasValue && item.Index.Value >= c.Episode && item.Index.Value <= c.EndEpisode.Value));
 
-                        // Compensate for "Other" type episode fallback logic where Season -4 maps to Season 1 or 0
+                        bool isMismatch = matchingMappings.Count > 0 ? !matchingMappings.Any(m => MatchesCoords(m.Coords)) : !MatchesCoords(coords);
+
+                        // Compensate for virtual TMDB episode group splits where individual TMDB episodes sit in different seasons or indices
                         if (
                             isMismatch
-                            && coords.Season == PlexConstants.SeasonOther
-                            && (item.ParentIndex.Value == PlexConstants.SeasonStandard || item.ParentIndex.Value == PlexConstants.SeasonSpecials)
-                            && item.Index.Value == coords.Episode
+                            && EnforceTmdbNumbering
+                            && episode.GetLinkedEpisodes(MetadataSource.TMDB) is { Count: > 1 } tmdbEps
+                            && episode.Series != null
+                            && prefIdCache.GetOrAdd(episode.ShokoSeriesID, _ => MapHelper.GetPreferredTmdbOrderingId(episode.Series)) is var prefId
+                            && tmdbEps.Any(te => PlexMapping.GetOrderingCoords(te, prefId) is var (ts, teNum) && ts == item.ParentIndex.Value && teNum == item.Index.Value)
                         )
                             isMismatch = false;
 
@@ -246,12 +263,13 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                         }
                         else
                         {
-                            var (ph, pu, ps, pe) = await ProcessPlexThumbnailAsync(item.Thumb, episode, epLogName, target, errsBag, uploadedBag, cancellationToken).ConfigureAwait(false);
+                            var (ph, pu, ps, pe) = await ProcessPlexThumbnailAsync(item.Thumb, episode, epLogName, target, errsBag, uploadedBag, itemToken).ConfigureAwait(false);
                             addStats(ph, pu, ps, pe);
                         }
                     }
                 }
 
+                var items = new List<PlexMetadataItem>();
                 if (allowedSet != null)
                 {
                     // Targeted fast-path for filtered series
@@ -266,24 +284,23 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                                     : $"/library/metadata/{ratingKey}/allLeaves?X-Plex-Container-Start=0&X-Plex-Container-Size=5000";
                             using var req = plexClient.CreateRequest(HttpMethod.Get, path, target.ServerUrl);
                             using var resp = await plexClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
-                            foreach (var item in (await PlexApi.ReadContainerAsync(resp, cancellationToken).ConfigureAwait(false))?.Metadata ?? [])
-                                await ProcessThumbnailItem(item).ConfigureAwait(false);
+                            if ((await PlexApi.ReadContainerAsync(resp, cancellationToken).ConfigureAwait(false))?.Metadata is { } metaList)
+                                items.AddRange(metaList);
                         }
                     }
                 }
                 else
                 {
                     // Bulk path: query all items in library section
-                    var items =
+                    items =
                         target.LibraryType == PlexLibraryType.Movie
                             ? await plexClient.GetSectionMoviesAsync(target, null, cancellationToken).ConfigureAwait(false) ?? []
                             : await plexClient.GetSectionEpisodesAsync(target, null, cancellationToken).ConfigureAwait(false) ?? [];
-
-                    foreach (var item in items)
-                        await ProcessThumbnailItem(item).ConfigureAwait(false);
                 }
+
+                await Parallel.ForEachAsync(items, DefaultParallelOptions(cancellationToken), ProcessThumbnailItem).ConfigureAwait(false);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 addStats(true, false, false, true);
                 errsBag.Add($"Failed to scan Plex section {target.SectionId}: {ex.Message}");
@@ -299,7 +316,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                 .Where(x => x.Source == ServiceRegistration.RelayPlexSource && x.EntityID.EntityType == MetadataEntityType.Episode)
                 .ToList();
 
-            var orphanedEpIds = allEpisodeXrefs.Select(x => int.TryParse(x.EntityID.ID, out int id) ? id : 0).Where(id => id > 0 && !processedInRun.Contains(id)).Distinct().ToList();
+            var orphanedEpIds = allEpisodeXrefs.Select(x => int.TryParse(x.EntityID.ID, out int id) ? id : 0).Where(id => id > 0 && !processedInRun.ContainsKey(id)).Distinct().ToList();
 
             foreach (var epId in orphanedEpIds)
             {
@@ -548,15 +565,17 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
         logger.LogTrace("ImageSyncService: Fetching Plex thumbnail for episode -> {LogName}", epLogName);
         try
         {
+            using var reqCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            reqCts.CancelAfter(TimeSpan.FromSeconds(15));
             using var req = plexClient.CreateRequest(HttpMethod.Get, thumbUrl, target.ServerUrl);
-            using var resp = await plexClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+            using var resp = await plexClient.SendAsync(req, reqCts.Token).ConfigureAwait(false);
             if (!resp.IsSuccessStatusCode)
             {
                 errorsBag.Add($"[Failed Plex Download] {epLogName} (HTTP {resp.StatusCode})");
                 return (true, false, false, true);
             }
 
-            var bytes = await resp.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+            var bytes = await resp.Content.ReadAsByteArrayAsync(reqCts.Token).ConfigureAwait(false);
 
             // Stream through imageManager.UploadImage to guarantee cross-reference creation for both new and existing images
             using var stream = new MemoryStream(bytes);
@@ -578,7 +597,13 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
             logger.LogDebug("ImageSyncService: Successfully uploaded and preferred thumbnail for episode -> {LogName}", epLogName);
             return (true, true, false, false);
         }
-        catch (Exception ex)
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            errorsBag.Add($"[Plex Thumbnail Timeout] {epLogName} (Timed out after 15s)");
+            logger.LogWarning("ImageSyncService: Timed out fetching Plex thumbnail for {LogName}", epLogName);
+            return (true, false, false, true);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             errorsBag.Add($"[Plex Thumbnail Exception] {epLogName}: {ex.Message}");
             logger.LogWarning(ex, "ImageSyncService: Failed to process Plex thumbnail for {LogName}", epLogName);

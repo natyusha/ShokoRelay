@@ -507,7 +507,7 @@
         <header>Sync Watched States Menu</header>
         <div class="modal-body">
           <div class="full">
-            <label class="dir-label">Direction<small></small></label>
+            <label class="dir-label">Sync Direction<small></small></label>
             <button id="sync-direction-toggle" class="direction-toggle" aria-pressed="false" title="Toggle Direction" aria-label="Direction: Plex to Shoko">
               <span class="dir-label">Plex</span>
               <span id="sync-direction-arrow" class="dir-chevron">
@@ -552,12 +552,19 @@
                 <option value="0">All</option>
                 <option value="1">Admin</option>
                 <option value="2">Extra</option>
+                <option value="4">Advanced</option>
                 <option value="3">None</option>
               </select>
             </div>
             <div>
               <label for="sync-library">Temporary Library Filter</label>
               <input id="sync-library" type="text" placeholder="Plex Library Name (Optional)" />
+            </div>
+          </div>
+          <div class="full">
+            <div>
+              <label for="sync-user-mappings">Advanced User Mappings</label>
+              <input id="sync-user-mappings" class="plex-auth" type="text" placeholder="ShokoUser,PlexUser;PIN,PlexUser2|ShokoUser2,PlexUser3" />
             </div>
           </div>
         </div>
@@ -652,6 +659,11 @@
             <small>
               Delays the creation of VFS links until the configured "Plex Fixup Delay" has elapsed. This should ensure that Shoko has completely finished downloading all metadata before Plex ever sees the
               files. This also skips the forced metadata refresh and it is intended for users who rely entirely on Plex's default file-system scanner.
+            </small>
+            <h4>Plex Image Sync</h4>
+            <small>
+              Syncs <a href="https://support.plex.tv/articles/200220717-local-media-assets-tv-shows/" title="Plex Articles">Local Artwork Assets</a> from Plex to Shoko. This allows Shoko's WebUI to have the
+              same art as Plex and is faster than manually uploaded art in Shoko. Plex's locally generated episode thumbnails will also be synced to Shoko if "TMDB Thumbnails" is disabled.
             </small>
             <h4>Plex Data Path</h4>
             <small>

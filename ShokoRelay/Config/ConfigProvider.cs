@@ -46,6 +46,9 @@ public partial class ConfigProvider : IDisposable
     /// <summary>Cached list of extra Plex user entries parsed from settings.</summary>
     private List<(string Name, string? Pin)>? _cachedExtraUsers;
 
+    /// <summary>Cached list of Shoko-to-Plex user mappings parsed from settings.</summary>
+    private List<AdvancedUserMappingEntry>? _cachedAdvancedUserMappings;
+
     /// <summary>Cached list of discovered Plex servers.</summary>
     private List<PlexAvailableServer>? _cachedServers;
 
@@ -72,6 +75,9 @@ public partial class ConfigProvider : IDisposable
 
     /// <summary>The absolute path to the plugin's configuration directory.</summary>
     public string ConfigDirectory { get; }
+
+    /// <summary>The absolute path to the plugin's cache directory.</summary>
+    public string CacheDirectory { get; }
 
     /// <summary>The absolute path to the plugin's task logs directory.</summary>
     public string LogsDirectory => Path.Combine(ConfigDirectory, "logs");
@@ -120,16 +126,19 @@ public partial class ConfigProvider : IDisposable
 
     /// <summary>Creates a new ConfigProvider using the specified paths provided by the host application.</summary>
     /// <param name="applicationPaths">Shoko application paths.</param>
+    /// <param name="pluginPaths">Optional plugin-specific paths resolved by Shoko Server.</param>
     /// <param name="httpContextAccessor">Optional HTTP context accessor for URL discovery.</param>
     /// <param name="logger">Logger instance.</param>
-    public ConfigProvider(IApplicationPaths applicationPaths, IHttpContextAccessor? httpContextAccessor = null, ILogger<ConfigProvider>? logger = null)
+    public ConfigProvider(IApplicationPaths applicationPaths, PluginPaths<Plugin>? pluginPaths = null, IHttpContextAccessor? httpContextAccessor = null, ILogger<ConfigProvider>? logger = null)
     {
         _httpContextAccessor = httpContextAccessor;
         _logger = logger;
-        PluginDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? string.Empty;
+        PluginDirectory = pluginPaths?.InstallPath ?? Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? string.Empty;
 
         ConfigDirectory = Path.Combine(applicationPaths.ConfigurationsPath, ShokoRelayConstants.PluginId);
+        CacheDirectory = pluginPaths?.CachePath ?? Path.Combine(applicationPaths.CachePath, ShokoRelayConstants.PluginId);
         Directory.CreateDirectory(ConfigDirectory);
+        Directory.CreateDirectory(CacheDirectory);
         Directory.CreateDirectory(LogsDirectory);
 
         _filePath = Path.Combine(ConfigDirectory, ShokoRelayConstants.FilePreferences);
@@ -171,6 +180,7 @@ public partial class ConfigProvider : IDisposable
         {
             _settings = null;
             _cachedExtraUsers = null;
+            _cachedAdvancedUserMappings = null;
         }
         _logger?.LogInformation("Config: Settings invalidated due to external file change");
     }
@@ -383,6 +393,7 @@ public partial class ConfigProvider : IDisposable
             VfsShared.WriteTextAtomic(_filePath, JsonSerializer.Serialize(settings, s_options));
             _settings = settings;
             _cachedExtraUsers = null; // Clear the cached extra users so they are re-parsed on the next sync after settings changes
+            _cachedAdvancedUserMappings = null;
         }
     }
 
@@ -574,6 +585,11 @@ public partial class ConfigProvider : IDisposable
 
     #region User Management
 
+    /// <summary>Represents a configured mapping between a Shoko username and one or more Plex users.</summary>
+    /// <param name="ShokoUser">The target Shoko username.</param>
+    /// <param name="PlexUsers">The Plex usernames and optional 4-digit PINs assigned to this Shoko user.</param>
+    public sealed record AdvancedUserMappingEntry(string ShokoUser, List<(string PlexUser, string? Pin)> PlexUsers);
+
     /// <summary>Parse a comma-separated string of Plex user entries, optionally containing 4-digit PINs.</summary>
     /// <param name="raw">The raw configuration string to parse.</param>
     /// <returns>A list of tuples containing the username and optional PIN.</returns>
@@ -586,12 +602,78 @@ public partial class ConfigProvider : IDisposable
                 .Select(p => (Name: p[0].Trim(), Pin: (p.Length > 1 && p[1].Trim().Length == 4 && p[1].Trim().All(char.IsDigit)) ? p[1].Trim() : null)),
         ];
 
+    /// <summary>Parses a pipe-delimited string of Shoko-to-Plex user mappings (<c>ShokoUser,PlexUser1;PIN,PlexUser2|ShokoUser2,PlexUser3</c>).</summary>
+    /// <param name="raw">The raw configuration string to parse.</param>
+    /// <returns>A list of parsed <see cref="AdvancedUserMappingEntry"/> records.</returns>
+    public static List<AdvancedUserMappingEntry> ParseAdvancedUserMappings(string? raw)
+    {
+        var entries = new List<AdvancedUserMappingEntry>();
+        var seenPlex = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var segment in (raw ?? "").Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var tokens = segment.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (tokens.Length < 2 || string.IsNullOrWhiteSpace(tokens[0]))
+                continue;
+
+            string shokoUser = tokens[0].Trim();
+            var plexUsers = new List<(string PlexUser, string? Pin)>();
+            for (int i = 1; i < tokens.Length; i++)
+            {
+                var parts = tokens[i].Split(';', 2);
+                string plexUser = parts[0].Trim();
+                if (string.IsNullOrWhiteSpace(plexUser) || !seenPlex.Add(plexUser))
+                    continue;
+
+                string? pin = (parts.Length > 1 && parts[1].Trim().Length == 4 && parts[1].Trim().All(char.IsDigit)) ? parts[1].Trim() : null;
+                plexUsers.Add((plexUser, pin));
+            }
+
+            if (plexUsers.Count > 0)
+                entries.Add(new AdvancedUserMappingEntry(shokoUser, plexUsers));
+        }
+
+        return entries;
+    }
+
     /// <summary>Returns the parsed and cached list of extra Plex users configured in settings.</summary>
     /// <returns>A list of extra user name and PIN tuples.</returns>
     public List<(string Name, string? Pin)> GetExtraPlexUserEntries()
     {
         lock (_settingsLock)
             return _cachedExtraUsers ??= ParseExtraPlexUsers(GetSettings().Automation.ExtraPlexUsers);
+    }
+
+    /// <summary>Returns the parsed and cached list of Shoko-to-Plex user mappings configured in settings.</summary>
+    /// <returns>A list of <see cref="AdvancedUserMappingEntry"/> records.</returns>
+    public List<AdvancedUserMappingEntry> GetAdvancedUserMappingEntries()
+    {
+        lock (_settingsLock)
+            return _cachedAdvancedUserMappings ??= ParseAdvancedUserMappings(GetSettings().Automation.AdvancedUserMappings);
+    }
+
+    /// <summary>Resolves the mapped Shoko username for a given Plex user, checking both literal names and the Plex admin alias.</summary>
+    /// <param name="plexUser">The Plex username or <c>admin</c>.</param>
+    /// <param name="adminUsername">Optional resolved Plex admin username.</param>
+    /// <param name="isOwner">Whether the caller represents the Plex server owner/admin.</param>
+    /// <returns>The mapped Shoko username, or <c>null</c> if unmapped.</returns>
+    public string? ResolveMappedShokoUsername(string plexUser, string? adminUsername = null, bool isOwner = false)
+    {
+        foreach (var group in GetAdvancedUserMappingEntries())
+        foreach (var (mappedPlex, _) in group.PlexUsers)
+        {
+            if ((isOwner || !string.Equals(mappedPlex, "admin", StringComparison.OrdinalIgnoreCase)) && string.Equals(mappedPlex, plexUser, StringComparison.OrdinalIgnoreCase))
+                return group.ShokoUser;
+            if (
+                isOwner
+                && (
+                    string.Equals(mappedPlex, "admin", StringComparison.OrdinalIgnoreCase)
+                    || (!string.IsNullOrWhiteSpace(adminUsername) && string.Equals(mappedPlex, adminUsername, StringComparison.OrdinalIgnoreCase))
+                )
+            )
+                return group.ShokoUser;
+        }
+        return null;
     }
 
     #endregion
@@ -658,6 +740,10 @@ public partial class ConfigProvider : IDisposable
             string.Join(separator + " ", (r ?? "").Split(separator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase));
 
         settings.Automation.ExtraPlexUsers = Norm(settings.Automation.ExtraPlexUsers, ',');
+        settings.Automation.AdvancedUserMappings = string.Join(
+            "|",
+            ParseAdvancedUserMappings(settings.Automation.AdvancedUserMappings).Select(g => string.Join(",", g.PlexUsers.Select(p => p.Pin != null ? $"{p.PlexUser};{p.Pin}" : p.PlexUser).Prepend(g.ShokoUser)))
+        );
 
         settings.Advanced.FolderExclusions = string.Join(
             Environment.NewLine,

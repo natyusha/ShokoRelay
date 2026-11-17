@@ -119,6 +119,10 @@ public enum SyncUserType
     /// <summary>Disable sync for all users.</summary>
     [Display(Name = "None")]
     None = 3,
+
+    /// <summary>Sync only users configured under Advanced User Mappings.</summary>
+    [Display(Name = "Advanced")]
+    Advanced = 4,
 }
 
 /// <summary>Levels of overlap allowed for AnimeThemes .webm files.</summary>
@@ -350,6 +354,12 @@ public class AutomationConfig
     [Browsable(false)]
     [DefaultValue(SyncUserType.None)]
     public SyncUserType ShokoSyncWatchedUserType { get; set; } = SyncUserType.None;
+
+    /// <summary>Pipe-delimited Shoko-to-Plex user mappings (e.g., ShokoUser,PlexUser1;PIN,PlexUser2|ShokoUser2,PlexUser3).</summary>
+    [Display(Name = "Advanced User Mappings", Description = "Pipe-delimited Shoko to Plex user mappings")]
+    [Browsable(false)]
+    [DefaultValue("")]
+    public string AdvancedUserMappings { get; set; } = "";
 }
 
 #endregion
@@ -428,15 +438,15 @@ public class AdvancedConfig
     [DefaultValue(false)]
     public bool RequireAuth { get; set; } = false;
 
-    /// <summary>Whether to defer initial VFS creation until the metadata fixup.</summary>
-    [Display(Name = "Defer VFS Creation", Description = "Enable to wait for the configured Plex Fixup Delay before generating VFS links")]
-    [DefaultValue(false)]
-    public bool DeferVfsCreationUntilFixup { get; set; } = false;
-
     /// <summary>Whether to sync unique local images and Plex-generated episode thumbnails back to Shoko and mark them as preferred.</summary>
     [Display(Name = "Plex Image Sync", Description = "Enable to automatically upload Plex's unique local and generated images back to Shoko")]
     [DefaultValue(false)]
     public bool EnableImageSync { get; set; } = false;
+
+    /// <summary>Whether to defer initial VFS creation until the metadata fixup.</summary>
+    [Display(Name = "Defer VFS Creation", Description = "Enable to wait for the configured Plex Fixup Delay before generating VFS links")]
+    [DefaultValue(false)]
+    public bool DeferVfsCreationUntilFixup { get; set; } = false;
 
     /// <summary>Whether to automatically merge Shoko series that are linked to the same TMDB series.</summary>
     [Display(Name = "Auto Merge TMDB Series", Description = "Enable to automatically merge Shoko series that share a TMDB series link")]
@@ -481,13 +491,13 @@ public class AdvancedConfig
     public OverlapLevel AnimeThemesOverlapLevel { get; set; } = OverlapLevel.All;
 
     /// <summary>Folder name for the ShokoRelay VFS root.</summary>
-    [Display(Name = "VFS Root Path", Description = "The location of the virtual links inside each import root")]
+    [Display(Name = "VFS Root Path", Description = "Per root location of the main virtual file system links")]
     [DefaultValue(ShokoRelayConstants.FolderVfsDefault)]
     [VfsRebuild]
     public string VfsRootPath { get; set; } = ShokoRelayConstants.FolderVfsDefault;
 
     /// <summary>Folder name for the movie specific VFS root.</summary>
-    [Display(Name = "Movie VFS Root Path", Description = "The folder name used for the movie specific VFS, if enabled")]
+    [Display(Name = "Movie VFS Root Path", Description = "Per root location of movie specific VFS links, if enabled")]
     [DefaultValue(ShokoRelayConstants.FolderMoviesDefault)]
     [VfsRebuild]
     public string MovieVfsRootPath { get; set; } = ShokoRelayConstants.FolderMoviesDefault;

@@ -165,7 +165,8 @@ com.plexapp.agents.shokorelay
 - The webhook respects the `Include Ratings`, `Include Progress` and `Sync Users` settings in the `Sync Watched States Menu`
   - `Sync Users` defaults to "None" and must be configured before the webhook will function
   - For clarity "All" users means both the admin and the configured extra Plex users
-- Managed users must be added to `Extra Plex Users` on the dashboard if you wish them to be included
+- Managed and regular Plex users must be added to `Extra Plex Users` or `Advanced User Mappings` if you wish them to be included
+  - `Advanced User Mappings` allows scrobbling to specific Shoko users when `Sync Users` is set to `All` or `Advanced` (available in the "Watch Sync Menu")
 - _Requires Plex authentication **and** a Plex Pass subscription_
 
 ### Scheduling
@@ -237,6 +238,8 @@ Applying a hyphenated suffix to the image that matches Plex's naming conventions
 - `Run Import` A button which will make shoko rescan all managed folders for new or unrecognized files
 - `Watch Sync Menu` A button which opens a modal (Sync Watched States Menu) allowing for watched state syncing from Plex to Shoko or Shoko to Plex
   - This includes any users configured under `Extra Plex Users` in the "Plex Authentication" section unless the `Sync Users` setting excludes them
+  - There is also an `Advanced User Mappings` input available in the modal itself which accepts pipe-delimited groups mapping a Shoko username to one or more Plex users
+    - The formatting is as follows: `ShokoUser,PlexUser1;PIN,PlexUser2|ShokoUser2,PlexUser3`
   - When syncing from Plex to Shoko the `Temporary Library Filter` can also be used to import watched states from non-Shoko Relay libraries via physical filename matching
   - _Requires Plex authentication_
 - `Purge Missing` A button which will remove files that are no longer present from Shoko
@@ -298,7 +301,7 @@ There is an included tree view which allows you to browse your themes by `Group 
 
 #### Favourites
 
-You can mark any theme as a favourite by clicking the heart icon `❤` next to its name in the tree view. Once marked as a favourite the icon for a given item will change to be red in colour and it will be persisted to a settings file based on its AnimeThemes VideoID. To quickly view only your marked themes, type `favs` into the search bar. This keyword can be combined with other search terms as well as tags (e.g., `+nc favs gundam`) to find specific favourites.
+You can mark any theme as a favourite by clicking the heart icon `❤` next to its name in the tree view. Once marked as a favourite the icon for a given item will change to be red in colour and it will be persisted to `favs_animethemes.csv` in the plugin's configuration folder based on its AnimeThemes VideoID. To quickly view only your marked themes, type `favs` into the search bar. This keyword can be combined with other search terms as well as tags (e.g., `+nc favs gundam`) to find specific favourites.
 
 ## Additional Information
 

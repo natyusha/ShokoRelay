@@ -12,6 +12,7 @@ public record PlexWatchedUserResult(int Processed = 0, int MarkedWatched = 0, in
 
 /// <summary>Represents a single change during sync.</summary>
 /// <param name="PlexUser">Plex username.</param>
+/// <param name="ShokoUser">Target Shoko username.</param>
 /// <param name="LibraryName">Plex library section title.</param>
 /// <param name="ShokoEpisodeId">Shoko episode ID.</param>
 /// <param name="SeriesTitle">Series title.</param>
@@ -28,6 +29,7 @@ public record PlexWatchedUserResult(int Processed = 0, int MarkedWatched = 0, in
 /// <param name="ShokoUserRating">Shoko user rating.</param>
 public record PlexWatchedChange(
     string PlexUser = "",
+    string? ShokoUser = null,
     string? LibraryName = null,
     int ShokoEpisodeId = 0,
     string? SeriesTitle = null,
@@ -96,16 +98,44 @@ public static class SyncHelper
 
     #endregion
 
-    #region Collection Helpers
+    #region Cache & Buckets
+
+    /// <summary>Caches Plex Home and Shared Server token lookups for the duration of a single sync run.</summary>
+    public sealed class PlexUserTokenCache
+    {
+        /// <summary>Cached list of Plex Home users.</summary>
+        public List<PlexHomeUser>? HomeUsers { get; set; }
+
+        /// <summary>Cached list of Plex devices for the admin account.</summary>
+        public List<PlexDevice>? AdminDevices { get; set; }
+
+        /// <summary>Cached list of shared server entries keyed by Plex server ID.</summary>
+        public Dictionary<string, List<PlexSharedServerUser>> SharedServersByServer { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>Cached resolved tokens keyed by (ServerId, PlexUserName).</summary>
+        public Dictionary<(string ServerId, string UserName), (string? Token, bool IsSharedFriend)> ResolvedTokens { get; } = [];
+    }
+
+    /// <summary>Represents a fetched Plex user bucket paired with its target Shoko username and token metadata.</summary>
+    /// <param name="Name">The Plex username or <c>admin</c>.</param>
+    /// <param name="ShokoUsername">The mapped Shoko username, or <c>null</c> to use the default Shoko user.</param>
+    /// <param name="Items">The fetched Plex metadata items.</param>
+    /// <param name="Token">The resolved Plex access token, or <c>null</c> for admin.</param>
+    /// <param name="IsSharedFriend">Whether the token came from a non-Home shared server entry.</param>
+    public sealed record PlexUserBucket(string Name, string? ShokoUsername, List<PlexMetadataItem> Items, string? Token, bool IsSharedFriend);
 
     /// <summary>Create result buckets for users.</summary>
-    /// <param name="extraUserNames">Configured extra Plex usernames.</param>
+    /// <param name="plexUserNames">Configured Plex usernames.</param>
+    /// <param name="includeAdmin">Whether the admin bucket should be initialized.</param>
     /// <returns>A case-insensitive dictionary initialized with user result buckets.</returns>
-    public static Dictionary<string, PlexWatchedUserResult> CreatePerUserBuckets(IEnumerable<string> extraUserNames)
+    public static Dictionary<string, PlexWatchedUserResult> CreatePerUserBuckets(IEnumerable<string> plexUserNames, bool includeAdmin = true)
     {
-        var perUser = new Dictionary<string, PlexWatchedUserResult>(StringComparer.OrdinalIgnoreCase) { ["admin"] = new() };
-        foreach (var n in extraUserNames ?? [])
-            perUser[n] = new();
+        var perUser = new Dictionary<string, PlexWatchedUserResult>(StringComparer.OrdinalIgnoreCase);
+        if (includeAdmin)
+            perUser["admin"] = new();
+        foreach (var n in plexUserNames ?? [])
+            if (!string.IsNullOrWhiteSpace(n))
+                perUser.TryAdd(n, new());
         return perUser;
     }
 
@@ -124,6 +154,7 @@ public static class SyncHelper
 
     /// <summary>Factory for watched changes.</summary>
     /// <param name="plexUser">Plex username.</param>
+    /// <param name="shokoUser">Target Shoko username.</param>
     /// <param name="libraryName">Plex library section title.</param>
     /// <param name="shokoEpisodeId">Shoko episode ID.</param>
     /// <param name="seriesTitle">Series title.</param>
@@ -141,6 +172,7 @@ public static class SyncHelper
     /// <returns>A populated <see cref="PlexWatchedChange"/> record.</returns>
     public static PlexWatchedChange MakeChange(
         string plexUser,
+        string? shokoUser = null,
         string? libraryName = null,
         int shokoEpisodeId = 0,
         string? seriesTitle = null,
@@ -159,6 +191,7 @@ public static class SyncHelper
         new()
         {
             PlexUser = plexUser,
+            ShokoUser = shokoUser,
             LibraryName = libraryName,
             ShokoEpisodeId = shokoEpisodeId,
             SeriesTitle = seriesTitle,
@@ -262,151 +295,240 @@ public static class SyncHelper
 
     #endregion
 
-    #region Extra Users
+    #region Resolution & Fetching
 
-    /// <summary>Fetches items for a managed user section, resolving the correct Server Access Token.</summary>
+    /// <summary>Builds the active list of Plex users (with optional PINs and mapped Shoko usernames) according to the sync user mode.</summary>
+    /// <param name="configProvider">Configuration provider.</param>
+    /// <param name="userType">Active sync user mode.</param>
+    /// <param name="adminUsername">Optional resolved Plex admin username.</param>
+    /// <returns>A tuple indicating whether admin is included and the list of extra Plex users to fetch.</returns>
+    public static (bool IncludeAdmin, string? AdminShokoUser, List<(string Name, string? Pin, string? ShokoUser)> ExtraUsers) ResolveActiveSyncUsers(
+        ConfigProvider configProvider,
+        SyncUserType userType,
+        string? adminUsername
+    )
+    {
+        if (userType == SyncUserType.None)
+            return (false, null, []);
+
+        var extraEntries = configProvider.GetExtraPlexUserEntries();
+        var advancedEntries = configProvider.GetAdvancedUserMappingEntries();
+
+        bool IsAdminAlias(string name) =>
+            string.Equals(name, "admin", StringComparison.OrdinalIgnoreCase) || (!string.IsNullOrWhiteSpace(adminUsername) && string.Equals(name, adminUsername, StringComparison.OrdinalIgnoreCase));
+
+        string? adminShokoUser = null;
+        var advMap = new Dictionary<string, (string? Pin, string ShokoUser)>(StringComparer.OrdinalIgnoreCase);
+        var advOrder = new List<string>();
+        foreach (var group in advancedEntries)
+        foreach (var (plexUser, pin) in group.PlexUsers)
+        {
+            if (IsAdminAlias(plexUser))
+                adminShokoUser ??= group.ShokoUser;
+            else if (advMap.TryAdd(plexUser, (pin, group.ShokoUser)))
+                advOrder.Add(plexUser);
+        }
+
+        bool includeAdmin = userType is SyncUserType.All or SyncUserType.Admin || (userType == SyncUserType.Advanced && adminShokoUser != null);
+        var extraUsers = new List<(string Name, string? Pin, string? ShokoUser)>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        if (userType is SyncUserType.All or SyncUserType.Extra)
+            foreach (var (name, pin) in extraEntries)
+            {
+                if (IsAdminAlias(name) || !seen.Add(name))
+                    continue;
+                var hasAdv = advMap.TryGetValue(name, out var adv);
+                extraUsers.Add((name, pin ?? (hasAdv ? adv.Pin : null), hasAdv ? adv.ShokoUser : null));
+            }
+
+        if (userType is SyncUserType.All or SyncUserType.Advanced)
+        {
+            var extraPinLookup = extraEntries.ToDictionary(e => e.Name, e => e.Pin, StringComparer.OrdinalIgnoreCase);
+            foreach (var name in advOrder)
+            {
+                if (!seen.Add(name))
+                    continue;
+                var (pin, shokoUser) = advMap[name];
+                extraUsers.Add((name, pin ?? extraPinLookup.GetValueOrDefault(name), shokoUser));
+            }
+        }
+
+        return (includeAdmin, adminShokoUser, extraUsers);
+    }
+
+    /// <summary>Resolves a server-scoped Plex access token for a Home user or regular Shared Server friend.</summary>
     /// <param name="plexAuth">Plex Auth service.</param>
-    /// <param name="plexClient">Plex Client service.</param>
-    /// <param name="configProvider">Config Provider service.</param>
+    /// <param name="configProvider">Configuration provider.</param>
     /// <param name="target">Target library.</param>
-    /// <param name="userName">Managed username.</param>
-    /// <param name="pin">Optional user PIN.</param>
-    /// <param name="sinceHours">Optional lookback window.</param>
+    /// <param name="userName">Plex username, title, email, or ID.</param>
+    /// <param name="pin">Optional 4-digit Home PIN.</param>
+    /// <param name="tokenCache">Per-sync-run token cache.</param>
     /// <param name="logger">Optional logger.</param>
-    /// <param name="onlyUnwatched">If true, only returns unwatched items. If false, watched. If null, returns both.</param>
-    /// <param name="hasProgress">Filter for items actively in progress.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A tuple containing the list of items, the resolved token, and an optional error message.</returns>
-    public static async Task<(List<PlexMetadataItem> Items, string? ResolvedToken, string? ErrorMessage)> FetchManagedUserSectionItemsAsync(
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The resolved access token and whether it originated from a shared server entry.</returns>
+    public static async Task<(string? Token, bool IsSharedFriend)> ResolvePlexUserTokenAsync(
         PlexAuth plexAuth,
-        PlexClient plexClient,
         ConfigProvider configProvider,
         PlexLibraryTarget target,
         string userName,
         string? pin,
-        int? sinceHours,
+        PlexUserTokenCache tokenCache,
         ILogger? logger = null,
-        bool? onlyUnwatched = false,
-        bool? hasProgress = null,
         CancellationToken cancellationToken = default
     )
     {
-        string typeLabel = target.LibraryType == PlexLibraryType.Movie ? "movies" : "episodes";
+        var cacheKey = (target.ServerId, userName);
+        if (tokenCache.ResolvedTokens.TryGetValue(cacheKey, out var cached))
+            return cached;
+
+        var adminToken = configProvider.GetPlexToken();
+        if (string.IsNullOrWhiteSpace(adminToken))
+        {
+            logger?.LogInformation("WatchedSyncService: admin Plex token missing; cannot fetch token for Plex user '{User}'", userName);
+            return tokenCache.ResolvedTokens[cacheKey] = (null, false);
+        }
+
+        PlexHomeUser? matchedHome = null;
         try
         {
-            // Fetches a transient token for a managed user.
-            string? userToken = null;
-            var adminToken = configProvider.GetPlexToken();
-            if (!string.IsNullOrWhiteSpace(adminToken))
-            {
-                try
-                {
-                    var homeUsers = await plexAuth.GetHomeUsersAsync(adminToken, cancellationToken).ConfigureAwait(false);
-                    var matched = homeUsers.FirstOrDefault(u =>
-                        string.Equals(u.Title?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(u.Username?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(u.Uuid, userName, StringComparison.OrdinalIgnoreCase)
-                        || (int.TryParse(userName, out var exId) && u.Id == exId)
-                    );
-                    if (matched != null)
-                    {
-                        if (!string.IsNullOrWhiteSpace(userToken = await plexAuth.SwitchHomeUserAsync(matched.Id, adminToken, pin, cancellationToken).ConfigureAwait(false)))
-                            logger?.LogDebug("WatchedSyncService: fetched transient token for managed Plex user '{User}' (id={Id}) not persisted", userName, matched.Id);
-                        else
-                            logger?.LogInformation("WatchedSyncService: SwitchHomeUser returned no token for managed user '{User}' (id={Id})", userName, matched.Id);
-                    }
-                    else
-                        logger?.LogDebug("WatchedSyncService: no matching managed/home user found for '{User}'", userName);
-                }
-                catch (Exception ex)
-                {
-                    logger?.LogWarning(ex, "WatchedSyncService: failed to auto-fetch token for managed Plex user '{User}'", userName);
-                }
-            }
-            else
-                logger?.LogInformation("WatchedSyncService: admin Plex token missing; cannot auto-fetch managed-user token for '{User}'", userName);
+            tokenCache.HomeUsers ??= await plexAuth.GetHomeUsersAsync(adminToken, cancellationToken).ConfigureAwait(false);
+            matchedHome = tokenCache.HomeUsers.FirstOrDefault(u =>
+                string.Equals(u.Title?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(u.Username?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(u.Uuid, userName, StringComparison.OrdinalIgnoreCase)
+                || (int.TryParse(userName, out var exId) && u.Id == exId)
+            );
 
-            if (string.IsNullOrWhiteSpace(userToken))
-                return ([], null, null);
-            string? serverAccessToken = null;
-            var targetServerUrl = target.ServerUrl;
-            var targetServerUrlNorm = string.IsNullOrWhiteSpace(targetServerUrl) ? null : targetServerUrl.TrimEnd('/');
-            try
+            if (matchedHome != null)
             {
-                var clientIdentifier = configProvider.GetPlexClientIdentifier();
-                var (tokenValid, servers, allDevices) = await plexAuth.GetPlexServerListAsync(userToken, clientIdentifier, cancellationToken).ConfigureAwait(false);
-                var devices = allDevices ?? [];
-                foreach (var dev in devices)
+                var switchedToken = await plexAuth.SwitchHomeUserAsync(matchedHome.Id, adminToken, pin, cancellationToken).ConfigureAwait(false);
+                if (!string.IsNullOrWhiteSpace(switchedToken))
                 {
-                    if (string.Equals(dev.ClientIdentifier, target.ServerId, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(dev.AccessToken))
+                    logger?.LogDebug("WatchedSyncService: fetched transient token for Plex Home user '{User}' (id={Id}) not persisted", userName, matchedHome.Id);
+                    string? serverAccessToken = null;
+                    var targetServerUrlNorm = string.IsNullOrWhiteSpace(target.ServerUrl) ? null : target.ServerUrl.TrimEnd('/');
+                    try
                     {
-                        serverAccessToken = dev.AccessToken;
-                        break;
-                    }
-                    if (dev?.Connections == null)
-                        continue;
-                    foreach (var c in dev.Connections)
-                    {
-                        if (string.IsNullOrWhiteSpace(c?.Uri) || targetServerUrlNorm == null)
-                            continue;
-
-                        if (Uri.TryCreate(c.Uri.TrimEnd('/'), UriKind.Absolute, out var connUri) && Uri.TryCreate(targetServerUrlNorm, UriKind.Absolute, out var tgtUri))
+                        var clientIdentifier = configProvider.GetPlexClientIdentifier();
+                        var (_, _, allDevices) = await plexAuth.GetPlexServerListAsync(switchedToken, clientIdentifier, cancellationToken).ConfigureAwait(false);
+                        foreach (var dev in allDevices ?? [])
                         {
-                            if (string.Equals(connUri.Host, tgtUri.Host, StringComparison.OrdinalIgnoreCase) && connUri.Port == tgtUri.Port)
+                            if (string.Equals(dev.ClientIdentifier, target.ServerId, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(dev.AccessToken))
                             {
                                 serverAccessToken = dev.AccessToken;
                                 break;
                             }
-                        }
-                        else if (string.Equals(c.Uri.TrimEnd('/'), targetServerUrlNorm, StringComparison.OrdinalIgnoreCase))
-                        {
-                            serverAccessToken = dev.AccessToken;
-                            break;
+                            foreach (var c in dev?.Connections ?? [])
+                            {
+                                if (string.IsNullOrWhiteSpace(c?.Uri) || targetServerUrlNorm == null)
+                                    continue;
+                                if (
+                                    Uri.TryCreate(c.Uri.TrimEnd('/'), UriKind.Absolute, out var connUri)
+                                    && Uri.TryCreate(targetServerUrlNorm, UriKind.Absolute, out var tgtUri)
+                                    && string.Equals(connUri.Host, tgtUri.Host, StringComparison.OrdinalIgnoreCase)
+                                    && connUri.Port == tgtUri.Port
+                                )
+                                {
+                                    serverAccessToken = dev!.AccessToken;
+                                    break;
+                                }
+                                if (string.Equals(c.Uri.TrimEnd('/'), targetServerUrlNorm, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    serverAccessToken = dev!.AccessToken;
+                                    break;
+                                }
+                            }
+                            if (!string.IsNullOrWhiteSpace(serverAccessToken))
+                                break;
                         }
                     }
-                    if (!string.IsNullOrWhiteSpace(serverAccessToken))
-                        break;
+                    catch (Exception ex)
+                    {
+                        logger?.LogDebug(ex, "WatchedSyncService: failed to resolve server access token for Home user; falling back to switched user token");
+                    }
+
+                    return tokenCache.ResolvedTokens[cacheKey] = (!string.IsNullOrWhiteSpace(serverAccessToken) ? serverAccessToken : switchedToken, false);
+                }
+
+                logger?.LogInformation("WatchedSyncService: SwitchHomeUser returned no token for Home user '{User}' (id={Id}); checking Shared Servers...", userName, matchedHome.Id);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger?.LogWarning(ex, "WatchedSyncService: failed Home lookup for Plex user '{User}'", userName);
+        }
+
+        // Fallback for regular non-Home Plex friends (or Home users whose switch failed) via Shared Servers API
+        string serverId = target.ServerId;
+        if (string.IsNullOrWhiteSpace(serverId) && !string.IsNullOrWhiteSpace(target.ServerUrl))
+        {
+            try
+            {
+                tokenCache.AdminDevices ??= (await plexAuth.GetPlexServerListAsync(adminToken, configProvider.GetPlexClientIdentifier(), cancellationToken).ConfigureAwait(false)).Devices;
+                string normTarget = target.ServerUrl.TrimEnd('/');
+                serverId =
+                    tokenCache
+                        .AdminDevices.FirstOrDefault(d =>
+                            d.Owned && d.Connections?.Any(c => !string.IsNullOrWhiteSpace(c.Uri) && string.Equals(c.Uri.TrimEnd('/'), normTarget, StringComparison.OrdinalIgnoreCase)) == true
+                        )
+                        ?.ClientIdentifier
+                    ?? string.Empty;
+            }
+            catch { }
+        }
+
+        if (!string.IsNullOrWhiteSpace(serverId))
+        {
+            try
+            {
+                if (!tokenCache.SharedServersByServer.TryGetValue(serverId, out var sharedUsers))
+                {
+                    sharedUsers = await plexAuth.GetSharedServersAsync(serverId, adminToken, cancellationToken).ConfigureAwait(false);
+                    tokenCache.SharedServersByServer[serverId] = sharedUsers;
+                }
+
+                var sharedMatch = sharedUsers.FirstOrDefault(s =>
+                    !string.IsNullOrWhiteSpace(s.AccessToken)
+                    && (
+                        string.Equals(s.Username?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(s.Email?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(s.UserId?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
+                        || (
+                            matchedHome != null
+                            && (
+                                (!string.IsNullOrWhiteSpace(matchedHome.Username) && string.Equals(s.Username?.Trim(), matchedHome.Username.Trim(), StringComparison.OrdinalIgnoreCase))
+                                || string.Equals(s.UserId?.Trim(), matchedHome.Id.ToString(), StringComparison.OrdinalIgnoreCase)
+                            )
+                        )
+                    )
+                );
+
+                if (sharedMatch != null)
+                {
+                    logger?.LogDebug("WatchedSyncService: resolved Shared Server token for regular Plex user '{User}'", userName);
+                    return tokenCache.ResolvedTokens[cacheKey] = (sharedMatch.AccessToken, true);
                 }
             }
             catch (Exception ex)
             {
-                logger?.LogDebug(ex, "WatchedSyncService: failed to resolve server access token for managed user; falling back to user token");
+                logger?.LogWarning(ex, "WatchedSyncService: failed Shared Server lookup for Plex user '{User}'", userName);
             }
-
-            var effectiveToken = !string.IsNullOrWhiteSpace(serverAccessToken) ? serverAccessToken : userToken;
-            long? minLast = (sinceHours.HasValue && sinceHours.Value > 0) ? DateTimeOffset.UtcNow.ToUnixTimeSeconds() - (sinceHours.Value * 3600) : null;
-
-            List<PlexMetadataItem> list =
-                target.LibraryType == PlexLibraryType.Movie
-                    ? await plexClient.GetSectionMoviesAsync(target, effectiveToken, cancellationToken, onlyUnwatched, hasProgress, null, minLast).ConfigureAwait(false) ?? []
-                    : await plexClient.GetSectionEpisodesAsync(target, effectiveToken, cancellationToken, onlyUnwatched, hasProgress, null, minLast).ConfigureAwait(false) ?? [];
-
-            logger?.LogInformation(
-                "WatchedSyncService: fetched {Count} {TypeLabel} for user {User} in library '{Library}' on {Server} (since={Since})",
-                list.Count,
-                typeLabel,
-                userName,
-                target.Title,
-                target.ServerName,
-                minLast?.ToString() ?? "NULL"
-            );
-            return (list, effectiveToken, null); // Return the resolved token so callers can use it for subsequent PUT requests
         }
-        catch (Exception ex)
-        {
-            string msg = $"Failed to fetch {typeLabel} for Plex user '{userName}' from {target.ServerUrl}:{target.SectionId}";
-            logger?.LogWarning(ex, "WatchedSyncService: {Message}", msg);
-            return ([], null, $"{msg} -> {ex.Message}");
-        }
+
+        logger?.LogInformation("WatchedSyncService: no matching Home or Shared Server token found for Plex user '{User}' on server {ServerId}", userName, serverId);
+        return tokenCache.ResolvedTokens[cacheKey] = (null, false);
     }
 
-    /// <summary>Fetches user buckets for sync operations, deduplicating the core retrieval loop across sync directions.</summary>
+    /// <summary>Fetches user buckets for sync operations across Admin, Home, and Shared Server Plex users.</summary>
     /// <param name="plexAuth">Plex Auth service.</param>
     /// <param name="plexClient">Plex Client service.</param>
-    /// <param name="configProvider">Config Provider service.</param>
+    /// <param name="configProvider">Configuration provider.</param>
     /// <param name="target">Target library.</param>
-    /// <param name="userType">Configured SyncUserType flag.</param>
-    /// <param name="extraEntries">Configured list of extra users.</param>
+    /// <param name="includeAdmin">Whether to include the Plex admin user.</param>
+    /// <param name="adminShokoUser">Optional mapped Shoko username for the admin user.</param>
+    /// <param name="extraUsers">Active non-admin Plex users, optional PINs, and mapped Shoko usernames.</param>
+    /// <param name="tokenCache">Per-sync-run token cache.</param>
     /// <param name="onlyUnwatched">Filter for unwatched items only. Null to return all items.</param>
     /// <param name="hasProgress">Filter for items actively in progress.</param>
     /// <param name="sinceHours">Optional lookback window.</param>
@@ -414,13 +536,15 @@ public static class SyncHelper
     /// <param name="logger">Optional logger.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A tuple containing the mapped user buckets and the updated sync result.</returns>
-    public static async Task<(List<(string Name, List<PlexMetadataItem> Items, string? Token)> Buckets, PlexWatchedSyncResult Result)> FetchUserBucketsAsync(
+    public static async Task<(List<PlexUserBucket> Buckets, PlexWatchedSyncResult Result)> FetchUserBucketsAsync(
         PlexAuth plexAuth,
         PlexClient plexClient,
         ConfigProvider configProvider,
         PlexLibraryTarget target,
-        SyncUserType userType,
-        List<(string Name, string? Pin)> extraEntries,
+        bool includeAdmin,
+        string? adminShokoUser,
+        List<(string Name, string? Pin, string? ShokoUser)> extraUsers,
+        PlexUserTokenCache tokenCache,
         bool? onlyUnwatched,
         bool? hasProgress,
         int? sinceHours,
@@ -429,11 +553,12 @@ public static class SyncHelper
         CancellationToken cancellationToken
     )
     {
-        var userBuckets = new List<(string Name, List<PlexMetadataItem> Items, string? Token)>();
+        var userBuckets = new List<PlexUserBucket>();
+        string typeLabel = target.LibraryType == PlexLibraryType.Movie ? "movies" : "episodes";
+        long? minLast = sinceHours > 0 ? DateTimeOffset.UtcNow.ToUnixTimeSeconds() - (sinceHours.Value * 3600) : null;
 
-        if (userType is SyncUserType.All or SyncUserType.Admin)
+        if (includeAdmin)
         {
-            long? minLast = sinceHours > 0 ? DateTimeOffset.UtcNow.ToUnixTimeSeconds() - (sinceHours.Value * 3600) : null;
             List<PlexMetadataItem> adminItems =
                 target.LibraryType == PlexLibraryType.Movie
                     ? await plexClient.GetSectionMoviesAsync(target, null, cancellationToken, onlyUnwatched, hasProgress, null, minLast).ConfigureAwait(false) ?? []
@@ -442,37 +567,44 @@ public static class SyncHelper
             logger?.LogInformation(
                 "WatchedSyncService: fetched {Count} {TypeLabel} for user admin in library '{Library}' on {Server} (since={Since})",
                 adminItems.Count,
-                target.LibraryType == PlexLibraryType.Movie ? "movies" : "episodes",
+                typeLabel,
                 target.Title,
                 target.ServerName,
                 minLast?.ToString() ?? "NULL"
             );
 
-            userBuckets.Add(("admin", adminItems, null));
+            userBuckets.Add(new PlexUserBucket("admin", adminShokoUser, adminItems, null, false));
         }
 
-        if (userType is SyncUserType.All or SyncUserType.Extra)
+        foreach (var (name, pin, shokoUser) in extraUsers)
         {
-            foreach (var (name, pin) in extraEntries)
+            try
             {
-                var (items, resolvedToken, err) = await FetchManagedUserSectionItemsAsync(
-                        plexAuth,
-                        plexClient,
-                        configProvider,
-                        target,
-                        name,
-                        pin,
-                        sinceHours,
-                        logger,
-                        onlyUnwatched,
-                        hasProgress,
-                        cancellationToken
-                    )
-                    .ConfigureAwait(false);
-                if (!string.IsNullOrEmpty(err))
-                    result = RecordError(result, result.PerUser, name, err);
-                else
-                    userBuckets.Add((name, items, resolvedToken));
+                var (effectiveToken, isSharedFriend) = await ResolvePlexUserTokenAsync(plexAuth, configProvider, target, name, pin, tokenCache, logger, cancellationToken).ConfigureAwait(false);
+                if (string.IsNullOrWhiteSpace(effectiveToken))
+                    continue;
+
+                List<PlexMetadataItem> list =
+                    target.LibraryType == PlexLibraryType.Movie
+                        ? await plexClient.GetSectionMoviesAsync(target, effectiveToken, cancellationToken, onlyUnwatched, hasProgress, null, minLast).ConfigureAwait(false) ?? []
+                        : await plexClient.GetSectionEpisodesAsync(target, effectiveToken, cancellationToken, onlyUnwatched, hasProgress, null, minLast).ConfigureAwait(false) ?? [];
+
+                logger?.LogInformation(
+                    "WatchedSyncService: fetched {Count} {TypeLabel} for user {User} in library '{Library}' on {Server} (since={Since})",
+                    list.Count,
+                    typeLabel,
+                    name,
+                    target.Title,
+                    target.ServerName,
+                    minLast?.ToString() ?? "NULL"
+                );
+                userBuckets.Add(new PlexUserBucket(name, shokoUser, list, effectiveToken, isSharedFriend));
+            }
+            catch (Exception ex)
+            {
+                string msg = $"Failed to fetch {typeLabel} for Plex user '{name}' from {target.ServerUrl}:{target.SectionId}";
+                logger?.LogWarning(ex, "WatchedSyncService: {Message}", msg);
+                result = RecordError(result, result.PerUser, name, $"{msg} -> {ex.Message}");
             }
         }
 

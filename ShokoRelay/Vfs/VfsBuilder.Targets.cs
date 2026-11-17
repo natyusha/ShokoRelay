@@ -69,7 +69,7 @@ public partial class VfsBuilder
                     state.Created++;
                     state.Planned++;
                     state.ExpectedFiles.Add(destFilePath);
-                    state.OnLink?.Invoke(locInfo.ImportRoot, seasonName, fileName, locInfo.Src);
+                    state.OnLink?.Invoke(rootPath, seasonName, fileName, locInfo.Src);
 
                     // Resolve Primary IDs to allow local asset linking for crossover files that have been consolidated via VFS Overrides.
                     bool isCrossover =
@@ -77,7 +77,7 @@ public partial class VfsBuilder
                         && xrefs.Where(cr => cr.ShokoEpisode != null).Select(cr => OverrideHelper.GetPrimary(cr.ShokoEpisode!.ShokoSeriesID, metadataService)).Distinct().Count() > 1;
 
                     if (!isCrossover)
-                        LinkLocalMetadataForFile(state, locInfo.Src, seriesPath, seasonPath, destFilePath, locInfo.ImportRoot, "", seasonName);
+                        LinkLocalMetadataForFile(state, locInfo.Src, seriesPath, seasonPath, destFilePath, rootPath, "", seasonName);
                 }
                 else
                 {
@@ -105,7 +105,7 @@ public partial class VfsBuilder
                         ? Path.Combine(importRoot, state.RootFolderName, state.FolderId.ToString(), fileName)
                         : Path.Combine(importRoot, state.RootFolderName, state.FolderId.ToString(), season, fileName);
                     state.ExpectedFiles.Add(path);
-                    state.OnLink?.Invoke(importRoot, season, fileName, source);
+                    state.OnLink?.Invoke(Path.Combine(importRoot, state.RootFolderName), season, fileName, source);
                 },
                 state.SkipCheck
             );
@@ -134,7 +134,7 @@ public partial class VfsBuilder
             string moviePath = Path.Combine(rootPath, folderName);
 
             state.ResolvedVfsSeriesPaths.Add(moviePath);
-            movieDirs.Add((locInfo.ImportRoot, folderName, moviePath));
+            movieDirs.Add((rootPath, folderName, moviePath));
 
             EnsureDirectory(rootPath, state.Session, true);
             EnsureDirectory(moviePath, state.Session);
@@ -162,9 +162,9 @@ public partial class VfsBuilder
                 state.Created++;
                 state.Planned++;
                 state.ExpectedFiles.Add(destFilePath);
-                state.OnLink?.Invoke(locInfo.ImportRoot, $"Movie ❯ {folderName}", fileName, locInfo.Src);
+                state.OnLink?.Invoke(rootPath, $"Movie ❯ {folderName}", fileName, locInfo.Src);
 
-                LinkLocalMetadataForFile(state, locInfo.Src, moviePath, moviePath, destFilePath, locInfo.ImportRoot, $"Movie ❯ {folderName}", $"Movie ❯ {folderName}");
+                LinkLocalMetadataForFile(state, locInfo.Src, moviePath, moviePath, destFilePath, rootPath, $"Movie ❯ {folderName}", $"Movie ❯ {folderName}");
             }
             else
             {

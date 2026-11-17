@@ -163,10 +163,20 @@ public class AnimeThemesController(
     /// <param name="refresh">If true, forces a cache refresh before selecting.</param>
     /// <returns>A JSON object containing the random path.</returns>
     [HttpGet("animethemes/mp3/random")]
-    public IActionResult AnimeThemesMp3Random([FromQuery] bool refresh = false)
+    public async Task<IActionResult> AnimeThemesMp3Random([FromQuery] bool refresh = false)
     {
         if (refresh)
-            animeThemesMp3Generator.RefreshThemeMp3Cache();
+        {
+            await VfsShared.VfsLock.WaitAsync(HttpContext.RequestAborted).ConfigureAwait(false);
+            try
+            {
+                animeThemesMp3Generator.RefreshThemeMp3Cache();
+            }
+            finally
+            {
+                VfsShared.VfsLock.Release();
+            }
+        }
         var folders = animeThemesMp3Generator.GetCachedThemeMp3s().Keys.ToList();
         return folders.Count == 0
             ? NotFound(new RelayResponse<object>(Status: "error", Message: "No themes found"))
@@ -252,7 +262,7 @@ public class AnimeThemesController(
         }
 
         // Load VFS WebM Cache (Existing Anime)
-        string cachePath = Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileAtWebmCache);
+        string cachePath = Path.Combine(ConfigProvider.CacheDirectory, ShokoRelayConstants.FileAtWebmCache);
         if (IoFile.Exists(cachePath))
         {
             try
@@ -460,7 +470,7 @@ public class AnimeThemesController(
     [HttpGet("animethemes/webm/favourites")]
     public IActionResult GetAnimeThemesFavourites()
     {
-        string path = Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileAtFavsCache);
+        string path = Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileAtFavs);
         lock (s_favsLock)
         {
             if (!IoFile.Exists(path))
@@ -485,7 +495,7 @@ public class AnimeThemesController(
         if (videoId <= 0)
             return BadRequest(new RelayResponse<object>(Status: "error", Message: "Invalid videoId"));
 
-        string path = Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileAtFavsCache);
+        string path = Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileAtFavs);
         lock (s_favsLock)
         {
             var ids = new HashSet<int>();

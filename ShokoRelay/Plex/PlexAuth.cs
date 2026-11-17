@@ -53,6 +53,14 @@ public sealed record PlexHomeUser(
     [property: JsonPropertyName("uuid")] string? Uuid
 );
 
+/// <summary>Record representing a user with shared server access from Plex.tv.</summary>
+/// <param name="Id">Shared server entry ID.</param>
+/// <param name="UserId">Plex user ID.</param>
+/// <param name="Username">Plex username.</param>
+/// <param name="Email">Plex user email address.</param>
+/// <param name="AccessToken">Server-scoped access token for this user.</param>
+public sealed record PlexSharedServerUser(string? Id, string? UserId, string? Username, string? Email, string? AccessToken);
+
 #endregion
 
 /// <summary>Handles authentication with Plex.tv, utilizing modern v2 JSON endpoints and legacy XML for user switching.</summary>
@@ -126,7 +134,7 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
         var devices = await ReadJsonAsync<List<PlexDevice>>(response, cancellationToken).ConfigureAwait(false) ?? [];
 
         var servers = devices
-            .Where(d => d.Owned && d.Provides?.Contains("server", StringComparison.OrdinalIgnoreCase) == true) // Filter out any servers where d.Owned is false to completely ignore shared servers
+            .Where(d => d.Owned && d.Provides?.Contains("server", StringComparison.OrdinalIgnoreCase) == true)
             .Select(d =>
             {
                 var validConnections = d.HttpsRequired ? d.Connections?.Where(c => c.Uri?.StartsWith("https", StringComparison.Ordinal) == true) : d.Connections;
@@ -269,6 +277,50 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
         return result?.Users ?? [];
     }
 
+    /// <summary>Retrieves all shared server entries (regular Plex friends and Home users) for a given server via XML.</summary>
+    /// <param name="serverId">The Plex server machine/client identifier.</param>
+    /// <param name="adminToken">The admin Plex authentication token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A list of <see cref="PlexSharedServerUser"/> entries.</returns>
+    public async Task<List<PlexSharedServerUser>> GetSharedServersAsync(string serverId, string adminToken, CancellationToken cancellationToken = default)
+    {
+        var users = new List<PlexSharedServerUser>();
+        if (string.IsNullOrWhiteSpace(serverId) || string.IsNullOrWhiteSpace(adminToken))
+            return users;
+
+        try
+        {
+            using var req = CreateRequest(HttpMethod.Get, new Uri($"{BaseUrl}/api/servers/{Uri.EscapeDataString(serverId)}/shared_servers"), adminToken);
+            using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+            if (!resp.IsSuccessStatusCode)
+                return users;
+
+            var content = await resp.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(content))
+                return users;
+
+            var doc = new XmlDocument { XmlResolver = null };
+            doc.LoadXml(content);
+            var nodes = doc.SelectNodes("//SharedServer");
+            if (nodes == null)
+                return users;
+
+            foreach (XmlNode node in nodes)
+            {
+                var attrs = node.Attributes;
+                if (attrs == null)
+                    continue;
+                users.Add(new PlexSharedServerUser(attrs["id"]?.Value, attrs["userID"]?.Value, attrs["username"]?.Value, attrs["email"]?.Value, attrs["accessToken"]?.Value));
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "PlexAuth: Failed to parse Shared Servers XML response for server {ServerId}", serverId);
+        }
+
+        return users;
+    }
+
     /// <summary>Switch to a Plex Home managed user and return a transient token via XML.</summary>
     /// <remarks><b>IMPORTANT</b>: This old Plex endpoint always returns XML.</remarks>
     /// <param name="userId">Home user ID.</param>
@@ -350,11 +402,11 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
     {
         var req = new HttpRequestMessage(method, url);
         req.Headers.TryAddWithoutValidation("X-Plex-Client-Identifier", cid ?? configProvider.GetPlexClientIdentifier());
-        req.Headers.TryAddWithoutValidation("X-Plex-Device-Name", "Shoko Server"); // Title (Line 1)
-        req.Headers.TryAddWithoutValidation("X-Plex-Version", ShokoRelayConstants.Version); // Label (Line 2)
-        req.Headers.TryAddWithoutValidation("X-Plex-Product", ShokoRelayConstants.Name); // Label (Line 3)
-        req.Headers.TryAddWithoutValidation("X-Plex-Device", RuntimeInformation.OSDescription); // Label (Line 4)
-        req.Headers.TryAddWithoutValidation("X-Plex-Platform", "Shoko Plugin"); // Not Shown
+        req.Headers.TryAddWithoutValidation("X-Plex-Device-Name", "Shoko Server");
+        req.Headers.TryAddWithoutValidation("X-Plex-Version", ShokoRelayConstants.Version);
+        req.Headers.TryAddWithoutValidation("X-Plex-Product", ShokoRelayConstants.Name);
+        req.Headers.TryAddWithoutValidation("X-Plex-Device", RuntimeInformation.OSDescription);
+        req.Headers.TryAddWithoutValidation("X-Plex-Platform", "Shoko Plugin");
         req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         if (!string.IsNullOrEmpty(token))
             req.Headers.TryAddWithoutValidation("X-Plex-Token", token);

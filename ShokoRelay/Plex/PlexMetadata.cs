@@ -361,7 +361,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
             ["type"]                  = "season",
             ["title"]                 = seasonTitle,
             ["originallyAvailableAt"] = seasonDate?.ToString("yyyy-MM-dd", null),
-            ["thumb"]                 = thumb ??= series.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage),
+            ["thumb"]                 = thumb ?? series.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage),
             ["contentRating"]         = ctx.ContentRating,
             //['originalTitle']       = No source for original season titles
             ["titleSort"]             = seasonTitle,

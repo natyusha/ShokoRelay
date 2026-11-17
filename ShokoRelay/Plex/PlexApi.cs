@@ -233,6 +233,10 @@ public class PlexWebhookPayload
     /// <summary>Plex user account info.</summary>
     public class PlexAccount
     {
+        /// <summary>Numeric Plex account ID.</summary>
+        [JsonPropertyName("id")]
+        public int? Id { get; set; }
+
         /// <summary>User account title.</summary>
         [JsonPropertyName("title")]
         public string? Title { get; set; }

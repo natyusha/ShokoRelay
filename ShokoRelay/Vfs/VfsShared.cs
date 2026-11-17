@@ -27,7 +27,7 @@ internal static class VfsShared
     public static StringComparison PathComparison => OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
     /// <summary>The absolute path to the VFS blueprint cache file.</summary>
-    public static string BlueprintFilePath => Path.Combine(ConfigDirectory, ShokoRelayConstants.FileVfsBlueprintCache);
+    public static string BlueprintFilePath => Path.Combine(CacheDirectory, ShokoRelayConstants.FileVfsBlueprintCache);
 
     /// <summary>The cached set of ignored folder names resolved during the last lookup.</summary>
     private static HashSet<string>? s_lastIgnoredNames;
@@ -335,6 +335,7 @@ internal static class VfsShared
                     string norm = NormalizeSeparators(p);
                     return norm.Length > 1 ? norm.TrimEnd(Path.DirectorySeparatorChar) : norm;
                 })
+                .OrderByDescending(p => p.Length)
                 .FirstOrDefault(p => string.Equals(normPath, p, PathComparison) || normPath.StartsWith(p.EndsWith(Path.DirectorySeparatorChar) ? p : p + Path.DirectorySeparatorChar, PathComparison));
 
             if (matchedRoot != null && TryMakeRelative(matchedRoot, path, out var rel))

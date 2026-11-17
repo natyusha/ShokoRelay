@@ -123,6 +123,9 @@ public class ShokoRelay : BackgroundService
     /// <summary>Access the plugin config directory.</summary>
     public static string ConfigDirectory => s_configProvider?.ConfigDirectory ?? string.Empty;
 
+    /// <summary>Access the plugin cache directory.</summary>
+    public static string CacheDirectory => s_configProvider?.CacheDirectory ?? string.Empty;
+
     /// <summary>Access the plugin logs directory.</summary>
     public static string LogsDirectory => s_configProvider?.LogsDirectory ?? string.Empty;
 

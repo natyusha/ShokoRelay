@@ -54,9 +54,7 @@
           btn.disabled = true;
         } else {
           setButtonLoading(btn, activeTasks.includes(id) || btn.classList.contains("clicking"));
-          if (btn.classList.contains("plex-auth") && !isPlexLinked) {
-            btn.disabled = true;
-          }
+          if (btn.classList.contains("plex-auth") && !isPlexLinked) btn.disabled = true;
         }
       });
 

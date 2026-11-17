@@ -55,14 +55,14 @@ public static partial class ShokoRelayConstants
     /// <summary>Filename for the AnimeThemes cross-reference mapping CSV.</summary>
     public const string FileAtMapping = "anidb_animethemes_xrefs.csv";
 
+    /// <summary>Filename for the AnimeThemes favourites list.</summary>
+    public const string FileAtFavs = "favs_animethemes.csv";
+
     /// <summary>Filename for the Theme.mp3 folder cache.</summary>
     public const string FileAtMp3Cache = "mp3_animethemes.cache";
 
     /// <summary>Filename for the WebM VFS metadata cache.</summary>
     public const string FileAtWebmCache = "webm_animethemes.cache";
-
-    /// <summary>Filename for the AnimeThemes favourites list.</summary>
-    public const string FileAtFavsCache = "favs_animethemes.cache";
 
     /// <summary>Filename for the Plex token.</summary>
     public const string FilePlexToken = "plex.token";

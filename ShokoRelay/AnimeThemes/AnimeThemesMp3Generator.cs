@@ -91,7 +91,7 @@ public class AnimeThemesMp3Generator(
     private readonly Lock _cacheLock = new();
 
     /// <summary>Gets the absolute file path to the persistent Theme.mp3 cache on disk.</summary>
-    private string ThemeCacheFilePath => Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FileAtMp3Cache);
+    private string ThemeCacheFilePath => Path.Combine(configProvider.CacheDirectory, ShokoRelayConstants.FileAtMp3Cache);
 
     #endregion
 
@@ -164,7 +164,7 @@ public class AnimeThemesMp3Generator(
                     foreach (var f in Directory.EnumerateFiles(r!, "Theme.mp3", SearchOption.AllDirectories))
                     {
                         string dir = Path.GetDirectoryName(f)!;
-                        if (!VfsShared.IsPathIgnored(dir, videoService, Settings, excluded))
+                        if (!VfsShared.IsPathIgnored(dir, videoService, Settings, excluded, relativeTo: r, isDirectory: true))
                             newCache.TryAdd(dir, "|");
                     }
                 }
@@ -249,7 +249,11 @@ public class AnimeThemesMp3Generator(
         var (results, p, s, e) = (new List<ThemeMp3OperationResult>(), 0, 0, 0);
 
         // Scan recursively for all directories, skipping ignored/VFS folders
-        var folders = Directory.EnumerateDirectories(root, "*", SearchOption.AllDirectories).Prepend(root).Where(f => !VfsShared.IsPathIgnored(f, videoService, Settings)).ToList();
+        var folders = Directory
+            .EnumerateDirectories(root, "*", SearchOption.AllDirectories)
+            .Prepend(root)
+            .Where(f => !VfsShared.IsPathIgnored(f, videoService, Settings, relativeTo: root, isDirectory: true))
+            .ToList();
 
         var processedSeries = new ConcurrentDictionary<int, byte>();
 

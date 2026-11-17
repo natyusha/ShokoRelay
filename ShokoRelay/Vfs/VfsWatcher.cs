@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using Shoko.Abstractions.Extensions;
 using Shoko.Abstractions.Metadata.Events;
 using Shoko.Abstractions.Video.Events;
 using Shoko.Abstractions.Video.Services;
@@ -13,6 +14,7 @@ namespace ShokoRelay.Vfs;
 /// <param name="releaseService">Shoko video release service.</param>
 /// <param name="builder">VFS builder.</param>
 /// <param name="metadataService">Shoko metadata service.</param>
+/// <param name="linkingService">Shoko linking service.</param>
 /// <param name="plexLibrary">Plex client.</param>
 /// <param name="collectionService">Plex collection service.</param>
 /// <param name="atMapping">AnimeThemes mapping service.</param>
@@ -25,6 +27,7 @@ public class VfsWatcher(
     IVideoReleaseService releaseService,
     VfsBuilder builder,
     IMetadataService metadataService,
+    IMetadataLinkingService linkingService,
     PlexClient plexLibrary,
     CollectionService collectionService,
     AnimeThemesMapping atMapping,
@@ -73,6 +76,7 @@ public class VfsWatcher(
         releaseService.ReleaseSaved += OnVideoReleaseSaved;
         releaseService.ReleaseDeleted += OnVideoReleaseDeleted;
         metadataService.SeriesRemoved += OnSeriesRemoved;
+        linkingService.LinksChanged += OnLinksChanged;
 
         logger.LogInformation("VFS: VfsWatcher -> Started (listening for relocation, matching and deletion events)");
     }
@@ -88,6 +92,7 @@ public class VfsWatcher(
             releaseService.ReleaseSaved -= OnVideoReleaseSaved;
             releaseService.ReleaseDeleted -= OnVideoReleaseDeleted;
             metadataService.SeriesRemoved -= OnSeriesRemoved;
+            linkingService.LinksChanged -= OnLinksChanged;
 
             lock (_gate)
                 _stopCts?.Cancel();
@@ -181,15 +186,28 @@ public class VfsWatcher(
     /// <param name="event">Event parameters containing release associations.</param>
     private void OnVideoReleaseDeleted(object? sender, VideoReleaseDeletedEventArgs @event)
     {
-        if (@event.Video?.Series == null || @event.Video.Series.Count == 0)
-            return;
-        logger.LogDebug("VFS: Release deleted for video '{FileName}'", Path.GetFileName(@event.Video.EarliestKnownName ?? "Unknown File"));
+        var seriesIds = new HashSet<int>();
+        if (@event.Video?.Series is { Count: > 0 } videoSeries)
+            foreach (var series in videoSeries)
+                seriesIds.Add(series.GetPrimaryId(metadataService));
 
-        foreach (var series in @event.Video.Series)
+        if (seriesIds.Count == 0 && @event.ReleaseInfo?.CrossReferences is { Count: > 0 } xrefs)
         {
-            int primaryId = series.GetPrimaryId(metadataService);
-            _pending[primaryId] = 1;
+            foreach (var xref in xrefs)
+            {
+                if (xref.AnidbAnimeID is { } animeId && animeId > 0 && metadataService.GetShokoSeriesByAnidbID(animeId) is { } s)
+                    seriesIds.Add(s.GetPrimaryId(metadataService));
+                else if (xref.AnidbEpisodeID > 0 && metadataService.GetShokoEpisodeByAnidbID(xref.AnidbEpisodeID) is { } ep)
+                    seriesIds.Add(OverrideHelper.GetPrimary(ep.ShokoSeriesID, metadataService));
+            }
         }
+
+        if (seriesIds.Count == 0)
+            return;
+
+        logger.LogDebug("VFS: Release deleted for video '{FileName}'", Path.GetFileName(@event.Video?.EarliestKnownName ?? "Unknown File"));
+        foreach (int primaryId in seriesIds)
+            _pending[primaryId] = 1;
 
         KickProcessLoop();
     }
@@ -206,6 +224,41 @@ public class VfsWatcher(
         logger.LogInformation("VFS: Series removed -> {Title} [{LocalId}] ... Queueing VFS prune", series.GetDisplayTitle(), series.LocalID);
         plexMetadata.InvalidateCache(primaryId);
         _pending[primaryId] = 1;
+        KickProcessLoop();
+    }
+
+    /// <summary>Handles Shoko metadata link changes, queueing affected series for VFS updates and cache invalidation when TMDB links change.</summary>
+    /// <param name="sender">Event sender.</param>
+    /// <param name="event">Event parameters containing changed metadata links.</param>
+    private void OnLinksChanged(object? sender, MetadataLinksChangedEventArgs @event)
+    {
+        var stalePrimaries = new List<int>();
+        var affectedSeries = new List<IShokoSeries>();
+        foreach (var change in @event.Changes)
+        {
+            if (change.Source != MetadataSource.TMDB || metadataService.GetShokoSeriesByAnidbID(change.AnidbAnimeID) is not { } series)
+                continue;
+
+            stalePrimaries.Add(series.GetPrimaryId(metadataService));
+            affectedSeries.Add(series);
+        }
+
+        if (affectedSeries.Count == 0)
+            return;
+
+        OverrideHelper.Reload();
+        foreach (int staleId in stalePrimaries)
+        {
+            plexMetadata.InvalidateCache(staleId);
+            _pending[staleId] = 1;
+        }
+        foreach (var series in affectedSeries)
+        {
+            int newPrimaryId = series.GetPrimaryId(metadataService);
+            plexMetadata.InvalidateCache(newPrimaryId);
+            _pending[newPrimaryId] = 1;
+        }
+
         KickProcessLoop();
     }
 

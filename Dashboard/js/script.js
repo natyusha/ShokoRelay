@@ -223,29 +223,6 @@
   }
 
   /**
-   * Fetches a protected binary or text resource with authorization headers and returns an Object URL.
-   * @param {string} url - The resource URL to fetch.
-   * @returns {Promise<string|null>} An Object URL for the fetched blob, or null on failure.
-   */
-  async function fetchBlobUrl(url) {
-    const usedKey = localStorage.getItem(AUTH_KEY);
-    let res = await fetch(url, { headers: authHeaders() });
-    if (res.status === 401 || res.status === 403) {
-      const currentKey = localStorage.getItem(AUTH_KEY);
-      let key = currentKey && currentKey !== usedKey ? currentKey : null;
-      if (!key) {
-        setAuthLocked(true);
-        key = await ensureAuth(true, { dismissable: false, forceVerify: false });
-        if (key) setAuthLocked(false);
-      }
-      if (key) res = await fetch(url, { headers: authHeaders() });
-    }
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    return URL.createObjectURL(blob);
-  }
-
-  /**
    * Extracts the inner data object from a standardized server response envelope.
    * @param {Object} res - The normalized fetch response object.
    * @returns {*} The actual result data.
@@ -399,22 +376,37 @@
     }
   }
 
+  /** @type {Promise<*>} Tracks the latest in-flight settings persistence promise. */
+  let pendingSettingsSave = Promise.resolve();
+
   /**
    * Persists the plugin configuration to the server.
    * @param {Object} config - The configuration object to save.
    * @returns {Promise<Object>} The server response.
    */
-  async function saveSettings(config) {
-    const cleanCfg = JSON.parse(JSON.stringify(config));
-    delete cleanCfg.PlexLibrary;
-    delete cleanCfg.PlexAuth;
-    const res = await fetchJson(configUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(cleanCfg),
+  function saveSettings(config) {
+    const run = pendingSettingsSave.then(async () => {
+      const cleanCfg = JSON.parse(JSON.stringify(config));
+      delete cleanCfg.PlexLibrary;
+      delete cleanCfg.PlexAuth;
+      const res = await fetchJson(configUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(cleanCfg),
+      });
+      if (!res.ok) toastOperation(res, "Settings Save");
+      return res;
     });
-    if (!res.ok) toastOperation(res, "Settings Save");
-    return res;
+    pendingSettingsSave = run.catch(() => {});
+    return run;
+  }
+
+  /**
+   * Waits for any pending configuration saves to complete before running dependent actions.
+   * @returns {Promise<void>}
+   */
+  async function flushSaves() {
+    await pendingSettingsSave;
   }
   // #endregion
 
@@ -439,6 +431,7 @@
     updatePlaybackTooltip,
     getData,
     saveSettings,
+    flushSaves,
     summarizeResult,
     actions: {},
     unwrapConfig: (data) => (data?.payload !== undefined ? data.payload || {} : data || {}),

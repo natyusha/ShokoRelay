@@ -155,6 +155,8 @@
       const performSync = async (isDryRun) => {
         const targetBtn = isDryRun ? dryBtn : startBtn;
         setButtonLoading(targetBtn, true);
+        if (document.activeElement && ["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement.tagName)) document.activeElement.blur();
+        await window._sr.flushSaves?.();
         const startToast = showToast(`Sync: Plex ${dirImport ? "←" : "→"} Shoko${isDryRun ? " (Dry Run)" : ""}...`, "info", 0);
 
         const ps = new URLSearchParams({
@@ -164,7 +166,7 @@
         });
 
         const usersVal = el("sync-users").value;
-        const usersMap = { 0: "all", 1: "admin", 2: "extra", 3: "none" };
+        const usersMap = { 0: "all", 1: "admin", 2: "extra", 3: "none", 4: "advanced" };
         ps.set("users", usersMap[usersVal] || "none");
 
         const libName = el("sync-library")?.value.trim();

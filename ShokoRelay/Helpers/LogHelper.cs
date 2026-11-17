@@ -378,7 +378,8 @@ public static class LogHelper
         var items = new List<string>();
         foreach (var userGroup in result.PerUserChanges.OrderBy(kv => kv.Key))
         {
-            items.Add($"User: {userGroup.Key}");
+            string? shokoUser = userGroup.Value.FirstOrDefault(c => !string.IsNullOrWhiteSpace(c.ShokoUser))?.ShokoUser;
+            items.Add(string.IsNullOrWhiteSpace(shokoUser) ? $"User: {userGroup.Key}" : $"User: {userGroup.Key} -> Shoko: {shokoUser}");
             var byLibrary = userGroup.Value.GroupBy(c => c.LibraryName ?? "Default").OrderBy(g => g.Key);
 
             foreach (var libGroup in byLibrary)

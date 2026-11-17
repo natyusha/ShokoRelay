@@ -26,6 +26,7 @@ namespace ShokoRelay.Controllers;
 /// <param name="applicationPaths">Shoko application paths.</param>
 /// <param name="scheduledActionService">Shoko scheduled action service.</param>
 /// <param name="userService">Shoko user service.</param>
+/// <param name="throttleService">Shoko throttle service.</param>
 /// <param name="logger">Logger instance.</param>
 [RelayAdminAuthorize]
 [ApiController]
@@ -39,6 +40,7 @@ public class DashboardController(
     IApplicationPaths applicationPaths,
     IScheduledActionService scheduledActionService,
     IUserService userService,
+    IAuthenticationThrottleService throttleService,
     ILogger<DashboardController> logger
 ) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary, logger)
 {
@@ -65,10 +67,18 @@ public class DashboardController(
         if (string.IsNullOrWhiteSpace(body?.Username))
             return BadRequest(new { status = "error", message = "Username is required." });
 
-        var user = userService.AuthenticateUser(body.Username.Trim(), body.Password ?? string.Empty);
-        if (user == null)
-            return Unauthorized(new { status = "error", message = "Invalid username or password." });
+        string username = body.Username.Trim();
+        if (throttleService.ThrottleAuthentication(HttpContext, username) is { } blocked)
+            return blocked;
 
+        var user = userService.AuthenticateUser(username, body.Password ?? string.Empty);
+        if (user == null)
+        {
+            throttleService.RegisterFailure(HttpContext);
+            return Unauthorized(new { status = "error", message = "Invalid username or password." });
+        }
+
+        throttleService.Reset(HttpContext);
         if (!user.IsAdmin)
             return StatusCode(StatusCodes.Status403Forbidden, new { status = "error", message = "Administrator privileges required." });
 
@@ -229,7 +239,9 @@ public class DashboardController(
                     themeDef.Values.Count > 0
                         ? $":root {{\n{string.Join("\n", themeDef.Values.Select(v => $"  --{(v.Key.StartsWith("--", StringComparison.Ordinal) ? v.Key[2..] : v.Key)}: {v.Value};"))}\n}}\n"
                         : string.Empty;
-                cssContent = $"{valuesCss}{themeDef.CssContent ?? string.Empty}";
+                var rawCss = themeDef.CssContent?.Trim() ?? string.Empty;
+                var wrappedCss = !string.IsNullOrEmpty(rawCss) && !rawCss.Contains('{') ? $":root {{\n{rawCss}\n}}" : rawCss;
+                cssContent = $"{valuesCss}{wrappedCss}";
             }
             else if (Path.Combine(applicationPaths.ThemesPath, $"{themeId}.css") is var cssPath && IoFile.Exists(cssPath))
                 cssContent = IoFile.ReadAllText(cssPath);
@@ -342,10 +354,11 @@ public class DashboardController(
     /// <returns>An HTML content result or NotFound if the template does not exist.</returns>
     private IActionResult ServePage(string fileName)
     {
-        string dashboardDir = Path.Combine(ConfigProvider.PluginDirectory, "dashboard");
+        string dashboardDir = Path.GetFullPath(Path.Combine(ConfigProvider.PluginDirectory, "dashboard"));
+        string dashboardDirWithSep = dashboardDir.EndsWith(Path.DirectorySeparatorChar) ? dashboardDir : dashboardDir + Path.DirectorySeparatorChar;
         string requested = Path.GetFullPath(Path.Combine(dashboardDir, fileName));
 
-        if (!requested.StartsWith(Path.GetFullPath(dashboardDir), StringComparison.OrdinalIgnoreCase) || !IoFile.Exists(requested))
+        if (!requested.StartsWith(dashboardDirWithSep, StringComparison.OrdinalIgnoreCase) || !IoFile.Exists(requested))
             return NotFound();
 
         var html = IoFile.ReadAllText(requested);

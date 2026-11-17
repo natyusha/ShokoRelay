@@ -91,7 +91,7 @@ public class CollectionService(
 
             List<string> globalRoots = [.. (videoService.GetAllManagedFolders() ?? []).Select(f => f.Path).Where(p => !string.IsNullOrEmpty(p)).Distinct()];
 
-            string cachePath = Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FilePlexCollectionsCache);
+            string cachePath = Path.Combine(configProvider.CacheDirectory, ShokoRelayConstants.FilePlexCollectionsCache);
             var cache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             if (File.Exists(cachePath))
             {
@@ -302,7 +302,9 @@ public class CollectionService(
                                 var group = metadataService.GetShokoGroupByID(series!.TopLevelGroupID);
                                 var primarySeries = group?.MainSeries ?? group?.Series?.FirstOrDefault() ?? series!;
                                 var desc = TextHelper.GetDescriptionByLanguage(primarySeries, Settings.DescriptionLanguage);
-                                var tmdbDesc = primarySeries.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault()?.PreferredOverview?.Value;
+                                var tmdbDesc =
+                                    primarySeries.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault()?.PreferredOverview?.Value
+                                    ?? primarySeries.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault()?.PreferredOverview?.Value;
                                 var summary = TextHelper.SanitizeSummaryWithFallback(desc, tmdbDesc, Settings.SummaryMode);
                                 await plexCollections.UpdateCollectionMetadataAsync(cid, collectionName, summary, target, cancellationToken).ConfigureAwait(false);
                             }
