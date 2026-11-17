@@ -41,6 +41,9 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
 
     private readonly SemaphoreSlim _syncLock = new(1, 1);
 
+    /// <summary>Serializes Shoko image manager write operations across parallel thumbnail and asset tasks.</summary>
+    private readonly SemaphoreSlim _imageWriteLock = new(1, 1);
+
     #endregion
 
     #region Public API
@@ -502,26 +505,35 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
             return (true, false, true, false); // Skipped: We already own this exact image for this entity. Shoko handles the IsPreferred exclusivity natively.
 
         logger.LogDebug("ImageSyncService: Local {Label} changed or new for -> {Entity} ... Uploading", label, entityName);
-        await PurgeEntityImagesAsync(entity, imageType, x => x.Source == ServiceRegistration.RelaySource).ConfigureAwait(false);
 
         try
         {
-            // Upload a local file from disk to Shoko and establish explicit ownership using the RelaySource cross-reference
-            using var stream = new FileStream(foundFile!, FileMode.Open, FileAccess.Read, FileShare.Read);
-            var contentType = ImageHelper.GetMimeType(Path.GetExtension(foundFile!)) ?? "image/jpeg";
-            var uploadedImage = imageManager.UploadImage(stream, contentType, userSubmitted: userSubmitted);
+            await _imageWriteLock.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                await PurgeEntityImagesAsync(entity, imageType, x => x.Source == ServiceRegistration.RelaySource).ConfigureAwait(false);
 
-            imageManager.AddImageCrossReference(
-                entity,
-                uploadedImage,
-                new ImageCrossReferenceData
-                {
-                    ImageType = imageType,
-                    Source = ServiceRegistration.RelaySource,
-                    IsPreferred = true,
-                    IsDesired = true,
-                }
-            );
+                // Upload a local file from disk to Shoko and establish explicit ownership using the RelaySource cross-reference
+                using var stream = new FileStream(foundFile!, FileMode.Open, FileAccess.Read, FileShare.Read);
+                var contentType = ImageHelper.GetMimeType(Path.GetExtension(foundFile!)) ?? "image/jpeg";
+                var uploadedImage = imageManager.UploadImage(stream, contentType, userSubmitted: userSubmitted);
+
+                imageManager.AddImageCrossReference(
+                    entity,
+                    uploadedImage,
+                    new ImageCrossReferenceData
+                    {
+                        ImageType = imageType,
+                        Source = ServiceRegistration.RelaySource,
+                        IsPreferred = true,
+                        IsDesired = true,
+                    }
+                );
+            }
+            finally
+            {
+                _imageWriteLock.Release();
+            }
 
             if (uploadDetail != null)
                 logger.LogDebug("ImageSyncService: Successfully uploaded and preferred {Label} for -> {Entity}", label, entityName);
@@ -578,20 +590,28 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
             var bytes = await resp.Content.ReadAsByteArrayAsync(reqCts.Token).ConfigureAwait(false);
 
             // Stream through imageManager.UploadImage to guarantee cross-reference creation for both new and existing images
-            using var stream = new MemoryStream(bytes);
-            var uploadedImage = imageManager.UploadImage(stream, "image/jpeg", userSubmitted: false);
+            await _imageWriteLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                using var stream = new MemoryStream(bytes);
+                var uploadedImage = imageManager.UploadImage(stream, "image/jpeg", userSubmitted: false);
 
-            imageManager.AddImageCrossReference(
-                episode,
-                uploadedImage,
-                new ImageCrossReferenceData
-                {
-                    ImageType = ImageEntityType.Backdrop,
-                    Source = ServiceRegistration.RelayPlexSource,
-                    IsPreferred = true,
-                    IsDesired = true,
-                }
-            );
+                imageManager.AddImageCrossReference(
+                    episode,
+                    uploadedImage,
+                    new ImageCrossReferenceData
+                    {
+                        ImageType = ImageEntityType.Backdrop,
+                        Source = ServiceRegistration.RelayPlexSource,
+                        IsPreferred = true,
+                        IsDesired = true,
+                    }
+                );
+            }
+            finally
+            {
+                _imageWriteLock.Release();
+            }
 
             uploadedBag.Add($"[Plex Thumb] {epLogName}");
             logger.LogDebug("ImageSyncService: Successfully uploaded and preferred thumbnail for episode -> {LogName}", epLogName);

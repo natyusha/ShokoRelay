@@ -1,7 +1,9 @@
 using System.Collections.Frozen;
 using System.Text.RegularExpressions;
+using Shoko.Abstractions.Extensions;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Enums;
+using Shoko.Abstractions.Metadata.Text.Options;
 
 namespace ShokoRelay.Helpers;
 
@@ -159,59 +161,135 @@ public static partial class TextHelper
         StringComparer.OrdinalIgnoreCase
     );
 
-    /// <summary>Return an item's title according to preferred language codes, excluding short titles and prioritizing official/main types.</summary>
+    /// <summary>Return an item's title according to preferred language codes, excluding short titles and respecting Shoko's source priorities.</summary>
     /// <param name="item">Object that exposes a Titles collection.</param>
     /// <param name="languageSetting">Comma-separated preferred language codes.</param>
     /// <returns>The best matching title string.</returns>
-    public static string GetTitleByLanguage(IWithTitles item, string languageSetting) =>
-        GetByLanguage(
-            languageSetting,
-            item.PreferredTitle?.Value,
-            item.Titles.Where(t => t.Type != TitleType.Short)
-                .OrderBy(t =>
-                    t.Type switch
-                    {
-                        TitleType.Main => 1,
-                        TitleType.Official => 2,
-                        TitleType.Synonym => 3,
-                        _ => 4,
-                    }
-                ),
-            t => t.LanguageCode,
-            t => t.Value
-        );
+    public static string GetTitleByLanguage(IWithTitles item, string languageSetting)
+    {
+        if (string.IsNullOrWhiteSpace(languageSetting))
+            return item.PreferredTitle?.Value ?? "";
 
-    /// <summary>Return an item's description according to a comma-separated list of preferred language codes.</summary>
+        List<ITitle>? titles = null;
+        TitleSelection? baseSelection = null;
+
+        foreach (var lang in languageSetting.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (lang.Equals("shoko", StringComparison.OrdinalIgnoreCase))
+                return item.PreferredTitle?.Value ?? "";
+
+            titles ??= [.. item.Titles.Where(t => t.Type != TitleType.Short)];
+
+            if (TextManager != null && lang.TryGetTitleLanguage(out var targetLang))
+            {
+                if (targetLang != TitleLanguage.Main && titles.FirstOrDefault(t => t.Preference == TextPreference.Language && t.Language == targetLang && !string.IsNullOrEmpty(t.Value)) is { } langPref)
+                    return langPref.Value;
+
+                baseSelection ??= TextManager.GetTitleSelection(
+                    item switch
+                    {
+                        IEpisode => MetadataEntityType.Episode,
+                        ISeason => MetadataEntityType.Season,
+                        _ => MetadataEntityType.Series,
+                    }
+                );
+
+                var steps = baseSelection
+                    .Steps.GroupBy(s => s.Source)
+                    .Select(g => new TitleSelectionStep
+                    {
+                        Source = g.Key,
+                        Language = targetLang,
+                        AllowSynonyms = g.Any(s => s.AllowSynonyms),
+                    })
+                    .ToList();
+
+                if (steps.Count == 0)
+                    steps.Add(
+                        new TitleSelectionStep
+                        {
+                            Source = null,
+                            Language = targetLang,
+                            AllowSynonyms = true,
+                        }
+                    );
+
+                var selection = new TitleSelection
+                {
+                    Steps = steps,
+                    RankGenericTitlesLast = baseSelection.RankGenericTitlesLast,
+                    UsePreferences = false,
+                };
+
+                if (TextManager.ChooseTitle(titles, selection) is { Value.Length: > 0 } chosen)
+                    return chosen.Value;
+            }
+            else
+            {
+                var match = titles
+                    .OrderBy(t =>
+                        t.Type switch
+                        {
+                            TitleType.Main => 1,
+                            TitleType.Official => 2,
+                            TitleType.Synonym => 3,
+                            _ => 4,
+                        }
+                    )
+                    .FirstOrDefault(x => x.LanguageCode.Equals(lang, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(x.Value));
+                if (match != null)
+                    return match.Value;
+            }
+        }
+
+        return item.PreferredTitle?.Value ?? "";
+    }
+
+    /// <summary>Return an item's description according to a comma-separated list of preferred language codes, respecting Shoko's source priorities.</summary>
     /// <param name="item">Object that exposes an Overviews collection.</param>
     /// <param name="languageSetting">Comma-separated preferred language codes.</param>
     /// <returns>The best matching description string.</returns>
-    public static string GetDescriptionByLanguage(IWithOverviews item, string languageSetting) =>
-        GetByLanguage(languageSetting, item.PreferredOverview?.Value, item.Overviews, d => d.LanguageCode, d => d.Value);
-
-    /// <summary>Selects the first non-empty value from a collection matching a priority list of language codes.</summary>
-    /// <typeparam name="T">The type of items in the collection.</typeparam>
-    /// <param name="languageSetting">Comma-separated preferred language codes.</param>
-    /// <param name="preferredValue">The default value to return if "shoko" is selected or as a final fallback.</param>
-    /// <param name="collection">The collection of metadata items to search.</param>
-    /// <param name="getLangCode">Function to extract the language code from a collection item.</param>
-    /// <param name="getValue">Function to extract the text value from a collection item.</param>
-    /// <returns>The resolved text value string.</returns>
-    private static string GetByLanguage<T>(string languageSetting, string? preferredValue, IEnumerable<T> collection, Func<T, string> getLangCode, Func<T, string> getValue)
+    public static string GetDescriptionByLanguage(IWithOverviews item, string languageSetting)
     {
         if (string.IsNullOrWhiteSpace(languageSetting))
-            return preferredValue ?? "";
+            return item.PreferredOverview?.Value ?? "";
 
-        var languages = languageSetting.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        foreach (var lang in languages)
+        IReadOnlyList<IText>? overviews = null;
+        OverviewSelection? baseSelection = null;
+
+        foreach (var lang in languageSetting.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
         {
             if (lang.Equals("shoko", StringComparison.OrdinalIgnoreCase))
-                return preferredValue ?? "";
+                return item.PreferredOverview?.Value ?? "";
 
-            var match = collection.FirstOrDefault(x => getLangCode(x).Equals(lang, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(getValue(x)));
-            if (match != null)
-                return getValue(match);
+            overviews ??= item.Overviews;
+
+            if (TextManager != null && lang.TryGetTitleLanguage(out var targetLang))
+            {
+                if (overviews.FirstOrDefault(o => o.Preference == TextPreference.Language && o.Language == targetLang && !string.IsNullOrEmpty(o.Value)) is { } langPref)
+                    return langPref.Value;
+
+                baseSelection ??= TextManager.GetOverviewSelection();
+
+                var steps = baseSelection.Steps.Select(s => s.Source).Distinct().Select(source => new OverviewSelectionStep { Source = source, Language = targetLang }).ToList();
+
+                if (steps.Count == 0)
+                    steps.Add(new OverviewSelectionStep { Source = null, Language = targetLang });
+
+                var selection = new OverviewSelection { Steps = steps, UsePreferences = false };
+
+                if (TextManager.ChooseOverview(overviews, selection) is { Value.Length: > 0 } chosen)
+                    return chosen.Value;
+            }
+            else
+            {
+                var match = overviews.FirstOrDefault(x => x.LanguageCode.Equals(lang, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(x.Value));
+                if (match != null)
+                    return match.Value;
+            }
         }
-        return preferredValue ?? "";
+
+        return item.PreferredOverview?.Value ?? "";
     }
 
     /// <summary>Determine display, sortable, and original titles for a series based on preferences and prefix reordering settings.</summary>

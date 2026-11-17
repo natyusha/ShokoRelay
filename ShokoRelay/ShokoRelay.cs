@@ -132,6 +132,9 @@ public class ShokoRelay : BackgroundService
     /// <summary>Access the Shoko image manager service.</summary>
     public static IImageManager ImageManager { get; private set; } = null!;
 
+    /// <summary>Access the Shoko metadata text manager service.</summary>
+    public static IMetadataTextManager? TextManager { get; private set; }
+
     private readonly VfsWatcher _watcher;
     private readonly ISystemService _systemService;
     private readonly IScheduledActionService _scheduledActionService;
@@ -152,6 +155,7 @@ public class ShokoRelay : BackgroundService
     /// <param name="scheduledActionService">Shoko scheduled action service.</param>
     /// <param name="metadataService">Shoko metadata service.</param>
     /// <param name="imageManager">Shoko image manager service.</param>
+    /// <param name="textManager">Shoko metadata text manager service.</param>
     /// <param name="logger">Logger instance.</param>
     public ShokoRelay(
         VfsWatcher watcher,
@@ -160,12 +164,14 @@ public class ShokoRelay : BackgroundService
         IScheduledActionService scheduledActionService,
         IMetadataService metadataService,
         IImageManager imageManager,
+        IMetadataTextManager textManager,
         ILogger<ShokoRelay> logger
     )
     {
         _watcher = watcher;
         s_configProvider = configProvider;
         ImageManager = imageManager;
+        TextManager = textManager;
         _systemService = systemService;
         _scheduledActionService = scheduledActionService;
         _metadataService = metadataService;

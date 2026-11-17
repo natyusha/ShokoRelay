@@ -344,7 +344,11 @@ public static class SyncHelper
 
         if (userType is SyncUserType.All or SyncUserType.Advanced)
         {
-            var extraPinLookup = extraEntries.ToDictionary(e => e.Name, e => e.Pin, StringComparer.OrdinalIgnoreCase);
+            var extraPinLookup = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (name, pin) in extraEntries)
+                if (!extraPinLookup.TryGetValue(name, out var existingPin) || (existingPin == null && pin != null))
+                    extraPinLookup[name] = pin;
+
             foreach (var name in advOrder)
             {
                 if (!seen.Add(name))
@@ -467,12 +471,12 @@ public static class SyncHelper
             {
                 tokenCache.AdminDevices ??= (await plexAuth.GetPlexServerListAsync(adminToken, configProvider.GetPlexClientIdentifier(), cancellationToken).ConfigureAwait(false)).Devices;
                 string normTarget = target.ServerUrl.TrimEnd('/');
+                var ownedServers = tokenCache.AdminDevices.Where(d => d.Owned && d.Provides?.Contains("server", StringComparison.OrdinalIgnoreCase) == true).ToList();
                 serverId =
-                    tokenCache
-                        .AdminDevices.FirstOrDefault(d =>
-                            d.Owned && d.Connections?.Any(c => !string.IsNullOrWhiteSpace(c.Uri) && string.Equals(c.Uri.TrimEnd('/'), normTarget, StringComparison.OrdinalIgnoreCase)) == true
-                        )
+                    ownedServers
+                        .FirstOrDefault(d => d.Connections?.Any(c => !string.IsNullOrWhiteSpace(c.Uri) && string.Equals(c.Uri.TrimEnd('/'), normTarget, StringComparison.OrdinalIgnoreCase)) == true)
                         ?.ClientIdentifier
+                    ?? (ownedServers.Count == 1 ? ownedServers[0].ClientIdentifier : null)
                     ?? string.Empty;
             }
             catch { }
