@@ -85,6 +85,9 @@
     sum.dataset.tooltipOverflowOnly = "true";
     const titleSpan = name ? `<span class="vfs-title" data-tooltip-overflow-only="true">${window._sr.esc(name)}</span>` : "";
     sum.innerHTML = `<span class="tree-icon expand"></span><span class="tree-icon collapse"></span>${titleSpan}${extraHtml}`;
+    sum.addEventListener("click", (e) => {
+      if (e.target.closest(".vfs-link")) e.stopPropagation();
+    });
     det.appendChild(sum);
 
     if (isOpen) {

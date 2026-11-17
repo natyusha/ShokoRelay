@@ -566,6 +566,8 @@
 
       if (item?.seriesId) {
         playerAnime.href = `${shokoBase}/webui/collection/series/${item.seriesId}/overview`;
+        playerAnime.target = "_blank";
+        playerAnime.rel = "noopener noreferrer";
         playerAnime.style.pointerEvents = "auto";
         playerAnime.style.color = "";
       } else {
@@ -578,6 +580,8 @@
     if (playerAnidb) {
       playerAnidb.textContent = item && item.anidbId ? `[a${item.anidbId}]` : "";
       playerAnidb.href = item && item.anidbId ? `https://anidb.net/a${item.anidbId}` : "#";
+      playerAnidb.target = "_blank";
+      playerAnidb.rel = "noopener noreferrer";
       playerAnidb.style.pointerEvents = item && item.anidbId ? "auto" : "none";
     }
     playerTree?.querySelectorAll(".leaf").forEach((el) => el.classList.toggle("active", el.dataset.path === path));
