@@ -202,7 +202,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
             ["guid"]                  = series.GetPlexGuid(),
             ["type"]                  = "show",
             ["title"]                 = ctx.Titles.DisplayTitle,
-            ["originallyAvailableAt"] = series.AirDate?.ToDateOnly().ToString("yyyy-MM-dd", null) ?? tmdbMovie?.ReleaseDate?.ToString("yyyy-MM-dd", null),
+            ["originallyAvailableAt"] = series.AirDate?.ToDateOnly().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? tmdbMovie?.ReleaseDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             ["thumb"]                 = images.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage) ?? (tmdbMovie as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage),
             ["art"]                   = images.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage) ?? (tmdbMovie as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage),
             ["contentRating"]         = ctx.ContentRating,
@@ -280,7 +280,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
             ["guid"]                  = episode.GetPlexMovieGuid(),
             ["type"]                  = "movie",
             ["title"]                 = title,
-            ["originallyAvailableAt"] = episode.AirDate?.ToString("yyyy-MM-dd", null) ?? tmdbMovie?.ReleaseDate?.ToString("yyyy-MM-dd", null) ?? series.AirDate?.ToDateOnly().ToString("yyyy-MM-dd", null),
+            ["originallyAvailableAt"] = episode.AirDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? tmdbMovie?.ReleaseDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? series.AirDate?.ToDateOnly().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             ["thumb"]                 = thumbUrl,
             ["art"]                   = artUrl,
             ["contentRating"]         = rating,
@@ -360,7 +360,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
             ["guid"]                  = series.GetPlexGuid(seasonNum),
             ["type"]                  = "season",
             ["title"]                 = seasonTitle,
-            ["originallyAvailableAt"] = seasonDate?.ToString("yyyy-MM-dd", null),
+            ["originallyAvailableAt"] = seasonDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             ["thumb"]                 = thumb ?? series.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage),
             ["contentRating"]         = ctx.ContentRating,
             //['originalTitle']       = No source for original season titles
@@ -455,7 +455,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
             ["type"]                  = "episode",
             ["subtype"]               = (mapped.Season < 0 && TryGetExtraSeason(mapped.Season, out var ex)) ? ex.Subtype : null,
             ["title"]                 = epTitle,
-            ["originallyAvailableAt"] = episode.AirDate?.ToString("yyyy-MM-dd", null),
+            ["originallyAvailableAt"] = episode.AirDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             ["thumb"]                 = thumb,
             //["art"]                 = No source for episode level background images
             ["contentRating"]         = rating,
@@ -635,7 +635,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
     /// <returns>An array of objects containing guid and tag (title), or null if no local matches found.</returns>
     private object[]? BuildSimilarArray(ISeries series) =>
         series is IShokoSeries { AnidbAnime.Suggestions: { Count: > 0 } list }
-            ? list.Select(s => metadataService.GetShokoSeriesByAnidbID(s.SuggestedID.GetNumericID<int>()))
+            ? list.Select(s => s.SuggestedID.TryGetNumericID(out int aid) ? metadataService.GetShokoSeriesByAnidbID(aid) : null)
                 .OfType<IShokoSeries>()
                 .Select(ls => (object)new { guid = ls.GetPlexGuid(), tag = ls.PreferredTitle?.Value ?? ls.DefaultTitle?.Value })
                 .ToArray()

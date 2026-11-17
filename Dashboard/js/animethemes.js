@@ -210,7 +210,9 @@
   }
 
   if (atTrack) {
-    atTrack.onclick = (e) => atAudio && (atAudio.currentTime = ((e.clientX - atTrack.getBoundingClientRect().left) / atTrack.offsetWidth) * atAudio.duration);
+    atTrack.onclick = (e) => {
+      if (atAudio?.duration && isFinite(atAudio.duration)) atAudio.currentTime = ((e.clientX - atTrack.getBoundingClientRect().left) / atTrack.offsetWidth) * atAudio.duration;
+    };
     atTrack.onmousedown = (e) => {
       if (e.button === 1 && atAudio?.src) {
         e.preventDefault();

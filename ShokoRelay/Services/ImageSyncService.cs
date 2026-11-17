@@ -511,7 +511,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
             await _imageWriteLock.WaitAsync().ConfigureAwait(false);
             try
             {
-                await PurgeEntityImagesAsync(entity, imageType, x => x.Source == ServiceRegistration.RelaySource).ConfigureAwait(false);
+                await PurgeEntityImagesUnlockedAsync(entity, imageType, x => x.Source == ServiceRegistration.RelaySource).ConfigureAwait(false);
 
                 // Upload a local file from disk to Shoko and establish explicit ownership using the RelaySource cross-reference
                 using var stream = new FileStream(foundFile!, FileMode.Open, FileAccess.Read, FileShare.Read);
@@ -641,6 +641,24 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
     /// <param name="predicate">Filter predicate to select cross-references for purging.</param>
     /// <returns>A task representing the asynchronous purge operation.</returns>
     private async Task PurgeEntityImagesAsync(IWithImages entity, ImageEntityType imageType, Func<IImageCrossReference, bool> predicate)
+    {
+        await _imageWriteLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await PurgeEntityImagesUnlockedAsync(entity, imageType, predicate).ConfigureAwait(false);
+        }
+        finally
+        {
+            _imageWriteLock.Release();
+        }
+    }
+
+    /// <summary>Purges stale or demoted cross-referenced images for an entity without acquiring <see cref="_imageWriteLock"/>.</summary>
+    /// <param name="entity">The Shoko metadata entity.</param>
+    /// <param name="imageType">The target image entity type.</param>
+    /// <param name="predicate">Filter predicate to select cross-references for purging.</param>
+    /// <returns>A task representing the asynchronous purge operation.</returns>
+    private async Task PurgeEntityImagesUnlockedAsync(IWithImages entity, ImageEntityType imageType, Func<IImageCrossReference, bool> predicate)
     {
         try
         {

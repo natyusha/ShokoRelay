@@ -240,6 +240,7 @@ Applying a hyphenated suffix to the image that matches Plex's naming conventions
   - This includes any users configured under `Extra Plex Users` in the "Plex Authentication" section unless the `Sync Users` setting excludes them
   - There is also an `Advanced User Mappings` input available in the modal itself which accepts pipe-delimited groups mapping a Shoko username to one or more Plex users
     - The formatting is as follows: `ShokoUser,PlexUser1;PIN,PlexUser2|ShokoUser2,PlexUser3`
+    - The only time a PIN is needed is when a Plex home user has one set. Shared accounts do not require one.
   - When syncing from Plex to Shoko the `Temporary Library Filter` can also be used to import watched states from non-Shoko Relay libraries via physical filename matching
   - _Requires Plex authentication_
 - `Purge Missing` A button which will remove files that are no longer present from Shoko

@@ -131,7 +131,7 @@ public class DashboardController(
         string requested = Path.GetFullPath(Path.Combine(dashboardDir, safePath));
 
         // Resolve the MIME content type for a given file path, prioritizing .cshtml templates
-        return !requested.StartsWith(dashboardDirWithSep, StringComparison.OrdinalIgnoreCase) || !IoFile.Exists(requested) || requested.EndsWith(".cshtml", StringComparison.OrdinalIgnoreCase)
+        return !requested.StartsWith(dashboardDirWithSep, VfsShared.PathComparison) || !IoFile.Exists(requested) || requested.EndsWith(".cshtml", StringComparison.OrdinalIgnoreCase)
             ? NotFound()
             : PhysicalFile(requested, s_contentTypeProvider.TryGetContentType(requested, out var contentType) ? contentType : "application/octet-stream");
     }
@@ -335,7 +335,7 @@ public class DashboardController(
         string safeFileName = Path.GetFileName(fileName);
         string requested = Path.GetFullPath(Path.Combine(logsDir, safeFileName));
 
-        if (!requested.StartsWith(logsDirWithSep, StringComparison.OrdinalIgnoreCase) || !safeFileName.EndsWith("-report.log", StringComparison.OrdinalIgnoreCase) || !IoFile.Exists(requested))
+        if (!requested.StartsWith(logsDirWithSep, VfsShared.PathComparison) || !safeFileName.EndsWith("-report.log", StringComparison.OrdinalIgnoreCase) || !IoFile.Exists(requested))
             return NotFound(new { status = "error", message = "log not found" });
 
         Response.Headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
@@ -358,7 +358,7 @@ public class DashboardController(
         string dashboardDirWithSep = dashboardDir.EndsWith(Path.DirectorySeparatorChar) ? dashboardDir : dashboardDir + Path.DirectorySeparatorChar;
         string requested = Path.GetFullPath(Path.Combine(dashboardDir, fileName));
 
-        if (!requested.StartsWith(dashboardDirWithSep, StringComparison.OrdinalIgnoreCase) || !IoFile.Exists(requested))
+        if (!requested.StartsWith(dashboardDirWithSep, VfsShared.PathComparison) || !IoFile.Exists(requested))
             return NotFound();
 
         var html = IoFile.ReadAllText(requested);

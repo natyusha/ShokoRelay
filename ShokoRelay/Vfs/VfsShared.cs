@@ -57,6 +57,18 @@ internal static class VfsShared
     /// <returns>The resolved import root path, or <c>null</c> if unavailable.</returns>
     public static string? ResolveImportRootPath(IVideoFile location)
     {
+        static string? TrimRoot(string? p)
+        {
+            if (string.IsNullOrWhiteSpace(p))
+                return null;
+            string norm = NormalizeSeparators(p);
+            string? pathRoot = Path.GetPathRoot(norm);
+            return !string.IsNullOrEmpty(pathRoot) && string.Equals(norm, pathRoot, PathComparison) ? norm : norm.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        }
+
+        if (!string.IsNullOrWhiteSpace(location.ManagedFolder?.Path))
+            return TrimRoot(location.ManagedFolder.Path);
+
         string path = location.Path;
         if (string.IsNullOrWhiteSpace(path))
             return null;
@@ -66,14 +78,9 @@ internal static class VfsShared
         {
             string normalizedRel = NormalizeSeparators(relative);
             if (normalizedPath.EndsWith(normalizedRel, PathComparison))
-            {
-                string root = normalizedPath[..^normalizedRel.Length].TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-                if (!string.IsNullOrWhiteSpace(root))
-                    return root;
-            }
+                return TrimRoot(normalizedPath[..^normalizedRel.Length]);
         }
-        string? dir = Path.GetDirectoryName(normalizedPath);
-        return string.IsNullOrWhiteSpace(dir) ? null : dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return TrimRoot(Path.GetDirectoryName(normalizedPath));
     }
 
     /// <summary>Resolves the source file path.</summary>
@@ -380,8 +387,9 @@ internal static class VfsShared
 
                 try
                 {
+                    var expectedBase = nameWithoutExt[..suffixIndex];
                     foreach (var file in Directory.EnumerateFiles(dir, searchPattern))
-                        if (videoService.IsAllowedVideoExtension(file))
+                        if (Path.GetFileNameWithoutExtension(file.AsSpan()).Equals(expectedBase, PathComparison) && videoService.IsAllowedVideoExtension(file))
                             return true;
                 }
                 catch { }

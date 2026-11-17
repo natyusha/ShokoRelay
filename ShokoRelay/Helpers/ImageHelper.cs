@@ -60,7 +60,6 @@ public static class ImageHelper
             ImageType = type,
             IsEnabled = true,
             IsAvailable = true,
-            IsDesired = true,
         };
 
         // Strictly prevent inherited series-level images from being returned for TMDB seasons
@@ -107,7 +106,9 @@ public static class ImageHelper
             return all;
 
         if (string.IsNullOrWhiteSpace(imageLanguage) || imageLanguage.Trim().Equals("SHOKO", StringComparison.OrdinalIgnoreCase))
-            return addEveryImage ? all.OrderByDescending(i => i.IsPreferred) : (all.FirstOrDefault(i => i.IsPreferred) is { } pref ? [pref] : all.Take(1));
+            return addEveryImage
+                ? all.OrderByDescending(i => i.IsPreferred).ThenByDescending(i => i.CrossReference?.IsPreferred == true)
+                : ((all.FirstOrDefault(i => i.IsPreferred) ?? all.FirstOrDefault(i => i.CrossReference?.IsPreferred == true)) is { } pref ? [pref] : all.Take(1));
 
         var langs = imageLanguage.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         var ordered = new List<IImage>();
@@ -117,7 +118,7 @@ public static class ImageHelper
         {
             if (lang.Equals("shoko", StringComparison.OrdinalIgnoreCase))
             {
-                if (remaining.FirstOrDefault(i => i.IsPreferred) is { } p)
+                if ((remaining.FirstOrDefault(i => i.IsPreferred) ?? remaining.FirstOrDefault(i => i.CrossReference?.IsPreferred == true)) is { } p)
                 {
                     ordered.Add(p);
                     remaining.Remove(p);
@@ -143,9 +144,9 @@ public static class ImageHelper
         }
 
         if (addEveryImage)
-            ordered.AddRange(remaining.OrderByDescending(i => i.IsPreferred));
+            ordered.AddRange(remaining.OrderByDescending(i => i.IsPreferred).ThenByDescending(i => i.CrossReference?.IsPreferred == true));
         else if (ordered.Count == 0 && remaining.Count > 0)
-            ordered.Add(remaining.FirstOrDefault(i => i.IsPreferred) ?? remaining.First());
+            ordered.Add(remaining.FirstOrDefault(i => i.IsPreferred) ?? remaining.FirstOrDefault(i => i.CrossReference?.IsPreferred == true) ?? remaining.First());
 
         return ordered;
     }

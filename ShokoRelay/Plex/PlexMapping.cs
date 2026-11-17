@@ -122,10 +122,12 @@ public static class PlexMapping
                 EndEpisode = null,
             };
 
-        if (EnforceTmdbNumbering && eps.Select(ep => ep.Type).Distinct().Count() == 1)
+        string? showPrefId = eps.OfType<IShokoEpisode>().Select(se => se.Series).FirstOrDefault() is { } series ? MapHelper.GetPreferredTmdbOrderingId(series) : null;
+        bool hasCustomOverride = eps.Any(e => e is IShokoEpisode { Series: { AnidbAnimeID: > 0 } ss } && OverrideHelper.GetCustomCoords(ss.AnidbAnimeID, e.Type, e.EpisodeNumber).HasValue);
+
+        if (!hasCustomOverride && EnforceTmdbNumbering && eps.Select(ep => ep.Type).Distinct().Count() == 1)
         {
             var tmdbEntriesRaw = eps.OfType<IShokoEpisode>().SelectMany(se => se.GetLinkedEpisodes(MetadataSource.TMDB) ?? []).ToList();
-            string? showPrefId = eps.OfType<IShokoEpisode>().Select(se => se.Series).FirstOrDefault() is { } series ? MapHelper.GetPreferredTmdbOrderingId(series) : null;
             var tmdbEntries = string.IsNullOrWhiteSpace(showPrefId)
                 ? [.. tmdbEntriesRaw.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber)]
                 : SelectPreferredTmdbOrdering(tmdbEntriesRaw, showPrefId);
@@ -147,9 +149,9 @@ public static class PlexMapping
             }
         }
         if (eps.Count == 1)
-            return GetPlexCoordinates(eps[0]);
-        var start = GetPlexCoordinates(eps[0]);
-        var end = GetPlexCoordinates(eps[^1]);
+            return GetPlexCoordinates(eps[0], showPrefId);
+        var start = GetPlexCoordinates(eps[0], showPrefId);
+        var end = GetPlexCoordinates(eps[^1], showPrefId);
         int? endEpisodeFinal = start.Season == end.Season ? end.Episode : null;
         return new PlexCoords
         {

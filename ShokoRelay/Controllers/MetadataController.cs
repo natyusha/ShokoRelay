@@ -1,6 +1,7 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
+using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Enums;
 using Shoko.Abstractions.Video.Services;
 using static ShokoRelay.Plex.PlexMapping;
@@ -142,7 +143,9 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
                 {
                     meta = mapper.MapSeries(ctx);
                     // Force remote URLs for Fix Match UI to bypass browser Mixed Content blocks
-                    meta["thumb"] = ctx.Series.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, forceRemote: true);
+                    meta["thumb"] =
+                        ctx.Series.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, forceRemote: true)
+                        ?? (ctx.TmdbMovie as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, forceRemote: true);
 
                     if (includeChildren)
                     {
