@@ -263,7 +263,7 @@ public class ShokoController(
                     }
                 }
                 else if (trashOnly)
-                    plexMessages.Add("Empty Plex Trash is disabled. Configure a threshold in Advanced Settings or pass 'threshold=N'.");
+                    plexMessages.Add("Empty Plex Trash is disabled. Configure a threshold under Provider Settings > Advanced or pass 'threshold=N'.");
 
                 return new PurgeMissingResult(dryRun, trashOnly, removed.Count, removed, plexRemoved, plexMessages);
             },

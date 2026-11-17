@@ -17,7 +17,7 @@ Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File Sy
 ### Shoko
 
 > [!WARNING]
-> The VFS is created inside each of Shoko's managed folders (that aren't marked exclusively as a "Source") under a subfolder named `!ShokoRelayVFS` (configurable under `Advanced Settings > VFS Root Path`).
+> The VFS is created inside each of Shoko's managed folders (that aren't marked exclusively as a "Source") under a subfolder named `!ShokoRelayVFS` (configurable under `Provider Settings > Advanced > VFS Root Path`).
 > While Shoko Relay includes an internal ignore rule to block scans of VFS folders during manual and scheduled imports, **Shoko's live file watcher ("Watch For New Files") bypasses plugin ignore rules entirely**.
 > To stop Shoko Server from scanning the generated links and spawning duplicate file entries, it is highly recommended to add a manual exclusion as a safety net. This covers cases where Shoko Relay isn't loaded or a managed "Destination" folder has "Watch for New Files" enabled.
 >
@@ -198,9 +198,9 @@ The button in the top right of the Automation Controls panel will run all three 
 - While Plex's Provider Framework assigns items to collections, it does not set their summaries or apply custom sort titles/artwork
   - This enhanced metadata must be injected manually via Plex's HTTP API instead
 - Click the `Generate Collections` button in the "Quick Actions" section of the dashboard to start this process
-- If `Advanced Settings > Plex Data Path` is configured this action will also clean up old collection images
+- If `Provider Settings > Advanced > Plex Data Path` is configured this action will also clean up old collection images
 - The primary series description will be used as the collection's summary
-- Any collections matching keywords defined under `Advanced Settings > Collection Exclusions` will be ignored and protected from removal or item unassignment
+- Any collections matching keywords defined under `Provider Settings > Advanced > Collection Exclusions` will be ignored and protected from removal or item unassignment
 - _Requires Plex authentication_
 
 As a bonus this supports using the primary series images as the collection images (if configured under "Provider Settings"). Custom local posters can also be used by placing them in the configured `Collection Images Root Path` (default `!CollectionImages`) folder. These files are simply named after the Shoko group name (or ID) that you wish them to apply to. If the name of a file matches that of a smart collection the images will be applied to it too. Empty collections (excluding smart collections) will also be removed automatically during collection generation.
@@ -230,7 +230,7 @@ Applying a hyphenated suffix to the image that matches Plex's naming conventions
   - Local episode thumbnails from the VFS Root of a series (with the same base filename as the corresponding episode)
   - Plex's auto generated episode thumbnails (skipped if "TMDB Thumbnails" is enabled or a local thumbnail is present)
 - This allows Shoko and Plex to share the same local image metadata with a single source of truth
-- This will not run during the Plex Metadata Fixup or scheduled Plex Automation Interval unless `Advanced Settings > Plex Image Sync` is enabled
+- This will not run during the Plex Metadata Fixup or scheduled Plex Automation Interval unless `Provider Settings > Advanced > Plex Image Sync` is enabled
 - _Requires Plex authentication_
 
 ### Shoko Actions
@@ -243,7 +243,7 @@ Applying a hyphenated suffix to the image that matches Plex's naming conventions
   - When syncing from Plex to Shoko the `Temporary Library Filter` can also be used to import watched states from non-Shoko Relay libraries via physical filename matching
   - _Requires Plex authentication_
 - `Purge Missing` A button which will remove files that are no longer present from Shoko
-  - If `Empty Plex Trash Threshold` is configured under Advanced Settings, this will safely empty the trash for your Plex libraries
+  - If `Empty Plex Trash Threshold` is configured under `Provider Settings > Advanced`, this will safely empty the trash for your Plex libraries
   - Unlike the "Remove Missing Files" action in Shoko's WebUI this will remove all traces of the files from the Shoko DB
   - This will also remove files that are in folders which the plugin has told Shoko to ignore
   - Entries will _always_ be removed from the AniDB MyList as well
@@ -267,7 +267,7 @@ The plugin will look for '.webm' theme files in a folder called `!AnimeThemes` (
    - The themes will be placed in the "Shorts" folder of their respective series
 
 > [!TIP]
-> By default, the plugin appends metadata attributes to the filename, such as `[SPOIL, SUBS]`. If you prefer a cleaner look, you can disable this by unchecking `Advanced Settings > Append AnimeThemes Tags` in the dashboard's Provider Settings. Note that a fresh "Generate" run is required to rename existing links after changing this setting.
+> By default, the plugin appends metadata attributes to the filename, such as `[SPOIL, SUBS]`. If you prefer a cleaner look, you can disable this by unchecking `Provider Settings > Advanced > Append AnimeThemes Tags` in the dashboard's Provider Settings. Note that a fresh "Generate" run is required to rename existing links after changing this setting.
 
 ### Themes as Series BGM
 
@@ -318,7 +318,7 @@ Shoko Relay has full support for all of Plex's features which involve local meta
   - If enabled, anything inside a folder matching Plex extras naming conventions or with the inline filename suffixes will be ignored by Shoko
   - Season level extras are applied by adding a special suffix to the standard folder names (` S#`) which is not part of Plex's spec
     - e.g. `Scenes S2` would place the extras in `###/Season 2/Scenes`
-  - If you don't use and/or want this feature you can disable it under `Advanced Settings > Plex Local Extras`
+  - If you don't use and/or want this feature you can disable it under `Provider Settings > Advanced > Plex Local Extras`
   - _Requires the `Plex Local Media` provider to be added to the Shoko Relay Agent in Plex_
 - [NFO Metadata Files](https://support.plex.tv/articles/using-nfo-metadata-files-with-plex/).
   - Allows overriding most metadata fields for series and episodes to whatever you want
@@ -329,7 +329,7 @@ Shoko Relay has full support for all of Plex's features which involve local meta
 ### Virtual File System (VFS)
 
 > [!IMPORTANT]
-> The VFS is created inside each of Shoko's managed folders: if they are configured as a "Destination", have no type set, or have not been excluded via `Managed Folder Exclusions`. A subfolder named `!ShokoRelayVFS` (renaming it is possible under `Advanced Settings > VFS Root Path`) will house it. Do not manage anything inside the VFS folders manually.
+> The VFS is created inside each of Shoko's managed folders: if they are configured as a "Destination", have no type set, or have not been excluded via `Managed Folder Exclusions`. A subfolder named `!ShokoRelayVFS` (renaming it is possible under `Provider Settings > Advanced > VFS Root Path`) will house it. Do not manage anything inside the VFS folders manually.
 
 When building the VFS files are placed into folders which are named according to their Shoko SeriesID. Within those folders they will be split into subfolders depending on the type of episode. For regular episodes or specials this means placement into a `Season #` or `Specials` folder. Files placed into those folders are named with the following pattern: `S##E##(-pt#)(-dup#) [{ShokoFileID}]([{isVariation}]).ext` (the parts in parenthesis are conditional). Files with `-pt#` in their name will also have `[{ShokoFileID}]([{isVariation}])` stripped to fully follow the format described in [Combining Episodes](#combining-episodes). To avoid conflicts any file which is a crossover episode will not trigger local metadata/subtitle linking.\
 _The ShokoFileID is unused by Plex and is there purely to help users visualise the file mappings._
@@ -395,7 +395,7 @@ In cases where AniDB uses ambiguous episode titles the series title will be used
 
 ### Separate Movie Libraries
 
-If you prefer separate movie libraries (which is not recommended), Shoko Relay provides an opt-in feature to allow this. By enabling `Movie Generation Mode` under `Advanced Settings`, the plugin will generate a dedicated VFS root for movies (default `!ShokoRelayMovieVFS`) alongside the standard unified VFS.
+If you prefer separate movie libraries (which is not recommended), Shoko Relay provides an opt-in feature to allow this. By enabling `Movie Generation Mode` under `Provider Settings > Advanced`, the plugin will generate a dedicated VFS root for movies (default `!ShokoRelayMovieVFS`) alongside the standard unified VFS.
 
 #### Caveats
 
@@ -502,7 +502,7 @@ It is highly recommended to use this feature for series like "Akahori Gedou Hour
 An example `anidb_vfs_overrides.csv` is available [here](https://raw.githubusercontent.com/natyusha/ShokoRelay/master/Data/anidb_vfs_overrides.csv).
 
 > [!TIP]
-> If you want all Shoko series which share a TMDB series link to be merged automatically this can be achieved by enabling `Advanced Settings > Auto Merge TMDB Series`. This will automatically disable AniDB numbering for the affected series regardless of the configured `TMDB Episode Numbering` setting.
+> If you want all Shoko series which share a TMDB series link to be merged automatically this can be achieved by enabling `Provider Settings > Advanced > Auto Merge TMDB Series`. This will automatically disable AniDB numbering for the affected series regardless of the configured `TMDB Episode Numbering` setting.
 
 ### Combining Episodes
 

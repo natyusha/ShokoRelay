@@ -230,6 +230,7 @@
 
     const primarySection = document.createElement("details");
     const primaryContent = document.createElement("div");
+    primarySection.id = "config-primary-settings";
     primarySection.className = "details-anim";
     primaryContent.className = "details-content";
     primarySection.open = true;
@@ -238,6 +239,7 @@
 
     const langSection = document.createElement("details");
     const langContent = document.createElement("div");
+    langSection.id = "config-lang-settings";
     langSection.className = "details-anim";
     langContent.className = "details-content";
     langSection.innerHTML = "<summary>Language</summary>";
@@ -245,6 +247,7 @@
 
     const advSection = document.createElement("details");
     const advContent = document.createElement("div");
+    advSection.id = "config-adv-settings";
     advSection.className = "details-anim";
     advContent.className = "details-content";
     advSection.innerHTML = "<summary>Advanced</summary>";
