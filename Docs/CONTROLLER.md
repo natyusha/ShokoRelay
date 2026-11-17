@@ -21,6 +21,7 @@ Endpoints managed by `DashboardController`
 ---
 
 ```
+POST /auth/login                                               -> Login
 GET  /auth/verify?force={true|false}                           -> VerifyAuth
 GET  /dashboard                                                -> GetDashboardPage
 GET  /browser                                                  -> GetBrowserPage
@@ -41,7 +42,8 @@ GET  /logs/list                                                -> GetLogsList
 GET  /logs/{fileName}                                          -> GetLog
 ```
 
-- `VerifyAuth` checks that the caller satisfies administrator authorization when `Advanced.RequireAuth` is enabled (or unconditionally when `force=true`, used before enabling auth).
+- `Login` authenticates a Shoko administrator via username and password (`IUserService.AuthenticateUser`) and issues a signed `HttpOnly` session cookie.
+- `VerifyAuth` checks whether the caller satisfies administrator authorization when `Advanced.RequireAuth` is enabled (or unconditionally when `force=true`, used before enabling auth).
 - `GetDashboardPage` Serves the main settings dashboard (`dashboard.cshtml`).
 - `GetBrowserPage` Serves the stand-alone VFS browser (`browser.cshtml`).
 - `GetPlayerPage` Serves the stand-alone AnimeThemes video player (`player.cshtml`).
@@ -65,8 +67,9 @@ GET  /logs/{fileName}                                          -> GetLog
 
 **Notes:**
 
-- Authentication: When `Advanced.RequireAuth` is enabled, all endpoints under `DashboardController`, `ShokoController`, `PlexController`, and `AnimeThemesController` require a Shoko API key
-  - This excludes static UI pages/assets (`/dashboard`, `/browser`, `/player`, `/dashboard/{\*path}`, `/theme.css`) and `MetadataController` (Plex requirement)
+- Authentication: When `Advanced.RequireAuth` is enabled, all endpoints under `DashboardController`, `ShokoController`, `PlexController`, and `AnimeThemesController` require Shoko administrator authentication.
+  - This can be done usings Shoko's standard `apikey` header for Swagger/curl, or the dashboard's `HttpOnly` session cookie via `POST /auth/login`.
+  - This excludes static UI pages/assets (`/dashboard`, `/browser`, `/player`, `/dashboard/{\*path}`, `/theme.css`), `/auth/login`, `/auth/verify`, and `MetadataController` (Plex requirement).
   - The following endpoint is also excluded: `POST /plex/webhook` (validated via server UUID and user rules).
 
 All automation endpoints utilize the `LogAndReturn` helper (via `ExecuteTrackedTaskAsync`) to provide a direct `logUrl` in the response. Reports include:

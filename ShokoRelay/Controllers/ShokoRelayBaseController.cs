@@ -1,13 +1,118 @@
+using System.Security.Cryptography;
 using System.Text;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.DependencyInjection;
+using Shoko.Abstractions.User;
 using Shoko.Abstractions.User.Services;
 
 namespace ShokoRelay.Controllers;
+
+/// <summary>Issues and validates signed HttpOnly session cookies for Shoko Relay administrator authentication.</summary>
+internal static class RelayAuthSession
+{
+    private const string CookieName = "shoko-relay-auth";
+    private const string ProtectorPurpose = "ShokoRelay.AdminAuth.v1";
+    private static readonly TimeSpan s_sessionLifetime = TimeSpan.FromDays(30);
+    private static readonly byte[] s_fallbackKey = RandomNumberGenerator.GetBytes(32);
+
+    /// <summary>Issues a signed HttpOnly session cookie for the authenticated administrator.</summary>
+    /// <param name="context">The current HTTP context.</param>
+    /// <param name="user">The authenticated Shoko administrator.</param>
+    public static void SignIn(HttpContext context, IUser user)
+    {
+        var expiresAt = DateTimeOffset.UtcNow.Add(s_sessionLifetime);
+        byte[] payload = Encoding.UTF8.GetBytes($"{user.LocalID}:{expiresAt.ToUnixTimeSeconds()}");
+        byte[] protectedBytes = context.RequestServices.GetService<IDataProtectionProvider>() is { } dp ? dp.CreateProtector(ProtectorPurpose).Protect(payload) : SignWithFallback(payload);
+
+        context.Response.Cookies.Append(
+            CookieName,
+            Convert.ToBase64String(protectedBytes),
+            new CookieOptions
+            {
+                HttpOnly = true,
+                IsEssential = true,
+                SameSite = SameSiteMode.Strict,
+                Secure = context.Request.IsHttps,
+                Path = "/",
+                Expires = expiresAt,
+            }
+        );
+    }
+
+    /// <summary>Deletes any active Shoko Relay authentication session cookie.</summary>
+    /// <param name="context">The current HTTP context.</param>
+    public static void SignOut(HttpContext context) =>
+        context.Response.Cookies.Delete(
+            CookieName,
+            new CookieOptions
+            {
+                HttpOnly = true,
+                IsEssential = true,
+                SameSite = SameSiteMode.Strict,
+                Secure = context.Request.IsHttps,
+                Path = "/",
+            }
+        );
+
+    /// <summary>Attempts to resolve an authenticated Shoko user from the session cookie.</summary>
+    /// <param name="context">The current HTTP context.</param>
+    /// <param name="userService">The Shoko user service.</param>
+    /// <returns>The resolved <see cref="IUser"/> if the cookie is valid and unexpired; otherwise, <c>null</c>.</returns>
+    public static IUser? GetUser(HttpContext context, IUserService userService)
+    {
+        if (!context.Request.Cookies.TryGetValue(CookieName, out var token) || string.IsNullOrWhiteSpace(token))
+            return null;
+
+        try
+        {
+            byte[] raw = Convert.FromBase64String(token);
+            byte[]? payload = context.RequestServices.GetService<IDataProtectionProvider>() is { } dp ? dp.CreateProtector(ProtectorPurpose).Unprotect(raw) : VerifyWithFallback(raw);
+            if (payload == null)
+                return null;
+
+            string text = Encoding.UTF8.GetString(payload);
+            int sep = text.IndexOf(':');
+            return sep <= 0 || !int.TryParse(text[..sep], out int userId) || !long.TryParse(text[(sep + 1)..], out long expUnix) || DateTimeOffset.UtcNow.ToUnixTimeSeconds() > expUnix
+                ? null
+                : userService.GetUserByID(userId);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Prepends an HMAC-SHA256 signature to the payload bytes when ASP.NET Data Protection is unavailable.</summary>
+    /// <param name="payload">The raw UTF-8 session payload bytes.</param>
+    /// <returns>The signed byte array containing the 32-byte MAC followed by the payload.</returns>
+    private static byte[] SignWithFallback(byte[] payload)
+    {
+        byte[] mac = HMACSHA256.HashData(s_fallbackKey, payload);
+        byte[] combined = new byte[mac.Length + payload.Length];
+        mac.CopyTo(combined, 0);
+        payload.CopyTo(combined, mac.Length);
+        return combined;
+    }
+
+    /// <summary>Verifies an HMAC-SHA256 signed token and extracts the payload bytes.</summary>
+    /// <param name="signed">The combined MAC and payload byte array.</param>
+    /// <returns>The verified payload bytes, or <c>null</c> if verification fails.</returns>
+    private static byte[]? VerifyWithFallback(byte[] signed)
+    {
+        if (signed.Length <= 32)
+            return null;
+
+        ReadOnlySpan<byte> mac = signed.AsSpan(0, 32);
+        byte[] payload = signed[32..];
+        byte[] expected = HMACSHA256.HashData(s_fallbackKey, payload);
+        return CryptographicOperations.FixedTimeEquals(mac, expected) ? payload : null;
+    }
+}
 
 /// <summary>Enforces Shoko administrator authorization on decorated controllers or actions when <c>Advanced.RequireAuth</c> is enabled.</summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
@@ -25,7 +130,7 @@ public sealed class RelayAdminAuthorizeAttribute : Attribute, IAuthorizationFilt
             return;
 
         var userService = context.HttpContext.RequestServices.GetRequiredService<IUserService>();
-        var user = userService.GetUserFromHttpContext(context.HttpContext);
+        var user = userService.GetUserFromHttpContext(context.HttpContext) ?? RelayAuthSession.GetUser(context.HttpContext, userService);
         if (user == null)
             context.Result = new UnauthorizedObjectResult(new { status = "error", message = "Authentication required." });
         else if (!user.IsAdmin)

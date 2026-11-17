@@ -423,8 +423,8 @@ public class AdvancedConfig
     [DefaultValue("")]
     public string CollectionExclusions { get; set; } = "";
 
-    /// <summary>Whether administrative plugin endpoints require a Shoko administrator API key.</summary>
-    [Display(Name = "Require Auth", Description = "Require a Shoko administrator API key for dashboard, config, logs, and task endpoints")]
+    /// <summary>Whether administrative plugin endpoints require Shoko administrator authentication.</summary>
+    [Display(Name = "Require Auth", Description = "Require Shoko administrator authentication for dashboard, config, logs, and task endpoints")]
     [DefaultValue(false)]
     public bool RequireAuth { get; set; } = false;
 

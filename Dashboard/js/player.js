@@ -3,7 +3,7 @@
  * @description Logic for the Shoko Relay stand-alone AnimeThemes VFS video player.
  */
 (() => {
-  const { base, shokoBase, configUrl, AUTH_KEY, el, esc, fetchJson, fetchBlobUrl, unwrapConfig, setValueByPath, openModal, updatePlaybackTooltip, saveSettings, getData, initSearchInteractions } = window._sr;
+  const { base, shokoBase, configUrl, el, fetchJson, unwrapConfig, setValueByPath, openModal, updatePlaybackTooltip, saveSettings, getData, initSearchInteractions } = window._sr;
 
   // DOM Elements - UI Indicators
   /** @type {HTMLElement} */ const playerTime = el("time-display");
@@ -328,7 +328,7 @@
      * @param {string} displayName - The text to display for the file.
      * @returns {HTMLLIElement} The completed file list item node.
      */
-    const createFileNode = (item, displayName) => {
+    const createFileLeaf = (item, displayName) => {
       const li = document.createElement("li");
       const leaf = document.createElement("div");
       leaf.className = `leaf ${item.path === currentWebmPath ? "active" : ""}`;
@@ -523,9 +523,6 @@
   // #endregion
 
   // #region Player Engine
-  /** @type {string|null} Active Object URL for Blob-fallback video playback. */
-  let playerBlobUrl = null;
-
   /**
    * Sets the video source, updates header metadata, highlights, and saves the active path.
    * @param {string} path - The relative VFS path to the WebM file.
@@ -535,23 +532,18 @@
     if (!playerVideo) return;
     currentWebmPath = path;
     localStorage.setItem(PATH_KEY, path);
-    if (playerBlobUrl) {
-      URL.revokeObjectURL(playerBlobUrl);
-      playerBlobUrl = null;
-    }
     const streamUrl = `${base}/animethemes/webm/stream?path=${encodeURIComponent(path)}`;
-    const token = localStorage.getItem(AUTH_KEY);
     playerVideo.onerror = async () => {
       playerVideo.onerror = null;
-      if (playerBlobUrl) return;
-      const blobUrl = await fetchBlobUrl(streamUrl);
-      if (blobUrl && currentWebmPath === path) {
-        playerBlobUrl = blobUrl;
-        playerVideo.src = blobUrl;
-        playerVideo.play().catch(() => {});
-      }
+      try {
+        const verifyRes = await fetch(`${base}/auth/verify`);
+        if ((verifyRes.status === 401 || verifyRes.status === 403) && (await window._sr.ensureAuth?.({ dismissable: false })) && currentWebmPath === path) {
+          playerVideo.src = streamUrl;
+          playerVideo.play().catch(() => {});
+        }
+      } catch {}
     };
-    playerVideo.src = token ? `${streamUrl}&apikey=${encodeURIComponent(token)}` : streamUrl;
+    playerVideo.src = streamUrl;
     playerVideo.play().catch(() => {});
 
     const item = webmTreeData.find((i) => i.path === path);
@@ -805,10 +797,6 @@
         playerVideo.pause();
         playerVideo.removeAttribute("src");
         playerVideo.load();
-        if (playerBlobUrl) {
-          URL.revokeObjectURL(playerBlobUrl);
-          playerBlobUrl = null;
-        }
         localStorage.removeItem(PATH_KEY);
         currentWebmPath = "";
 
@@ -850,37 +838,34 @@
 
     window.addEventListener("keydown", (e) => {
       if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA" || document.querySelector(".modal-overlay.open")) return;
-      // prettier-ignore
-      const handledKeys = [
-        " ", "k", "K", "ArrowLeft", "ArrowRight", "j", "J", "l", "L", ",", ".", "b", "B", "n", "N", ";", "'",
-        "ArrowDown", "ArrowUp", "m", "M", "f", "F", "v", "V", "r", "R", "g", "G", "h", "H", "?", "q", "Q"
-      ];
-      if (!handledKeys.includes(e.key)) return;
+      const key = e.key.toLowerCase();
+      const handledKeys = [" ", "k", "arrowleft", "arrowright", "j", "l", ",", ".", "b", "n", ";", "'", "arrowdown", "arrowup", "m", "f", "v", "r", "g", "h", "?", "q"];
+      if (!handledKeys.includes(key)) return;
       e.preventDefault();
       const isShuffle = playerModeBtn?.getAttribute("data-mode") === "shuffle";
       // prettier-ignore
-      switch (e.key) {
-        case " ": case "k": case "K": if (playerVideo.src) { if (playerVideo.ended) { playerVideo.currentTime = 0; playerVideo.play(); } else { playerVideo.paused ? playerVideo.play() : playerVideo.pause(); } } else playMove(isShuffle, 1); break;
-        case "ArrowLeft": if (playerVideo.src) { playerVideo.currentTime -= 5; syncProgressUI(); } break;
-        case "ArrowRight": if (playerVideo.src) { playerVideo.currentTime += 5; syncProgressUI(); } break;
-        case "j": case "J": if (playerVideo.src) { playerVideo.currentTime -= 10; syncProgressUI(); } break;
-        case "l": case "L": if (playerVideo.src) { playerVideo.currentTime += 10; syncProgressUI(); } break;
+      switch (key) {
+        case " ": case "k": if (playerVideo.src) { if (playerVideo.ended) { playerVideo.currentTime = 0; playerVideo.play(); } else { playerVideo.paused ? playerVideo.play() : playerVideo.pause(); } } else playMove(isShuffle, 1); break;
+        case "arrowleft": if (playerVideo.src) { playerVideo.currentTime -= 5; syncProgressUI(); } break;
+        case "arrowright": if (playerVideo.src) { playerVideo.currentTime += 5; syncProgressUI(); } break;
+        case "j": if (playerVideo.src) { playerVideo.currentTime -= 10; syncProgressUI(); } break;
+        case "l": if (playerVideo.src) { playerVideo.currentTime += 10; syncProgressUI(); } break;
         case ",": if (playerVideo.src) { playerVideo.pause(); playerVideo.currentTime = Math.max(0, playerVideo.currentTime - 1 / 24); } break;
         case ".": if (playerVideo.src) { playerVideo.pause(); playerVideo.currentTime = Math.min(playerVideo.duration, playerVideo.currentTime + 1 / 24); } break;
-        case "b": case "B": playMove(isShuffle, -1); break;
-        case "n": case "N": playMove(isShuffle, 1); break;
+        case "b": playMove(isShuffle, -1); break;
+        case "n": playMove(isShuffle, 1); break;
         case ";": updateMode(1); break;
         case "'": toggleFolderView(); break;
-        case "ArrowDown": playerVideo.volume = Math.max(0, playerVideo.volume - 0.1); break;
-        case "ArrowUp": playerVideo.volume = Math.min(1, playerVideo.volume + 0.1); break;
-        case "m": case "M": if (playerVideo.src) playerVideo.muted = !playerVideo.muted; break;
-        case "f": case "F": toggleFullscreen(); break;
-        case "v": case "V": toggleVideo(); break;
-        case "r": case "R": if (playerVideo.src) { playerVideo.currentTime = 0; playerVideo.play().catch(() => {}); } break;
-        case "g": case "G": locateCurrentInTree(); break;
-        case "h": case "H": const hItem = webmTreeData.find((i) => i.path === currentWebmPath); if (hItem) toggleFavourite(hItem.videoId); break;
+        case "arrowdown": playerVideo.volume = Math.max(0, playerVideo.volume - 0.1); break;
+        case "arrowup": playerVideo.volume = Math.min(1, playerVideo.volume + 0.1); break;
+        case "m": if (playerVideo.src) playerVideo.muted = !playerVideo.muted; break;
+        case "f": toggleFullscreen(); break;
+        case "v": toggleVideo(); break;
+        case "r": if (playerVideo.src) { playerVideo.currentTime = 0; playerVideo.play().catch(() => {}); } break;
+        case "g": locateCurrentInTree(); break;
+        case "h": const hItem = webmTreeData.find((i) => i.path === currentWebmPath); if (hItem) toggleFavourite(hItem.videoId); break;
         case "?": toggleHelpModal(); break;
-        case "q": case "Q": playerCloseBtn?.click(); break;
+        case "q": playerCloseBtn?.click(); break;
       }
     });
 

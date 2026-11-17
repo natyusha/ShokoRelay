@@ -1,6 +1,6 @@
 /**
  * @file script.js
- * @description Core shared layout utilities, authentication token management, and fetch wrappers for the Shoko Relay client interface.
+ * @description Core shared layout utilities, administrator session authentication, and fetch wrappers for the Shoko Relay client interface.
  */
 (() => {
   /** @type {string} Base path for API requests determined dynamically from the location. */
@@ -12,13 +12,13 @@
   /** @type {string} URL endpoint for configuration data. */
   const configUrl = base + "/config";
 
-  /** @type {string} LocalStorage key storing the Shoko admin API key for authenticated dashboard requests. */
-  const AUTH_KEY = "shoko-relay-api-key";
-
-  /** @type {Promise<string|null>|null} Shared in-flight promise preventing duplicate auth modals. */
+  /** @type {Promise<boolean>|null} Shared in-flight promise preventing duplicate auth modals. */
   let authPromptPromise = null;
 
-  /** @type {boolean} Tracks whether the user dismissed the auth modal to avoid repeated background polling prompts. */
+  /** @type {number} Monotonically incremented each time an interactive login succeeds to prevent stale 401 retries from re-opening the modal. */
+  let authGeneration = 0;
+
+  /** @type {boolean} Tracks whether the user dismissed the auth modal. */
   let authCancelled = false;
 
   /**
@@ -43,15 +43,6 @@
 
   // #region Auth Helpers
   /**
-   * Builds authorization headers containing the stored Shoko API key if available.
-   * @returns {Object<string, string>} Header key-value map.
-   */
-  const authHeaders = () => {
-    const key = localStorage.getItem(AUTH_KEY);
-    return key ? { Authorization: `Bearer ${key}` } : {};
-  };
-
-  /**
    * Enables or disables interactive dashboard controls while waiting for authentication.
    * @param {boolean} locked - True to grey out and disable dashboard controls; false to restore them.
    * @returns {void}
@@ -74,17 +65,12 @@
   }
 
   /**
-   * Prompts the user for a Shoko administrator API key and validates it against the server.
-   * @param {boolean} [forceReset=false] - If true, clears any previously stored key before prompting.
+   * Prompts the user for Shoko administrator credentials and creates an authenticated session cookie.
    * @param {Object} [opts] - Modal behavior options.
    * @param {boolean} [opts.dismissable=true] - Whether the modal can be dismissed via Cancel, Escape, or backdrop click.
-   * @param {boolean} [opts.forceVerify=false] - Whether to validate the key even if Require Auth is not yet enabled on the server.
-   * @returns {Promise<string|null>} A verified API key, or null if dismissed.
+   * @returns {Promise<boolean>} True if authentication succeeded, or false if dismissed.
    */
-  function ensureAuth(forceReset = false, { dismissable = true, forceVerify = false } = {}) {
-    if (forceReset) localStorage.removeItem(AUTH_KEY);
-    const existing = localStorage.getItem(AUTH_KEY);
-    if (existing) return Promise.resolve(existing);
+  function ensureAuth({ dismissable = true } = {}) {
     if (authPromptPromise) return authPromptPromise;
 
     authPromptPromise = new Promise((resolve) => {
@@ -98,10 +84,11 @@
         overlay.innerHTML = `<div class="modal" role="document">
           <header>Authentication</header>
           <div class="modal-body">
-            <label for="auth-api-key">Shoko API Key</label>
-            <input id="auth-api-key" type="password" autocomplete="current-password" placeholder="Paste your Shoko API key" />
-            <small>Use an existing API Key or generate one in Shoko:</small>
-            <code>WebUI > Core Settings &gt; API Keys</code>
+            <label for="auth-username">Username</label>
+            <input id="auth-username" type="text" autocomplete="username" placeholder="Enter your Shoko username" />
+            <label for="auth-password">Password</label>
+            <input id="auth-password" type="password" autocomplete="current-password" placeholder="Enter your Shoko password" />
+            <small>Sign in with a Shoko administrator account</small>
           </div>
           <footer>
             <button id="auth-cancel" class="cancel" type="button">Cancel</button>
@@ -111,53 +98,66 @@
         document.body.appendChild(overlay);
       }
 
-      const input = el("auth-api-key");
+      const usernameInput = el("auth-username");
+      const passwordInput = el("auth-password");
       const submitBtn = el("auth-submit");
       const cancelBtn = el("auth-cancel");
-      input.value = "";
+      usernameInput.value = "";
+      passwordInput.value = "";
       cancelBtn.hidden = !dismissable;
 
       let close = () => {};
       /**
        * Completes the authentication prompt and resolves the pending promise.
-       * @param {string|null} val - The verified API key, or null if dismissed.
+       * @param {boolean} ok - True if login succeeded, false if dismissed.
        * @param {boolean} [fromModalClose=false] - Whether invoked from the modal close callback.
        * @returns {void}
        */
-      const finish = (val, fromModalClose = false) => {
+      const finish = (ok, fromModalClose = false) => {
         if (!authPromptPromise) return;
         authPromptPromise = null;
-        authCancelled = val === null;
+        authCancelled = !ok;
+        if (ok) authGeneration++;
         if (!fromModalClose) close();
-        resolve(val);
+        resolve(ok);
       };
-      close = openModal(overlay, () => finish(null, true), dismissable);
-      setTimeout(() => input.focus(), 15);
+      close = openModal(overlay, () => finish(false, true), dismissable);
+      setTimeout(() => usernameInput.focus(), 15);
 
-      cancelBtn.onclick = () => dismissable && finish(null);
+      cancelBtn.onclick = () => dismissable && finish(false);
       submitBtn.onclick = async () => {
-        const key = input.value.trim();
-        if (!key) return;
+        const username = usernameInput.value.trim();
+        const password = passwordInput.value;
+        if (!username) {
+          usernameInput.focus();
+          return;
+        }
         submitBtn.disabled = true;
         try {
-          const verifyUrl = forceVerify ? `${base}/auth/verify?force=true` : `${base}/auth/verify`;
-          const check = await fetch(verifyUrl, { headers: { Authorization: `Bearer ${key}` } });
+          const check = await fetch(`${base}/auth/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, password }),
+          });
           if (check.ok) {
-            localStorage.setItem(AUTH_KEY, key);
-            finish(key);
+            finish(true);
           } else {
-            showToast(check.status === 403 ? "Admin privileges required." : "Invalid API key.", "error", TOAST_MS);
-            input.focus();
+            const errMsg = check.status === 403 ? "Administrator privileges required." : "Invalid username or password.";
+            showToast(errMsg, "error", TOAST_MS);
+            passwordInput.focus();
           }
         } catch {
-          showToast("Failed to verify API key.", "error", TOAST_MS);
+          showToast("Failed to authenticate.", "error", TOAST_MS);
         } finally {
           submitBtn.disabled = false;
         }
       };
-      input.onkeydown = (ev) => {
+
+      const onKeyDown = (ev) => {
         if (ev.key === "Enter") submitBtn.click();
       };
+      usernameInput.onkeydown = onKeyDown;
+      passwordInput.onkeydown = onKeyDown;
     });
 
     return authPromptPromise;
@@ -170,14 +170,14 @@
   async function checkInitialAuth() {
     setAuthLocked(true);
     try {
-      const res = await fetch(`${base}/auth/verify`, { headers: authHeaders() });
+      const res = await fetch(`${base}/auth/verify`);
       if (res.ok) {
         setAuthLocked(false);
         return true;
       }
       if (res.status === 401 || res.status === 403) {
-        const key = await ensureAuth(true, { dismissable: false, forceVerify: false });
-        if (key) {
+        const ok = await ensureAuth({ dismissable: false });
+        if (ok) {
           setAuthLocked(false);
           return true;
         }
@@ -198,16 +198,14 @@
    */
   async function fetchJson(url, opts = {}, allowPrompt = true) {
     try {
-      const usedKey = localStorage.getItem(AUTH_KEY);
-      const headers = Object.assign({}, authHeaders(), opts.headers || {});
-      const res = await fetch(url, { ...opts, headers });
+      const requestGen = authGeneration;
+      const res = await fetch(url, opts);
       if ((res.status === 401 || res.status === 403) && allowPrompt) {
-        const currentKey = localStorage.getItem(AUTH_KEY);
-        if (currentKey && currentKey !== usedKey) return fetchJson(url, opts, false);
+        if (authGeneration !== requestGen) return fetchJson(url, opts, false);
         authCancelled = false;
         setAuthLocked(true);
-        const key = await ensureAuth(true, { dismissable: false, forceVerify: false });
-        if (key) {
+        const ok = await ensureAuth({ dismissable: false });
+        if (ok) {
           setAuthLocked(false);
           return fetchJson(url, opts, false);
         }
@@ -428,16 +426,13 @@
     base,
     shokoBase,
     configUrl,
-    AUTH_KEY,
     authReady,
     el,
     esc,
     TOAST_MS,
-    authHeaders,
     ensureAuth,
     isAuthCancelled: () => authCancelled,
     fetchJson,
-    fetchBlobUrl,
     showToast,
     toastOperation,
     openModal,
@@ -573,19 +568,6 @@
     }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["title", "href"] });
   }
   // #endregion
-
-  // Intercept log link clicks so protected log endpoints receive Authorization headers via Blob URLs
-  document.addEventListener("click", async (e) => {
-    const link = e.target.closest("a.log-link");
-    if (!link) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const blobUrl = await fetchBlobUrl(link.href);
-    if (blobUrl) {
-      window.open(blobUrl, "_blank", "noopener,noreferrer");
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
-    }
-  });
 
   // Lifecycle Execution
   initTooltips();

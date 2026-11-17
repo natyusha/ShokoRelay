@@ -268,22 +268,17 @@
           input.checked = !!value;
           input.onchange = async () => {
             if (input.checked) {
-              let key = localStorage.getItem(window._sr.AUTH_KEY);
-              if (key) {
-                const verifyRes = await fetchJson(`${window._sr.base}/auth/verify?force=true`, {}, false);
-                if (!verifyRes.ok) key = null;
-              }
-              if (!key) {
-                key = await window._sr.ensureAuth?.(true, { dismissable: true, forceVerify: true });
-                if (!key) {
+              const verifyRes = await fetchJson(`${window._sr.base}/auth/verify?force=true`, {}, false);
+              if (!verifyRes.ok) {
+                const authed = await window._sr.ensureAuth?.({ dismissable: true });
+                if (!authed) {
                   input.checked = false;
                   return;
                 }
               }
             }
             setValueByPath(config, p.Path, input.checked);
-            const saveRes = await saveSettings(config);
-            if (!input.checked && saveRes?.ok) localStorage.removeItem(window._sr.AUTH_KEY);
+            await saveSettings(config);
           };
         } else {
           bindConfig(input, p.Path, config, saveSettings, "check");

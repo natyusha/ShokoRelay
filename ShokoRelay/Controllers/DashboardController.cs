@@ -50,14 +50,40 @@ public class DashboardController(
 
     #region Auth & Pages
 
-    /// <summary>Verifies whether the caller is authorized, optionally enforcing an administrator API key even before <c>Advanced.RequireAuth</c> is enabled.</summary>
-    /// <param name="force">When <c>true</c>, validates an administrator API key regardless of <c>Advanced.RequireAuth</c>.</param>
+    /// <summary>Payload containing Shoko user credentials for dashboard authentication.</summary>
+    /// <param name="Username">The Shoko username.</param>
+    /// <param name="Password">The Shoko password.</param>
+    public sealed record LoginRequest(string Username, string? Password);
+
+    /// <summary>Authenticates a Shoko administrator by username and password and issues an HttpOnly session cookie.</summary>
+    /// <param name="body">The login credentials payload.</param>
+    /// <returns>An authenticated confirmation payload, or 401/403 if credentials are invalid or the user is not an administrator.</returns>
+    [AllowAnonymous]
+    [HttpPost("auth/login")]
+    public IActionResult Login([FromBody] LoginRequest? body)
+    {
+        if (string.IsNullOrWhiteSpace(body?.Username))
+            return BadRequest(new { status = "error", message = "Username is required." });
+
+        var user = userService.AuthenticateUser(body.Username.Trim(), body.Password ?? string.Empty);
+        if (user == null)
+            return Unauthorized(new { status = "error", message = "Invalid username or password." });
+
+        if (!user.IsAdmin)
+            return StatusCode(StatusCodes.Status403Forbidden, new { status = "error", message = "Administrator privileges required." });
+
+        RelayAuthSession.SignIn(HttpContext, user);
+        return Ok(new { authenticated = true, username = user.Username });
+    }
+
+    /// <summary>Verifies whether the caller is authorized, optionally enforcing an administrator session even before <c>Advanced.RequireAuth</c> is enabled.</summary>
+    /// <param name="force">When <c>true</c>, validates an authenticated administrator session regardless of <c>Advanced.RequireAuth</c>.</param>
     /// <returns>An authenticated confirmation payload, or 401/403 if the caller is unauthenticated or not an administrator.</returns>
     [AllowAnonymous]
     [HttpGet("auth/verify")]
     public IActionResult VerifyAuth([FromQuery] bool force = false) =>
         !force && !Settings.Advanced.RequireAuth ? Ok(new { authenticated = true, required = false })
-        : userService.GetUserFromHttpContext(HttpContext) is not { } user ? Unauthorized(new { status = "error", message = "Authentication required." })
+        : (userService.GetUserFromHttpContext(HttpContext) ?? RelayAuthSession.GetUser(HttpContext, userService)) is not { } user ? Unauthorized(new { status = "error", message = "Authentication required." })
         : !user.IsAdmin ? StatusCode(StatusCodes.Status403Forbidden, new { status = "error", message = "Administrator privileges required." })
         : Ok(new { authenticated = true, required = Settings.Advanced.RequireAuth });
 
@@ -135,6 +161,8 @@ public class DashboardController(
             Logger.LogInformation("Dashboard: Saving updated provider settings...");
             ConfigProvider.SaveSettings(config);
             ActionScheduleHelper.SyncTriggers(config, scheduledActionService);
+            if (!config.Advanced.RequireAuth)
+                RelayAuthSession.SignOut(HttpContext);
             return Ok(new { status = "ok" });
         }
         catch (ArgumentException ex)

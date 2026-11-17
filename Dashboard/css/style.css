@@ -499,10 +499,6 @@ code {
   min-width: 40px;
   color: var(--text-color);
 }
-#auth-modal code {
-  display: inline-block;
-  margin-top: 6px;
-}
 .modal em {
   color: var(--ok-color);
 }

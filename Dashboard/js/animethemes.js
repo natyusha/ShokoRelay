@@ -3,7 +3,7 @@
  * @description Dedicated logic for AnimeThemes VFS and Theme.mp3 generation on the Shoko Relay dashboard.
  */
 (() => {
-  const { base, el, esc, TOAST_MS, authHeaders, fetchJson, fetchBlobUrl, showToast, toastOperation, initToggle, updatePlaybackTooltip, getData, summarizeResult } = window._sr;
+  const { base, el, esc, TOAST_MS, fetchJson, showToast, toastOperation, initToggle, updatePlaybackTooltip, getData, summarizeResult } = window._sr;
 
   // #region Param Providers
   /**
@@ -113,8 +113,6 @@
 
   /** @type {HTMLAudioElement|null} Reference to the active HTML5 Audio element. */
   let atAudio = null;
-  /** @type {string|null} Active Object URL for the currently loaded MP3 stream. */
-  let atAudioBlobUrl = null;
   /** @type {HTMLElement|null} Reference to the active 'Now Playing' toast element. */
   let nowPlayingToast = null;
   /** @type {string|null} The folder path of the currently playing theme. */
@@ -168,7 +166,7 @@
    */
   async function showNowPlaying(folderPath) {
     try {
-      const res = await fetch(`${base}/animethemes/mp3/stream?path=${encodeURIComponent(folderPath)}`, { method: "HEAD", headers: authHeaders() });
+      const res = await fetch(`${base}/animethemes/mp3/stream?path=${encodeURIComponent(folderPath)}`, { method: "HEAD" });
       const getHeader = (k) => {
         const v = res.headers.get(k);
         if (!v) return "";
@@ -244,11 +242,7 @@
         } else dismissNowPlaying();
       };
     }
-    const blobUrl = await fetchBlobUrl(`${base}/animethemes/mp3/stream?path=${encodeURIComponent(folderPath)}`);
-    if (!blobUrl) return;
-    if (atAudioBlobUrl) URL.revokeObjectURL(atAudioBlobUrl);
-    atAudioBlobUrl = blobUrl;
-    atAudio.src = blobUrl;
+    atAudio.src = `${base}/animethemes/mp3/stream?path=${encodeURIComponent(folderPath)}`;
     atAudio.loop = el("at-mode")?.getAttribute("data-mode") === "loop";
     atAudio.play().catch(() => {});
     atCurrentFolder = folderPath;
@@ -290,10 +284,6 @@
           atAudio.pause();
           atAudio.removeAttribute("src");
           atAudio.load();
-          if (atAudioBlobUrl) {
-            URL.revokeObjectURL(atAudioBlobUrl);
-            atAudioBlobUrl = null;
-          }
           atCurrentFolder = null;
           dismissNowPlaying();
         }
