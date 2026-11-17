@@ -410,7 +410,7 @@
       </div>
 
       <!-- #region MARK: Provider Settings
-      -->
+    -->
       <section>
         <div class="full">
           <h2>
@@ -422,13 +422,12 @@
           </button>
         </div>
         <div id="config-form"></div>
-        <hr />
         <small>All provider settings are saved automatically</small>
       </section>
       <!-- #endregion -->
 
       <!--#region MARK: Task Logs
-      -->
+    -->
       <div>
         <section>
           <details class="details-anim">
@@ -503,7 +502,7 @@
     <!--#region MARK: Sync Watched Modal
     -->
     <div id="sync-modal" class="modal-overlay" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="sync-modal-title">
-      <div class="modal" role="document">
+      <div class="modal sync" role="document">
         <header>Sync Watched States Menu</header>
         <div class="modal-body">
           <div class="full">
@@ -584,9 +583,30 @@
         <header>Settings Help</header>
         <div class="modal-body">
           <section>
-            <h3>Primary Settings</h3>
+            <h3>Metadata</h3>
             <h4>Metadata Refresh Required</h4>
-            <small>Every provider setting that isn't listed under "Advanced Settings" requires a metadata refresh in Plex to take effect.</small>
+            <small>Every provider setting that is listed under this section requires a metadata refresh in Plex to take effect.</small>
+            <h4>Tag Weights</h4>
+            <small>
+              Many tags on AniDB use a <a href="https://wiki.anidb.net/Tags#Star-rating_-_the_Weight_system" title="AniDB Wiki">3 Star Weight System</a> which represents a value from 0 (no stars) to 600 (3
+              stars) and determines how relevant the tag is to the series it is applied to. By setting this value you can filter out tags below a certain star threshold.
+            </small>
+            <h4>Tag Overrides</h4>
+            <small>
+              Tags can easily be merged or blocked using this setting. The first tag on a new line becomes the target, with all subsequent tags merged into it:
+              <code>Target Tag, Source Tag 1, Source Tag 2</code>. You can also blacklist tags by prefixing a new line with a semicolon: <code>;Blocked Tag 1,Blocked Tag 2</code>. There is a
+              <a href="https://raw.githubusercontent.com/natyusha/ShokoRelay/master/Data/default_tag_overrides.csv" title="Default Tag Overrides">large list of tags</a> which are already blocked/merged by
+              default. Anything on a merge or block line which references one of them will supersede it. It should also be noted that this allows custom tag names to be assigned as the target tag name does not
+              have to exist in Shoko.
+            </small>
+          </section>
+          <section>
+            <h3>Language</h3>
+            <h4>Series Alt Title Language</h4>
+            <small>
+              Generally this the only setting that needs to be changed in this section as it isn't configurable in Shoko. Make sure to set it to something other than the "Series Title Language" as it is
+              searchable in Plex which can make finding some things much easier.
+            </small>
             <h4>Language Tag Examples</h4>
             <div class="full">
               <ul class="help-list">
@@ -606,22 +626,9 @@
                 <li><code>DE</code><small>German</small></li>
               </ul>
             </div>
-            <h4>Tag Weights</h4>
-            <small>
-              Many tags on AniDB use a <a href="https://wiki.anidb.net/Tags#Star-rating_-_the_Weight_system" title="AniDB Wiki">3 Star Weight System</a> which represents a value from 0 (no stars) to 600 (3
-              stars) and determines how relevant the tag is to the series it is applied to. By setting this value you can filter out tags below a certain star threshold.
-            </small>
-            <h4>Tag Overrides</h4>
-            <small>
-              Tags can easily be merged or blocked using this setting. The first tag on a new line becomes the target, with all subsequent tags merged into it:
-              <code>Target Tag, Source Tag 1, Source Tag 2</code>. You can also blacklist tags by prefixing a new line with a semicolon: <code>;Blocked Tag 1,Blocked Tag 2</code>. There is a
-              <a href="https://raw.githubusercontent.com/natyusha/ShokoRelay/master/Data/default_tag_overrides.csv" title="Default Tag Overrides">large list of tags</a> which are already blocked/merged by
-              default. Anything on a merge or block line which references one of them will supersede it. It should also be noted that this allows custom tag names to be assigned as the target tag name does not
-              have to exist in Shoko.
-            </small>
           </section>
           <section>
-            <h3>Advanced Settings</h3>
+            <h3>Advanced</h3>
             <h4>VFS Rebuild Required</h4>
             <small>Any setting that includes a <strong>⟳</strong> symbol requires a VFS rebuild to take effect. This is because they directly affect how the VFS is generated.</small>
             <h4>Shoko Server URL / Plex Server URL</h4>

@@ -382,7 +382,8 @@ public class DashboardController(
     /// <param name="EnumValues">Possible values for enums.</param>
     /// <param name="Advanced">Whether this is an advanced setting.</param>
     /// <param name="Rebuild">Whether the setting requires a VFS rebuild.</param>
-    private sealed record ConfigPropertySchema(string Path, string Type, string? Display, string? Description, object? DefaultValue, object? EnumValues, bool Advanced, bool Rebuild);
+    /// <param name="Language">Whether this is a language setting.</param>
+    private sealed record ConfigPropertySchema(string Path, string Type, string? Display, string? Description, object? DefaultValue, object? EnumValues, bool Advanced, bool Rebuild, bool Language);
 
     /// <summary>Recursively builds a list of property metadata descriptors from a type to expose as a JSON schema.</summary>
     /// <param name="type">The type to reflect over and parse.</param>
@@ -402,6 +403,7 @@ public class DashboardController(
 
             bool isAdvanced = isAdvancedBranch || prop.Name == "Advanced";
             bool needsRebuild = prop.GetCustomAttribute<VfsRebuildAttribute>() != null; // Detect the custom attribute
+            bool isLanguage = prop.GetCustomAttribute<LanguageSettingAttribute>() != null;
             string path = string.IsNullOrWhiteSpace(prefix) ? prop.Name : $"{prefix}.{prop.Name}";
             var display = prop.GetCustomAttribute<DisplayAttribute>();
             var defaultValue = prop.GetCustomAttribute<DefaultValueAttribute>()?.Value;
@@ -420,16 +422,16 @@ public class DashboardController(
                     })
                     .Where(x => !isFlags || (x.value > 0 && (x.value & (x.value - 1)) == 0))
                     .ToArray();
-                props.Add(new ConfigPropertySchema(path, isFlags ? "flags" : "enum", display?.Name, display?.Description, defaultValue, values, isAdvanced, needsRebuild));
+                props.Add(new ConfigPropertySchema(path, isFlags ? "flags" : "enum", display?.Name, display?.Description, defaultValue, values, isAdvanced, needsRebuild, isLanguage));
             }
             else if (propType == typeof(bool))
-                props.Add(new ConfigPropertySchema(path, "bool", display?.Name, display?.Description, defaultValue, null, isAdvanced, needsRebuild));
+                props.Add(new ConfigPropertySchema(path, "bool", display?.Name, display?.Description, defaultValue, null, isAdvanced, needsRebuild, isLanguage));
             else if (propType == typeof(string))
-                props.Add(new ConfigPropertySchema(path, "string", display?.Name, display?.Description, defaultValue, null, isAdvanced, needsRebuild));
+                props.Add(new ConfigPropertySchema(path, "string", display?.Name, display?.Description, defaultValue, null, isAdvanced, needsRebuild, isLanguage));
             else if (propType.IsPrimitive || propType == typeof(decimal))
-                props.Add(new ConfigPropertySchema(path, "number", display?.Name, display?.Description, defaultValue, null, isAdvanced, needsRebuild));
+                props.Add(new ConfigPropertySchema(path, "number", display?.Name, display?.Description, defaultValue, null, isAdvanced, needsRebuild, isLanguage));
             else if (typeof(IDictionary).IsAssignableFrom(propType))
-                props.Add(new ConfigPropertySchema(path, "json", display?.Name, display?.Description, defaultValue, null, isAdvanced, needsRebuild));
+                props.Add(new ConfigPropertySchema(path, "json", display?.Name, display?.Description, defaultValue, null, isAdvanced, needsRebuild, isLanguage));
             else if (propType.IsClass)
                 props.AddRange(BuildConfigSchema(propType, path, isAdvanced));
         }

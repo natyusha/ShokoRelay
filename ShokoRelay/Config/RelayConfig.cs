@@ -10,6 +10,10 @@ namespace ShokoRelay.Config;
 [AttributeUsage(AttributeTargets.Property)]
 public class VfsRebuildAttribute : Attribute { }
 
+/// <summary>Metadata attribute used to flag configuration properties that belong to the collapsible language settings section.</summary>
+[AttributeUsage(AttributeTargets.Property)]
+public class LanguageSettingAttribute : Attribute { }
+
 #endregion
 
 
@@ -176,26 +180,31 @@ public class RelayConfig
     /// <summary>Priority list of languages for series titles.</summary>
     [Display(Name = "Series Title Language", Description = "Priority, comma separated")]
     [DefaultValue("SHOKO")]
+    [LanguageSetting]
     public string SeriesTitleLanguage { get; set; } = "SHOKO";
 
     /// <summary>Priority list of languages for alternate series titles.</summary>
     [Display(Name = "Series Alt Title Language", Description = "Priority, comma separated *this field is searchable in Plex")]
     [DefaultValue("EN, X-MAIN, SHOKO")]
+    [LanguageSetting]
     public string SeriesAltTitleLanguage { get; set; } = "EN, X-MAIN, SHOKO";
 
     /// <summary>Priority list of languages for episode titles.</summary>
     [Display(Name = "Episode Title Language", Description = "Priority, comma separated")]
     [DefaultValue("SHOKO")]
+    [LanguageSetting]
     public string EpisodeTitleLanguage { get; set; } = "SHOKO";
 
     /// <summary>Priority list of languages for series and episode descriptions.</summary>
     [Display(Name = "Description Language", Description = "Priority, comma separated")]
     [DefaultValue("SHOKO")]
+    [LanguageSetting]
     public string DescriptionLanguage { get; set; } = "SHOKO";
 
     /// <summary>Priority list of languages for TMDB images.</summary>
     [Display(Name = "TMDB Image Language", Description = "Priority, comma separated ")]
     [DefaultValue("SHOKO")]
+    [LanguageSetting]
     public string TmdbImageLanguage { get; set; } = "SHOKO";
 
     /// <summary>Whether to append prefixes like OVA to the end of titles.</summary>

@@ -121,7 +121,7 @@
 .modal.confirmation {
   width: 600px;
 }
-.overrides.sync {
+.modal.sync {
   width: 475px;
 }
 #sync-direction-arrow {
@@ -552,6 +552,9 @@ button.float-link {
 }
 .details-anim h2 {
   margin-bottom: 0;
+}
+#config-form details:not([open]) {
+  border-bottom: 1px solid var(--inset-color);
 }
 /* #endregion */
 

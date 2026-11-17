@@ -55,6 +55,7 @@ GET  /logs/{fileName}                                          -> GetLog
   - `/config` does not expose the Plex token. Instead the response includes `PlexLibrary.HasToken`.
 - `GetConfigSchema` returns a JSON schema representation of `RelayConfig` properties.
   - Properties within the `AdvancedConfig` class are automatically flagged with `Advanced: true`.
+  - Properties flagged with `[LanguageSetting]` are automatically flagged with `Language: true`.
 - `GetDynamicThemeCss` generates and serves a dynamically mapped CSS stylesheet.
   - It reads the selected Shoko WebUI theme (configured under `Advanced.SelectedTheme`) from Shoko's `themes/` directory via `IApplicationPaths`.
   - For custom WebUI themes, it appends a translation block that bridges Shoko's native CSS variables onto the plugin's custom layout variables.

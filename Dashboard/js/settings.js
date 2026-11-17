@@ -7,7 +7,7 @@
 
   // #region Config Helpers
   /**
-   * Attach a smooth open/close animation to a <details> element using the Web Animations API.
+   * Attach a smooth open/close animation to a <details> element using the Web Animations API, persisting its open/closed state to localStorage.
    * @param {HTMLElement} details - The details element.
    * @param {HTMLElement} content - The inner content container.
    * @param {number} [duration=300] - Animation duration in ms.
@@ -15,11 +15,16 @@
    */
   function initDetailsAnimation(details, content, duration = 300) {
     let anim = null;
+    if (details.id) {
+      const saved = localStorage.getItem(`details-state-${details.id}`);
+      if (saved !== null) details.open = saved === "true";
+    }
     details.querySelector("summary")?.addEventListener("click", (e) => {
       e.preventDefault();
       if (anim) anim.cancel();
       const isOpening = !details.open;
       if (isOpening) details.open = true;
+      if (details.id) localStorage.setItem(`details-state-${details.id}`, String(isOpening));
       const startH = isOpening ? "0px" : content.offsetHeight + "px";
       const endH = isOpening ? content.offsetHeight + "px" : "0px";
       anim = content.animate({ height: [startH, endH] }, { duration, easing: "ease" });
@@ -223,11 +228,26 @@
     el("config-form").innerHTML = "";
     if (el("overrides-text")) el("overrides-text").value = rawCfg.overrides || "";
 
+    const primarySection = document.createElement("details");
+    const primaryContent = document.createElement("div");
+    primarySection.className = "details-anim";
+    primaryContent.className = "details-content";
+    primarySection.open = true;
+    primarySection.innerHTML = "<summary>Metadata</summary>";
+    primaryContent.appendChild(document.createElement("hr"));
+
+    const langSection = document.createElement("details");
+    const langContent = document.createElement("div");
+    langSection.className = "details-anim";
+    langContent.className = "details-content";
+    langSection.innerHTML = "<summary>Language</summary>";
+    langContent.appendChild(document.createElement("hr"));
+
     const advSection = document.createElement("details");
     const advContent = document.createElement("div");
     advSection.className = "details-anim";
     advContent.className = "details-content";
-    advSection.innerHTML = "<summary>Advanced Settings</summary>";
+    advSection.innerHTML = "<summary>Advanced</summary>";
     advContent.appendChild(document.createElement("hr"));
 
     schema.forEach((p) => {
@@ -340,8 +360,20 @@
           };
         } else bindConfig(input, p.Path, config, saveSettings, p.Type === "bool" ? "check" : p.Type === "number" ? "number" : "text");
       }
-      (p.Advanced ? advContent : el("config-form")).appendChild(wrap);
+      (p.Advanced ? advContent : p.Language ? langContent : primaryContent).appendChild(wrap);
     });
+
+    if (primaryContent.children.length > 1) {
+      el("config-form").appendChild(primarySection);
+      primarySection.appendChild(primaryContent);
+      initDetailsAnimation(primarySection, primaryContent);
+    }
+
+    if (langContent.children.length > 1) {
+      el("config-form").appendChild(langSection);
+      langSection.appendChild(langContent);
+      initDetailsAnimation(langSection, langContent);
+    }
 
     if (advContent.children.length > 1) {
       el("config-form").appendChild(advSection);
