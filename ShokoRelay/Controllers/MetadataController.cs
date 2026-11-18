@@ -516,8 +516,8 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
         if (mapping == null)
             return (episode, partIdx, null);
 
-        // Handle Episode Groups (One Shoko ID mapped to multiple TMDB IDs)
-        if (EnforceTmdbNumbering && episode.GetLinkedEpisodes(MetadataSource.TMDB) is { Count: > 1 } tmdbEps)
+        // Handle Episode Groups (One Shoko ID mapped to multiple TMDB IDs, bypassed when custom VFS overrides dictate coordinates)
+        if (EnforceTmdbNumbering && !OverrideHelper.HasCustomCoords(episode) && episode.GetLinkedEpisodes(MetadataSource.TMDB) is { Count: > 1 } tmdbEps)
         {
             string? prefId = MapHelper.GetPreferredTmdbOrderingId(ctx.Series);
             var tmdbEpisodes = SelectPreferredTmdbOrdering(tmdbEps, prefId);

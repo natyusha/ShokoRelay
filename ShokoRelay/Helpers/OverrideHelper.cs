@@ -260,5 +260,10 @@ public static class OverrideHelper
         return null;
     }
 
+    /// <summary>Determines whether the specified episode has explicit custom coordinate overrides configured.</summary>
+    /// <param name="episode">The episode to check.</param>
+    /// <returns><c>true</c> if custom coordinates are configured for this episode; otherwise, <c>false</c>.</returns>
+    public static bool HasCustomCoords(IEpisode episode) => episode is IShokoEpisode { Series: { AnidbAnimeID: > 0 } ss } && GetCustomCoords(ss.AnidbAnimeID, episode.Type, episode.EpisodeNumber).HasValue;
+
     #endregion
 }

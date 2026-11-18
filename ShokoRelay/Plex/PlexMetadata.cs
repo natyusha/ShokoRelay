@@ -516,8 +516,8 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
 
         foreach (var m in ctx.FileData.GetForSeason(seasonNum))
         {
-            // TMDB Episode Groups: One Shoko episode maps to multiple TMDB entries.
-            if (enforceTmdb && m.Episodes.Count == 1 && m.PrimaryEpisode is IShokoEpisode se && se.GetLinkedEpisodes(MetadataSource.TMDB) is { Count: > 1 } tmdbEps)
+            // TMDB Episode Groups: One Shoko episode maps to multiple TMDB entries (bypassed when custom VFS overrides dictate coordinates).
+            if (enforceTmdb && m.Episodes.Count == 1 && m.PrimaryEpisode is IShokoEpisode se && !OverrideHelper.HasCustomCoords(se) && se.GetLinkedEpisodes(MetadataSource.TMDB) is { Count: > 1 } tmdbEps)
             {
                 var tmdbEpisodes = SelectPreferredTmdbOrdering(tmdbEps, prefId);
                 for (int i = 0; i < tmdbEpisodes.Count; i++)

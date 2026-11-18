@@ -287,7 +287,7 @@ public static class MapHelper
 
             // TMDB Episode metadata override for multi-part files
             IEpisode? tmdbEp = null;
-            if (allowPt && EnforceTmdbNumbering && firstEp is IShokoEpisode se)
+            if (allowPt && EnforceTmdbNumbering && firstEp is IShokoEpisode se && !OverrideHelper.HasCustomCoords(se))
             {
                 if (!tmdbEpsCache.TryGetValue(se.LocalID, out var tmdbEps))
                 {

@@ -345,8 +345,14 @@ public static partial class TextHelper
             return title;
         }
 
-        // If TMDB episode group names enabled and multiple links exist, prefer TMDB titles
-        if (Settings.TmdbEpGroupNames && episode is IShokoEpisode tmdbGrouped && tmdbGrouped.GetLinkedEpisodes(MetadataSource.TMDB) is { Count: > 1 } && !string.IsNullOrEmpty(tmdbTitle))
+        // If TMDB episode group names enabled and multiple links exist, prefer TMDB titles (unless custom VFS overrides bypassed grouping)
+        if (
+            Settings.TmdbEpGroupNames
+            && episode is IShokoEpisode tmdbGrouped
+            && !OverrideHelper.HasCustomCoords(tmdbGrouped)
+            && tmdbGrouped.GetLinkedEpisodes(MetadataSource.TMDB) is { Count: > 1 }
+            && !string.IsNullOrEmpty(tmdbTitle)
+        )
             return tmdbTitle;
 
         // Standard enumeration override (e.g. "Episode 1" -> "Actual Title")
