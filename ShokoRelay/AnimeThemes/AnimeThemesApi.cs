@@ -112,16 +112,23 @@ public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesAp
     public async Task<AnimePagination?> FetchAnimePageAsync(int? year, string? season, string? name, int page, CancellationToken cancellationToken)
     {
         var filters = new List<string>();
+        var variables = new Dictionary<string, object?> { ["page"] = page };
+        var varDefs = new List<string> { "$page: Int" };
+
         if (year.HasValue)
             filters.Add($"{{ column: YEAR, operator: EQ, value: {year.Value} }}");
         if (!string.IsNullOrWhiteSpace(season) && season.All(char.IsLetter))
             filters.Add($"{{ column: SEASON, operator: EQ, value: {season.ToUpperInvariant()} }}");
         if (!string.IsNullOrWhiteSpace(name))
-            filters.Add($"{{ column: TITLE_ROMAJI, operator: LIKE, value: \"%{name.Replace("\\", "\\\\").Replace("\"", "\\\"")}%\" }}");
+        {
+            varDefs.Add("$name: Mixed");
+            variables["name"] = $"%{name}%";
+            filters.Add("{ column: TITLE_ROMAJI, operator: LIKE, value: $name }");
+        }
 
         string whereClause = filters.Count > 0 ? $"where: {{ AND: [{string.Join(", ", filters)}] }}" : "";
         string query =
-            $@"query($page: Int) {{
+            $@"query({string.Join(", ", varDefs)}) {{
           animePagination(page: $page, first: 15, {whereClause}) {{
             paginatorInfo {{ hasMorePages }}
             data {{
@@ -131,7 +138,7 @@ public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesAp
           }}
         }}";
 
-        return (await PostGraphQlAsync<AnimePaginationResponse>(query, new { page }, cancellationToken).ConfigureAwait(false))?.AnimePagination;
+        return (await PostGraphQlAsync<AnimePaginationResponse>(query, variables, cancellationToken).ConfigureAwait(false))?.AnimePagination;
     }
 
     #endregion
@@ -193,8 +200,12 @@ public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesAp
             if (response.Headers.TryGetValues("X-RateLimit-Remaining", out var remVals) && int.TryParse(remVals.FirstOrDefault(), out int remaining))
                 _rateLimitRemaining = remaining;
 
-            if (response.Headers.TryGetValues("X-RateLimit-Reset", out var resetVals) && long.TryParse(resetVals.FirstOrDefault(), out long resetMs))
-                _rateLimitReset = DateTimeOffset.FromUnixTimeMilliseconds(resetMs);
+            if (response.Headers.TryGetValues("X-RateLimit-Reset", out var resetVals) && long.TryParse(resetVals.FirstOrDefault(), out long resetVal))
+                _rateLimitReset =
+                    resetVal > 10_000_000_000L ? DateTimeOffset.FromUnixTimeMilliseconds(resetVal)
+                    : resetVal > 1_000_000_000L ? DateTimeOffset.FromUnixTimeSeconds(resetVal)
+                    : resetVal > 0 ? DateTimeOffset.UtcNow.AddSeconds(resetVal)
+                    : DateTimeOffset.MinValue;
         }
     }
 

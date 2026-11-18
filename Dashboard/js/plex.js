@@ -81,6 +81,7 @@
    * @returns {Promise<void>}
    */
   async function refreshPlexState() {
+    await window._sr.flushSaves?.();
     const res = await fetchJson(configUrl);
     if (!res.ok) {
       window._sr.isPlexLinked = false;
@@ -88,7 +89,7 @@
       return;
     }
 
-    const settings = (window.relaySettings = unwrapConfig(res.data));
+    const settings = window._sr.syncConfig(unwrapConfig(res.data));
     const plex = settings.PlexLibrary || {};
     const isLinked = !!plex.HasToken;
 

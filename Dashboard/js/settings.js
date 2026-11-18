@@ -222,7 +222,7 @@
 
     const schema = schemaRes.data.properties || [];
     const rawCfg = configRes.data || {};
-    const config = unwrapConfig(rawCfg);
+    const config = window._sr.syncConfig(unwrapConfig(rawCfg));
     const overridesBtn = el("vfs-overrides");
 
     el("config-form").innerHTML = "";
@@ -359,7 +359,7 @@
             setValueByPath(config, p.Path, cleanVal);
             await saveSettings(config);
           };
-        } else bindConfig(input, p.Path, config, saveSettings, p.Type === "bool" ? "check" : p.Type === "number" ? "number" : "text");
+        } else bindConfig(input, p.Path, config, saveSettings, p.Type === "number" ? "number" : "text");
       }
       (p.Advanced ? advContent : p.Language ? langContent : primaryContent).appendChild(wrap);
     });
@@ -403,7 +403,6 @@
     b("sync-progress", "Automation.ShokoSyncWatchedIncludeProgress", "check");
     b("sync-users", "Automation.ShokoSyncWatchedUserType", "number");
     b("sync-user-mappings", "Automation.AdvancedUserMappings", "text");
-    b("plex-scrobble", "Automation.AutoScrobble", "check");
     window._sr.initAtConfig?.(config, saveSettings);
     window._sr.updateControlStates(config);
   }

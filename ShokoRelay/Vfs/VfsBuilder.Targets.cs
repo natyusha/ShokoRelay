@@ -36,20 +36,20 @@ public partial class VfsBuilder
 
                 (string Folder, string Subtype) ex = PlexMapping.TryGetExtraSeason(mapping.Coords.Season, out var e) ? e : ("Featurettes", "featurette");
 
-                string fileName = VfsHelper.SanitizeName(
-                    PlexMapping.TryGetExtraSeason(mapping.Coords.Season, out _)
-                        ? VfsHelper.BuildExtrasFileName(
-                            mapping,
-                            ex,
-                            state.ExtraPad.GetValueOrDefault(mapping.Coords.Season, 1),
-                            Path.GetExtension(locInfo.Src),
-                            state.DisplayTitle,
-                            hasPeer ? mapping.PartIndex : null,
-                            hasPeer ? mapping.PartCount : 1,
-                            vIdx,
-                            mapping.IsVariation
-                        )
-                        : VfsHelper.BuildStandardFileName(
+                string fileName = PlexMapping.TryGetExtraSeason(mapping.Coords.Season, out _)
+                    ? VfsHelper.BuildExtrasFileName(
+                        mapping,
+                        ex,
+                        state.ExtraPad.GetValueOrDefault(mapping.Coords.Season, 1),
+                        Path.GetExtension(locInfo.Src),
+                        state.DisplayTitle,
+                        hasPeer ? mapping.PartIndex : null,
+                        hasPeer ? mapping.PartCount : 1,
+                        vIdx,
+                        mapping.IsVariation
+                    )
+                    : VfsHelper.SanitizeName(
+                        VfsHelper.BuildStandardFileName(
                             mapping,
                             state.EpPad,
                             Path.GetExtension(locInfo.Src),
@@ -60,7 +60,7 @@ public partial class VfsBuilder
                             vIdx,
                             mapping.IsVariation
                         )
-                );
+                    );
 
                 var destFilePath = Path.Combine(seasonPath, fileName);
 

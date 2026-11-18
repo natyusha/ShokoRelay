@@ -21,6 +21,9 @@
   /** @type {boolean} Tracks whether the user dismissed the auth modal. */
   let authCancelled = false;
 
+  /** @type {Object|null} Shared in-memory configuration object synchronized across all dashboard panels. */
+  let sharedConfig = null;
+
   /**
    * Shorthand helper for document.getElementById.
    * @param {string} id - The ID of the element to retrieve.
@@ -442,6 +445,17 @@
     flushSaves,
     summarizeResult,
     actions: {},
+    /**
+     * Merges a freshly fetched configuration payload into the shared in-memory configuration instance.
+     * @param {Object} fresh - The unwrapped configuration object retrieved from the server.
+     * @returns {Object} The shared configuration object reference.
+     */
+    syncConfig: (fresh) => {
+      if (!sharedConfig) sharedConfig = fresh || {};
+      else if (fresh) Object.assign(sharedConfig, fresh);
+      window.relaySettings = sharedConfig;
+      return sharedConfig;
+    },
     unwrapConfig: (data) => (data?.payload !== undefined ? data.payload || {} : data || {}),
     getValueByPath: (obj, path) => path.split(".").reduce((o, k) => o?.[k], obj),
     setValueByPath: (obj, path, value) => {

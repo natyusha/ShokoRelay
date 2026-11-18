@@ -316,7 +316,7 @@ public class ShokoController(
     /// <param name="ratings">Whether to include ratings in the sync. Defaults to configuration.</param>
     /// <param name="progress">Whether to include playback progress in the sync. Defaults to configuration.</param>
     /// <param name="import">Direction: <c>true</c> for Plex←Shoko (Import to Plex), <c>false</c> for Plex→Shoko (Sync to Shoko).</param>
-    /// <param name="users">Optional override for the sync users configuration (0: All, 1: Admin, 2: Extra, 3: None, 4: Advanced). Defaults to configuration.</param>
+    /// <param name="users">Optional override for the sync users configuration (0: All, 1: Admin, 2: Extra, 3: Advanced, 4: None). Defaults to configuration.</param>
     /// <param name="libraryName">Optional filter to restrict sync to a specific Plex library by name.</param>
     /// <returns>A task representing the result of the synchronization.</returns>
     [Route("sync-watched")]
