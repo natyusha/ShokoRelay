@@ -29,6 +29,10 @@ public static partial class VfsHelper
     [GeneratedRegex(@"-(?:behindthescenes|deleted|featurette|interview|scene|short|trailer|other)\d*$", RegexOptions.IgnoreCase)]
     private static partial Regex LocalExtraFileRegex();
 
+    /// <summary>Regex to match standard season or specials subfolder names.</summary>
+    [GeneratedRegex(@"^(?:Season\s*\d+|Specials|S\d+)$", RegexOptions.IgnoreCase)]
+    private static partial Regex SeasonSubfolderRegex();
+
     /// <summary>Array of styled text replacements for cleaning episode titles.</summary>
     private static readonly (string Find, string Replace)[] s_styledReplacements = [("1/2", "½"), ("1/6", "⅙"), ("-->", "→"), ("<--", "←"), ("->", "→"), ("<-", "←")];
 
@@ -303,6 +307,11 @@ public static partial class VfsHelper
         var enumerator = LocalExtraFileRegex().EnumerateMatches(fileNameWithoutExtension);
         return (suffixIndex = enumerator.MoveNext() ? enumerator.Current.Index : -1) >= 0;
     }
+
+    /// <summary>Determines if a directory name matches a standard season or specials subfolder pattern.</summary>
+    /// <param name="name">The directory name to evaluate.</param>
+    /// <returns>True if the directory name is a season or specials folder.</returns>
+    public static bool IsSeasonSubfolder(string name) => !string.IsNullOrWhiteSpace(name) && SeasonSubfolderRegex().IsMatch(name);
 
     #endregion
 

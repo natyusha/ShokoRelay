@@ -107,90 +107,67 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
         int page = 1;
         bool hasNext = true;
 
-        while (hasNext && !cancellationToken.IsCancellationRequested)
+        try
         {
-            var resp = await _api.FetchAnimePageAsync(query.Year, query.Season, query.Name, page, cancellationToken).ConfigureAwait(false);
-            var animeList = resp?.Data;
-            if (animeList == null || animeList.Count == 0)
-                break;
-
-            foreach (var anime in animeList)
+            while (hasNext && !cancellationToken.IsCancellationRequested)
             {
-                // Format the year into a decade string if before 2000, otherwise returns the exact year
-                string yearFolder = !anime.Year.HasValue ? "Unknown" : (anime.Year.Value >= 2000 ? anime.Year.Value.ToString() : $"{anime.Year.Value / 10 * 10 % 100:D2}s");
+                var resp = await _api.FetchAnimePageAsync(query.Year, query.Season, query.Name, page, cancellationToken).ConfigureAwait(false);
+                var animeList = resp?.Data;
+                if (animeList == null || animeList.Count == 0)
+                    break;
 
-                // Format the season into title case
-                string seasonFolder = string.IsNullOrWhiteSpace(anime.Season) ? "Unknown" : char.ToUpper(anime.Season[0]) + anime.Season[1..].ToLowerInvariant();
-
-                foreach (var theme in anime.Animethemes ?? [])
+                foreach (var anime in animeList)
                 {
-                    try
+                    // Format the year into a decade string if before 2000, otherwise returns the exact year
+                    string yearFolder = !anime.Year.HasValue ? "Unknown" : (anime.Year.Value >= 2000 ? anime.Year.Value.ToString() : $"{anime.Year.Value / 10 * 10 % 100:D2}s");
+
+                    // Format the season into title case
+                    string seasonFolder = string.IsNullOrWhiteSpace(anime.Season) ? "Unknown" : char.ToUpper(anime.Season[0]) + anime.Season[1..].ToLowerInvariant();
+
+                    foreach (var theme in anime.Animethemes ?? [])
                     {
-                        var details = await _api.FetchAnimeThemeWithArtistsAsync(theme.Id, cancellationToken).ConfigureAwait(false);
-                        var video = details?.Animethemeentries?.FirstOrDefault()?.Videos?.Nodes?.FirstOrDefault();
-
-                        if (video == null || string.IsNullOrWhiteSpace(video.Link) || string.IsNullOrWhiteSpace(video.Basename))
-                            continue;
-
-                        string targetPath = Path.Combine(baseThemePath, yearFolder, seasonFolder, video.Basename);
-                        string relPath = $"/{yearFolder}/{seasonFolder}/{video.Basename}";
-
-                        if (!query.Force && existingFiles.TryGetValue(video.Basename, out var existingRelPath))
+                        try
                         {
-                            if (mappedFilesWithAnidb.Contains(video.Basename))
+                            var details = await _api.FetchAnimeThemeWithArtistsAsync(theme.Id, cancellationToken).ConfigureAwait(false);
+                            var video = details?.Animethemeentries?.FirstOrDefault()?.Videos?.Nodes?.FirstOrDefault();
+
+                            if (video == null || string.IsNullOrWhiteSpace(video.Link) || string.IsNullOrWhiteSpace(video.Basename))
+                                continue;
+
+                            string targetPath = Path.Combine(baseThemePath, yearFolder, seasonFolder, video.Basename);
+                            string relPath = $"/{yearFolder}/{seasonFolder}/{video.Basename}";
+
+                            if (!query.Force && existingFiles.TryGetValue(video.Basename, out var existingRelPath))
                             {
-                                logger.LogDebug("AnimeThemes WebM: Skipping already mapped theme -> {Basename}...", video.Basename);
-                                skipped++;
+                                if (mappedFilesWithAnidb.Contains(video.Basename))
+                                {
+                                    logger.LogDebug("AnimeThemes WebM: Skipping already mapped theme -> {Basename}...", video.Basename);
+                                    skipped++;
+                                    continue;
+                                }
+
+                                downloadedItems.Add((existingRelPath, video.Basename));
+                                logger.LogInformation("AnimeThemes WebM: Found unmapped local theme -> {Basename}, checking for AniDB ID...", video.Basename);
                                 continue;
                             }
 
-                            downloadedItems.Add((existingRelPath, video.Basename));
-                            logger.LogInformation("AnimeThemes WebM: Found unmapped local theme -> {Basename}, checking for AniDB ID...", video.Basename);
-                            continue;
-                        }
-
-                        Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
-                        logger.LogDebug("AnimeThemes WebM: Downloading -> {Basename}...", video.Basename);
-
-                        try
-                        {
-                            using var videoResp = await httpClient.GetAsync(video.Link, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
-                            videoResp.EnsureSuccessStatusCode();
-
-                            await using var fs = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
-                            await videoResp.Content.CopyToAsync(fs, cancellationToken).ConfigureAwait(false);
-
-                            downloads.Add(video.Basename);
-                            downloadedItems.Add((relPath, video.Basename));
-                            existingFiles[video.Basename] = relPath; // Add to cache so it isn't downloaded again if it appears in another anime
-                            downloaded++;
-                        }
-                        catch (HttpRequestException ex) when (ex.StatusCode is HttpStatusCode.ServiceUnavailable or HttpStatusCode.TooManyRequests)
-                        {
-                            if (File.Exists(targetPath))
-                                try
-                                {
-                                    File.Delete(targetPath);
-                                }
-                                catch { }
-
-                            logger.LogWarning("AnimeThemes WebM: Rate limited (503/429) on theme ID -> {ThemeId}. Waiting 90 seconds before retrying...", theme.Id);
-                            await Task.Delay(TimeSpan.FromSeconds(90), cancellationToken).ConfigureAwait(false);
+                            Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
+                            logger.LogDebug("AnimeThemes WebM: Downloading -> {Basename}...", video.Basename);
 
                             try
                             {
-                                using var retryResp = await httpClient.GetAsync(video.Link, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
-                                retryResp.EnsureSuccessStatusCode();
+                                using var videoResp = await httpClient.GetAsync(video.Link, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                                videoResp.EnsureSuccessStatusCode();
 
                                 await using var fs = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
-                                await retryResp.Content.CopyToAsync(fs, cancellationToken).ConfigureAwait(false);
+                                await videoResp.Content.CopyToAsync(fs, cancellationToken).ConfigureAwait(false);
 
                                 downloads.Add(video.Basename);
                                 downloadedItems.Add((relPath, video.Basename));
-                                existingFiles[video.Basename] = relPath;
+                                existingFiles[video.Basename] = relPath; // Add to cache so it isn't downloaded again if it appears in another anime
                                 downloaded++;
                             }
-                            catch (Exception retryEx)
+                            catch (HttpRequestException ex) when (ex.StatusCode is HttpStatusCode.ServiceUnavailable or HttpStatusCode.TooManyRequests)
                             {
                                 if (File.Exists(targetPath))
                                     try
@@ -199,39 +176,67 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
                                     }
                                     catch { }
 
-                                logger.LogWarning(retryEx, "AnimeThemes WebM: Failed to download theme ID -> {ThemeId}", theme.Id);
-                                throw new InvalidOperationException($"Task aborted. Rate limit retry failed for theme ID {theme.Id}: {retryEx.Message}");
+                                logger.LogWarning("AnimeThemes WebM: Rate limited (503/429) on theme ID -> {ThemeId}. Waiting 90 seconds before retrying...", theme.Id);
+                                await Task.Delay(TimeSpan.FromSeconds(90), cancellationToken).ConfigureAwait(false);
+
+                                try
+                                {
+                                    using var retryResp = await httpClient.GetAsync(video.Link, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                                    retryResp.EnsureSuccessStatusCode();
+
+                                    await using var fs = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
+                                    await retryResp.Content.CopyToAsync(fs, cancellationToken).ConfigureAwait(false);
+
+                                    downloads.Add(video.Basename);
+                                    downloadedItems.Add((relPath, video.Basename));
+                                    existingFiles[video.Basename] = relPath;
+                                    downloaded++;
+                                }
+                                catch (Exception retryEx)
+                                {
+                                    if (File.Exists(targetPath))
+                                        try
+                                        {
+                                            File.Delete(targetPath);
+                                        }
+                                        catch { }
+
+                                    logger.LogWarning(retryEx, "AnimeThemes WebM: Failed to download theme ID -> {ThemeId}", theme.Id);
+                                    throw new InvalidOperationException($"Task aborted. Rate limit retry failed for theme ID {theme.Id}: {retryEx.Message}");
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                if (File.Exists(targetPath))
+                                    try
+                                    {
+                                        File.Delete(targetPath);
+                                    }
+                                    catch { }
+
+                                errors++;
+                                messages.Add($"Failed to download theme ID {theme.Id}: {ex.Message}");
+                                logger.LogWarning(ex, "AnimeThemes WebM: Failed to download theme ID -> {ThemeId}", theme.Id);
                             }
                         }
                         catch (Exception ex)
                         {
-                            if (File.Exists(targetPath))
-                                try
-                                {
-                                    File.Delete(targetPath);
-                                }
-                                catch { }
-
                             errors++;
-                            messages.Add($"Failed to download theme ID {theme.Id}: {ex.Message}");
-                            logger.LogWarning(ex, "AnimeThemes WebM: Failed to download theme ID -> {ThemeId}", theme.Id);
+                            messages.Add($"Failed to process theme ID {theme.Id}: {ex.Message}");
+                            logger.LogWarning(ex, "AnimeThemes WebM: Failed to process theme ID -> {ThemeId}", theme.Id);
                         }
                     }
-                    catch (Exception ex)
-                    {
-                        errors++;
-                        messages.Add($"Failed to process theme ID {theme.Id}: {ex.Message}");
-                        logger.LogWarning(ex, "AnimeThemes WebM: Failed to process theme ID -> {ThemeId}", theme.Id);
-                    }
                 }
+
+                hasNext = resp?.PaginatorInfo?.HasMorePages ?? false;
+                page++;
             }
-
-            hasNext = resp?.PaginatorInfo?.HasMorePages ?? false;
-            page++;
         }
-
-        if (await mappingService.AppendEntriesToMappingFileAsync(downloadedItems, CancellationToken.None).ConfigureAwait(false) is int mapped && mapped > 0)
-            messages.Add($"Auto-mapped {mapped} new entries into {ShokoRelayConstants.FileAtMapping}");
+        finally
+        {
+            if (await mappingService.AppendEntriesToMappingFileAsync(downloadedItems, CancellationToken.None).ConfigureAwait(false) is int mapped && mapped > 0)
+                messages.Add($"Auto-mapped {mapped} new entries into {ShokoRelayConstants.FileAtMapping}");
+        }
 
         logger.LogInformation("AnimeThemes WebM: Download operation finished -> {Downloaded} downloaded, {Skipped} skipped, {Errors} errors", downloaded, skipped, errors);
         return new WebmDownloadResult(downloaded, skipped, errors, downloads, messages);

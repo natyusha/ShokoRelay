@@ -77,7 +77,10 @@ public partial class VfsBuilder
                         && xrefs.Where(cr => cr.ShokoEpisode != null).Select(cr => OverrideHelper.GetPrimary(cr.ShokoEpisode!.ShokoSeriesID, metadataService)).Distinct().Count() > 1;
 
                     if (!isCrossover)
-                        LinkLocalMetadataForFile(state, locInfo.Src, seriesPath, seasonPath, destFilePath, rootPath, "", seasonName);
+                    {
+                        bool isPrimary = (mapping.PrimaryEpisode as IShokoEpisode)?.ShokoSeriesID == state.FolderId;
+                        LinkLocalMetadataForFile(state, locInfo.Src, seriesPath, seasonPath, destFilePath, rootPath, locInfo.ImportRoot, "", seasonName, isPrimary);
+                    }
                 }
                 else
                 {
@@ -91,6 +94,8 @@ public partial class VfsBuilder
                 state.Errors.Add($"Error processing mapping for {mapping.FileName}: {ex.Message}");
             }
         }
+
+        FlushSeriesMetadataLinks(state);
 
         // Plex Local Extras: Evaluates source directories exactly once, broadcasting results across all unique VFS roots.
         if (Settings.Advanced.PlexLocalExtras)
@@ -164,7 +169,8 @@ public partial class VfsBuilder
                 state.ExpectedFiles.Add(destFilePath);
                 state.OnLink?.Invoke(rootPath, $"Movie ❯ {folderName}", fileName, locInfo.Src);
 
-                LinkLocalMetadataForFile(state, locInfo.Src, moviePath, moviePath, destFilePath, rootPath, $"Movie ❯ {folderName}", $"Movie ❯ {folderName}");
+                bool isPrimary = (mapping.PrimaryEpisode as IShokoEpisode)?.ShokoSeriesID == state.FolderId;
+                LinkLocalMetadataForFile(state, locInfo.Src, moviePath, moviePath, destFilePath, rootPath, locInfo.ImportRoot, $"Movie ❯ {folderName}", $"Movie ❯ {folderName}", isPrimary);
             }
             else
             {
@@ -172,6 +178,8 @@ public partial class VfsBuilder
                 state.Errors.Add($"Link failed: {locInfo.Src} -> {destFilePath}");
             }
         }
+
+        FlushSeriesMetadataLinks(state);
 
         if (Settings.Advanced.PlexLocalExtras)
         {

@@ -61,6 +61,13 @@ public sealed record PlexHomeUser(
 /// <param name="AccessToken">Server-scoped access token for this user.</param>
 public sealed record PlexSharedServerUser(string? Id, string? UserId, string? Username, string? Email, string? AccessToken);
 
+/// <summary>Record representing a Plex friend/user from the Plex.tv users list.</summary>
+/// <param name="Id">Plex user ID.</param>
+/// <param name="Title">Display title.</param>
+/// <param name="Username">Actual username.</param>
+/// <param name="Email">Email address.</param>
+public sealed record PlexFriendUser(string? Id, string? Title, string? Username, string? Email);
+
 #endregion
 
 /// <summary>Handles authentication with Plex.tv, utilizing modern v2 JSON endpoints and legacy XML for user switching.</summary>
@@ -277,7 +284,7 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
         return result?.Users ?? [];
     }
 
-    /// <summary>Retrieves all shared server entries (regular Plex friends and Home users) for a given server via XML.</summary>
+    /// <summary>Retrieves all shared server entries (regular Plex friends and Home users) for a given server via XML or JSON.</summary>
     /// <param name="serverId">The Plex server machine/client identifier.</param>
     /// <param name="adminToken">The admin Plex authentication token.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
@@ -290,14 +297,37 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
 
         try
         {
-            using var req = CreateRequest(HttpMethod.Get, new Uri($"{BaseUrl}/api/servers/{Uri.EscapeDataString(serverId)}/shared_servers"), adminToken);
+            using var req = CreateRequest(HttpMethod.Get, new Uri($"{BaseUrl}/api/servers/{Uri.EscapeDataString(serverId)}/shared_servers"), adminToken, acceptJson: false);
             using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
             if (!resp.IsSuccessStatusCode)
+            {
+                logger.LogWarning("PlexAuth: Failed to query Shared Servers for server {ServerId} (HTTP {StatusCode})", serverId, resp.StatusCode);
                 return users;
+            }
 
             var content = await resp.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             if (string.IsNullOrWhiteSpace(content))
                 return users;
+
+            if (content.TrimStart().StartsWith('{') || content.TrimStart().StartsWith('['))
+            {
+                using var json = JsonDocument.Parse(content);
+                var items =
+                    json.RootElement.ValueKind == JsonValueKind.Array ? json.RootElement.EnumerateArray()
+                    : json.RootElement.TryGetProperty("MediaContainer", out var mc) && mc.TryGetProperty("SharedServer", out var ss) ? ss.EnumerateArray()
+                    : default;
+                foreach (var el in items)
+                    users.Add(
+                        new PlexSharedServerUser(
+                            GetJsonString(el, "id"),
+                            GetJsonString(el, "userID") ?? GetJsonString(el, "userId"),
+                            GetJsonString(el, "username") ?? GetJsonString(el, "name"),
+                            GetJsonString(el, "email"),
+                            GetJsonString(el, "accessToken")
+                        )
+                    );
+                return users;
+            }
 
             var doc = new XmlDocument { XmlResolver = null };
             doc.LoadXml(content);
@@ -307,48 +337,109 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
 
             foreach (XmlNode node in nodes)
             {
-                var attrs = node.Attributes;
-                if (attrs == null)
+                if (node.Attributes is not { } attrs)
                     continue;
-                users.Add(new PlexSharedServerUser(attrs["id"]?.Value, attrs["userID"]?.Value, attrs["username"]?.Value, attrs["email"]?.Value, attrs["accessToken"]?.Value));
+                users.Add(new PlexSharedServerUser(attrs["id"]?.Value, attrs["userID"]?.Value, attrs["username"]?.Value ?? attrs["name"]?.Value, attrs["email"]?.Value, attrs["accessToken"]?.Value));
             }
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "PlexAuth: Failed to parse Shared Servers XML response for server {ServerId}", serverId);
+            logger.LogWarning(ex, "PlexAuth: Failed to parse Shared Servers response for server {ServerId}", serverId);
         }
 
         return users;
     }
 
-    /// <summary>Switch to a Plex Home managed user and return a transient token via XML.</summary>
-    /// <remarks><b>IMPORTANT</b>: This old Plex endpoint always returns XML.</remarks>
+    /// <summary>Retrieves the Plex.tv friend/user list to map display titles to usernames and user IDs.</summary>
+    /// <param name="adminToken">The admin Plex authentication token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A list of <see cref="PlexFriendUser"/> entries.</returns>
+    public async Task<List<PlexFriendUser>> GetFriendsAsync(string adminToken, CancellationToken cancellationToken = default)
+    {
+        var friends = new List<PlexFriendUser>();
+        if (string.IsNullOrWhiteSpace(adminToken))
+            return friends;
+
+        try
+        {
+            using var req = CreateRequest(HttpMethod.Get, new Uri($"{BaseUrl}/api/users"), adminToken, acceptJson: false);
+            using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+            if (!resp.IsSuccessStatusCode)
+            {
+                logger.LogDebug("PlexAuth: Failed to query Plex users list (HTTP {StatusCode})", resp.StatusCode);
+                return friends;
+            }
+
+            var content = await resp.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(content))
+                return friends;
+
+            var doc = new XmlDocument { XmlResolver = null };
+            doc.LoadXml(content);
+            if (doc.SelectNodes("//User") is not { } nodes)
+                return friends;
+
+            foreach (XmlNode node in nodes)
+            {
+                if (node.Attributes is not { } attrs)
+                    continue;
+                friends.Add(new PlexFriendUser(attrs["id"]?.Value, attrs["title"]?.Value, attrs["username"]?.Value, attrs["email"]?.Value));
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "PlexAuth: Failed to parse Plex users list");
+        }
+
+        return friends;
+    }
+
+    /// <summary>Switch to a Plex Home managed user and return a transient token via v1 XML or v2 JSON endpoints.</summary>
     /// <param name="userId">Home user ID.</param>
     /// <param name="adminToken">Admin token.</param>
     /// <param name="pin">Optional user PIN.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
+    /// <param name="userUuid">Optional Home user UUID for v2 switch fallback.</param>
     /// <returns>The user token or null.</returns>
-    public async Task<string?> SwitchHomeUserAsync(int userId, string adminToken, string? pin = null, CancellationToken cancellationToken = default)
+    public async Task<string?> SwitchHomeUserAsync(int userId, string adminToken, string? pin = null, CancellationToken cancellationToken = default, string? userUuid = null)
     {
-        try
+        string pinQuery = string.IsNullOrWhiteSpace(pin) ? "" : $"?pin={Uri.EscapeDataString(pin)}";
+        return await TrySwitchAsync(new Uri($"{BaseUrl}/api/home/users/{userId}/switch{pinQuery}"), false).ConfigureAwait(false) is { Length: > 0 } v1Token ? v1Token
+            : !string.IsNullOrWhiteSpace(userUuid) ? await TrySwitchAsync(new Uri($"https://clients.plex.tv/api/v2/home/users/{Uri.EscapeDataString(userUuid)}/switch{pinQuery}"), true).ConfigureAwait(false)
+            : null;
+
+        async Task<string?> TrySwitchAsync(Uri uri, bool acceptJson)
         {
-            var uriText = $"{BaseUrl}/api/home/users/{userId}/switch" + (string.IsNullOrWhiteSpace(pin) ? "" : $"?pin={Uri.EscapeDataString(pin)}");
-            using var req = CreateRequest(HttpMethod.Post, new Uri(uriText), adminToken);
-            using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
-            if (!resp.IsSuccessStatusCode)
+            try
+            {
+                using var req = CreateRequest(HttpMethod.Post, uri, adminToken, acceptJson: acceptJson);
+                using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+                if (!resp.IsSuccessStatusCode)
+                {
+                    logger.LogWarning("PlexAuth: SwitchHomeUser failed for user {UserId} at {Path} (HTTP {StatusCode})", userId, uri.AbsolutePath, resp.StatusCode);
+                    return null;
+                }
+
+                var content = await resp.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                if (string.IsNullOrWhiteSpace(content))
+                    return null;
+
+                if (content.TrimStart().StartsWith('{'))
+                {
+                    using var json = JsonDocument.Parse(content);
+                    return GetJsonString(json.RootElement, "authToken") ?? GetJsonString(json.RootElement, "auth_token");
+                }
+
+                var doc = new XmlDocument { XmlResolver = null };
+                doc.LoadXml(content);
+                var node = doc.SelectSingleNode("//user") ?? doc.DocumentElement;
+                return node?.Attributes?["authToken"]?.Value ?? node?.Attributes?["authenticationToken"]?.Value;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "PlexAuth: Failed to parse Switch User response at {Path}", uri.AbsolutePath);
                 return null;
-            var content = await resp.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-            if (string.IsNullOrWhiteSpace(content))
-                return null;
-            var doc = new XmlDocument { XmlResolver = null };
-            doc.LoadXml(content);
-            var node = doc.SelectSingleNode("//user") ?? doc.DocumentElement;
-            return node?.Attributes?["authToken"]?.Value ?? node?.Attributes?["authenticationToken"]?.Value;
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "PlexAuth: Failed to parse Switch User XML response");
-            return null;
+            }
         }
     }
 
@@ -397,8 +488,9 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
     /// <param name="url">The fully qualified destination URI.</param>
     /// <param name="token">An optional Plex authentication token to embed in headers.</param>
     /// <param name="cid">An optional Plex client identifier override.</param>
+    /// <param name="acceptJson">Whether to request <c>application/json</c>; false requests <c>application/xml</c>.</param>
     /// <returns>A pre-configured HttpRequestMessage instance.</returns>
-    private HttpRequestMessage CreateRequest(HttpMethod method, Uri url, string? token = null, string? cid = null)
+    private HttpRequestMessage CreateRequest(HttpMethod method, Uri url, string? token = null, string? cid = null, bool acceptJson = true)
     {
         var req = new HttpRequestMessage(method, url);
         req.Headers.TryAddWithoutValidation("X-Plex-Client-Identifier", cid ?? configProvider.GetPlexClientIdentifier());
@@ -407,11 +499,21 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
         req.Headers.TryAddWithoutValidation("X-Plex-Product", ShokoRelayConstants.Name);
         req.Headers.TryAddWithoutValidation("X-Plex-Device", RuntimeInformation.OSDescription);
         req.Headers.TryAddWithoutValidation("X-Plex-Platform", "Shoko Plugin");
-        req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(acceptJson ? "application/json" : "application/xml"));
         if (!string.IsNullOrEmpty(token))
             req.Headers.TryAddWithoutValidation("X-Plex-Token", token);
         return req;
     }
+
+    /// <summary>Extracts a property from a JSON element as a string regardless of whether it is encoded as a string or number.</summary>
+    /// <param name="element">The JSON object element.</param>
+    /// <param name="propertyName">The property name to look up.</param>
+    /// <returns>The property value as a string, or null if absent.</returns>
+    private static string? GetJsonString(JsonElement element, string propertyName) =>
+        !element.TryGetProperty(propertyName, out var prop) ? null
+        : prop.ValueKind == JsonValueKind.String ? prop.GetString()
+        : prop.ValueKind == JsonValueKind.Number ? prop.GetRawText()
+        : null;
 
     /// <summary>Reads and deserializes a JSON HTTP response body into a strongly-typed object with error logging.</summary>
     /// <typeparam name="T">The target type to deserialize the response content into.</typeparam>

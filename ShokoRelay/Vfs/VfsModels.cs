@@ -142,28 +142,74 @@ internal sealed class SeriesBuildState(
     Action<string, string, string, string?>? onLink
 )
 {
+    /// <summary>Primary Shoko series metadata.</summary>
     public IShokoSeries Series { get; } = series;
+
+    /// <summary>Standard VFS root folder name.</summary>
     public string RootFolderName { get; } = rootFolderName;
+
+    /// <summary>Standalone Movie VFS root folder name.</summary>
     public string MovieRootName { get; } = movieRootName;
+
+    /// <summary>Resolved display title for the series.</summary>
     public string DisplayTitle { get; } = displayTitle;
+
+    /// <summary>Resolved primary series folder ID.</summary>
     public int FolderId { get; } = folderId;
+
+    /// <summary>Whether to bypass symlink existence checks.</summary>
     public bool SkipCheck { get; } = skipCheck;
+
+    /// <summary>Ignored folder names.</summary>
     public HashSet<string> IgnoredFolders { get; } = ignoredFolders;
+
+    /// <summary>Active build session context.</summary>
     public VfsBuildSession Session { get; } = session;
+
+    /// <summary>Consolidated file mappings for the series.</summary>
     public MapHelper.SeriesFileData FileData { get; } = fileData;
+
+    /// <summary>Base filenames of all indexed video files.</summary>
     public HashSet<string> VideoBaseNames { get; } = videoBaseNames;
+
+    /// <summary>Counts per coordinate/variation bucket.</summary>
     public Dictionary<(int Season, int Episode, bool IsVariation), int> CoordCounts { get; } = coordCounts;
+
+    /// <summary>Episode padding digit count.</summary>
     public int EpPad { get; } = epPad;
+
+    /// <summary>Extra padding digit counts per season.</summary>
     public Dictionary<int, int> ExtraPad { get; } = extraPad;
+
+    /// <summary>Optional callback for recording blueprint entries.</summary>
     public Action<string, string, string, string?>? OnLink { get; } = onLink;
+
+    /// <summary>Successful links created count.</summary>
     public int Created;
+
+    /// <summary>Skipped links count.</summary>
     public int Skipped;
+
+    /// <summary>Planned links count.</summary>
     public int Planned;
+
+    /// <summary>Encountered error messages.</summary>
     public List<string> Errors { get; } = [];
+
+    /// <summary>Detailed skipped item messages.</summary>
     public List<string> SkippedDetails { get; } = [];
+
+    /// <summary>Unique VFS series or movie root paths touched during this build.</summary>
     public HashSet<string> ResolvedVfsSeriesPaths { get; } = new(VfsShared.PathComparer);
+
+    /// <summary>Tracked set of VFS destination file paths expected after the build.</summary>
     public HashSet<string> ExpectedFiles { get; } = new(VfsShared.PathComparer);
+
+    /// <summary>Tracks already-linked source and destination directory pairs.</summary>
     public HashSet<string> LinkedSeriesMetaDirs { get; } = new(VfsShared.PathComparer);
+
+    /// <summary>Deferred series-level metadata linking entries ordered with primary series directories first.</summary>
+    public List<(string SrcDir, string DestSeriesDir, string ImportRoot, string SeriesSeasonLabel, bool IsPrimary)> PendingSeriesMetaDirs { get; } = [];
 }
 
 #endregion

@@ -377,8 +377,14 @@ public partial class ConfigProvider : IDisposable
         if (!string.IsNullOrWhiteSpace(settings.Advanced.PlexServerUrl))
             settings.Advanced.PlexServerUrl = settings.Advanced.PlexServerUrl.Trim().TrimEnd('/');
 
-        if (!Validator.TryValidateObject(settings, new ValidationContext(settings), null, true))
-            throw new ArgumentException("Config validation failed.");
+        var validationResults = new List<ValidationResult>();
+        bool isValid =
+            Validator.TryValidateObject(settings, new ValidationContext(settings), validationResults, true)
+            && Validator.TryValidateObject(settings.Automation, new ValidationContext(settings.Automation), validationResults, true)
+            && Validator.TryValidateObject(settings.Playback, new ValidationContext(settings.Playback), validationResults, true)
+            && Validator.TryValidateObject(settings.Advanced, new ValidationContext(settings.Advanced), validationResults, true);
+        if (!isValid)
+            throw new ArgumentException($"Config validation failed: {string.Join("; ", validationResults.Select(r => r.ErrorMessage).Where(m => !string.IsNullOrWhiteSpace(m)))}");
         NormalizePathMappings(settings);
         NormalizeSubtitleMappings(settings);
         NormalizeCsvFields(settings);

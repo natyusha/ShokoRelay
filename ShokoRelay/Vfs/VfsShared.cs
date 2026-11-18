@@ -29,6 +29,12 @@ internal static class VfsShared
     /// <summary>The absolute path to the VFS blueprint cache file.</summary>
     public static string BlueprintFilePath => Path.Combine(CacheDirectory, ShokoRelayConstants.FileVfsBlueprintCache);
 
+    /// <summary>Monotonically incremented counter tracking blueprint saves for cache invalidation.</summary>
+    private static long s_blueprintVersion;
+
+    /// <summary>Gets the current monotonic blueprint save version.</summary>
+    public static long BlueprintVersion => Volatile.Read(ref s_blueprintVersion);
+
     /// <summary>The cached set of ignored folder names resolved during the last lookup.</summary>
     private static HashSet<string>? s_lastIgnoredNames;
 
@@ -157,20 +163,25 @@ internal static class VfsShared
     }
 
     /// <summary>Resolves the VFS root folder name.</summary>
+    /// <param name="settings">Optional configuration settings override.</param>
     /// <returns>The sanitized VFS root folder name.</returns>
-    public static string ResolveRootFolderName() => ResolveFolderName(Settings.Advanced.VfsRootPath, ShokoRelayConstants.FolderVfsDefault);
+    public static string ResolveRootFolderName(RelayConfig? settings = null) => ResolveFolderName((settings ?? Settings).Advanced.VfsRootPath, ShokoRelayConstants.FolderVfsDefault);
 
     /// <summary>Resolves the standalone Movies VFS root folder name.</summary>
+    /// <param name="settings">Optional configuration settings override.</param>
     /// <returns>The sanitized standalone movies VFS root folder name.</returns>
-    public static string ResolveMovieRootFolderName() => ResolveFolderName(Settings.Advanced.MovieVfsRootPath, ShokoRelayConstants.FolderMoviesDefault);
+    public static string ResolveMovieRootFolderName(RelayConfig? settings = null) => ResolveFolderName((settings ?? Settings).Advanced.MovieVfsRootPath, ShokoRelayConstants.FolderMoviesDefault);
 
     /// <summary>Resolves the anime themes folder name.</summary>
+    /// <param name="settings">Optional configuration settings override.</param>
     /// <returns>The sanitized AnimeThemes folder name.</returns>
-    public static string ResolveAnimeThemesFolderName() => ResolveFolderName(Settings.Advanced.AnimeThemesRootPath, ShokoRelayConstants.FolderAnimeThemesDefault);
+    public static string ResolveAnimeThemesFolderName(RelayConfig? settings = null) => ResolveFolderName((settings ?? Settings).Advanced.AnimeThemesRootPath, ShokoRelayConstants.FolderAnimeThemesDefault);
 
     /// <summary>Resolves the collection posters folder name.</summary>
+    /// <param name="settings">Optional configuration settings override.</param>
     /// <returns>The sanitized collection images folder name.</returns>
-    public static string ResolveCollectionImagesFolderName() => ResolveFolderName(Settings.Advanced.CollectionImagesRootPath, ShokoRelayConstants.FolderCollectionImagesDefault);
+    public static string ResolveCollectionImagesFolderName(RelayConfig? settings = null) =>
+        ResolveFolderName((settings ?? Settings).Advanced.CollectionImagesRootPath, ShokoRelayConstants.FolderCollectionImagesDefault);
 
     /// <summary>Assembles a unique set of folder names that should be ignored by VFS and Link operations based on current settings.</summary>
     /// <param name="settings">The current relay configuration.</param>
@@ -185,7 +196,13 @@ internal static class VfsShared
             if (ReferenceEquals(s_lastSettingsForIgnore, settings) && s_lastIgnoredNames != null)
                 return s_lastIgnoredNames;
 
-            var ignored = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ResolveRootFolderName(), ResolveMovieRootFolderName(), ResolveAnimeThemesFolderName(), ResolveCollectionImagesFolderName() };
+            var ignored = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ResolveRootFolderName(settings),
+                ResolveMovieRootFolderName(settings),
+                ResolveAnimeThemesFolderName(settings),
+                ResolveCollectionImagesFolderName(settings),
+            };
             foreach (var folder in (settings.Advanced.FolderExclusions ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                 ignored.Add(folder.TrimSlashes());
 
@@ -488,6 +505,7 @@ internal static class VfsShared
                     JsonSerializer.Serialize(fs, blueprint);
                 }
             );
+            Interlocked.Increment(ref s_blueprintVersion);
         }
         catch { }
     }

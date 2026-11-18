@@ -96,7 +96,6 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
         else
             seriesList = metadataService.GetAllShokoSeries() ?? [];
 
-        int totalInScope = seriesList.Count();
         int consolidatedCount = 0;
 
         if (EnforceTmdbNumbering)
@@ -104,7 +103,21 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
             // Group by primary ID and count how many secondary series are being merged
             var grouped = seriesList.GroupBy(s => OverrideHelper.GetPrimary(s.LocalID, metadataService)).ToList();
             seriesList = [.. grouped.Select(g => metadataService.GetShokoSeriesByID(g.Key) ?? g.First())];
-            consolidatedCount = totalInScope - seriesList.Count();
+            consolidatedCount = seriesList.Sum(s => Math.Max(0, OverrideHelper.GetGroup(s.LocalID, metadataService).Count - 1));
+
+            // Remove stale secondary series entries from the blueprint (and disk on filtered builds) when series are merged via overrides
+            foreach (var primarySeries in seriesList)
+            {
+                int primaryId = primarySeries.LocalID;
+                bool doMovie = MapHelper.IsMovie(primarySeries) && Settings.Advanced.MovieGenerationMode != MovieGenerationMode.Disabled;
+                foreach (int secId in OverrideHelper.GetGroup(primaryId, metadataService).Where(id => id != primaryId))
+                {
+                    foreach (var rootDict in blueprint.Values)
+                        rootDict.TryRemove(secId, out _);
+                    if (isFiltered)
+                        PruneSeries(rootName, secId, errorsBag.Add, pruneStandard: true, pruneMovies: !doMovie);
+                }
+            }
         }
 
         // Process series in parallel
@@ -381,33 +394,46 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
         return true;
     }
 
-    /// <summary>Links series-level and episode-level sidecar metadata for a newly created video symlink.</summary>
+    /// <summary>Queues series-level metadata directories (including season-subfolder parents) and links episode-level sidecar metadata for a newly created video symlink.</summary>
     /// <param name="state">The active series build state.</param>
     /// <param name="srcPath">Absolute path to the physical source video file.</param>
     /// <param name="destSeriesDir">Target VFS series or movie root folder.</param>
     /// <param name="destEpDir">Target VFS season or movie folder for episode sidecars.</param>
     /// <param name="destFilePath">Target VFS video symlink path.</param>
     /// <param name="importRoot">The physical import root path.</param>
+    /// <param name="physicalImportRoot">The physical managed folder root used to guard parent-folder traversal.</param>
     /// <param name="seriesSeasonLabel">Blueprint season label for series-level metadata.</param>
     /// <param name="epSeasonLabel">Blueprint season label for episode-level sidecars.</param>
-    private void LinkLocalMetadataForFile(SeriesBuildState state, string srcPath, string destSeriesDir, string destEpDir, string destFilePath, string importRoot, string seriesSeasonLabel, string epSeasonLabel)
+    /// <param name="isPrimary">Whether this file belongs to the primary series in the override group.</param>
+    private void LinkLocalMetadataForFile(
+        SeriesBuildState state,
+        string srcPath,
+        string destSeriesDir,
+        string destEpDir,
+        string destFilePath,
+        string importRoot,
+        string physicalImportRoot,
+        string seriesSeasonLabel,
+        string epSeasonLabel,
+        bool isPrimary
+    )
     {
         string srcDir = Path.GetDirectoryName(srcPath)!;
-        if (state.LinkedSeriesMetaDirs.Add(Path.Combine(srcDir, destSeriesDir)))
-        {
-            assetLinker.LinkSeriesMetadata(
-                srcDir,
-                destSeriesDir,
-                state.VideoBaseNames,
-                state.Session.MetadataFileCache,
-                (name, s) =>
-                {
-                    state.ExpectedFiles.Add(Path.Combine(destSeriesDir, name));
-                    state.OnLink?.Invoke(importRoot, seriesSeasonLabel, name, s);
-                },
-                state.SkipCheck
-            );
-        }
+        if (state.LinkedSeriesMetaDirs.Add($"{srcDir}\0{destSeriesDir}"))
+            state.PendingSeriesMetaDirs.Add((srcDir, destSeriesDir, importRoot, seriesSeasonLabel, isPrimary));
+
+        // When episodes sit inside a Season/Specials subfolder, also queue the series root folder one level above
+        if (
+            VfsHelper.IsSeasonSubfolder(Path.GetFileName(srcDir))
+            && Path.GetDirectoryName(srcDir) is { Length: > 0 } parentDir
+            && !string.Equals(
+                parentDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                physicalImportRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                VfsShared.PathComparison
+            )
+            && state.LinkedSeriesMetaDirs.Add($"{parentDir}\0{destSeriesDir}")
+        )
+            state.PendingSeriesMetaDirs.Add((parentDir, destSeriesDir, importRoot, seriesSeasonLabel, isPrimary));
 
         assetLinker.LinkEpisodeMetadata(
             srcPath,
@@ -427,6 +453,31 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
             },
             state.SkipCheck
         );
+    }
+
+    /// <summary>Links queued series-level metadata directories, prioritizing primary series folders ahead of secondary override folders.</summary>
+    /// <param name="state">The active series build state.</param>
+    private void FlushSeriesMetadataLinks(SeriesBuildState state)
+    {
+        foreach (var (srcDir, destSeriesDir, importRoot, seriesSeasonLabel, _) in state.PendingSeriesMetaDirs.OrderByDescending(x => x.IsPrimary))
+        {
+            assetLinker.LinkSeriesMetadata(
+                srcDir,
+                destSeriesDir,
+                state.VideoBaseNames,
+                state.Session.MetadataFileCache,
+                ref state.Planned,
+                ref state.Created,
+                state.ExpectedFiles,
+                (name, s) =>
+                {
+                    state.ExpectedFiles.Add(Path.Combine(destSeriesDir, name));
+                    state.OnLink?.Invoke(importRoot, seriesSeasonLabel, name, s);
+                },
+                state.SkipCheck
+            );
+        }
+        state.PendingSeriesMetaDirs.Clear();
     }
 
     /// <summary>Safely purges the contents and removes a root VFS directory.</summary>

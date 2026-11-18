@@ -17,6 +17,7 @@ public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesAp
 
     private readonly HttpClient _http = httpClient ?? new HttpClient();
     private readonly SemaphoreSlim _rateLock = new(1, 1);
+    private readonly Lock _quotaLock = new();
     private DateTimeOffset _lastRequest = DateTimeOffset.MinValue;
     private DateTimeOffset _rateLimitReset = DateTimeOffset.MinValue;
     private int _rateLimitRemaining = 90;
@@ -113,7 +114,7 @@ public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesAp
         var filters = new List<string>();
         if (year.HasValue)
             filters.Add($"{{ column: YEAR, operator: EQ, value: {year.Value} }}");
-        if (!string.IsNullOrWhiteSpace(season))
+        if (!string.IsNullOrWhiteSpace(season) && season.All(char.IsLetter))
             filters.Add($"{{ column: SEASON, operator: EQ, value: {season.ToUpperInvariant()} }}");
         if (!string.IsNullOrWhiteSpace(name))
             filters.Add($"{{ column: TITLE_ROMAJI, operator: LIKE, value: \"%{name.Replace("\\", "\\\\").Replace("\"", "\\\"")}%\" }}");
@@ -187,11 +188,14 @@ public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesAp
     /// <param name="response">The HTTP response containing rate limit headers.</param>
     private void UpdateRateLimits(HttpResponseMessage response)
     {
-        if (response.Headers.TryGetValues("X-RateLimit-Remaining", out var remVals) && int.TryParse(remVals.FirstOrDefault(), out int remaining))
-            _rateLimitRemaining = remaining;
+        lock (_quotaLock)
+        {
+            if (response.Headers.TryGetValues("X-RateLimit-Remaining", out var remVals) && int.TryParse(remVals.FirstOrDefault(), out int remaining))
+                _rateLimitRemaining = remaining;
 
-        if (response.Headers.TryGetValues("X-RateLimit-Reset", out var resetVals) && long.TryParse(resetVals.FirstOrDefault(), out long resetMs))
-            _rateLimitReset = DateTimeOffset.FromUnixTimeMilliseconds(resetMs);
+            if (response.Headers.TryGetValues("X-RateLimit-Reset", out var resetVals) && long.TryParse(resetVals.FirstOrDefault(), out long resetMs))
+                _rateLimitReset = DateTimeOffset.FromUnixTimeMilliseconds(resetMs);
+        }
     }
 
     /// <summary>Enforces proactive pacing and halts requests if the remaining quota has been exhausted.</summary>
@@ -202,15 +206,18 @@ public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesAp
         try
         {
             var now = DateTimeOffset.UtcNow;
+            TimeSpan quotaWait;
+            lock (_quotaLock)
+                quotaWait = _rateLimitRemaining <= 0 && _rateLimitReset > now ? _rateLimitReset - now : TimeSpan.Zero;
 
             // Preemptively wait if the server quota is completely exhausted
-            if (_rateLimitRemaining <= 0 && _rateLimitReset > now)
+            if (quotaWait > TimeSpan.Zero)
             {
-                var quotaWait = _rateLimitReset - now;
                 logger?.LogDebug("AnimeThemes: Quota exhausted. Waiting {Seconds:F1}s for rate limit reset window", quotaWait.TotalSeconds);
                 await Task.Delay(quotaWait, cancellationToken).ConfigureAwait(false);
                 now = DateTimeOffset.UtcNow;
-                _rateLimitRemaining = 90;
+                lock (_quotaLock)
+                    _rateLimitRemaining = 90;
             }
 
             var intervalWait = _lastRequest + s_minRequestInterval - now;

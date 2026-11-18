@@ -43,7 +43,7 @@
    */
   window._sr.updateControlStates = (config) => {
     const isPlexLinked = !!window._sr.isPlexLinked;
-    const isSyncActive = el("sync-users")?.value !== "3";
+    const isSyncActive = el("sync-users")?.value !== "4";
 
     document.querySelectorAll(".plex-auth, .sync-user").forEach((elem) => {
       const reqPlex = elem.classList.contains("plex-auth");

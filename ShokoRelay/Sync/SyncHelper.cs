@@ -112,6 +112,9 @@ public static class SyncHelper
         /// <summary>Cached list of shared server entries keyed by Plex server ID.</summary>
         public Dictionary<string, List<PlexSharedServerUser>> SharedServersByServer { get; } = new(StringComparer.OrdinalIgnoreCase);
 
+        /// <summary>Cached list of Plex friends/users for display-title matching.</summary>
+        public List<PlexFriendUser>? Friends { get; set; }
+
         /// <summary>Cached resolved tokens keyed by (ServerId, PlexUserName).</summary>
         public Dictionary<(string ServerId, string UserName), (string? Token, bool IsSharedFriend)> ResolvedTokens { get; } = [];
     }
@@ -406,7 +409,7 @@ public static class SyncHelper
 
             if (matchedHome != null)
             {
-                var switchedToken = await plexAuth.SwitchHomeUserAsync(matchedHome.Id, adminToken, pin, cancellationToken).ConfigureAwait(false);
+                var switchedToken = await plexAuth.SwitchHomeUserAsync(matchedHome.Id, adminToken, pin, cancellationToken, matchedHome.Uuid).ConfigureAwait(false);
                 if (!string.IsNullOrWhiteSpace(switchedToken))
                 {
                     logger?.LogDebug("WatchedSyncService: fetched transient token for Plex Home user '{User}' (id={Id}) not persisted", userName, matchedHome.Id);
@@ -492,12 +495,27 @@ public static class SyncHelper
                     tokenCache.SharedServersByServer[serverId] = sharedUsers;
                 }
 
+                tokenCache.Friends ??= await plexAuth.GetFriendsAsync(adminToken, cancellationToken).ConfigureAwait(false);
+                var matchedFriend = tokenCache.Friends.FirstOrDefault(f =>
+                    string.Equals(f.Title?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(f.Username?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(f.Email?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(f.Id?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
+                );
+
                 var sharedMatch = sharedUsers.FirstOrDefault(s =>
                     !string.IsNullOrWhiteSpace(s.AccessToken)
                     && (
                         string.Equals(s.Username?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
                         || string.Equals(s.Email?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
                         || string.Equals(s.UserId?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
+                        || (
+                            matchedFriend != null
+                            && (
+                                (!string.IsNullOrWhiteSpace(matchedFriend.Username) && string.Equals(s.Username?.Trim(), matchedFriend.Username.Trim(), StringComparison.OrdinalIgnoreCase))
+                                || (!string.IsNullOrWhiteSpace(matchedFriend.Id) && string.Equals(s.UserId?.Trim(), matchedFriend.Id.Trim(), StringComparison.OrdinalIgnoreCase))
+                            )
+                        )
                         || (
                             matchedHome != null
                             && (
@@ -586,7 +604,12 @@ public static class SyncHelper
             {
                 var (effectiveToken, isSharedFriend) = await ResolvePlexUserTokenAsync(plexAuth, configProvider, target, name, pin, tokenCache, logger, cancellationToken).ConfigureAwait(false);
                 if (string.IsNullOrWhiteSpace(effectiveToken))
+                {
+                    string msg = $"Could not resolve Plex access token for configured user '{name}' on '{target.ServerName}'";
+                    logger?.LogWarning("WatchedSyncService: {Message}", msg);
+                    result = RecordError(result, result.PerUser, name, msg);
                     continue;
+                }
 
                 List<PlexMetadataItem> list =
                     target.LibraryType == PlexLibraryType.Movie

@@ -568,7 +568,7 @@ public class VfsWatcher(
             bool foundInAnyTarget = false;
 
             // Pre-filter targets so we only poll libraries that physically contain the VFS paths for this series, eliminating timeouts on irrelevant libraries
-            var matchingTargetIds = vfsPaths.SelectMany(plexLibrary.GetMatchingTargetsForPath).Select(x => x.Target.SectionId).ToHashSet();
+            var matchingTargetIds = vfsPaths.SelectMany(plexLibrary.GetMatchingTargetsForPath).Select(x => (x.Target.ServerId, x.Target.SectionId)).ToHashSet();
 
             // Wait for Plex to assign rating keys (primarily for users in deferred mode)
             int retryDelaySeconds = Settings.Advanced.PlexScanDelay;
@@ -576,7 +576,7 @@ public class VfsWatcher(
 
             foreach (var target in targets)
             {
-                if (!matchingTargetIds.Contains(target.SectionId))
+                if (!matchingTargetIds.Contains((target.ServerId, target.SectionId)))
                     continue;
 
                 var ratingKeys = new List<int>();

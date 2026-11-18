@@ -310,7 +310,7 @@ GET  /sync-watched/start                                       -> StartWatchedSy
   - `ratings`: (default to configuration) set to true/false to override the `Automation.ShokoSyncWatchedIncludeRatings` setting.
   - `progress`: (default to configuration) set to true/false to override the `Automation.ShokoSyncWatchedIncludeProgress` setting.
   - `import`: (default false) Direction: true for Plex←Shoko, false for Plex→Shoko.
-  - `users`: (default to configuration) Restrict sync to specific user groups (`0: All`, `1: Admin`, `2: Extra`, `3: None`, `4: Advanced`).
+  - `users`: (default to configuration) Restrict sync to specific user groups (`0: All`, `1: Admin`, `2: Extra`, `3: Advanced`, `4: None`).
   - `libraryName`: (optional) restrict processing to a specific Plex library name (e.g. `Anime`).
     - If the library does not use Shoko Relay and it is a Plex to Shoko sync, a fallback mode which matches physical filenames instead of GUIDs will be used.
   - Direction and exclusion settings are read from `AutomationConfig`.

@@ -166,7 +166,7 @@
         });
 
         const usersVal = el("sync-users").value;
-        const usersMap = { 0: "all", 1: "admin", 2: "extra", 3: "none", 4: "advanced" };
+        const usersMap = { 0: "all", 1: "admin", 2: "extra", 3: "advanced", 4: "none" };
         ps.set("users", usersMap[usersVal] || "none");
 
         const libName = el("sync-library")?.value.trim();

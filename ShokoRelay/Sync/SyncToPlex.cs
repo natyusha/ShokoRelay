@@ -139,7 +139,7 @@ public class SyncToPlex(
                 foreach (var (ud, _) in userWatched)
                     activeSourceEpisodes.Add((targetShokoUser.LocalID, ud.EpisodeID));
 
-                result.PerUser[uName] = result.PerUser[uName] with { Processed = userWatched.Count };
+                result.PerUser[uName] = result.PerUser[uName] with { Processed = Math.Max(result.PerUser[uName].Processed, userWatched.Count) };
 
                 var plexMap = new Dictionary<int, List<PlexMetadataItem>>();
                 foreach (var item in unwatched)

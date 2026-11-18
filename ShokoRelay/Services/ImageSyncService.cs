@@ -180,7 +180,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                     {
                         if (
                             episode
-                                .GetImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = ImageEntityType.Backdrop })
+                                .GetImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = ImageEntityType.Backdrop, LinkedEntityImages = false })
                                 .Any(x => x.Source == ServiceRegistration.RelayPlexSource || x.Source == ServiceRegistration.RelaySource)
                         )
                         {
@@ -241,6 +241,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                             epLogName,
                             false,
                             $"[Local {labelType} Thumb] {epLogName}",
+                            uploadedBag,
                             errsBag
                         )
                         .ConfigureAwait(false);
@@ -249,7 +250,11 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                     bool purgePlexThumb = fileExists || Settings.TmdbThumbnails;
                     if (purgePlexThumb)
                     {
-                        if (episode.GetImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = ImageEntityType.Backdrop }).Any(x => x.Source == ServiceRegistration.RelayPlexSource))
+                        if (
+                            episode
+                                .GetImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = ImageEntityType.Backdrop, LinkedEntityImages = false })
+                                .Any(x => x.Source == ServiceRegistration.RelayPlexSource)
+                        )
                         {
                             logger.LogInformation("ImageSyncService: {Reason} ... Purging Plex thumbnail for -> {LogName}", fileExists ? "Local thumbnail found" : "TMDB Thumbnails enabled", epLogName);
                             await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, x => x.Source == ServiceRegistration.RelayPlexSource).ConfigureAwait(false);
@@ -261,7 +266,11 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                         {
                             addStats(true, false, false, true);
                             errsBag.Add($"[Missing Plex Thumbnail] {epLogName} (No thumbnail generated or available in Plex)");
-                            if (episode.GetImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = ImageEntityType.Backdrop }).Any(x => x.Source == ServiceRegistration.RelayPlexSource))
+                            if (
+                                episode
+                                    .GetImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = ImageEntityType.Backdrop, LinkedEntityImages = false })
+                                    .Any(x => x.Source == ServiceRegistration.RelayPlexSource)
+                            )
                                 await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, x => x.Source == ServiceRegistration.RelayPlexSource).ConfigureAwait(false);
                         }
                         else
@@ -370,12 +379,11 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                     $"group {group.PreferredTitle?.Value} [{group.LocalID}]",
                     true,
                     $"[Collection Poster] {group.PreferredTitle?.Value}",
+                    uploadedBag,
                     errsBag
                 )
                 .ConfigureAwait(false);
 
-            if (fileExists && u)
-                uploadedBag.Add($"[Collection Poster] {group.PreferredTitle?.Value}");
             addStats(fileExists, u, s, e);
         }
     }
@@ -404,7 +412,11 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                     {
                         if (OverrideHelper.GetPrimary(series.LocalID, metadataService) != series.LocalID)
                         {
-                            if (series.GetImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = config.Type }).Any(x => x.Source == ServiceRegistration.RelaySource))
+                            if (
+                                series
+                                    .GetImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = config.Type, LinkedEntityImages = false })
+                                    .Any(x => x.Source == ServiceRegistration.RelaySource)
+                            )
                             {
                                 await PurgeEntityImagesAsync(series, config.Type, x => x.Source == ServiceRegistration.RelaySource).ConfigureAwait(false);
                                 addStats(false, false, false, false);
@@ -432,12 +444,11 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                                 $"series {series.GetDisplayTitle()} [{series.LocalID}]",
                                 true,
                                 $"[Local {config.Label}] {series.GetDisplayTitle()}",
+                                uploadedBag,
                                 errsBag
                             )
                             .ConfigureAwait(false);
 
-                        if (fileExists && u)
-                            uploadedBag.Add($"[Local {config.Label}] {series.GetDisplayTitle()}");
                         addStats(fileExists, u, s, e);
                     }
                 }
@@ -456,7 +467,8 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
     /// <param name="label">Human-readable asset label for log messages.</param>
     /// <param name="entityName">Human-readable entity label for log messages.</param>
     /// <param name="userSubmitted">Whether the uploaded image should be marked as user-submitted.</param>
-    /// <param name="uploadDetail">Optional detail label logged on successful upload.</param>
+    /// <param name="uploadDetail">Optional detail label recorded on successful upload.</param>
+    /// <param name="uploadedBag">Thread-safe collection for recording uploaded asset details.</param>
     /// <param name="errorsBag">Thread-safe collection for recording upload errors.</param>
     /// <returns>A tuple indicating whether the file exists, was uploaded, was skipped, or errored.</returns>
     private async Task<(bool FileExists, bool Uploaded, bool Skipped, bool Error)> ProcessLocalAssetAsync(
@@ -467,6 +479,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
         string entityName,
         bool userSubmitted,
         string? uploadDetail,
+        ConcurrentBag<string> uploadedBag,
         ConcurrentBag<string> errorsBag
     )
     {
@@ -484,7 +497,10 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
             catch { }
         }
 
-        var existingXrefs = entity.GetImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = imageType }).Where(x => x.Source == ServiceRegistration.RelaySource).ToList();
+        var existingXrefs = entity
+            .GetImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = imageType, LinkedEntityImages = false })
+            .Where(x => x.Source == ServiceRegistration.RelaySource)
+            .ToList();
 
         if (!exists)
         {
@@ -536,7 +552,10 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
             }
 
             if (uploadDetail != null)
+            {
+                uploadedBag.Add(uploadDetail);
                 logger.LogDebug("ImageSyncService: Successfully uploaded and preferred {Label} for -> {Entity}", label, entityName);
+            }
             return (true, true, false, false);
         }
         catch (Exception ex)
@@ -567,7 +586,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
     )
     {
         var existingXrefs = episode
-            .GetImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = ImageEntityType.Backdrop })
+            .GetImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = ImageEntityType.Backdrop, LinkedEntityImages = false })
             .Where(x => x.Source == ServiceRegistration.RelayPlexSource)
             .ToList();
 
@@ -662,7 +681,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
     {
         try
         {
-            var filterOpts = new ImageCrossReferenceFilteringOptions { ImageType = imageType };
+            var filterOpts = new ImageCrossReferenceFilteringOptions { ImageType = imageType, LinkedEntityImages = false };
             foreach (var xref in entity.GetImageCrossReferences(filterOpts).Where(predicate))
             {
                 imageManager.RemoveImageCrossReference(xref);

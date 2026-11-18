@@ -178,10 +178,19 @@ public static class PlexMapping
             : string.IsNullOrWhiteSpace(showPreferredOrderingId) ? [.. list.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber)]
             :
             [
-                .. list.Select(te => (Episode: te, Priority: te.PreferredOrdering is { } pref && IsTmdbOrdering(pref, showPreferredOrderingId) ? 0 : 1))
+                .. list.Select(te =>
+                    {
+                        bool isPref = te.PreferredOrdering is { } pref && IsTmdbOrdering(pref, showPreferredOrderingId);
+                        return (
+                            Episode: te,
+                            Priority: isPref ? 0 : 1,
+                            Season: isPref ? te.PreferredOrdering!.SeasonNumber ?? 0 : te.SeasonNumber ?? 0,
+                            Number: isPref ? te.PreferredOrdering!.EpisodeNumber : te.EpisodeNumber
+                        );
+                    })
                     .OrderBy(x => x.Priority)
-                    .ThenBy(x => x.Episode.SeasonNumber ?? 0)
-                    .ThenBy(x => x.Episode.EpisodeNumber)
+                    .ThenBy(x => x.Season)
+                    .ThenBy(x => x.Number)
                     .Select(x => x.Episode),
             ];
     }

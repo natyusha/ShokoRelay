@@ -298,7 +298,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
             //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
             ["Genre"]                 = TagHelper.GetFilteredTags(series, tmdbSeries, metadataService),
             ["Guid"]                  = BuildXrefGuidArray(series, tmdbSeries, tmdbMovie),
-            ["Country"]               = BuildCountryArray(series, tmdbSeries),
+            ["Country"]               = BuildCountryArray(series, tmdbSeries, tmdbMovie),
             ["Role"]                  = CastHelper.GetCastAndCrew(series, metadataService, tmdbSeries),
             ["Director"]              = CastHelper.GetDirectors(series, metadataService),
             ["Producer"]              = CastHelper.GetProducers(series, metadataService),
@@ -408,16 +408,20 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
         var images = (IWithImages)episode;
         var seriesImages = (IWithImages)series;
 
-        bool isMovieOverride = tmdbMovie != null || actualSeries.Type == AnimeType.Movie;
+        bool isMovieOverride = episode.Type == EpisodeType.Episode && (tmdbMovie != null || actualSeries.Type == AnimeType.Movie);
 
-        string epTitle =
-            tmdbEp is IWithTitles { PreferredTitle.Value: { Length: > 0 } pt } ? pt
-            : isMovieOverride ? TextHelper.ResolveMovieTitle(episode, actualSeries, tmdbMovie, seriesTitle: actualSeries.LocalID == series.LocalID ? ctx.Titles.DisplayTitle : null)
+        string epTitle = isMovieOverride
+            ? TextHelper.ResolveMovieTitle(episode, actualSeries, tmdbMovie, seriesTitle: actualSeries.LocalID == series.LocalID ? ctx.Titles.DisplayTitle : null)
             : TextHelper.ResolveEpisodeTitle(episode, actualSeries.LocalID == series.LocalID ? ctx.Titles.DisplayTitle : (actualSeries.GetDisplayTitle() ?? ctx.Titles.DisplayTitle), tmdbEp);
 
-        string epDescription = tmdbEp is IWithOverviews { PreferredOverview.Value: { Length: > 0 } pd } ? pd : TextHelper.GetDescriptionByLanguage(episode, Settings.DescriptionLanguage);
+        string epDescription =
+            Settings.TmdbEpGroupNames && tmdbEpisode != null && TextHelper.GetDescriptionByLanguage(tmdbEpisode, Settings.DescriptionLanguage) is { Length: > 0 } gd
+                ? gd
+                : TextHelper.GetDescriptionByLanguage(episode, Settings.DescriptionLanguage);
         if (isMovieOverride && string.IsNullOrWhiteSpace(epDescription))
-            epDescription = tmdbMovie?.PreferredOverview?.Value ?? TextHelper.GetDescriptionByLanguage(actualSeries, Settings.DescriptionLanguage);
+            epDescription = (tmdbMovie != null ? TextHelper.GetDescriptionByLanguage(tmdbMovie, Settings.DescriptionLanguage) : null) is { Length: > 0 } md
+                ? md
+                : TextHelper.GetDescriptionByLanguage(actualSeries, Settings.DescriptionLanguage);
 
         string? parentThumb = null;
         if (Settings.TmdbSeasonPosters && mapped.Season >= 0 && string.IsNullOrEmpty(ctx.PreferredOrderingId))
@@ -462,7 +466,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
             //["originalTitle"]       = No source for original episode titles
             ["titleSort"]             = epTitle,
             ["year"]                  = episode.AirDate?.Year,
-            ["summary"]               = TextHelper.SanitizeSummaryWithFallback(epDescription, tmdbEp?.PreferredOverview?.Value, Settings.SummaryMode),
+            ["summary"]               = TextHelper.SanitizeSummaryWithFallback(epDescription, tmdbEp != null ? TextHelper.GetDescriptionByLanguage(tmdbEp, Settings.DescriptionLanguage) : null, Settings.SummaryMode),
             ["isAdult"]               = isAdult,
             ["duration"]              = (int)episode.Runtime.TotalMilliseconds,
 

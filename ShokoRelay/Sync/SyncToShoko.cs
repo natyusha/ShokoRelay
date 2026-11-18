@@ -74,7 +74,8 @@ public class SyncToShoko(
             return result;
 
         result = result with { PerUser = SyncHelper.CreatePerUserBuckets(extraUsers.Select(e => e.Name), includeAdmin) };
-        var appliedIds = new HashSet<(int ShokoUserId, int EpisodeId)>();
+        var appliedWatchedIds = new HashSet<(int ShokoUserId, int EpisodeId)>();
+        var appliedProgressIds = new HashSet<(int ShokoUserId, int EpisodeId)>();
         var tokenCache = new SyncHelper.PlexUserTokenCache();
         var shokoUserLookup = new Dictionary<string, IUser?>(StringComparer.OrdinalIgnoreCase);
 
@@ -217,7 +218,7 @@ public class SyncToShoko(
                     if (item.LibrarySectionId.HasValue && item.LibrarySectionId != target.SectionId)
                         continue;
 
-                    if (GetCachedEpisode(item) is not { } ep || appliedIds.Contains((targetShokoUser.LocalID, ep.LocalID)) || !seenEpIds.Add(ep.LocalID))
+                    if (GetCachedEpisode(item) is not { } ep || appliedWatchedIds.Contains((targetShokoUser.LocalID, ep.LocalID)) || !seenEpIds.Add(ep.LocalID))
                         continue;
 
                     var epUserData = GetCachedUserData(ep, targetShokoUser);
@@ -244,7 +245,7 @@ public class SyncToShoko(
 
                     result = SyncHelper.IncProcessed(result, result.PerUser, uName);
 
-                    if (GetCachedEpisode(item) is not { } ep || appliedIds.Contains((targetShokoUser.LocalID, ep.LocalID)))
+                    if (GetCachedEpisode(item) is not { } ep || appliedWatchedIds.Contains((targetShokoUser.LocalID, ep.LocalID)))
                     {
                         result = SyncHelper.IncSkipped(result, result.PerUser, uName);
                         continue;
@@ -259,7 +260,7 @@ public class SyncToShoko(
                     bool wouldMark = isWatchedInPlex && !alreadyWatched && (ep.Videos?.Count > 0);
                     bool wouldUpdateProgress = false;
 
-                    if (!isWatchedInPlex && hasProgressInPlex && !alreadyWatched && ep.Videos?.Count > 0)
+                    if (!isWatchedInPlex && hasProgressInPlex && !alreadyWatched && !appliedProgressIds.Contains((targetShokoUser.LocalID, ep.LocalID)) && ep.Videos?.Count > 0)
                         wouldUpdateProgress =
                             userDataService.GetVideoUserData(ep.Videos.First(), targetShokoUser) is not { } existingData
                             || Math.Abs(existingData.ProgressPosition.TotalMilliseconds - item.ViewOffset!.Value) >= 5000;
@@ -286,7 +287,7 @@ public class SyncToShoko(
                                 .SetEpisodeWatchedStatus(ep, targetShokoUser, true, watchedAt, videoReason: VideoUserDataSaveReason.UserInteraction, noVideoPropagation: false, updateStatsNow: isLastInSeries)
                                 .ConfigureAwait(false);
                         }
-                        appliedIds.Add((targetShokoUser.LocalID, ep.LocalID));
+                        appliedWatchedIds.Add((targetShokoUser.LocalID, ep.LocalID));
                         result = SyncHelper.IncMarkedWatched(result, result.PerUser, uName);
                         logger.LogInformation(
                             "WatchedSyncService: {Prefix}Plex -> Shoko: {User} marked {Type} -> {Title} [{SeriesId}] - S{Season:D2}E{Episode:D2} (RatingKey: {RatingKey})",
@@ -308,7 +309,7 @@ public class SyncToShoko(
                             foreach (var video in ep.Videos!)
                                 await userDataService.SaveVideoUserData(video, targetShokoUser, update, VideoUserDataSaveReason.PlaybackProgress).ConfigureAwait(false);
                         }
-                        appliedIds.Add((targetShokoUser.LocalID, ep.LocalID));
+                        appliedProgressIds.Add((targetShokoUser.LocalID, ep.LocalID));
                         result = SyncHelper.IncProgressUpdated(result, result.PerUser, uName);
                         logger.LogInformation(
                             "WatchedSyncService: {Prefix}Plex -> Shoko: {User} updated progress for {Type} -> {Title} [{SeriesId}] - S{Season:D2}E{Episode:D2} (RatingKey: {RatingKey}) to {Offset}",

@@ -293,7 +293,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     [HttpGet("metadata/{ratingKey}/children")]
     public IActionResult GetChildren(string ratingKey) =>
         SafeRequest(() =>
-            PlexHelper.IsMovieKey(ratingKey) ? EmptyMatch()
+            PlexHelper.IsMovieKey(ratingKey) || PlexHelper.IsEpisodeKey(ratingKey) ? EmptyMatch()
             : mapper.GetSeriesContext(ratingKey) is not { } ctx ? NotFound()
             : ratingKey.IndexOf(PlexConstants.SeasonPrefix, StringComparison.OrdinalIgnoreCase) is var sIdx && sIdx >= 0
                 ? (!int.TryParse(ratingKey[(sIdx + PlexConstants.SeasonPrefix.Length)..], out int sNum) ? NotFound() : WrapInPagedContainer(mapper.BuildEpisodeList(ctx, sNum)))

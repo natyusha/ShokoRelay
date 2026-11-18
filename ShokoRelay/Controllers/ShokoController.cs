@@ -56,6 +56,9 @@ public class ShokoController(
     /// <summary>Last write timestamp of the blueprint file used to invalidate the cached JSON.</summary>
     private static DateTime s_lastBlueprintWriteUtc = DateTime.MinValue;
 
+    /// <summary>Last blueprint save version used to invalidate the cached JSON.</summary>
+    private static long s_lastBlueprintVersion = -1;
+
     /// <summary>Lock object for synchronizing tree cache updates.</summary>
     private static readonly Lock s_treeCacheLock = new();
 
@@ -65,29 +68,32 @@ public class ShokoController(
     /// <param name="filter">Optional comma-separated list of Shoko or AniDB series IDs to filter the operation.</param>
     /// <returns>A task representing the result of the build outcome.</returns>
     [HttpGet("vfs")]
-    public Task<IActionResult> BuildVfs([FromQuery] bool clean = true, [FromQuery] bool run = false, [FromQuery] string? filter = null) =>
-        ValidateFilterOrBadRequest(filter, out var filterIds) is { } guard ? Task.FromResult(guard)
-        : !run ? Task.FromResult<IActionResult>(Ok(new RelayResponse<object>(Status: "skipped", Message: "Set run=true to build the VFS")))
-        : ExecuteTrackedTaskAsync(
-            ShokoRelayConstants.TaskVfsBuild,
-            LogHelper.BuildVfsReport,
-            async () =>
-            {
-                var result = filterIds.Count > 0 ? vfsBuilder.Build(filterIds, clean) : vfsBuilder.Build((int?)null, clean);
+    public Task<IActionResult> BuildVfs([FromQuery] bool clean = true, [FromQuery] bool run = false, [FromQuery] string? filter = null)
+    {
+        OverrideHelper.Reload();
+        return ValidateFilterOrBadRequest(filter, out var filterIds) is { } guard ? Task.FromResult(guard)
+            : !run ? Task.FromResult<IActionResult>(Ok(new RelayResponse<object>(Status: "skipped", Message: "Set run=true to build the VFS")))
+            : ExecuteTrackedTaskAsync(
+                ShokoRelayConstants.TaskVfsBuild,
+                LogHelper.BuildVfsReport,
+                async () =>
+                {
+                    var result = filterIds.Count > 0 ? vfsBuilder.Build(filterIds, clean) : vfsBuilder.Build((int?)null, clean);
 
-                // Restore AnimeThemes links after the VFS build (filtered or global) if a mapping file exists
-                if (IoFile.Exists(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileAtMapping)))
-                    await atMapping.ApplyMappingAsync(filterIds.Count > 0 ? filterIds : null, CancellationToken.None).ConfigureAwait(false);
+                    // Restore AnimeThemes links after the VFS build (filtered or global) if a mapping file exists
+                    if (IoFile.Exists(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileAtMapping)))
+                        await atMapping.ApplyMappingAsync(filterIds.Count > 0 ? filterIds : null, CancellationToken.None).ConfigureAwait(false);
 
-                // Trigger standard debounced Plex updates if this is a targeted manual rebuild
-                if (PlexLibrary.IsEnabled && filterIds.Count > 0)
-                    foreach (var id in filterIds)
-                        vfsWatcher.TriggerPlexUpdates(id);
+                    // Trigger standard debounced Plex updates if this is a targeted manual rebuild
+                    if (PlexLibrary.IsEnabled && filterIds.Count > 0)
+                        foreach (var id in filterIds)
+                            vfsWatcher.TriggerPlexUpdates(id);
 
-                return result;
-            },
-            VfsShared.VfsLock
-        );
+                    return result;
+                },
+                VfsShared.VfsLock
+            );
+    }
 
     /// <summary>Audits the VFS to find and remove orphaned series folders and broken symlinks.</summary>
     /// <returns>A task representing the result of the audit operation.</returns>
@@ -133,11 +139,10 @@ public class ShokoController(
             return EmptyTree();
 
         var lastWrite = IoFile.GetLastWriteTimeUtc(VfsShared.BlueprintFilePath);
+        var version = VfsShared.BlueprintVersion;
         lock (s_treeCacheLock)
-        {
-            if (s_cachedTreeJson != null && s_lastBlueprintWriteUtc == lastWrite)
+            if (s_cachedTreeJson != null && s_lastBlueprintWriteUtc == lastWrite && s_lastBlueprintVersion == version)
                 return Content(s_cachedTreeJson, "application/json");
-        }
 
         try
         {
@@ -207,6 +212,7 @@ public class ShokoController(
             {
                 s_cachedTreeJson = json;
                 s_lastBlueprintWriteUtc = lastWrite;
+                s_lastBlueprintVersion = version;
             }
 
             // Bypass MVC's default Newtonsoft.Json formatter and return explicit System.Text.Json to preserve attribute-based casing
@@ -435,8 +441,8 @@ public class ShokoController(
     {
         Logger.LogInformation("Shoko: Starting a manual purge of all Relay-owned images...");
         var xrefs = imageManager
-            .GetAllImageCrossReferences(new ImageCrossReferenceFilteringOptions())
-            .Where(x => x.Source == ServiceRegistration.RelaySource || x.Source == ServiceRegistration.RelayPlexSource)
+            .GetAllImageCrossReferences(new ImageCrossReferenceFilteringOptions { XrefSource = ServiceRegistration.RelaySource })
+            .Concat(imageManager.GetAllImageCrossReferences(new ImageCrossReferenceFilteringOptions { XrefSource = ServiceRegistration.RelayPlexSource }))
             .ToList();
         int purgedCount = 0;
 

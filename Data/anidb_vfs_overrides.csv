@@ -15,9 +15,9 @@
 # https://www.themoviedb.org/tv/70881
 12661,13334
 
-# Black Clover (2017) | Black Clover
+# Black Clover (2017) | Black Clover | Black Clover 2nd Season
 # https://www.themoviedb.org/tv/73223/episode_group/5ea411e1bdc34c002625e6df
-12665,12351
+12665,12351,19433
 
 # Bleach | Bleach: Sennen Kessen Hen | Bleach: Sennen Kessen Hen - Ketsubetsu Tan
 # Bleach: Sennen Kessen Hen - Soukoku Tan | Bleach: Sennen Kessen Hen - Kashin Tan
@@ -56,6 +56,13 @@
 # Ranma ½ Super | Ranma ½ Akumu! Shunmin Kou
 # https://www.themoviedb.org/tv/57706/episode_group/61ae6fa8af85de0043620bba
 4576,193,405,6393,2995,2996,6141
+
+
+## Custom Episode Ordering ##
+
+# Urusei Yatsura
+# Bypass strange TMDB decision to split the first 23 episodes and adopt TheTVDB Aired Order
+377;1-54s1e1|55-106s2e1|107-149s3e1|150-195s4e1
 
 
 ## Crossover Series ##

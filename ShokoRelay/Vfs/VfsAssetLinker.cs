@@ -30,6 +30,9 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
     /// <param name="destDir">The target VFS series directory.</param>
     /// <param name="videoBaseNames">A set of base names for video files to exclude from series-level linking.</param>
     /// <param name="cache">Build-session cache for directory enumeration results.</param>
+    /// <param name="planned">Reference to the planned links counter.</param>
+    /// <param name="created">Reference to the successful links created counter.</param>
+    /// <param name="expectedFiles">Optional set of VFS destination paths already claimed for this build.</param>
     /// <param name="onLink">Optional callback to record the created link for the VFS Browser blueprint.</param>
     /// <param name="skipExistenceCheck">If true, bypasses the filesystem check and writes the link directly.</param>
     public void LinkSeriesMetadata(
@@ -37,6 +40,9 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
         string destDir,
         HashSet<string> videoBaseNames,
         ConcurrentDictionary<string, Lazy<string[]>> cache,
+        ref int planned,
+        ref int created,
+        HashSet<string>? expectedFiles = null,
         Action<string, string?>? onLink = null,
         bool skipExistenceCheck = false
     )
@@ -51,8 +57,15 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
             if (videoBaseNames.Contains(baseName))
                 continue;
             string destName = baseName.Equals("Specials", StringComparison.OrdinalIgnoreCase) ? "Season-Specials-Poster" + Path.GetExtension(name) : name;
-            if (VfsShared.TryCreateLink(file, Path.Combine(destDir, destName), logger, skipExistenceCheck: skipExistenceCheck))
+            string destPath = Path.Combine(destDir, destName);
+            if (expectedFiles?.Contains(destPath) == true)
+                continue;
+            if (VfsShared.TryCreateLink(file, destPath, logger, skipExistenceCheck: skipExistenceCheck))
+            {
+                planned++;
+                created++;
                 onLink?.Invoke(destName, file);
+            }
         }
     }
 

@@ -626,7 +626,9 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
                 else
                 {
                     var newCacheLines = new List<string>();
-                    var primaryIdsToPurge = new HashSet<string>(seriesFilter.Select(id => EnforceTmdbNumbering ? OverrideHelper.GetPrimary(id, metadataService).ToString() : id.ToString()));
+                    var primaryIdsToPurge = new HashSet<string>(
+                        seriesFilter.SelectMany(id => EnforceTmdbNumbering ? OverrideHelper.GetGroup(OverrideHelper.GetPrimary(id, metadataService), metadataService) : [id]).Select(id => id.ToString())
+                    );
                     string searchToken = $"/{vfsRoot}/";
                     string movieSearchToken = $"/{VfsShared.ResolveMovieRootFolderName()}/";
 

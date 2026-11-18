@@ -536,7 +536,12 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
 
             using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?{string.Join("&", q)}", target.ServerUrl, token);
             using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
-            var cont = resp.IsSuccessStatusCode ? await PlexApi.ReadContainerAsync(resp, cancellationToken).ConfigureAwait(false) : null;
+            if (!resp.IsSuccessStatusCode)
+            {
+                logger.LogWarning("PlexClient: Failed to query section {SectionId} on {ServerName} (HTTP {StatusCode})", target.SectionId, target.ServerName, resp.StatusCode);
+                break;
+            }
+            var cont = await PlexApi.ReadContainerAsync(resp, cancellationToken).ConfigureAwait(false);
             if (cont?.Metadata == null || cont.Metadata.Count == 0)
                 break;
             results.AddRange(cont.Metadata);

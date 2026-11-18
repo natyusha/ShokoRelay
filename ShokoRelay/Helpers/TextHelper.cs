@@ -323,7 +323,8 @@ public static partial class TextHelper
     public static string ResolveEpisodeTitle(IEpisode episode, string displaySeriesTitle, IEpisode? tmdbEp = null)
     {
         string raw = GetTitleByLanguage(episode, Settings.EpisodeTitleLanguage);
-        string? tmdbTitle = tmdbEp?.PreferredTitle?.Value ?? (episode as IShokoEpisode)?.GetLinkedEpisodes(MetadataSource.TMDB)?.FirstOrDefault()?.PreferredTitle?.Value;
+        var resolvedTmdbEp = tmdbEp ?? (episode as IShokoEpisode)?.GetLinkedEpisodes(MetadataSource.TMDB)?.FirstOrDefault();
+        string? tmdbTitle = resolvedTmdbEp != null ? GetTitleByLanguage(resolvedTmdbEp, Settings.EpisodeTitleLanguage) : null;
 
         // Replace ambiguous single entry titles (like "OVA") with the series title
         if (episode.EpisodeNumber == 1 && s_ambiguousTitles.Contains(raw))
@@ -332,7 +333,7 @@ public static partial class TextHelper
 
             // Fallback to TMDB title or English series title as a last resort
             if (title == raw)
-                title = tmdbTitle ?? (episode.Series != null ? GetTitleByLanguage(episode.Series, "en") : raw);
+                title = !string.IsNullOrEmpty(tmdbTitle) ? tmdbTitle : (episode.Series != null ? GetTitleByLanguage(episode.Series, "en") : raw);
 
             // Append ambiguous title to series title if not already present
             if (title != raw && !title.Contains(raw))

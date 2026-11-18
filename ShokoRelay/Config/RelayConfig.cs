@@ -120,13 +120,13 @@ public enum SyncUserType
     [Display(Name = "Extra Users Only")]
     Extra = 2,
 
-    /// <summary>Disable sync for all users.</summary>
-    [Display(Name = "None")]
-    None = 3,
-
     /// <summary>Sync only users configured under Advanced User Mappings.</summary>
     [Display(Name = "Advanced")]
-    Advanced = 4,
+    Advanced = 3,
+
+    /// <summary>Disable sync for all users.</summary>
+    [Display(Name = "None")]
+    None = 4,
 }
 
 /// <summary>Levels of overlap allowed for AnimeThemes .webm files.</summary>
@@ -176,36 +176,6 @@ public class RelayConfig
 
     /// <summary>Advanced system settings.</summary>
     public AdvancedConfig Advanced { get; set; } = new();
-
-    /// <summary>Priority list of languages for series titles.</summary>
-    [Display(Name = "Series Title Language", Description = "Priority, comma separated")]
-    [DefaultValue("SHOKO")]
-    [LanguageSetting]
-    public string SeriesTitleLanguage { get; set; } = "SHOKO";
-
-    /// <summary>Priority list of languages for alternate series titles.</summary>
-    [Display(Name = "Series Alt Title Language", Description = "Priority, comma separated *this field is searchable in Plex")]
-    [DefaultValue("EN, X-MAIN, SHOKO")]
-    [LanguageSetting]
-    public string SeriesAltTitleLanguage { get; set; } = "EN, X-MAIN, SHOKO";
-
-    /// <summary>Priority list of languages for episode titles.</summary>
-    [Display(Name = "Episode Title Language", Description = "Priority, comma separated")]
-    [DefaultValue("SHOKO")]
-    [LanguageSetting]
-    public string EpisodeTitleLanguage { get; set; } = "SHOKO";
-
-    /// <summary>Priority list of languages for series and episode descriptions.</summary>
-    [Display(Name = "Description Language", Description = "Priority, comma separated")]
-    [DefaultValue("SHOKO")]
-    [LanguageSetting]
-    public string DescriptionLanguage { get; set; } = "SHOKO";
-
-    /// <summary>Priority list of languages for TMDB images.</summary>
-    [Display(Name = "TMDB Image Language", Description = "Priority, comma separated ")]
-    [DefaultValue("SHOKO")]
-    [LanguageSetting]
-    public string TmdbImageLanguage { get; set; } = "SHOKO";
 
     /// <summary>Whether to append prefixes like OVA to the end of titles.</summary>
     [Display(Name = "Move Common Series Title Prefixes", Description = "Enable to append 'Gekijouban', 'OVA', etc. to the series title, after an em dash '—'")]
@@ -291,6 +261,36 @@ public class RelayConfig
     [Display(Name = "Tag Overrides", Description = "A list of tags to merge or blacklist (see help for syntax)")]
     [DefaultValue("")]
     public string TagOverrides { get; set; } = "";
+
+    /// <summary>Priority list of languages for series titles.</summary>
+    [Display(Name = "Series Title Language", Description = "Priority, comma separated")]
+    [DefaultValue("SHOKO")]
+    [LanguageSetting]
+    public string SeriesTitleLanguage { get; set; } = "SHOKO";
+
+    /// <summary>Priority list of languages for alternate series titles.</summary>
+    [Display(Name = "Series Alt Title Language", Description = "Priority, comma separated *this field is searchable in Plex")]
+    [DefaultValue("EN, X-MAIN, SHOKO")]
+    [LanguageSetting]
+    public string SeriesAltTitleLanguage { get; set; } = "EN, X-MAIN, SHOKO";
+
+    /// <summary>Priority list of languages for episode titles.</summary>
+    [Display(Name = "Episode Title Language", Description = "Priority, comma separated")]
+    [DefaultValue("SHOKO")]
+    [LanguageSetting]
+    public string EpisodeTitleLanguage { get; set; } = "SHOKO";
+
+    /// <summary>Priority list of languages for series and episode descriptions.</summary>
+    [Display(Name = "Description Language", Description = "Priority, comma separated")]
+    [DefaultValue("SHOKO")]
+    [LanguageSetting]
+    public string DescriptionLanguage { get; set; } = "SHOKO";
+
+    /// <summary>Priority list of languages for TMDB images.</summary>
+    [Display(Name = "TMDB Image Language", Description = "Priority, comma separated ")]
+    [DefaultValue("SHOKO")]
+    [LanguageSetting]
+    public string TmdbImageLanguage { get; set; } = "SHOKO";
 }
 
 #endregion
