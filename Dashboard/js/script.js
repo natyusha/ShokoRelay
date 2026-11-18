@@ -168,22 +168,30 @@
    * @returns {Promise<boolean>} True once the session is authorized or auth is not required.
    */
   async function checkInitialAuth() {
-    setAuthLocked(true);
+    const isPlayer = !!el("player");
+    if (!isPlayer) setAuthLocked(true);
     try {
-      const res = await fetch(`${base}/auth/verify`);
+      const res = await fetch(`${base}/auth/verify${isPlayer ? "?player=true" : ""}`);
       if (res.ok) {
-        setAuthLocked(false);
+        const data = await res.json().catch(() => ({}));
+        window._sr.authState = {
+          authenticated: !!data.authenticated,
+          required: !!data.required,
+          allowPlayerAccess: !!data.allowPlayerAccess,
+        };
+        if (!isPlayer) setAuthLocked(false);
         return true;
       }
       if (res.status === 401 || res.status === 403) {
         const ok = await ensureAuth({ dismissable: false });
         if (ok) {
-          setAuthLocked(false);
+          window._sr.authState = { authenticated: true, required: true, allowPlayerAccess: false };
+          if (!isPlayer) setAuthLocked(false);
           return true;
         }
       }
     } catch {}
-    setAuthLocked(false);
+    if (!isPlayer) setAuthLocked(false);
     return true;
   }
   // #endregion

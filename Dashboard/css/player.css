@@ -233,6 +233,19 @@
 .leaf.active .fav-icon.favourited:hover {
   color: color-mix(in srgb, currentColor 50%, transparent);
 }
+#player.fav-disabled .fav-icon,
+#player.fav-disabled .fav-icon:hover {
+  opacity: 0.45;
+  cursor: not-allowed;
+  color: color-mix(in srgb, currentColor 10%, transparent);
+}
+#player.fav-disabled .fav-icon.favourited,
+#player.fav-disabled .fav-icon.favourited:hover,
+#player.fav-disabled .leaf.active .fav-icon.favourited,
+#player.fav-disabled .leaf.active .fav-icon.favourited:hover {
+  opacity: 0.65;
+  color: var(--danger-color);
+}
 /* #endregion */
 
 /* #region MARK: Layout Adjustments

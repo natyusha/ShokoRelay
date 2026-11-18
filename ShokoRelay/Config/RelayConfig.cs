@@ -145,6 +145,22 @@ public enum OverlapLevel
     None = 2,
 }
 
+/// <summary>Authentication enforcement modes for Shoko Relay endpoints.</summary>
+public enum RequireAuthMode
+{
+    /// <summary>Disable authentication requirements.</summary>
+    [Display(Name = "Disabled")]
+    Disabled = 0,
+
+    /// <summary>Require Shoko administrator authentication for all protected endpoints.</summary>
+    [Display(Name = "Full")]
+    Full = 1,
+
+    /// <summary>Require Shoko administrator authentication for all protected endpoints, except read-only AnimeThemes Player access.</summary>
+    [Display(Name = "Allow Player Access")]
+    AllowPlayerAccess = 2,
+}
+
 /// <summary>Determines how movie-type anime are structured within the VFS.</summary>
 public enum MovieGenerationMode
 {
@@ -287,7 +303,7 @@ public class RelayConfig
     public string DescriptionLanguage { get; set; } = "SHOKO";
 
     /// <summary>Priority list of languages for TMDB images.</summary>
-    [Display(Name = "TMDB Image Language", Description = "Priority, comma separated ")]
+    [Display(Name = "TMDB Image Language", Description = "Priority, comma separated")]
     [DefaultValue("SHOKO")]
     [LanguageSetting]
     public string TmdbImageLanguage { get; set; } = "SHOKO";
@@ -416,6 +432,11 @@ public class AdvancedConfig
     [DefaultValue("")]
     public string PlexServerUrl { get; set; } = "";
 
+    /// <summary>Authentication enforcement mode for administrative plugin endpoints.</summary>
+    [Display(Name = "Require Auth", Description = "Applies to dashboard, config, logs, and task endpoints")]
+    [DefaultValue(RequireAuthMode.Disabled)]
+    public RequireAuthMode RequireAuth { get; set; } = RequireAuthMode.Disabled;
+
     /// <summary>Directory mappings between Shoko and the working device.</summary>
     [Display(Name = "Path Mappings", Description = "Per line mappings for working base paths to Shoko base paths")]
     public Dictionary<string, string> PathMappings { get; set; } = [];
@@ -441,11 +462,6 @@ public class AdvancedConfig
     [Display(Name = "Collection Exclusions", Description = "Per line collection keywords to ignore and protect from deletion")]
     [DefaultValue("")]
     public string CollectionExclusions { get; set; } = "";
-
-    /// <summary>Whether administrative plugin endpoints require Shoko administrator authentication.</summary>
-    [Display(Name = "Require Auth", Description = "Require Shoko administrator authentication for dashboard, config, logs, and task endpoints")]
-    [DefaultValue(false)]
-    public bool RequireAuth { get; set; } = false;
 
     /// <summary>Whether to sync unique local images and Plex-generated episode thumbnails back to Shoko and mark them as preferred.</summary>
     [Display(Name = "Plex Image Sync", Description = "Enable to automatically upload Plex's unique local and generated images back to Shoko")]

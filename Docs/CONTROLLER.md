@@ -22,7 +22,7 @@ Endpoints managed by `DashboardController`
 
 ```
 POST /auth/login                                               -> Login
-GET  /auth/verify?force={true|false}                           -> VerifyAuth
+GET  /auth/verify?force={true|false}&player={true|false}       -> VerifyAuth
 GET  /dashboard                                                -> GetDashboardPage
 GET  /browser                                                  -> GetBrowserPage
 GET  /player                                                   -> GetPlayerPage
@@ -44,6 +44,7 @@ GET  /logs/{fileName}                                          -> GetLog
 
 - `Login` authenticates a Shoko administrator via username and password (`IUserService.AuthenticateUser`) and issues a signed `HttpOnly` session cookie.
 - `VerifyAuth` checks whether the caller satisfies administrator authorization when `Advanced.RequireAuth` is enabled (or unconditionally when `force=true`, used before enabling auth).
+  - Passing `player=true` permits an unauthenticated status check when `RequireAuth` is set to `Allow Player Access`.
 - `GetDashboardPage` Serves the main settings dashboard (`dashboard.cshtml`).
 - `GetBrowserPage` Serves the stand-alone VFS browser (`browser.cshtml`).
 - `GetPlayerPage` Serves the stand-alone AnimeThemes video player (`player.cshtml`).
@@ -71,6 +72,8 @@ GET  /logs/{fileName}                                          -> GetLog
 - Authentication: When `Advanced.RequireAuth` is enabled, all endpoints under `DashboardController`, `ShokoController`, `PlexController`, and `AnimeThemesController` require Shoko administrator authentication.
   - This can be done using Shoko's standard `apikey` header for Swagger/curl, or the dashboard's `HttpOnly` session cookie via `POST /auth/login`.
   - This excludes static UI pages/assets (`/dashboard`, `/browser`, `/player`, `/dashboard/{\*path}`, `/theme.css`), `/auth/login`, `/auth/verify`, and `MetadataController` (Plex requirement).
+  - When set to `Allow Player Access`, the read-only AnimeThemes Player data endpoints (`/webm/tree`, `/webm/stream`, and `GET /animethemes/webm/favourites`) are also accessible without authentication.
+    - `POST /animethemes/webm/favourites` remains restricted to administrators.
   - The following endpoint is also excluded: `POST /plex/webhook` (validated via server UUID and user rules).
 
 All automation endpoints utilize the `LogAndReturn` helper (via `ExecuteTrackedTaskAsync`) to provide a direct `logUrl` in the response. Reports include:
@@ -309,7 +312,7 @@ GET  /sync-watched/start                                       -> StartWatchedSy
   - `sinceHours`: (optional) limit processing to items viewed within this window.
   - `ratings`: (default to configuration) set to true/false to override the `Automation.ShokoSyncWatchedIncludeRatings` setting.
   - `progress`: (default to configuration) set to true/false to override the `Automation.ShokoSyncWatchedIncludeProgress` setting.
-  - `import`: (default false) Direction: true for Plex←Shoko, false for Plex→Shoko.
+  - `import`: (default false) Direction: true for Plex←Shoko (Import to Plex), false for Plex→Shoko (Sync to Shoko).
   - `users`: (default to configuration) Restrict sync to specific user groups (`0: All`, `1: Admin`, `2: Extra`, `3: Advanced`, `4: None`).
   - `libraryName`: (optional) restrict processing to a specific Plex library name (e.g. `Anime`).
     - If the library does not use Shoko Relay and it is a Plex to Shoko sync, a fallback mode which matches physical filenames instead of GUIDs will be used.
@@ -436,7 +439,7 @@ POST /animethemes/webm/download                                -> DownloadAnimeT
      [?name={string}&year={int}&season={string}&force={true|false}&destination={path}]
 ```
 
-- `AnimeThemesWebmTree` returns the hierarchical tree including bitmask flags, `videoId`, and `relPath` (source folder path for folder view support).
+- `AnimeThemesWebmTree` returns the hierarchical tree including bitmask flags, `videoId`, `relPath` (source folder path for folder view support), and the configured `playbackMode`.
   - Employs single-pass in-memory dictionary caching of physical files to avoid redundant disk I/O on large mapping catalogs.
   - Differentiates deterministically between TV and Movie VFS structures.
 - `AnimeThemesWebmStream` supports HTTP range requests for seekable browser playback.

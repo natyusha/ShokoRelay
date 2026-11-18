@@ -266,6 +266,28 @@
   }
 
   /**
+   * Determines whether the current session is permitted to modify server-persisted player state such as favourites and playback mode.
+   * @returns {boolean} True if authentication is disabled or the user is an authenticated administrator.
+   */
+  const canModifyServerState = () => {
+    const auth = window._sr.authState;
+    return !!auth && (!auth.required || !!auth.authenticated);
+  };
+
+  /**
+   * Updates the disabled state and tooltips of favourite controls based on the current authentication state.
+   * @returns {void}
+   */
+  const syncFavouriteControls = () => {
+    const allowed = canModifyServerState();
+    el("player")?.classList.toggle("fav-disabled", !allowed);
+    if (playerNowPlayingFav) {
+      playerNowPlayingFav.setAttribute("aria-disabled", String(!allowed));
+      playerNowPlayingFav.title = allowed ? "Favourite" : "Authentication required to modify favourites";
+    }
+  };
+
+  /**
    * Standard toggle for browser fullscreen API.
    * @returns {void}
    */
@@ -283,6 +305,7 @@
    * @returns {Promise<void>}
    */
   async function toggleFavourite(videoId, heartEl) {
+    if (!canModifyServerState()) return;
     if (!videoId || videoId <= 0) return console.warn("VideoId missing.");
     const res = await fetchJson(base + "/animethemes/webm/favourites", {
       method: "POST",
@@ -334,12 +357,15 @@
       leaf.className = `leaf ${item.path === currentWebmPath ? "active" : ""}`;
       leaf.dataset.path = item.path;
 
+      const favAllowed = canModifyServerState();
       const heart = document.createElement("span");
       heart.className = `fav-icon ${favourites.has(item.videoId) ? "favourited" : ""}`;
       heart.textContent = "❤";
+      heart.setAttribute("aria-disabled", String(!favAllowed));
+      if (!favAllowed) heart.title = "Authentication required to modify favourites";
       heart.onclick = (e) => {
         e.stopPropagation();
-        toggleFavourite(item.videoId, heart);
+        if (canModifyServerState()) toggleFavourite(item.videoId, heart);
       };
 
       const text = document.createElement("span");
@@ -536,7 +562,7 @@
     playerVideo.onerror = async () => {
       playerVideo.onerror = null;
       try {
-        const verifyRes = await fetch(`${base}/auth/verify`);
+        const verifyRes = await fetch(`${base}/auth/verify?player=true`);
         if ((verifyRes.status === 401 || verifyRes.status === 403) && (await window._sr.ensureAuth?.({ dismissable: false })) && currentWebmPath === path) {
           playerVideo.src = streamUrl;
           playerVideo.play().catch(() => {});
@@ -554,7 +580,7 @@
       playerNowPlayingFav.classList.toggle("favourited", favourites.has(item.videoId));
       playerNowPlayingFav.onclick = (e) => {
         e.stopPropagation();
-        toggleFavourite(item.videoId, playerNowPlayingFav);
+        if (canModifyServerState()) toggleFavourite(item.videoId, playerNowPlayingFav);
       };
     }
     if (playerLocateBtn && item) playerLocateBtn.style.pointerEvents = "auto";
@@ -665,6 +691,11 @@
     playerModeBtn.setAttribute("data-mode", next);
     updatePlaybackTooltip(playerModeBtn);
     resetNavigationHistory();
+
+    if (!canModifyServerState()) {
+      localStorage.setItem("player-playback-mode", next);
+      return;
+    }
 
     const res = await fetchJson(configUrl);
     if (res.ok) {
@@ -875,11 +906,18 @@
 
     (async () => {
       await window._sr.authReady;
+      syncFavouriteControls();
       if (playerTree) playerTree.innerHTML = '<div class="placeholder"><svg class="loading-spinner"><use href="img/icons.svg#loading"></use></svg><div>Loading video tree...</div></div>';
-      const [treeRes, cfgRes, favRes] = await Promise.all([fetchJson(base + "/animethemes/webm/tree"), fetchJson(configUrl), fetchJson(base + "/animethemes/webm/favourites")]);
+      const canReadConfig = canModifyServerState();
+      const [treeRes, cfgRes, favRes] = await Promise.all([
+        fetchJson(base + "/animethemes/webm/tree"),
+        canReadConfig ? fetchJson(configUrl) : Promise.resolve({ ok: false }),
+        fetchJson(base + "/animethemes/webm/favourites"),
+      ]);
       if (favRes.ok) favourites = new Set(getData(favRes) || []);
+      const treePayload = getData(treeRes);
       if (treeRes.ok) {
-        webmTreeData = (getData(treeRes)?.items || [])
+        webmTreeData = (treePayload?.items || [])
           .map((item) => {
             item._searchIndex = `${item.group} ${item.series} ${decodeUnicode(item.file)} ${item.relPath || ""}`.toLowerCase().replace(/[\u200B\u200A]/g, "");
             return item;
@@ -904,8 +942,8 @@
           setTimeout(locateCurrentInTree, 500);
         }
       }
-      if (cfgRes.ok && playerModeBtn) {
-        const mode = unwrapConfig(getData(cfgRes)).Playback.AnimeThemesWebmMode || "off";
+      if (playerModeBtn) {
+        const mode = canReadConfig && cfgRes.ok ? unwrapConfig(getData(cfgRes)).Playback.AnimeThemesWebmMode || "off" : localStorage.getItem("player-playback-mode") || treePayload?.playbackMode || "off";
         playerModeBtn.setAttribute("data-mode", mode);
         updatePlaybackTooltip(playerModeBtn);
       }

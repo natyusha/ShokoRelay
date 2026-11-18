@@ -4,7 +4,7 @@
 # Special Rule: If a single entry special exists from before the main entry also combine it
 
 
-## Regular Series ##
+## Standard TMDB Mappings ##
 
 # Bishoujo Senshi Sailor Moon | Bishoujo Senshi Sailor Moon R | Bishoujo Senshi Sailor Moon S
 # Bishoujo Senshi Sailor Moon Super S | Bishoujo Senshi Sailor Moon Sailor Stars
@@ -58,10 +58,10 @@
 4576,193,405,6393,2995,2996,6141
 
 
-## Custom Episode Ordering ##
+## Custom Episode Mappings ##
 
 # Urusei Yatsura
-# Bypass strange TMDB decision to split the first 23 episodes and adopt TheTVDB Aired Order
+# Bypass TMDB's decision to split the first 23 episodes and adopt TheTVDB's Aired Order
 377;1-54s1e1|55-106s2e1|107-149s3e1|150-195s4e1
 
 

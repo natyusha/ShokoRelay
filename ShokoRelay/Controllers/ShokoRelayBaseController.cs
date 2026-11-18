@@ -114,6 +114,10 @@ internal static class RelayAuthSession
     }
 }
 
+/// <summary>Marks an endpoint as accessible without authentication when <c>Advanced.RequireAuth</c> is set to <see cref="RequireAuthMode.AllowPlayerAccess"/>.</summary>
+[AttributeUsage(AttributeTargets.Method)]
+public sealed class AllowPlayerAccessAttribute : Attribute;
+
 /// <summary>Enforces Shoko administrator authorization on decorated controllers or actions when <c>Advanced.RequireAuth</c> is enabled.</summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
 public sealed class RelayAdminAuthorizeAttribute : Attribute, IAuthorizationFilter
@@ -126,7 +130,11 @@ public sealed class RelayAdminAuthorizeAttribute : Attribute, IAuthorizationFilt
             return;
 
         var configProvider = context.HttpContext.RequestServices.GetRequiredService<ConfigProvider>();
-        if (!configProvider.GetSettings().Advanced.RequireAuth)
+        var authMode = configProvider.GetSettings().Advanced.RequireAuth;
+        if (authMode == RequireAuthMode.Disabled)
+            return;
+
+        if (authMode == RequireAuthMode.AllowPlayerAccess && context.ActionDescriptor.EndpointMetadata.OfType<AllowPlayerAccessAttribute>().Any())
             return;
 
         var userService = context.HttpContext.RequestServices.GetRequiredService<IUserService>();

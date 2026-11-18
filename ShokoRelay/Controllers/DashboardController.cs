@@ -88,14 +88,49 @@ public class DashboardController(
 
     /// <summary>Verifies whether the caller is authorized, optionally enforcing an administrator session even before <c>Advanced.RequireAuth</c> is enabled.</summary>
     /// <param name="force">When <c>true</c>, validates an authenticated administrator session regardless of <c>Advanced.RequireAuth</c>.</param>
+    /// <param name="player">When <c>true</c>, allows an unauthenticated status response if <c>Advanced.RequireAuth</c> is set to <see cref="RequireAuthMode.AllowPlayerAccess"/>.</param>
     /// <returns>An authenticated confirmation payload, or 401/403 if the caller is unauthenticated or not an administrator.</returns>
     [AllowAnonymous]
     [HttpGet("auth/verify")]
-    public IActionResult VerifyAuth([FromQuery] bool force = false) =>
-        !force && !Settings.Advanced.RequireAuth ? Ok(new { authenticated = true, required = false })
-        : (userService.GetUserFromHttpContext(HttpContext) ?? RelayAuthSession.GetUser(HttpContext, userService)) is not { } user ? Unauthorized(new { status = "error", message = "Authentication required." })
-        : !user.IsAdmin ? StatusCode(StatusCodes.Status403Forbidden, new { status = "error", message = "Administrator privileges required." })
-        : Ok(new { authenticated = true, required = Settings.Advanced.RequireAuth });
+    public IActionResult VerifyAuth([FromQuery] bool force = false, [FromQuery] bool player = false)
+    {
+        var mode = Settings.Advanced.RequireAuth;
+        if (!force && mode == RequireAuthMode.Disabled)
+            return Ok(
+                new
+                {
+                    authenticated = true,
+                    required = false,
+                    allowPlayerAccess = true,
+                    mode,
+                }
+            );
+
+        var user = userService.GetUserFromHttpContext(HttpContext) ?? RelayAuthSession.GetUser(HttpContext, userService);
+        bool isAdmin = user?.IsAdmin == true;
+
+        return !force && player && mode == RequireAuthMode.AllowPlayerAccess
+                ? Ok(
+                    new
+                    {
+                        authenticated = isAdmin,
+                        required = true,
+                        allowPlayerAccess = true,
+                        mode,
+                    }
+                )
+            : user == null ? Unauthorized(new { status = "error", message = "Authentication required." })
+            : !isAdmin ? StatusCode(StatusCodes.Status403Forbidden, new { status = "error", message = "Administrator privileges required." })
+            : Ok(
+                new
+                {
+                    authenticated = true,
+                    required = true,
+                    allowPlayerAccess = mode == RequireAuthMode.AllowPlayerAccess,
+                    mode,
+                }
+            );
+    }
 
     /// <summary>Serves the main settings dashboard page.</summary>
     /// <returns>The settings dashboard HTML content.</returns>
@@ -171,7 +206,7 @@ public class DashboardController(
             Logger.LogInformation("Dashboard: Saving updated provider settings...");
             ConfigProvider.SaveSettings(config);
             ActionScheduleHelper.SyncTriggers(config, scheduledActionService);
-            if (!config.Advanced.RequireAuth)
+            if (config.Advanced.RequireAuth == RequireAuthMode.Disabled)
                 RelayAuthSession.SignOut(HttpContext);
             return Ok(new { status = "ok" });
         }

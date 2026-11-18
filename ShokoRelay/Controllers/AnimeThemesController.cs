@@ -236,6 +236,7 @@ public class AnimeThemesController(
 
     /// <summary>Returns the hierarchical tree of WebM files for the standalone player.</summary>
     /// <returns>A JSON object containing the hierarchical theme list.</returns>
+    [AllowPlayerAccess]
     [HttpGet("animethemes/webm/tree")]
     public IActionResult AnimeThemesWebmTree()
     {
@@ -382,52 +383,54 @@ public class AnimeThemesController(
                     }
                 }
 
-                // Lazy lookup cache for series that physically exist in the local collection
-                var localSeriesWithFiles = new HashSet<int>();
-
-                foreach (var entry in entries)
+                if (physicalThemes.Count > 0)
                 {
-                    // Check if anime is in Shoko and has physical files without querying the entire database upfront
-                    if (localSeriesWithFiles.Contains(entry.AniDbId))
-                        continue;
+                    // Lazy lookup cache for series that physically exist in the local collection
+                    var localSeriesHasFiles = new Dictionary<int, bool>();
 
-                    if (MetadataService.GetShokoSeriesByAnidbID(entry.AniDbId) is { } localSeries && localSeries.Episodes.Any(e => e.Videos?.Count > 0))
+                    foreach (var entry in entries)
                     {
-                        localSeriesWithFiles.Add(entry.AniDbId);
-                        continue;
-                    }
+                        string normRel = entry.FilePath.TrimLeadingSlashes().Replace('\\', '/');
+                        if (!physicalThemes.TryGetValue(normRel, out var absolutePath))
+                            continue;
 
-                    string normRel = entry.FilePath.TrimLeadingSlashes().Replace('\\', '/');
-                    if (!physicalThemes.TryGetValue(normRel, out var absolutePath))
-                        continue;
-
-                    // Parse series name gracefully directly from the file basename
-                    string rawFileName = Path.GetFileNameWithoutExtension(entry.FilePath);
-                    int dashIndex = rawFileName.IndexOf('-');
-                    string pseudoTitle = AnimeThemesHelper.PascalCaseRegex().Replace(dashIndex > 0 ? rawFileName[..dashIndex] : rawFileName, " ");
-                    var lookup = new AnimeThemesVideoLookup(entry);
-
-                    items.Add(
-                        new
+                        // Check if anime is in Shoko and has physical files without querying the entire database upfront
+                        if (entry.AniDbId > 0)
                         {
-                            group = "Missing from Collection",
-                            series = pseudoTitle,
-                            seriesId = 0,
-                            anidbId = entry.AniDbId,
-                            file = AnimeThemesHelper.BuildNewFileName(lookup, ""),
-                            relPath = entry.FilePath,
-                            path = absolutePath.Replace('\\', '/').Trim(),
-                            videoId = entry.VideoId,
-                            nc = entry.Nc,
-                            lyrics = entry.Lyrics,
-                            subs = entry.Subbed,
-                            uncen = entry.Uncen,
-                            nsfw = entry.NSFW,
-                            spoiler = entry.Spoiler,
-                            trans = entry.Overlap == "Transition",
-                            over = entry.Overlap == "Over",
+                            if (!localSeriesHasFiles.TryGetValue(entry.AniDbId, out bool hasFiles))
+                                localSeriesHasFiles[entry.AniDbId] = hasFiles = MetadataService.GetShokoSeriesByAnidbID(entry.AniDbId) is { } ls && ls.Episodes.Any(e => e.Videos?.Count > 0);
+                            if (hasFiles)
+                                continue;
                         }
-                    );
+
+                        // Parse series name gracefully directly from the file basename
+                        string rawFileName = Path.GetFileNameWithoutExtension(entry.FilePath);
+                        int dashIndex = rawFileName.IndexOf('-');
+                        string pseudoTitle = AnimeThemesHelper.PascalCaseRegex().Replace(dashIndex > 0 ? rawFileName[..dashIndex] : rawFileName, " ");
+                        var lookup = new AnimeThemesVideoLookup(entry);
+
+                        items.Add(
+                            new
+                            {
+                                group = "Missing from Collection",
+                                series = pseudoTitle,
+                                seriesId = 0,
+                                anidbId = entry.AniDbId,
+                                file = AnimeThemesHelper.BuildNewFileName(lookup, ""),
+                                relPath = entry.FilePath,
+                                path = absolutePath.Replace('\\', '/').Trim(),
+                                videoId = entry.VideoId,
+                                nc = entry.Nc,
+                                lyrics = entry.Lyrics,
+                                subs = entry.Subbed,
+                                uncen = entry.Uncen,
+                                nsfw = entry.NSFW,
+                                spoiler = entry.Spoiler,
+                                trans = entry.Overlap == "Transition",
+                                over = entry.Overlap == "Over",
+                            }
+                        );
+                    }
                 }
             }
             catch (Exception ex)
@@ -436,12 +439,13 @@ public class AnimeThemesController(
             }
         }
 
-        return Ok(new { items });
+        return Ok(new { items, playbackMode = Settings.Playback.AnimeThemesWebmMode });
     }
 
     /// <summary>Streams a WebM theme file from the VFS.</summary>
     /// <param name="path">The relative VFS path to the WebM file.</param>
     /// <returns>A file stream result.</returns>
+    [AllowPlayerAccess]
     [Route("animethemes/webm/stream")]
     [HttpGet]
     [HttpHead]
@@ -467,6 +471,7 @@ public class AnimeThemesController(
 
     /// <summary>Returns the list of videoIds marked as favourites.</summary>
     /// <returns>An array of video IDs.</returns>
+    [AllowPlayerAccess]
     [HttpGet("animethemes/webm/favourites")]
     public IActionResult GetAnimeThemesFavourites()
     {
@@ -509,7 +514,7 @@ public class AnimeThemesController(
 
             try
             {
-                VfsShared.WriteLinesAtomic(path, ids.Select(i => i.ToString()));
+                VfsShared.WriteLinesAtomic(path, ids.Order().Select(i => i.ToString()));
                 return Ok(new RelayResponse<object>(Data: new { videoId, isFavourite = ids.Contains(videoId) }));
             }
             catch (Exception ex)

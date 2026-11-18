@@ -287,27 +287,9 @@
           <span class="shoko-checkbox-icon" aria-hidden="true"><svg class="unchecked"><use href="img/icons.svg#checkbox-blank-circle-outline"></use></svg><svg class="checked"><use href="img/icons.svg#checkbox-marked-circle-outline"></use></svg></span>
           <span class="shoko-checkbox-text"><span class="shoko-checkbox-title">${esc(p.Display || p.Path)}</span><small class="shoko-checkbox-desc" style="display:block">${esc(p.Description || "")}</small></span></label>`;
         input = wrap.querySelector("input");
-        if (p.Path === "Advanced.RequireAuth") {
-          input.checked = !!value;
-          input.onchange = async () => {
-            if (input.checked) {
-              const verifyRes = await fetchJson(`${window._sr.base}/auth/verify?force=true`, {}, false);
-              if (!verifyRes.ok) {
-                const authed = await window._sr.ensureAuth?.({ dismissable: true });
-                if (!authed) {
-                  input.checked = false;
-                  return;
-                }
-              }
-            }
-            setValueByPath(config, p.Path, input.checked);
-            await saveSettings(config);
-          };
-        } else {
-          bindConfig(input, p.Path, config, saveSettings, "check");
-          // Re-evaluate the overrides button state when either relevant setting is toggled.
-          if (overridesBtn && ["Advanced.TmdbEpNumbering", "Advanced.MergeTmdbSeries"].includes(p.Path)) input.addEventListener("change", () => window._sr.updateControlStates(config));
-        }
+        bindConfig(input, p.Path, config, saveSettings, "check");
+        // Re-evaluate the overrides button state when either relevant setting is toggled.
+        if (overridesBtn && ["Advanced.TmdbEpNumbering", "Advanced.MergeTmdbSeries"].includes(p.Path)) input.addEventListener("change", () => window._sr.updateControlStates(config));
       } else if (p.Type === "flags") {
         createFlagsMultiselect(wrap, p, config, value);
       } else if (p.Path.endsWith("PathMappings")) {
@@ -334,8 +316,24 @@
         }
         wrap.appendChild(input);
 
-        // Custom validation for ShokoServerUrl and PlexServerUrl
-        if (p.Path.endsWith("ShokoServerUrl") || p.Path.endsWith("PlexServerUrl")) {
+        if (p.Path === "Advanced.RequireAuth") {
+          input.onchange = async () => {
+            const nextVal = Number(input.value) || 0;
+            if (nextVal !== 0) {
+              const verifyRes = await fetchJson(`${window._sr.base}/auth/verify?force=true`, {}, false);
+              if (!verifyRes.ok) {
+                const authed = await window._sr.ensureAuth?.({ dismissable: true });
+                if (!authed) {
+                  input.value = String(getValueByPath(config, p.Path) ?? 0);
+                  return;
+                }
+              }
+            }
+            setValueByPath(config, p.Path, nextVal);
+            await saveSettings(config);
+          };
+          // Custom validation for ShokoServerUrl and PlexServerUrl
+        } else if (p.Path.endsWith("ShokoServerUrl") || p.Path.endsWith("PlexServerUrl")) {
           input.value = value ?? "";
           input.onchange = async () => {
             const urlRegex = /^https?:\/\/([a-zA-Z0-9.-]+|\[[a-fA-F0-9:]+\])(:\d+)?$/;
