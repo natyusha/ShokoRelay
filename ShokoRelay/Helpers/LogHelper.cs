@@ -392,7 +392,12 @@ public static class LogHelper
                         .ThenBy(c => c.EpisodeNumber)
                         .Select(c =>
                         {
-                            string action = c.Reason == "progress_updated" ? "Updated Progress" : (c.WouldMark && string.IsNullOrEmpty(c.Reason) ? "Marked" : "Already Watched");
+                            string action = c.Reason switch
+                            {
+                                "progress_updated" => "Updated Progress",
+                                "rating_updated" => "Updated Rating",
+                                _ => c.WouldMark && string.IsNullOrEmpty(c.Reason) ? "Marked" : "Already Watched",
+                            };
                             return $"    - {c.SeriesTitle} (S{c.SeasonNumber:D2}E{c.EpisodeNumber:D2}) -> {action}";
                         })
                 );

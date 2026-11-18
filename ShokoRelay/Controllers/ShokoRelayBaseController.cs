@@ -13,6 +13,10 @@ using Shoko.Abstractions.User.Services;
 namespace ShokoRelay.Controllers;
 
 /// <summary>Issues and validates signed HttpOnly session cookies for Shoko Relay administrator authentication.</summary>
+/// <remarks>
+/// Cookie-authenticated requests do not carry a Shoko <see cref="ApiToken"/>, so Shoko's <see cref="IActorContext.Current"/> remains <c>null</c> (system) on triggered events.
+/// Pass Shoko's <c>apikey</c> header when per-token actor attribution is required.
+/// </remarks>
 internal static class RelayAuthSession
 {
     private const string CookieName = "shoko-relay-auth";
@@ -115,6 +119,7 @@ internal static class RelayAuthSession
 }
 
 /// <summary>Marks an endpoint as accessible without authentication when <c>Advanced.RequireAuth</c> is set to <see cref="RequireAuthMode.AllowPlayerAccess"/>.</summary>
+/// <remarks>Player endpoints intentionally omit <c>IUser.IsAllowedToSee</c> restricted-tag filtering so the standalone player remains anonymous under this mode.</remarks>
 [AttributeUsage(AttributeTargets.Method)]
 public sealed class AllowPlayerAccessAttribute : Attribute;
 

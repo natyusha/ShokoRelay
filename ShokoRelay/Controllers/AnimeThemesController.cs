@@ -227,6 +227,7 @@ public class AnimeThemesController(
         }
         catch { }
 
+        // Stream via FileStream rather than PhysicalFile to prevent browsers from receiving physical file paths or triggering security errors
         return File(new FileStream(themePath, FileMode.Open, FileAccess.Read, FileShare.Read), "audio/mpeg", enableRangeProcessing: true);
     }
 
@@ -235,6 +236,9 @@ public class AnimeThemesController(
     #region WebM & Player
 
     /// <summary>Returns the hierarchical tree of WebM files for the standalone player.</summary>
+    /// <remarks>
+    /// Restricted-tag visibility (<c>IUser.IsAllowedToSee</c>) is intentionally not enforced here so <see cref="AllowPlayerAccessAttribute"/> remains usable without a user session.
+    /// </remarks>
     /// <returns>A JSON object containing the hierarchical theme list.</returns>
     [AllowPlayerAccess]
     [HttpGet("animethemes/webm/tree")]
@@ -443,6 +447,7 @@ public class AnimeThemesController(
     }
 
     /// <summary>Streams a WebM theme file from the VFS.</summary>
+    /// <remarks>Restricted-tag visibility (<c>IUser.IsAllowedToSee</c>) is intentionally not enforced here so <see cref="AllowPlayerAccessAttribute"/> remains usable without a user session.</remarks>
     /// <param name="path">The relative VFS path to the WebM file.</param>
     /// <returns>A file stream result.</returns>
     [AllowPlayerAccess]
@@ -464,6 +469,7 @@ public class AnimeThemesController(
             return BadRequest();
         }
 
+        // Stream via FileStream rather than PhysicalFile to prevent browsers from receiving physical file paths or triggering security errors
         return !IsInsideManagedFolders(fullPath) || !string.Equals(Path.GetExtension(fullPath), ".webm", StringComparison.OrdinalIgnoreCase) || !IoFile.Exists(fullPath)
             ? NotFound()
             : File(new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read), "video/webm", enableRangeProcessing: true);

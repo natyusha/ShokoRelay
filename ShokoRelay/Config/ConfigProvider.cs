@@ -125,7 +125,7 @@ public partial class ConfigProvider : IDisposable
         _logger = logger;
         PluginDirectory = pluginPaths?.InstallPath ?? Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? string.Empty;
 
-        ConfigDirectory = Path.Combine(applicationPaths.ConfigurationsPath, ShokoRelayConstants.PluginId);
+        ConfigDirectory = pluginPaths?.ConfigurationsPath ?? Path.Combine(applicationPaths.ConfigurationsPath, ShokoRelayConstants.PluginId);
         CacheDirectory = pluginPaths?.CachePath ?? Path.Combine(applicationPaths.CachePath, ShokoRelayConstants.PluginId);
         Directory.CreateDirectory(ConfigDirectory);
         Directory.CreateDirectory(CacheDirectory);

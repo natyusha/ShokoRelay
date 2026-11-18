@@ -71,9 +71,10 @@ GET  /logs/{fileName}                                          -> GetLog
 
 - Authentication: When `Advanced.RequireAuth` is enabled, all endpoints under `DashboardController`, `ShokoController`, `PlexController`, and `AnimeThemesController` require Shoko administrator authentication.
   - This can be done using Shoko's standard `apikey` header for Swagger/curl, or the dashboard's `HttpOnly` session cookie via `POST /auth/login`.
+    - Cookie-authenticated requests leave Shoko's `IActorContext` actor as system.
   - This excludes static UI pages/assets (`/dashboard`, `/browser`, `/player`, `/dashboard/{\*path}`, `/theme.css`), `/auth/login`, `/auth/verify`, and `MetadataController` (Plex requirement).
   - When set to `Allow Player Access`, the read-only AnimeThemes Player data endpoints (`/webm/tree`, `/webm/stream`, and `GET /animethemes/webm/favourites`) are also accessible without authentication.
-    - `POST /animethemes/webm/favourites` remains restricted to administrators.
+    - Restricted-tag visibility filtering is not applied to player listings.
   - The following endpoint is also excluded: `POST /plex/webhook` (validated via server UUID and user rules).
 
 All automation endpoints utilize the `LogAndReturn` helper (via `ExecuteTrackedTaskAsync`) to provide a direct `logUrl` in the response. Reports include:
@@ -321,6 +322,8 @@ GET  /sync-watched/start                                       -> StartWatchedSy
 **Notes:**
 
 - The response for `PurgeMissingFiles` includes a `Processed` property containing the count of records removed.
+- When syncing `Plex←Shoko` (`import=true`) with `Include Ratings` enabled, the Plex query includes both watched and unwatched items so ratings on already-watched episodes can be updated.
+  - This can be noticeably slower on large libraries than when ratings are disabled.
 - Scheduled automations are anchored to UTC midnight using `Automation.UtcOffsetHours`.
 - Plex Home user tokens are obtained transiently via Plex Home switching, and regular shared-server user tokens are read transiently from Plex.tv; neither is persisted.
 

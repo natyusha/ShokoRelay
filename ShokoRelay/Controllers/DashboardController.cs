@@ -275,7 +275,15 @@ public class DashboardController(
                         ? $":root {{\n{string.Join("\n", themeDef.Values.Select(v => $"  --{(v.Key.StartsWith("--", StringComparison.Ordinal) ? v.Key[2..] : v.Key)}: {v.Value};"))}\n}}\n"
                         : string.Empty;
                 var rawCss = themeDef.CssContent?.Trim() ?? string.Empty;
-                var wrappedCss = !string.IsNullOrEmpty(rawCss) && !rawCss.Contains('{') ? $":root {{\n{rawCss}\n}}" : rawCss;
+                string wrappedCss = rawCss;
+                if (!string.IsNullOrEmpty(rawCss))
+                {
+                    int braceIdx = rawCss.IndexOf('{');
+                    if (braceIdx < 0)
+                        wrappedCss = $":root {{\n{rawCss}\n}}";
+                    else if (rawCss[..braceIdx].LastIndexOf(';') is int lastSemi && lastSemi >= 0 && !rawCss[..lastSemi].TrimStart().StartsWith('@'))
+                        wrappedCss = $":root {{\n{rawCss[..(lastSemi + 1)].Trim()}\n}}\n{rawCss[(lastSemi + 1)..].TrimStart()}";
+                }
                 cssContent = $"{valuesCss}{wrappedCss}";
             }
             else if (Path.Combine(applicationPaths.ThemesPath, $"{themeId}.css") is var cssPath && IoFile.Exists(cssPath))

@@ -242,6 +242,8 @@ Applying a hyphenated suffix to the image that matches Plex's naming conventions
     - The formatting is as follows: `ShokoUser,PlexUser1;PIN,PlexUser2|ShokoUser2,PlexUser3`
     - The only time a PIN is needed is when a Plex home user has one set. Shared accounts do not require one.
   - When syncing from Plex to Shoko the `Temporary Library Filter` can also be used to import watched states from non-Shoko Relay libraries via physical filename matching
+  - When syncing from Shoko to Plex with `Include Ratings` enabled, both watched and unwatched Plex items are queried so ratings on already-watched episodes can also be updated
+    - This makes Shoko→Plex syncs significantly slower on large libraries
   - _Requires Plex authentication_
 - `Purge Missing` A button which will remove files that are no longer present from Shoko
   - If `Empty Plex Trash Threshold` is configured under `Provider Settings > Advanced`, this will safely empty the trash for your Plex libraries
