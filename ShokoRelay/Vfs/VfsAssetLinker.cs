@@ -283,8 +283,13 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
                     continue;
 
                 var (type, seasonNum) = (match.Groups[1].Value, match.Groups[3].Value);
+                int parsedSeason = 0;
+                bool hasSeason = !string.IsNullOrEmpty(seasonNum);
+                if (hasSeason && !int.TryParse(seasonNum, out parsedSeason))
+                    continue;
+
                 string plexDirName = PlexConstants.LocalExtraDirs.First(d => string.Equals(d, type, StringComparison.OrdinalIgnoreCase));
-                string seasonFolder = string.IsNullOrEmpty(seasonNum) ? "" : VfsHelper.SanitizeName(PlexMapping.GetSeasonFolder(int.Parse(seasonNum)));
+                string seasonFolder = hasSeason ? VfsHelper.SanitizeName(PlexMapping.GetSeasonFolder(parsedSeason)) : "";
 
                 foreach (var file in Directory.EnumerateFiles(subDir).Where(videoService.IsAllowedVideoExtension))
                 {

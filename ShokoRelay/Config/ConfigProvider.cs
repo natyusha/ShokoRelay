@@ -88,38 +88,30 @@ public partial class ConfigProvider : IDisposable
         get
         {
             var settings = GetSettings();
-            if (!string.IsNullOrWhiteSpace(settings.Advanced.ShokoServerUrl))
-                return settings.Advanced.ShokoServerUrl.Trim().TrimEnd('/');
-
-            if (_httpContextAccessor?.HttpContext is { } ctx)
-            {
-                var request = ctx.Request;
-
-                // Inspect standard proxy headers to accurately detect HTTPS scheme and external hostname
-                var scheme = request.Headers["X-Forwarded-Proto"].FirstOrDefault()?.Split(',')[0].Trim();
-                if (string.IsNullOrEmpty(scheme) || (!scheme.Equals("http", StringComparison.OrdinalIgnoreCase) && !scheme.Equals("https", StringComparison.OrdinalIgnoreCase)))
-                    scheme = request.IsHttps ? "https" : request.Scheme;
-
-                var rawHost = request.Headers["X-Forwarded-Host"].FirstOrDefault()?.Split(',')[0].Trim();
-                var host = !string.IsNullOrEmpty(rawHost) && TextHelper.ForwardedHostRegex().IsMatch(rawHost) ? rawHost : request.Host.ToString();
-
-                var detectedUrl = $"{scheme}://{host}{request.PathBase}".TrimEnd('/');
-
-                var tokenFile = ReadTokenFile();
-                bool isConfigPath = request.Path.StartsWithSegments(ShokoRelayConstants.BasePath + "/config", StringComparison.OrdinalIgnoreCase);
-                bool isDashboardPath = request.Path.StartsWithSegments(ShokoRelayConstants.BasePath + "/dashboard", StringComparison.OrdinalIgnoreCase);
-                if (
-                    tokenFile.AutoShokoServerUrl != detectedUrl
-                    && (isConfigPath || (settings.Advanced.RequireAuth == RequireAuthMode.Disabled && (string.IsNullOrWhiteSpace(tokenFile.AutoShokoServerUrl) || isDashboardPath)))
-                )
-                    UpdatePlexTokenInfo(autoUrl: detectedUrl);
-
-                return detectedUrl;
-            }
-
-            var cachedUrl = ReadTokenFile().AutoShokoServerUrl;
-            return !string.IsNullOrWhiteSpace(cachedUrl) ? cachedUrl : "http://localhost:8111";
+            return !string.IsNullOrWhiteSpace(settings.Advanced.ShokoServerUrl) ? settings.Advanced.ShokoServerUrl.Trim().TrimEnd('/')
+                : DetectRequestBaseUrl() is { } detectedUrl ? detectedUrl
+                : ReadTokenFile().AutoShokoServerUrl is { Length: > 0 } cachedUrl ? cachedUrl
+                : "http://localhost:8111";
         }
+    }
+
+    /// <summary>Extracts the externally-reachable base URL from the current HTTP request headers, if an HTTP context is active.</summary>
+    /// <returns>The detected base URL without trailing slash, or <c>null</c> when no HTTP context is active.</returns>
+    private string? DetectRequestBaseUrl()
+    {
+        if (_httpContextAccessor?.HttpContext is not { } ctx)
+            return null;
+
+        var request = ctx.Request;
+
+        // Inspect standard proxy headers to accurately detect HTTPS scheme and external hostname
+        var scheme = request.Headers["X-Forwarded-Proto"].FirstOrDefault()?.Split(',')[0].Trim();
+        if (string.IsNullOrEmpty(scheme) || (!scheme.Equals("http", StringComparison.OrdinalIgnoreCase) && !scheme.Equals("https", StringComparison.OrdinalIgnoreCase)))
+            scheme = request.IsHttps ? "https" : request.Scheme;
+
+        var rawHost = request.Headers["X-Forwarded-Host"].FirstOrDefault()?.Split(',')[0].Trim();
+        var host = !string.IsNullOrEmpty(rawHost) && TextHelper.ForwardedHostRegex().IsMatch(rawHost) ? rawHost : request.Host.ToString();
+        return $"{scheme}://{host}{request.PathBase}".TrimEnd('/');
     }
 
     /// <summary>Creates a new ConfigProvider using the specified paths provided by the host application.</summary>
@@ -353,9 +345,15 @@ public partial class ConfigProvider : IDisposable
     /// <returns>A sanitized configuration object for dashboard consumption.</returns>
     public object GetDashboardConfig()
     {
-        _ = ServerBaseUrl; // Explicitly access ServerBaseUrl to trigger the HttpContext based auto discovery on dashboard load
+        var settings = GetSettings();
+        if (string.IsNullOrWhiteSpace(settings.Advanced.ShokoServerUrl) && DetectRequestBaseUrl() is { } detectedUrl)
+        {
+            var tokenFile = ReadTokenFile();
+            if (!string.Equals(tokenFile.AutoShokoServerUrl, detectedUrl, StringComparison.OrdinalIgnoreCase))
+                UpdatePlexTokenInfo(autoUrl: detectedUrl);
+        }
 
-        var dict = JsonSerializer.Deserialize<Dictionary<string, object>>(JsonSerializer.Serialize(GetSettings(), s_options))!;
+        var dict = JsonSerializer.Deserialize<Dictionary<string, object>>(JsonSerializer.Serialize(settings, s_options))!;
         dict["PlexLibrary"] = new
         {
             HasToken = !string.IsNullOrWhiteSpace(GetPlexToken()),

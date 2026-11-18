@@ -134,25 +134,29 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
                             if (video == null || string.IsNullOrWhiteSpace(video.Link) || string.IsNullOrWhiteSpace(video.Basename))
                                 continue;
 
-                            string targetPath = Path.Combine(baseThemePath, yearFolder, seasonFolder, video.Basename);
-                            string relPath = $"/{yearFolder}/{seasonFolder}/{video.Basename}";
+                            string safeBasename = Path.GetFileName(video.Basename.Trim());
+                            if (string.IsNullOrWhiteSpace(safeBasename) || safeBasename is "." or "..")
+                                continue;
 
-                            if (!query.Force && existingFiles.TryGetValue(video.Basename, out var existingRelPath))
+                            string targetPath = Path.Combine(baseThemePath, yearFolder, seasonFolder, safeBasename);
+                            string relPath = $"/{yearFolder}/{seasonFolder}/{safeBasename}";
+
+                            if (!query.Force && existingFiles.TryGetValue(safeBasename, out var existingRelPath))
                             {
-                                if (mappedFilesWithAnidb.Contains(video.Basename))
+                                if (mappedFilesWithAnidb.Contains(safeBasename))
                                 {
-                                    logger.LogDebug("AnimeThemes WebM: Skipping already mapped theme -> {Basename}...", video.Basename);
+                                    logger.LogDebug("AnimeThemes WebM: Skipping already mapped theme -> {Basename}...", safeBasename);
                                     skipped++;
                                     continue;
                                 }
 
-                                downloadedItems.Add((existingRelPath, video.Basename));
-                                logger.LogInformation("AnimeThemes WebM: Found unmapped local theme -> {Basename}, checking for AniDB ID...", video.Basename);
+                                downloadedItems.Add((existingRelPath, safeBasename));
+                                logger.LogInformation("AnimeThemes WebM: Found unmapped local theme -> {Basename}, checking for AniDB ID...", safeBasename);
                                 continue;
                             }
 
                             Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
-                            logger.LogDebug("AnimeThemes WebM: Downloading -> {Basename}...", video.Basename);
+                            logger.LogDebug("AnimeThemes WebM: Downloading -> {Basename}...", safeBasename);
 
                             try
                             {
@@ -162,9 +166,9 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
                                 await using var fs = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
                                 await videoResp.Content.CopyToAsync(fs, cancellationToken).ConfigureAwait(false);
 
-                                downloads.Add(video.Basename);
-                                downloadedItems.Add((relPath, video.Basename));
-                                existingFiles[video.Basename] = relPath; // Add to cache so it isn't downloaded again if it appears in another anime
+                                downloads.Add(safeBasename);
+                                downloadedItems.Add((relPath, safeBasename));
+                                existingFiles[safeBasename] = relPath; // Add to cache so it isn't downloaded again if it appears in another anime
                                 downloaded++;
                             }
                             catch (HttpRequestException ex) when (ex.StatusCode is HttpStatusCode.ServiceUnavailable or HttpStatusCode.TooManyRequests)
@@ -187,9 +191,9 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
                                     await using var fs = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
                                     await retryResp.Content.CopyToAsync(fs, cancellationToken).ConfigureAwait(false);
 
-                                    downloads.Add(video.Basename);
-                                    downloadedItems.Add((relPath, video.Basename));
-                                    existingFiles[video.Basename] = relPath;
+                                    downloads.Add(safeBasename);
+                                    downloadedItems.Add((relPath, safeBasename));
+                                    existingFiles[safeBasename] = relPath;
                                     downloaded++;
                                 }
                                 catch (Exception retryEx)

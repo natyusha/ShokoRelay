@@ -239,7 +239,7 @@ POST /plex/webhook                                             -> PluginPlexWebh
   - Managed and regular Plex users (Plex Home or shared server) are permitted to scrobble if listed in `Automation.ExtraPlexUsers`.
   - `Automation.AdvancedUserMappings` will also scrobble to specific Shoko/Plex users when configured.
 - Success logs use the format: `user='Name', series='Title', episode='S01E01'`.
-- Rating events update Shoko episode ratings via `IUserDataService.RateEpisode` if `Automation.ShokoSyncWatchedIncludeRatings` is enabled.
+- Rating events update Shoko episode ratings via `IUserDataService.RateEpisode` (or remove them via `IUserDataService.UnrateEpisode` when cleared) if `Automation.ShokoSyncWatchedIncludeRatings` is enabled.
 - Progress events (`media.stop` / `media.pause`) update the VideoUserData ProgressPosition via `IUserDataService.SaveVideoUserData`.
 
 ---

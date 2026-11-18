@@ -35,11 +35,14 @@ internal static class VfsShared
     /// <summary>Gets the current monotonic blueprint save version.</summary>
     public static long BlueprintVersion => Volatile.Read(ref s_blueprintVersion);
 
-    /// <summary>The cached set of ignored folder names resolved during the last lookup.</summary>
-    private static HashSet<string>? s_lastIgnoredNames;
+    /// <summary>Cached ignored folder names and multi-segment path exclusions for a specific configuration instance.</summary>
+    /// <param name="Settings">The configuration instance this cache entry was built from.</param>
+    /// <param name="Names">Single-segment folder names to ignore.</param>
+    /// <param name="MultiSegments">Multi-segment relative path exclusions normalized with platform separators.</param>
+    private sealed record IgnoreCacheEntry(RelayConfig Settings, HashSet<string> Names, string[] MultiSegments);
 
-    /// <summary>Reference to the last evaluated configuration settings instance used for cache invalidation.</summary>
-    private static RelayConfig? s_lastSettingsForIgnore;
+    /// <summary>The cached ignored folder names and multi-segment path exclusions resolved during the last lookup.</summary>
+    private static volatile IgnoreCacheEntry? s_ignoreCache;
 
     /// <summary>Exclusive lock used to ensure thread-safe ignored folder cache compilation.</summary>
     private static readonly Lock s_ignoreLock = new();
@@ -186,15 +189,20 @@ internal static class VfsShared
     /// <summary>Assembles a unique set of folder names that should be ignored by VFS and Link operations based on current settings.</summary>
     /// <param name="settings">The current relay configuration.</param>
     /// <returns>A HashSet of folder names.</returns>
-    public static HashSet<string> GetIgnoredFolderNames(RelayConfig settings)
+    public static HashSet<string> GetIgnoredFolderNames(RelayConfig settings) => GetIgnoredCache(settings).Names;
+
+    /// <summary>Builds and caches single-segment folder names and multi-segment relative exclusion paths for the specified settings instance.</summary>
+    /// <param name="settings">The current relay configuration.</param>
+    /// <returns>The cached <see cref="IgnoreCacheEntry"/>.</returns>
+    private static IgnoreCacheEntry GetIgnoredCache(RelayConfig settings)
     {
-        if (ReferenceEquals(s_lastSettingsForIgnore, settings) && s_lastIgnoredNames != null)
-            return s_lastIgnoredNames;
+        if (s_ignoreCache is { } cached && ReferenceEquals(cached.Settings, settings))
+            return cached;
 
         lock (s_ignoreLock)
         {
-            if (ReferenceEquals(s_lastSettingsForIgnore, settings) && s_lastIgnoredNames != null)
-                return s_lastIgnoredNames;
+            if (s_ignoreCache is { } recheck && ReferenceEquals(recheck.Settings, settings))
+                return recheck;
 
             var ignored = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
@@ -203,8 +211,15 @@ internal static class VfsShared
                 ResolveAnimeThemesFolderName(settings),
                 ResolveCollectionImagesFolderName(settings),
             };
+            var multi = new List<string>();
             foreach (var folder in (settings.Advanced.FolderExclusions ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-                ignored.Add(folder.TrimSlashes());
+            {
+                string trimmed = NormalizeSeparators(folder).TrimSlashes();
+                if (trimmed.Contains(Path.DirectorySeparatorChar))
+                    multi.Add(trimmed);
+                else if (trimmed.Length > 0)
+                    ignored.Add(trimmed);
+            }
 
             // If Plex Local Extras are enabled, automatically include the standard Plex extra subdirectories in the ignore list.
             // This prevents Shoko from attempting to index these files, removing the need for manual user intervention for show and season-level extras.
@@ -212,8 +227,7 @@ internal static class VfsShared
                 foreach (var extraDir in PlexConstants.LocalExtraDirs)
                     ignored.Add(extraDir);
 
-            s_lastSettingsForIgnore = settings;
-            return s_lastIgnoredNames = ignored;
+            return s_ignoreCache = new IgnoreCacheEntry(settings, ignored, [.. multi]);
         }
     }
 
@@ -386,6 +400,20 @@ internal static class VfsShared
 
             if (relEnd >= 0)
                 lastSlash = end;
+        }
+
+        var multiSegments = GetIgnoredCache(settings).MultiSegments;
+        if (multiSegments.Length > 0)
+        {
+            string normRel = NormalizeSeparators(path).Trim(Path.DirectorySeparatorChar);
+            foreach (var multi in multiSegments)
+                if (
+                    normRel.Equals(multi, StringComparison.OrdinalIgnoreCase)
+                    || normRel.StartsWith(multi + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                    || normRel.EndsWith(Path.DirectorySeparatorChar + multi, StringComparison.OrdinalIgnoreCase)
+                    || normRel.Contains(Path.DirectorySeparatorChar + multi + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                )
+                    return true;
         }
 
         if (plexLocalExtras && !isDirectory)

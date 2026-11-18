@@ -124,7 +124,7 @@ public partial class VfsBuilder
     /// <param name="state">The active series build state.</param>
     private void BuildMovieVfs(SeriesBuildState state)
     {
-        var movieDirs = new List<(string ImportRoot, string FolderName, string FullPath)>();
+        var movieDirs = new Dictionary<string, (string ImportRoot, string FolderName)>(VfsShared.PathComparer);
         var mainMappings = state.FileData.Mappings.Where(m => m.PrimaryEpisode.Type == EpisodeType.Episode).ToList();
         var extraMappings = state.FileData.Mappings.Where(m => m.PrimaryEpisode.Type != EpisodeType.Episode).ToList();
         var movieVersionCounters = state.CoordCounts.Where(g => g.Value > 1).ToDictionary(g => g.Key, _ => 1);
@@ -139,7 +139,7 @@ public partial class VfsBuilder
             string moviePath = Path.Combine(rootPath, folderName);
 
             state.ResolvedVfsSeriesPaths.Add(moviePath);
-            movieDirs.Add((rootPath, folderName, moviePath));
+            movieDirs.TryAdd(moviePath, (rootPath, folderName));
 
             EnsureDirectory(rootPath, state.Session, true);
             EnsureDirectory(moviePath, state.Session);
@@ -201,7 +201,7 @@ public partial class VfsBuilder
                     mapping.IsVariation
                 );
 
-                foreach (var (importRoot, folderName, moviePath) in movieDirs)
+                foreach (var (moviePath, (importRoot, folderName)) in movieDirs)
                 {
                     string extraPath = Path.Combine(moviePath, ex.Folder);
                     if (!Settings.Advanced.DisableVfsGeneration)

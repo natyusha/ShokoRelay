@@ -137,7 +137,8 @@ public static partial class PlexHelper
     public static string? FindCollectionImagePath(IShokoSeries? series, string collectionName, int collectionId, string[] suffixes, IMetadataService metadataService, IReadOnlyList<string>? globalRoots = null)
     {
         string? normalizedTitle = NormalizeCollectionKey(collectionName);
-        if (string.IsNullOrWhiteSpace(normalizedTitle))
+        int groupId = series?.TopLevelGroupID ?? 0;
+        if (string.IsNullOrWhiteSpace(normalizedTitle) && collectionId <= 0 && groupId <= 0)
             return null;
 
         List<string> roots =
@@ -147,8 +148,6 @@ public static partial class PlexHelper
 
         if (roots.Count == 0)
             return null;
-
-        int groupId = series?.TopLevelGroupID ?? 0;
 
         string postersFolderName = VfsShared.ResolveCollectionImagesFolderName();
         foreach (var root in roots)
@@ -166,10 +165,12 @@ public static partial class PlexHelper
                     continue;
 
                 foreach (var suffix in suffixes)
-                {
-                    if (IsIdMatch(baseName, collectionId, suffix) || IsNameMatch(baseName, normalizedTitle, suffix) || (series != null && IsIdMatch(baseName, groupId, suffix)))
+                    if (
+                        IsIdMatch(baseName, collectionId, suffix)
+                        || (!string.IsNullOrWhiteSpace(normalizedTitle) && IsNameMatch(baseName, normalizedTitle, suffix))
+                        || (series != null && IsIdMatch(baseName, groupId, suffix))
+                    )
                         return file;
-                }
             }
         }
         return null;

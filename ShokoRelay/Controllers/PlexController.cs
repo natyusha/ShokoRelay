@@ -433,13 +433,17 @@ public class PlexController(
 
         if (isRate)
         {
-            if (evt.Metadata.UserRating.HasValue)
+            if (evt.Metadata.UserRating is > 0)
             {
                 double clampedRating = Math.Clamp(evt.Metadata.UserRating.Value, 1.0, 10.0);
                 await userDataService.RateEpisode(shokoEpisode, user, clampedRating).ConfigureAwait(false);
                 Logger.LogInformation("Plex: Rating applied -> user='{User}', series='{Series}', {Type}='{Item}', rating={Rating}", evt.Account?.Title, seriesName, typeLabel, itemTitle, clampedRating);
+                return Ok(new { status = "ok", rated = true });
             }
-            return Ok(new { status = "ok", rated = true });
+
+            await userDataService.UnrateEpisode(shokoEpisode, user).ConfigureAwait(false);
+            Logger.LogInformation("Plex: Rating removed -> user='{User}', series='{Series}', {Type}='{Item}'", evt.Account?.Title, seriesName, typeLabel, itemTitle);
+            return Ok(new { status = "ok", rated = false });
         }
 
         DateTime? watchedAt = evt.Metadata.LastViewedAt > 0 ? DateTimeOffset.FromUnixTimeSeconds(evt.Metadata.LastViewedAt.Value).UtcDateTime : null;

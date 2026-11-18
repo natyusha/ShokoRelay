@@ -186,18 +186,39 @@ public class SyncToShoko(
 
             if (actualProgress)
             {
-                var (progressBuckets, prResult) = await SyncHelper
-                    .FetchUserBucketsAsync(plexAuth, plexClient, configProvider, target, includeAdmin, adminShokoUser, extraUsers, tokenCache, true, true, sinceHours, result, logger, cancellationToken)
-                    .ConfigureAwait(false);
-                result = prResult;
+                bool progressIncludeAdmin = includeAdmin && userBuckets.Any(b => string.Equals(b.Name, "admin", StringComparison.OrdinalIgnoreCase));
+                var progressExtraUsers = extraUsers.Where(e => userBuckets.Any(b => string.Equals(b.Name, e.Name, StringComparison.OrdinalIgnoreCase))).ToList();
 
-                foreach (var pb in progressBuckets)
+                if (progressIncludeAdmin || progressExtraUsers.Count > 0)
                 {
-                    var existingIndex = userBuckets.FindIndex(b => string.Equals(b.Name, pb.Name, StringComparison.OrdinalIgnoreCase));
-                    if (existingIndex >= 0)
-                        userBuckets[existingIndex].Items.AddRange(pb.Items);
-                    else
-                        userBuckets.Add(pb);
+                    var (progressBuckets, prResult) = await SyncHelper
+                        .FetchUserBucketsAsync(
+                            plexAuth,
+                            plexClient,
+                            configProvider,
+                            target,
+                            progressIncludeAdmin,
+                            adminShokoUser,
+                            progressExtraUsers,
+                            tokenCache,
+                            true,
+                            true,
+                            sinceHours,
+                            result,
+                            logger,
+                            cancellationToken
+                        )
+                        .ConfigureAwait(false);
+                    result = prResult;
+
+                    foreach (var pb in progressBuckets)
+                    {
+                        var existingIndex = userBuckets.FindIndex(b => string.Equals(b.Name, pb.Name, StringComparison.OrdinalIgnoreCase));
+                        if (existingIndex >= 0)
+                            userBuckets[existingIndex].Items.AddRange(pb.Items);
+                        else
+                            userBuckets.Add(pb);
+                    }
                 }
             }
 
