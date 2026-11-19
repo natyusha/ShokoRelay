@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Shoko.Abstractions.Metadata.Enums;
 
 namespace ShokoRelay.Plex;
 

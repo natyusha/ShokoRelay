@@ -4,7 +4,6 @@ using System.Globalization;
 using System.Text;
 using Newtonsoft.Json;
 using Shoko.Abstractions.Metadata.Containers;
-using Shoko.Abstractions.Metadata.Enums;
 
 namespace ShokoRelay.Helpers;
 

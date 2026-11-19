@@ -1,5 +1,3 @@
-using Shoko.Abstractions.Metadata.Enums;
-
 namespace ShokoRelay.Plex;
 
 /// <summary>Maps Shoko episode/season data to Plex-style coordinates.</summary>

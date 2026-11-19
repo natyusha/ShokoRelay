@@ -2,7 +2,6 @@ using System.Collections.Frozen;
 using System.Text.RegularExpressions;
 using Shoko.Abstractions.Extensions;
 using Shoko.Abstractions.Metadata.Containers;
-using Shoko.Abstractions.Metadata.Enums;
 using Shoko.Abstractions.Metadata.Text.Options;
 
 namespace ShokoRelay.Helpers;

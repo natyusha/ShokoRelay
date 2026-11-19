@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using Shoko.Abstractions.Metadata.Enums;
 using Shoko.Abstractions.Video.Services;
 
 namespace ShokoRelay.Vfs;

@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using Shoko.Abstractions.Extensions;
 using Shoko.Abstractions.Metadata.CrossReferences;
-using Shoko.Abstractions.Metadata.Enums;
 
 namespace ShokoRelay.Helpers;
 

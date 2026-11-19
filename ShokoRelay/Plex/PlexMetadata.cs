@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Globalization;
 using Shoko.Abstractions.Metadata.Containers;
-using Shoko.Abstractions.Metadata.Enums;
 using static ShokoRelay.Plex.PlexMapping;
 
 namespace ShokoRelay.Plex;

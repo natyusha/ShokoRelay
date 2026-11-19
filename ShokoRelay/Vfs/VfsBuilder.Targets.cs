@@ -1,5 +1,3 @@
-using Shoko.Abstractions.Metadata.Enums;
-
 namespace ShokoRelay.Vfs;
 
 public partial class VfsBuilder
