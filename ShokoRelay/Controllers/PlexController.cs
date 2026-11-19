@@ -329,7 +329,8 @@ public class PlexController(
             return Ok(new { status = "ignored", reason = "auto_scrobble_disabled" });
 
         // Extract and parses the raw JSON payload from the Plex webhook request stream
-        string? payloadJson = (Request.HasFormContentType && Request.Form.TryGetValue("payload", out var p)) ? p.ToString() : await new StreamReader(Request.Body).ReadToEndAsync().ConfigureAwait(false);
+        string? payloadJson =
+            (Request.HasFormContentType && Request.Form.TryGetValue("payload", out var payloadForm)) ? payloadForm.ToString() : await new StreamReader(Request.Body).ReadToEndAsync().ConfigureAwait(false);
 
         if (string.IsNullOrWhiteSpace(payloadJson))
             return BadRequest(new { status = "error", message = "invalid payload" });
@@ -383,7 +384,9 @@ public class PlexController(
                     ?? (accountIdStr != null ? ConfigProvider.ResolveMappedShokoUsername(accountIdStr, adminName, evt.Owner == true) : null);
                 bool isExtra = ConfigProvider
                     .GetExtraPlexUserEntries()
-                    .Any(e => string.Equals(e.Name, plexUser, StringComparison.OrdinalIgnoreCase) || (accountIdStr != null && string.Equals(e.Name, accountIdStr, StringComparison.OrdinalIgnoreCase)));
+                    .Any(entry =>
+                        string.Equals(entry.Name, plexUser, StringComparison.OrdinalIgnoreCase) || (accountIdStr != null && string.Equals(entry.Name, accountIdStr, StringComparison.OrdinalIgnoreCase))
+                    );
                 bool isAdvanced = mappedShokoUser != null;
 
                 if (userType == SyncUserType.None)
@@ -415,7 +418,7 @@ public class PlexController(
         if (shokoEpisode == null)
             return Ok(new { status = "ignored", reason = "episode_not_found" });
 
-        var user = !string.IsNullOrWhiteSpace(mappedShokoUser) ? userService.GetUserByUsername(mappedShokoUser) : userService.GetUsers().OrderBy(u => u.LocalID).FirstOrDefault();
+        var user = !string.IsNullOrWhiteSpace(mappedShokoUser) ? userService.GetUserByUsername(mappedShokoUser) : userService.GetUsers().OrderBy(usr => usr.LocalID).FirstOrDefault();
         if (user == null)
         {
             if (!string.IsNullOrWhiteSpace(mappedShokoUser))
@@ -450,7 +453,7 @@ public class PlexController(
 
         if (isProgress)
         {
-            if (userDataService.GetEpisodeUserData(shokoEpisode, user)?.LastPlayedAt != null)
+            if (userDataService.GetEpisodeUserData(shokoEpisode, user)?.IsWatched == true)
                 return Ok(new { status = "ignored", reason = "already_watched" });
 
             if (evt.Metadata.ViewOffset.HasValue && evt.Metadata.ViewOffset.Value > 0)

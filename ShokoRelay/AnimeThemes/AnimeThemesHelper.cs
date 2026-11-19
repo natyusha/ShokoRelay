@@ -46,9 +46,27 @@ public sealed record AnimeThemesMappingEntry(
 {
     /// <summary>Constructs a mapping entry from a relative filepath and resolved video metadata.</summary>
     /// <param name="filePath">Relative path to the theme file.</param>
-    /// <param name="l">Resolved video metadata lookup entry.</param>
-    internal AnimeThemesMappingEntry(string filePath, AnimeThemesVideoLookup l)
-        : this(filePath, l.VideoId, l.AniDbId, l.NC, l.Slug, l.Version, l.ArtistName, l.SongTitle, l.Lyrics, l.Subbed, l.Uncen, l.NSFW, l.Spoiler, l.Source, l.Resolution, l.Episodes, l.Overlap) { }
+    /// <param name="lookup">Resolved video metadata lookup entry.</param>
+    internal AnimeThemesMappingEntry(string filePath, AnimeThemesVideoLookup lookup)
+        : this(
+            filePath,
+            lookup.VideoId,
+            lookup.AniDbId,
+            lookup.NC,
+            lookup.Slug,
+            lookup.Version,
+            lookup.ArtistName,
+            lookup.SongTitle,
+            lookup.Lyrics,
+            lookup.Subbed,
+            lookup.Uncen,
+            lookup.NSFW,
+            lookup.Spoiler,
+            lookup.Source,
+            lookup.Resolution,
+            lookup.Episodes,
+            lookup.Overlap
+        ) { }
 }
 
 /// <summary>Result returned by a mapping file build operation.</summary>
@@ -98,9 +116,27 @@ internal sealed record AnimeThemesVideoLookup(
 )
 {
     /// <summary>Constructs a lookup entry from an existing mapping entry.</summary>
-    /// <param name="e">The existing mapping entry.</param>
-    internal AnimeThemesVideoLookup(AnimeThemesMappingEntry e)
-        : this(e.VideoId, 0, e.AniDbId, e.Nc, e.Slug, e.Version, e.ArtistName, e.SongTitle, e.Lyrics, e.Subbed, e.Uncen, e.NSFW, e.Spoiler, e.Source, e.Resolution, e.Episodes, e.Overlap) { }
+    /// <param name="entry">The existing mapping entry.</param>
+    internal AnimeThemesVideoLookup(AnimeThemesMappingEntry entry)
+        : this(
+            entry.VideoId,
+            0,
+            entry.AniDbId,
+            entry.Nc,
+            entry.Slug,
+            entry.Version,
+            entry.ArtistName,
+            entry.SongTitle,
+            entry.Lyrics,
+            entry.Subbed,
+            entry.Uncen,
+            entry.NSFW,
+            entry.Spoiler,
+            entry.Source,
+            entry.Resolution,
+            entry.Episodes,
+            entry.Overlap
+        ) { }
 }
 
 /// <summary>Represents a mapped theme item resolved for VFS linking.</summary>
@@ -194,35 +230,38 @@ internal static partial class AnimeThemesHelper
 
     #region CSV Logic
 
+    /// <summary>Reads ID3v2 text frames from an MP3 file header and maps common fields to friendly tag keys.</summary>
+    /// <param name="filePath">The absolute path to the MP3 file.</param>
+    /// <returns>A dictionary of extracted tag keys and values.</returns>
     internal static Dictionary<string, string> ReadId3v2Tags(string filePath)
     {
         var tags = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-        Span<byte> h = stackalloc byte[10];
-        if (fs.Read(h) < 10 || h[0] != 'I' || h[1] != 'D' || h[2] != '3')
+        Span<byte> header = stackalloc byte[10];
+        if (fs.Read(header) < 10 || header[0] != 'I' || header[1] != 'D' || header[2] != '3')
             return tags;
 
-        int tagSize = (h[6] << 21) | (h[7] << 14) | (h[8] << 7) | h[9];
+        int tagSize = (header[6] << 21) | (header[7] << 14) | (header[8] << 7) | header[9];
         int maxRead = Math.Min(tagSize, 65536);
-        byte[] d = new byte[maxRead];
-        int bytesRead = fs.Read(d, 0, maxRead);
+        byte[] tagBytes = new byte[maxRead];
+        int bytesRead = fs.Read(tagBytes, 0, maxRead);
         int pos = 0;
         while (pos + 10 <= bytesRead)
         {
-            string id = Encoding.ASCII.GetString(d, pos, 4);
+            string id = Encoding.ASCII.GetString(tagBytes, pos, 4);
             if (id[0] == '\0')
                 break;
-            int sz = (d[pos + 4] << 24) | (d[pos + 5] << 16) | (d[pos + 6] << 8) | d[pos + 7];
-            if (sz <= 0 || pos + 10 + sz > bytesRead)
+            int frameSize = (tagBytes[pos + 4] << 24) | (tagBytes[pos + 5] << 16) | (tagBytes[pos + 6] << 8) | tagBytes[pos + 7];
+            if (frameSize <= 0 || pos + 10 + frameSize > bytesRead)
                 break;
-            if (id.StartsWith('T') && id != "TXXX" && sz > 1)
+            if (id.StartsWith('T') && id != "TXXX" && frameSize > 1)
             {
-                string val = d[pos + 10] switch
+                string val = tagBytes[pos + 10] switch
                 {
-                    1 => Encoding.Unicode.GetString(d, pos + 11, sz - 1),
-                    2 => Encoding.BigEndianUnicode.GetString(d, pos + 11, sz - 1),
-                    3 => Encoding.UTF8.GetString(d, pos + 11, sz - 1),
-                    _ => Encoding.Latin1.GetString(d, pos + 11, sz - 1),
+                    1 => Encoding.Unicode.GetString(tagBytes, pos + 11, frameSize - 1),
+                    2 => Encoding.BigEndianUnicode.GetString(tagBytes, pos + 11, frameSize - 1),
+                    3 => Encoding.UTF8.GetString(tagBytes, pos + 11, frameSize - 1),
+                    _ => Encoding.Latin1.GetString(tagBytes, pos + 11, frameSize - 1),
                 };
                 string tagKey = id switch
                 {
@@ -234,7 +273,7 @@ internal static partial class AnimeThemesHelper
                 };
                 tags[tagKey] = val.TrimEnd('\0').Replace("\uFEFF", "", StringComparison.Ordinal);
             }
-            pos += 10 + sz;
+            pos += 10 + frameSize;
         }
         return tags;
     }
@@ -364,7 +403,7 @@ internal static partial class AnimeThemesHelper
     /// <summary>Extracts the numeric suffix from a theme slug, defaulting to 1 if unnumbered or unparseable.</summary>
     /// <param name="baseSlug">The base slug to extract numbers from.</param>
     /// <returns>The extracted number, or 1 if unnumbered.</returns>
-    internal static int ExtractSlugNumber(string baseSlug) => NumberRegex().Match(baseSlug) is { Success: true } match && int.TryParse(match.Value, out var n) ? n : 1;
+    internal static int ExtractSlugNumber(string baseSlug) => NumberRegex().Match(baseSlug) is { Success: true } match && int.TryParse(match.Value, out var num) ? num : 1;
 
     /// <summary>Standardizes a raw or display theme slug into the canonical 'OP#' or 'ED#' format.</summary>
     /// <param name="slug">The slug string to parse.</param>
@@ -469,7 +508,7 @@ internal static partial class AnimeThemesHelper
     /// <summary>Formats a slug variant suffix into a human-readable tag.</summary>
     /// <param name="suffix">The slug suffix (e.g. BD, TV).</param>
     /// <returns>A formatted string tag.</returns>
-    internal static string FormatSlugTag(string? suffix) => string.IsNullOrWhiteSpace(suffix) ? "" : $" ({(s_slugFormatting.TryGetValue(suffix.Trim(), out var f) ? f : suffix)})";
+    internal static string FormatSlugTag(string? suffix) => string.IsNullOrWhiteSpace(suffix) ? "" : $" ({(s_slugFormatting.TryGetValue(suffix.Trim(), out var formatted) ? formatted : suffix)})";
 
     #endregion
 }

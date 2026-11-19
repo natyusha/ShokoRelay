@@ -153,7 +153,7 @@ public static class LogHelper
         if (result.ErrorsList.Count > 0)
         {
             items.Add("Errors:");
-            items.AddRange(result.ErrorsList.Select(e => $"  ERROR: {e}"));
+            items.AddRange(result.ErrorsList.Select(err => $"  ERROR: {err}"));
         }
 
         BuildReport(builder, "Collection Build Report", stats, "Details:", items);
@@ -178,12 +178,12 @@ public static class LogHelper
 
         void AddChanges(string header, string type)
         {
-            var changes = result.AppliedChanges.Where(x => x.Type == type).OrderBy(x => x.Title).ToList();
+            var changes = result.AppliedChanges.Where(change => change.Type == type).OrderBy(change => change.Title).ToList();
             if (changes.Count == 0)
                 return;
 
             items.Add(header);
-            items.AddRange(changes.Select(c => $"  {c.Title} ({c.RatingKey}): {c.OldRating?.ToString("F2") ?? "0.00"} -> {c.NewRating?.ToString("F2") ?? "0.00"}"));
+            items.AddRange(changes.Select(change => $"  {change.Title} ({change.RatingKey}): {change.OldRating?.ToString("F2") ?? "0.00"} -> {change.NewRating?.ToString("F2") ?? "0.00"}"));
             items.Add("");
         }
 
@@ -194,7 +194,7 @@ public static class LogHelper
         if (result.ErrorsList.Count > 0)
         {
             items.Add("Errors:");
-            items.AddRange(result.ErrorsList.Select(e => $"  ERROR: {e}"));
+            items.AddRange(result.ErrorsList.Select(err => $"  ERROR: {err}"));
         }
 
         BuildReport(builder, "Audience Rating Report", stats, "Details:", items);
@@ -213,8 +213,8 @@ public static class LogHelper
             ["Images Already Uploaded"] = result.Skipped,
             ["Errors"] = result.Errors,
         };
-        var items = result.UploadedDetails.OrderBy(u => u).Select(u => $"UPLOADED: {u}").ToList();
-        items.AddRange(result.ErrorsList.OrderBy(e => e).Select(e => $"ERROR: {e}"));
+        var items = result.UploadedDetails.OrderBy(detail => detail).Select(detail => $"UPLOADED: {detail}").ToList();
+        items.AddRange(result.ErrorsList.OrderBy(err => err).Select(err => $"ERROR: {err}"));
         BuildReport(builder, "Plex Image Sync Report", stats, "Details:", items);
     }
 
@@ -270,17 +270,17 @@ public static class LogHelper
         if (result.CleanupDetails.Any())
         {
             items.Add("Cleanup Details:");
-            items.AddRange(result.CleanupDetails.OrderBy(c => c.Path).Select(c => $"[{c.ElapsedMs, 5}ms] {c.Path}"));
+            items.AddRange(result.CleanupDetails.OrderBy(cleanup => cleanup.Path).Select(cleanup => $"[{cleanup.ElapsedMs, 5}ms] {cleanup.Path}"));
             items.Add("");
         }
 
-        var tvSeries = result.SeriesDetails.Where(d => !d.IsMovie).ToList();
-        var movies = result.SeriesDetails.Where(d => d.IsMovie).ToList();
+        var tvSeries = result.SeriesDetails.Where(detail => !detail.IsMovie).ToList();
+        var movies = result.SeriesDetails.Where(detail => detail.IsMovie).ToList();
 
         if (tvSeries.Count > 0)
         {
             items.Add("Processed Series Details:");
-            items.AddRange(tvSeries.OrderByDescending(x => x.ElapsedMs).ThenBy(x => x.Name).Select(d => $"[{d.ElapsedMs, 5}ms] {d.Name} ({d.CreatedLinks} links)"));
+            items.AddRange(tvSeries.OrderByDescending(detail => detail.ElapsedMs).ThenBy(detail => detail.Name).Select(detail => $"[{detail.ElapsedMs, 5}ms] {detail.Name} ({detail.CreatedLinks} links)"));
         }
 
         if (movies.Count > 0)
@@ -288,16 +288,16 @@ public static class LogHelper
             if (tvSeries.Count > 0)
                 items.Add("");
             items.Add("Processed Movie Details:");
-            items.AddRange(movies.OrderByDescending(x => x.ElapsedMs).ThenBy(x => x.Name).Select(d => $"[{d.ElapsedMs, 5}ms] {d.Name} ({d.CreatedLinks} links)"));
+            items.AddRange(movies.OrderByDescending(detail => detail.ElapsedMs).ThenBy(detail => detail.Name).Select(detail => $"[{detail.ElapsedMs, 5}ms] {detail.Name} ({detail.CreatedLinks} links)"));
         }
 
         if (result.SkippedDetails.Any())
         {
             items.Add("");
             items.Add("Skipped Items:");
-            items.AddRange(result.SkippedDetails.OrderBy(s => s).Select(s => $"SKIPPED: {s}"));
+            items.AddRange(result.SkippedDetails.OrderBy(skippedItem => skippedItem).Select(skippedItem => $"SKIPPED: {skippedItem}"));
         }
-        items.AddRange(result.Errors.OrderBy(e => e).Select(e => $"ERROR: {e}"));
+        items.AddRange(result.Errors.OrderBy(err => err).Select(err => $"ERROR: {err}"));
 
         BuildReport(builder, "VFS Generation Report", stats, "Report Details:", items);
     }
@@ -314,8 +314,8 @@ public static class LogHelper
             ["Orphaned Folders Removed"] = result.OrphanedFoldersRemoved,
             ["Errors"] = result.Errors.Count,
         };
-        var items = result.RemovedItems.OrderBy(i => i).ToList();
-        items.AddRange(result.Errors.OrderBy(e => e).Select(e => $"ERROR: {e}"));
+        var items = result.RemovedItems.OrderBy(removedItem => removedItem).ToList();
+        items.AddRange(result.Errors.OrderBy(err => err).Select(err => $"ERROR: {err}"));
         BuildReport(builder, "VFS Audit Report", stats, "Details:", items);
     }
 
@@ -338,19 +338,19 @@ public static class LogHelper
         if (plexMessages?.Count > 0)
         {
             items.Add("Plex Trash Status:");
-            items.AddRange(plexMessages.Select(m => $"  {m}"));
+            items.AddRange(plexMessages.Select(msg => $"  {msg}"));
             items.Add("");
         }
         if (removed?.Count > 0)
         {
             items.Add("Shoko Removed Paths:");
-            items.AddRange(removed.OrderBy(p => p).Select(p => $"  {p}"));
+            items.AddRange(removed.OrderBy(path => path).Select(path => $"  {path}"));
             items.Add("");
         }
         if (plexRemoved?.Count > 0)
         {
             items.Add("Plex Trashed Items:");
-            items.AddRange(plexRemoved.OrderBy(p => p).Select(p => $"  {p}"));
+            items.AddRange(plexRemoved.OrderBy(path => path).Select(path => $"  {path}"));
         }
 
         BuildReport(builder, "Purge Missing Files Report", stats, "Details:", items);
@@ -422,8 +422,8 @@ public static class LogHelper
         if (filter.Count > 0)
             stats["Filter"] = string.Join(", ", filter);
 
-        var items = result.CacheEntries.OrderBy(ce => ce.VfsPath).Select(ce => $"{ce.VfsPath} (VideoID: {ce.VideoId})").ToList();
-        items.AddRange(result.Errors.OrderBy(e => e).Select(e => $"ERROR: {e}"));
+        var items = result.CacheEntries.OrderBy(entry => entry.VfsPath).Select(entry => $"{entry.VfsPath} (VideoID: {entry.VideoId})").ToList();
+        items.AddRange(result.Errors.OrderBy(err => err).Select(err => $"ERROR: {err}"));
 
         BuildReport(builder, "AnimeThemes: VFS Build Report", stats, "Planned Links & Errors:", items);
     }
@@ -451,16 +451,16 @@ public static class LogHelper
 
         // Sort priority: [ok] (0), [skipped] (1), [error] (2). Secondary sort by Folder path since that is the primary text displayed in the report.
         var items = result
-            .Items.OrderBy(i =>
-                i.Status == "ok" ? 0
-                : i.Status == "skipped" ? 1
+            .Items.OrderBy(item =>
+                item.Status == "ok" ? 0
+                : item.Status == "skipped" ? 1
                 : 2
             )
-            .ThenBy(i => i.Folder)
-            .Select(i =>
+            .ThenBy(item => item.Folder)
+            .Select(item =>
             {
-                string line = $"[{i.Status}] {i.Folder}";
-                return i.Status == "ok" ? (!string.IsNullOrWhiteSpace(i.Slug) ? $"{line} | {i.Slug}" : line) : (!string.IsNullOrWhiteSpace(i.Message) ? $"{line} | {i.Message}" : line);
+                string line = $"[{item.Status}] {item.Folder}";
+                return item.Status == "ok" ? (!string.IsNullOrWhiteSpace(item.Slug) ? $"{line} | {item.Slug}" : line) : (!string.IsNullOrWhiteSpace(item.Message) ? $"{line} | {item.Message}" : line);
             })
             .ToList();
 
@@ -486,28 +486,28 @@ public static class LogHelper
         if (result.Upgrades.Count > 0)
         {
             items.Add("Non-Standard Themes:");
-            items.AddRange(result.Upgrades.OrderBy(u => u).Select(u => $"  {u}"));
+            items.AddRange(result.Upgrades.OrderBy(upgrade => upgrade).Select(upgrade => $"  {upgrade}"));
             items.Add("");
         }
 
         if (result.OverriddenOps.Count > 0)
         {
             items.Add("Overridden Openings:");
-            items.AddRange(result.OverriddenOps.OrderBy(o => o).Select(o => $"  {o}"));
+            items.AddRange(result.OverriddenOps.OrderBy(ovr => ovr).Select(ovr => $"  {ovr}"));
             items.Add("");
         }
 
         if (result.OverriddenEds.Count > 0)
         {
             items.Add("Overridden Endings:");
-            items.AddRange(result.OverriddenEds.OrderBy(o => o).Select(o => $"  {o}"));
+            items.AddRange(result.OverriddenEds.OrderBy(ovr => ovr).Select(ovr => $"  {ovr}"));
             items.Add("");
         }
 
         if (result.ErrorsList.Count > 0)
         {
             items.Add("Errors:");
-            items.AddRange(result.ErrorsList.OrderBy(e => e).Select(e => $"ERROR: {e}"));
+            items.AddRange(result.ErrorsList.OrderBy(err => err).Select(err => $"ERROR: {err}"));
         }
 
         BuildReport(builder, "AnimeThemes: MP3 Audit Report", stats, "Details:", items);
@@ -524,8 +524,8 @@ public static class LogHelper
             ["Skipped"] = result.Skipped,
             ["Errors"] = result.Errors,
         };
-        var items = result.Downloads.OrderBy(d => d).Select(d => $"DOWNLOADED: {d}").ToList();
-        items.AddRange(result.Messages.OrderBy(m => m).Select(m => $"MESSAGE: {m}"));
+        var items = result.Downloads.OrderBy(download => download).Select(download => $"DOWNLOADED: {download}").ToList();
+        items.AddRange(result.Messages.OrderBy(msg => msg).Select(msg => $"MESSAGE: {msg}"));
         BuildReport(builder, "AnimeThemes: WebM Download Report", stats, "Details:", items);
     }
 
@@ -535,7 +535,7 @@ public static class LogHelper
     public static void BuildSourceLinkReport(StringBuilder builder, SourceLinkResult result)
     {
         var stats = new Dictionary<string, object> { ["Mode"] = result.IsPurge ? "Purge" : "Map", ["Operations Completed"] = result.Count };
-        BuildReport(builder, "Source Link Report", stats, result.IsPurge ? null : "Links Created:", result.Details.OrderBy(d => d));
+        BuildReport(builder, "Source Link Report", stats, result.IsPurge ? null : "Links Created:", result.Details.OrderBy(detail => detail));
     }
 
     #endregion

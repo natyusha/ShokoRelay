@@ -73,10 +73,10 @@
    * @param {MouseEvent} e - The mouse movement event.
    * @returns {void}
    */
-  const resetIdle = (e) => {
+  const resetIdle = (ev) => {
     playerContainer.classList.remove("idle");
     clearTimeout(idleTimer);
-    if (!e.target.closest(".ui-btn, #player-progress-track")) idleTimer = setTimeout(() => playerContainer.classList.add("idle"), 2000);
+    if (!ev.target.closest(".ui-btn, #player-progress-track")) idleTimer = setTimeout(() => playerContainer.classList.add("idle"), 2000);
   };
 
   /**
@@ -155,7 +155,7 @@
    * @param {string} s - The string containing escape sequences.
    * @returns {string} A decoded string.
    */
-  const decodeUnicode = (s) => (s || "").replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+  const decodeUnicode = (str) => (str || "").replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
 
   /**
    * Cycles through an array of modes in a specific direction.
@@ -196,15 +196,15 @@
     const rawFt = (uiFilter?.value || "").toLowerCase().trim();
     if (!rawFt) return webmTreeData;
 
-    const words = rawFt.split(/\s+/).filter((w) => w.length > 0);
+    const words = rawFt.split(/\s+/).filter((word) => word.length > 0);
     const isFavQuery = words.includes("favs");
     const tagExclusions = [];
     const tagInclusions = [];
     const searchTerms = [];
 
-    words.forEach((w) => {
-      if (w === "favs") return;
-      w.startsWith("-") ? tagExclusions.push(w.substring(1)) : w.startsWith("+") ? tagInclusions.push(w.substring(1)) : searchTerms.push(w);
+    words.forEach((word) => {
+      if (word === "favs") return;
+      word.startsWith("-") ? tagExclusions.push(word.substring(1)) : word.startsWith("+") ? tagInclusions.push(word.substring(1)) : searchTerms.push(word);
     });
 
     /**
@@ -440,21 +440,21 @@
       const getSeasonWeight = (name) => seasonOrder[name.toLowerCase()] || 99;
 
       const renderFolderTree = (node, isRoot, container) => {
-        const sortedFolders = [...node.folders.keys()].sort((a, b) => {
-          const wA = getSeasonWeight(a);
-          const wB = getSeasonWeight(b);
-          if (wA !== 99 || wB !== 99) return wA !== wB ? wA - wB : a.localeCompare(b, undefined, { numeric: true });
-          return a.localeCompare(b, undefined, { numeric: true });
+        const sortedFolders = [...node.folders.keys()].sort((left, right) => {
+          const weightLeft = getSeasonWeight(left);
+          const weightRight = getSeasonWeight(right);
+          if (weightLeft !== 99 || weightRight !== 99) return weightLeft !== weightRight ? weightLeft - weightRight : left.localeCompare(right, undefined, { numeric: true });
+          return left.localeCompare(right, undefined, { numeric: true });
         });
 
         sortedFolders.forEach((folderName) => {
           const childNode = node.folders.get(folderName);
           const extraHtml = childNode.isSeries ? buildSeriesLinks(childNode.seriesId, childNode.anidbId) : "";
-          container.appendChild(createFolderNode(folderName, (c) => renderFolderTree(childNode, false, c), ft, childNode.isMissing, extraHtml));
+          container.appendChild(createFolderNode(folderName, (container) => renderFolderTree(childNode, false, container), ft, childNode.isMissing, extraHtml));
         });
 
-        const sortedFiles = node.files.sort((a, b) => a.file.localeCompare(b.file, undefined, { numeric: true }));
-        sortedFiles.forEach((item) => container.appendChild(createFileLeaf(item, decodeUnicode(item.file))));
+        const sortedFiles = node.files.sort((left, right) => left.file.localeCompare(right.file, undefined, { numeric: true }));
+        sortedFiles.forEach((file) => container.appendChild(createFileLeaf(file, decodeUnicode(file.file))));
       };
 
       renderFolderTree(rootNode, true, rootUl);
@@ -494,7 +494,7 @@
           const seriesFiles = sMap.get(sName);
           const firstFile = seriesFiles[0];
           const extraHtml = buildSeriesLinks(firstFile.seriesId, firstFile.anidbId);
-          const renderFiles = (container) => seriesFiles.forEach((f) => container.appendChild(createFileLeaf(f, decodeUnicode(f.file))));
+          const renderFiles = (container) => seriesFiles.forEach((file) => container.appendChild(createFileLeaf(file, decodeUnicode(file.file))));
           rootUl.appendChild(createFolderNode(sName, renderFiles, ft, isMissing, extraHtml));
         } else {
           rootUl.appendChild(createFolderNode(gName, renderSeriesFolders, ft, isMissing));
@@ -898,7 +898,7 @@
         case "v": toggleVideo(); break;
         case "r": if (playerVideo.src) { playerVideo.currentTime = 0; playerVideo.play().catch(() => {}); } break;
         case "g": locateCurrentInTree(); break;
-        case "h": const hItem = webmTreeData.find((i) => i.path === currentWebmPath); if (hItem) toggleFavourite(hItem.videoId); break;
+        case "h": const favItem = webmTreeData.find((item) => item.path === currentWebmPath); if (favItem) toggleFavourite(favItem.videoId); break;
         case "?": toggleHelpModal(); break;
         case "q": playerCloseBtn?.click(); break;
       }

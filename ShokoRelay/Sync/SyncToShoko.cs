@@ -59,7 +59,7 @@ public class SyncToShoko(
         bool actualVotes = includeVotes ?? auto.ShokoSyncWatchedIncludeRatings;
         bool actualProgress = includeProgress ?? auto.ShokoSyncWatchedIncludeProgress;
 
-        if (!plexClient.IsEnabled || userService.GetUsers().OrderBy(u => u.LocalID).FirstOrDefault() is not { } defaultUser)
+        if (!plexClient.IsEnabled || userService.GetUsers().OrderBy(usr => usr.LocalID).FirstOrDefault() is not { } defaultUser)
             return result;
 
         string? adminUsername = configProvider.GetAdminUsername();
@@ -243,7 +243,7 @@ public class SyncToShoko(
                         continue;
 
                     var epUserData = GetCachedUserData(ep, targetShokoUser);
-                    bool alreadyWatched = epUserData?.LastPlayedAt != null;
+                    bool alreadyWatched = epUserData?.IsWatched == true;
                     bool isWatchedInPlex = item.ViewCount > 0;
 
                     if (isWatchedInPlex && !alreadyWatched && (ep.Videos?.Count > 0))
@@ -273,7 +273,7 @@ public class SyncToShoko(
                     }
 
                     var epUserData = GetCachedUserData(ep, targetShokoUser);
-                    bool alreadyWatched = epUserData?.LastPlayedAt != null;
+                    bool alreadyWatched = epUserData?.IsWatched == true;
 
                     bool isWatchedInPlex = item.ViewCount > 0;
                     bool hasProgressInPlex = item.ViewOffset > 0;

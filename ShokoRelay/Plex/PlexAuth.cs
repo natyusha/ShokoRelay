@@ -455,7 +455,10 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
             return null;
         var content = await resp.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         using var doc = JsonDocument.Parse(content);
-        return new PlexAccountInfo(doc.RootElement.TryGetProperty("title", out var t) ? t.GetString() : null, doc.RootElement.TryGetProperty("username", out var u) ? u.GetString() : null);
+        return new PlexAccountInfo(
+            doc.RootElement.TryGetProperty("title", out var titleProp) ? titleProp.GetString() : null,
+            doc.RootElement.TryGetProperty("username", out var userProp) ? userProp.GetString() : null
+        );
     }
 
     #endregion

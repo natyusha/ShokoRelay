@@ -66,9 +66,9 @@
           const btn = el(taskName);
           if (btn?.classList.contains("clicking")) continue;
           const isOk = (result.status || result.Status || "").toLowerCase() === "ok";
-          const fInput = btn?.dataset.relayPersistIfEmpty ? document.querySelector(btn.dataset.relayPersistIfEmpty) : null;
+          const filterInput = btn?.dataset.relayPersistIfEmpty ? document.querySelector(btn.dataset.relayPersistIfEmpty) : null;
 
-          toastOperation({ ok: isOk, data: result }, taskName.replace(/-/g, " "), { hideOnSucceed: fInput?.value?.trim() ? TOAST_MS : 0 });
+          toastOperation({ ok: isOk, data: result }, taskName.replace(/-/g, " "), { hideOnSucceed: filterInput?.value?.trim() ? TOAST_MS : 0 });
           await fetchJson(base + `/tasks/clear/${taskName}`, { method: "POST" }, false);
           hasNewLogs = true;
           if (taskName === window._sr.tasks.plexAuthRefresh) window._sr.refreshPlexState?.();
@@ -93,19 +93,19 @@
       const files = getData(res) || [];
       if (files.length > 0) {
         logsList.innerHTML = "";
-        files.forEach((f) => {
+        files.forEach((file) => {
           const li = document.createElement("li");
           li.className = "log-item";
 
           const link = document.createElement("a");
-          link.href = `${base}/logs/${f.name}`;
+          link.href = `${base}/logs/${file.name}`;
           link.target = "_blank";
           link.rel = "noopener noreferrer";
-          link.textContent = f.friendlyName;
+          link.textContent = file.friendlyName;
           link.className = "log-link";
 
           const small = document.createElement("small");
-          small.textContent = ` (${f.name})`;
+          small.textContent = ` (${file.name})`;
 
           li.append(link, small);
           logsList.appendChild(li);
@@ -174,8 +174,8 @@
   // #endregion
 
   // #region Global Dispatcher
-  document.addEventListener("click", (e) => {
-    const target = e.target.closest("[data-relay-endpoint], [data-relay-action]");
+  document.addEventListener("click", (ev) => {
+    const target = ev.target.closest("[data-relay-endpoint], [data-relay-action]");
     if (!target) return;
 
     const action = async (btn, forceDryRun = false) => {

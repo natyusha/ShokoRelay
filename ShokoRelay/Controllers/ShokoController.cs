@@ -165,31 +165,33 @@ public class ShokoController(
             var roots = data.Select(root =>
                 {
                     var parentDir = Path.GetDirectoryName(root.Key)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) ?? string.Empty;
-                    var match = managedFolders.FirstOrDefault(f => string.Equals(parentDir, f.Path, StringComparison.OrdinalIgnoreCase));
+                    var match = managedFolders.FirstOrDefault(folder => string.Equals(parentDir, folder.Path, StringComparison.OrdinalIgnoreCase));
                     var fallback = Path.GetFileName(parentDir);
                     string tabName = match?.Name ?? (string.IsNullOrEmpty(fallback) ? "Unknown" : fallback);
 
                     return new { Name = tabName, Series = root.Value.Values };
                 })
-                .GroupBy(x => x.Name)
-                .Select(g =>
+                .GroupBy(rootGroup => rootGroup.Name)
+                .Select(group =>
                 {
                     // Safely merge TV and Movie blueprint entries sharing the same Shoko Series ID within a unified root tab
-                    var mergedSeries = g.SelectMany(x => x.Series)
-                        .GroupBy(s => s.SeriesId)
-                        .Select(sg =>
+                    var mergedSeries = group
+                        .SelectMany(entry => entry.Series)
+                        .GroupBy(series => series.SeriesId)
+                        .Select(seriesGroup =>
                         {
-                            var first = sg.First();
-                            if (sg.Count() == 1)
+                            var first = seriesGroup.First();
+                            if (seriesGroup.Count() == 1)
                                 return first;
 
-                            var allRootFiles = sg.SelectMany(s => s.RootFiles).DistinctBy(f => f.Name).ToList();
-                            var allSeasons = sg.SelectMany(s => s.Seasons)
-                                .GroupBy(s => s.Name)
+                            var allRootFiles = seriesGroup.SelectMany(series => series.RootFiles).DistinctBy(file => file.Name).ToList();
+                            var allSeasons = seriesGroup
+                                .SelectMany(series => series.Seasons)
+                                .GroupBy(season => season.Name)
                                 .Select(seasonGroup =>
                                 {
                                     var sFirst = seasonGroup.First();
-                                    return seasonGroup.Count() == 1 ? sFirst : (sFirst with { Files = [.. seasonGroup.SelectMany(sx => sx.Files).DistinctBy(f => f.Name)] });
+                                    return seasonGroup.Count() == 1 ? sFirst : (sFirst with { Files = [.. seasonGroup.SelectMany(season => season.Files).DistinctBy(file => file.Name)] });
                                 })
                                 .ToList();
 
@@ -199,12 +201,12 @@ public class ShokoController(
                                 Seasons = allSeasons,
                             };
                         })
-                        .OrderBy(s => s.Title ?? "")
+                        .OrderBy(series => series.Title ?? "")
                         .ToList();
 
-                    return new { name = g.Key, series = mergedSeries };
+                    return new { name = group.Key, series = mergedSeries };
                 })
-                .OrderBy(r => r.name)
+                .OrderBy(root => root.name)
                 .ToList();
 
             var json = JsonSerializer.Serialize(new { roots });
@@ -286,7 +288,7 @@ public class ShokoController(
         return Ok(new RelayResponse<object>(Data: new { scanned, scannedCount = scanned?.Count ?? 0 }));
     }
 
-    /// <summary>Triggers import and resets automation schedule.</summary>
+    /// <summary>Triggers an immediate import scan and returns the current scheduled action status.</summary>
     /// <returns>Trigger result.</returns>
     [HttpGet("shoko/import/start")]
     public async Task<IActionResult> StartShokoImportNow()
@@ -346,7 +348,7 @@ public class ShokoController(
                 SyncHelper.SyncLock
             );
 
-    /// <summary>Triggers immediate sync and resets schedule.</summary>
+    /// <summary>Triggers an immediate watched-state sync and returns the current scheduled action status.</summary>
     /// <returns>Trigger result.</returns>
     [HttpGet("sync-watched/start")]
     public async Task<IActionResult> StartWatchedSyncNow()

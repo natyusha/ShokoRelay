@@ -68,12 +68,12 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
         {
             string? rawPath = body?.Filename ?? Request.Query["filename"];
             string? title = body?.Title ?? Request.Query["title"];
-            int? manual = body?.Manual ?? (int.TryParse(Request.Query["manual"], out var m) ? m : null);
-            int? manualId = int.TryParse(title, out var mId)
-                ? mId
+            int? manual = body?.Manual ?? (int.TryParse(Request.Query["manual"], out var manualFlag) ? manualFlag : null);
+            int? manualId = int.TryParse(title, out var manualSeriesId)
+                ? manualSeriesId
                 : (
-                    title?.StartsWith(PlexConstants.AniDbPrefix, StringComparison.OrdinalIgnoreCase) == true && int.TryParse(title[1..], out var aid)
-                        ? MetadataService.GetShokoSeriesByAnidbID(aid)?.LocalID
+                    title?.StartsWith(PlexConstants.AniDbPrefix, StringComparison.OrdinalIgnoreCase) == true && int.TryParse(title[1..], out var anidbId)
+                        ? MetadataService.GetShokoSeriesByAnidbID(anidbId)?.LocalID
                         : null
                 );
             int? id = (manual == 1 && manualId.HasValue) ? manualId : (string.IsNullOrWhiteSpace(rawPath) ? null : ExtractSeriesId(rawPath));
@@ -261,8 +261,8 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
 
             if (PlexHelper.IsEpisodeKey(ratingKey))
             {
-                var (episode, partIdx, m) = TryResolveEpisodeContext(ctx, ratingKey);
-                return episode == null || m == null ? NotFound() : WrapInContainer(mapper.MapEpisode(episode, m.Coords, ctx, partIdx, m.TmdbEpisode));
+                var (episode, partIdx, mapping) = TryResolveEpisodeContext(ctx, ratingKey);
+                return episode == null || mapping == null ? NotFound() : WrapInContainer(mapper.MapEpisode(episode, mapping.Coords, ctx, partIdx, mapping.TmdbEpisode));
             }
             int seasonIdx = ratingKey.IndexOf(PlexConstants.SeasonPrefix, StringComparison.OrdinalIgnoreCase);
             if (seasonIdx >= 0)
@@ -368,8 +368,8 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
                 return NotFound();
             if (PlexHelper.IsEpisodeKey(ratingKey))
             {
-                var (episode, partIdx, m) = TryResolveEpisodeContext(ctx, ratingKey);
-                images = (episode != null && m != null) ? ExtractImages(mapper.MapEpisode(episode, m.Coords, ctx, partIdx, m.TmdbEpisode)) : [];
+                var (episode, partIdx, mapping) = TryResolveEpisodeContext(ctx, ratingKey);
+                images = (episode != null && mapping != null) ? ExtractImages(mapper.MapEpisode(episode, mapping.Coords, ctx, partIdx, mapping.TmdbEpisode)) : [];
             }
             else
             {
@@ -432,17 +432,17 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             List<string> globalRoots = [.. (videoService.GetAllManagedFolders() ?? []).Select(f => f.Path).Where(p => !string.IsNullOrEmpty(p)).Distinct()];
 
             // If prefixed with 'sc', it's a Plex smart collection with a parsed ID (bypassing Shoko Group lookup)
-            if (groupId.StartsWith(PlexConstants.SmartCollectionPrefix, StringComparison.OrdinalIgnoreCase) && int.TryParse(groupId[2..], out int cid))
-                posterPath = PlexHelper.FindCollectionImagePath(null, name ?? string.Empty, cid, [actualSuffix], MetadataService, globalRoots);
-            else if (int.TryParse(groupId, out int gid))
+            if (groupId.StartsWith(PlexConstants.SmartCollectionPrefix, StringComparison.OrdinalIgnoreCase) && int.TryParse(groupId[2..], out int smartCollectionId))
+                posterPath = PlexHelper.FindCollectionImagePath(null, name ?? string.Empty, smartCollectionId, [actualSuffix], MetadataService, globalRoots);
+            else if (int.TryParse(groupId, out int shokoGroupId))
             {
-                var group = MetadataService.GetShokoGroupByID(gid);
+                var group = MetadataService.GetShokoGroupByID(shokoGroupId);
                 var primarySeries = group?.MainSeries ?? group?.Series?.FirstOrDefault();
                 if (primarySeries != null)
-                    posterPath = PlexHelper.FindCollectionImagePathByGroup(primarySeries, gid, actualSuffix, MetadataService);
+                    posterPath = PlexHelper.FindCollectionImagePathByGroup(primarySeries, shokoGroupId, actualSuffix, MetadataService);
 
                 if (string.IsNullOrEmpty(posterPath) || !IoFile.Exists(posterPath))
-                    posterPath = PlexHelper.FindCollectionImagePath(null, name ?? string.Empty, gid, [actualSuffix], MetadataService, globalRoots);
+                    posterPath = PlexHelper.FindCollectionImagePath(null, name ?? string.Empty, shokoGroupId, [actualSuffix], MetadataService, globalRoots);
             }
 
             return string.IsNullOrWhiteSpace(posterPath) || !IoFile.Exists(posterPath)

@@ -406,7 +406,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
             {
                 if (dir.TryGetProperty("title", out var titleProp) && string.Equals(titleProp.GetString(), libraryName, StringComparison.OrdinalIgnoreCase))
                 {
-                    int id = dir.TryGetProperty("key", out var keyProp) && int.TryParse(keyProp.GetString(), out int k) ? k : 0;
+                    int id = dir.TryGetProperty("key", out var keyProp) && int.TryParse(keyProp.GetString(), out int parsedKey) ? parsedKey : 0;
                     if (id == 0)
                         continue;
 
@@ -414,8 +414,8 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
                     var locations = new List<string>();
                     if (dir.TryGetProperty("Location", out var locs))
                         foreach (var loc in locs.EnumerateArray())
-                            if (loc.TryGetProperty("path", out var pathProp) && pathProp.GetString() is { } p)
-                                locations.Add(p);
+                            if (loc.TryGetProperty("path", out var pathProp) && pathProp.GetString() is { } pathVal)
+                                locations.Add(pathVal);
 
                     return new PlexLibraryTarget
                     {

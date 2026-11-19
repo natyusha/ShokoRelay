@@ -162,7 +162,7 @@ public static partial class TagHelper
                 activeMerges[normSource] = target;
 
             // Start with default blacklist, dropping any tag mentioned on a user merge line so user merges can unblock default blacklisted tags
-            var activeBlacklist = new HashSet<string>(s_defaultTagBlacklist.Where(b => !userMergeMentioned.Contains(b)), StringComparer.OrdinalIgnoreCase);
+            var activeBlacklist = new HashSet<string>(s_defaultTagBlacklist.Where(tagKey => !userMergeMentioned.Contains(tagKey)), StringComparer.OrdinalIgnoreCase);
 
             foreach (var blacklistedTag in userBlacklist)
                 activeBlacklist.Add(blacklistedTag);
@@ -344,7 +344,7 @@ public static partial class TagHelper
     /// <param name="metadataService">The Shoko metadata service used to enumerate all series.</param>
     /// <returns>A CSV-formatted string listing source, tag, and series count, with merged variants appended after semicolons.</returns>
     public static string BuildTagReport(IMetadataService metadataService) =>
-        new ReportHelper.CsvReportBuilder("Tag", "tag", NormalizeTagKey, s_defaultTagMerges, s_defaultTagBlacklist, TitleCase, s => TagCleanupRegex().Replace(s, "")).Build(
+        new ReportHelper.CsvReportBuilder("Tag", "tag", NormalizeTagKey, s_defaultTagMerges, s_defaultTagBlacklist, TitleCase, rawTag => TagCleanupRegex().Replace(rawTag, "")).Build(
             metadataService.GetAllShokoSeries() ?? [],
             (series, record) =>
             {
@@ -400,11 +400,11 @@ public static partial class TagHelper
         string result = WordRegex()
             .Replace(
                 text.ToLowerInvariant(),
-                m =>
-                    s_forceLower.Contains(m.Value) ? m.Value.ToLowerInvariant()
-                    : s_forceUpper.Contains(m.Value) ? m.Value.ToUpperInvariant()
+                match =>
+                    s_forceLower.Contains(match.Value) ? match.Value.ToLowerInvariant()
+                    : s_forceUpper.Contains(match.Value) ? match.Value.ToUpperInvariant()
                     // Capitalise all words accounting for apostrophes first
-                    : char.ToUpperInvariant(m.Value[0]) + m.Value[1..]
+                    : char.ToUpperInvariant(match.Value[0]) + match.Value[1..]
             );
 
         // Force capitalise the first character no matter what
@@ -416,7 +416,7 @@ public static partial class TagHelper
             result = result[..(lastSpaceIndex + 1)] + char.ToUpperInvariant(result[lastSpaceIndex + 1]) + result[(lastSpaceIndex + 2)..];
 
         // Apply special case preferences for whole words and hyphenated suffixes as the absolute final step
-        result = WordRegex().Replace(result, m => ApplySpecialCasing(m.Value));
+        result = WordRegex().Replace(result, match => ApplySpecialCasing(match.Value));
         return result;
     }
 

@@ -53,7 +53,7 @@ public class SyncToPlex(
         var logPrefix = (result = result with { DryRun = dryRun }).DryRun ? "[DRYRUN] " : "";
         bool actualVotes = includeVotes ?? auto.ShokoSyncWatchedIncludeRatings;
 
-        if (!plexClient.IsEnabled || userService.GetUsers().OrderBy(u => u.LocalID).FirstOrDefault() is not { } defaultUser)
+        if (!plexClient.IsEnabled || userService.GetUsers().OrderBy(usr => usr.LocalID).FirstOrDefault() is not { } defaultUser)
             return result;
         var targets = plexClient.GetConfiguredTargets();
         if (targets.Count == 0)
@@ -96,15 +96,15 @@ public class SyncToPlex(
             if (shokoWatchedByUser.TryGetValue(shokoUser.LocalID, out var cached))
                 return cached;
 
-            var query = userDataService.GetEpisodeUserDataForUser(shokoUser).Where(e => e.LastPlayedAt != null || (actualVotes && e.HasUserRating));
+            var query = userDataService.GetEpisodeUserDataForUser(shokoUser).Where(entry => entry.IsWatched || (actualVotes && entry.HasUserRating));
             if (sinceHours > 0)
             {
                 var cutoff = DateTime.UtcNow.AddHours(-sinceHours.Value);
-                query = query.Where(e => actualVotes ? e.LastUpdatedAt >= cutoff || e.LastPlayedAt >= cutoff : e.LastPlayedAt >= cutoff);
+                query = query.Where(entry => actualVotes ? entry.LastUpdatedAt >= cutoff || entry.LastPlayedAt >= cutoff : entry.LastPlayedAt >= cutoff || (entry.IsWatched && entry.LastUpdatedAt >= cutoff));
             }
 
             return shokoWatchedByUser[shokoUser.LocalID] = [
-                .. query.Select(sw => (UserData: sw, Episode: metadataService.GetShokoEpisodeByID(sw.EpisodeID))).Where(x => x.Episode != null).Select(x => (x.UserData, Episode: x.Episode!)),
+                .. query.Select(sw => (UserData: sw, Episode: metadataService.GetShokoEpisodeByID(sw.EpisodeID))).Where(item => item.Episode != null).Select(item => (item.UserData, Episode: item.Episode!)),
             ];
         }
 
@@ -179,10 +179,10 @@ public class SyncToPlex(
 
                     matchedGlobal.Add((targetShokoUser.LocalID, episode.LocalID));
 
-                    foreach (var plexItem in plexItems.DistinctBy(i => i.RatingKey))
+                    foreach (var plexItem in plexItems.DistinctBy(item => item.RatingKey))
                     {
                         bool isWatchedInPlex = plexItem.ViewCount > 0;
-                        bool shouldScrobble = userData.LastPlayedAt != null && !isWatchedInPlex;
+                        bool shouldScrobble = userData.IsWatched && !isWatchedInPlex;
                         bool scrobbled = false;
 
                         if (shouldScrobble)
@@ -308,7 +308,7 @@ public class SyncToPlex(
                                                 null,
                                                 userData.LastPlayedAt,
                                                 true,
-                                                userData.LastPlayedAt != null,
+                                                userData.IsWatched,
                                                 reason: "rating_updated",
                                                 plexUserRating: userData.UserRating
                                             )

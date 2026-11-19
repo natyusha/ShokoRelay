@@ -32,9 +32,9 @@ public partial class VfsBuilder
 
                 var key = (mapping.Coords.Season, mapping.Coords.Episode, mapping.IsVariation);
                 bool hasPeer = state.CoordCounts.TryGetValue(key, out var count) && count > 1;
-                int? vIdx = (hasPeer && !mapping.PartIndex.HasValue && versionCounters.TryGetValue(key, out var v)) ? (versionCounters[key] = v + 1) - 1 : null;
+                int? vIdx = (hasPeer && !mapping.PartIndex.HasValue && versionCounters.TryGetValue(key, out var ver)) ? (versionCounters[key] = ver + 1) - 1 : null;
 
-                (string Folder, string Subtype) ex = PlexMapping.TryGetExtraSeason(mapping.Coords.Season, out var e) ? e : ("Featurettes", "featurette");
+                (string Folder, string Subtype) ex = PlexMapping.TryGetExtraSeason(mapping.Coords.Season, out var extra) ? extra : ("Featurettes", "featurette");
 
                 string fileName = PlexMapping.TryGetExtraSeason(mapping.Coords.Season, out _)
                     ? VfsHelper.BuildExtrasFileName(
@@ -146,7 +146,7 @@ public partial class VfsBuilder
 
             var key = (mapping.Coords.Season, mapping.Coords.Episode, mapping.IsVariation);
             bool hasPeer = state.CoordCounts.TryGetValue(key, out var count) && count > 1;
-            int? vIdx = (hasPeer && !mapping.PartIndex.HasValue && movieVersionCounters.TryGetValue(key, out var v)) ? (movieVersionCounters[key] = v + 1) - 1 : null;
+            int? vIdx = (hasPeer && !mapping.PartIndex.HasValue && movieVersionCounters.TryGetValue(key, out var ver)) ? (movieVersionCounters[key] = ver + 1) - 1 : null;
 
             string fileName = VfsHelper.SanitizeName(
                 VfsHelper.BuildMovieFileName(
@@ -188,7 +188,7 @@ public partial class VfsBuilder
                 if (!TryResolveAndValidate(state, mapping, out var locInfo))
                     continue;
 
-                (string Folder, string Subtype) ex = PlexMapping.TryGetExtraSeason(mapping.Coords.Season, out var e) ? e : ("Featurettes", "featurette");
+                (string Folder, string Subtype) ex = PlexMapping.TryGetExtraSeason(mapping.Coords.Season, out var extra) ? extra : ("Featurettes", "featurette");
                 string fileName = VfsHelper.BuildExtrasFileName(
                     mapping,
                     ex,

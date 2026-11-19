@@ -101,8 +101,8 @@ public static partial class VfsHelper
         if (string.IsNullOrWhiteSpace(title))
             return "";
         string cleanedTitle = title;
-        foreach (var (f, r) in s_styledReplacements)
-            cleanedTitle = cleanedTitle.Replace(f, r, StringComparison.Ordinal);
+        foreach (var (find, replace) in s_styledReplacements)
+            cleanedTitle = cleanedTitle.Replace(find, replace, StringComparison.Ordinal);
         cleanedTitle = QuotedTextRegex().Replace(cleanedTitle, "“$1”");
 
         // Zero-width space (\u200B) and hair space (\u200A) bypass Plex's undocumented behavior of automatically stripping OP/ED/extra prefixes from display titles while also sorting Openings before Endings

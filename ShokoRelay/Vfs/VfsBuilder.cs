@@ -446,10 +446,10 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
             ref state.Skipped,
             state.Errors,
             ref state.Created,
-            (name, s) =>
+            (name, source) =>
             {
                 state.ExpectedFiles.Add(Path.Combine(destEpDir, name));
-                state.OnLink?.Invoke(importRoot, epSeasonLabel, name, s);
+                state.OnLink?.Invoke(importRoot, epSeasonLabel, name, source);
             },
             state.SkipCheck
         );
@@ -469,10 +469,10 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
                 ref state.Planned,
                 ref state.Created,
                 state.ExpectedFiles,
-                (name, s) =>
+                (name, source) =>
                 {
                     state.ExpectedFiles.Add(Path.Combine(destSeriesDir, name));
-                    state.OnLink?.Invoke(importRoot, seriesSeasonLabel, name, s);
+                    state.OnLink?.Invoke(importRoot, seriesSeasonLabel, name, source);
                 },
                 state.SkipCheck
             );

@@ -11,10 +11,10 @@
    * @returns {URLSearchParams} The compiled parameters.
    */
   window._sr.getAtParams = () => {
-    const ps = new URLSearchParams();
-    ["path", "slug", "offset"].forEach((k) => window._sr.setIfNotEmpty(ps, k, el(`at-${k}`)?.value));
-    ["seasonal", "force", "batch"].forEach((t) => el(`at-mp3-${t}`)?.getAttribute("aria-pressed") === "true" && ps.set(t, "true"));
-    return ps;
+    const params = new URLSearchParams();
+    ["path", "slug", "offset"].forEach((key) => window._sr.setIfNotEmpty(params, key, el(`at-${key}`)?.value));
+    ["seasonal", "force", "batch"].forEach((toggle) => el(`at-mp3-${toggle}`)?.getAttribute("aria-pressed") === "true" && params.set(toggle, "true"));
+    return params;
   };
 
   /**
@@ -22,9 +22,9 @@
    * @returns {URLSearchParams} The compiled parameters.
    */
   window._sr.getAtMapParams = () => {
-    const ps = new URLSearchParams();
-    window._sr.setIfNotEmpty(ps, "filter", el("at-filter-map")?.value);
-    return ps;
+    const params = new URLSearchParams();
+    window._sr.setIfNotEmpty(params, "filter", el("at-filter-map")?.value);
+    return params;
   };
 
   /**
@@ -84,7 +84,7 @@
         } else if (isBatch) {
           const items = resData?.Items || resData?.items || [];
           const playItem =
-            items.find((i) => (i.Status || i.status) === "ok") ||
+            items.find((item) => (item.Status || item.status) === "ok") ||
             (items.length === 1 && (items[0].Status || items[0].status) === "skipped" && (items[0].Message || items[0].message) === "Theme.mp3 already exists." ? items[0] : null);
           const playPath = playItem?.Folder || playItem?.folder;
           if (playPath) playThemeMp3(playPath);
@@ -196,26 +196,26 @@
    * @returns {void}
    */
   function syncPlaybackUI() {
-    const isE = el("at-playback")?.getAttribute("aria-pressed") === "true";
-    const isA = isE && atAudio?.src && !atAudio.ended;
-    atTrack?.classList.toggle("active", isA);
+    const isEnabled = el("at-playback")?.getAttribute("aria-pressed") === "true";
+    const isActive = isEnabled && atAudio?.src && !atAudio.ended;
+    atTrack?.classList.toggle("active", isActive);
     atTrack?.classList.toggle("paused", atAudio?.paused);
-    if (!isA && atFill) atFill.style.width = "0%";
-    const pBtn = el("at-play");
-    if (pBtn) {
+    if (!isActive && atFill) atFill.style.width = "0%";
+    const playBtn = el("at-play");
+    if (playBtn) {
       const isPlaying = atAudio && !atAudio.paused && !atAudio.ended;
-      pBtn.setAttribute("data-state", isPlaying ? "playing" : "idle");
-      updatePlaybackTooltip(pBtn);
+      playBtn.setAttribute("data-state", isPlaying ? "playing" : "idle");
+      updatePlaybackTooltip(playBtn);
     }
   }
 
   if (atTrack) {
-    atTrack.onclick = (e) => {
-      if (atAudio?.duration && isFinite(atAudio.duration)) atAudio.currentTime = ((e.clientX - atTrack.getBoundingClientRect().left) / atTrack.offsetWidth) * atAudio.duration;
+    atTrack.onclick = (ev) => {
+      if (atAudio?.duration && isFinite(atAudio.duration)) atAudio.currentTime = ((ev.clientX - atTrack.getBoundingClientRect().left) / atTrack.offsetWidth) * atAudio.duration;
     };
-    atTrack.onmousedown = (e) => {
-      if (e.button === 1 && atAudio?.src) {
-        e.preventDefault();
+    atTrack.onmousedown = (ev) => {
+      if (ev.button === 1 && atAudio?.src) {
+        ev.preventDefault();
         atAudio.paused ? atAudio.play() : atAudio.pause();
       }
     };

@@ -53,7 +53,7 @@
    * @returns {Object[]} A filtered array of series objects.
    */
   function getFilteredItems() {
-    const root = displayRoots.find((r) => r.name === activeTabName);
+    const root = displayRoots.find((rootItem) => rootItem.name === activeTabName);
     if (!root) return [];
     const rawFt = (uiFilter?.value || "").toLowerCase();
     const ft = rawFt.trim();
@@ -62,13 +62,13 @@
     const isExact = rawFt.endsWith(" ");
     if (/^a\d+\s*$/.test(rawFt.trimStart())) {
       const aid = ft.substring(1);
-      return root.series.filter((s) => (isExact ? String(s.anidbId) === aid : String(s.anidbId).startsWith(aid)));
+      return root.series.filter((series) => (isExact ? String(series.anidbId) === aid : String(series.anidbId).startsWith(aid)));
     }
     if (/^m\d+\s*$/.test(rawFt.trimStart())) {
       const sid = ft.substring(1);
-      return root.series.filter((s) => (isExact ? String(s.id) === sid : String(s.id).startsWith(sid)));
+      return root.series.filter((series) => (isExact ? String(series.id) === sid : String(series.id).startsWith(sid)));
     }
-    return root.series.filter((s) => s.title.toLowerCase().includes(ft) || String(s.id).includes(ft));
+    return root.series.filter((series) => series.title.toLowerCase().includes(ft) || String(series.id).includes(ft));
   }
 
   /**
@@ -81,38 +81,38 @@
     const clonedIds = new Set();
 
     roots.forEach((root) => {
-      root.series.forEach((s) => {
-        if (!seriesMap.has(s.id)) {
-          seriesMap.set(s.id, s);
+      root.series.forEach((series) => {
+        if (!seriesMap.has(series.id)) {
+          seriesMap.set(series.id, series);
         } else {
-          let merged = seriesMap.get(s.id);
-          if (!clonedIds.has(s.id)) {
+          let merged = seriesMap.get(series.id);
+          if (!clonedIds.has(series.id)) {
             merged = {
               id: merged.id,
               anidbId: merged.anidbId,
               title: merged.title,
               rootFiles: [...(merged.rootFiles || [])],
-              seasons: (merged.seasons || []).map((se) => ({ name: se.name, seasonId: se.seasonId, files: [...se.files] })),
+              seasons: (merged.seasons || []).map((season) => ({ name: season.name, seasonId: season.seasonId, files: [...season.files] })),
             };
-            seriesMap.set(s.id, merged);
-            clonedIds.add(s.id);
+            seriesMap.set(series.id, merged);
+            clonedIds.add(series.id);
           }
 
-          (s.rootFiles || []).forEach((f) => {
-            if (!merged.rootFiles.some((ef) => ef.name === f.name && ef.source === f.source)) merged.rootFiles.push(f);
+          (series.rootFiles || []).forEach((file) => {
+            if (!merged.rootFiles.some((existingFile) => existingFile.name === file.name && existingFile.source === file.source)) merged.rootFiles.push(file);
           });
-          (s.seasons || []).forEach((se) => {
-            const existSeason = merged.seasons.find((ese) => ese.name === se.name);
+          (series.seasons || []).forEach((season) => {
+            const existSeason = merged.seasons.find((existingSeason) => existingSeason.name === season.name);
             if (existSeason) {
-              se.files.forEach((f) => {
-                if (!existSeason.files.some((ef) => ef.name === f.name && ef.source === f.source)) existSeason.files.push(f);
+              season.files.forEach((file) => {
+                if (!existSeason.files.some((existingFile) => existingFile.name === file.name && existingFile.source === file.source)) existSeason.files.push(file);
               });
-            } else merged.seasons.push({ name: se.name, seasonId: se.seasonId, files: [...se.files] });
+            } else merged.seasons.push({ name: season.name, seasonId: season.seasonId, files: [...season.files] });
           });
         }
       });
     });
-    return { name: "All", series: [...seriesMap.values()].sort((a, b) => a.title.localeCompare(b.title)) };
+    return { name: "All", series: [...seriesMap.values()].sort((left, right) => left.title.localeCompare(right.title)) };
   }
 
   /**
@@ -130,26 +130,28 @@
   function renderTabs() {
     if (!rootTabs) return;
 
+    // Validate that the activeTabName actually exists in displayRoots, fallback to the first tab (usually "All") if not
+    if (displayRoots.length > 0 && !displayRoots.some((root) => root.name === activeTabName)) {
+      activeTabName = displayRoots[0].name;
+      localStorage.setItem(TABS_KEY, activeTabName);
+    }
+
     const existing = rootTabs.querySelectorAll(".tab-btn");
-    if (existing.length > 0) {
+    const matchesRoots = existing.length === displayRoots.length && [...existing].every((btn, idx) => btn.textContent === displayRoots[idx].name);
+    if (matchesRoots && existing.length > 0) {
       existing.forEach((btn) => btn.classList.toggle("active", btn.textContent === activeTabName));
       return;
     }
     rootTabs.innerHTML = "";
 
     // Validate that the activeTabName actually exists in displayRoots, fallback to the first tab (usually "All") if not
-    if (displayRoots.length > 0 && !displayRoots.some((r) => r.name === activeTabName)) {
-      activeTabName = displayRoots[0].name;
-      localStorage.setItem(TABS_KEY, activeTabName);
-    }
-
-    displayRoots.forEach((r) => {
+    displayRoots.forEach((root) => {
       const btn = document.createElement("button");
-      btn.className = `tab-btn ${r.name === activeTabName ? "active" : ""}`;
-      btn.textContent = r.name;
+      btn.className = `tab-btn ${root.name === activeTabName ? "active" : ""}`;
+      btn.textContent = root.name;
       btn.onclick = () => {
-        activeTabName = r.name;
-        localStorage.setItem(TABS_KEY, r.name);
+        activeTabName = root.name;
+        localStorage.setItem(TABS_KEY, root.name);
         renderTabs();
         showLoadingSpinner();
         setTimeout(renderActiveRoot, 300);
@@ -171,9 +173,9 @@
     window._sr.mp3Cache = {};
     if (mp3Res.ok) {
       const data = getData(mp3Res) || {};
-      for (const [k, v] of Object.entries(data)) {
-        const parts = (v || "").split("|");
-        window._sr.mp3Cache[k.replace(/\\/g, "/").toLowerCase()] = {
+      for (const [key, val] of Object.entries(data)) {
+        const parts = (val || "").split("|");
+        window._sr.mp3Cache[key.replace(/\\/g, "/").toLowerCase()] = {
           slug: parts[0] || "",
           upgrade: parts[1] || "",
         };
@@ -202,20 +204,20 @@
   // #region Tree & Navigation
   /**
    * Helper to construct a file leaf node with source path tooltip.
-   * @param {Object} f - The file metadata object.
+   * @param {Object} file - The file metadata object.
    * @returns {HTMLLIElement} The file list item element.
    */
-  const createFileLeaf = (f) => {
+  const createFileLeaf = (file) => {
     const li = document.createElement("li");
     const leaf = document.createElement("div");
     leaf.className = "leaf";
 
     const nameSpan = document.createElement("span");
-    nameSpan.textContent = f.name;
-    nameSpan.title = f.name;
+    nameSpan.textContent = file.name;
+    nameSpan.title = file.name;
     nameSpan.dataset.tooltipOverflowOnly = "true";
 
-    const src = f.source || "Unknown";
+    const src = file.source || "Unknown";
     const sourceSpan = document.createElement("span");
     sourceSpan.className = "source-path";
     sourceSpan.textContent = src;
@@ -229,58 +231,58 @@
 
   /**
    * Dynamically renders and appends file nodes inside a season container, automatically nesting subdirectories.
-   * @param {Object} s - The season data object.
-   * @param {HTMLUListElement} sUl - The sub-list container element to append file nodes to.
+   * @param {Object} season - The season data object.
+   * @param {HTMLUListElement} seasonUl - The sub-list container element to append file nodes to.
    * @returns {void}
    */
-  function renderSeasonContents(s, sUl) {
+  function renderSeasonContents(season, seasonUl) {
     const subfolders = new Map();
     const directFiles = [];
 
-    s.files.forEach((f) => {
-      const parts = f.name.replace(/\\/g, "/").split("/");
+    season.files.forEach((file) => {
+      const parts = file.name.replace(/\\/g, "/").split("/");
       if (parts.length > 1) {
         const subName = parts[0];
         const actualName = parts.slice(1).join("/");
         if (!subfolders.has(subName)) subfolders.set(subName, []);
-        subfolders.get(subName).push({ ...f, name: actualName });
+        subfolders.get(subName).push({ ...file, name: actualName });
       } else {
-        directFiles.push(f);
+        directFiles.push(file);
       }
     });
 
-    directFiles.forEach((f) => sUl.appendChild(createFileLeaf(f)));
+    directFiles.forEach((file) => seasonUl.appendChild(createFileLeaf(file)));
 
     [...subfolders.entries()]
-      .sort((a, b) => a[0].localeCompare(b[0]))
+      .sort((left, right) => left[0].localeCompare(right[0]))
       .forEach(([subName, files]) => {
-        const sLi = document.createElement("li");
+        const seasonLi = document.createElement("li");
         const subUl = document.createElement("ul");
-        const sDet = window._sr.createLazyDetails(subName, subUl, (container) => renderSeasonContents({ files }, container), false);
-        sLi.appendChild(sDet);
-        sUl.appendChild(sLi);
+        const subDet = window._sr.createLazyDetails(subName, subUl, (container) => renderSeasonContents({ files }, container), false);
+        seasonLi.appendChild(subDet);
+        seasonUl.appendChild(seasonLi);
       });
   }
 
   /**
    * Dynamically renders and appends the seasons and root files for a specific series.
-   * @param {Object} g - The series data object.
+   * @param {Object} series - The series data object.
    * @param {HTMLUListElement} ul - The container element to append items to.
    * @param {boolean} [forceRender=false] - If true, forces nested season files to render immediately.
    * @returns {void}
    */
-  function renderSeriesContents(g, ul, forceRender = false) {
-    const movieSeasons = (g.seasons || []).filter((s) => s.name.startsWith("Movie ❯ "));
-    const regularSeasons = (g.seasons || []).filter((s) => !s.name.startsWith("Movie ❯ "));
+  function renderSeriesContents(series, ul, forceRender = false) {
+    const movieSeasons = (series.seasons || []).filter((season) => season.name.startsWith("Movie ❯ "));
+    const regularSeasons = (series.seasons || []).filter((season) => !season.name.startsWith("Movie ❯ "));
     let movieCount = 0;
 
-    const renderSeason = (s) => {
-      const sLi = document.createElement("li");
-      const sUl = document.createElement("ul");
-      const isMovie = s.name.startsWith("Movie ❯ ");
-      const movieId = isMovie ? s.name.split(" ❯ ")[1] : null;
+    const renderSeason = (season) => {
+      const seasonLi = document.createElement("li");
+      const seasonUl = document.createElement("ul");
+      const isMovie = season.name.startsWith("Movie ❯ ");
+      const movieId = isMovie ? season.name.split(" ❯ ")[1] : null;
 
-      let displayName = s.name;
+      let displayName = season.name;
       if (isMovie) {
         movieCount++;
         displayName = movieSeasons.length > 1 ? `Movie ${movieCount}` : `Movie`;
@@ -288,29 +290,29 @@
 
       const seasonLink = isMovie
         ? `<a href="${base}/metadata/m${movieId}?includeChildren=1" class="vfs-link small" target="_blank" rel="noopener noreferrer">[m${movieId}]</a>`
-        : s.seasonId !== null && s.seasonId !== undefined
-          ? `<a href="${base}/metadata/${g.id}s${s.seasonId}?includeChildren=1" class="vfs-link small" target="_blank" rel="noopener noreferrer">[m${g.id}s${s.seasonId}]</a>`
+        : season.seasonId !== null && season.seasonId !== undefined
+          ? `<a href="${base}/metadata/${series.id}s${season.seasonId}?includeChildren=1" class="vfs-link small" target="_blank" rel="noopener noreferrer">[m${series.id}s${season.seasonId}]</a>`
           : "";
 
-      const sDet = window._sr.createLazyDetails(
+      const seasonDet = window._sr.createLazyDetails(
         displayName,
-        sUl,
+        seasonUl,
         (container) => {
-          renderSeasonContents(s, container);
+          renderSeasonContents(season, container);
         },
         forceRender,
         seasonLink ? ` ${seasonLink}` : "",
       );
 
-      sLi.appendChild(sDet);
-      ul.appendChild(sLi);
+      seasonLi.appendChild(seasonDet);
+      ul.appendChild(seasonLi);
     };
 
     // Movie Branches First
     movieSeasons.forEach(renderSeason);
 
     // Root Files Second (e.g. Theme.mp3)
-    (g.rootFiles || []).forEach((f) => ul.appendChild(createFileLeaf(f)));
+    (series.rootFiles || []).forEach((file) => ul.appendChild(createFileLeaf(file)));
 
     // Regular TV Seasons Third
     regularSeasons.forEach(renderSeason);
@@ -322,7 +324,7 @@
    */
   function renderActiveRoot() {
     if (!vfsTree) return;
-    const root = displayRoots.find((r) => r.name === activeTabName);
+    const root = displayRoots.find((rootItem) => rootItem.name === activeTabName);
     if (!root) {
       vfsTree.innerHTML = '<div class="placeholder">No VFS roots found. Ensure you have generated the VFS once.</div>';
       return;
@@ -338,14 +340,14 @@
     const rootUl = document.createElement("ul");
     rootUl.className = "tree";
 
-    items.forEach((g) => {
+    items.forEach((series) => {
       const li = document.createElement("li");
       const ul = document.createElement("ul");
       const det = window._sr.createLazyDetails(
         "",
         ul,
         (container) => {
-          renderSeriesContents(g, container, false);
+          renderSeriesContents(series, container, false);
         },
         false,
       );
@@ -355,15 +357,16 @@
       refresh.className = "refresh-btn";
       refresh.textContent = "⟳";
       refresh.title = "Refresh VFS Folder";
-      refresh.onclick = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        refreshSeries(g.id);
+      refresh.onclick = (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        refreshSeries(series.id);
       };
 
-      const hasTheme = (g.rootFiles || []).some((f) => f.name === "Theme.mp3");
-      const validSeasons = (g.seasons || []).filter((s) => s.name.toLowerCase().startsWith("season") || s.name.toLowerCase() === "specials");
-      const firstFile = g.rootFiles && g.rootFiles.length > 0 ? g.rootFiles[0] : validSeasons.length > 0 && validSeasons[0].files && validSeasons[0].files.length > 0 ? validSeasons[0].files[0] : null;
+      const hasTheme = (series.rootFiles || []).some((file) => file.name === "Theme.mp3");
+      const validSeasons = (series.seasons || []).filter((season) => season.name.toLowerCase().startsWith("season") || season.name.toLowerCase() === "specials");
+      const firstFile =
+        series.rootFiles && series.rootFiles.length > 0 ? series.rootFiles[0] : validSeasons.length > 0 && validSeasons[0].files && validSeasons[0].files.length > 0 ? validSeasons[0].files[0] : null;
       let slug = "";
       let upgrade = "";
 
@@ -395,9 +398,9 @@
       }
 
       if (!hasTheme) {
-        theme.onclick = async (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+        theme.onclick = async (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
 
           if (!firstFile || !firstFile.source) {
             showToast("VFS: No physical source files found to resolve paths", "error", TOAST_MS);
@@ -408,34 +411,34 @@
           parts.pop();
           const physicalPath = parts.join("/");
 
-          const label = `Theme MP3 [${g.id}]`;
+          const label = `Theme MP3 [${series.id}]`;
           showToast(`${label}: Generating...`, "info", TOAST_MS);
 
           const res = await fetchJson(`${base}/animethemes/mp3?path=${encodeURIComponent(physicalPath)}`);
           toastOperation(res, label, { hideOnSucceed: TOAST_MS });
 
           const themeData = getData(res);
-          if (res.ok && (themeData?.Status === "ok" || themeData?.status === "ok")) refreshSeries(g.id);
+          if (res.ok && (themeData?.Status === "ok" || themeData?.status === "ok")) refreshSeries(series.id);
         };
       } else {
         // Swallows the click to prevent the parent VFS details folder from toggling
-        theme.onclick = (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+        theme.onclick = (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
         };
       }
 
-      const anidbLink = g.anidbId ? `<a href="https://anidb.net/a${g.anidbId}" class="vfs-link small" target="_blank" rel="noopener noreferrer">[a${g.anidbId}]</a>` : "";
+      const anidbLink = series.anidbId ? `<a href="https://anidb.net/a${series.anidbId}" class="vfs-link small" target="_blank" rel="noopener noreferrer">[a${series.anidbId}]</a>` : "";
       const titleHtml =
-        `<a href="${shokoBase}/webui/collection/series/${g.id}/overview" class="vfs-link vfs-id-link" target="_blank" rel="noopener noreferrer">${g.id}</a><span class="vfs-sep">❯</span>` +
-        `<span class="vfs-title" title="${esc(g.title)}" data-tooltip-overflow-only="true">${esc(g.title)}</span>` +
+        `<a href="${shokoBase}/webui/collection/series/${series.id}/overview" class="vfs-link vfs-id-link" target="_blank" rel="noopener noreferrer">${series.id}</a><span class="vfs-sep">❯</span>` +
+        `<span class="vfs-title" title="${esc(series.title)}" data-tooltip-overflow-only="true">${esc(series.title)}</span>` +
         anidbLink +
-        `<a href="${base}/metadata/${g.id}?includeChildren=1" class="vfs-link small" target="_blank" rel="noopener noreferrer">[m${g.id}]</a>`;
+        `<a href="${base}/metadata/${series.id}?includeChildren=1" class="vfs-link small" target="_blank" rel="noopener noreferrer">[m${series.id}]</a>`;
 
       sum.appendChild(refresh);
       sum.appendChild(theme);
       sum.insertAdjacentHTML("beforeend", titleHtml);
-      sum.title = g.title; // Set exact title override
+      sum.title = series.title; // Set exact title override
       li.appendChild(det);
       rootUl.appendChild(li);
     });

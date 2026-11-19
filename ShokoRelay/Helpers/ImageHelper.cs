@@ -107,8 +107,8 @@ public static class ImageHelper
 
         if (string.IsNullOrWhiteSpace(imageLanguage) || imageLanguage.Trim().Equals("SHOKO", StringComparison.OrdinalIgnoreCase))
             return addEveryImage
-                ? all.OrderByDescending(i => i.IsPreferred).ThenByDescending(i => i.CrossReference?.IsPreferred == true)
-                : ((all.FirstOrDefault(i => i.IsPreferred) ?? all.FirstOrDefault(i => i.CrossReference?.IsPreferred == true)) is { } pref ? [pref] : all.Take(1));
+                ? all.OrderByDescending(img => img.IsPreferred).ThenByDescending(img => img.CrossReference?.IsPreferred == true)
+                : ((all.FirstOrDefault(img => img.IsPreferred) ?? all.FirstOrDefault(img => img.CrossReference?.IsPreferred == true)) is { } pref ? [pref] : all.Take(1));
 
         var langs = imageLanguage.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         var ordered = new List<IImage>();
@@ -118,17 +118,17 @@ public static class ImageHelper
         {
             if (lang.Equals("shoko", StringComparison.OrdinalIgnoreCase))
             {
-                if ((remaining.FirstOrDefault(i => i.IsPreferred) ?? remaining.FirstOrDefault(i => i.CrossReference?.IsPreferred == true)) is { } p)
+                if ((remaining.FirstOrDefault(img => img.IsPreferred) ?? remaining.FirstOrDefault(img => img.CrossReference?.IsPreferred == true)) is { } prefImg)
                 {
-                    ordered.Add(p);
-                    remaining.Remove(p);
+                    ordered.Add(prefImg);
+                    remaining.Remove(prefImg);
                 }
             }
             else
             {
                 var matches = remaining
-                    .Where(i =>
-                        (i.LanguageCode ?? "") is var code && (code.Equals(lang, StringComparison.OrdinalIgnoreCase) || (lang.Equals("none", StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(code)))
+                    .Where(img =>
+                        (img.LanguageCode ?? "") is var code && (code.Equals(lang, StringComparison.OrdinalIgnoreCase) || (lang.Equals("none", StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(code)))
                     )
                     .ToList();
 

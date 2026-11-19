@@ -265,10 +265,10 @@ public partial class ConfigProvider : IDisposable
             if (_settings != null)
                 return _settings;
 
-            RelayConfig s;
+            RelayConfig loaded;
             try
             {
-                s = File.Exists(_filePath) ? JsonSerializer.Deserialize<RelayConfig>(ReadFileWithRetry(_filePath), s_options) ?? new() : new();
+                loaded = File.Exists(_filePath) ? JsonSerializer.Deserialize<RelayConfig>(ReadFileWithRetry(_filePath), s_options) ?? new() : new();
             }
             catch (Exception ex)
             {
@@ -279,13 +279,13 @@ public partial class ConfigProvider : IDisposable
                 return fallback;
             }
 
-            ApplyDefaultValues(s);
-            NormalizeVfsRoots(s);
-            NormalizePathMappings(s);
-            NormalizeSubtitleMappings(s);
-            NormalizeCsvFields(s);
-            NormalizeSettings(s, _logger);
-            return _settings = s;
+            ApplyDefaultValues(loaded);
+            NormalizeVfsRoots(loaded);
+            NormalizePathMappings(loaded);
+            NormalizeSubtitleMappings(loaded);
+            NormalizeCsvFields(loaded);
+            NormalizeSettings(loaded, _logger);
+            return _settings = loaded;
         }
     }
 
@@ -741,13 +741,14 @@ public partial class ConfigProvider : IDisposable
     /// <param name="settings">The relay configuration instance to normalize.</param>
     private static void NormalizeCsvFields(RelayConfig settings)
     {
-        static string Norm(string? r, char separator) =>
-            string.Join(separator + " ", (r ?? "").Split(separator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase));
+        static string Norm(string? raw, char separator) =>
+            string.Join(separator + " ", (raw ?? "").Split(separator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase));
 
         settings.Automation.ExtraPlexUsers = Norm(settings.Automation.ExtraPlexUsers, ',');
         settings.Automation.AdvancedUserMappings = string.Join(
             "|",
-            ParseAdvancedUserMappings(settings.Automation.AdvancedUserMappings).Select(g => string.Join(",", g.PlexUsers.Select(p => p.Pin != null ? $"{p.PlexUser};{p.Pin}" : p.PlexUser).Prepend(g.ShokoUser)))
+            ParseAdvancedUserMappings(settings.Automation.AdvancedUserMappings)
+                .Select(group => string.Join(",", group.PlexUsers.Select(plexEntry => plexEntry.Pin != null ? $"{plexEntry.PlexUser};{plexEntry.Pin}" : plexEntry.PlexUser).Prepend(group.ShokoUser)))
         );
 
         settings.Advanced.FolderExclusions = string.Join(
@@ -779,10 +780,10 @@ public partial class ConfigProvider : IDisposable
     /// <param name="obj">The object to apply default values to.</param>
     private static void ApplyDefaultValues(object obj)
     {
-        foreach (var prop in obj.GetType().GetProperties().Where(p => p.CanRead && p.CanWrite))
+        foreach (var prop in obj.GetType().GetProperties().Where(prop => prop.CanRead && prop.CanWrite))
         {
-            if (prop.PropertyType == typeof(string) && string.IsNullOrWhiteSpace(prop.GetValue(obj) as string) && prop.GetCustomAttribute<DefaultValueAttribute>() is { } d)
-                prop.SetValue(obj, d.Value);
+            if (prop.PropertyType == typeof(string) && string.IsNullOrWhiteSpace(prop.GetValue(obj) as string) && prop.GetCustomAttribute<DefaultValueAttribute>() is { } defaultAttr)
+                prop.SetValue(obj, defaultAttr.Value);
             else if (prop.PropertyType.IsClass && prop.PropertyType != typeof(string) && !typeof(IDictionary).IsAssignableFrom(prop.PropertyType))
                 ApplyDefaultValues(prop.GetValue(obj)!);
         }

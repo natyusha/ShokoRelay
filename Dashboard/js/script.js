@@ -18,9 +18,6 @@
   /** @type {number} Monotonically incremented each time an interactive login succeeds to prevent stale 401 retries from re-opening the modal. */
   let authGeneration = 0;
 
-  /** @type {boolean} Tracks whether the user dismissed the auth modal. */
-  let authCancelled = false;
-
   /** @type {Object|null} Shared in-memory configuration object synchronized across all dashboard panels. */
   let sharedConfig = null;
 
@@ -119,7 +116,6 @@
       const finish = (ok, fromModalClose = false) => {
         if (!authPromptPromise) return;
         authPromptPromise = null;
-        authCancelled = !ok;
         if (ok) authGeneration++;
         if (!fromModalClose) close();
         resolve(ok);
@@ -213,7 +209,6 @@
       const res = await fetch(url, opts);
       if ((res.status === 401 || res.status === 403) && allowPrompt) {
         if (authGeneration !== requestGen) return fetchJson(url, opts, false);
-        authCancelled = false;
         setAuthLocked(true);
         const ok = await ensureAuth({ dismissable: false });
         if (ok) {
@@ -227,9 +222,9 @@
       } catch {
         return { ok: res.ok, status: res.status, data: text };
       }
-    } catch (e) {
-      console.error("fetchJson error for", url, e);
-      return { ok: false, status: 0, data: { error: String(e), message: e?.message ?? String(e), url } };
+    } catch (err) {
+      console.error("fetchJson error for", url, err);
+      return { ok: false, status: 0, data: { error: String(err), message: err?.message ?? String(err), url } };
     }
   }
 
@@ -374,16 +369,16 @@
 
   /**
    * Updates element title from data-mode or data-state for tooltips.
-   * @param {HTMLElement} el - The target element.
+   * @param {HTMLElement} targetEl - The target element.
    * @returns {void}
    */
-  function updatePlaybackTooltip(el) {
-    if (!el) return;
-    const key = el.getAttribute("data-mode") || el.getAttribute("data-state");
+  function updatePlaybackTooltip(targetEl) {
+    if (!targetEl) return;
+    const key = targetEl.getAttribute("data-mode") || targetEl.getAttribute("data-state");
     const label = PLAYBACK_LABELS[key];
     if (label) {
-      if (el.dataset.tooltipText !== undefined) el.dataset.tooltipText = label;
-      else el.title = label;
+      if (targetEl.dataset.tooltipText !== undefined) targetEl.dataset.tooltipText = label;
+      else targetEl.title = label;
     }
   }
 
@@ -434,7 +429,6 @@
     esc,
     TOAST_MS,
     ensureAuth,
-    isAuthCancelled: () => authCancelled,
     fetchJson,
     showToast,
     toastOperation,
@@ -456,14 +450,41 @@
       window.relaySettings = sharedConfig;
       return sharedConfig;
     },
+    /**
+     * Unwraps a configuration payload envelope if present.
+     * @param {Object} data - The raw response payload.
+     * @returns {Object} The unwrapped configuration object.
+     */
     unwrapConfig: (data) => (data?.payload !== undefined ? data.payload || {} : data || {}),
-    getValueByPath: (obj, path) => path.split(".").reduce((o, k) => o?.[k], obj),
+    /**
+     * Retrieves a nested property value using a dot-delimited path.
+     * @param {Object} obj - The source object.
+     * @param {string} path - The dot-delimited property path.
+     * @returns {*} The resolved property value, or undefined.
+     */
+    getValueByPath: (obj, path) => path.split(".").reduce((curr, key) => curr?.[key], obj),
+    /**
+     * Sets a nested property value using a dot-delimited path, creating intermediate objects as needed.
+     * @param {Object} obj - The target object.
+     * @param {string} path - The dot-delimited property path.
+     * @param {*} value - The value to assign.
+     * @returns {void}
+     */
     setValueByPath: (obj, path, value) => {
       const parts = path.split(".");
       const last = parts.pop();
-      const target = parts.reduce((o, k) => ((o[k] ??= {}), o[k]), obj);
+      const target = parts.reduce((curr, key) => ((curr[key] ??= {}), curr[key]), obj);
       target[last] = value;
     },
+    /**
+     * Binds an HTML form control to a nested configuration path and persists changes.
+     * @param {HTMLElement|string} target - The DOM element or its ID.
+     * @param {string} path - The dot-delimited configuration path.
+     * @param {Object} config - The shared configuration object.
+     * @param {Function} persistFn - Async function called to persist changes.
+     * @param {"text"|"number"|"check"} [type="text"] - Input value parsing mode.
+     * @returns {void}
+     */
     bindConfig: (target, path, config, persistFn, type = "text") => {
       const elem = typeof target === "string" ? el(target) : target;
       if (!elem) return;
@@ -476,8 +497,15 @@
         await persistFn(config);
       };
     },
-    setIfNotEmpty: (ps, k, v) => {
-      if (v != null && String(v) !== "") ps.set(k, String(v));
+    /**
+     * Appends a parameter to URLSearchParams when its value is non-null and non-empty.
+     * @param {URLSearchParams} params - The target search parameters collection.
+     * @param {string} key - The parameter name.
+     * @param {*} value - The parameter value.
+     * @returns {void}
+     */
+    setIfNotEmpty: (params, key, value) => {
+      if (value != null && String(value) !== "") params.set(key, String(value));
     },
   });
   // #endregion
@@ -489,14 +517,14 @@
    */
   function initTooltips() {
     if (el("shoko-tooltip")) return;
-    const tpl = document.createElement("div");
-    tpl.id = "shoko-tooltip";
-    tpl.className = "tooltip-core tooltip-box tooltip-dark tooltip-place-top";
-    tpl.setAttribute("role", "status");
-    tpl.setAttribute("aria-hidden", "true");
-    tpl.innerHTML = '<div class="tooltip-arrow"></div><div class="rt-content"></div>';
-    document.body.appendChild(tpl);
-    const content = tpl.querySelector(".rt-content");
+    const tooltipEl = document.createElement("div");
+    tooltipEl.id = "shoko-tooltip";
+    tooltipEl.className = "tooltip-core tooltip-box tooltip-dark tooltip-place-top";
+    tooltipEl.setAttribute("role", "status");
+    tooltipEl.setAttribute("aria-hidden", "true");
+    tooltipEl.innerHTML = '<div class="tooltip-arrow"></div><div class="rt-content"></div>';
+    document.body.appendChild(tooltipEl);
+    const content = tooltipEl.querySelector(".rt-content");
     let showTimer;
 
     const show = (target) => {
@@ -504,81 +532,81 @@
       if (target.disabled || !text) return;
       if (target.dataset.tooltipOverflowOnly === "true" && target.scrollWidth <= target.clientWidth) return;
       content.textContent = text;
-      tpl.className = "tooltip-core tooltip-box tooltip-dark tooltip-show";
-      tpl.setAttribute("aria-hidden", "false");
+      tooltipEl.className = "tooltip-core tooltip-box tooltip-dark tooltip-show";
+      tooltipEl.setAttribute("aria-hidden", "false");
       const disabledChild = target.tagName !== "LABEL" ? target.querySelector(":disabled, [disabled]") : null;
       const rect = disabledChild ? disabledChild.getBoundingClientRect() : target.getBoundingClientRect();
       const vw = document.documentElement.clientWidth;
       const vh = document.documentElement.clientHeight;
       const margin = 10;
       let place = "top";
-      let top = rect.top - tpl.offsetHeight - margin;
-      let left = rect.left + rect.width / 2 - tpl.offsetWidth / 2;
+      let top = rect.top - tooltipEl.offsetHeight - margin;
+      let left = rect.left + rect.width / 2 - tooltipEl.offsetWidth / 2;
       if (top < margin) {
         const spaceBelow = vh - rect.bottom;
-        if (spaceBelow > tpl.offsetHeight + margin) {
+        if (spaceBelow > tooltipEl.offsetHeight + margin) {
           top = rect.bottom + margin;
           place = "bottom";
         }
       }
       const minLeft = margin;
-      const maxLeft = vw - tpl.offsetWidth - margin;
+      const maxLeft = vw - tooltipEl.offsetWidth - margin;
       const clampedLeft = Math.max(minLeft, Math.min(left, maxLeft));
-      const arrow = tpl.querySelector(".tooltip-arrow");
+      const arrow = tooltipEl.querySelector(".tooltip-arrow");
       if (arrow) arrow.style.marginLeft = `${left - clampedLeft}px`;
-      tpl.classList.add(`tooltip-place-${place}`);
-      tpl.style.left = `${Math.round(clampedLeft + window.scrollX)}px`;
-      tpl.style.top = `${Math.round(top + window.scrollY)}px`;
+      tooltipEl.classList.add(`tooltip-place-${place}`);
+      tooltipEl.style.left = `${Math.round(clampedLeft + window.scrollX)}px`;
+      tooltipEl.style.top = `${Math.round(top + window.scrollY)}px`;
       target.setAttribute("aria-describedby", "shoko-tooltip");
     };
 
     const hide = () => {
       clearTimeout(showTimer);
-      tpl.classList.remove("tooltip-show");
-      tpl.classList.add("tooltip-closing");
-      tpl.setAttribute("aria-hidden", "true");
-      setTimeout(() => tpl.classList.remove("tooltip-closing"), 150);
+      tooltipEl.classList.remove("tooltip-show");
+      tooltipEl.classList.add("tooltip-closing");
+      tooltipEl.setAttribute("aria-hidden", "true");
+      setTimeout(() => tooltipEl.classList.remove("tooltip-closing"), 150);
     };
 
     window.addEventListener("blur", hide);
     document.addEventListener("mouseleave", hide);
 
-    const attach = (t) => {
+    const attach = (target) => {
       // Tooltip logic
-      if (t.title) {
-        t.dataset.tooltipText = t.title;
-        t.removeAttribute("title");
-        if (!t.dataset.tooltipAttached) {
-          t.dataset.tooltipAttached = "true";
-          t.addEventListener("mouseenter", () => {
+      if (target.title) {
+        target.dataset.tooltipText = target.title;
+        target.removeAttribute("title");
+        if (!target.dataset.tooltipAttached) {
+          target.dataset.tooltipAttached = "true";
+          target.addEventListener("mouseenter", () => {
             showTimer = setTimeout(() => {
-              if (t.matches(":hover")) show(t);
+              if (target.matches(":hover")) show(target);
             }, 100);
           });
-          t.addEventListener("mouseleave", hide);
-          t.addEventListener("mousedown", hide);
+          target.addEventListener("mouseleave", hide);
+          target.addEventListener("mousedown", hide);
         }
       }
       // Automated link behavior: Force new tab and security headers for all links
-      if (t.tagName === "A" && t.hasAttribute("href")) {
-        const href = t.getAttribute("href");
+      if (target.tagName === "A" && target.hasAttribute("href")) {
+        const href = target.getAttribute("href");
         if (href && !href.startsWith("#") && !href.startsWith("javascript:")) {
-          t.target = "_blank";
-          t.rel = "noopener noreferrer";
+          target.target = "_blank";
+          target.rel = "noopener noreferrer";
         }
       }
     };
 
     document.querySelectorAll("[title], a[href]").forEach(attach);
-    new MutationObserver((ms) => {
-      ms.forEach((m) => {
-        m.addedNodes.forEach((n) => {
-          if (n.nodeType === 1) {
-            attach(n);
-            n.querySelectorAll("[title], a[href]").forEach(attach);
+    new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        mutation.addedNodes.forEach((node) => {
+          if (node.nodeType === 1) {
+            attach(node);
+            node.querySelectorAll("[title], a[href]").forEach(attach);
           }
         });
-        if (m.type === "attributes" && (m.attributeName === "title" || m.attributeName === "href") && m.target.nodeType === 1) attach(m.target);
+        if (mutation.type === "attributes" && (mutation.attributeName === "title" || mutation.attributeName === "href") && mutation.target.nodeType === 1) attach(mutation.target);
       });
     }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["title", "href"] });
   }

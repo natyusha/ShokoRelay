@@ -246,13 +246,13 @@ public class AnimeThemesMp3Generator(
         }
 
         logger.LogInformation("AnimeThemes MP3: Starting batch generation for root -> {Root}", root);
-        var (results, p, s, e) = (new List<ThemeMp3OperationResult>(), 0, 0, 0);
+        var (results, processed, skipped, errors) = (new List<ThemeMp3OperationResult>(), 0, 0, 0);
 
         // Scan recursively for all directories, skipping ignored/VFS folders
         var folders = Directory
             .EnumerateDirectories(root, "*", SearchOption.AllDirectories)
             .Prepend(root)
-            .Where(f => !VfsShared.IsPathIgnored(f, videoService, Settings, relativeTo: root, isDirectory: true))
+            .Where(dir => !VfsShared.IsPathIgnored(dir, videoService, Settings, relativeTo: root, isDirectory: true))
             .ToList();
 
         var processedSeries = new ConcurrentDictionary<int, byte>();
@@ -267,17 +267,17 @@ public class AnimeThemesMp3Generator(
                 {
                     results.Add(res);
                     if (res.Status == "ok")
-                        p++;
+                        processed++;
                     else if (res.Status == "skipped")
-                        s++;
+                        skipped++;
                     else
-                        e++;
+                        errors++;
                 }
             }
         );
 
-        logger.LogInformation("AnimeThemes MP3: Batch generation finished -> {Processed} processed, {Skipped} skipped, {Errors} errors", p, s, e);
-        return new ThemeMp3BatchResult(root, results, p, s, e);
+        logger.LogInformation("AnimeThemes MP3: Batch generation finished -> {Processed} processed, {Skipped} skipped, {Errors} errors", processed, skipped, errors);
+        return new ThemeMp3BatchResult(root, results, processed, skipped, errors);
     }
 
     /// <summary>Handles a single folder request, downloading and converting the selected theme to an MP3.</summary>
@@ -361,11 +361,11 @@ public class AnimeThemesMp3Generator(
             if (entry?.Animethemes != null && entry.Animethemes.Count > 0)
             {
                 var validThemes = entry
-                    .Animethemes.Where(t =>
+                    .Animethemes.Where(theme =>
                     {
                         if (string.IsNullOrEmpty(query.Slug))
-                            return t.Slug != null && (AnimeThemesHelper.IsOp(t.Slug) || AnimeThemesHelper.IsEd(t.Slug));
-                        var (baseSlug, _) = AnimeThemesHelper.ParseSlug(t.Slug ?? "");
+                            return theme.Slug != null && (AnimeThemesHelper.IsOp(theme.Slug) || AnimeThemesHelper.IsEd(theme.Slug));
+                        var (baseSlug, _) = AnimeThemesHelper.ParseSlug(theme.Slug ?? "");
                         var (queryBase, _) = AnimeThemesHelper.ParseSlug(query.Slug);
                         return string.Equals(baseSlug, queryBase, StringComparison.OrdinalIgnoreCase)
                             || string.Equals(baseSlug, queryBase + "1", StringComparison.OrdinalIgnoreCase)
@@ -378,19 +378,19 @@ public class AnimeThemesMp3Generator(
                 {
                     var (bestTheme, bestIndex, _, _) = validThemes
                         .Select(
-                            (t, index) =>
+                            (theme, index) =>
                             {
-                                string slug = t.Slug ?? "";
+                                string slug = theme.Slug ?? "";
                                 var (baseSlug, _) = AnimeThemesHelper.ParseSlug(slug);
                                 int num = AnimeThemesHelper.ExtractSlugNumber(baseSlug);
 
                                 int group = AnimeThemesHelper.IsOp(baseSlug) ? 1 : (AnimeThemesHelper.IsEd(baseSlug) ? 2 : 3);
-                                return (Theme: t, OriginalIndex: index, Group: group, Number: num);
+                                return (Theme: theme, OriginalIndex: index, Group: group, Number: num);
                             }
                         )
-                        .OrderBy(x => x.Group)
-                        .ThenBy(x => x.Number)
-                        .ThenBy(x => x.OriginalIndex)
+                        .OrderBy(item => item.Group)
+                        .ThenBy(item => item.Number)
+                        .ThenBy(item => item.OriginalIndex)
                         .FirstOrDefault();
 
                     if (bestTheme != null)
@@ -404,13 +404,14 @@ public class AnimeThemesMp3Generator(
 
                     if (!string.IsNullOrEmpty(audioUrl))
                     {
-                        var (bp, sp) = AnimeThemesHelper.ParseSlug(themeDetail!.Slug ?? "");
+                        var (basePart, suffixPart) = AnimeThemesHelper.ParseSlug(themeDetail!.Slug ?? "");
                         slugRaw = themeDetail.Slug ?? "";
-                        slugDisplay = $"{(bp.StartsWith("OP", StringComparison.OrdinalIgnoreCase) ? "Opening" : "Ending")} {bp[2..]}".Trim() + AnimeThemesHelper.FormatSlugTag(sp);
+                        slugDisplay = $"{(basePart.StartsWith("OP", StringComparison.OrdinalIgnoreCase) ? "Opening" : "Ending")} {basePart[2..]}".Trim() + AnimeThemesHelper.FormatSlugTag(suffixPart);
                         songTitle = themeDetail.Song?.Title?.Romaji ?? "";
 
-                        var artists = themeDetail.Song?.Performances?.Select(p => p.Artist).ToList();
-                        artist = artists?.Count > 1 ? string.Join("; ", artists.Select(a => a?.Name?.Main).Where(n => !string.IsNullOrEmpty(n))) : artists?.FirstOrDefault()?.Name?.Main ?? "";
+                        var artists = themeDetail.Song?.Performances?.Select(perf => perf.Artist).ToList();
+                        artist =
+                            artists?.Count > 1 ? string.Join("; ", artists.Select(artistItem => artistItem?.Name?.Main).Where(name => !string.IsNullOrEmpty(name))) : artists?.FirstOrDefault()?.Name?.Main ?? "";
 
                         animeTitle = entry.Title?.Romaji ?? "";
                         animeSlug = entry.Slug ?? "";
@@ -549,9 +550,9 @@ public class AnimeThemesMp3Generator(
                     try
                     {
                         var tags = AnimeThemesHelper.ReadId3v2Tags(themePath);
-                        if (tags.TryGetValue("Slug", out var t) && !string.IsNullOrEmpty(t))
+                        if (tags.TryGetValue("Slug", out var rawSlug) && !string.IsNullOrEmpty(rawSlug))
                         {
-                            slug = AnimeThemesHelper.StandardizeSlug(t);
+                            slug = AnimeThemesHelper.StandardizeSlug(rawSlug);
                             SetCacheEntry(folder, $"{slug}|{upgrade}");
                             Interlocked.Increment(ref fixes);
                             Interlocked.Exchange(ref cacheUpdated, 1);

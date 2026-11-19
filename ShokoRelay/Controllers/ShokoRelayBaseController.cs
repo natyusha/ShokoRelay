@@ -367,12 +367,12 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
     protected (int Start, int Size) GetPaging()
     {
         int start =
-            int.TryParse(Request.Headers["X-Plex-Container-Start"], out var s) ? s
-            : int.TryParse(Request.Query["X-Plex-Container-Start"], out var sq) ? sq
+            int.TryParse(Request.Headers["X-Plex-Container-Start"], out var startHeader) ? startHeader
+            : int.TryParse(Request.Query["X-Plex-Container-Start"], out var startQuery) ? startQuery
             : 0;
         int size =
-            int.TryParse(Request.Headers["X-Plex-Container-Size"], out var z) ? z
-            : int.TryParse(Request.Query["X-Plex-Container-Size"], out var zq) ? zq
+            int.TryParse(Request.Headers["X-Plex-Container-Size"], out var sizeHeader) ? sizeHeader
+            : int.TryParse(Request.Query["X-Plex-Container-Size"], out var sizeQuery) ? sizeQuery
             : 50;
         return (start, size);
     }

@@ -278,7 +278,7 @@ public class AnimeThemesController(
                     var pipeParts = line.Split('|');
                     string pathRaw = pipeParts[0];
                     int videoId = (pipeParts.Length > 1 && int.TryParse(pipeParts[1], out var vid)) ? vid : 0;
-                    int flags = (pipeParts.Length > 2 && int.TryParse(pipeParts[2], out var f)) ? f : 0;
+                    int flags = (pipeParts.Length > 2 && int.TryParse(pipeParts[2], out var parsedFlags)) ? parsedFlags : 0;
 
                     var segments = pathRaw.Replace('\\', '/').Trim().Split('/', StringSplitOptions.RemoveEmptyEntries);
                     int? seriesId = null;
@@ -488,7 +488,7 @@ public class AnimeThemesController(
                 return Ok(new RelayResponse<List<int>>(Data: []));
             try
             {
-                return Ok(new RelayResponse<List<int>>(Data: [.. IoFile.ReadAllLines(path).Select(l => l.Trim()).Where(l => !l.StartsWith('#') && int.TryParse(l, out _)).Select(int.Parse)]));
+                return Ok(new RelayResponse<List<int>>(Data: [.. IoFile.ReadAllLines(path).Select(line => line.Trim()).Where(line => !line.StartsWith('#') && int.TryParse(line, out _)).Select(int.Parse)]));
             }
             catch
             {
@@ -520,7 +520,7 @@ public class AnimeThemesController(
 
             try
             {
-                VfsShared.WriteLinesAtomic(path, ids.Order().Select(i => i.ToString()));
+                VfsShared.WriteLinesAtomic(path, ids.Order().Select(id => id.ToString()));
                 return Ok(new RelayResponse<object>(Data: new { videoId, isFavourite = ids.Contains(videoId) }));
             }
             catch (Exception ex)

@@ -227,7 +227,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
             ["Writer"]                = CastHelper.GetWriters(series, metadataService),
             ["Similar"]               = BuildSimilarArray(series),
             ["Studio"]                = studios,
-            ["Collection"]            = GetCollectionName(series, ctx) is string c ? new[] { new { tag = c } } : null,
+            ["Collection"]            = GetCollectionName(series, ctx) is string colName ? new[] { new { tag = colName } } : null,
             ["Network"]               = BuildNetworkArray(tmdbSeries),
             ["Rating"]                = BuildRatingArray(tmdbRating, anidbRating),
             //[SeasonType]            = Not relevant
@@ -305,7 +305,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
             ["Writer"]                = CastHelper.GetWriters(series, metadataService),
             ["Similar"]               = BuildSimilarArray(series),
             ["Studio"]                = studios,
-            ["Collection"]            = GetCollectionName(series, ctx) is string c ? new[] { new { tag = c } } : null,
+            ["Collection"]            = GetCollectionName(series, ctx) is string colName ? new[] { new { tag = colName } } : null,
             ["Rating"]                = BuildRatingArray(movieTmdbRating, movieAnidbRating)
         };
     }
@@ -535,14 +535,14 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
                     var tmdbCoords = new PlexCoords { Season = season ?? 0, Episode = episode };
                     int? effectivePart = mapping.PartIndex ?? (epIdx + 1); // Assign a virtual part index based on the TMDB segment order to ensure unique ratingKeys (e.g. e123p1, e123p2)
                     var meta = MapEpisode(se, tmdbCoords, ctx, effectivePart, tmdbEp);
-                    if (meta is Dictionary<string, object?> d && d.TryGetValue("ratingKey", out var rk) && rk is string key && seenKeys.Add(key))
+                    if (meta is Dictionary<string, object?> metaDict && metaDict.TryGetValue("ratingKey", out var rk) && rk is string key && seenKeys.Add(key))
                         items.Add((tmdbCoords, effectivePart, meta));
                 }
                 continue;
             }
 
             // Joined Episodes: Multiple Shoko episodes of the same type sharing a file.
-            if (mapping.Episodes.Count > 1 && mapping.Episodes.Select(x => x.Type).Distinct().Count() == 1)
+            if (mapping.Episodes.Count > 1 && mapping.Episodes.Select(ep => ep.Type).Distinct().Count() == 1)
             {
                 foreach (var ep in mapping.Episodes)
                 {
@@ -551,7 +551,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
                     if (coordsEp.Season != seasonNum)
                         continue;
                     var meta = MapEpisode(ep, coordsEp, ctx, mapping.PartIndex);
-                    if (meta is Dictionary<string, object?> d && d.TryGetValue("ratingKey", out var rk) && rk is string key && seenKeys.Add(key))
+                    if (meta is Dictionary<string, object?> metaDict && metaDict.TryGetValue("ratingKey", out var rk) && rk is string key && seenKeys.Add(key))
                         items.Add((coordsEp, mapping.PartIndex, meta));
                 }
                 continue;
@@ -559,7 +559,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
 
             // Standard or Relation-linked files: Use the PrimaryEpisode resolved by MapHelper, which filters out unwanted relations.
             var primaryMeta = MapEpisode(mapping.PrimaryEpisode, mapping.Coords, ctx, mapping.PartIndex, mapping.TmdbEpisode);
-            if (primaryMeta is Dictionary<string, object?> pDict && pDict.TryGetValue("ratingKey", out var pRk) && pRk is string pKey && seenKeys.Add(pKey))
+            if (primaryMeta is Dictionary<string, object?> primaryDict && primaryDict.TryGetValue("ratingKey", out var pRk) && pRk is string pKey && seenKeys.Add(pKey))
                 items.Add((mapping.Coords, mapping.PartIndex, primaryMeta));
         }
         return [.. items.OrderBy(x => x.Coords.Episode).ThenBy(x => x.Part ?? 0).Select(x => x.Meta)];
@@ -611,7 +611,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
                 ? $"tvdb://{teTvdb}"
                 : (tmdbMovie?.GetCrossSourceID("tvdb", MetadataEntityType.Movie) is { } tmTvdb ? $"tvdb://{tmTvdb}" : null),
             .. tmdbEps is { Count: > 0 } list
-                ? list.SelectMany(t => t.GetCrossSourceID("tvdb", MetadataEntityType.Episode) is { } tTvdb ? [$"tmdb://{t.ID.ID}", $"tvdb://{tTvdb}"] : new[] { $"tmdb://{t.ID.ID}" })
+                ? list.SelectMany(ep => ep.GetCrossSourceID("tvdb", MetadataEntityType.Episode) is { } tvdbId ? [$"tmdb://{ep.ID.ID}", $"tvdb://{tvdbId}"] : new[] { $"tmdb://{ep.ID.ID}" })
                 : [],
         ]);
 
@@ -624,16 +624,16 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
         (tmdbSeries?.ProductionCountries ?? tmdbMovie?.ProductionCountries ?? (series as IShokoSeries)?.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault()?.ProductionCountries) is { } codes
             ? CreateTagArray(
                 codes
-                    .Where(c => !string.IsNullOrWhiteSpace(c))
-                    .Select(c =>
+                    .Where(code => !string.IsNullOrWhiteSpace(code))
+                    .Select(code =>
                     {
                         try
                         {
-                            return new RegionInfo(c.Trim().ToUpperInvariant()).EnglishName;
+                            return new RegionInfo(code.Trim().ToUpperInvariant()).EnglishName;
                         }
                         catch
                         {
-                            return c.Trim();
+                            return code.Trim();
                         }
                     })
             )
@@ -645,9 +645,9 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
     /// <returns>An array of objects containing guid and tag (title), or null if no local matches found.</returns>
     private object[]? BuildSimilarArray(ISeries series) =>
         series is IShokoSeries { AnidbAnime.Suggestions: { Count: > 0 } list }
-            ? list.Select(s => s.SuggestedID.TryGetNumericID(out int aid) ? metadataService.GetShokoSeriesByAnidbID(aid) : null)
+            ? list.Select(suggestion => suggestion.SuggestedID.TryGetNumericID(out int aid) ? metadataService.GetShokoSeriesByAnidbID(aid) : null)
                 .OfType<IShokoSeries>()
-                .Select(ls => (object)new { guid = ls.GetPlexGuid(), tag = ls.PreferredTitle?.Value ?? ls.DefaultTitle?.Value })
+                .Select(linkedSeries => (object)new { guid = linkedSeries.GetPlexGuid(), tag = linkedSeries.PreferredTitle?.Value ?? linkedSeries.DefaultTitle?.Value })
                 .ToArray()
                 is { Length: > 0 } arr
                 ? arr

@@ -19,8 +19,8 @@
       const saved = localStorage.getItem(`details-state-${details.id}`);
       if (saved !== null) details.open = saved === "true";
     }
-    details.querySelector("summary")?.addEventListener("click", (e) => {
-      e.preventDefault();
+    details.querySelector("summary")?.addEventListener("click", (ev) => {
+      ev.preventDefault();
       if (anim) anim.cancel();
       const isOpening = !details.open;
       if (isOpening) details.open = true;
@@ -110,12 +110,12 @@
    * @param {number|string} value - The current property value.
    * @returns {void}
    */
-  function createFlagsMultiselect(wrap, p, config, value) {
+  function createFlagsMultiselect(wrap, prop, config, value) {
     const label = document.createElement("label");
-    label.innerHTML = `<span>${esc(p.Display || p.Path.split(".").pop())}</span>${p.Description ? `<small>${esc(p.Description)}</small>` : ""}`;
+    label.innerHTML = `<span>${esc(prop.Display || prop.Path.split(".").pop())}</span>${prop.Description ? `<small>${esc(prop.Description)}</small>` : ""}`;
     wrap.appendChild(label);
 
-    const enumValues = p.EnumValues || [];
+    const enumValues = prop.EnumValues || [];
     let mask = parseFlagsValue(value, enumValues);
 
     const container = document.createElement("div");
@@ -132,35 +132,35 @@
     menu.className = "multiselect-menu";
 
     const updateSummary = () => {
-      const activeNames = enumValues.filter((ev) => (mask & ev.value) === ev.value).map((ev) => ev.name);
+      const activeNames = enumValues.filter((enumVal) => (mask & enumVal.value) === enumVal.value).map((enumVal) => enumVal.name);
       textSpan.textContent = activeNames.length ? activeNames.join(", ") : "None";
     };
 
-    enumValues.forEach((ev) => {
+    enumValues.forEach((enumVal) => {
       const itemLabel = document.createElement("label");
       itemLabel.className = "shoko-checkbox";
-      itemLabel.innerHTML = `<input type="checkbox" value="${esc(ev.value)}">
+      itemLabel.innerHTML = `<input type="checkbox" value="${esc(enumVal.value)}">
         <span class="shoko-checkbox-icon" aria-hidden="true"><svg class="unchecked"><use href="img/icons.svg#checkbox-blank-circle-outline"></use></svg><svg class="checked"><use href="img/icons.svg#checkbox-marked-circle-outline"></use></svg></span>
-        <span class="shoko-checkbox-text"><span class="shoko-checkbox-title">${esc(ev.name)}</span></span>`;
-      const cb = itemLabel.querySelector("input");
-      cb.checked = (mask & ev.value) === ev.value;
-      cb.onchange = async () => {
-        mask = cb.checked ? mask | ev.value : mask & ~ev.value;
+        <span class="shoko-checkbox-text"><span class="shoko-checkbox-title">${esc(enumVal.name)}</span></span>`;
+      const checkbox = itemLabel.querySelector("input");
+      checkbox.checked = (mask & enumVal.value) === enumVal.value;
+      checkbox.onchange = async () => {
+        mask = checkbox.checked ? mask | enumVal.value : mask & ~enumVal.value;
         updateSummary();
-        setValueByPath(config, p.Path, mask);
+        setValueByPath(config, prop.Path, mask);
         await saveSettings(config);
       };
       menu.appendChild(itemLabel);
     });
 
-    trigger.onclick = (e) => {
-      e.stopPropagation();
+    trigger.onclick = (clickEv) => {
+      clickEv.stopPropagation();
       const willOpen = !container.classList.contains("open");
       document.querySelectorAll(".multiselect.open").forEach((elOpen) => elOpen.classList.remove("open"));
       if (willOpen) container.classList.add("open");
     };
 
-    menu.onclick = (e) => e.stopPropagation();
+    menu.onclick = (clickEv) => clickEv.stopPropagation();
 
     updateSummary();
     container.append(trigger, menu);
@@ -180,9 +180,9 @@
    * @param {boolean} keyOnLeft - If true, dictionary keys are placed on the left; otherwise, they are on the right.
    * @returns {void}
    */
-  function createDualTextareaMapping(wrap, p, config, value, leftHeader, rightHeader, keyOnLeft) {
+  function createDualTextareaMapping(wrap, prop, config, value, leftHeader, rightHeader, keyOnLeft) {
     const label = document.createElement("label");
-    label.innerHTML = `<span>${esc(p.Display || p.Path.split(".").pop())}</span>${p.Description ? `<small>${esc(p.Description)}</small>` : ""}`;
+    label.innerHTML = `<span>${esc(prop.Display || prop.Path.split(".").pop())}</span>${prop.Description ? `<small>${esc(prop.Description)}</small>` : ""}`;
     wrap.appendChild(label);
 
     const mappingContainer = document.createElement("div");
@@ -194,17 +194,17 @@
     const mappingDict = value || {};
     const keys = Object.keys(mappingDict); // Preserve user priority/order
 
-    leftArea.value = keys.map((k) => (keyOnLeft ? k : mappingDict[k])).join("\n");
-    rightArea.value = keys.map((k) => (keyOnLeft ? mappingDict[k] : k)).join("\n");
+    leftArea.value = keys.map((key) => (keyOnLeft ? key : mappingDict[key])).join("\n");
+    rightArea.value = keys.map((key) => (keyOnLeft ? mappingDict[key] : key)).join("\n");
 
     leftArea.onchange = rightArea.onchange = async () => {
       const val = {};
       const lLines = leftArea.value.split("\n");
       const rLines = rightArea.value.split("\n");
-      lLines.forEach((lv, idx) => {
-        if (lv.trim() && rLines[idx]?.trim()) val[keyOnLeft ? lv.trim() : rLines[idx].trim()] = keyOnLeft ? rLines[idx].trim() : lv.trim();
+      lLines.forEach((leftVal, idx) => {
+        if (leftVal.trim() && rLines[idx]?.trim()) val[keyOnLeft ? leftVal.trim() : rLines[idx].trim()] = keyOnLeft ? rLines[idx].trim() : leftVal.trim();
       });
-      setValueByPath(config, p.Path, val);
+      setValueByPath(config, prop.Path, val);
       await saveSettings(config);
     };
   }
@@ -253,23 +253,23 @@
     advSection.innerHTML = "<summary>Advanced</summary>";
     advContent.appendChild(document.createElement("hr"));
 
-    schema.forEach((p) => {
+    schema.forEach((prop) => {
       const wrap = document.createElement("div");
-      if (p.Rebuild) wrap.classList.add("vfs-rebuild");
+      if (prop.Rebuild) wrap.classList.add("vfs-rebuild");
       const label = document.createElement("label");
-      const value = getValueByPath(config, p.Path);
+      const value = getValueByPath(config, prop.Path);
       let input;
 
-      if (p.Path.endsWith("SelectedTheme")) {
-        label.innerHTML = `<span>${esc(p.Display || p.Path.split(".").pop())}</span>${p.Description ? `<small>${esc(p.Description)}</small>` : ""}`;
+      if (prop.Path.endsWith("SelectedTheme")) {
+        label.innerHTML = `<span>${esc(prop.Display || prop.Path.split(".").pop())}</span>${prop.Description ? `<small>${esc(prop.Description)}</small>` : ""}`;
         wrap.appendChild(label);
         input = document.createElement("select");
         input.add(new Option("Default", "default"));
         input.add(new Option("Shoko Gray", "shoko-gray"));
 
-        (rawCfg.themes || []).forEach((t) => {
-          const opt = new Option(t.name, t.id);
-          opt.selected = t.id === value;
+        (rawCfg.themes || []).forEach((theme) => {
+          const opt = new Option(theme.name, theme.id);
+          opt.selected = theme.id === value;
           input.add(opt);
         });
         wrap.appendChild(input);

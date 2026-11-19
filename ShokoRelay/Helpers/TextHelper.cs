@@ -88,7 +88,7 @@ public static partial class TextHelper
     /// <param name="value">The string containing escape sequences.</param>
     /// <returns>A decoded string.</returns>
     public static string UnescapeUnicode(string value) =>
-        string.IsNullOrEmpty(value) || !value.Contains(@"\u", StringComparison.Ordinal) ? value : UnicodeEscapeRegex().Replace(value, m => ((char)Convert.ToInt32(m.Groups[1].Value, 16)).ToString());
+        string.IsNullOrEmpty(value) || !value.Contains(@"\u", StringComparison.Ordinal) ? value : UnicodeEscapeRegex().Replace(value, match => ((char)Convert.ToInt32(match.Groups[1].Value, 16)).ToString());
 
     /// <summary>Splits a CSV line on commas.</summary>
     /// <param name="line">The raw CSV line.</param>
@@ -195,12 +195,12 @@ public static partial class TextHelper
                 );
 
                 var steps = baseSelection
-                    .Steps.GroupBy(s => s.Source)
-                    .Select(g => new TitleSelectionStep
+                    .Steps.GroupBy(step => step.Source)
+                    .Select(group => new TitleSelectionStep
                     {
-                        Source = g.Key,
+                        Source = group.Key,
                         Language = targetLang,
-                        AllowSynonyms = g.Any(s => s.AllowSynonyms),
+                        AllowSynonyms = group.Any(step => step.AllowSynonyms),
                     })
                     .ToList();
 
@@ -227,8 +227,8 @@ public static partial class TextHelper
             else
             {
                 var match = titles
-                    .OrderBy(t =>
-                        t.Type switch
+                    .OrderBy(title =>
+                        title.Type switch
                         {
                             TitleType.Main => 1,
                             TitleType.Official => 2,
@@ -236,7 +236,7 @@ public static partial class TextHelper
                             _ => 4,
                         }
                     )
-                    .FirstOrDefault(x => x.LanguageCode.Equals(lang, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(x.Value));
+                    .FirstOrDefault(title => title.LanguageCode.Equals(lang, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(title.Value));
                 if (match != null)
                     return match.Value;
             }
@@ -271,7 +271,7 @@ public static partial class TextHelper
 
                 baseSelection ??= TextManager.GetOverviewSelection();
 
-                var steps = baseSelection.Steps.Select(s => s.Source).Distinct().Select(source => new OverviewSelectionStep { Source = source, Language = targetLang }).ToList();
+                var steps = baseSelection.Steps.Select(step => step.Source).Distinct().Select(source => new OverviewSelectionStep { Source = source, Language = targetLang }).ToList();
 
                 if (steps.Count == 0)
                     steps.Add(new OverviewSelectionStep { Source = null, Language = targetLang });
@@ -283,7 +283,7 @@ public static partial class TextHelper
             }
             else
             {
-                var match = overviews.FirstOrDefault(x => x.LanguageCode.Equals(lang, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(x.Value));
+                var match = overviews.FirstOrDefault(overview => overview.LanguageCode.Equals(lang, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(overview.Value));
                 if (match != null)
                     return match.Value;
             }
