@@ -36,12 +36,12 @@
       debouncedRender();
     };
 
-    input.onkeydown = (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
+    input.onkeydown = (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
         input.blur();
-      } else if (e.key === "Escape") {
-        e.preventDefault();
+      } else if (ev.key === "Escape") {
+        ev.preventDefault();
         input.value = "";
         if (clearBtn) clearBtn.hidden = true;
         renderFn();
@@ -59,10 +59,10 @@
     }
 
     // Global Key Listener for search focus (shared across browser and player)
-    window.addEventListener("keydown", (e) => {
+    window.addEventListener("keydown", (ev) => {
       if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA" || document.querySelector(".modal-overlay.open")) return;
-      if (e.key === "/") {
-        e.preventDefault();
+      if (ev.key === "/") {
+        ev.preventDefault();
         input.focus();
       }
     });
@@ -85,8 +85,8 @@
     sum.dataset.tooltipOverflowOnly = "true";
     const titleSpan = name ? `<span class="vfs-title" data-tooltip-overflow-only="true">${window._sr.esc(name)}</span>` : "";
     sum.innerHTML = `<span class="tree-icon expand"></span><span class="tree-icon collapse"></span>${titleSpan}${extraHtml}`;
-    sum.addEventListener("click", (e) => {
-      if (e.target.closest(".vfs-link")) e.stopPropagation();
+    sum.addEventListener("click", (ev) => {
+      if (ev.target.closest(".vfs-link")) ev.stopPropagation();
     });
     det.appendChild(sum);
 

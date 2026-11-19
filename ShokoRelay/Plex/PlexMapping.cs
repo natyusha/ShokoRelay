@@ -65,14 +65,22 @@ public static class PlexMapping
             // Fast path: resolve coordinates from the pre-indexed alternate ordering table in O(1)
             if (tmdbOrderingLookup != null)
             {
-                var first = tmdbEps[0];
-                if (tmdbOrderingLookup.TryGetValue(first.ID, out var c))
+                var ordered = tmdbEps
+                    .Select(ep => tmdbOrderingLookup.TryGetValue(ep.ID, out var coords) ? (Found: true, Coords: coords) : default)
+                    .Where(item => item.Found)
+                    .OrderBy(item => item.Coords.Season)
+                    .ThenBy(item => item.Coords.Episode)
+                    .ToList();
+
+                if (ordered.Count > 0)
                 {
-                    int? endEp = tmdbEps.Count > 1 && tmdbOrderingLookup.TryGetValue(tmdbEps[^1].ID, out var last) && last.Season == c.Season ? last.Episode : null;
+                    var (firstSeason, firstEpisode) = ordered[0].Coords;
+                    var (lastSeason, lastEpisode) = ordered[^1].Coords;
+                    int? endEp = ordered.Count > 1 && lastSeason == firstSeason ? lastEpisode : null;
                     return new PlexCoords
                     {
-                        Season = c.Season,
-                        Episode = c.Episode,
+                        Season = firstSeason,
+                        Episode = firstEpisode,
                         EndEpisode = endEp,
                     };
                 }

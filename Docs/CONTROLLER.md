@@ -472,7 +472,7 @@ GET  /animethemes/mp3/random?refresh={true|false}              -> AnimeThemesMp3
 ```
 
 - `AnimeThemesMp3` generates or batches Theme.mp3 files using parallelism.
-  - `path`: (required) relative or absolute Shoko/Plex path.
+  - `path`: (required) relative or absolute Shoko/Plex path (must resolve inside a configured Shoko managed folder).
   - `slug`: (optional) specific theme identifier (e.g., OP1).
   - `offset`: (default 0) selection index when multiple themes match.
   - `batch`: (default false) set to true to recursively process subfolders.

@@ -41,13 +41,17 @@ public class AnimeThemesController(
 
     /// <summary>Checks whether a normalized full path resides within any configured Shoko managed folder.</summary>
     /// <param name="fullPath">The full filesystem path to validate.</param>
+    /// <param name="allowRoot">When <c>true</c>, also permits the managed folder root directory itself.</param>
     /// <returns><c>true</c> if the path is inside a managed folder; otherwise, <c>false</c>.</returns>
-    private bool IsInsideManagedFolders(string fullPath) =>
-        (videoService.GetAllManagedFolders() ?? [])
-            .Select(mf => mf.Path)
-            .Where(p => !string.IsNullOrWhiteSpace(p))
-            .Select(p => Path.GetFullPath(p).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar)
-            .Any(root => fullPath.StartsWith(root, VfsShared.PathComparison));
+    private bool IsInsideManagedFolders(string fullPath, bool allowRoot = false)
+    {
+        string candidate = allowRoot ? fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar : fullPath;
+        return (videoService.GetAllManagedFolders() ?? [])
+            .Select(folder => folder.Path)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Select(path => Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar)
+            .Any(root => candidate.StartsWith(root, VfsShared.PathComparison));
+    }
 
     #endregion
 
@@ -123,9 +127,21 @@ public class AnimeThemesController(
     {
         if (string.IsNullOrWhiteSpace(query.Path))
             return BadRequest(new RelayResponse<object>(Status: "error", Message: "path is required"));
-        string reverse = PlexLibrary.MapPlexPathToShokoPath(query.Path);
-        if (!string.Equals(reverse, query.Path, StringComparison.Ordinal))
-            query = query with { Path = reverse };
+
+        string fullFolderPath;
+        try
+        {
+            fullFolderPath = Path.GetFullPath(PlexLibrary.MapPlexPathToShokoPath(query.Path));
+        }
+        catch (ArgumentException)
+        {
+            return BadRequest(new RelayResponse<object>(Status: "error", Message: "Invalid path."));
+        }
+
+        if (!IsInsideManagedFolders(fullFolderPath, allowRoot: true))
+            return BadRequest(new RelayResponse<object>(Status: "error", Message: "Path must be inside a configured Shoko managed folder."));
+
+        query = query with { Path = fullFolderPath };
 
         if (query.Batch)
             return await ExecuteTrackedTaskAsync(
@@ -237,7 +253,7 @@ public class AnimeThemesController(
 
     /// <summary>Returns the hierarchical tree of WebM files for the standalone player.</summary>
     /// <remarks>
-    /// Restricted-tag visibility (<c>IUser.IsAllowedToSee</c>) is intentionally not enforced here so <see cref="AllowPlayerAccessAttribute"/> remains usable without a user session.
+    ///   Restricted-tag visibility (<c>IUser.IsAllowedToSee</c>) is intentionally not enforced here so <see cref="AllowPlayerAccessAttribute"/> remains usable without a user session.
     /// </remarks>
     /// <returns>A JSON object containing the hierarchical theme list.</returns>
     [AllowPlayerAccess]

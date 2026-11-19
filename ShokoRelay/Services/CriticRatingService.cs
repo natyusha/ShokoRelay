@@ -65,6 +65,8 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                 return new ApplyRatingsResult(0, 0, 0, 0, 0, errorsList, appliedChanges, sw.Elapsed);
 
             var allowedSet = allowedSeriesIds != null ? new HashSet<int>(allowedSeriesIds.Select(id => OverrideHelper.GetPrimary(id, metadataService))) : null;
+            if (allowedSet is { Count: 0 })
+                return new ApplyRatingsResult(0, 0, 0, 0, 0, errorsList, appliedChanges, sw.Elapsed);
 
             async Task ProcessShowRating(PlexMetadataItem item, PlexLibraryTarget target)
             {

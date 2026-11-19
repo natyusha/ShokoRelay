@@ -265,12 +265,12 @@ public class PlexController(
     /// <returns>A collection build report.</returns>
     [HttpGet("plex/collections/build")]
     public Task<IActionResult> BuildPlexCollections([FromQuery] string? filter = null, [FromQuery] bool assignment = true, [FromQuery] bool clean = true) =>
-        ValidatePlexFilterRequest(filter, out var seriesList, out _) is { } guard
+        ValidatePlexFilterRequest(filter, out var seriesList, out var filterIds) is { } guard
             ? Task.FromResult(guard)
             : ExecuteTrackedTaskAsync(
                 ShokoRelayConstants.TaskPlexCollectionsBuild,
                 LogHelper.BuildCollectionsReport,
-                () => collectionService.BuildCollectionsAsync(seriesList, assignment, clean, CancellationToken.None),
+                () => collectionService.BuildCollectionsAsync(filterIds.Count > 0 ? seriesList : null, assignment, clean, CancellationToken.None),
                 SyncHelper.SyncLock
             );
 
@@ -279,12 +279,12 @@ public class PlexController(
     /// <returns>A ratings update report.</returns>
     [HttpGet("plex/ratings/apply")]
     public Task<IActionResult> ApplyAudienceRatings([FromQuery] string? filter = null) =>
-        ValidatePlexFilterRequest(filter, out var seriesList, out _) is { } guard
+        ValidatePlexFilterRequest(filter, out var seriesList, out var filterIds) is { } guard
             ? Task.FromResult(guard)
             : ExecuteTrackedTaskAsync(
                 ShokoRelayConstants.TaskPlexRatingsApply,
                 LogHelper.BuildRatingsReport,
-                () => criticRatingService.ApplyRatingsAsync(seriesList.WhereNotNull().Select(s => s.LocalID), CancellationToken.None),
+                () => criticRatingService.ApplyRatingsAsync(filterIds.Count > 0 ? seriesList.WhereNotNull().Select(series => series.LocalID) : null, CancellationToken.None),
                 SyncHelper.SyncLock
             );
 

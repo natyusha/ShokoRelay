@@ -117,7 +117,7 @@ public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesAp
 
         if (year.HasValue)
             filters.Add($"{{ column: YEAR, operator: EQ, value: {year.Value} }}");
-        if (!string.IsNullOrWhiteSpace(season) && season.All(char.IsLetter))
+        if (!string.IsNullOrWhiteSpace(season) && season.All(char.IsAsciiLetter))
             filters.Add($"{{ column: SEASON, operator: EQ, value: {season.ToUpperInvariant()} }}");
         if (!string.IsNullOrWhiteSpace(name))
         {
@@ -167,7 +167,11 @@ public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesAp
 
             if (response.StatusCode == HttpStatusCode.TooManyRequests)
             {
-                var wait = response.Headers.RetryAfter?.Delta ?? (_rateLimitReset > DateTimeOffset.UtcNow ? _rateLimitReset - DateTimeOffset.UtcNow : TimeSpan.FromSeconds(60));
+                DateTimeOffset rateLimitReset;
+                lock (_quotaLock)
+                    rateLimitReset = _rateLimitReset;
+
+                var wait = response.Headers.RetryAfter?.Delta ?? (rateLimitReset > DateTimeOffset.UtcNow ? rateLimitReset - DateTimeOffset.UtcNow : TimeSpan.FromSeconds(60));
                 logger?.LogWarning("AnimeThemes: Rate limit exceeded (429). Retrying after {Seconds:F1}s", wait.TotalSeconds);
                 await Task.Delay(wait, cancellationToken).ConfigureAwait(false);
                 continue;

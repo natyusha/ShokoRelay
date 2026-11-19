@@ -96,6 +96,10 @@ public partial class ConfigProvider : IDisposable
     }
 
     /// <summary>Extracts the externally-reachable base URL from the current HTTP request headers, if an HTTP context is active.</summary>
+    /// <remarks>
+    ///   Reads <c>X-Forwarded-Proto</c> and <c>X-Forwarded-Host</c> directly because Shoko's <c>Web.TrustedProxies</c> setting defaults to empty and requires a restart.
+    ///   Only admin-authenticated dashboard requests persist the detected URL to <c>AutoShokoServerUrl</c>; unauthenticated requests affect only the active response.
+    /// </remarks>
     /// <returns>The detected base URL without trailing slash, or <c>null</c> when no HTTP context is active.</returns>
     private string? DetectRequestBaseUrl()
     {
@@ -369,6 +373,10 @@ public partial class ConfigProvider : IDisposable
     /// <param name="settings">The <see cref="RelayConfig"/> instance to save.</param>
     public void SaveSettings(RelayConfig settings)
     {
+        settings.Automation ??= new();
+        settings.Playback ??= new();
+        settings.Advanced ??= new();
+
         ApplyDefaultValues(settings);
         NormalizeVfsRoots(settings);
 
@@ -784,8 +792,8 @@ public partial class ConfigProvider : IDisposable
         {
             if (prop.PropertyType == typeof(string) && string.IsNullOrWhiteSpace(prop.GetValue(obj) as string) && prop.GetCustomAttribute<DefaultValueAttribute>() is { } defaultAttr)
                 prop.SetValue(obj, defaultAttr.Value);
-            else if (prop.PropertyType.IsClass && prop.PropertyType != typeof(string) && !typeof(IDictionary).IsAssignableFrom(prop.PropertyType))
-                ApplyDefaultValues(prop.GetValue(obj)!);
+            else if (prop.PropertyType.IsClass && prop.PropertyType != typeof(string) && !typeof(IDictionary).IsAssignableFrom(prop.PropertyType) && prop.GetValue(obj) is { } nestedObj)
+                ApplyDefaultValues(nestedObj);
         }
     }
 

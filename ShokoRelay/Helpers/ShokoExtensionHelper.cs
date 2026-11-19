@@ -21,7 +21,7 @@ public static class ShokoExtensionHelper
     /// <param name="series">The series metadata.</param>
     /// <param name="metadataService">The metadata service used for override resolution.</param>
     /// <returns>The resolved primary Shoko series ID.</returns>
-    public static int GetPrimaryId(this ISeries series, IMetadataService metadataService) => OverrideHelper.GetPrimary(series.ID.GetNumericID<int>(), metadataService);
+    public static int GetPrimaryId(this ISeries series, IMetadataService metadataService) => OverrideHelper.GetPrimary(series.ID.GetNumericID<int>(), metadataService, (series as IShokoSeries)?.AnidbAnimeID);
 
     /// <summary>Gets the collection of series IDs associated with this series in an override group.</summary>
     /// <param name="series">The series metadata.</param>

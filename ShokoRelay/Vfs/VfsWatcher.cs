@@ -15,6 +15,7 @@ namespace ShokoRelay.Vfs;
 /// <param name="builder">VFS builder.</param>
 /// <param name="metadataService">Shoko metadata service.</param>
 /// <param name="linkingService">Shoko linking service.</param>
+/// <param name="orderingService">Shoko metadata ordering service.</param>
 /// <param name="plexLibrary">Plex client.</param>
 /// <param name="collectionService">Plex collection service.</param>
 /// <param name="atMapping">AnimeThemes mapping service.</param>
@@ -28,6 +29,7 @@ public class VfsWatcher(
     VfsBuilder builder,
     IMetadataService metadataService,
     IMetadataLinkingService linkingService,
+    IMetadataOrderingService orderingService,
     PlexClient plexLibrary,
     CollectionService collectionService,
     AnimeThemesMapping atMapping,
@@ -48,6 +50,9 @@ public class VfsWatcher(
     /// <summary>Tracks cancellation tokens for pending debounced library scans.</summary>
     private readonly ConcurrentDictionary<int, CancellationTokenSource> _pendingLibraryScans = new();
 
+    /// <summary>Indicates if the watcher is currently subscribed and running (1 = active, 0 = stopped).</summary>
+    private int _isRunning;
+
     /// <summary>Indicates if the background processing loop is currently active.</summary>
     private bool _processing;
 
@@ -64,6 +69,9 @@ public class VfsWatcher(
     /// <summary>Subscribe to Shoko video-file events and begin watching for changes.</summary>
     public void Start()
     {
+        if (Interlocked.Exchange(ref _isRunning, 1) != 0)
+            return;
+
         lock (_gate)
         {
             _stopCts?.Dispose();
@@ -77,13 +85,17 @@ public class VfsWatcher(
         releaseService.ReleaseDeleted += OnVideoReleaseDeleted;
         metadataService.SeriesRemoved += OnSeriesRemoved;
         linkingService.LinksChanged += OnLinksChanged;
+        orderingService.EpisodeHiddenChanged += OnEpisodeHiddenChanged;
 
-        logger.LogInformation("VFS: VfsWatcher -> Started (listening for relocation, matching and deletion events)");
+        logger.LogInformation("VFS: VfsWatcher -> Started (listening for relocation, matching, hidden, and deletion events)");
     }
 
     /// <summary>Unsubscribe from Shoko video-file events and stop watching.</summary>
     public void Stop()
     {
+        if (Interlocked.Exchange(ref _isRunning, 0) == 0)
+            return;
+
         try
         {
             videoService.VideoFileRelocated -= OnVideoFileRelocated;
@@ -93,6 +105,7 @@ public class VfsWatcher(
             releaseService.ReleaseDeleted -= OnVideoReleaseDeleted;
             metadataService.SeriesRemoved -= OnSeriesRemoved;
             linkingService.LinksChanged -= OnLinksChanged;
+            orderingService.EpisodeHiddenChanged -= OnEpisodeHiddenChanged;
 
             lock (_gate)
                 _stopCts?.Cancel();
@@ -224,6 +237,36 @@ public class VfsWatcher(
         logger.LogInformation("VFS: Series removed -> {Title} [{LocalId}] ... Queueing VFS prune", series.GetDisplayTitle(), series.LocalID);
         plexMetadata.InvalidateCache(primaryId);
         _pending[primaryId] = 1;
+        if (primaryId != series.LocalID)
+        {
+            plexMetadata.InvalidateCache(series.LocalID);
+            _pending[series.LocalID] = 1;
+        }
+        KickProcessLoop();
+    }
+
+    /// <summary>Handles Shoko episode hidden state changes, queueing affected series for VFS updates and cache invalidation.</summary>
+    /// <param name="sender">Event sender.</param>
+    /// <param name="event">Event parameters containing the episode identifier and new hidden state.</param>
+    private void OnEpisodeHiddenChanged(object? sender, EpisodeHiddenChangedEventArgs @event)
+    {
+        if (metadataService.GetEpisode(@event.EpisodeID) is not { } episode)
+            return;
+
+        IReadOnlyList<int> primaryIds = episode is IShokoEpisode shokoEp
+            ? [OverrideHelper.GetPrimary(shokoEp.ShokoSeriesID, metadataService)]
+            : [.. episode.ShokoEpisodes.Select(shokoEpisode => OverrideHelper.GetPrimary(shokoEpisode.ShokoSeriesID, metadataService)).Distinct()];
+
+        if (primaryIds.Count == 0)
+            return;
+
+        logger.LogDebug("VFS: Episode hidden state changed ({EpisodeId}, IsHidden={IsHidden}) -> Queueing VFS update", @event.EpisodeID, @event.IsHidden);
+        foreach (int primaryId in primaryIds)
+        {
+            plexMetadata.InvalidateCache(primaryId);
+            _pending[primaryId] = 1;
+        }
+
         KickProcessLoop();
     }
 

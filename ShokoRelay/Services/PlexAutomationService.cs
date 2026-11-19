@@ -33,16 +33,8 @@ public sealed record PlexAutomationRunResult(
 /// <param name="criticRatingService">Plex critic rating service.</param>
 /// <param name="imageSyncService">Shoko image sync service.</param>
 /// <param name="plexClient">Plex client.</param>
-/// <param name="metadataService">Shoko metadata service.</param>
 /// <param name="logger">Logger instance.</param>
-public class PlexAutomationService(
-    CollectionService collectionService,
-    CriticRatingService criticRatingService,
-    ImageSyncService imageSyncService,
-    PlexClient plexClient,
-    IMetadataService metadataService,
-    ILogger<PlexAutomationService> logger
-)
+public class PlexAutomationService(CollectionService collectionService, CriticRatingService criticRatingService, ImageSyncService imageSyncService, PlexClient plexClient, ILogger<PlexAutomationService> logger)
 {
     #region Public API
 
@@ -53,11 +45,10 @@ public class PlexAutomationService(
     public async Task<PlexAutomationRunResult> RunAutomationAsync(IProgress<decimal>? progress = null, CancellationToken token = default)
     {
         var sw = Stopwatch.StartNew();
-        var allSeries = metadataService.GetAllShokoSeries()?.Cast<IShokoSeries?>().ToList() ?? [];
         progress?.Report(10);
 
         var swCollections = Stopwatch.StartNew();
-        var collectionRes = await collectionService.BuildCollectionsAsync(allSeries, cancellationToken: token).ConfigureAwait(false);
+        var collectionRes = await collectionService.BuildCollectionsAsync(null, cancellationToken: token).ConfigureAwait(false);
         swCollections.Stop();
         LogHelper.WriteReport($"{ShokoRelayConstants.TaskPlexCollectionsBuild}-report.log", collectionRes, LogHelper.BuildCollectionsReport, logger);
         progress?.Report(40);

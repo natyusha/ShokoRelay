@@ -422,8 +422,8 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
 
     /// <summary>Read a previously built mapping file and create/update VFS links for matching theme files.</summary>
     /// <remarks>
-    /// Prioritizes BD sources: if a filename collision occurs and a BD source is available, non-BD sources are skipped.
-    /// If multiple BD sources collide (or no BD sources exist), they are de-duplicated with (2), (3), etc.
+    ///   Prioritizes BD sources: if a filename collision occurs and a BD source is available, non-BD sources are skipped.
+    ///   If multiple BD sources collide (or no BD sources exist), they are de-duplicated with (2), (3), etc.
     /// </remarks>
     /// <param name="seriesFilter">Optional collection of series IDs to limit processing to.</param>
     /// <param name="cancellationToken">The cancellation token.</param>

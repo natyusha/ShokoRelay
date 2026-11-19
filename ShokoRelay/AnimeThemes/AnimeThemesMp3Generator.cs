@@ -248,11 +248,30 @@ public class AnimeThemesMp3Generator(
         logger.LogInformation("AnimeThemes MP3: Starting batch generation for root -> {Root}", root);
         var (results, processed, skipped, errors) = (new List<ThemeMp3OperationResult>(), 0, 0, 0);
 
-        // Scan recursively for all directories, skipping ignored/VFS folders
-        var folders = Directory
+        // Scan recursively for directories that hold videos directly (or via immediate Season/Specials subfolders), excluding ignored/VFS paths
+        var candidateDirs = Directory
             .EnumerateDirectories(root, "*", SearchOption.AllDirectories)
             .Prepend(root)
             .Where(dir => !VfsShared.IsPathIgnored(dir, videoService, Settings, relativeTo: root, isDirectory: true))
+            .ToList();
+        var candidateSet = candidateDirs.ToHashSet(VfsShared.PathComparer);
+
+        var folders = candidateDirs
+            .Where(dir =>
+            {
+                if (VfsHelper.IsSeasonSubfolder(Path.GetFileName(dir)) && Path.GetDirectoryName(dir) is { Length: > 0 } parentDir && candidateSet.Contains(parentDir))
+                    return false;
+
+                bool hasDirectVideo = Directory
+                    .EnumerateFiles(dir, "*", SearchOption.TopDirectoryOnly)
+                    .Any(file => videoService.IsAllowedVideoExtension(file) && !VfsShared.IsPathIgnored(file, videoService, Settings));
+                return hasDirectVideo
+                    || Directory
+                        .EnumerateDirectories(dir, "*", SearchOption.TopDirectoryOnly)
+                        .Where(subDir => VfsHelper.IsSeasonSubfolder(Path.GetFileName(subDir)) && !VfsShared.IsPathIgnored(subDir, videoService, Settings, isDirectory: true))
+                        .SelectMany(subDir => Directory.EnumerateFiles(subDir, "*", SearchOption.TopDirectoryOnly))
+                        .Any(file => videoService.IsAllowedVideoExtension(file) && !VfsShared.IsPathIgnored(file, videoService, Settings));
+            })
             .ToList();
 
         var processedSeries = new ConcurrentDictionary<int, byte>();
@@ -298,7 +317,15 @@ public class AnimeThemesMp3Generator(
         if (VfsHelper.IsInVfsRoot(folder, out string vfsRoot))
             return new(folder, "error", $"Cannot generate Theme.mp3 inside the VFS directory '{vfsRoot}'. Target your physical managed folder instead.");
 
-        string? vid = Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories).FirstOrDefault(f => videoService.IsAllowedVideoExtension(f) && !VfsShared.IsPathIgnored(f, videoService, Settings));
+        var searchOption = query.Batch ? SearchOption.TopDirectoryOnly : SearchOption.AllDirectories;
+        string? vid = Directory.EnumerateFiles(folder, "*", searchOption).FirstOrDefault(file => videoService.IsAllowedVideoExtension(file) && !VfsShared.IsPathIgnored(file, videoService, Settings));
+        if (vid == null && query.Batch)
+            vid = Directory
+                .EnumerateDirectories(folder, "*", SearchOption.TopDirectoryOnly)
+                .Where(subDir => VfsHelper.IsSeasonSubfolder(Path.GetFileName(subDir)) && !VfsShared.IsPathIgnored(subDir, videoService, Settings, isDirectory: true))
+                .SelectMany(subDir => Directory.EnumerateFiles(subDir, "*", SearchOption.TopDirectoryOnly))
+                .FirstOrDefault(file => videoService.IsAllowedVideoExtension(file) && !VfsShared.IsPathIgnored(file, videoService, Settings));
+
         if (vid == null)
         {
             logger.LogDebug("AnimeThemes MP3: No recognized video files in folder -> {Folder}", folder);
@@ -312,10 +339,6 @@ public class AnimeThemesMp3Generator(
             logger.LogWarning("AnimeThemes MP3: Series lookup failed for video -> {Video} in {Folder}", vid, folder);
             return new(folder, "error", vf == null ? "Video not recognized." : "Series lookup failed.");
         }
-
-        string themePath = Path.Combine(folder, "Theme.mp3");
-        if (!query.Force && File.Exists(themePath))
-            return new(folder, "skipped", "Theme.mp3 already exists.");
 
         logger.LogDebug("AnimeThemes MP3: Folder {Folder} maps to series -> {Title} [{LocalId}] (AniDB: {AnidbId})", folder, series.GetDisplayTitle(), series.LocalID, series.AnidbAnimeID);
 
@@ -341,6 +364,10 @@ public class AnimeThemesMp3Generator(
 
         if (batchProcessedSeries != null && !batchProcessedSeries.TryAdd(series.LocalID, 0))
             return new(folder, "skipped", "Theme already processed for this series in another directory.");
+
+        string themePath = Path.Combine(folder, "Theme.mp3");
+        if (!query.Force && File.Exists(themePath))
+            return new(folder, "skipped", "Theme.mp3 already exists.");
 
         string? temp = null;
         try

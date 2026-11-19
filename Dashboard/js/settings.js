@@ -281,42 +281,42 @@
           if (link) link.href = `../theme.css?t=${new Date().getTime()}`;
         };
 
-        bindConfig(input, p.Path, config, customSave, "text");
-      } else if (p.Type === "bool") {
+        bindConfig(input, prop.Path, config, customSave, "text");
+      } else if (prop.Type === "bool") {
         wrap.innerHTML = `<label class="shoko-checkbox"><input type="checkbox">
           <span class="shoko-checkbox-icon" aria-hidden="true"><svg class="unchecked"><use href="img/icons.svg#checkbox-blank-circle-outline"></use></svg><svg class="checked"><use href="img/icons.svg#checkbox-marked-circle-outline"></use></svg></span>
-          <span class="shoko-checkbox-text"><span class="shoko-checkbox-title">${esc(p.Display || p.Path)}</span><small class="shoko-checkbox-desc" style="display:block">${esc(p.Description || "")}</small></span></label>`;
+          <span class="shoko-checkbox-text"><span class="shoko-checkbox-title">${esc(prop.Display || prop.Path)}</span><small class="shoko-checkbox-desc" style="display:block">${esc(prop.Description || "")}</small></span></label>`;
         input = wrap.querySelector("input");
-        bindConfig(input, p.Path, config, saveSettings, "check");
+        bindConfig(input, prop.Path, config, saveSettings, "check");
         // Re-evaluate the overrides button state when either relevant setting is toggled.
-        if (overridesBtn && ["Advanced.TmdbEpNumbering", "Advanced.MergeTmdbSeries"].includes(p.Path)) input.addEventListener("change", () => window._sr.updateControlStates(config));
-      } else if (p.Type === "flags") {
-        createFlagsMultiselect(wrap, p, config, value);
-      } else if (p.Path.endsWith("PathMappings")) {
-        createDualTextareaMapping(wrap, p, config, value, "Working Base Paths", "Shoko Base Paths", false);
-      } else if (p.Path.endsWith("SubtitleLanguageMappings")) {
-        createDualTextareaMapping(wrap, p, config, value, "Original Tags", "Mapped Tags", true);
+        if (overridesBtn && ["Advanced.TmdbEpNumbering", "Advanced.MergeTmdbSeries"].includes(prop.Path)) input.addEventListener("change", () => window._sr.updateControlStates(config));
+      } else if (prop.Type === "flags") {
+        createFlagsMultiselect(wrap, prop, config, value);
+      } else if (prop.Path.endsWith("PathMappings")) {
+        createDualTextareaMapping(wrap, prop, config, value, "Working Base Paths", "Shoko Base Paths", false);
+      } else if (prop.Path.endsWith("SubtitleLanguageMappings")) {
+        createDualTextareaMapping(wrap, prop, config, value, "Original Tags", "Mapped Tags", true);
       } else {
-        label.innerHTML = `<span>${esc(p.Display || p.Path.split(".").pop())}</span>${p.Description ? `<small>${esc(p.Description)}</small>` : ""}`;
+        label.innerHTML = `<span>${esc(prop.Display || prop.Path.split(".").pop())}</span>${prop.Description ? `<small>${esc(prop.Description)}</small>` : ""}`;
         wrap.appendChild(label);
-        input = document.createElement(p.Type === "enum" ? "select" : p.Type === "json" || p.Path.endsWith("TagOverrides") || p.Path.endsWith("Exclusions") ? "textarea" : "input");
-        if (p.Path === "TagOverrides") input.id = "resizable";
-        if (p.Type === "enum") {
-          (p.EnumValues || []).forEach((ev) => {
+        input = document.createElement(prop.Type === "enum" ? "select" : prop.Type === "json" || prop.Path.endsWith("TagOverrides") || prop.Path.endsWith("Exclusions") ? "textarea" : "input");
+        if (prop.Path === "TagOverrides") input.id = "resizable";
+        if (prop.Type === "enum") {
+          (prop.EnumValues || []).forEach((ev) => {
             const opt = new Option(ev.name, ev.value);
             opt.selected = String(ev.value) === String(value);
             input.add(opt);
           });
-        } else if (p.Type === "number") {
+        } else if (prop.Type === "number") {
           input.type = "number";
         } else if (input.tagName === "INPUT") {
           input.type = "text";
-          if (p.Path.endsWith("ShokoServerUrl")) input.placeholder = "e.g. http://localhost:8111";
-          if (p.Path.endsWith("PlexServerUrl")) input.placeholder = "e.g. http://localhost:32400";
+          if (prop.Path.endsWith("ShokoServerUrl")) input.placeholder = "e.g. http://localhost:8111";
+          if (prop.Path.endsWith("PlexServerUrl")) input.placeholder = "e.g. http://localhost:32400";
         }
         wrap.appendChild(input);
 
-        if (p.Path === "Advanced.RequireAuth") {
+        if (prop.Path === "Advanced.RequireAuth") {
           input.onchange = async () => {
             const nextVal = Number(input.value) || 0;
             if (nextVal !== 0) {
@@ -324,30 +324,30 @@
               if (!verifyRes.ok) {
                 const authed = await window._sr.ensureAuth?.({ dismissable: true });
                 if (!authed) {
-                  input.value = String(getValueByPath(config, p.Path) ?? 0);
+                  input.value = String(getValueByPath(config, prop.Path) ?? 0);
                   return;
                 }
               }
             }
-            setValueByPath(config, p.Path, nextVal);
+            setValueByPath(config, prop.Path, nextVal);
             await saveSettings(config);
           };
           // Custom validation for ShokoServerUrl and PlexServerUrl
-        } else if (p.Path.endsWith("ShokoServerUrl") || p.Path.endsWith("PlexServerUrl")) {
+        } else if (prop.Path.endsWith("ShokoServerUrl") || prop.Path.endsWith("PlexServerUrl")) {
           input.value = value ?? "";
           input.onchange = async () => {
             const urlRegex = /^https?:\/\/([a-zA-Z0-9.-]+|\[[a-fA-F0-9:]+\])(:\d+)?$/;
             const cleanVal = input.value.trim().replace(/\/+$/, "");
             if (cleanVal && !urlRegex.test(cleanVal)) {
-              showToast(`Invalid ${p.Path.endsWith("ShokoServerUrl") ? "Shoko" : "Plex"} URL. Use http(s)://HOST:PORT`, "error", 5000);
-              input.value = getValueByPath(config, p.Path) || "";
+              showToast(`Invalid ${prop.Path.endsWith("ShokoServerUrl") ? "Shoko" : "Plex"} URL. Use http(s)://HOST:PORT`, "error", 5000);
+              input.value = getValueByPath(config, prop.Path) || "";
               return;
             }
             input.value = cleanVal;
-            setValueByPath(config, p.Path, cleanVal);
+            setValueByPath(config, prop.Path, cleanVal);
             await saveSettings(config);
           };
-        } else if (p.Path === "Advanced.FolderExclusions") {
+        } else if (prop.Path === "Advanced.FolderExclusions") {
           input.value = value ?? "";
           input.onchange = async () => {
             const cleanVal = input.value
@@ -356,12 +356,12 @@
               .filter((line) => line.length > 0)
               .join("\n");
             input.value = cleanVal;
-            setValueByPath(config, p.Path, cleanVal);
+            setValueByPath(config, prop.Path, cleanVal);
             await saveSettings(config);
           };
-        } else bindConfig(input, p.Path, config, saveSettings, p.Type === "number" ? "number" : "text");
+        } else bindConfig(input, prop.Path, config, saveSettings, prop.Type === "number" ? "number" : "text");
       }
-      (p.Advanced ? advContent : p.Language ? langContent : primaryContent).appendChild(wrap);
+      (prop.Advanced ? advContent : prop.Language ? langContent : primaryContent).appendChild(wrap);
     });
 
     if (primaryContent.children.length > 1) {

@@ -129,8 +129,8 @@ internal static class VfsShared
 
         foreach (var mapping in fileData.Mappings)
         {
-            var location = mapping.Video.Files.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l.Path)) ?? mapping.Video.Files.FirstOrDefault();
-            if (location == null || !IsVfsEnabledFolder(location.ManagedFolder))
+            var location = mapping.Video.Files.FirstOrDefault(file => IsVfsEnabledFolder(file.ManagedFolder) && !string.IsNullOrWhiteSpace(file.Path));
+            if (location == null)
                 continue;
 
             string? importRoot = ResolveImportRootPath(location);

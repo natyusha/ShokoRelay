@@ -169,27 +169,40 @@ public static class OverrideHelper
     /// <summary>Return the primary series id for the given Shoko series ID according to overrides and auto-merges.</summary>
     /// <param name="shokoSeriesId">The input series ID.</param>
     /// <param name="metadataService">Service used to resolve series mappings.</param>
+    /// <param name="anidbAnimeId">Optional AniDB anime ID fallback when the series is no longer in the database.</param>
     /// <returns>The primary Shoko series ID, or the original ID if no override exists.</returns>
-    public static int GetPrimary(int shokoSeriesId, IMetadataService metadataService)
+    public static int GetPrimary(int shokoSeriesId, IMetadataService metadataService, int? anidbAnimeId = null)
     {
         EnsureLoaded();
 
-        if (metadataService?.GetShokoSeriesByID(shokoSeriesId) is not { AnidbAnimeID: > 0 } series || !EnforceTmdbNumbering)
+        if (!EnforceTmdbNumbering)
+            return shokoSeriesId;
+
+        var series = metadataService?.GetShokoSeriesByID(shokoSeriesId);
+        int animeId = series?.AnidbAnimeID ?? anidbAnimeId ?? 0;
+        if (animeId <= 0)
             return shokoSeriesId;
 
         // 1. Manual override takes precedence (O(1))
-        if (s_groups.TryGetValue(series.AnidbAnimeID, out var manualGrp) && manualGrp.Count > 0)
-            return metadataService.GetShokoSeriesByAnidbID(manualGrp[0])?.LocalID ?? shokoSeriesId;
+        if (s_groups.TryGetValue(animeId, out var manualGrp) && manualGrp.Count > 0)
+            return metadataService?.GetShokoSeriesByAnidbID(manualGrp[0])?.LocalID ?? shokoSeriesId;
 
         // 2. Auto TMDB Merge fast-path (O(1))
-        if (Settings.Advanced.MergeTmdbSeries && series.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() is { } tmdbSeries && !string.IsNullOrWhiteSpace(tmdbSeries.ID.ID))
+        if (Settings.Advanced.MergeTmdbSeries)
         {
-            if (s_tmdbGroups.TryGetValue(tmdbSeries.ID.ID, out var cachedGroup) && cachedGroup.Count > 0)
-                return metadataService.GetShokoSeriesByAnidbID(cachedGroup[0])?.LocalID ?? shokoSeriesId;
+            if (series?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() is { } tmdbSeries && !string.IsNullOrWhiteSpace(tmdbSeries.ID.ID))
+            {
+                if (s_tmdbGroups.TryGetValue(tmdbSeries.ID.ID, out var cachedGroup) && cachedGroup.Count > 0)
+                    return metadataService!.GetShokoSeriesByAnidbID(cachedGroup[0])?.LocalID ?? shokoSeriesId;
 
-            // Cache miss - resolve JIT via GetGroup
-            var group = GetGroup(shokoSeriesId, metadataService);
-            return group.Count > 0 ? group[0] : shokoSeriesId;
+                // Cache miss - resolve JIT via GetGroup
+                var group = GetGroup(shokoSeriesId, metadataService!);
+                return group.Count > 0 ? group[0] : shokoSeriesId;
+            }
+
+            // Fallback when the series row has already been removed from Shoko's database
+            if (s_tmdbGroups.Values.FirstOrDefault(grp => grp.Contains(animeId)) is { Count: > 0 } cachedGrp)
+                return metadataService?.GetShokoSeriesByAnidbID(cachedGrp[0])?.LocalID ?? shokoSeriesId;
         }
 
         return shokoSeriesId;

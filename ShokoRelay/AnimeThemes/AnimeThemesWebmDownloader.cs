@@ -39,6 +39,10 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
 
     #region Download Logic
 
+    /// <summary>Signals an unrecoverable rate-limit failure that should abort the download loop.</summary>
+    /// <param name="message">The failure reason.</param>
+    private sealed class RateLimitAbortException(string message) : InvalidOperationException(message);
+
     /// <summary>Downloads AnimeThemes WebM files based on specific filters and organizes them by Year/Season.</summary>
     /// <param name="query">The search filters.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
@@ -206,10 +210,10 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
                                         catch { }
 
                                     logger.LogWarning(retryEx, "AnimeThemes WebM: Failed to download theme ID -> {ThemeId}", theme.Id);
-                                    throw new InvalidOperationException($"Task aborted. Rate limit retry failed for theme ID {theme.Id}: {retryEx.Message}");
+                                    throw new RateLimitAbortException($"Task aborted. Rate limit retry failed for theme ID {theme.Id}: {retryEx.Message}");
                                 }
                             }
-                            catch (Exception ex)
+                            catch (Exception ex) when (ex is not RateLimitAbortException)
                             {
                                 if (File.Exists(targetPath))
                                     try
@@ -223,7 +227,7 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
                                 logger.LogWarning(ex, "AnimeThemes WebM: Failed to download theme ID -> {ThemeId}", theme.Id);
                             }
                         }
-                        catch (Exception ex)
+                        catch (Exception ex) when (ex is not RateLimitAbortException)
                         {
                             errors++;
                             messages.Add($"Failed to process theme ID {theme.Id}: {ex.Message}");

@@ -323,7 +323,7 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
             string vfsRootDir = Path.GetDirectoryName(seriesPath)!;
             string root = Path.GetDirectoryName(vfsRootDir)!;
             string themeRootName = VfsShared.ResolveAnimeThemesFolderName();
-            bool isMoviePath = seriesPath.Contains(movieRootName, StringComparison.OrdinalIgnoreCase);
+            bool isMoviePath = string.Equals(Path.GetFileName(vfsRootDir), movieRootName, VfsShared.PathComparison);
             string folderName = Path.GetFileName(seriesPath);
 
             foreach (var anidbId in anidbIds)

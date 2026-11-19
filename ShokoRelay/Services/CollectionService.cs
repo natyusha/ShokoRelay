@@ -63,13 +63,13 @@ public class CollectionService(
 
     #region Collection Building
 
-    /// <summary>Create or update Plex collections and their images for the supplied series list.</summary>
-    /// <param name="seriesList">The collection of series to process.</param>
+    /// <summary>Create or update Plex collections and their images for the supplied series list, or all series when null.</summary>
+    /// <param name="seriesList">Optional collection of series to process, or <c>null</c> to process all libraries in bulk.</param>
     /// <param name="applyAssignment">If true, perform metadata assignment; otherwise, only refresh collection image assets.</param>
     /// <param name="clean">If true, prunes old cached custom posters from Plex's local metadata directory.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A result object containing statistics on the operation.</returns>
-    public async Task<BuildCollectionsResult> BuildCollectionsAsync(IEnumerable<IShokoSeries?> seriesList, bool applyAssignment = true, bool clean = true, CancellationToken cancellationToken = default)
+    public async Task<BuildCollectionsResult> BuildCollectionsAsync(IEnumerable<IShokoSeries?>? seriesList, bool applyAssignment = true, bool clean = true, CancellationToken cancellationToken = default)
     {
         const string TaskName = ShokoRelayConstants.TaskPlexCollectionsBuild;
         await _buildLock.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -81,10 +81,10 @@ public class CollectionService(
         {
             var (created, uploaded, alreadyUploaded, errors, uniqueSeries) = (0, 0, 0, 0, new HashSet<int>());
             var (createdList, uploadedDetails, errorsList) = (new List<CollectionAssignmentDetail>(), new List<CollectionUploadDetail>(), new List<string>());
-            var allowedIds = new HashSet<int>(seriesList?.WhereNotNull().Select(s => OverrideHelper.GetPrimary(s.LocalID, metadataService)) ?? []);
+            HashSet<int>? allowedIds = seriesList != null ? [.. seriesList.WhereNotNull().Select(series => OverrideHelper.GetPrimary(series.LocalID, metadataService))] : null;
             var targets = plexClient.GetConfiguredTargets();
 
-            if (targets.Count == 0)
+            if (targets.Count == 0 || allowedIds is { Count: 0 })
                 return new BuildCollectionsResult(0, 0, 0, 0, 0, 0, 0, createdList, uploadedDetails, [], errorsList, sw.Elapsed);
 
             var excludedKeywords = (Settings.Advanced.CollectionExclusions ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -167,7 +167,7 @@ public class CollectionService(
                 bool isMovieTarget = target.LibraryType == PlexLibraryType.Movie;
 
                 var items = new List<PlexMetadataItem>();
-                if (allowedIds.Count > 0)
+                if (allowedIds != null)
                 {
                     // Targeted fast-path for filtered series
                     foreach (var seriesId in allowedIds)
@@ -235,7 +235,7 @@ public class CollectionService(
                     else
                         sid = PlexHelper.ExtractShokoSeriesIdFromGuid(item.Guid);
 
-                    if (!sid.HasValue || (allowedIds.Count > 0 && !allowedIds.Contains(sid.Value)))
+                    if (!sid.HasValue || (allowedIds != null && !allowedIds.Contains(sid.Value)))
                         continue;
 
                     uniqueSeries.Add(sid.Value);

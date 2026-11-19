@@ -128,7 +128,8 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
     {
         var processedInRun = new ConcurrentDictionary<int, byte>();
         var fileDataCache = new ConcurrentDictionary<int, MapHelper.SeriesFileData?>();
-        var orderedTargets = targets.OrderBy(t => t.LibraryType == PlexLibraryType.Movie ? 1 : 0).ToList();
+        var orderedTargets = targets.OrderBy(target => target.LibraryType == PlexLibraryType.Movie ? 1 : 0).ToList();
+        bool sectionScanFailed = false;
 
         foreach (var target in orderedTargets)
         {
@@ -314,6 +315,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                sectionScanFailed = true;
                 addStats(true, false, false, true);
                 errsBag.Add($"Failed to scan Plex section {target.SectionId}: {ex.Message}");
                 logger.LogWarning(ex, "ImageSyncService: Failed to scan library section {SectionId}", target.SectionId);
@@ -321,7 +323,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
         }
 
         // Safely purge orphaned Plex thumbnails for episodes completely removed from Plex
-        if (allowedSet == null && errsBag.IsEmpty)
+        if (allowedSet == null && !sectionScanFailed)
         {
             var allEpisodeXrefs = imageManager
                 .GetAllImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = ImageEntityType.Backdrop })
@@ -362,15 +364,15 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
         CancellationToken cancellationToken
     )
     {
-        var groups = allSeries.Where(s => s.TopLevelGroupID > 0).Select(s => s.TopLevelGroup).OfType<IShokoGroup>().DistinctBy(g => g.LocalID).ToList();
+        var groups = allSeries.Where(series => series.TopLevelGroupID > 0).Select(series => series.TopLevelGroup).OfType<IShokoGroup>().DistinctBy(group => group.LocalID).ToList();
         foreach (var group in groups)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var seriesInGroup = allSeries.FirstOrDefault(s => s.TopLevelGroupID == group.LocalID);
-            if (seriesInGroup == null)
+            var groupSeries = group.AllSeries?.ToList() is { Count: > 0 } allGroupSeries ? allGroupSeries : [.. allSeries.Where(series => series.TopLevelGroupID == group.LocalID)];
+            if (groupSeries.Count == 0)
                 continue;
 
-            string? groupPosterFile = PlexHelper.FindCollectionImagePathByGroup(seriesInGroup, group.LocalID, "", metadataService);
+            string? groupPosterFile = groupSeries.Select(series => PlexHelper.FindCollectionImagePathByGroup(series, group.LocalID, "", metadataService)).FirstOrDefault(path => !string.IsNullOrEmpty(path));
             var (fileExists, wasUploaded, wasSkipped, hasError) = await ProcessLocalAssetAsync(
                     groupPosterFile,
                     group,
@@ -526,7 +528,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                 await PurgeEntityImagesUnlockedAsync(entity, imageType, xref => xref.Source == ServiceRegistration.RelaySource).ConfigureAwait(false);
 
                 // Upload a local file from disk to Shoko and establish explicit ownership using the RelaySource cross-reference
-                using var stream = new FileStream(foundFile!, FileMode.Open, FileAccess.Read, FileShare.Read);
+                using var stream = new FileStream(foundFile!, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
                 var contentType = ImageHelper.GetMimeType(Path.GetExtension(foundFile!)) ?? "image/jpeg";
                 var uploadedImage = imageManager.UploadImage(stream, contentType, ServiceRegistration.RelaySource);
 
