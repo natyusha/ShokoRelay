@@ -28,7 +28,8 @@ public partial class VfsBuilder
 
         string rootName = VfsShared.ResolveRootFolderName();
         string movieRootName = VfsShared.ResolveMovieRootFolderName();
-        var allRoots = videoService.GetAllManagedFolders()?.Where(VfsShared.IsVfsEnabledFolder).Select(f => f.Path).Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(VfsShared.PathComparer).ToList() ?? [];
+        var allRoots =
+            videoService.GetAllManagedFolders()?.Where(VfsShared.IsVfsEnabledFolder).Select(f => f.Path).Where(path => !string.IsNullOrWhiteSpace(path)).Distinct(VfsShared.PathComparer).ToList() ?? [];
 
         var validFolderIds = new HashSet<int>();
         var validMovieFolders = new HashSet<int>();

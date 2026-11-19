@@ -66,11 +66,11 @@ internal static class VfsShared
     /// <returns>The resolved import root path, or <c>null</c> if unavailable.</returns>
     public static string? ResolveImportRootPath(IVideoFile location)
     {
-        static string? TrimRoot(string? p)
+        static string? TrimRoot(string? path)
         {
-            if (string.IsNullOrWhiteSpace(p))
+            if (string.IsNullOrWhiteSpace(path))
                 return null;
-            string norm = NormalizeSeparators(p);
+            string norm = NormalizeSeparators(path);
             string? pathRoot = Path.GetPathRoot(norm);
             return !string.IsNullOrEmpty(pathRoot) && string.Equals(norm, pathRoot, PathComparison) ? norm : norm.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         }
@@ -367,10 +367,10 @@ internal static class VfsShared
 
             var matchedRoot = (videoService.GetAllManagedFolders() ?? [])
                 .Select(mf => mf.Path)
-                .Where(p => !string.IsNullOrWhiteSpace(p))
-                .Select(p =>
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Select(path =>
                 {
-                    string norm = NormalizeSeparators(p);
+                    string norm = NormalizeSeparators(path);
                     return norm.Length > 1 ? norm.TrimEnd(Path.DirectorySeparatorChar) : norm;
                 })
                 .OrderByDescending(p => p.Length)

@@ -464,7 +464,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
                     return [];
 
                 var keys = new List<int>();
-                foreach (var ep in series.Episodes.Where(e => e.Type == EpisodeType.Episode && e.Videos.Count > 0 && !MapHelper.IsHidden(e)))
+                foreach (var ep in series.Episodes.Where(ep => ep.Type == EpisodeType.Episode && ep.Videos.Count > 0 && !MapHelper.IsHidden(ep)))
                 {
                     string guid = $"{ShokoRelayConstants.MovieAgentScheme}://movie/{PlexConstants.MoviePrefix}{ep.LocalID}";
                     using var req = CreateRequest(

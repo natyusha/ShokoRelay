@@ -49,7 +49,7 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
     {
         if (string.IsNullOrWhiteSpace(sourceDir) || !Directory.Exists(sourceDir))
             return;
-        var candidates = cache.GetOrAdd(sourceDir, dir => new Lazy<string[]>(() => [.. Directory.EnumerateFiles(dir).Where(f => s_seriesMetadataExtensions.Contains(Path.GetExtension(f)))])).Value;
+        var candidates = cache.GetOrAdd(sourceDir, dir => new Lazy<string[]>(() => [.. Directory.EnumerateFiles(dir).Where(file => s_seriesMetadataExtensions.Contains(Path.GetExtension(file)))])).Value;
         foreach (var file in candidates)
         {
             string name = Path.GetFileName(file);
@@ -101,7 +101,7 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
             return;
 
         string originalBase = Path.GetFileNameWithoutExtension(sourceFile);
-        var candidates = cache.GetOrAdd(sourceDir, dir => new Lazy<string[]>(() => [.. Directory.EnumerateFiles(dir).Where(f => s_episodeMetadataExtensions.Contains(Path.GetExtension(f)))])).Value;
+        var candidates = cache.GetOrAdd(sourceDir, dir => new Lazy<string[]>(() => [.. Directory.EnumerateFiles(dir).Where(file => s_episodeMetadataExtensions.Contains(Path.GetExtension(file)))])).Value;
         var mappings = Settings.Advanced.SubtitleLanguageMappings;
         bool requireLangCode = Settings.Advanced.RequireSubtitleLanguageCodes;
 
@@ -221,9 +221,11 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
         bool skipExistenceCheck = false
     )
     {
-        var subDirs = dirCache.GetOrAdd(sourceDir, d => new Lazy<string[]>(() => [.. Directory.EnumerateDirectories(d)])).Value;
-        string? attachSrcDir = subDirs.FirstOrDefault(d =>
-            Path.GetFileName(d) is var name && name.StartsWith(originalBase, StringComparison.OrdinalIgnoreCase) && PlexConstants.LocalMediaAssets.AttachmentFolderSuffixes.Contains(name[originalBase.Length..])
+        var subDirs = dirCache.GetOrAdd(sourceDir, dir => new Lazy<string[]>(() => [.. Directory.EnumerateDirectories(dir)])).Value;
+        string? attachSrcDir = subDirs.FirstOrDefault(dir =>
+            Path.GetFileName(dir) is var name
+            && name.StartsWith(originalBase, StringComparison.OrdinalIgnoreCase)
+            && PlexConstants.LocalMediaAssets.AttachmentFolderSuffixes.Contains(name[originalBase.Length..])
         );
 
         if (attachSrcDir == null)
@@ -272,7 +274,11 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
         bool skipExistenceCheck = false
     )
     {
-        var sourceDirs = fileData.Mappings.SelectMany(m => m.Video.Files).Select(f => Path.GetDirectoryName(f.Path)).Where(d => !string.IsNullOrEmpty(d) && Directory.Exists(d)).Distinct(VfsShared.PathComparer);
+        var sourceDirs = fileData
+            .Mappings.SelectMany(m => m.Video.Files)
+            .Select(f => Path.GetDirectoryName(f.Path))
+            .Where(dir => !string.IsNullOrEmpty(dir) && Directory.Exists(dir))
+            .Distinct(VfsShared.PathComparer);
         foreach (var srcDir in sourceDirs)
         {
             // Show and Season-Level Extras (Subdirectory pattern matching)

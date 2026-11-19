@@ -288,7 +288,7 @@ public class AnimeThemesController(
         {
             try
             {
-                var lines = IoFile.ReadAllLines(cachePath).Where(l => !string.IsNullOrWhiteSpace(l));
+                var lines = IoFile.ReadAllLines(cachePath).Where(line => !string.IsNullOrWhiteSpace(line));
                 foreach (var line in lines)
                 {
                     var pipeParts = line.Split('|');

@@ -257,7 +257,7 @@ GET  /vfs/audit                                                -> AuditVfs
 
 POST /vfs/overrides                                            -> SaveVfsOverrides
 
-GET  /vfs/tree                                                 -> GetVfsTree
+GET  /vfs/tree?refresh={true|false}                            -> GetVfsTree
 ```
 
 - `BuildVfs` (all query parameters are optional)
@@ -267,6 +267,7 @@ GET  /vfs/tree                                                 -> GetVfsTree
 - `AuditVfs` scans physical VFS directories against the database to find and remove orphaned folders and broken symlinks.
 - `SaveVfsOverrides` accepts raw text for `anidb_vfs_overrides.csv`.
 - `GetVfsTree` returns a hierarchical representation of the VFS structure by reading `vfs_blueprint.cache` in the plugin's `CachePath`, utilizing in-memory caching keyed to file modification time.
+  - `refresh`: (default false) set to true to re-resolve series display titles from current provider settings and update the blueprint cache.
 
 **Notes:**
 

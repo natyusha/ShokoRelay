@@ -143,7 +143,7 @@ public static class MapHelper
     private static List<FileMapping> BuildFileMappings(ISeries series, IMetadataService metadataService)
     {
         var result = new List<FileMapping>();
-        var seriesEpisodes = series.Episodes.Where(e => e.Videos.Count > 0 && !IsHidden(e)).Select(e => (Episode: e, e.Videos)).ToList();
+        var seriesEpisodes = series.Episodes.Where(ep => ep.Videos.Count > 0 && !IsHidden(ep)).Select(ep => (Episode: ep, ep.Videos)).ToList();
         if (seriesEpisodes.Count == 0)
             return result;
 

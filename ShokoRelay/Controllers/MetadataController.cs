@@ -429,7 +429,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
         {
             string? posterPath = null;
             string actualSuffix = suffix ?? "";
-            List<string> globalRoots = [.. (videoService.GetAllManagedFolders() ?? []).Select(f => f.Path).Where(p => !string.IsNullOrEmpty(p)).Distinct()];
+            List<string> globalRoots = [.. (videoService.GetAllManagedFolders() ?? []).Select(f => f.Path).Where(path => !string.IsNullOrEmpty(path)).Distinct()];
 
             // If prefixed with 'sc', it's a Plex smart collection with a parsed ID (bypassing Shoko Group lookup)
             if (groupId.StartsWith(PlexConstants.SmartCollectionPrefix, StringComparison.OrdinalIgnoreCase) && int.TryParse(groupId[2..], out int smartCollectionId))

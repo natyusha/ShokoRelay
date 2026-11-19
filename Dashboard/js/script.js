@@ -265,7 +265,7 @@
     let errorCount = 0;
 
     Object.entries(keys).forEach(([label, aliases]) => {
-      const match = aliases.find((k) => resData[k] !== undefined && resData[k] !== null);
+      const match = aliases.find((key) => resData[key] !== undefined && resData[key] !== null);
       if (match === undefined) return;
       const val = resData[match];
       const count = label === "errors" ? (Array.isArray(val) ? val.length : Number(val) || 0) : val;
@@ -612,6 +612,7 @@
   }
   // #endregion
 
-  // Lifecycle Execution
+  // #region Lifecycle Execution
   initTooltips();
+  // #endregion
 })();

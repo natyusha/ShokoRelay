@@ -4,6 +4,10 @@
   color: color-mix(in srgb, currentColor 60%, transparent);
   font-size: 0.9em;
 }
+#vfs-refresh svg {
+  width: 1.1em;
+  height: 1.1em;
+}
 .tabs-container {
   display: flex;
   gap: 8px;

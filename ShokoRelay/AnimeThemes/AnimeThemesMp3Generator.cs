@@ -151,7 +151,7 @@ public class AnimeThemesMp3Generator(
         {
             var roots = (videoService.GetAllManagedFolders() ?? [])
                 .Select(mf => mf.Path?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
-                .Where(p => !string.IsNullOrWhiteSpace(p) && Directory.Exists(p))
+                .Where(path => !string.IsNullOrWhiteSpace(path) && Directory.Exists(path))
                 .Distinct(VfsShared.PathComparer)
                 .ToList();
 
@@ -190,7 +190,7 @@ public class AnimeThemesMp3Generator(
             {
                 var dict = new ConcurrentDictionary<string, string>(
                     File.ReadLines(ThemeCacheFilePath)
-                        .Where(l => !string.IsNullOrWhiteSpace(l))
+                        .Where(line => !string.IsNullOrWhiteSpace(line))
                         .Select(l => l.Split('|', 3))
                         .Where(p => p.Length > 0 && !string.IsNullOrWhiteSpace(p[0]))
                         .ToDictionary(p => p[0], p => $"{(p.Length > 1 ? p[1] : "")}|{(p.Length > 2 ? p[2] : "")}", VfsShared.PathComparer)
@@ -610,7 +610,7 @@ public class AnimeThemesMp3Generator(
                         {
                             string? vid = Directory
                                 .EnumerateFiles(folder, "*", SearchOption.AllDirectories)
-                                .FirstOrDefault(f => videoService.IsAllowedVideoExtension(f) && !VfsShared.IsPathIgnored(f, videoService, Settings));
+                                .FirstOrDefault(file => videoService.IsAllowedVideoExtension(file) && !VfsShared.IsPathIgnored(file, videoService, Settings));
                             if (vid == null)
                                 return;
 

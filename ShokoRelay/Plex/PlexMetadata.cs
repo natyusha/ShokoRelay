@@ -255,7 +255,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
         List<IEpisode> fileMainEps =
             mappedFile != null ? [.. mappedFile.Episodes.Where(e => e.Type == EpisodeType.Episode)]
             : episode is IShokoEpisode { Videos: { Count: > 0 } vids } shokoEp
-                ? [.. vids.SelectMany(v => v.Episodes).Where(e => e.Type == EpisodeType.Episode && e.ShokoSeriesID == shokoEp.ShokoSeriesID && !MapHelper.IsHidden(e)).DistinctBy(e => e.LocalID)]
+                ? [.. vids.SelectMany(v => v.Episodes).Where(ep => ep.Type == EpisodeType.Episode && ep.ShokoSeriesID == shokoEp.ShokoSeriesID && !MapHelper.IsHidden(ep)).DistinctBy(e => e.LocalID)]
             : [];
         bool isMultiEpMovie = fileMainEps.Count > 1;
 
@@ -579,7 +579,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
     /// <param name="tags">The source tag names to process.</param>
     /// <returns>An array of anonymous tag objects, or null if empty.</returns>
     private static object[]? CreateTagArray(IEnumerable<string>? tags) =>
-        tags?.Where(t => !string.IsNullOrWhiteSpace(t)).Distinct(StringComparer.OrdinalIgnoreCase).Select(t => (object)new { tag = t }).ToArray() is { Length: > 0 } arr ? arr : null;
+        tags?.Where(tag => !string.IsNullOrWhiteSpace(tag)).Distinct(StringComparer.OrdinalIgnoreCase).Select(tag => (object)new { tag }).ToArray() is { Length: > 0 } arr ? arr : null;
 
     /// <summary>Builds an array of external cross-reference GUIDs (TMDB/TVDB/IMDB) for a series or movie.</summary>
     /// <param name="series">The Shoko series metadata.</param>

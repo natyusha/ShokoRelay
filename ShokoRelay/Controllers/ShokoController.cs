@@ -121,9 +121,10 @@ public class ShokoController(
     }
 
     /// <summary>Returns a hierarchical representation of the VFS structure grouped by import root friendly names.</summary>
+    /// <param name="refresh">When <c>true</c>, re-resolves series display titles from current provider settings and updates the blueprint cache before returning.</param>
     /// <returns>A JSON object containing the folder and file hierarchy.</returns>
     [HttpGet("vfs/tree")]
-    public async Task<IActionResult> GetVfsTree()
+    public async Task<IActionResult> GetVfsTree([FromQuery] bool refresh = false)
     {
         Response.Headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
         Response.Headers["Pragma"] = "no-cache";
@@ -137,6 +138,34 @@ public class ShokoController(
 
         if (!IoFile.Exists(VfsShared.BlueprintFilePath))
             return EmptyTree();
+
+        if (refresh)
+        {
+            await VfsShared.VfsLock.WaitAsync(HttpContext.RequestAborted).ConfigureAwait(false);
+            try
+            {
+                var blueprint = VfsShared.LoadBlueprint();
+                bool updated = false;
+                foreach (var rootDict in blueprint.Values)
+                foreach (var seriesEntry in rootDict.ToList())
+                    if (MetadataService.GetShokoSeriesByID(seriesEntry.Key) is { } shokoSeries)
+                    {
+                        string latestTitle = TextHelper.ResolveFullSeriesTitles(shokoSeries).DisplayTitle;
+                        if (!string.Equals(seriesEntry.Value.Title, latestTitle, StringComparison.Ordinal))
+                        {
+                            rootDict[seriesEntry.Key] = seriesEntry.Value with { Title = latestTitle };
+                            updated = true;
+                        }
+                    }
+
+                if (updated)
+                    VfsShared.SaveBlueprint(blueprint);
+            }
+            finally
+            {
+                VfsShared.VfsLock.Release();
+            }
+        }
 
         var lastWrite = IoFile.GetLastWriteTimeUtc(VfsShared.BlueprintFilePath);
         var version = VfsShared.BlueprintVersion;

@@ -140,10 +140,11 @@
   }
   // #endregion
 
-  // Initialization
+  // #region Initialization
   window._sr.refreshPlexState = refreshPlexState;
   (async () => {
     await window._sr.authReady;
     refreshPlexState();
   })();
+  // #endregion
 })();

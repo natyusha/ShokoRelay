@@ -267,9 +267,9 @@
     const getVal = (path) => window._sr.getValueByPath(cfg, path);
 
     if (playback) {
-      const sync = (v) => {
-        if (playButton) playButton.hidden = !v;
-        if (modeButton) modeButton.hidden = !v;
+      const sync = (isVisible) => {
+        if (playButton) playButton.hidden = !isVisible;
+        if (modeButton) modeButton.hidden = !isVisible;
         syncPlaybackUI();
       };
 

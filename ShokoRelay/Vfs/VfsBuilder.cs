@@ -37,7 +37,7 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
     private VfsBuildResult BuildInternal(IReadOnlyCollection<int>? seriesIds, bool cleanRoot)
     {
         var rootName = VfsShared.ResolveRootFolderName();
-        var overlapping = videoService.GetAllManagedFolders()?.Select(f => f.Path).FirstOrDefault(p => !string.IsNullOrEmpty(p) && VfsHelper.IsInVfsRoot(p, out _));
+        var overlapping = videoService.GetAllManagedFolders()?.Select(f => f.Path).FirstOrDefault(path => !string.IsNullOrEmpty(path) && VfsHelper.IsInVfsRoot(path, out _));
 
         if (overlapping != null)
             throw new InvalidOperationException(
@@ -63,7 +63,7 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
         if (isCleanBuild)
         {
             logger.LogInformation("VFS: Performing global root cleanup...");
-            var allRoots = videoService.GetAllManagedFolders()?.Select(f => f.Path).Where(p => !string.IsNullOrEmpty(p)).Distinct(VfsShared.PathComparer) ?? [];
+            var allRoots = videoService.GetAllManagedFolders()?.Select(f => f.Path).Where(path => !string.IsNullOrEmpty(path)).Distinct(VfsShared.PathComparer) ?? [];
             foreach (var root in allRoots)
             {
                 CleanVfsRoot(Path.Combine(root, rootName), cleanupDetails, logger);
@@ -499,7 +499,7 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
 
         // Safety verification: Prevent wiping user media if VfsRootPath was accidentally set to an existing non-VFS media directory
         string marker = Path.Combine(path, ".ignore");
-        if (!File.Exists(marker) && Directory.EnumerateFileSystemEntries(path).Any(e => !File.GetAttributes(e).HasFlag(FileAttributes.ReparsePoint)))
+        if (!File.Exists(marker) && Directory.EnumerateFileSystemEntries(path).Any(entry => !File.GetAttributes(entry).HasFlag(FileAttributes.ReparsePoint)))
         {
             logger.LogError("VFS: Aborting cleanup! Path '{Path}' contains non-symlink data and lacks a .ignore marker. Verify VFS Root Path settings.", path);
             return;
@@ -571,7 +571,7 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
         if (Settings.Advanced.DisableVfsGeneration)
             return;
 
-        List<string> roots = [.. (videoService.GetAllManagedFolders() ?? []).Select(f => f.Path).Where(p => !string.IsNullOrEmpty(p)).Distinct(VfsShared.PathComparer)];
+        List<string> roots = [.. (videoService.GetAllManagedFolders() ?? []).Select(f => f.Path).Where(path => !string.IsNullOrEmpty(path)).Distinct(VfsShared.PathComparer)];
         string movieRoot = VfsShared.ResolveMovieRootFolderName();
         var movieEpIds = new HashSet<int>(extraMovieEpIds ?? []);
         if (pruneMovies && metadataService.GetShokoSeriesByID(folderId) is { Episodes: { } eps })

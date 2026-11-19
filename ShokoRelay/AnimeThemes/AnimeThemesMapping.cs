@@ -96,7 +96,7 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
             var roots = (videoService.GetAllManagedFolders() ?? [])
                 .Where(VfsShared.IsVfsEnabledFolder)
                 .Select(f => f.Path)
-                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Where(path => !string.IsNullOrWhiteSpace(path))
                 .Distinct(VfsShared.PathComparer)
                 .Select(p => Path.Combine(p, themeFolder))
                 .Where(Directory.Exists)
@@ -342,7 +342,7 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
                 var matchedRoot = (videoService.GetAllManagedFolders() ?? [])
                     .Where(VfsShared.IsVfsEnabledFolder)
                     .Select(f => f.Path)
-                    .Where(p => !string.IsNullOrWhiteSpace(p))
+                    .Where(path => !string.IsNullOrWhiteSpace(path))
                     .Select(p => Path.Combine(p, themeFolder))
                     .FirstOrDefault(dir => Directory.Exists(dir) && Directory.EnumerateFiles(dir, fileName, SearchOption.AllDirectories).Any());
 
@@ -745,7 +745,7 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
                 videoEntry.Nc,
                 theme.Slug ?? "",
                 first.Version,
-                string.Join(" / ", theme.Song?.Performances?.Select(p => p.Artist?.Name?.Main).Where(n => !string.IsNullOrEmpty(n)) ?? []),
+                string.Join(" / ", theme.Song?.Performances?.Select(p => p.Artist?.Name?.Main).Where(name => !string.IsNullOrEmpty(name)) ?? []),
                 theme.Song?.Title?.Romaji ?? "",
                 videoEntry.Lyrics,
                 videoEntry.Subbed,

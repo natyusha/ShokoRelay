@@ -297,9 +297,9 @@ public static partial class TagHelper
 
         var normalized = text.Normalize(NormalizationForm.FormD);
         var sb = new StringBuilder(normalized.Length);
-        foreach (char c in normalized)
-            if (CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark && char.IsLetterOrDigit(c))
-                sb.Append(char.ToLowerInvariant(c));
+        foreach (char ch in normalized)
+            if (CharUnicodeInfo.GetUnicodeCategory(ch) != UnicodeCategory.NonSpacingMark && char.IsLetterOrDigit(ch))
+                sb.Append(char.ToLowerInvariant(ch));
 
         string key = sb.ToString();
 

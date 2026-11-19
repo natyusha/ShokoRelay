@@ -89,7 +89,7 @@ public class CollectionService(
 
             var excludedKeywords = (Settings.Advanced.CollectionExclusions ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-            List<string> globalRoots = [.. (videoService.GetAllManagedFolders() ?? []).Select(f => f.Path).Where(p => !string.IsNullOrEmpty(p)).Distinct()];
+            List<string> globalRoots = [.. (videoService.GetAllManagedFolders() ?? []).Select(f => f.Path).Where(path => !string.IsNullOrEmpty(path)).Distinct()];
 
             string cachePath = Path.Combine(configProvider.CacheDirectory, ShokoRelayConstants.FilePlexCollectionsCache);
             var cache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -247,7 +247,7 @@ public class CollectionService(
                     // Skip standard metadata assignment if only refreshing poster assets
                     if (applyAssignment)
                     {
-                        var currentPlexCollections = item.Collection?.Select(c => c.Tag).Where(t => !string.IsNullOrEmpty(t)).ToList() ?? [];
+                        var currentPlexCollections = item.Collection?.Select(c => c.Tag).Where(tag => !string.IsNullOrEmpty(tag)).ToList() ?? [];
                         bool alreadyHasCorrect = !string.IsNullOrEmpty(collectionName) && currentPlexCollections.Any(c => string.Equals(c, collectionName, StringComparison.OrdinalIgnoreCase));
 
                         foreach (var staleName in currentPlexCollections)

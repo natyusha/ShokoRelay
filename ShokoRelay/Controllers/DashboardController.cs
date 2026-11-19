@@ -457,10 +457,10 @@ public class DashboardController(
                 bool isFlags = propType.IsDefined(typeof(FlagsAttribute), false);
                 var values = Enum.GetValues(propType)
                     .Cast<object>()
-                    .Select(v =>
+                    .Select(val =>
                     {
-                        int iv = Convert.ToInt32(v);
-                        string memberName = Enum.GetName(propType, v) ?? iv.ToString();
+                        int iv = Convert.ToInt32(val);
+                        string memberName = Enum.GetName(propType, val) ?? iv.ToString();
                         return new { name = propType.GetField(memberName)?.GetCustomAttribute<DisplayAttribute>()?.Name ?? memberName, value = iv };
                     })
                     .Where(x => !isFlags || (x.value > 0 && (x.value & (x.value - 1)) == 0))

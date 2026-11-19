@@ -70,13 +70,13 @@
   // #region Utilities
   /**
    * Resets the idle timer and reveals the UI, suspending it if hovering over controls.
-   * @param {MouseEvent} e - The mouse movement event.
+   * @param {MouseEvent} ev - The mouse movement event.
    * @returns {void}
    */
   const resetIdle = (ev) => {
     playerContainer.classList.remove("idle");
     clearTimeout(idleTimer);
-    if (!ev.target.closest(".ui-btn, #player-progress-track")) idleTimer = setTimeout(() => playerContainer.classList.add("idle"), 2000);
+    if (!ev.target.closest(".ui-btn, #player-progress-track, #volume-text")) idleTimer = setTimeout(() => playerContainer.classList.add("idle"), 2000);
   };
 
   /**
@@ -318,7 +318,7 @@
       isFav ? favourites.add(videoId) : favourites.delete(videoId);
 
       if (heartEl) heartEl.classList.toggle("favourited", isFav);
-      const isCurrentVideo = webmTreeData.find((i) => i.path === currentWebmPath)?.videoId === videoId;
+      const isCurrentVideo = webmTreeData.find((item) => item.path === currentWebmPath)?.videoId === videoId;
       const treeHeart = isCurrentVideo ? playerTree.querySelector(`.leaf[data-path="${CSS.escape(currentWebmPath)}"] .fav-icon`) : null;
       if (treeHeart) treeHeart.classList.toggle("favourited", isFav);
 
@@ -362,9 +362,9 @@
       heart.className = `fav-icon ${favourites.has(item.videoId) ? "favourited" : ""}`;
       heart.textContent = "❤";
       heart.setAttribute("aria-disabled", String(!favAllowed));
-      if (!favAllowed) heart.title = "Authentication required to modify favourites";
-      heart.onclick = (e) => {
-        e.stopPropagation();
+      if (!favAllowed) heart.title = "Authentication Required to Modify Favourites";
+      heart.onclick = (ev) => {
+        ev.stopPropagation();
         if (canModifyServerState()) toggleFavourite(item.videoId, heart);
       };
 
@@ -419,21 +419,21 @@
     if (useFolderView) {
       // Source Folder Structure View (Year -> Season -> Series -> Song)
       const rootNode = { folders: new Map(), files: [] };
-      items.forEach((i) => {
-        const parts = (i.relPath || `Unknown/${i.file}`).replace(/\\/g, "/").split("/").filter(Boolean);
-        i._originalName = parts.pop(); // Remove original filename
-        parts.push(i.series); // Group by series within the source folders
+      items.forEach((item) => {
+        const parts = (item.relPath || `Unknown/${item.file}`).replace(/\\/g, "/").split("/").filter(Boolean);
+        item._originalName = parts.pop(); // Remove original filename
+        parts.push(item.series); // Group by series within the source folders
         let current = rootNode;
-        parts.forEach((p) => {
-          if (!current.folders.has(p)) current.folders.set(p, { folders: new Map(), files: [] });
-          current = current.folders.get(p);
+        parts.forEach((part) => {
+          if (!current.folders.has(part)) current.folders.set(part, { folders: new Map(), files: [] });
+          current = current.folders.get(part);
         });
         current.isSeries = true;
-        current.seriesId = i.seriesId;
-        current.anidbId = i.anidbId;
-        if (i.group === MISSING_LABEL) current.isMissing = true;
+        current.seriesId = item.seriesId;
+        current.anidbId = item.anidbId;
+        if (item.group === MISSING_LABEL) current.isMissing = true;
 
-        current.files.push(i);
+        current.files.push(item);
       });
 
       const seasonOrder = { winter: 1, spring: 2, summer: 3, fall: 4 };
@@ -461,30 +461,30 @@
     } else {
       // Standard Metadata View (Group -> Series -> File)
       const groups = new Map();
-      items.forEach((i) => {
-        if (!groups.has(i.group)) groups.set(i.group, new Map());
-        const sMap = groups.get(i.group);
-        if (!sMap.has(i.series)) sMap.set(i.series, []);
-        sMap.get(i.series).push(i);
+      items.forEach((item) => {
+        if (!groups.has(item.group)) groups.set(item.group, new Map());
+        const sMap = groups.get(item.group);
+        if (!sMap.has(item.series)) sMap.set(item.series, []);
+        sMap.get(item.series).push(item);
       });
 
-      const sortedGroupNames = [...groups.keys()].sort((a, b) => {
-        if (a === MISSING_LABEL && b !== MISSING_LABEL) return -1;
-        if (b === MISSING_LABEL && a !== MISSING_LABEL) return 1;
-        return a.localeCompare(b);
+      const sortedGroupNames = [...groups.keys()].sort((lGrp, rGrp) => {
+        if (lGrp === MISSING_LABEL && rGrp !== MISSING_LABEL) return -1;
+        if (rGrp === MISSING_LABEL && lGrp !== MISSING_LABEL) return 1;
+        return lGrp.localeCompare(rGrp);
       });
 
       sortedGroupNames.forEach((gName) => {
         const sMap = groups.get(gName);
         const isMissing = gName === MISSING_LABEL;
-        const sKeys = [...sMap.keys()].sort((a, b) => a.localeCompare(b));
+        const sKeys = [...sMap.keys()].sort((lName, rName) => lName.localeCompare(rName));
 
         const renderSeriesFolders = (container) => {
           sKeys.forEach((sName) => {
             const seriesFiles = sMap.get(sName);
             const firstFile = seriesFiles[0];
             const extraHtml = buildSeriesLinks(firstFile.seriesId, firstFile.anidbId);
-            const renderFiles = (fContainer) => seriesFiles.forEach((f) => fContainer.appendChild(createFileLeaf(f, decodeUnicode(f.file))));
+            const renderFiles = (fContainer) => seriesFiles.forEach((file) => fContainer.appendChild(createFileLeaf(file, decodeUnicode(file.file))));
             container.appendChild(createFolderNode(sName, renderFiles, ft, isMissing, extraHtml));
           });
         };
@@ -512,7 +512,7 @@
   function locateCurrentInTree() {
     if (!currentWebmPath) return;
 
-    const item = webmTreeData.find((i) => i.path === currentWebmPath);
+    const item = webmTreeData.find((themeItem) => themeItem.path === currentWebmPath);
     if (!item) return;
 
     // Collapse all open folders to reset the tree state before locating
@@ -531,8 +531,8 @@
     }
 
     let currentScope = playerTree;
-    pathSegments.forEach((p) => {
-      const det = [...currentScope.querySelectorAll("details")].find((d) => getSummaryTitle(d.querySelector("summary")) === p);
+    pathSegments.forEach((seg) => {
+      const det = [...currentScope.querySelectorAll("details")].find((detailsEl) => getSummaryTitle(detailsEl.querySelector("summary")) === seg);
       if (det) {
         det.open = true;
         if (!det.dataset.rendered) det.dispatchEvent(new Event("toggle"));
@@ -572,14 +572,14 @@
     playerVideo.src = streamUrl;
     playerVideo.play().catch(() => {});
 
-    const item = webmTreeData.find((i) => i.path === path);
+    const item = webmTreeData.find((themeItem) => themeItem.path === path);
     if (playerTitle) playerTitle.textContent = playerTitle.title = item ? decodeUnicode(item.file) : "Video Player";
 
     if (playerNowPlayingFav && item) {
       playerNowPlayingFav.style.pointerEvents = "auto";
       playerNowPlayingFav.classList.toggle("favourited", favourites.has(item.videoId));
-      playerNowPlayingFav.onclick = (e) => {
-        e.stopPropagation();
+      playerNowPlayingFav.onclick = (ev) => {
+        ev.stopPropagation();
         if (canModifyServerState()) toggleFavourite(item.videoId, playerNowPlayingFav);
       };
     }
@@ -661,7 +661,7 @@
       playFile(navigationStack[stackIndex]);
     } else {
       resetNavigationHistory();
-      const currentIdx = items.findIndex((i) => i.path === currentWebmPath);
+      const currentIdx = items.findIndex((item) => item.path === currentWebmPath);
       const nextIdx = (currentIdx + direction + items.length) % items.length;
       playFile(items[nextIdx].path);
     }
@@ -766,21 +766,21 @@
     playerVideo.ondblclick = toggleFullscreen;
 
     if (playerTrack) {
-      const updateSeek = (e) => {
+      const updateSeek = (ev) => {
         if (!playerVideo.duration) return;
         const rect = playerTrack.getBoundingClientRect();
-        const pos = (e.clientX - rect.left) / rect.width;
+        const pos = (ev.clientX - rect.left) / rect.width;
         playerVideo.currentTime = Math.max(0, Math.min(1, pos)) * playerVideo.duration;
         if (playerVideo.paused) syncProgressUI();
       };
-      playerTrack.onmousedown = (e) => {
-        if (e.button === 1 && playerVideo.src) {
-          e.preventDefault();
+      playerTrack.onmousedown = (ev) => {
+        if (ev.button === 1 && playerVideo.src) {
+          ev.preventDefault();
           playerVideo.paused ? playerVideo.play() : playerVideo.pause();
           return;
         }
-        if (e.button === 0) {
-          updateSeek(e);
+        if (ev.button === 0) {
+          updateSeek(ev);
           const onMouseMove = (moveEv) => updateSeek(moveEv);
           const onMouseUp = () => {
             window.removeEventListener("mousemove", onMouseMove);
@@ -792,11 +792,46 @@
       };
     }
 
-    if (playerMuteBtn)
-      playerMuteBtn.onclick = (e) => {
-        e.stopPropagation();
+    /**
+     * Adjusts the video player volume by a relative delta and unmutes when increasing from mute.
+     * @param {number} delta - Volume change step in the range [-1, 1].
+     * @returns {void}
+     */
+    const stepVolume = (delta) => {
+      if (playerVideo.muted && delta > 0) playerVideo.muted = false;
+      playerVideo.volume = Math.max(0, Math.min(1, Math.round((playerVideo.volume + delta) * 100) / 100));
+    };
+
+    if (playerMuteBtn) {
+      playerMuteBtn.onclick = (ev) => {
+        ev.stopPropagation();
         if (playerVideo.src) playerVideo.muted = !playerVideo.muted;
       };
+      playerMuteBtn.addEventListener(
+        "wheel",
+        (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          resetIdle(ev);
+          stepVolume(ev.deltaY < 0 ? 0.05 : -0.05);
+        },
+        { passive: false },
+      );
+    }
+
+    if (playerVolText) {
+      playerVolText.onclick = (ev) => ev.stopPropagation();
+      playerVolText.addEventListener(
+        "wheel",
+        (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          resetIdle(ev);
+          stepVolume(ev.deltaY < 0 ? 0.05 : -0.05);
+        },
+        { passive: false },
+      );
+    }
 
     initSearchInteractions(uiFilter, uiFilterClear, () => renderTree(getFilteredItems()));
 
@@ -865,18 +900,18 @@
       playerVideoBtn.setAttribute("data-state", savedVideoState);
       playerVideoBtn.title = savedVideoState === "on" ? "Turn Video Off" : "Turn Video On";
       playerContainer.classList.toggle("video-off", savedVideoState === "off");
-      playerVideoBtn.onclick = (e) => {
-        e.stopPropagation();
+      playerVideoBtn.onclick = (ev) => {
+        ev.stopPropagation();
         toggleVideo();
       };
     }
 
-    window.addEventListener("keydown", (e) => {
+    window.addEventListener("keydown", (ev) => {
       if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA" || document.querySelector(".modal-overlay.open")) return;
-      const key = e.key.toLowerCase();
+      const key = ev.key.toLowerCase();
       const handledKeys = [" ", "k", "arrowleft", "arrowright", "j", "l", ",", ".", "b", "n", ";", "'", "arrowdown", "arrowup", "m", "f", "v", "r", "g", "h", "?", "q"];
       if (!handledKeys.includes(key)) return;
-      e.preventDefault();
+      ev.preventDefault();
       const isShuffle = playerModeBtn?.getAttribute("data-mode") === "shuffle";
       // prettier-ignore
       switch (key) {
@@ -891,8 +926,8 @@
         case "n": playMove(isShuffle, 1); break;
         case ";": updateMode(1); break;
         case "'": toggleFolderView(); break;
-        case "arrowdown": playerVideo.volume = Math.max(0, playerVideo.volume - 0.1); break;
-        case "arrowup": playerVideo.volume = Math.min(1, playerVideo.volume + 0.1); break;
+        case "arrowdown": playerVideo.volume = Math.max(0, playerVideo.volume - 0.05); break;
+        case "arrowup": playerVideo.volume = Math.min(1, playerVideo.volume + 0.05); break;
         case "m": if (playerVideo.src) playerVideo.muted = !playerVideo.muted; break;
         case "f": toggleFullscreen(); break;
         case "v": toggleVideo(); break;

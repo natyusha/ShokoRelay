@@ -227,7 +227,7 @@ public partial class ConfigProvider : IDisposable
             JsonValueKind.True => true,
             JsonValueKind.False => false,
             JsonValueKind.Object => element.EnumerateObject().ToDictionary(p => p.Name, p => SanitizeConfigObject(p.Value)),
-            JsonValueKind.Array => element.EnumerateArray().Select(x => SanitizeConfigObject(x)).ToList(),
+            JsonValueKind.Array => element.EnumerateArray().Select(item => SanitizeConfigObject(item)).ToList(),
             _ => null!,
         };
 
@@ -393,7 +393,7 @@ public partial class ConfigProvider : IDisposable
             && Validator.TryValidateObject(settings.Playback, new ValidationContext(settings.Playback), validationResults, true)
             && Validator.TryValidateObject(settings.Advanced, new ValidationContext(settings.Advanced), validationResults, true);
         if (!isValid)
-            throw new ArgumentException($"Config validation failed: {string.Join("; ", validationResults.Select(r => r.ErrorMessage).Where(m => !string.IsNullOrWhiteSpace(m)))}");
+            throw new ArgumentException($"Config validation failed: {string.Join("; ", validationResults.Select(r => r.ErrorMessage).Where(msg => !string.IsNullOrWhiteSpace(msg)))}");
         NormalizePathMappings(settings);
         NormalizeSubtitleMappings(settings);
         NormalizeCsvFields(settings);

@@ -191,14 +191,14 @@ public static class ImageHelper
         if (episodeNumber > 1 && movieImages != null)
         {
             var tmdbImages = FilterImagesByLanguage(movieImages.GetAvailableImages(ImageEntityType.Primary), imageLanguage, true).ToList();
-            var uniqueImage = tmdbImages.FirstOrDefault(i => GetImageUrl(i) != defaultThumb);
+            var uniqueImage = tmdbImages.FirstOrDefault(img => GetImageUrl(img) != defaultThumb);
 
             if (uniqueImage != null)
             {
                 thumbUrl = GetImageUrl(uniqueImage);
                 imagesArray.RemoveAll(i => i.Type == "coverPoster");
 
-                var uniqueImages = tmdbImages.Where(i => GetImageUrl(i) != defaultThumb).ToList();
+                var uniqueImages = tmdbImages.Where(img => GetImageUrl(img) != defaultThumb).ToList();
                 var selectedImages = addEveryImage ? uniqueImages : uniqueImages.Take(1);
 
                 imagesArray.AddRange(

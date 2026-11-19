@@ -221,7 +221,7 @@ public static class CastHelper
             (series, record) =>
             {
                 var tmdbSeries = series.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault();
-                var networkNames = tmdbSeries?.Networks?.Select(n => n.Name).Where(n => !string.IsNullOrWhiteSpace(n)).ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
+                var networkNames = tmdbSeries?.Networks?.Select(n => n.Name).Where(name => !string.IsNullOrWhiteSpace(name)).ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
 
                 void Record(MetadataSource source, string? name, bool isPerson)
                 {
@@ -284,13 +284,13 @@ public static class CastHelper
         void ProcessRoleGroup<T>(IEnumerable<T> roles, Func<T, ICreator?> getCreator, Func<T, MetadataSource> getSource, Func<T, string?> getRole)
             where T : class
         {
-            var allRoles = roles.Where(c => getCreator(c) != null).ToList();
+            var allRoles = roles.Where(role => getCreator(role) != null).ToList();
             if (allRoles.Count == 0)
                 return;
 
-            var tmdbRoles = allRoles.Where(c => getSource(c) == MetadataSource.TMDB).ToList();
-            var anidbRoles = allRoles.Where(c => getSource(c) != MetadataSource.TMDB).ToList();
-            var index = tmdbRoles.Count > 0 ? new TmdbRoleIndex<T>(tmdbRoles, getCreator, c => getCreator(c)?.Title) : null;
+            var tmdbRoles = allRoles.Where(role => getSource(role) == MetadataSource.TMDB).ToList();
+            var anidbRoles = allRoles.Where(role => getSource(role) != MetadataSource.TMDB).ToList();
+            var index = tmdbRoles.Count > 0 ? new TmdbRoleIndex<T>(tmdbRoles, getCreator, role => getCreator(role)?.Title) : null;
             var matchedTmdb = index != null ? new HashSet<T>() : null;
             var seenRolePairs = new HashSet<(string Key, string Role)>();
 
@@ -376,8 +376,8 @@ public static class CastHelper
         {
             var anidbMergedStudios = (metadataService != null && series is IShokoSeries { AnidbAnimeID: > 0 } ss) ? metadataService.GetMergedStudios(ss.AnidbAnimeID) : [];
 
-            var animationStudioNames = anidbMergedStudios.Select(s => s.Name).Where(n => !string.IsNullOrWhiteSpace(n)).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var networkNames = tmdbSeries?.Networks?.Select(n => n.Name).Where(n => !string.IsNullOrWhiteSpace(n)).ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
+            var animationStudioNames = anidbMergedStudios.Select(s => s.Name).Where(name => !string.IsNullOrWhiteSpace(name)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var networkNames = tmdbSeries?.Networks?.Select(n => n.Name).Where(name => !string.IsNullOrWhiteSpace(name)).ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
 
             // Process TMDB studios first so their high-resolution logos are cached and preferred over AniDB images
             var allStudios = (series.Studios ?? [])
@@ -486,9 +486,9 @@ public static class CastHelper
 
         var normalized = trimmed.Normalize(NormalizationForm.FormD);
         var sb = new StringBuilder(normalized.Length);
-        foreach (char c in normalized)
-            if (CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark && char.IsLetterOrDigit(c))
-                sb.Append(char.ToLowerInvariant(c));
+        foreach (char ch in normalized)
+            if (CharUnicodeInfo.GetUnicodeCategory(ch) != UnicodeCategory.NonSpacingMark && char.IsLetterOrDigit(ch))
+                sb.Append(char.ToLowerInvariant(ch));
 
         return sb.ToString();
     }

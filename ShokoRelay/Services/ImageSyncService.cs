@@ -223,13 +223,14 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                     var localThumb = (episode.Videos ?? [])
                         .SelectMany(v => v.Files ?? [])
                         .Select(f => f.Path)
-                        .Where(p => !string.IsNullOrWhiteSpace(p) && Directory.Exists(Path.GetDirectoryName(p)))
-                        .Select(p => (Dir: Path.GetDirectoryName(p)!, Base: Path.GetFileNameWithoutExtension(p)))
+                        .Where(path => !string.IsNullOrWhiteSpace(path) && Directory.Exists(Path.GetDirectoryName(path)))
+                        .Select(path => (Dir: Path.GetDirectoryName(path)!, Base: Path.GetFileNameWithoutExtension(path)))
                         .SelectMany(x =>
                             Directory
                                 .EnumerateFiles(x.Dir, $"{x.Base}.*")
-                                .Where(f =>
-                                    string.Equals(Path.GetFileNameWithoutExtension(f), x.Base, StringComparison.OrdinalIgnoreCase) && PlexConstants.LocalMediaAssets.Artwork.ContainsKey(Path.GetExtension(f))
+                                .Where(file =>
+                                    string.Equals(Path.GetFileNameWithoutExtension(file), x.Base, StringComparison.OrdinalIgnoreCase)
+                                    && PlexConstants.LocalMediaAssets.Artwork.ContainsKey(Path.GetExtension(file))
                                 )
                         )
                         .FirstOrDefault();
@@ -430,8 +431,8 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                             .ResolveSeriesVfsPaths(series, metadataService)
                             .Where(Directory.Exists)
                             .SelectMany(Directory.EnumerateFiles)
-                            .Where(f => PlexConstants.LocalMediaAssets.Artwork.ContainsKey(Path.GetExtension(f)))
-                            .Select(f => new { File = f, Index = Array.FindIndex(config.Names, n => string.Equals(Path.GetFileNameWithoutExtension(f), n, StringComparison.OrdinalIgnoreCase)) })
+                            .Where(file => PlexConstants.LocalMediaAssets.Artwork.ContainsKey(Path.GetExtension(file)))
+                            .Select(file => new { File = file, Index = Array.FindIndex(config.Names, n => string.Equals(Path.GetFileNameWithoutExtension(file), n, StringComparison.OrdinalIgnoreCase)) })
                             .Where(x => x.Index >= 0)
                             .OrderBy(x => x.Index)
                             .FirstOrDefault()

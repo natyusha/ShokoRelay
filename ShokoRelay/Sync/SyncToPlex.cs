@@ -324,7 +324,7 @@ public class SyncToPlex(
                 }
             }
         }
-        var notFoundCount = activeSourceEpisodes.Count(k => !matchedGlobal.Contains(k));
+        var notFoundCount = activeSourceEpisodes.Count(key => !matchedGlobal.Contains(key));
         result = result with { Processed = activeSourceEpisodes.Count, Skipped = result.Skipped + notFoundCount };
         return result;
     }

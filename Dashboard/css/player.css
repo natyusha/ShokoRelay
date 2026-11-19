@@ -87,14 +87,20 @@
   content: "";
   color: var(--text-color);
 }
-.ui-left,
-#volume-text {
+.ui-left {
   pointer-events: none;
 }
 .ui-top-row,
 .ui-left,
 #volume-text {
   z-index: 2;
+}
+#volume-text {
+  pointer-events: auto;
+  user-select: none;
+}
+#volume-text:hover {
+  color: var(--hover-color);
 }
 .at-progress-track {
   z-index: 3;

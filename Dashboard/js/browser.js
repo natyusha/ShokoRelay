@@ -13,6 +13,8 @@
   const uiFilterClear = el("filter-clear");
   /** @type {HTMLElement} The element displaying the total series count. */
   const vfsCount = el("vfs-count");
+  /** @type {HTMLButtonElement} The button used to refresh VFS Browser series titles and tree data. */
+  const vfsRefresh = el("vfs-refresh");
   /** @type {HTMLElement} The container element for the root selection tabs. */
   const rootTabs = el("root-tabs");
 
@@ -163,12 +165,14 @@
   /**
    * Fetches the latest VFS blueprint and MP3 cache from the server and renders the tabs and tree view.
    * @param {boolean} [showLoading=true] - If true, displays the loading spinner before fetching.
+   * @param {boolean} [refresh=false] - If true, asks the server to re-resolve series titles from current settings before returning the tree.
    * @returns {Promise<void>}
    */
-  async function loadVfsTree(showLoading = true) {
+  async function loadVfsTree(showLoading = true, refresh = false) {
     if (showLoading) showLoadingSpinner();
 
-    const [treeRes, mp3Res] = await Promise.all([fetchJson(base + "/vfs/tree"), fetchJson(base + "/animethemes/mp3/cache")]);
+    const treeEndpoint = refresh ? `${base}/vfs/tree?refresh=true` : `${base}/vfs/tree`;
+    const [treeRes, mp3Res] = await Promise.all([fetchJson(treeEndpoint), fetchJson(`${base}/animethemes/mp3/cache`)]);
 
     window._sr.mp3Cache = {};
     if (mp3Res.ok) {
@@ -450,6 +454,7 @@
 
   // #region Initialization
   initSearchInteractions(uiFilter, uiFilterClear, () => renderActiveRoot());
+  if (vfsRefresh) vfsRefresh.onclick = () => loadVfsTree(true, true);
 
   (async () => {
     await window._sr.authReady;

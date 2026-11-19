@@ -209,7 +209,7 @@
       }
     };
 
-    e.preventDefault();
+    ev.preventDefault();
     const confirmMsg = target.dataset.relayConfirm;
     if (confirmMsg) {
       const modal = el("confirm-modal");
@@ -233,11 +233,12 @@
   });
   // #endregion
 
-  // Lifecycle Execution
+  // #region Lifecycle Execution
   (async () => {
     await window._sr.authReady;
     setInterval(syncActiveTasks, 3000);
     syncActiveTasks();
     loadLogs();
   })();
+  // #endregion
 })();
