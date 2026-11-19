@@ -55,23 +55,27 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient, ILogg
         try
         {
             // Find a collection ID by title, enforcing an exact match to prevent Plex search fuzziness from merging unrelated collections
-            using var req = plexClient.CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/collections?title={Uri.EscapeDataString(collectionName)}&X-Plex-Container-Size=10", target.ServerUrl);
-            using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
-            var container = await PlexApi.ReadContainerAsync(resp, cancellationToken).ConfigureAwait(false);
-            var meta = container?.Metadata?.FirstOrDefault(c => string.Equals(c.Title, collectionName, StringComparison.OrdinalIgnoreCase));
-            if (int.TryParse(meta?.RatingKey, out int id))
-                return id;
+            using var findRequest = plexClient.CreateRequest(
+                HttpMethod.Get,
+                $"/library/sections/{target.SectionId}/collections?title={Uri.EscapeDataString(collectionName)}&X-Plex-Container-Size=10",
+                target.ServerUrl
+            );
+            using var findResponse = await httpClient.SendAsync(findRequest, cancellationToken).ConfigureAwait(false);
+            var findContainer = await PlexApi.ReadContainerAsync(findResponse, cancellationToken).ConfigureAwait(false);
+            var existingMeta = findContainer?.Metadata?.FirstOrDefault(col => string.Equals(col.Title, collectionName, StringComparison.OrdinalIgnoreCase));
+            if (int.TryParse(existingMeta?.RatingKey, out int existingId))
+                return existingId;
 
             // Create a new collection in the specified target library
             string path = $"/library/collections?title={Uri.EscapeDataString(collectionName)}&titleSort={Uri.EscapeDataString(collectionName)}&sectionId={target.SectionId}&type={(int)target.LibraryType}";
-            using var req2 = plexClient.CreateRequest(HttpMethod.Post, path, target.ServerUrl);
-            using var resp2 = await httpClient.SendAsync(req2, cancellationToken).ConfigureAwait(false);
-            if (!resp2.IsSuccessStatusCode)
+            using var createRequest = plexClient.CreateRequest(HttpMethod.Post, path, target.ServerUrl);
+            using var createResponse = await httpClient.SendAsync(createRequest, cancellationToken).ConfigureAwait(false);
+            if (!createResponse.IsSuccessStatusCode)
             {
-                var body = await resp2.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                var body = await createResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
                 logger.LogWarning(
                     "PlexCollections: Create collection failed with status {StatusCode} for title {Title} on {ServerUrl}/{SectionId}. Response: {Response}",
-                    resp2.StatusCode,
+                    createResponse.StatusCode,
                     collectionName,
                     target.ServerUrl,
                     target.SectionId,
@@ -79,9 +83,9 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient, ILogg
                 );
                 return null;
             }
-            var container2 = await PlexApi.ReadContainerAsync(resp2, cancellationToken).ConfigureAwait(false);
-            var meta2 = container2?.Metadata?.FirstOrDefault(c => string.Equals(c.Title, collectionName, StringComparison.OrdinalIgnoreCase));
-            return int.TryParse(meta2?.RatingKey, out int id2) ? id2 : null;
+            var createdContainer = await PlexApi.ReadContainerAsync(createResponse, cancellationToken).ConfigureAwait(false);
+            var createdMeta = createdContainer?.Metadata?.FirstOrDefault(col => string.Equals(col.Title, collectionName, StringComparison.OrdinalIgnoreCase));
+            return int.TryParse(createdMeta?.RatingKey, out int createdId) ? createdId : null;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
@@ -162,7 +166,7 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient, ILogg
                 checkResp.IsSuccessStatusCode
                 && (await PlexApi.ReadContainerAsync(checkResp, cancellationToken).ConfigureAwait(false))
                     ?.Metadata?.FirstOrDefault()
-                    ?.Collection?.Any(c => string.Equals(c.Tag, collectionName, StringComparison.OrdinalIgnoreCase)) == true
+                    ?.Collection?.Any(tagEntry => string.Equals(tagEntry.Tag, collectionName, StringComparison.OrdinalIgnoreCase)) == true
             )
             || await ExecuteActionAsync(
                 HttpMethod.Put,

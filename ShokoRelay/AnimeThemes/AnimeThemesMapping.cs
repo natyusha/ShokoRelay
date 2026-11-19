@@ -339,15 +339,17 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
             if (string.IsNullOrEmpty(relPath))
             {
                 string themeFolder = VfsShared.ResolveAnimeThemesFolderName();
-                var matchedRoot = (videoService.GetAllManagedFolders() ?? [])
+                var matchedFile = (videoService.GetAllManagedFolders() ?? [])
                     .Where(VfsShared.IsVfsEnabledFolder)
-                    .Select(f => f.Path)
+                    .Select(folder => folder.Path)
                     .Where(path => !string.IsNullOrWhiteSpace(path))
-                    .Select(p => Path.Combine(p, themeFolder))
-                    .FirstOrDefault(dir => Directory.Exists(dir) && Directory.EnumerateFiles(dir, fileName, SearchOption.AllDirectories).Any());
+                    .Select(root => Path.Combine(root, themeFolder))
+                    .Where(Directory.Exists)
+                    .Select(dir => (Root: dir, File: Directory.EnumerateFiles(dir, fileName, SearchOption.AllDirectories).FirstOrDefault()))
+                    .FirstOrDefault(match => match.File != null);
 
-                if (matchedRoot != null && Directory.EnumerateFiles(matchedRoot, fileName, SearchOption.AllDirectories).FirstOrDefault() is { } fullPath)
-                    relPath = "/" + Path.GetRelativePath(matchedRoot, fullPath).Replace('\\', '/');
+                if (matchedFile.File != null)
+                    relPath = "/" + Path.GetRelativePath(matchedFile.Root, matchedFile.File).Replace('\\', '/');
             }
 
             if (string.IsNullOrEmpty(relPath))
@@ -620,7 +622,7 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
                 string cachePath = Path.Combine(configProvider.CacheDirectory, ShokoRelayConstants.FileAtWebmCache);
                 if (seriesFilter == null || seriesFilter.Count == 0)
                 {
-                    var cacheLines = state.CacheEntries.Select(ce => $"{ce.VfsPath.Replace('\\', '/')}|{ce.VideoId}|{ce.Bitmask}");
+                    var cacheLines = state.CacheEntries.Select(entry => $"{entry.VfsPath.Replace('\\', '/')}|{entry.VideoId}|{entry.Bitmask}");
                     await VfsShared.WriteLinesAtomicAsync(cachePath, cacheLines, cancellationToken).ConfigureAwait(false);
                 }
                 else

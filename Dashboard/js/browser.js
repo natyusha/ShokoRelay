@@ -146,7 +146,6 @@
     }
     rootTabs.innerHTML = "";
 
-    // Validate that the activeTabName actually exists in displayRoots, fallback to the first tab (usually "All") if not
     displayRoots.forEach((root) => {
       const btn = document.createElement("button");
       btn.className = `tab-btn ${root.name === activeTabName ? "active" : ""}`;

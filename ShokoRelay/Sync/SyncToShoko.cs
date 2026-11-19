@@ -230,28 +230,7 @@ public class SyncToShoko(
                     continue;
 
                 string? mappedLabel = string.IsNullOrWhiteSpace(bucket.ShokoUsername) ? null : targetShokoUser.Username;
-
-                // Pre-resolve and filter which episodes will actually be marked watched to group by SeriesID
-                var epsToMark = new List<IShokoEpisode>();
-                var seenEpIds = new HashSet<int>();
-                foreach (var item in items)
-                {
-                    if (item.LibrarySectionId.HasValue && item.LibrarySectionId != target.SectionId)
-                        continue;
-
-                    if (GetCachedEpisode(item) is not { } ep || appliedWatchedIds.Contains((targetShokoUser.LocalID, ep.LocalID)) || !seenEpIds.Add(ep.LocalID))
-                        continue;
-
-                    var epUserData = GetCachedUserData(ep, targetShokoUser);
-                    bool alreadyWatched = epUserData?.IsWatched == true;
-                    bool isWatchedInPlex = item.ViewCount > 0;
-
-                    if (isWatchedInPlex && !alreadyWatched && (ep.Videos?.Count > 0))
-                        epsToMark.Add(ep);
-                }
-
-                var epsToMarkGrouped = epsToMark.GroupBy(e => e.ShokoSeriesID).ToDictionary(g => g.Key, g => g.ToList());
-                var processedEpsToMarkCount = new Dictionary<int, int>();
+                var seriesToUpdateStats = new Dictionary<int, IShokoSeries>();
 
                 foreach (var item in items)
                 {
@@ -299,14 +278,12 @@ public class SyncToShoko(
                     {
                         if (!dryRun)
                         {
-                            int currentCount = processedEpsToMarkCount.TryGetValue(ep.ShokoSeriesID, out int count) ? count + 1 : 1;
-                            processedEpsToMarkCount[ep.ShokoSeriesID] = currentCount;
-
-                            bool isLastInSeries = epsToMarkGrouped.TryGetValue(ep.ShokoSeriesID, out var list) && currentCount == list.Count;
-
                             await userDataService
-                                .SetEpisodeWatchedStatus(ep, targetShokoUser, true, watchedAt, videoReason: VideoUserDataSaveReason.UserInteraction, noVideoPropagation: false, updateStatsNow: isLastInSeries)
+                                .SetEpisodeWatchedStatus(ep, targetShokoUser, true, watchedAt, videoReason: VideoUserDataSaveReason.UserInteraction, noVideoPropagation: false, updateStatsNow: false)
                                 .ConfigureAwait(false);
+
+                            if (ep.Series is { } parentSeries)
+                                seriesToUpdateStats.TryAdd(parentSeries.LocalID, parentSeries);
                         }
                         appliedWatchedIds.Add((targetShokoUser.LocalID, ep.LocalID));
                         result = SyncHelper.IncMarkedWatched(result, result.PerUser, uName);
@@ -383,6 +360,10 @@ public class SyncToShoko(
                             result = SyncHelper.IncVotesSkipped(result);
                     }
                 }
+
+                if (!dryRun)
+                    foreach (var touchedSeries in seriesToUpdateStats.Values)
+                        userDataService.UpdateWatchedStats(touchedSeries, targetShokoUser);
             }
         }
         return result;

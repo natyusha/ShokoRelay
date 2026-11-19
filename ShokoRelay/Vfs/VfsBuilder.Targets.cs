@@ -8,9 +8,9 @@ public partial class VfsBuilder
     /// <param name="state">The active series build state.</param>
     private void BuildVfs(SeriesBuildState state)
     {
-        var versionCounters = state.CoordCounts.Where(g => g.Value > 1).ToDictionary(g => g.Key, _ => 1);
+        var versionCounters = state.CoordCounts.Where(group => group.Value > 1).ToDictionary(group => group.Key, _ => 1);
 
-        foreach (var mapping in state.FileData.Mappings.OrderBy(m => m.Coords.Season).ThenBy(m => m.Coords.Episode).ThenBy(m => m.PartIndex ?? 0))
+        foreach (var mapping in state.FileData.Mappings.OrderBy(map => map.Coords.Season).ThenBy(map => map.Coords.Episode).ThenBy(map => map.PartIndex ?? 0))
         {
             try
             {
@@ -32,12 +32,12 @@ public partial class VfsBuilder
                 bool hasPeer = state.CoordCounts.TryGetValue(key, out var count) && count > 1;
                 int? vIdx = (hasPeer && !mapping.PartIndex.HasValue && versionCounters.TryGetValue(key, out var ver)) ? (versionCounters[key] = ver + 1) - 1 : null;
 
-                (string Folder, string Subtype) ex = PlexMapping.TryGetExtraSeason(mapping.Coords.Season, out var extra) ? extra : ("Featurettes", "featurette");
+                (string Folder, string Subtype) extraSeason = PlexMapping.TryGetExtraSeason(mapping.Coords.Season, out var extraMatch) ? extraMatch : ("Featurettes", "featurette");
 
                 string fileName = PlexMapping.TryGetExtraSeason(mapping.Coords.Season, out _)
                     ? VfsHelper.BuildExtrasFileName(
                         mapping,
-                        ex,
+                        extraSeason,
                         state.ExtraPad.GetValueOrDefault(mapping.Coords.Season, 1),
                         Path.GetExtension(locInfo.Src),
                         state.DisplayTitle,
@@ -123,9 +123,9 @@ public partial class VfsBuilder
     private void BuildMovieVfs(SeriesBuildState state)
     {
         var movieDirs = new Dictionary<string, (string ImportRoot, string FolderName)>(VfsShared.PathComparer);
-        var mainMappings = state.FileData.Mappings.Where(m => m.PrimaryEpisode.Type == EpisodeType.Episode).ToList();
-        var extraMappings = state.FileData.Mappings.Where(m => m.PrimaryEpisode.Type != EpisodeType.Episode).ToList();
-        var movieVersionCounters = state.CoordCounts.Where(g => g.Value > 1).ToDictionary(g => g.Key, _ => 1);
+        var mainMappings = state.FileData.Mappings.Where(mapping => mapping.PrimaryEpisode.Type == EpisodeType.Episode).ToList();
+        var extraMappings = state.FileData.Mappings.Where(mapping => mapping.PrimaryEpisode.Type != EpisodeType.Episode).ToList();
+        var movieVersionCounters = state.CoordCounts.Where(group => group.Value > 1).ToDictionary(group => group.Key, _ => 1);
 
         foreach (var mapping in mainMappings)
         {
@@ -186,10 +186,10 @@ public partial class VfsBuilder
                 if (!TryResolveAndValidate(state, mapping, out var locInfo))
                     continue;
 
-                (string Folder, string Subtype) ex = PlexMapping.TryGetExtraSeason(mapping.Coords.Season, out var extra) ? extra : ("Featurettes", "featurette");
+                (string Folder, string Subtype) extraSeason = PlexMapping.TryGetExtraSeason(mapping.Coords.Season, out var extraMatch) ? extraMatch : ("Featurettes", "featurette");
                 string fileName = VfsHelper.BuildExtrasFileName(
                     mapping,
-                    ex,
+                    extraSeason,
                     state.ExtraPad.GetValueOrDefault(mapping.Coords.Season, 1),
                     Path.GetExtension(locInfo.Src),
                     state.DisplayTitle,
@@ -199,9 +199,9 @@ public partial class VfsBuilder
                     mapping.IsVariation
                 );
 
-                foreach (var (moviePath, (importRoot, folderName)) in movieDirs)
+                foreach (var (moviePath, (rootPath, folderName)) in movieDirs)
                 {
-                    string extraPath = Path.Combine(moviePath, ex.Folder);
+                    string extraPath = Path.Combine(moviePath, extraSeason.Folder);
                     if (!Settings.Advanced.DisableVfsGeneration)
                         Directory.CreateDirectory(extraPath);
                     string destFilePath = Path.Combine(extraPath, fileName);
@@ -211,7 +211,7 @@ public partial class VfsBuilder
                         state.Created++;
                         state.Planned++;
                         state.ExpectedFiles.Add(destFilePath);
-                        state.OnLink?.Invoke(importRoot, $"Movie ❯ {folderName}", $"{ex.Folder}/{fileName}", locInfo.Src);
+                        state.OnLink?.Invoke(rootPath, $"Movie ❯ {folderName}", $"{extraSeason.Folder}/{fileName}", locInfo.Src);
                     }
                 }
             }

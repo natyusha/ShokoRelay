@@ -59,14 +59,14 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
         var allTargets = GetConfiguredTargets();
 
         var exactMatches = allTargets.Where(target =>
-            target.Locations.Any(loc =>
+            target.Locations.Any(location =>
             {
-                string normLoc = PlexHelper.NormalizePathForPlex(loc);
+                string normLoc = PlexHelper.NormalizePathForPlex(location);
                 return normMapped.Equals(normLoc, StringComparison.OrdinalIgnoreCase) || normMapped.StartsWith(normLoc + "/", StringComparison.OrdinalIgnoreCase);
             })
         );
         if (exactMatches.Any())
-            return [.. exactMatches.Select(t => (t, mapped))];
+            return [.. exactMatches.Select(target => (target, mapped))];
 
         // If Path Mappings aren't configured, safely infer the correct Plex path by matching the VFS root name to Plex's configured library locations.
         string vfsRootName = VfsShared.ResolveRootFolderName();
@@ -112,8 +112,8 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
             }
 
             // Filter to only parent-matching locations if any exist; otherwise fallback to broad scan
-            bool hasParentMatch = potentialFallbacks.Any(f => f.IsParentMatch);
-            results.AddRange(potentialFallbacks.Where(f => !hasParentMatch || f.IsParentMatch).Select(f => (f.Target, f.GuessedPath)));
+            bool hasParentMatch = potentialFallbacks.Any(fallback => fallback.IsParentMatch);
+            results.AddRange(potentialFallbacks.Where(fallback => !hasParentMatch || fallback.IsParentMatch).Select(fallback => (fallback.Target, fallback.GuessedPath)));
         }
 
         return results;
@@ -350,23 +350,23 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
                 string? trimmedUrl = !string.IsNullOrWhiteSpace(customUrl) ? customUrl.Trim().TrimEnd('/') : null;
                 _cachedTargets =
                 [
-                    .. libs.Select(l => new PlexLibraryTarget
+                    .. libs.Select(lib => new PlexLibraryTarget
                     {
-                        SectionId = l.Id,
-                        Title = l.Title,
-                        Type = l.Type,
-                        Uuid = l.Uuid,
-                        ServerId = l.ServerId,
-                        ServerName = l.ServerName,
-                        ServerUrl = trimmedUrl ?? l.ServerUrl,
-                        LibraryType = (l.Type ?? "").ToLowerInvariant() switch
+                        SectionId = lib.Id,
+                        Title = lib.Title,
+                        Type = lib.Type,
+                        Uuid = lib.Uuid,
+                        ServerId = lib.ServerId,
+                        ServerName = lib.ServerName,
+                        ServerUrl = trimmedUrl ?? lib.ServerUrl,
+                        LibraryType = (lib.Type ?? "").ToLowerInvariant() switch
                         {
                             "movie" => PlexLibraryType.Movie,
                             "artist" => PlexLibraryType.Music,
                             "photo" => PlexLibraryType.Photo,
                             _ => PlexLibraryType.Show,
                         },
-                        Locations = l.Locations ?? [],
+                        Locations = lib.Locations ?? [],
                     }),
                 ];
             }
@@ -383,7 +383,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
         if (!IsEnabled || string.IsNullOrWhiteSpace(libraryName))
             return null;
 
-        var server = configProvider.GetPlexDiscoveredServers().FirstOrDefault(s => !string.IsNullOrWhiteSpace(s.PreferredUri));
+        var server = configProvider.GetPlexDiscoveredServers().FirstOrDefault(srv => !string.IsNullOrWhiteSpace(srv.PreferredUri));
         if (server == null && string.IsNullOrWhiteSpace(Settings.Advanced.PlexServerUrl))
             return null;
 
@@ -412,8 +412,8 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
                     string type = dir.TryGetProperty("type", out var typeProp) ? typeProp.GetString() ?? "" : "";
                     var locations = new List<string>();
                     if (dir.TryGetProperty("Location", out var locs))
-                        foreach (var loc in locs.EnumerateArray())
-                            if (loc.TryGetProperty("path", out var pathProp) && pathProp.GetString() is { } pathVal)
+                        foreach (var location in locs.EnumerateArray())
+                            if (location.TryGetProperty("path", out var pathProp) && pathProp.GetString() is { } pathVal)
                                 locations.Add(pathVal);
 
                     return new PlexLibraryTarget
@@ -635,9 +635,9 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
         {
             if (!ReferenceEquals(_lastCachedMappings, currentMappings))
             {
-                var pairs = currentMappings.Select(m => new { Shoko = PlexHelper.NormalizePathForPlex(m.Key), Plex = PlexHelper.NormalizePathForPlex(m.Value) }).ToList();
-                _shokoToPlexMappings = [.. pairs.Select(p => (p.Shoko, p.Plex)).OrderByDescending(p => p.Shoko.Length)];
-                _plexToShokoMappings = [.. pairs.Select(p => (p.Plex, p.Shoko)).OrderByDescending(p => p.Plex.Length)];
+                var pairs = currentMappings.Select(mapping => new { Shoko = PlexHelper.NormalizePathForPlex(mapping.Key), Plex = PlexHelper.NormalizePathForPlex(mapping.Value) }).ToList();
+                _shokoToPlexMappings = [.. pairs.Select(pair => (pair.Shoko, pair.Plex)).OrderByDescending(pair => pair.Shoko.Length)];
+                _plexToShokoMappings = [.. pairs.Select(pair => (pair.Plex, pair.Shoko)).OrderByDescending(pair => pair.Plex.Length)];
                 _lastCachedMappings = currentMappings;
             }
             list = shokoToPlex ? _shokoToPlexMappings : _plexToShokoMappings;
@@ -647,7 +647,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
             return path;
 
         string input = PlexHelper.NormalizePathForPlex(path);
-        var (matchIn, matchOut) = list.FirstOrDefault(m => input.StartsWith(m.In, StringComparison.OrdinalIgnoreCase));
+        var (matchIn, matchOut) = list.FirstOrDefault(pair => input.StartsWith(pair.In, StringComparison.OrdinalIgnoreCase));
         if (matchIn == null)
             return path;
 

@@ -141,21 +141,21 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
         var devices = await ReadJsonAsync<List<PlexDevice>>(response, cancellationToken).ConfigureAwait(false) ?? [];
 
         var servers = devices
-            .Where(d => d.Owned && d.Provides?.Contains("server", StringComparison.OrdinalIgnoreCase) == true)
-            .Select(d =>
+            .Where(device => device.Owned && device.Provides?.Contains("server", StringComparison.OrdinalIgnoreCase) == true)
+            .Select(device =>
             {
-                var validConnections = d.HttpsRequired ? d.Connections?.Where(c => c.Uri?.StartsWith("https", StringComparison.Ordinal) == true) : d.Connections;
+                var validConnections = device.HttpsRequired ? device.Connections?.Where(conn => conn.Uri?.StartsWith("https", StringComparison.Ordinal) == true) : device.Connections;
 
                 var pref = validConnections
-                    ?.OrderByDescending(c =>
-                        (c.Local && !c.Relay ? 100 : 0)
-                        + (!c.Relay ? 1 : 0)
-                        + (c.Uri?.StartsWith("https", StringComparison.Ordinal) == true && (c.Uri.Contains(".plex.direct", StringComparison.OrdinalIgnoreCase) || d.HttpsRequired) ? 10 : 0)
+                    ?.OrderByDescending(conn =>
+                        (conn.Local && !conn.Relay ? 100 : 0)
+                        + (!conn.Relay ? 1 : 0)
+                        + (conn.Uri?.StartsWith("https", StringComparison.Ordinal) == true && (conn.Uri.Contains(".plex.direct", StringComparison.OrdinalIgnoreCase) || device.HttpsRequired) ? 10 : 0)
                     )
                     .FirstOrDefault()
                     ?.Uri;
 
-                return new PlexServerInfo(d.ClientIdentifier ?? "", d.Name ?? "", pref, d.HttpsRequired);
+                return new PlexServerInfo(device.ClientIdentifier ?? "", device.Name ?? "", pref, device.HttpsRequired);
             })
             .ToList();
 
@@ -174,15 +174,15 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
         using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
         var wrapper = await ReadJsonAsync<LibrarySectionsResponse>(resp, cancellationToken).ConfigureAwait(false);
         return wrapper
-                ?.MediaContainer?.Directory?.Select(d => new PlexLibraryInfo(
-                    int.TryParse(d.Key, out int id) ? id : 0,
-                    d.Title ?? "",
-                    d.Type ?? "",
-                    d.Agent ?? "",
-                    d.Uuid ?? "",
-                    d.Locations?.Select(l => l.Path).ToList() ?? []
+                ?.MediaContainer?.Directory?.Select(directory => new PlexLibraryInfo(
+                    int.TryParse(directory.Key, out int id) ? id : 0,
+                    directory.Title ?? "",
+                    directory.Type ?? "",
+                    directory.Agent ?? "",
+                    directory.Uuid ?? "",
+                    directory.Locations?.Select(loc => loc.Path).ToList() ?? []
                 ))
-                .Where(l => l.Id > 0)
+                .Where(lib => lib.Id > 0)
                 .ToList()
             ?? [];
     }
@@ -211,9 +211,9 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
                     cts.CancelAfter(TimeSpan.FromSeconds(5));
 
                     var libs = await GetPlexLibrariesAsync(token, cid, uri, cts.Token).ConfigureAwait(false);
-                    var matched = libs.Where(l =>
-                            string.Equals(l.Agent, ShokoRelayConstants.AgentScheme, StringComparison.OrdinalIgnoreCase)
-                            || string.Equals(l.Agent, ShokoRelayConstants.MovieAgentScheme, StringComparison.OrdinalIgnoreCase)
+                    var matched = libs.Where(lib =>
+                            string.Equals(lib.Agent, ShokoRelayConstants.AgentScheme, StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(lib.Agent, ShokoRelayConstants.MovieAgentScheme, StringComparison.OrdinalIgnoreCase)
                         )
                         .ToList();
                     foreach (var lib in matched)
@@ -316,14 +316,14 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
                     json.RootElement.ValueKind == JsonValueKind.Array ? json.RootElement.EnumerateArray()
                     : json.RootElement.TryGetProperty("MediaContainer", out var mc) && mc.TryGetProperty("SharedServer", out var ss) ? ss.EnumerateArray()
                     : default;
-                foreach (var el in items)
+                foreach (var element in items)
                     users.Add(
                         new PlexSharedServerUser(
-                            GetJsonString(el, "id"),
-                            GetJsonString(el, "userID") ?? GetJsonString(el, "userId"),
-                            GetJsonString(el, "username") ?? GetJsonString(el, "name"),
-                            GetJsonString(el, "email"),
-                            GetJsonString(el, "accessToken")
+                            GetJsonString(element, "id"),
+                            GetJsonString(element, "userID") ?? GetJsonString(element, "userId"),
+                            GetJsonString(element, "username") ?? GetJsonString(element, "name"),
+                            GetJsonString(element, "email"),
+                            GetJsonString(element, "accessToken")
                         )
                     );
                 return users;

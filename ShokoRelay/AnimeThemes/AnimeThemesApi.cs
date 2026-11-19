@@ -187,7 +187,7 @@ public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesAp
             var result = await JsonSerializer.DeserializeAsync<GraphQlResponse<T>>(stream, s_jsonOptions, cancellationToken).ConfigureAwait(false);
 
             if (result?.Errors != null && result.Errors.Count > 0)
-                logger?.LogWarning("AnimeThemes: GraphQL returned errors: {Errors}", string.Join(", ", result.Errors.Select(e => e.Message)));
+                logger?.LogWarning("AnimeThemes: GraphQL returned errors: {Errors}", string.Join(", ", result.Errors.Select(err => err.Message)));
 
             return result?.Data;
         }

@@ -160,11 +160,11 @@ public static class ImageHelper
     {
         IEnumerable<ImageInfo> Project(ImageEntityType type, string kind) =>
             FilterImagesByLanguage(images.GetAvailableImages(type), imageLanguage, addEveryImage)
-                .Select(i => new ImageInfo
+                .Select(img => new ImageInfo
                 {
                     Alt = title,
                     Type = kind,
-                    Url = GetImageUrl(i, forceRemote: addEveryImage),
+                    Url = GetImageUrl(img, forceRemote: addEveryImage),
                 });
 
         return [.. Project(ImageEntityType.Backdrop, "background"), .. Project(ImageEntityType.Logo, "clearLogo"), .. Project(ImageEntityType.Primary, "coverPoster")];

@@ -275,8 +275,8 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
     )
     {
         var sourceDirs = fileData
-            .Mappings.SelectMany(m => m.Video.Files)
-            .Select(f => Path.GetDirectoryName(f.Path))
+            .Mappings.SelectMany(mapping => mapping.Video.Files)
+            .Select(file => Path.GetDirectoryName(file.Path))
             .Where(dir => !string.IsNullOrEmpty(dir) && Directory.Exists(dir))
             .Distinct(VfsShared.PathComparer);
         foreach (var srcDir in sourceDirs)
@@ -294,7 +294,7 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
                 if (hasSeason && !int.TryParse(seasonNum, out parsedSeason))
                     continue;
 
-                string plexDirName = PlexConstants.LocalExtraDirs.First(d => string.Equals(d, type, StringComparison.OrdinalIgnoreCase));
+                string plexDirName = PlexConstants.LocalExtraDirs.First(dirName => string.Equals(dirName, type, StringComparison.OrdinalIgnoreCase));
                 string seasonFolder = hasSeason ? VfsHelper.SanitizeName(PlexMapping.GetSeasonFolder(parsedSeason)) : "";
 
                 foreach (var file in Directory.EnumerateFiles(subDir).Where(videoService.IsAllowedVideoExtension))

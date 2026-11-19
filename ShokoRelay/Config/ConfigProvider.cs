@@ -28,7 +28,7 @@ public partial class ConfigProvider : IDisposable
     [
         .. typeof(RelayConfig)
             .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(p => p.CanWrite && p.PropertyType != typeof(AdvancedConfig) && p.PropertyType != typeof(AutomationConfig) && p.PropertyType != typeof(PlaybackConfig)),
+            .Where(prop => prop.CanWrite && prop.PropertyType != typeof(AdvancedConfig) && prop.PropertyType != typeof(AutomationConfig) && prop.PropertyType != typeof(PlaybackConfig)),
     ];
 
     /// <summary>File path for the plugin preferences file.</summary>
@@ -221,12 +221,12 @@ public partial class ConfigProvider : IDisposable
         element.ValueKind switch
         {
             JsonValueKind.String => element.GetString()!,
-            JsonValueKind.Number => element.TryGetInt32(out var i) ? i
-            : element.TryGetInt64(out var l) ? l
+            JsonValueKind.Number => element.TryGetInt32(out var intVal) ? intVal
+            : element.TryGetInt64(out var longVal) ? longVal
             : element.GetDouble(),
             JsonValueKind.True => true,
             JsonValueKind.False => false,
-            JsonValueKind.Object => element.EnumerateObject().ToDictionary(p => p.Name, p => SanitizeConfigObject(p.Value)),
+            JsonValueKind.Object => element.EnumerateObject().ToDictionary(property => property.Name, property => SanitizeConfigObject(property.Value)),
             JsonValueKind.Array => element.EnumerateArray().Select(item => SanitizeConfigObject(item)).ToList(),
             _ => null!,
         };
@@ -311,14 +311,14 @@ public partial class ConfigProvider : IDisposable
         var overridePath = ctx.Request.RouteValues["overrides"]?.ToString();
         if (!string.IsNullOrWhiteSpace(overridePath))
             foreach (var pair in overridePath.Split(';', StringSplitOptions.RemoveEmptyEntries))
-                if (pair.Split('=', 2) is { Length: 2 } kv)
-                    overrides[kv[0].Trim()] = kv[1].Trim();
+                if (pair.Split('=', 2) is { Length: 2 } pairTokens)
+                    overrides[pairTokens[0].Trim()] = pairTokens[1].Trim();
 
         // Extract from Query String (fallback for testing)
         foreach (var queryParam in ctx.Request.Query)
             overrides[queryParam.Key] = queryParam.Value.ToString();
 
-        if (overrides.Count == 0 || !s_overridableProps.Any(p => overrides.ContainsKey(p.Name)))
+        if (overrides.Count == 0 || !s_overridableProps.Any(prop => overrides.ContainsKey(prop.Name)))
             return settings;
 
         var cloned = JsonSerializer.Deserialize<RelayConfig>(JsonSerializer.Serialize(settings, s_options), s_options)!;
@@ -607,9 +607,9 @@ public partial class ConfigProvider : IDisposable
         [
             .. (raw ?? "")
                 .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Select(s => s.Split(';', 2))
-                .Where(p => p.Length > 0 && !string.IsNullOrWhiteSpace(p[0]))
-                .Select(p => (Name: p[0].Trim(), Pin: (p.Length > 1 && p[1].Trim().Length == 4 && p[1].Trim().All(char.IsDigit)) ? p[1].Trim() : null)),
+                .Select(userEntry => userEntry.Split(';', 2))
+                .Where(parts => parts.Length > 0 && !string.IsNullOrWhiteSpace(parts[0]))
+                .Select(parts => (Name: parts[0].Trim(), Pin: (parts.Length > 1 && parts[1].Trim().Length == 4 && parts[1].Trim().All(char.IsDigit)) ? parts[1].Trim() : null)),
         ];
 
     /// <summary>Parses a pipe-delimited string of Shoko-to-Plex user mappings (<c>ShokoUser,PlexUser1;PIN,PlexUser2|ShokoUser2,PlexUser3</c>).</summary>
@@ -709,9 +709,9 @@ public partial class ConfigProvider : IDisposable
         if (settings.Advanced.PathMappings.Count == 0)
             return;
 
-        var mapped = settings.Advanced.PathMappings.Select(kvp =>
+        var mapped = settings.Advanced.PathMappings.Select(mappingPair =>
         {
-            string normKey = VfsShared.NormalizeSeparators(kvp.Key).Trim();
+            string normKey = VfsShared.NormalizeSeparators(mappingPair.Key).Trim();
             string key = normKey;
             try
             {
@@ -720,14 +720,14 @@ public partial class ConfigProvider : IDisposable
             catch { }
 
             string val =
-                (PlexHelper.NormalizePathForPlex(kvp.Value.Trim()) is var plexPath && !plexPath.StartsWith('/') && !plexPath.Contains(':') && !plexPath.StartsWith("//", StringComparison.Ordinal))
+                (PlexHelper.NormalizePathForPlex(mappingPair.Value.Trim()) is var plexPath && !plexPath.StartsWith('/') && !plexPath.Contains(':') && !plexPath.StartsWith("//", StringComparison.Ordinal))
                     ? "/" + plexPath
                     : plexPath;
             return (Key: key, Value: val);
         });
 
         // Deduplicate keys before dictionary creation to prevent ArgumentException if duplicate paths were entered
-        settings.Advanced.PathMappings = mapped.DistinctBy(x => x.Key, VfsShared.PathComparer).ToDictionary(x => x.Key, x => x.Value, VfsShared.PathComparer);
+        settings.Advanced.PathMappings = mapped.DistinctBy(mapping => mapping.Key, VfsShared.PathComparer).ToDictionary(mapping => mapping.Key, mapping => mapping.Value, VfsShared.PathComparer);
     }
 
     /// <summary>Normalizes the subtitle language mappings to ensure they are case-insensitive while preserving priority order.</summary>
@@ -763,8 +763,8 @@ public partial class ConfigProvider : IDisposable
             Environment.NewLine,
             (settings.Advanced.FolderExclusions ?? "")
                 .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Select(x => x.TrimSlashes())
-                .Where(x => x.Length > 0)
+                .Select(line => line.TrimSlashes())
+                .Where(line => line.Length > 0)
                 .Distinct(VfsShared.PathComparer)
         );
 

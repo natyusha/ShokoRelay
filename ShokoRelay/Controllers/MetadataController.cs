@@ -346,7 +346,10 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             if (PlexHelper.IsMovieKey(ratingKey))
             {
                 var (ep, movieCtx, tmdbMovie) = TryResolveMovieContext(ratingKey);
-                images = (ep != null && movieCtx != null) ? ExtractImages(mapper.MapMovie(ep, movieCtx, tmdbMovie)) : [];
+                if (ep == null || movieCtx == null)
+                    return NotFound();
+
+                images = ExtractImages(mapper.MapMovie(ep, movieCtx, tmdbMovie));
                 return Ok(
                     new
                     {
@@ -504,8 +507,8 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
 
         if (!int.TryParse(idStr, out int id))
             return (null, null, null);
-        if (partSplit >= 0 && int.TryParse(idPart[(partSplit + PlexConstants.PartPrefix.Length)..], out int p))
-            partIdx = p;
+        if (partSplit >= 0 && int.TryParse(idPart[(partSplit + PlexConstants.PartPrefix.Length)..], out int parsedPart))
+            partIdx = parsedPart;
 
         var episode = isAniDbEp ? MetadataService.GetShokoEpisodeByAnidbID(id) : MetadataService.GetShokoEpisodeByID(id);
         if (episode == null)

@@ -152,7 +152,7 @@
 
   /**
    * Decodes unicode escape sequences back into their actual Unicode characters.
-   * @param {string} s - The string containing escape sequences.
+   * @param {string} str - The string containing escape sequences.
    * @returns {string} A decoded string.
    */
   const decodeUnicode = (str) => (str || "").replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
@@ -957,15 +957,15 @@
             item._searchIndex = `${item.group} ${item.series} ${decodeUnicode(item.file)} ${item.relPath || ""}`.toLowerCase().replace(/[\u200B\u200A]/g, "");
             return item;
           })
-          .sort((a, b) => {
-            if (a.group === MISSING_LABEL && b.group !== MISSING_LABEL) return -1;
-            if (b.group === MISSING_LABEL && a.group !== MISSING_LABEL) return 1;
+          .sort((left, right) => {
+            if (left.group === MISSING_LABEL && right.group !== MISSING_LABEL) return -1;
+            if (right.group === MISSING_LABEL && left.group !== MISSING_LABEL) return 1;
 
-            const groupComp = a.group.localeCompare(b.group);
+            const groupComp = left.group.localeCompare(right.group);
             if (groupComp !== 0) return groupComp;
-            const seriesComp = a.series.localeCompare(b.series);
+            const seriesComp = left.series.localeCompare(right.series);
             if (seriesComp !== 0) return seriesComp;
-            return a.file.localeCompare(b.file);
+            return left.file.localeCompare(right.file);
           });
         renderTree(getFilteredItems());
 

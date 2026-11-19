@@ -18,8 +18,8 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
         List<string> folders = [];
         try
         {
-            if (videoService.GetAllManagedFolders() is { } mf)
-                folders = [.. mf.Select(f => f.Name ?? f.Path ?? string.Empty).Where(name => !string.IsNullOrEmpty(name))];
+            if (videoService.GetAllManagedFolders() is { } managedFolders)
+                folders = [.. managedFolders.Select(folder => folder.Name ?? folder.Path ?? string.Empty).Where(name => !string.IsNullOrEmpty(name))];
         }
         catch (Exception ex)
         {
@@ -74,7 +74,10 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
             }
 
             // A file is considered "missing" if its managed folder is online and it doesn't exist on disk OR if its path is blocked by Relay ignore rules.
-            var toDelete = all.Where(f => IsFolderOnline(f.ManagedFolder) && (!File.Exists(f.Path) || VfsShared.IsPathIgnored(f.Path, videoService, Settings, ignoredNames, relativeTo: f.ManagedFolder.Path)))
+            var toDelete = all.Where(videoFile =>
+                    IsFolderOnline(videoFile.ManagedFolder)
+                    && (!File.Exists(videoFile.Path) || VfsShared.IsPathIgnored(videoFile.Path, videoService, Settings, ignoredNames, relativeTo: videoFile.ManagedFolder.Path))
+                )
                 .ToList();
 
             if (!dryRun && toDelete.Count > 0)
@@ -90,7 +93,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
                 logger.LogInformation("ShokoImportService: Database and MyList cleanup complete");
             }
 
-            return [.. toDelete.Select(f => f.Path)];
+            return [.. toDelete.Select(videoFile => videoFile.Path)];
         }
         finally
         {

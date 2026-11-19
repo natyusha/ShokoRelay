@@ -59,7 +59,7 @@ public static class MapHelper
     public static SeriesFileData GetSeriesFileData(ISeries series, IMetadataService metadataService)
     {
         var mappings = BuildFileMappings(series, metadataService);
-        return new SeriesFileData(mappings, [.. mappings.Select(m => m.Coords.Season).Distinct().OrderBy(s => s)]);
+        return new SeriesFileData(mappings, [.. mappings.Select(mapping => mapping.Coords.Season).Distinct().OrderBy(season => season)]);
     }
 
     /// <summary>Generate consolidated SeriesFileData for the given series, automatically handling TMDB enforcement and VFS override groupings.</summary>
@@ -95,8 +95,8 @@ public static class MapHelper
                 all.AddRange(BuildFileMappings(extraSeries, metadataService));
 
         // A single physical crossover file linked to multiple Shoko series in an override group will produce duplicate mappings. This ensures the VFS only builds the file once.
-        var deduped = all.DistinctBy(m => (m.Video.LocalID, m.Coords, m.PartIndex, m.IsVariation)).ToList();
-        return new SeriesFileData(deduped, [.. deduped.Select(m => m.Coords.Season).Distinct().OrderBy(s => s)]);
+        var deduped = all.DistinctBy(mapping => (mapping.Video.LocalID, mapping.Coords, mapping.PartIndex, mapping.IsVariation)).ToList();
+        return new SeriesFileData(deduped, [.. deduped.Select(mapping => mapping.Coords.Season).Distinct().OrderBy(season => season)]);
     }
 
     /// <summary>Indicates whether an episode should be treated as hidden.</summary>
@@ -142,7 +142,7 @@ public static class MapHelper
     private static List<FileMapping> BuildFileMappings(ISeries series, IMetadataService metadataService)
     {
         var result = new List<FileMapping>();
-        var seriesEpisodes = series.Episodes.Where(ep => ep.Videos.Count > 0 && !IsHidden(ep)).Select(ep => (Episode: ep, ep.Videos)).ToList();
+        var seriesEpisodes = series.Episodes.Where(episode => episode.Videos.Count > 0 && !IsHidden(episode)).Select(episode => (Episode: episode, episode.Videos)).ToList();
         if (seriesEpisodes.Count == 0)
             return result;
 
@@ -154,7 +154,7 @@ public static class MapHelper
         {
             var tmdbSeries = (series as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault();
             if (tmdbSeries?.PreferredOrdering is { IsDefault: false } ordering && ordering.Series is { } orderedView)
-                tmdbOrderingLookup = orderedView.Episodes.DistinctBy(e => e.ID).ToDictionary(e => e.ID, e => (e.SeasonNumber ?? 1, e.EpisodeNumber));
+                tmdbOrderingLookup = orderedView.Episodes.DistinctBy(orderedEp => orderedEp.ID).ToDictionary(orderedEp => orderedEp.ID, orderedEp => (orderedEp.SeasonNumber ?? 1, orderedEp.EpisodeNumber));
         }
 
         var videoToEps = new Dictionary<int, List<(IEpisode Episode, PlexCoords Coords)>>();
@@ -171,10 +171,10 @@ public static class MapHelper
             }
         }
 
-        var distinctVideos = seriesEpisodes.SelectMany(x => x.Videos).DistinctBy(v => v.LocalID).ToList();
-        var videoFileNameCache = distinctVideos.ToDictionary(v => v.LocalID, v => Path.GetFileName(v.Files.FirstOrDefault()?.Path ?? string.Empty));
-        var episodeFileLists = seriesEpisodes.ToDictionary(x => x.Episode.ID, x => x.Videos.OrderBy(v => videoFileNameCache.GetValueOrDefault(v.LocalID, string.Empty)).ToList());
-        var allVideos = distinctVideos.OrderBy(v => videoFileNameCache[v.LocalID]).ToList();
+        var distinctVideos = seriesEpisodes.SelectMany(tuple => tuple.Videos).DistinctBy(video => video.LocalID).ToList();
+        var videoFileNameCache = distinctVideos.ToDictionary(video => video.LocalID, video => Path.GetFileName(video.Files.FirstOrDefault()?.Path ?? string.Empty));
+        var episodeFileLists = seriesEpisodes.ToDictionary(tuple => tuple.Episode.ID, tuple => tuple.Videos.OrderBy(video => videoFileNameCache.GetValueOrDefault(video.LocalID, string.Empty)).ToList());
+        var allVideos = distinctVideos.OrderBy(video => videoFileNameCache[video.LocalID]).ToList();
 
         // Pass 1: Resolve all coordinates and crossover statuses once
         var videoCoords = new Dictionary<int, (PlexCoords Coords, List<(IEpisode Episode, PlexCoords Coords)> Deduped)>();

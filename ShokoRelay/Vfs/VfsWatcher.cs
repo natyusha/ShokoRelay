@@ -275,14 +275,16 @@ public class VfsWatcher(
     /// <param name="event">Event parameters containing changed metadata links.</param>
     private void OnLinksChanged(object? sender, MetadataLinksChangedEventArgs @event)
     {
-        var stalePrimaries = new List<int>();
+        var affectedIds = new HashSet<int>();
         var affectedSeries = new List<IShokoSeries>();
         foreach (var change in @event.Changes)
         {
             if (change.Source != MetadataSource.TMDB || metadataService.GetShokoSeriesByAnidbID(change.AnidbAnimeID) is not { } series)
                 continue;
 
-            stalePrimaries.Add(series.GetPrimaryId(metadataService));
+            affectedIds.Add(series.GetPrimaryId(metadataService));
+            foreach (int memberId in OverrideHelper.GetGroup(series.LocalID, metadataService))
+                affectedIds.Add(memberId);
             affectedSeries.Add(series);
         }
 
@@ -290,16 +292,17 @@ public class VfsWatcher(
             return;
 
         OverrideHelper.Reload();
-        foreach (int staleId in stalePrimaries)
-        {
-            plexMetadata.InvalidateCache(staleId);
-            _pending[staleId] = 1;
-        }
         foreach (var series in affectedSeries)
         {
-            int newPrimaryId = series.GetPrimaryId(metadataService);
-            plexMetadata.InvalidateCache(newPrimaryId);
-            _pending[newPrimaryId] = 1;
+            affectedIds.Add(series.GetPrimaryId(metadataService));
+            foreach (int memberId in OverrideHelper.GetGroup(series.LocalID, metadataService))
+                affectedIds.Add(memberId);
+        }
+
+        foreach (int targetId in affectedIds)
+        {
+            plexMetadata.InvalidateCache(targetId);
+            _pending[targetId] = 1;
         }
 
         KickProcessLoop();

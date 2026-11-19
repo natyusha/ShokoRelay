@@ -153,8 +153,8 @@ public static class ContentRatingHelper
     private static string? GetTmdbContentRating(ISeries? series, IWithContentRatings? fallback) =>
         (fallback?.ContentRatings ?? (series as IWithContentRatings)?.ContentRatings ?? (series as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault()?.ContentRatings)
             is { Count: > 0 } ratings
-            ? ratings.FirstOrDefault(r => string.Equals(r.CountryCode, "US", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(r.Value))?.Value
-                ?? ratings.FirstOrDefault(r => !string.IsNullOrWhiteSpace(r.Value))?.Value
+            ? ratings.FirstOrDefault(rating => string.Equals(rating.CountryCode, "US", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(rating.Value))?.Value
+                ?? ratings.FirstOrDefault(rating => !string.IsNullOrWhiteSpace(rating.Value))?.Value
             : null;
 
     #endregion

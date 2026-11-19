@@ -363,7 +363,9 @@ public static partial class TextHelper
     /// <returns>True if at least one video file linked to this episode also contains other main episodes from the same series.</returns>
     public static bool IsMultiEpisodeMovieFile(IEpisode episode) =>
         episode is IShokoEpisode { Videos: { Count: > 0 } vids } shokoEp
-        && vids.Any(v => v.Episodes.Where(ep => ep.Type == EpisodeType.Episode && ep.ShokoSeriesID == shokoEp.ShokoSeriesID && !MapHelper.IsHidden(ep)).Select(e => e.LocalID).Distinct().Skip(1).Any());
+        && vids.Any(video =>
+            video.Episodes.Where(ep => ep.Type == EpisodeType.Episode && ep.ShokoSeriesID == shokoEp.ShokoSeriesID && !MapHelper.IsHidden(ep)).Select(ep => ep.LocalID).Distinct().Skip(1).Any()
+        );
 
     /// <summary>Compute the best title to display for a standalone movie, omitting the episode title if the series only contains one main episode, the file spans multiple episodes, or the episode title is ambiguous.</summary>
     /// <param name="episode">The movie episode metadata.</param>

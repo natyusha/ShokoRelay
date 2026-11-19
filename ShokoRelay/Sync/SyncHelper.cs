@@ -496,31 +496,31 @@ public static class SyncHelper
                 }
 
                 tokenCache.Friends ??= await plexAuth.GetFriendsAsync(adminToken, cancellationToken).ConfigureAwait(false);
-                var matchedFriend = tokenCache.Friends.FirstOrDefault(f =>
-                    string.Equals(f.Title?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(f.Username?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(f.Email?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(f.Id?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
+                var matchedFriend = tokenCache.Friends.FirstOrDefault(friend =>
+                    string.Equals(friend.Title?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(friend.Username?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(friend.Email?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(friend.Id?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
                 );
 
-                var sharedMatch = sharedUsers.FirstOrDefault(s =>
-                    !string.IsNullOrWhiteSpace(s.AccessToken)
+                var sharedMatch = sharedUsers.FirstOrDefault(shared =>
+                    !string.IsNullOrWhiteSpace(shared.AccessToken)
                     && (
-                        string.Equals(s.Username?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(s.Email?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(s.UserId?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
+                        string.Equals(shared.Username?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(shared.Email?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(shared.UserId?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
                         || (
                             matchedFriend != null
                             && (
-                                (!string.IsNullOrWhiteSpace(matchedFriend.Username) && string.Equals(s.Username?.Trim(), matchedFriend.Username.Trim(), StringComparison.OrdinalIgnoreCase))
-                                || (!string.IsNullOrWhiteSpace(matchedFriend.Id) && string.Equals(s.UserId?.Trim(), matchedFriend.Id.Trim(), StringComparison.OrdinalIgnoreCase))
+                                (!string.IsNullOrWhiteSpace(matchedFriend.Username) && string.Equals(shared.Username?.Trim(), matchedFriend.Username.Trim(), StringComparison.OrdinalIgnoreCase))
+                                || (!string.IsNullOrWhiteSpace(matchedFriend.Id) && string.Equals(shared.UserId?.Trim(), matchedFriend.Id.Trim(), StringComparison.OrdinalIgnoreCase))
                             )
                         )
                         || (
                             matchedHome != null
                             && (
-                                (!string.IsNullOrWhiteSpace(matchedHome.Username) && string.Equals(s.Username?.Trim(), matchedHome.Username.Trim(), StringComparison.OrdinalIgnoreCase))
-                                || string.Equals(s.UserId?.Trim(), matchedHome.Id.ToString(), StringComparison.OrdinalIgnoreCase)
+                                (!string.IsNullOrWhiteSpace(matchedHome.Username) && string.Equals(shared.Username?.Trim(), matchedHome.Username.Trim(), StringComparison.OrdinalIgnoreCase))
+                                || string.Equals(shared.UserId?.Trim(), matchedHome.Id.ToString(), StringComparison.OrdinalIgnoreCase)
                             )
                         )
                     )

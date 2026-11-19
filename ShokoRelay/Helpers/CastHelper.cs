@@ -509,8 +509,8 @@ public static class CastHelper
         return
         [
             .. studios
-                .Where(s => !string.IsNullOrWhiteSpace(s.Name) && !IsCreditBlacklisted(s.Name))
-                .Select(s => ResolvePreferredCreditName(s.Name, false, s.ID.Source == MetadataSource.AniDB ? 1 : 2))
+                .Where(studio => !string.IsNullOrWhiteSpace(studio.Name) && !IsCreditBlacklisted(studio.Name))
+                .Select(studio => ResolvePreferredCreditName(studio.Name, false, studio.ID.Source == MetadataSource.AniDB ? 1 : 2))
                 .Where(name => !string.IsNullOrWhiteSpace(name))
                 .DistinctBy(NormalizeCreditKey)
                 .Select(name => new TagItem { Tag = name }),
@@ -603,7 +603,7 @@ public static class CastHelper
         }
     }
 
-    /// <summary>High-performance lookup index for matching AniDB cast and crew against TMDB records in O(1) time.</summary>
+    /// <summary>High-performance lookup index for matching AniDB cast and crew against TMDB records.</summary>
     private sealed class TmdbRoleIndex<T>
         where T : class
     {
@@ -675,27 +675,27 @@ public static class CastHelper
             string? flippedName = GetFlippedName(name);
 
             // OriginalName matches OriginalName (whitespace stripped)
-            if (!string.IsNullOrEmpty(origNoSpace) && _exactOriginal.TryGetValue(origNoSpace, out var m1))
-                return m1;
+            if (!string.IsNullOrEmpty(origNoSpace) && _exactOriginal.TryGetValue(origNoSpace, out var exactOriginalMatch))
+                return exactOriginalMatch;
 
             // OriginalName matches TMDB AlternativeNames (whitespace stripped)
-            if (!string.IsNullOrEmpty(origNoSpace) && _altOriginal.TryGetValue(origNoSpace, out var m2))
-                return m2;
+            if (!string.IsNullOrEmpty(origNoSpace) && _altOriginal.TryGetValue(origNoSpace, out var altOriginalMatch))
+                return altOriginalMatch;
 
             // Name matches Name (romanised)
-            if (!string.IsNullOrEmpty(name) && _names.TryGetValue(name, out var m3))
-                return m3;
+            if (!string.IsNullOrEmpty(name) && _names.TryGetValue(name, out var nameMatch))
+                return nameMatch;
 
             // Flipped Name matches Name (romanised)
-            if (flippedName != null && _names.TryGetValue(flippedName, out var m4))
-                return m4;
+            if (flippedName != null && _names.TryGetValue(flippedName, out var flippedNameMatch))
+                return flippedNameMatch;
 
             // AniDB Name matches TMDB AlternativeNames
-            if (!string.IsNullOrEmpty(name) && _altNames.TryGetValue(name, out var m5))
-                return m5;
+            if (!string.IsNullOrEmpty(name) && _altNames.TryGetValue(name, out var altNameMatch))
+                return altNameMatch;
 
             // Flipped AniDB Name matches TMDB AlternativeNames (and their flipped variants)
-            return flippedName != null && _altNames.TryGetValue(flippedName, out var m6) ? m6 : null;
+            return flippedName != null && _altNames.TryGetValue(flippedName, out var altFlippedMatch) ? altFlippedMatch : null;
         }
     }
 

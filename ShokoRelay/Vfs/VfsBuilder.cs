@@ -62,7 +62,7 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
         if (isCleanBuild)
         {
             logger.LogInformation("VFS: Performing global root cleanup...");
-            var allRoots = videoService.GetAllManagedFolders()?.Select(f => f.Path).Where(path => !string.IsNullOrEmpty(path)).Distinct(VfsShared.PathComparer) ?? [];
+            var allRoots = videoService.GetAllManagedFolders()?.Select(folder => folder.Path).Where(path => !string.IsNullOrEmpty(path)).Distinct(VfsShared.PathComparer) ?? [];
             foreach (var root in allRoots)
             {
                 CleanVfsRoot(Path.Combine(root, rootName), cleanupDetails, logger);
@@ -294,16 +294,32 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
         }
 
         // Collect the base names of all source video files to prevent them from being linked as series-level metadata
-        var videoBaseNames = fileData.Mappings.Select(m => Path.GetFileNameWithoutExtension(m.FileName)).Distinct().ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var coordCounts = fileData.Mappings.GroupBy(m => (m.Coords.Season, m.Coords.Episode, m.IsVariation)).ToDictionary(g => g.Key, g => g.Count());
-        int epPad = Math.Max(2, fileData.Mappings.Where(m => m.Coords.Season >= 0).DefaultIfEmpty().Max(m => m?.Coords.EndEpisode ?? m?.Coords.Episode ?? 1).ToString().Length);
-        var extraPad = fileData.Mappings.Where(m => m.Coords.Season < 0).GroupBy(m => m.Coords.Season).ToDictionary(g => g.Key, g => g.Count() > 9 ? 2 : 1);
+        var videoBaseNames = fileData.Mappings.Select(mapping => Path.GetFileNameWithoutExtension(mapping.FileName)).Distinct().ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var coordCounts = fileData.Mappings.GroupBy(mapping => (mapping.Coords.Season, mapping.Coords.Episode, mapping.IsVariation)).ToDictionary(group => group.Key, group => group.Count());
+        int epPad = Math.Max(2, fileData.Mappings.Where(mapping => mapping.Coords.Season >= 0).DefaultIfEmpty().Max(mapping => mapping?.Coords.EndEpisode ?? mapping?.Coords.Episode ?? 1).ToString().Length);
+        var extraPad = fileData.Mappings.Where(mapping => mapping.Coords.Season < 0).GroupBy(mapping => mapping.Coords.Season).ToDictionary(group => group.Key, group => group.Count() > 9 ? 2 : 1);
         bool skipCheck = cleanRoot && !isFiltered;
 
         var state = new SeriesBuildState(series, rootFolderName, movieRootName, displayTitle, folderId, skipCheck, ignoredFolders, session, fileData, videoBaseNames, coordCounts, epPad, extraPad, onLink);
 
         // Evaluates the categorization logic to determine if the series should be processed as a movie
         var (doStandard, doMovie) = MapHelper.GetGenerationModes(MapHelper.IsMovie(series), Settings.Advanced.MovieGenerationMode);
+
+        // Prune stale virtual folders: If movie mode was disabled or a series lost its movie link, clean up leftover movie folders
+        // If a series was switched to movie-only mode, clean up its standard TV show folder
+        if (!skipCheck && (!doStandard || !doMovie))
+        {
+            HashSet<int>? staleMovieIds = !doMovie
+                ?
+                [
+                    .. fileData
+                        .Mappings.Where(mapping => mapping.PrimaryEpisode.Type == EpisodeType.Episode)
+                        .Select(mapping => mapping.PrimaryEpisode.ID.TryGetNumericID(out int episodeId) ? episodeId : 0)
+                        .Where(episodeId => episodeId > 0),
+                ]
+                : null;
+            PruneSeries(rootFolderName, folderId, state.Errors.Add, staleMovieIds, pruneStandard: !doStandard, pruneMovies: !doMovie);
+        }
 
         if (!doStandard && !skipCheck)
             PruneSeries(rootFolderName, folderId, state.Errors.Add, pruneMovies: !doMovie);
@@ -315,7 +331,7 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
             BuildMovieVfs(state);
 
         // Dynamically register physically present AnimeThemes mapping files inside the blueprint Shorts directory to protect them from cleanup
-        var anidbIds = OverrideHelper.GetGroup(folderId, metadataService).Select(metadataService.GetShokoSeriesByID).OfType<IShokoSeries>().Select(s => s.AnidbAnimeID).ToList();
+        var anidbIds = OverrideHelper.GetGroup(folderId, metadataService).Select(metadataService.GetShokoSeriesByID).OfType<IShokoSeries>().Select(shokoSeries => shokoSeries.AnidbAnimeID).ToList();
 
         foreach (var seriesPath in state.ResolvedVfsSeriesPaths)
         {
@@ -570,12 +586,14 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
         if (Settings.Advanced.DisableVfsGeneration)
             return;
 
-        List<string> roots = [.. (videoService.GetAllManagedFolders() ?? []).Select(f => f.Path).Where(path => !string.IsNullOrEmpty(path)).Distinct(VfsShared.PathComparer)];
+        List<string> roots = [.. (videoService.GetAllManagedFolders() ?? []).Select(folder => folder.Path).Where(path => !string.IsNullOrEmpty(path)).Distinct(VfsShared.PathComparer)];
         string movieRoot = VfsShared.ResolveMovieRootFolderName();
         var movieEpIds = new HashSet<int>(extraMovieEpIds ?? []);
-        if (pruneMovies && metadataService.GetShokoSeriesByID(folderId) is { Episodes: { } eps })
-            foreach (var ep in eps.Where(e => e.Type == EpisodeType.Episode))
-                movieEpIds.Add(ep.LocalID);
+        if (pruneMovies)
+            foreach (int groupSeriesId in OverrideHelper.GetGroup(folderId, metadataService))
+                if (metadataService.GetShokoSeriesByID(groupSeriesId) is { Episodes: { } eps })
+                    foreach (var episode in eps.Where(episode => episode.Type == EpisodeType.Episode))
+                        movieEpIds.Add(episode.LocalID);
 
         foreach (var root in roots)
         {

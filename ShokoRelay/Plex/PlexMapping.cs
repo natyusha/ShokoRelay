@@ -60,11 +60,11 @@ public static class PlexMapping
 
         if (EnforceTmdbNumbering && episode is IShokoEpisode shokoEpisode && shokoEpisode.GetLinkedEpisodes(MetadataSource.TMDB) is { Count: > 0 } tmdbEps)
         {
-            // Fast path: resolve coordinates from the pre-indexed alternate ordering table in O(1)
+            // Fast path: resolve coordinates from the pre-indexed alternate ordering table
             if (tmdbOrderingLookup != null)
             {
                 var ordered = tmdbEps
-                    .Select(ep => tmdbOrderingLookup.TryGetValue(ep.ID, out var coords) ? (Found: true, Coords: coords) : default)
+                    .Select(tmdbEp => tmdbOrderingLookup.TryGetValue(tmdbEp.ID, out var coords) ? (Found: true, Coords: coords) : default)
                     .Where(item => item.Found)
                     .OrderBy(item => item.Coords.Season)
                     .ThenBy(item => item.Coords.Episode)
@@ -85,7 +85,7 @@ public static class PlexMapping
             }
 
             var tmdbEpisodes = string.IsNullOrWhiteSpace(seriesPreferredOrderingId)
-                ? [.. tmdbEps.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber)]
+                ? [.. tmdbEps.OrderBy(tmdbEp => tmdbEp.SeasonNumber ?? 0).ThenBy(tmdbEp => tmdbEp.EpisodeNumber)]
                 : SelectPreferredTmdbOrdering(tmdbEps, seriesPreferredOrderingId);
 
             if (tmdbEpisodes.Count > 0)
@@ -131,11 +131,11 @@ public static class PlexMapping
         string? showPrefId = eps.OfType<IShokoEpisode>().Select(se => se.Series).FirstOrDefault() is { } series ? MapHelper.GetPreferredTmdbOrderingId(series) : null;
         bool hasCustomOverride = eps.Any(e => e is IShokoEpisode { Series: { AnidbAnimeID: > 0 } ss } && OverrideHelper.GetCustomCoords(ss.AnidbAnimeID, e.Type, e.EpisodeNumber).HasValue);
 
-        if (!hasCustomOverride && EnforceTmdbNumbering && eps.Select(ep => ep.Type).Distinct().Count() == 1)
+        if (!hasCustomOverride && EnforceTmdbNumbering && eps.Select(episode => episode.Type).Distinct().Count() == 1)
         {
-            var tmdbEntriesRaw = eps.OfType<IShokoEpisode>().SelectMany(se => se.GetLinkedEpisodes(MetadataSource.TMDB) ?? []).ToList();
+            var tmdbEntriesRaw = eps.OfType<IShokoEpisode>().SelectMany(shokoEp => shokoEp.GetLinkedEpisodes(MetadataSource.TMDB) ?? []).ToList();
             var tmdbEntries = string.IsNullOrWhiteSpace(showPrefId)
-                ? [.. tmdbEntriesRaw.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber)]
+                ? [.. tmdbEntriesRaw.OrderBy(tmdbEp => tmdbEp.SeasonNumber ?? 0).ThenBy(tmdbEp => tmdbEp.EpisodeNumber)]
                 : SelectPreferredTmdbOrdering(tmdbEntriesRaw, showPrefId);
 
             if (tmdbEntries.Count > 0)
@@ -181,23 +181,23 @@ public static class PlexMapping
             return [];
         var list = entries.ToList();
         return list.Count <= 1 ? list
-            : string.IsNullOrWhiteSpace(showPreferredOrderingId) ? [.. list.OrderBy(te => te.SeasonNumber ?? 0).ThenBy(te => te.EpisodeNumber)]
+            : string.IsNullOrWhiteSpace(showPreferredOrderingId) ? [.. list.OrderBy(tmdbEp => tmdbEp.SeasonNumber ?? 0).ThenBy(tmdbEp => tmdbEp.EpisodeNumber)]
             :
             [
-                .. list.Select(te =>
+                .. list.Select(tmdbEp =>
                     {
-                        bool isPref = te.PreferredOrdering is { } pref && IsTmdbOrdering(pref, showPreferredOrderingId);
+                        bool isPref = tmdbEp.PreferredOrdering is { } pref && IsTmdbOrdering(pref, showPreferredOrderingId);
                         return (
-                            Episode: te,
+                            Episode: tmdbEp,
                             Priority: isPref ? 0 : 1,
-                            Season: isPref ? te.PreferredOrdering!.SeasonNumber ?? 0 : te.SeasonNumber ?? 0,
-                            Number: isPref ? te.PreferredOrdering!.EpisodeNumber : te.EpisodeNumber
+                            Season: isPref ? tmdbEp.PreferredOrdering!.SeasonNumber ?? 0 : tmdbEp.SeasonNumber ?? 0,
+                            Number: isPref ? tmdbEp.PreferredOrdering!.EpisodeNumber : tmdbEp.EpisodeNumber
                         );
                     })
-                    .OrderBy(x => x.Priority)
-                    .ThenBy(x => x.Season)
-                    .ThenBy(x => x.Number)
-                    .Select(x => x.Episode),
+                    .OrderBy(entry => entry.Priority)
+                    .ThenBy(entry => entry.Season)
+                    .ThenBy(entry => entry.Number)
+                    .Select(entry => entry.Episode),
             ];
     }
 

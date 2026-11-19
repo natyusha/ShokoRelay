@@ -105,7 +105,7 @@
   /**
    * Generates a multiselect checkbox dropdown for Flags enum properties and binds it to the configuration state.
    * @param {HTMLElement} wrap - The container element to append to.
-   * @param {Object} p - The property schema object.
+   * @param {Object} prop - The property schema object.
    * @param {Object} config - The active configuration object.
    * @param {number|string} value - The current property value.
    * @returns {void}
@@ -172,7 +172,7 @@
   /**
    * Generates a dual-textarea UI for mapping dictionaries and binds it to the configuration state.
    * @param {HTMLElement} wrap - The container element to append to.
-   * @param {Object} p - The property schema object.
+   * @param {Object} prop - The property schema object.
    * @param {Object} config - The active configuration object.
    * @param {Object} value - The current dictionary value.
    * @param {string} leftHeader - The label for the left textarea.

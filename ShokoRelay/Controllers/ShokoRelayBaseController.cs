@@ -31,7 +31,9 @@ internal static class RelayAuthSession
     {
         var expiresAt = DateTimeOffset.UtcNow.Add(s_sessionLifetime);
         byte[] payload = Encoding.UTF8.GetBytes($"{user.LocalID}:{expiresAt.ToUnixTimeSeconds()}");
-        byte[] protectedBytes = context.RequestServices.GetService<IDataProtectionProvider>() is { } dp ? dp.CreateProtector(ProtectorPurpose).Protect(payload) : SignWithFallback(payload);
+        byte[] protectedBytes = context.RequestServices.GetService<IDataProtectionProvider>() is { } dataProtection
+            ? dataProtection.CreateProtector(ProtectorPurpose).Protect(payload)
+            : SignWithFallback(payload);
 
         context.Response.Cookies.Append(
             CookieName,
@@ -75,7 +77,7 @@ internal static class RelayAuthSession
         try
         {
             byte[] raw = Convert.FromBase64String(token);
-            byte[]? payload = context.RequestServices.GetService<IDataProtectionProvider>() is { } dp ? dp.CreateProtector(ProtectorPurpose).Unprotect(raw) : VerifyWithFallback(raw);
+            byte[]? payload = context.RequestServices.GetService<IDataProtectionProvider>() is { } dataProtection ? dataProtection.CreateProtector(ProtectorPurpose).Unprotect(raw) : VerifyWithFallback(raw);
             if (payload == null)
                 return null;
 
@@ -281,7 +283,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
         if (errors.Count > 0)
             return BadRequest(new RelayResponse<object>(Status: "error", Message: "Invalid filter values.", Data: new { errors }));
 
-        ids = [.. ids.Select(i => OverrideHelper.GetPrimary(i, MetadataService)).Distinct()];
+        ids = [.. ids.Select(id => OverrideHelper.GetPrimary(id, MetadataService)).Distinct()];
         return null;
     }
 

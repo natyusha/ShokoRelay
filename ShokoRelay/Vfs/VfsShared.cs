@@ -506,11 +506,11 @@ internal static class VfsShared
             {
                 using var fs = new FileStream(BlueprintFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
                 if (JsonSerializer.Deserialize<Dictionary<string, Dictionary<int, VfsBlueprintSeries>>>(fs) is { } existing)
-                    foreach (var rKvp in existing)
+                    foreach (var rootPair in existing)
                     {
-                        var rootDict = blueprint.GetOrAdd(rKvp.Key, _ => new());
-                        foreach (var sKvp in rKvp.Value)
-                            rootDict.TryAdd(sKvp.Key, sKvp.Value);
+                        var rootDict = blueprint.GetOrAdd(rootPair.Key, _ => new());
+                        foreach (var seriesPair in rootPair.Value)
+                            rootDict.TryAdd(seriesPair.Key, seriesPair.Value);
                     }
             }
             catch { }

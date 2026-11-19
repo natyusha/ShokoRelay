@@ -28,7 +28,8 @@ public partial class VfsBuilder
         string rootName = VfsShared.ResolveRootFolderName();
         string movieRootName = VfsShared.ResolveMovieRootFolderName();
         var allRoots =
-            videoService.GetAllManagedFolders()?.Where(VfsShared.IsVfsEnabledFolder).Select(f => f.Path).Where(path => !string.IsNullOrWhiteSpace(path)).Distinct(VfsShared.PathComparer).ToList() ?? [];
+            videoService.GetAllManagedFolders()?.Where(VfsShared.IsVfsEnabledFolder).Select(folder => folder.Path).Where(path => !string.IsNullOrWhiteSpace(path)).Distinct(VfsShared.PathComparer).ToList()
+            ?? [];
 
         var validFolderIds = new HashSet<int>();
         var validMovieFolders = new HashSet<int>();
@@ -46,8 +47,8 @@ public partial class VfsBuilder
                     validFolderIds.Add(folderId);
 
                 if (doMovie)
-                    foreach (var ep in series.Episodes.Where(e => e.Type == EpisodeType.Episode))
-                        validMovieFolders.Add(ep.LocalID);
+                    foreach (var episode in series.Episodes.Where(ep => ep.Type == EpisodeType.Episode))
+                        validMovieFolders.Add(episode.LocalID);
             }
         }
 
@@ -125,7 +126,7 @@ public partial class VfsBuilder
                             }
                         }
 
-                        foreach (var subDir in Directory.EnumerateDirectories(seriesFolder, "*", SearchOption.AllDirectories).OrderByDescending(d => d.Length))
+                        foreach (var subDir in Directory.EnumerateDirectories(seriesFolder, "*", SearchOption.AllDirectories).OrderByDescending(dir => dir.Length))
                         {
                             try
                             {

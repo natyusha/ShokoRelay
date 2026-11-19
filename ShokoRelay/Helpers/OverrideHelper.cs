@@ -83,7 +83,7 @@ public static class OverrideHelper
                     if (line.Length == 0 || line[0] == '#')
                         continue;
 
-                    var parts = TextHelper.SplitCsvLine(line).Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
+                    var parts = TextHelper.SplitCsvLine(line).Select(part => part.Trim()).Where(part => part.Length > 0).ToList();
                     if (parts.Count == 0)
                         continue;
 
@@ -182,11 +182,11 @@ public static class OverrideHelper
         if (animeId <= 0)
             return shokoSeriesId;
 
-        // 1. Manual override takes precedence (O(1))
+        // 1. Manual override takes precedence
         if (s_groups.TryGetValue(animeId, out var manualGrp) && manualGrp.Count > 0)
             return metadataService?.GetShokoSeriesByAnidbID(manualGrp[0])?.LocalID ?? shokoSeriesId;
 
-        // 2. Auto TMDB Merge fast-path (O(1))
+        // 2. Auto TMDB Merge fast-path
         if (Settings.Advanced.MergeTmdbSeries)
         {
             if (series?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() is { } tmdbSeries && !string.IsNullOrWhiteSpace(tmdbSeries.ID.ID))
@@ -233,19 +233,19 @@ public static class OverrideHelper
             if (xrefs.Count > 1)
             {
                 var groupIds = xrefs
-                    .Select(x => x.AnidbAnimeID)
+                    .Select(xref => xref.AnidbAnimeID)
                     .Distinct()
                     .Select(metadataService.GetShokoSeriesByAnidbID)
                     .OfType<IShokoSeries>()
-                    .OrderBy(s => s.AirDate ?? PartialDateOnly.MaxValue)
-                    .ThenBy(s => s.AnidbAnimeID)
-                    .Select(s => s.AnidbAnimeID)
+                    .OrderBy(seriesItem => seriesItem.AirDate ?? PartialDateOnly.MaxValue)
+                    .ThenBy(seriesItem => seriesItem.AnidbAnimeID)
+                    .Select(seriesItem => seriesItem.AnidbAnimeID)
                     .ToList();
 
                 if (groupIds.Count > 1)
                 {
                     s_tmdbGroups[tmdbIdStr] = groupIds;
-                    return [.. groupIds.Select(metadataService.GetShokoSeriesByAnidbID).OfType<IShokoSeries>().Select(ss => ss.LocalID)];
+                    return [.. groupIds.Select(metadataService.GetShokoSeriesByAnidbID).OfType<IShokoSeries>().Select(seriesItem => seriesItem.LocalID)];
                 }
             }
 

@@ -68,7 +68,7 @@ public static class ReportHelper
                 seriesList,
                 DefaultParallelOptions(),
                 () => new ThreadState(),
-                (series, _, local) =>
+                (series, loopState, local) =>
                 {
                     local.SeenInSeries.Clear();
                     collectSeries(series, (source, sourceOrder, rawName, category) => RecordLocal(local, series.LocalID, category, source, sourceOrder, rawName));
@@ -78,19 +78,19 @@ public static class ReportHelper
                 {
                     lock (_mergeLock)
                     {
-                        foreach (var (gKey, localGroup) in local.Groups)
+                        foreach (var (groupKey, localGroup) in local.Groups)
                         {
-                            if (!_globalGroups.TryGetValue(gKey, out var globalGroup))
-                                _globalGroups[gKey] = globalGroup = new GroupStats();
+                            if (!_globalGroups.TryGetValue(groupKey, out var globalGroup))
+                                _globalGroups[groupKey] = globalGroup = new GroupStats();
 
                             globalGroup.MergeTarget ??= localGroup.MergeTarget;
-                            foreach (var sid in localGroup.SeriesIds)
-                                globalGroup.SeriesIds.Add(sid);
+                            foreach (var seriesId in localGroup.SeriesIds)
+                                globalGroup.SeriesIds.Add(seriesId);
 
-                            foreach (var (vKey, vStats) in localGroup.Variants)
+                            foreach (var (variantKey, vStats) in localGroup.Variants)
                             {
-                                if (!globalGroup.Variants.TryGetValue(vKey, out var gv))
-                                    globalGroup.Variants[vKey] = gv = new VariantStats();
+                                if (!globalGroup.Variants.TryGetValue(variantKey, out var gv))
+                                    globalGroup.Variants[variantKey] = gv = new VariantStats();
                                 gv.Count += vStats.Count;
                             }
                         }
@@ -168,11 +168,11 @@ public static class ReportHelper
                 // 4. Shorter name, then alphabetical
                 var ordered = group
                     .Variants.Select(kvp => (kvp.Key.SourceOrder, kvp.Key.Source, kvp.Key.DisplayName, kvp.Value.Count))
-                    .OrderByDescending(v => group.MergeTarget != null && string.Equals(v.DisplayName, group.MergeTarget, StringComparison.OrdinalIgnoreCase))
-                    .ThenBy(v => v.SourceOrder)
-                    .ThenByDescending(v => v.Count)
-                    .ThenBy(v => v.DisplayName.Length)
-                    .ThenBy(v => v.DisplayName, StringComparer.Ordinal)
+                    .OrderByDescending(variant => group.MergeTarget != null && string.Equals(variant.DisplayName, group.MergeTarget, StringComparison.OrdinalIgnoreCase))
+                    .ThenBy(variant => variant.SourceOrder)
+                    .ThenByDescending(variant => variant.Count)
+                    .ThenBy(variant => variant.DisplayName.Length)
+                    .ThenBy(variant => variant.DisplayName, StringComparer.Ordinal)
                     .ToList();
 
                 // When distinct primary-source (AniDB) entries are not explicitly merged by CSV rules, emit each as its own line and attach secondary-source matches

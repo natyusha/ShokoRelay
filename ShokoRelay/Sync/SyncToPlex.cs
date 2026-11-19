@@ -104,7 +104,10 @@ public class SyncToPlex(
             }
 
             return shokoWatchedByUser[shokoUser.LocalID] = [
-                .. query.Select(sw => (UserData: sw, Episode: metadataService.GetShokoEpisodeByID(sw.EpisodeID))).Where(item => item.Episode != null).Select(item => (item.UserData, Episode: item.Episode!)),
+                .. query
+                    .Select(entry => (UserData: entry, Episode: metadataService.GetShokoEpisodeByID(entry.EpisodeID)))
+                    .Where(item => item.Episode != null)
+                    .Select(item => (item.UserData, Episode: item.Episode!)),
             ];
         }
 

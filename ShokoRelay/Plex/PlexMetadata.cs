@@ -456,7 +456,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
             ["key"]                   = $"/metadata/{episode.GetPlexRatingKey(partIndex)}",
             ["guid"]                  = episode.GetPlexGuid(partIndex),
             ["type"]                  = "episode",
-            ["subtype"]               = (mapped.Season < 0 && TryGetExtraSeason(mapped.Season, out var ex)) ? ex.Subtype : null,
+            ["subtype"]               = (mapped.Season < 0 && TryGetExtraSeason(mapped.Season, out var extraSeason)) ? extraSeason.Subtype : null,
             ["title"]                 = epTitle,
             ["originallyAvailableAt"] = episode.AirDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             ["thumb"]                 = thumb,
@@ -646,7 +646,9 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
         series is IShokoSeries { AnidbAnime.Suggestions: { Count: > 0 } list }
             ? list.Select(suggestion => suggestion.SuggestedID.TryGetNumericID(out int aid) ? metadataService.GetShokoSeriesByAnidbID(aid) : null)
                 .OfType<IShokoSeries>()
-                .Select(linkedSeries => (object)new { guid = linkedSeries.GetPlexGuid(), tag = linkedSeries.PreferredTitle?.Value ?? linkedSeries.DefaultTitle?.Value })
+                .Select(linkedSeries => metadataService.GetShokoSeriesByID(OverrideHelper.GetPrimary(linkedSeries.LocalID, metadataService)) ?? linkedSeries)
+                .DistinctBy(primarySeries => primarySeries.LocalID)
+                .Select(primarySeries => (object)new { guid = primarySeries.GetPlexGuid(), tag = primarySeries.PreferredTitle?.Value ?? primarySeries.DefaultTitle?.Value })
                 .ToArray()
                 is { Length: > 0 } arr
                 ? arr

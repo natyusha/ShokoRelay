@@ -48,9 +48,9 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
         if (!safeMapFile.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
             return new SourceLinkResult(0, false, details);
 
-        foreach (var mf in managedFolders)
+        foreach (var managedFolder in managedFolders)
         {
-            string root = mf.Path;
+            string root = managedFolder.Path;
             if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
                 continue;
 
@@ -101,7 +101,7 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
                     string srcBase = Path.GetFileNameWithoutExtension(fullSrc);
                     string destBase = Path.GetFileNameWithoutExtension(fullDest);
 
-                    string tagSuffix = srcInfo.Tags.Count > 0 ? " " + string.Join(" ", srcInfo.Tags.Select(t => $"[{t}]")) : string.Empty;
+                    string tagSuffix = srcInfo.Tags.Count > 0 ? " " + string.Join(" ", srcInfo.Tags.Select(tag => $"[{tag}]")) : string.Empty;
                     string finalDestBase = destBase + tagSuffix;
 
                     if (!string.IsNullOrEmpty(destDir))
@@ -116,9 +116,10 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
                         string name = Path.GetFileName(entry);
                         bool isDir = Directory.Exists(entry);
                         bool isAttachDir = isDir && name.StartsWith(srcBase, cmp) && PlexConstants.LocalMediaAssets.AttachmentFolderSuffixes.Contains(name[srcBase.Length..]);
+                        bool isSidecarFile = !isDir && name.StartsWith(srcBase, cmp) && (name.Length == srcBase.Length || !char.IsLetterOrDigit(name[srcBase.Length]));
 
-                        // Logic: Filter for the primary video, any file starting with the base name, or the designated attachments folder
-                        if (!name.Equals(Path.GetFileName(fullSrc), cmp) && (isDir || !name.StartsWith(srcBase, cmp)) && !isAttachDir)
+                        // Logic: Filter for the primary video, any file starting with the base name (guarded against prefix collisions), or the designated attachments folder
+                        if (!name.Equals(Path.GetFileName(fullSrc), cmp) && !isSidecarFile && !isAttachDir)
                             continue;
 
                         string suffix = isDir ? "_attach" : name[srcBase.Length..];

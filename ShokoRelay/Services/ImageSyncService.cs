@@ -532,7 +532,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                 var contentType = ImageHelper.GetMimeType(Path.GetExtension(foundFile!)) ?? "image/jpeg";
                 var uploadedImage = imageManager.UploadImage(stream, contentType, ServiceRegistration.RelaySource);
 
-                imageManager.AddImageCrossReference(
+                var addedXref = imageManager.AddImageCrossReference(
                     entity,
                     uploadedImage,
                     new ImageCrossReferenceData
@@ -543,6 +543,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                         IsDesired = true,
                     }
                 );
+                imageManager.SetPreferredImageForEntity(addedXref);
             }
             finally
             {
@@ -613,7 +614,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                 using var stream = new MemoryStream(bytes);
                 var uploadedImage = imageManager.UploadImage(stream, "image/jpeg", ServiceRegistration.RelayPlexSource);
 
-                imageManager.AddImageCrossReference(
+                var addedXref = imageManager.AddImageCrossReference(
                     episode,
                     uploadedImage,
                     new ImageCrossReferenceData
@@ -624,6 +625,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                         IsDesired = true,
                     }
                 );
+                imageManager.SetPreferredImageForEntity(addedXref);
             }
             finally
             {
