@@ -206,24 +206,24 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient, ILogg
         foreach (var target in plexClient.GetConfiguredTargets())
         {
             bool isMovie = target.LibraryType == PlexLibraryType.Movie;
-            foreach (var m in await plexClient.GetSectionCollectionsAsync(target, cancellationToken).ConfigureAwait(false))
+            foreach (var collectionItem in await plexClient.GetSectionCollectionsAsync(target, cancellationToken).ConfigureAwait(false))
             {
                 // Exclude smart collections from automatic empty collection deletion
-                if (PlexHelper.IsPlexTrue(m.Smart))
+                if (PlexHelper.IsPlexTrue(collectionItem.Smart))
                     continue;
 
-                if (PlexHelper.IsCollectionExcluded(m.Title, excludedKeywords))
+                if (PlexHelper.IsCollectionExcluded(collectionItem.Title, excludedKeywords))
                     continue;
 
                 // Delete a custom collection from the specified Plex library target
                 if (
-                    int.TryParse(m.RatingKey, out int id)
-                    && m.ChildCount == 0
+                    int.TryParse(collectionItem.RatingKey, out int id)
+                    && collectionItem.ChildCount == 0
                     && await ExecuteActionAsync(HttpMethod.Delete, $"/library/collections/{id}", target, $"Delete collection {id}", cancellationToken).ConfigureAwait(false)
                 )
                 {
-                    logger.LogInformation("PlexCollections: Deleted empty collection '{Title}' (RatingKey: {RatingKey}) in section {SectionId}", m.Title ?? "Unknown", id, target.SectionId);
-                    deleted.Add(new CollectionDeletionDetail(target.Title, isMovie, m.Title ?? "Unknown", id));
+                    logger.LogInformation("PlexCollections: Deleted empty collection '{Title}' (RatingKey: {RatingKey}) in section {SectionId}", collectionItem.Title ?? "Unknown", id, target.SectionId);
+                    deleted.Add(new CollectionDeletionDetail(target.Title, isMovie, collectionItem.Title ?? "Unknown", id));
                 }
             }
         }

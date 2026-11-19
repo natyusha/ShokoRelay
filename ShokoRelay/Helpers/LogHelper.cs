@@ -101,15 +101,15 @@ public static class LogHelper
         if (tvLibs.Count > 0)
         {
             builder.AppendLine().AppendLine("TV Shows Libraries:");
-            foreach (var l in tvLibs)
-                PrintLib(l);
+            foreach (var lib in tvLibs)
+                PrintLib(lib);
         }
 
         if (movieLibs.Count > 0)
         {
             builder.AppendLine().AppendLine("Movie Libraries:");
-            foreach (var l in movieLibs)
-                PrintLib(l);
+            foreach (var lib in movieLibs)
+                PrintLib(lib);
         }
     }
 

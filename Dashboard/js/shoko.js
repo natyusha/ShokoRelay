@@ -177,12 +177,12 @@
         startToast?.remove();
         setButtonLoading(targetBtn, false);
 
-        await fetchJson(`${base}/tasks/clear/shoko-sync-watched`, { method: "POST" }, false); // Clear the task immediately on the server to prevent the background poller from firing a duplicate toast
+        await fetchJson(base + "/tasks/clear/shoko-sync-watched", { method: "POST" }, false); // Clear the task immediately on the server to prevent the background poller from firing a duplicate toast
         if (res.ok) {
-          const d = getData(res);
+          const syncData = getData(res);
 
           // Generate a robust summary combining standard counts and custom "Votes" data
-          const summary = (summarizeResult(res).text || `processed ${d.Processed ?? 0}`) + (d.VotesFound ? `, votes: ${d.VotesFound}` : "");
+          const summary = (summarizeResult(res).text || `processed ${syncData.Processed ?? 0}`) + (syncData.VotesFound ? `, votes: ${syncData.VotesFound}` : "");
 
           toastOperation(res, "Sync", { summary, hideOnSucceed: 0 });
         } else {

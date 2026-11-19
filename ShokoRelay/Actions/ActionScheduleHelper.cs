@@ -37,10 +37,10 @@ public static class ActionScheduleHelper
             if (freqHours > 1 && freqHours <= 24 && 24 % freqHours == 0)
             {
                 var todayUtc = DateTime.UtcNow.Date;
-                for (int i = 0; i < 24; i += freqHours)
+                for (int hourOffset = 0; hourOffset < 24; hourOffset += freqHours)
                 {
                     // Calculate the UTC hour and map it to the local server time
-                    int utcHour = (offset + i + 24) % 24;
+                    int utcHour = (offset + hourOffset + 24) % 24;
                     var utcTime = DateTime.SpecifyKind(todayUtc.AddHours(utcHour), DateTimeKind.Utc);
                     var localTime = TimeZoneInfo.ConvertTimeFromUtc(utcTime, TimeZoneInfo.Local);
 

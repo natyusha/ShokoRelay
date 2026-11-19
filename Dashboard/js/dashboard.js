@@ -22,10 +22,10 @@
     btn.classList.toggle("loading", isLoading);
     isLoading ? btn.setAttribute("disabled", "") : btn.removeAttribute("disabled");
     if (isLoading && !btn.querySelector(".button-spinner")) {
-      const s = document.createElement("span");
-      s.className = "button-spinner";
-      s.innerHTML = '<svg class="icon-svg"><use href="img/icons.svg#loading"></use></svg>';
-      btn.appendChild(s);
+      const spinner = document.createElement("span");
+      spinner.className = "button-spinner";
+      spinner.innerHTML = '<svg class="icon-svg"><use href="img/icons.svg#loading"></use></svg>';
+      btn.appendChild(spinner);
     } else if (!isLoading) btn.querySelector(".button-spinner")?.remove();
   }
 

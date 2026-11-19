@@ -100,9 +100,9 @@
    */
   const formatTime = (seconds) => {
     if (isNaN(seconds)) return "0:00";
-    const m = Math.floor(seconds / 60);
-    const s = Math.floor(seconds % 60);
-    return `${m}:${s < 10 ? "0" : ""}${s}`;
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
   };
 
   /**
@@ -745,13 +745,13 @@
     playerVideo.addEventListener("ended", () => {
       playerTrack?.classList.add("paused");
       cancelAnimationFrame(progressRaf);
-      const m = playerModeBtn?.getAttribute("data-mode");
+      const playbackMode = playerModeBtn?.getAttribute("data-mode");
       setTimeout(() => {
-        if (m === "loop") {
+        if (playbackMode === "loop") {
           playerVideo.currentTime = 0;
           playerVideo.play().catch(() => {});
-        } else if (m === "shuffle" || m === "next") {
-          playMove(m === "shuffle", 1);
+        } else if (playbackMode === "shuffle" || playbackMode === "next") {
+          playMove(playbackMode === "shuffle", 1);
         }
       }, 0);
     });

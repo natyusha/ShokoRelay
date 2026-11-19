@@ -522,19 +522,19 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
         int start = 0;
         while (true)
         {
-            var q = new List<string> { $"X-Plex-Container-Start={start}", "X-Plex-Container-Size=200" };
+            var queryParams = new List<string> { $"X-Plex-Container-Start={start}", "X-Plex-Container-Size=200" };
             if (type.HasValue)
-                q.Add($"type={type.Value}");
+                queryParams.Add($"type={type.Value}");
             if (onlyUnwatched.HasValue)
-                q.Add($"unwatched={(onlyUnwatched.Value ? 1 : 0)}");
+                queryParams.Add($"unwatched={(onlyUnwatched.Value ? 1 : 0)}");
             if (hasProgress.HasValue)
-                q.Add(hasProgress.Value ? "viewOffset>=1" : "viewOffset=0");
+                queryParams.Add(hasProgress.Value ? "viewOffset>=1" : "viewOffset=0");
             if (!string.IsNullOrEmpty(guidFilter))
-                q.Add($"guid={Uri.EscapeDataString(guidFilter)}");
+                queryParams.Add($"guid={Uri.EscapeDataString(guidFilter)}");
             if (minLastViewed.HasValue)
-                q.Add($"lastViewedAt>={minLastViewed.Value}");
+                queryParams.Add($"lastViewedAt>={minLastViewed.Value}");
 
-            using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?{string.Join("&", q)}", target.ServerUrl, token);
+            using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?{string.Join("&", queryParams)}", target.ServerUrl, token);
             using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
             if (!resp.IsSuccessStatusCode)
             {

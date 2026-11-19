@@ -47,11 +47,11 @@
 
       showToast(`${label}: Generating...`, "info", TOAST_MS);
       const res = await fetchJson(`${base}/animethemes/mp3?${ps}`);
-      const d = getData(res);
+      const resData = getData(res);
 
-      const status = d?.Status || d?.status;
-      const message = d?.Message || d?.message;
-      const folder = d?.Folder || d?.folder || ps.get("path");
+      const status = resData?.Status || resData?.status;
+      const message = resData?.Message || resData?.message;
+      const folder = resData?.Folder || resData?.folder || ps.get("path");
 
       let summary = summarizeResult(res).text;
       let isNoTheme = false;
@@ -79,10 +79,10 @@
 
         // Trigger playback side effect if a theme exists locally (or play first downloaded theme from a batch)
         if (!isBatch && (status === "ok" || (status === "skipped" && message === "Theme.mp3 already exists."))) {
-          const playPath = d?.Folder || d?.folder || ps.get("path");
+          const playPath = resData?.Folder || resData?.folder || ps.get("path");
           if (playPath) playThemeMp3(playPath);
         } else if (isBatch) {
-          const items = d?.Items || d?.items || [];
+          const items = resData?.Items || resData?.items || [];
           const playItem =
             items.find((i) => (i.Status || i.status) === "ok") ||
             (items.length === 1 && (items[0].Status || items[0].status) === "skipped" && (items[0].Message || items[0].message) === "Theme.mp3 already exists." ? items[0] : null);
@@ -167,13 +167,13 @@
   async function showNowPlaying(folderPath) {
     try {
       const res = await fetch(`${base}/animethemes/mp3/stream?path=${encodeURIComponent(folderPath)}`, { method: "HEAD" });
-      const getHeader = (k) => {
-        const v = res.headers.get(k);
-        if (!v) return "";
+      const getHeader = (headerKey) => {
+        const val = res.headers.get(headerKey);
+        if (!val) return "";
         try {
-          return decodeURIComponent(v);
+          return decodeURIComponent(val);
         } catch {
-          return v;
+          return val;
         }
       };
       const title = getHeader("X-Theme-Title");
@@ -239,8 +239,8 @@
         syncPlaybackUI();
         if (el("at-mode")?.getAttribute("data-mode") === "shuffle") {
           const res = await fetchJson(base + "/animethemes/mp3/random");
-          const d = getData(res);
-          if (d?.path) playThemeMp3(d.path);
+          const randomData = getData(res);
+          if (randomData?.path) playThemeMp3(randomData.path);
         } else dismissNowPlaying();
       };
     }
@@ -278,11 +278,11 @@
       sync(isEnabled);
 
       playback.onclick = async () => {
-        const n = playback.getAttribute("aria-pressed") !== "true";
-        playback.setAttribute("aria-pressed", n);
-        sync(n);
+        const nextPressed = playback.getAttribute("aria-pressed") !== "true";
+        playback.setAttribute("aria-pressed", nextPressed);
+        sync(nextPressed);
 
-        if (!n && atAudio) {
+        if (!nextPressed && atAudio) {
           atAudio.pause();
           atAudio.removeAttribute("src");
           atAudio.load();
@@ -290,7 +290,7 @@
           dismissNowPlaying();
         }
 
-        window._sr.setValueByPath(cfg, "Playback.AnimeThemesMp3Playback", n);
+        window._sr.setValueByPath(cfg, "Playback.AnimeThemesMp3Playback", nextPressed);
         await persist(cfg);
       };
     }
@@ -301,11 +301,11 @@
       updatePlaybackTooltip(modeButton);
 
       modeButton.onclick = async () => {
-        const n = getNextMode(modeButton.getAttribute("data-mode"), ["loop", "shuffle", "off"]);
-        modeButton.setAttribute("data-mode", n);
+        const nextMode = getNextMode(modeButton.getAttribute("data-mode"), ["loop", "shuffle", "off"]);
+        modeButton.setAttribute("data-mode", nextMode);
         updatePlaybackTooltip(modeButton);
-        if (atAudio) atAudio.loop = n === "loop";
-        window._sr.setValueByPath(cfg, "Playback.AnimeThemesMp3Mode", n);
+        if (atAudio) atAudio.loop = nextMode === "loop";
+        window._sr.setValueByPath(cfg, "Playback.AnimeThemesMp3Mode", nextMode);
         await persist(cfg);
       };
     }
@@ -318,8 +318,8 @@
           if (atCurrentFolder) showNowPlaying(atCurrentFolder);
         } else {
           const res = await fetchJson(base + "/animethemes/mp3/random");
-          const d = getData(res);
-          d?.path ? playThemeMp3(d.path) : showToast("No Theme.mp3 Files Found", "error", window._sr.TOAST_MS);
+          const randomData = getData(res);
+          randomData?.path ? playThemeMp3(randomData.path) : showToast("No Theme.mp3 Files Found", "error", window._sr.TOAST_MS);
         }
       };
     }

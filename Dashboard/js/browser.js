@@ -414,8 +414,8 @@
           const res = await fetchJson(`${base}/animethemes/mp3?path=${encodeURIComponent(physicalPath)}`);
           toastOperation(res, label, { hideOnSucceed: TOAST_MS });
 
-          const d = getData(res);
-          if (res.ok && (d?.Status === "ok" || d?.status === "ok")) refreshSeries(g.id);
+          const themeData = getData(res);
+          if (res.ok && (themeData?.Status === "ok" || themeData?.status === "ok")) refreshSeries(g.id);
         };
       } else {
         // Swallows the click to prevent the parent VFS details folder from toggling

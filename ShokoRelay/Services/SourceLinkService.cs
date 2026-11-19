@@ -65,9 +65,9 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
             bool modified = false;
             var dirsToScan = new HashSet<string>(VfsShared.PathComparer);
 
-            for (int i = 0; i < lines.Length; i++)
+            for (int lineIdx = 0; lineIdx < lines.Length; lineIdx++)
             {
-                string line = lines[i].Trim();
+                string line = lines[lineIdx].Trim();
                 if (string.IsNullOrWhiteSpace(line) || line[0] == '#')
                     continue;
 
@@ -144,7 +144,7 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
 
                     if (mainLinked)
                     {
-                        lines[i] = "#" + lines[i];
+                        lines[lineIdx] = "#" + lines[lineIdx];
                         modified = true;
                         count++;
                         string logMsg = $"{srcInfo.Path} -> {destInfo.Path}";

@@ -137,9 +137,9 @@ public static partial class TextHelper
                 if (normTarget.Length > 0)
                     mergeMentioned.Add(normTarget);
 
-                for (int i = 1; i < parts.Length; i++)
+                for (int partIdx = 1; partIdx < parts.Length; partIdx++)
                 {
-                    var source = UnescapeUnicode(parts[i].Trim());
+                    var source = UnescapeUnicode(parts[partIdx].Trim());
                     if (normalizeKey(source) is { Length: > 0 } normSource)
                     {
                         merges[normSource] = target;

@@ -514,20 +514,26 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
         string? prefId = ctx.PreferredOrderingId;
         bool enforceTmdb = EnforceTmdbNumbering;
 
-        foreach (var m in ctx.FileData.GetForSeason(seasonNum))
+        foreach (var mapping in ctx.FileData.GetForSeason(seasonNum))
         {
             // TMDB Episode Groups: One Shoko episode maps to multiple TMDB entries (bypassed when custom VFS overrides dictate coordinates).
-            if (enforceTmdb && m.Episodes.Count == 1 && m.PrimaryEpisode is IShokoEpisode se && !OverrideHelper.HasCustomCoords(se) && se.GetLinkedEpisodes(MetadataSource.TMDB) is { Count: > 1 } tmdbEps)
+            if (
+                enforceTmdb
+                && mapping.Episodes.Count == 1
+                && mapping.PrimaryEpisode is IShokoEpisode se
+                && !OverrideHelper.HasCustomCoords(se)
+                && se.GetLinkedEpisodes(MetadataSource.TMDB) is { Count: > 1 } tmdbEps
+            )
             {
                 var tmdbEpisodes = SelectPreferredTmdbOrdering(tmdbEps, prefId);
-                for (int i = 0; i < tmdbEpisodes.Count; i++)
+                for (int epIdx = 0; epIdx < tmdbEpisodes.Count; epIdx++)
                 {
-                    var tmdbEp = tmdbEpisodes[i];
+                    var tmdbEp = tmdbEpisodes[epIdx];
                     var (season, episode) = GetOrderingCoords(tmdbEp, prefId);
                     if (season != seasonNum)
                         continue;
                     var tmdbCoords = new PlexCoords { Season = season ?? 0, Episode = episode };
-                    int? effectivePart = m.PartIndex ?? (i + 1); // Assign a virtual part index based on the TMDB segment order to ensure unique ratingKeys (e.g. e123p1, e123p2)
+                    int? effectivePart = mapping.PartIndex ?? (epIdx + 1); // Assign a virtual part index based on the TMDB segment order to ensure unique ratingKeys (e.g. e123p1, e123p2)
                     var meta = MapEpisode(se, tmdbCoords, ctx, effectivePart, tmdbEp);
                     if (meta is Dictionary<string, object?> d && d.TryGetValue("ratingKey", out var rk) && rk is string key && seenKeys.Add(key))
                         items.Add((tmdbCoords, effectivePart, meta));
@@ -536,25 +542,25 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
             }
 
             // Joined Episodes: Multiple Shoko episodes of the same type sharing a file.
-            if (m.Episodes.Count > 1 && m.Episodes.Select(x => x.Type).Distinct().Count() == 1)
+            if (mapping.Episodes.Count > 1 && mapping.Episodes.Select(x => x.Type).Distinct().Count() == 1)
             {
-                foreach (var ep in m.Episodes)
+                foreach (var ep in mapping.Episodes)
                 {
                     var coordsEp = GetPlexCoordinates(ep, prefId);
-                    coordsEp.Season = m.Coords.Season;
+                    coordsEp.Season = mapping.Coords.Season;
                     if (coordsEp.Season != seasonNum)
                         continue;
-                    var meta = MapEpisode(ep, coordsEp, ctx, m.PartIndex);
+                    var meta = MapEpisode(ep, coordsEp, ctx, mapping.PartIndex);
                     if (meta is Dictionary<string, object?> d && d.TryGetValue("ratingKey", out var rk) && rk is string key && seenKeys.Add(key))
-                        items.Add((coordsEp, m.PartIndex, meta));
+                        items.Add((coordsEp, mapping.PartIndex, meta));
                 }
                 continue;
             }
 
             // Standard or Relation-linked files: Use the PrimaryEpisode resolved by MapHelper, which filters out unwanted relations.
-            var primaryMeta = MapEpisode(m.PrimaryEpisode, m.Coords, ctx, m.PartIndex, m.TmdbEpisode);
+            var primaryMeta = MapEpisode(mapping.PrimaryEpisode, mapping.Coords, ctx, mapping.PartIndex, mapping.TmdbEpisode);
             if (primaryMeta is Dictionary<string, object?> pDict && pDict.TryGetValue("ratingKey", out var pRk) && pRk is string pKey && seenKeys.Add(pKey))
-                items.Add((m.Coords, m.PartIndex, primaryMeta));
+                items.Add((mapping.Coords, mapping.PartIndex, primaryMeta));
         }
         return [.. items.OrderBy(x => x.Coords.Episode).ThenBy(x => x.Part ?? 0).Select(x => x.Meta)];
     }

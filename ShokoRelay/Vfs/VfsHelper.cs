@@ -84,8 +84,8 @@ public static partial class VfsHelper
                 name,
                 (chars, state) =>
                 {
-                    for (int i = 0; i < state.Length; i++)
-                        chars[i] = InvalidFileNameChars.Contains(state[i]) ? ' ' : state[i];
+                    for (int charIdx = 0; charIdx < state.Length; charIdx++)
+                        chars[charIdx] = InvalidFileNameChars.Contains(state[charIdx]) ? ' ' : state[charIdx];
                 }
             );
 
@@ -100,29 +100,29 @@ public static partial class VfsHelper
     {
         if (string.IsNullOrWhiteSpace(title))
             return "";
-        string c = title;
+        string cleanedTitle = title;
         foreach (var (f, r) in s_styledReplacements)
-            c = c.Replace(f, r, StringComparison.Ordinal);
-        c = QuotedTextRegex().Replace(c, "“$1”");
+            cleanedTitle = cleanedTitle.Replace(f, r, StringComparison.Ordinal);
+        cleanedTitle = QuotedTextRegex().Replace(cleanedTitle, "“$1”");
 
         // Zero-width space (\u200B) and hair space (\u200A) bypass Plex's undocumented behavior of automatically stripping OP/ED/extra prefixes from display titles while also sorting Openings before Endings
-        if (c.StartsWith("Opening", StringComparison.OrdinalIgnoreCase))
-            c = $"{TextHelper.HairSpace}O{TextHelper.ZeroWidthSpace}pening{c[7..]}";
-        else if (c.StartsWith("Ending", StringComparison.OrdinalIgnoreCase))
-            c = $"E{TextHelper.ZeroWidthSpace}nding{c[6..]}";
+        if (cleanedTitle.StartsWith("Opening", StringComparison.OrdinalIgnoreCase))
+            cleanedTitle = $"{TextHelper.HairSpace}O{TextHelper.ZeroWidthSpace}pening{cleanedTitle[7..]}";
+        else if (cleanedTitle.StartsWith("Ending", StringComparison.OrdinalIgnoreCase))
+            cleanedTitle = $"E{TextHelper.ZeroWidthSpace}nding{cleanedTitle[6..]}";
 
-        if (c.AsSpan().IndexOfAny(s_replacementChars) >= 0)
-            c = string.Create(
-                c.Length,
-                c,
+        if (cleanedTitle.AsSpan().IndexOfAny(s_replacementChars) >= 0)
+            cleanedTitle = string.Create(
+                cleanedTitle.Length,
+                cleanedTitle,
                 (chars, state) =>
                 {
-                    for (int i = 0; i < state.Length; i++)
-                        chars[i] = ReplacementCharMap.TryGetValue(state[i], out var m) ? m : state[i];
+                    for (int charIdx = 0; charIdx < state.Length; charIdx++)
+                        chars[charIdx] = ReplacementCharMap.TryGetValue(state[charIdx], out var m) ? m : state[charIdx];
                 }
             );
 
-        return WhitespaceRegex().Replace(c, " ").Trim(' ');
+        return WhitespaceRegex().Replace(cleanedTitle, " ").Trim(' ');
     }
 
     #endregion
@@ -346,12 +346,12 @@ public static partial class VfsHelper
                     catch { }
 
             var dirs = Directory.EnumerateDirectories(seriesPath, "*", SearchOption.AllDirectories).OrderByDescending(d => d.Length).ToList();
-            foreach (var d in dirs)
+            foreach (var dir in dirs)
             {
                 try
                 {
-                    if (!Directory.EnumerateFileSystemEntries(d).Any())
-                        Directory.Delete(d);
+                    if (!Directory.EnumerateFileSystemEntries(dir).Any())
+                        Directory.Delete(dir);
                 }
                 catch { }
             }

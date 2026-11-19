@@ -290,12 +290,12 @@ public static partial class PlexHelper
     {
         if (id <= 0)
             return false;
-        string s = value.Trim();
-        if (s.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
-            s = s[..^suffix.Length].Trim();
+        string str = value.Trim();
+        if (str.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            str = str[..^suffix.Length].Trim();
         else if (suffix != "")
             return false;
-        return int.TryParse(s.StartsWith("c", StringComparison.OrdinalIgnoreCase) ? s[1..] : s, out int parsed) && parsed == id;
+        return int.TryParse(str.StartsWith("c", StringComparison.OrdinalIgnoreCase) ? str[1..] : str, out int parsed) && parsed == id;
     }
 
     /// <summary>Determines if a filename base matches a specific normalized title and suffix.</summary>
@@ -327,8 +327,8 @@ public static partial class PlexHelper
         if (keywords.Length == 0)
             return false;
 
-        for (int i = 0; i < keywords.Length; i++)
-            if (collectionTitle.Contains(keywords[i], StringComparison.OrdinalIgnoreCase))
+        for (int kwIdx = 0; kwIdx < keywords.Length; kwIdx++)
+            if (collectionTitle.Contains(keywords[kwIdx], StringComparison.OrdinalIgnoreCase))
                 return true;
 
         return false;

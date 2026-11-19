@@ -37,16 +37,16 @@ public partial class VfsBuilder
 
         if (allSeries != null)
         {
-            foreach (var s in allSeries)
+            foreach (var series in allSeries)
             {
-                int folderId = s.GetPrimaryId(metadataService);
-                var (doStandard, doMovie) = MapHelper.GetGenerationModes(MapHelper.IsMovie(s), mode);
+                int folderId = series.GetPrimaryId(metadataService);
+                var (doStandard, doMovie) = MapHelper.GetGenerationModes(MapHelper.IsMovie(series), mode);
 
                 if (doStandard)
                     validFolderIds.Add(folderId);
 
                 if (doMovie)
-                    foreach (var ep in s.Episodes.Where(e => e.Type == EpisodeType.Episode))
+                    foreach (var ep in series.Episodes.Where(e => e.Type == EpisodeType.Episode))
                         validMovieFolders.Add(ep.LocalID);
             }
         }

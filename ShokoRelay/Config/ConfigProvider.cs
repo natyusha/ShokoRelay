@@ -236,7 +236,7 @@ public partial class ConfigProvider : IDisposable
     /// <returns>The file contents.</returns>
     private static string ReadFileWithRetry(string path)
     {
-        for (int i = 0; i < 3; i++)
+        for (int attempt = 0; attempt < 3; attempt++)
         {
             try
             {
@@ -244,7 +244,7 @@ public partial class ConfigProvider : IDisposable
             }
             catch (IOException)
             {
-                if (i == 2)
+                if (attempt == 2)
                     throw;
                 Thread.Sleep(50);
             }
@@ -311,8 +311,8 @@ public partial class ConfigProvider : IDisposable
                     overrides[kv[0].Trim()] = kv[1].Trim();
 
         // Extract from Query String (fallback for testing)
-        foreach (var q in ctx.Request.Query)
-            overrides[q.Key] = q.Value.ToString();
+        foreach (var queryParam in ctx.Request.Query)
+            overrides[queryParam.Key] = queryParam.Value.ToString();
 
         if (overrides.Count == 0 || !s_overridableProps.Any(p => overrides.ContainsKey(p.Name)))
             return settings;
@@ -620,9 +620,9 @@ public partial class ConfigProvider : IDisposable
 
             string shokoUser = tokens[0].Trim();
             var plexUsers = new List<(string PlexUser, string? Pin)>();
-            for (int i = 1; i < tokens.Length; i++)
+            for (int tokenIdx = 1; tokenIdx < tokens.Length; tokenIdx++)
             {
-                var parts = tokens[i].Split(';', 2);
+                var parts = tokens[tokenIdx].Split(';', 2);
                 string plexUser = parts[0].Trim();
                 if (string.IsNullOrWhiteSpace(plexUser) || !seenPlex.Add(plexUser))
                     continue;
@@ -703,15 +703,18 @@ public partial class ConfigProvider : IDisposable
 
         var mapped = settings.Advanced.PathMappings.Select(kvp =>
         {
-            string n = VfsShared.NormalizeSeparators(kvp.Key).Trim();
-            string key = n;
+            string normKey = VfsShared.NormalizeSeparators(kvp.Key).Trim();
+            string key = normKey;
             try
             {
-                key = Path.IsPathRooted(n) ? Path.GetFullPath(n).TrimEnd(Path.DirectorySeparatorChar) : n.TrimEnd(Path.DirectorySeparatorChar);
+                key = Path.IsPathRooted(normKey) ? Path.GetFullPath(normKey).TrimEnd(Path.DirectorySeparatorChar) : normKey.TrimEnd(Path.DirectorySeparatorChar);
             }
             catch { }
 
-            string val = (PlexHelper.NormalizePathForPlex(kvp.Value.Trim()) is var p && !p.StartsWith('/') && !p.Contains(':') && !p.StartsWith("//", StringComparison.Ordinal)) ? "/" + p : p;
+            string val =
+                (PlexHelper.NormalizePathForPlex(kvp.Value.Trim()) is var plexPath && !plexPath.StartsWith('/') && !plexPath.Contains(':') && !plexPath.StartsWith("//", StringComparison.Ordinal))
+                    ? "/" + plexPath
+                    : plexPath;
             return (Key: key, Value: val);
         });
 
@@ -776,12 +779,12 @@ public partial class ConfigProvider : IDisposable
     /// <param name="obj">The object to apply default values to.</param>
     private static void ApplyDefaultValues(object obj)
     {
-        foreach (var p in obj.GetType().GetProperties().Where(p => p.CanRead && p.CanWrite))
+        foreach (var prop in obj.GetType().GetProperties().Where(p => p.CanRead && p.CanWrite))
         {
-            if (p.PropertyType == typeof(string) && string.IsNullOrWhiteSpace(p.GetValue(obj) as string) && p.GetCustomAttribute<DefaultValueAttribute>() is { } d)
-                p.SetValue(obj, d.Value);
-            else if (p.PropertyType.IsClass && p.PropertyType != typeof(string) && !typeof(IDictionary).IsAssignableFrom(p.PropertyType))
-                ApplyDefaultValues(p.GetValue(obj)!);
+            if (prop.PropertyType == typeof(string) && string.IsNullOrWhiteSpace(prop.GetValue(obj) as string) && prop.GetCustomAttribute<DefaultValueAttribute>() is { } d)
+                prop.SetValue(obj, d.Value);
+            else if (prop.PropertyType.IsClass && prop.PropertyType != typeof(string) && !typeof(IDictionary).IsAssignableFrom(prop.PropertyType))
+                ApplyDefaultValues(prop.GetValue(obj)!);
         }
     }
 

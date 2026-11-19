@@ -216,8 +216,8 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
                             || string.Equals(l.Agent, ShokoRelayConstants.MovieAgentScheme, StringComparison.OrdinalIgnoreCase)
                         )
                         .ToList();
-                    foreach (var l in matched)
-                        list.Add((l, srv with { PreferredUri = uri }));
+                    foreach (var lib in matched)
+                        list.Add((lib, srv with { PreferredUri = uri }));
 
                     if (matched.Count > 0)
                         logger.LogInformation("Plex Discovery: Connected to server -> {Name} ... {Uri} (Type: {Type}, Libraries: {Count})", srv.Name, uri, isFallback ? "Fallback" : "Preferred", matched.Count);
@@ -234,9 +234,9 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
                 }
             }
 
-            for (int i = 0; i < servers.Count; i++)
+            for (int srvIdx = 0; srvIdx < servers.Count; srvIdx++)
             {
-                var srv = servers[i];
+                var srv = servers[srvIdx];
                 string? customUrl = !string.IsNullOrWhiteSpace(Settings.Advanced.PlexServerUrl) ? Settings.Advanced.PlexServerUrl.Trim().TrimEnd('/') : null;
                 var ok =
                     (!string.IsNullOrEmpty(customUrl) && await TryConnectAsync(customUrl, srv with { PreferredUri = customUrl }, false).ConfigureAwait(false))
@@ -254,7 +254,7 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
                         var workingSrv = srv with { PreferredUri = conn.Uri };
                         if (await TryConnectAsync(conn.Uri, workingSrv, true).ConfigureAwait(false))
                         {
-                            servers[i] = workingSrv;
+                            servers[srvIdx] = workingSrv;
                             ok = true;
                             break;
                         }

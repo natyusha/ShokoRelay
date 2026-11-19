@@ -87,7 +87,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
                 "1" or "movie" => PlexConstants.TypeMovie,
                 "3" or "season" => PlexConstants.TypeSeason,
                 "4" or "episode" => PlexConstants.TypeEpisode,
-                var t when int.TryParse(t, out int parsed) => parsed,
+                var typeText when int.TryParse(typeText, out int parsed) => parsed,
                 _ => PlexConstants.TypeShow,
             };
 
@@ -570,8 +570,8 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             return null;
 
         var segments = PlexHelper.NormalizePathForPlex(text).Split('/', StringSplitOptions.RemoveEmptyEntries);
-        for (int i = segments.Length - 1; i >= 0; i--)
-            if (int.TryParse(segments[i], out int id))
+        for (int segIdx = segments.Length - 1; segIdx >= 0; segIdx--)
+            if (int.TryParse(segments[segIdx], out int id))
                 return id;
 
         return null;

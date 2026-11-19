@@ -206,8 +206,8 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
                     Interlocked.Add(ref created, sCreated);
                     Interlocked.Add(ref skipped, sSkipped);
                     Interlocked.Add(ref planned, sPlanned);
-                    foreach (var s in sSkippedList)
-                        skippedDetailsBag.Add(s);
+                    foreach (var skippedItem in sSkippedList)
+                        skippedDetailsBag.Add(skippedItem);
                     foreach (var err in sErrors)
                         errorsBag.Add(err);
                     Interlocked.Increment(ref seriesProcessed);

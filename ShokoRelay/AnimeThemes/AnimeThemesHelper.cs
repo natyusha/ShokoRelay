@@ -194,9 +194,6 @@ internal static partial class AnimeThemesHelper
 
     #region CSV Logic
 
-    /// <summary>Reads specific ID3v2 tags from an MP3 file without external dependencies.</summary>
-    /// <param name="filePath">Absolute path to the MP3 file.</param>
-    /// <returns>A dictionary of tag names and values.</returns>
     internal static Dictionary<string, string> ReadId3v2Tags(string filePath)
     {
         var tags = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -208,24 +205,24 @@ internal static partial class AnimeThemesHelper
         int tagSize = (h[6] << 21) | (h[7] << 14) | (h[8] << 7) | h[9];
         int maxRead = Math.Min(tagSize, 65536);
         byte[] d = new byte[maxRead];
-        int r = fs.Read(d, 0, maxRead);
-        int p = 0;
-        while (p + 10 <= r)
+        int bytesRead = fs.Read(d, 0, maxRead);
+        int pos = 0;
+        while (pos + 10 <= bytesRead)
         {
-            string id = Encoding.ASCII.GetString(d, p, 4);
+            string id = Encoding.ASCII.GetString(d, pos, 4);
             if (id[0] == '\0')
                 break;
-            int sz = (d[p + 4] << 24) | (d[p + 5] << 16) | (d[p + 6] << 8) | d[p + 7];
-            if (sz <= 0 || p + 10 + sz > r)
+            int sz = (d[pos + 4] << 24) | (d[pos + 5] << 16) | (d[pos + 6] << 8) | d[pos + 7];
+            if (sz <= 0 || pos + 10 + sz > bytesRead)
                 break;
             if (id.StartsWith('T') && id != "TXXX" && sz > 1)
             {
-                string val = d[p + 10] switch
+                string val = d[pos + 10] switch
                 {
-                    1 => Encoding.Unicode.GetString(d, p + 11, sz - 1),
-                    2 => Encoding.BigEndianUnicode.GetString(d, p + 11, sz - 1),
-                    3 => Encoding.UTF8.GetString(d, p + 11, sz - 1),
-                    _ => Encoding.Latin1.GetString(d, p + 11, sz - 1),
+                    1 => Encoding.Unicode.GetString(d, pos + 11, sz - 1),
+                    2 => Encoding.BigEndianUnicode.GetString(d, pos + 11, sz - 1),
+                    3 => Encoding.UTF8.GetString(d, pos + 11, sz - 1),
+                    _ => Encoding.Latin1.GetString(d, pos + 11, sz - 1),
                 };
                 string tagKey = id switch
                 {
@@ -237,7 +234,7 @@ internal static partial class AnimeThemesHelper
                 };
                 tags[tagKey] = val.TrimEnd('\0').Replace("\uFEFF", "", StringComparison.Ordinal);
             }
-            p += 10 + sz;
+            pos += 10 + sz;
         }
         return tags;
     }
@@ -257,13 +254,13 @@ internal static partial class AnimeThemesHelper
         string? line;
         while ((line = reader.ReadLine()) != null)
         {
-            string t = line.Trim();
-            if (t.StartsWith("# filepath", StringComparison.OrdinalIgnoreCase))
+            string trimmedLine = line.Trim();
+            if (trimmedLine.StartsWith("# filepath", StringComparison.OrdinalIgnoreCase))
             {
                 passedHeader = true;
                 continue;
             }
-            if (t.Length == 0 || t.StartsWith('#'))
+            if (trimmedLine.Length == 0 || trimmedLine.StartsWith('#'))
             {
                 if (!passedHeader)
                     comments.Add(line);
@@ -272,29 +269,29 @@ internal static partial class AnimeThemesHelper
 
             passedHeader = true;
 
-            var f = TextHelper.SplitCsvLine(t);
-            if (f.Length < 17 || !int.TryParse(f[1], out int vid) || !int.TryParse(f[2], out int aid) || !int.TryParse(f[5], out int ver))
+            var fields = TextHelper.SplitCsvLine(trimmedLine);
+            if (fields.Length < 17 || !int.TryParse(fields[1], out int vid) || !int.TryParse(fields[2], out int aid) || !int.TryParse(fields[5], out int ver))
                 continue;
 
             entries.Add(
                 new AnimeThemesMappingEntry(
-                    f[0],
+                    fields[0],
                     vid,
                     aid,
-                    f[3] == "1",
-                    f[4],
+                    fields[3] == "1",
+                    fields[4],
                     ver,
-                    TextHelper.UnescapeUnicode(f[7]),
-                    TextHelper.UnescapeUnicode(f[6]),
-                    f[8] == "1",
-                    f[9] == "1",
-                    f[10] == "1",
-                    f[11] == "1",
-                    f[12] == "1",
-                    f[13],
-                    int.TryParse(f[14], out var res) ? res : 0,
-                    f[15],
-                    f[16]
+                    TextHelper.UnescapeUnicode(fields[7]),
+                    TextHelper.UnescapeUnicode(fields[6]),
+                    fields[8] == "1",
+                    fields[9] == "1",
+                    fields[10] == "1",
+                    fields[11] == "1",
+                    fields[12] == "1",
+                    fields[13],
+                    int.TryParse(fields[14], out var res) ? res : 0,
+                    fields[15],
+                    fields[16]
                 )
             );
         }
@@ -314,8 +311,8 @@ internal static partial class AnimeThemesHelper
             while (lastIndex >= 0 && string.IsNullOrWhiteSpace(comments[lastIndex]))
                 lastIndex--;
 
-            for (int i = 0; i <= lastIndex; i++)
-                sb.AppendLine(comments[i]);
+            for (int idx = 0; idx <= lastIndex; idx++)
+                sb.AppendLine(comments[idx]);
             sb.AppendLine();
         }
         else
@@ -325,8 +322,8 @@ internal static partial class AnimeThemesHelper
 
         sb.AppendLine("# filepath, videoId, anidbId, nc, slug, version, songTitle, artistName, lyrics, subbed, uncen, nsfw, spoiler, source, resolution, episodes, overlap");
 
-        foreach (var e in entries)
-            sb.AppendLine(SerializeEntry(e));
+        foreach (var entry in entries)
+            sb.AppendLine(SerializeEntry(entry));
         return sb.ToString();
     }
 
@@ -376,15 +373,15 @@ internal static partial class AnimeThemesHelper
     {
         if (string.IsNullOrWhiteSpace(slug))
             return "";
-        string s = slug.Trim();
-        var match = SlugStandardizeRegex().Match(s);
+        string rawSlug = slug.Trim();
+        var match = SlugStandardizeRegex().Match(rawSlug);
         if (match.Success)
         {
             string type = match.Groups[1].Value.StartsWith("O", StringComparison.OrdinalIgnoreCase) ? "OP" : "ED";
             string num = string.IsNullOrEmpty(match.Groups[2].Value) ? "1" : match.Groups[2].Value;
             return type + num;
         }
-        return s;
+        return rawSlug;
     }
 
     /// <summary>Extracts the numeric year or decade from a file path for chronological sorting.</summary>
@@ -395,10 +392,10 @@ internal static partial class AnimeThemesHelper
         var parts = path.TrimLeadingSlashes().Split(['/', '\\']);
         if (parts.Length > 0)
         {
-            string y = parts[0];
-            if (y.EndsWith("s", StringComparison.OrdinalIgnoreCase) && int.TryParse(y[..^1], out int dec))
+            string yearPart = parts[0];
+            if (yearPart.EndsWith("s", StringComparison.OrdinalIgnoreCase) && int.TryParse(yearPart[..^1], out int dec))
                 return 1900 + dec;
-            if (int.TryParse(y, out int year))
+            if (int.TryParse(yearPart, out int year))
                 return year;
         }
         return 9999;
@@ -465,8 +462,8 @@ internal static partial class AnimeThemesHelper
         if (string.IsNullOrWhiteSpace(slug))
             return ("", null);
         int dash = slug.IndexOf('-');
-        string b = dash < 0 ? slug : slug[..dash];
-        return (b.Equals("OP1", StringComparison.OrdinalIgnoreCase) || b.Equals("ED1", StringComparison.OrdinalIgnoreCase) ? b[..2] : b, dash < 0 ? null : slug[(dash + 1)..]);
+        string basePart = dash < 0 ? slug : slug[..dash];
+        return (basePart.Equals("OP1", StringComparison.OrdinalIgnoreCase) || basePart.Equals("ED1", StringComparison.OrdinalIgnoreCase) ? basePart[..2] : basePart, dash < 0 ? null : slug[(dash + 1)..]);
     }
 
     /// <summary>Formats a slug variant suffix into a human-readable tag.</summary>

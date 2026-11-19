@@ -164,8 +164,8 @@ public static partial class TagHelper
             // Start with default blacklist, dropping any tag mentioned on a user merge line so user merges can unblock default blacklisted tags
             var activeBlacklist = new HashSet<string>(s_defaultTagBlacklist.Where(b => !userMergeMentioned.Contains(b)), StringComparer.OrdinalIgnoreCase);
 
-            foreach (var b in userBlacklist)
-                activeBlacklist.Add(b);
+            foreach (var blacklistedTag in userBlacklist)
+                activeBlacklist.Add(blacklistedTag);
 
             return s_tagCaches[key] = new TagCacheState(activeBlacklist, activeMerges);
         }
@@ -349,17 +349,17 @@ public static partial class TagHelper
             (series, record) =>
             {
                 if (series.AnidbAnime?.Tags is IReadOnlyList<IAnidbTagForAnime> anidbTags)
-                    foreach (var t in anidbTags)
-                        record("AniDB", 0, t.Name);
+                    foreach (var tag in anidbTags)
+                        record("AniDB", 0, tag.Name);
 
                 if (series.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() is { } tmdb)
-                    foreach (var t in tmdb.Tags)
-                        if (t.Kind is TagKind.Genre || (t.Kind is TagKind.Keyword && !NonEnglishTagRegex().IsMatch(t.Name)))
-                            record("TMDB", 1, t.Name);
+                    foreach (var tag in tmdb.Tags)
+                        if (tag.Kind is TagKind.Genre || (tag.Kind is TagKind.Keyword && !NonEnglishTagRegex().IsMatch(tag.Name)))
+                            record("TMDB", 1, tag.Name);
 
-                foreach (var t in series.Tags ?? [])
-                    if (t != null && t.ID.Source == MetadataSource.User)
-                        record("User", 2, t.Name);
+                foreach (var tag in series.Tags ?? [])
+                    if (tag != null && tag.ID.Source == MetadataSource.User)
+                        record("User", 2, tag.Name);
             }
         );
 
@@ -378,9 +378,9 @@ public static partial class TagHelper
         if (word.Contains('-'))
         {
             var parts = word.Split('-');
-            for (int i = 1; i < parts.Length; i++)
-                if (!string.IsNullOrEmpty(parts[i]) && s_forceSpecial.TryGetValue("-" + parts[i], out var hyphenSpecial))
-                    parts[i] = hyphenSpecial.TrimStart('-');
+            for (int partIdx = 1; partIdx < parts.Length; partIdx++)
+                if (!string.IsNullOrEmpty(parts[partIdx]) && s_forceSpecial.TryGetValue("-" + parts[partIdx], out var hyphenSpecial))
+                    parts[partIdx] = hyphenSpecial.TrimStart('-');
 
             return string.Join('-', parts);
         }

@@ -299,9 +299,9 @@ public class AnimeThemesController(
 
                     if (!seriesId.HasValue)
                     {
-                        for (int i = 0; i < segments.Length; i++)
+                        for (int segIdx = 0; segIdx < segments.Length; segIdx++)
                         {
-                            if (int.TryParse(segments[i], out int sid))
+                            if (int.TryParse(segments[segIdx], out int sid))
                             {
                                 if (MetadataService.GetShokoSeriesByID(sid) is { } series)
                                 {
@@ -511,8 +511,8 @@ public class AnimeThemesController(
         {
             var ids = new HashSet<int>();
             if (IoFile.Exists(path))
-                foreach (var l in IoFile.ReadAllLines(path))
-                    if (int.TryParse(l.Trim(), out int id))
+                foreach (var line in IoFile.ReadAllLines(path))
+                    if (int.TryParse(line.Trim(), out int id))
                         ids.Add(id);
 
             if (!ids.Remove(videoId))

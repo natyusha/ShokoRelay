@@ -259,9 +259,9 @@ internal static class VfsShared
             try
             {
                 var fi = new FileInfo(dest);
-                if (fi.Exists || fi.LinkTarget != null) // Accurately captures both valid files and broken symlinks
+                if (fi.Exists || fi.LinkTarget != null)
                 {
-                    if (fi.Attributes.HasFlag(FileAttributes.ReparsePoint) && string.Equals(NormalizeSeparators(fi.LinkTarget ?? string.Empty), NormalizeSeparators(relativeTarget), PathComparison))
+                    if (string.Equals(NormalizeSeparators(fi.LinkTarget ?? string.Empty), NormalizeSeparators(relativeTarget), PathComparison))
                         return true;
 
                     fi.Delete();

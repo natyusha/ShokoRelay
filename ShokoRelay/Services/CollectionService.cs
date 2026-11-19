@@ -113,8 +113,8 @@ public class CollectionService(
             var staleSectionKeys = cache.Keys.Where(k => k.IndexOf('|') is int idx && idx > 0 && !validSectionIds.Contains(k[..idx])).ToList();
             if (staleSectionKeys.Count > 0)
             {
-                foreach (var k in staleSectionKeys)
-                    cache.Remove(k);
+                foreach (var key in staleSectionKeys)
+                    cache.Remove(key);
                 cacheModified = true;
             }
 
@@ -213,8 +213,8 @@ public class CollectionService(
 
                 if (staleCollectionKeys.Count > 0)
                 {
-                    foreach (var k in staleCollectionKeys)
-                        cache.Remove(k);
+                    foreach (var key in staleCollectionKeys)
+                        cache.Remove(key);
                     cacheModified = true;
                 }
 
@@ -402,9 +402,9 @@ public class CollectionService(
 
             if (deletedList.Count > 0)
                 foreach (var del in deletedList)
-                foreach (var k in cache.Keys.Where(k => k.Contains($"|{del.RatingKey}|") || k.Contains($"|sc{del.RatingKey}|")).ToList())
+                foreach (var cacheKey in cache.Keys.Where(k => k.Contains($"|{del.RatingKey}|") || k.Contains($"|sc{del.RatingKey}|")).ToList())
                 {
-                    cache.Remove(k);
+                    cache.Remove(cacheKey);
                     cacheModified = true;
                 }
 

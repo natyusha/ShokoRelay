@@ -321,10 +321,10 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
                 if (!videoBaseNames.Contains(parentBase))
                     continue;
 
-                foreach (var m in fileData.Mappings.Where(m => Path.GetFileNameWithoutExtension(m.FileName).Equals(parentBase, StringComparison.OrdinalIgnoreCase)))
+                foreach (var mapping in fileData.Mappings.Where(m => Path.GetFileNameWithoutExtension(m.FileName).Equals(parentBase, StringComparison.OrdinalIgnoreCase)))
                 {
-                    string seasonFolder = VfsHelper.SanitizeName(PlexMapping.GetSeasonFolder(m.Coords.Season));
-                    string destName = Path.GetFileNameWithoutExtension(VfsHelper.BuildStandardFileName(m, epPad, "", m.Video.LocalID)) + name[parentBase.Length..] + Path.GetExtension(file);
+                    string seasonFolder = VfsHelper.SanitizeName(PlexMapping.GetSeasonFolder(mapping.Coords.Season));
+                    string destName = Path.GetFileNameWithoutExtension(VfsHelper.BuildStandardFileName(mapping, epPad, "", mapping.Video.LocalID)) + name[parentBase.Length..] + Path.GetExtension(file);
 
                     foreach (var vfsSeriesPath in vfsSeriesPaths)
                     {
@@ -347,8 +347,8 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
     private static bool HasSubtitleLanguageCode(string suffix)
     {
         var parts = suffix.Split('.', StringSplitOptions.RemoveEmptyEntries);
-        for (int i = 0; i < parts.Length - 1; i++)
-            if (!PlexConstants.LocalMediaAssets.SubtitleModifiers.Contains(parts[i]))
+        for (int partIdx = 0; partIdx < parts.Length - 1; partIdx++)
+            if (!PlexConstants.LocalMediaAssets.SubtitleModifiers.Contains(parts[partIdx]))
                 return true;
         return false;
     }
@@ -363,23 +363,23 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
         int priority = int.MaxValue;
         bool modified = false;
 
-        for (int i = 1; i < parts.Length - 1; i++)
+        for (int partIdx = 1; partIdx < parts.Length - 1; partIdx++)
         {
-            if (PlexConstants.LocalMediaAssets.SubtitleModifiers.Contains(parts[i]))
+            if (PlexConstants.LocalMediaAssets.SubtitleModifiers.Contains(parts[partIdx]))
                 continue;
 
-            for (int j = 0; j < mappings.Count; j++)
+            for (int mapIdx = 0; mapIdx < mappings.Count; mapIdx++)
             {
-                var mapping = mappings.GetAt(j);
-                if (!parts[i].Equals(mapping.Key.Trim(), StringComparison.OrdinalIgnoreCase))
+                var mapping = mappings.GetAt(mapIdx);
+                if (!parts[partIdx].Equals(mapping.Key.Trim(), StringComparison.OrdinalIgnoreCase))
                     continue;
 
                 string? replacement = mapping.Value?.Trim();
                 // Reuse the existing filename sanitizer to reject unsafe replacements, without changing other settings.
                 if (!string.IsNullOrEmpty(replacement) && !replacement.Contains('.') && VfsHelper.SanitizeName(replacement) == replacement)
                 {
-                    parts[i] = replacement;
-                    priority = Math.Min(priority, j);
+                    parts[partIdx] = replacement;
+                    priority = Math.Min(priority, mapIdx);
                     modified = true;
                 }
                 break;

@@ -115,10 +115,10 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
                 try
                 {
                     (existingComments, var parsedEntries) = AnimeThemesHelper.ParseMappingContentWithComments(await File.ReadAllTextAsync(mapPath, cancellationToken).ConfigureAwait(false));
-                    foreach (var e in parsedEntries)
+                    foreach (var entry in parsedEntries)
                     {
-                        existing.TryAdd(e.FilePath, e);
-                        existingByFilename.TryAdd(Path.GetFileName(e.FilePath), e);
+                        existing.TryAdd(entry.FilePath, entry);
+                        existingByFilename.TryAdd(Path.GetFileName(entry.FilePath), entry);
                     }
                 }
                 catch { }
@@ -241,8 +241,8 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
                 try
                 {
                     (existingComments, entries) = AnimeThemesHelper.ParseMappingContentWithComments(await File.ReadAllTextAsync(mapPath, cancellationToken).ConfigureAwait(false));
-                    foreach (var e in entries)
-                        existing.TryAdd(e.FilePath, e);
+                    foreach (var entry in entries)
+                        existing.TryAdd(entry.FilePath, entry);
                 }
                 catch { }
             }
@@ -589,8 +589,8 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
                                     bool isMyFile = false;
                                     if (AnimeThemesHelper.OverrideThemeFileRegex().IsMatch(fileName))
                                     {
-                                        foreach (var p in myPrefixes)
-                                            if (p != null && fileName.StartsWith(p))
+                                        foreach (var prefix in myPrefixes)
+                                            if (prefix != null && fileName.StartsWith(prefix))
                                                 isMyFile = true;
                                     }
                                     else if (myPrefixes.Contains(null))
@@ -709,15 +709,15 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
     /// <returns>A tuple containing the mapped metadata lookup and a boolean indicating if the AniDB ID was missing.</returns>
     private async Task<(AnimeThemesVideoLookup? lookup, bool idMissing)> FetchMetadataAsync(string fileName, int? overrideAnidbId = null, CancellationToken cancellationToken = default)
     {
-        var v = await _apiClient.FetchVideoWithArtistsAsync(fileName, cancellationToken).ConfigureAwait(false);
-        if (v == null)
+        var videoEntry = await _apiClient.FetchVideoWithArtistsAsync(fileName, cancellationToken).ConfigureAwait(false);
+        if (videoEntry == null)
             return (null, false);
-        var first = v.Animethemeentries?.Nodes?.FirstOrDefault();
+        var first = videoEntry.Animethemeentries?.Nodes?.FirstOrDefault();
         if (first?.Animetheme == null)
             return (null, false);
 
         string[] seasonOrder = ["Winter", "Spring", "Summer", "Fall"];
-        var allAnime = v.Animethemeentries?.Nodes?.Select(e => e.Animetheme?.Anime).Where(a => a != null).ToList() ?? [];
+        var allAnime = videoEntry.Animethemeentries?.Nodes?.Select(e => e.Animetheme?.Anime).Where(a => a != null).ToList() ?? [];
 
         var best = allAnime
             .Select(e => new
@@ -739,23 +739,23 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
 
         return (
             new AnimeThemesVideoLookup(
-                v.Id,
+                videoEntry.Id,
                 theme.Id,
                 anidbId,
-                v.Nc,
+                videoEntry.Nc,
                 theme.Slug ?? "",
                 first.Version,
                 string.Join(" / ", theme.Song?.Performances?.Select(p => p.Artist?.Name?.Main).Where(n => !string.IsNullOrEmpty(n)) ?? []),
                 theme.Song?.Title?.Romaji ?? "",
-                v.Lyrics,
-                v.Subbed,
-                v.Uncen,
+                videoEntry.Lyrics,
+                videoEntry.Subbed,
+                videoEntry.Uncen,
                 first.Nsfw,
                 first.Spoiler,
-                v.Source ?? "",
-                v.Resolution ?? 0,
+                videoEntry.Source ?? "",
+                videoEntry.Resolution ?? 0,
                 first.Episodes ?? "",
-                v.Overlap ?? ""
+                videoEntry.Overlap ?? ""
             ),
             idMissing
         );

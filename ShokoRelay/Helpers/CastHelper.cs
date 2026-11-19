@@ -196,20 +196,20 @@ public static class CastHelper
     /// <param name="onCredit">Callback invoked with (rawName, isPerson, isAnidb) for each credit entry.</param>
     private static void EnumerateSeriesCredits(ISeries series, ISeries? tmdbSeries, Action<string?, bool, bool> onCredit)
     {
-        foreach (var c in series.Cast ?? [])
-            if (c.CreatorID != null && c.Creator is { } creator)
-                onCredit(creator.Title, creator.Type == CreatorType.Person, c.Source != MetadataSource.TMDB);
+        foreach (var cast in series.Cast ?? [])
+            if (cast.CreatorID != null && cast.Creator is { } creator)
+                onCredit(creator.Title, creator.Type == CreatorType.Person, cast.Source != MetadataSource.TMDB);
 
-        foreach (var c in series.Crew ?? [])
-            if (c.Creator is { } creator)
-                onCredit(creator.Title, creator.Type == CreatorType.Person, c.Source != MetadataSource.TMDB);
+        foreach (var crew in series.Crew ?? [])
+            if (crew.Creator is { } creator)
+                onCredit(creator.Title, creator.Type == CreatorType.Person, crew.Source != MetadataSource.TMDB);
 
-        foreach (var s in series.Studios ?? [])
-            onCredit(s.Name, false, s.ID.Source != MetadataSource.TMDB);
+        foreach (var studio in series.Studios ?? [])
+            onCredit(studio.Name, false, studio.ID.Source != MetadataSource.TMDB);
 
         var resolvedTmdb = tmdbSeries ?? (series as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault();
-        foreach (var s in resolvedTmdb?.Studios ?? [])
-            onCredit(s.Name, false, false);
+        foreach (var studio in resolvedTmdb?.Studios ?? [])
+            onCredit(studio.Name, false, false);
     }
 
     /// <summary>Builds a diagnostic CSV report of all cast, crew, and studio credits across Shoko series after applying default credit overrides.</summary>
@@ -232,21 +232,21 @@ public static class CastHelper
                     record(isTmdb ? "TMDB" : "AniDB", isTmdb ? 1 : 0, name, isPerson ? "Person" : "Company");
                 }
 
-                foreach (var c in series.Cast ?? [])
-                    if (c.Creator != null)
-                        Record(c.Source, c.Creator.Title, c.Creator.Type == CreatorType.Person);
+                foreach (var cast in series.Cast ?? [])
+                    if (cast.Creator != null)
+                        Record(cast.Source, cast.Creator.Title, cast.Creator.Type == CreatorType.Person);
 
-                foreach (var c in series.Crew ?? [])
-                    if (c.Creator != null)
-                        Record(c.Source, c.Creator.Title, c.Creator.Type == CreatorType.Person);
+                foreach (var crew in series.Crew ?? [])
+                    if (crew.Creator != null)
+                        Record(crew.Source, crew.Creator.Title, crew.Creator.Type == CreatorType.Person);
 
-                foreach (var s in series.Studios ?? [])
-                    if (!string.IsNullOrWhiteSpace(s.Name) && !networkNames.Contains(s.Name))
-                        Record(s.ID.Source, s.Name, false);
+                foreach (var studio in series.Studios ?? [])
+                    if (!string.IsNullOrWhiteSpace(studio.Name) && !networkNames.Contains(studio.Name))
+                        Record(studio.ID.Source, studio.Name, false);
 
-                foreach (var s in tmdbSeries?.Studios ?? [])
-                    if (!string.IsNullOrWhiteSpace(s.Name) && !networkNames.Contains(s.Name))
-                        Record(MetadataSource.TMDB, s.Name, false);
+                foreach (var studio in tmdbSeries?.Studios ?? [])
+                    if (!string.IsNullOrWhiteSpace(studio.Name) && !networkNames.Contains(studio.Name))
+                        Record(MetadataSource.TMDB, studio.Name, false);
             }
         );
 
@@ -269,10 +269,10 @@ public static class CastHelper
                 RecordSeriesCredits(seriesItem, tmdbSeries);
 
             // Pre-populate global studio thumbs from this series' TMDB studios so both crew and company listings can reference them
-            foreach (var s in (seriesItem.Studios ?? []).Concat(tmdbSeries?.Studios ?? []))
-                if (s.ID.Source == MetadataSource.TMDB && s is IWithImages withImages && !string.IsNullOrWhiteSpace(s.Name))
+            foreach (var studio in (seriesItem.Studios ?? []).Concat(tmdbSeries?.Studios ?? []))
+                if (studio.ID.Source == MetadataSource.TMDB && studio is IWithImages withImages && !string.IsNullOrWhiteSpace(studio.Name))
                 {
-                    string sKey = NormalizeCreditKey(ResolvePreferredCreditName(s.Name, false, 2));
+                    string sKey = NormalizeCreditKey(ResolvePreferredCreditName(studio.Name, false, 2));
                     if (!s_globalStudioThumbs.ContainsKey(sKey) && withImages.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, forceRemote: true) is { } logoUrl)
                         s_globalStudioThumbs[sKey] = logoUrl;
                 }
@@ -294,18 +294,18 @@ public static class CastHelper
             var matchedTmdb = index != null ? new HashSet<T>() : null;
             var seenRolePairs = new HashSet<(string Key, string Role)>();
 
-            foreach (var c in anidbRoles)
+            foreach (var role in anidbRoles)
             {
-                var creator = getCreator(c)!;
+                var creator = getCreator(role)!;
                 bool isPerson = creator.Type == CreatorType.Person;
                 string? rawTag = creator.Title;
-                string? role = getRole(c);
+                string? roleName = getRole(role);
 
                 if (string.IsNullOrWhiteSpace(rawTag) || IsCreditBlacklisted(rawTag))
                     continue;
 
                 string tag = ResolvePreferredCreditName(rawTag, isPerson, 1);
-                if (IsCreditBlacklisted(tag) || !seenRolePairs.Add((NormalizeCreditKey(tag), (role ?? string.Empty).Trim().ToUpperInvariant())))
+                if (IsCreditBlacklisted(tag) || !seenRolePairs.Add((NormalizeCreditKey(tag), (roleName ?? string.Empty).Trim().ToUpperInvariant())))
                     continue;
 
                 var thumbImg = creator.PrimaryImage;
@@ -327,7 +327,7 @@ public static class CastHelper
                     {
                         order = order++,
                         tag,
-                        role,
+                        role = roleName,
                         thumb,
                     }
                 );
@@ -336,21 +336,21 @@ public static class CastHelper
             if (matchedTmdb == null)
                 return;
 
-            foreach (var c in tmdbRoles)
+            foreach (var role in tmdbRoles)
             {
-                if (matchedTmdb.Contains(c))
+                if (matchedTmdb.Contains(role))
                     continue;
 
-                var creator = getCreator(c)!;
+                var creator = getCreator(role)!;
                 bool isPerson = creator.Type == CreatorType.Person;
                 string? rawTag = creator.Title;
-                string? role = getRole(c);
+                string? roleName = getRole(role);
 
                 if (string.IsNullOrWhiteSpace(rawTag) || IsCreditBlacklisted(rawTag))
                     continue;
 
                 string tag = ResolvePreferredCreditName(rawTag, isPerson, 2);
-                if (IsCreditBlacklisted(tag) || !seenRolePairs.Add((NormalizeCreditKey(tag), (role ?? string.Empty).Trim().ToUpperInvariant())))
+                if (IsCreditBlacklisted(tag) || !seenRolePairs.Add((NormalizeCreditKey(tag), (roleName ?? string.Empty).Trim().ToUpperInvariant())))
                     continue;
 
                 finalRoles.Add(
@@ -358,7 +358,7 @@ public static class CastHelper
                     {
                         order = order++,
                         tag,
-                        role,
+                        role = roleName,
                         thumb = creator.PrimaryImage is { } img ? ImageHelper.GetImageUrl(img, forceRemote: true) : null,
                     }
                 );
@@ -388,10 +388,10 @@ public static class CastHelper
 
             var studioGroups = new Dictionary<string, (string Name, bool IsAnimationStudio, string? Thumb)>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var s in allStudios)
+            foreach (var studio in allStudios)
             {
-                string rawName = s.Name.Trim();
-                bool isAniDb = s.ID.Source == MetadataSource.AniDB;
+                string rawName = studio.Name.Trim();
+                bool isAniDb = studio.ID.Source == MetadataSource.AniDB;
                 int priority = isAniDb ? 1 : 2;
                 string preferredName = ResolvePreferredCreditName(rawName, false, priority);
                 bool isAnimation = animationStudioNames.Contains(rawName) || animationStudioNames.Contains(preferredName);
@@ -399,12 +399,12 @@ public static class CastHelper
 
                 if (!studioGroups.TryGetValue(key, out var existing))
                 {
-                    string? thumb = s is IWithImages withImages ? withImages.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, forceRemote: true) : null;
+                    string? thumb = studio is IWithImages withImages ? withImages.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, forceRemote: true) : null;
                     studioGroups[key] = (preferredName, isAnimation, thumb);
                 }
                 else
                 {
-                    string? thumb = existing.Thumb ?? (s is IWithImages withImages ? withImages.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, forceRemote: true) : null);
+                    string? thumb = existing.Thumb ?? (studio is IWithImages withImages ? withImages.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, forceRemote: true) : null);
                     studioGroups[key] = (preferredName, existing.IsAnimationStudio || isAnimation, thumb);
                 }
             }
@@ -583,24 +583,24 @@ public static class CastHelper
 
             if (tmdb.Count == 0)
             {
-                foreach (var c in anidb)
-                    yield return c;
+                foreach (var crewMember in anidb)
+                    yield return crewMember;
                 continue;
             }
 
             var index = new TmdbRoleIndex<ICrew>(tmdb, t => t.Creator, t => t.Creator?.Title);
             var matchedTmdbEntries = new HashSet<ICrew>();
 
-            foreach (var c in anidb)
+            foreach (var crewMember in anidb)
             {
-                yield return c;
-                if (c.Creator != null && index.FindMatch(c.Creator, c.Creator.Title) is { } match)
+                yield return crewMember;
+                if (crewMember.Creator != null && index.FindMatch(crewMember.Creator, crewMember.Creator.Title) is { } match)
                     matchedTmdbEntries.Add(match);
             }
 
-            foreach (var c in tmdb)
-                if (!matchedTmdbEntries.Contains(c))
-                    yield return c;
+            foreach (var crewMember in tmdb)
+                if (!matchedTmdbEntries.Contains(crewMember))
+                    yield return crewMember;
         }
     }
 

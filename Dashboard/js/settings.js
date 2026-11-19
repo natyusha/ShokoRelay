@@ -189,18 +189,18 @@
     mappingContainer.innerHTML = `<div class="full"><div><small>${esc(leftHeader)}</small><textarea class="mapping-left"></textarea></div><div><small>${esc(rightHeader)}</small><textarea class="mapping-right"></textarea></div></div>`;
     wrap.appendChild(mappingContainer);
 
-    const l = mappingContainer.querySelector(".mapping-left");
-    const r = mappingContainer.querySelector(".mapping-right");
-    const m = value || {};
-    const keys = Object.keys(m); // Preserve user priority/order
+    const leftArea = mappingContainer.querySelector(".mapping-left");
+    const rightArea = mappingContainer.querySelector(".mapping-right");
+    const mappingDict = value || {};
+    const keys = Object.keys(mappingDict); // Preserve user priority/order
 
-    l.value = keys.map((k) => (keyOnLeft ? k : m[k])).join("\n");
-    r.value = keys.map((k) => (keyOnLeft ? m[k] : k)).join("\n");
+    leftArea.value = keys.map((k) => (keyOnLeft ? k : mappingDict[k])).join("\n");
+    rightArea.value = keys.map((k) => (keyOnLeft ? mappingDict[k] : k)).join("\n");
 
-    l.onchange = r.onchange = async () => {
+    leftArea.onchange = rightArea.onchange = async () => {
       const val = {};
-      const lLines = l.value.split("\n");
-      const rLines = r.value.split("\n");
+      const lLines = leftArea.value.split("\n");
+      const rLines = rightArea.value.split("\n");
       lLines.forEach((lv, idx) => {
         if (lv.trim() && rLines[idx]?.trim()) val[keyOnLeft ? lv.trim() : rLines[idx].trim()] = keyOnLeft ? rLines[idx].trim() : lv.trim();
       });
@@ -382,7 +382,7 @@
       initDetailsAnimation(advSection, advContent);
     }
 
-    const b = (id, path, type) => bindConfig(id, path, config, saveSettings, type);
+    const bindField = (id, path, type) => bindConfig(id, path, config, saveSettings, type);
     const autoMap = {
       "shoko-utc-offset": "UtcOffsetHours",
       "shoko-import-frequency": "ShokoImportFrequencyHours",
@@ -390,7 +390,7 @@
       "plex-auto-frequency": "PlexAutomationFrequencyHours",
     };
     for (const [id, path] of Object.entries(autoMap)) {
-      b(id, "Automation." + path, "number");
+      bindField(id, "Automation." + path, "number");
       const inputEl = el(id);
       if (inputEl) {
         inputEl.oninput = () => {
@@ -399,10 +399,10 @@
       }
     }
 
-    b("sync-ratings", "Automation.ShokoSyncWatchedIncludeRatings", "check");
-    b("sync-progress", "Automation.ShokoSyncWatchedIncludeProgress", "check");
-    b("sync-users", "Automation.ShokoSyncWatchedUserType", "number");
-    b("sync-user-mappings", "Automation.AdvancedUserMappings", "text");
+    bindField("sync-ratings", "Automation.ShokoSyncWatchedIncludeRatings", "check");
+    bindField("sync-progress", "Automation.ShokoSyncWatchedIncludeProgress", "check");
+    bindField("sync-users", "Automation.ShokoSyncWatchedUserType", "number");
+    bindField("sync-user-mappings", "Automation.AdvancedUserMappings", "text");
     window._sr.initAtConfig?.(config, saveSettings);
     window._sr.updateControlStates(config);
   }

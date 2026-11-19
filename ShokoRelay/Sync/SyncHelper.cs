@@ -136,9 +136,9 @@ public static class SyncHelper
         var perUser = new Dictionary<string, PlexWatchedUserResult>(StringComparer.OrdinalIgnoreCase);
         if (includeAdmin)
             perUser["admin"] = new();
-        foreach (var n in plexUserNames ?? [])
-            if (!string.IsNullOrWhiteSpace(n))
-                perUser.TryAdd(n, new());
+        foreach (var userName in plexUserNames ?? [])
+            if (!string.IsNullOrWhiteSpace(userName))
+                perUser.TryAdd(userName, new());
         return perUser;
     }
 
@@ -426,12 +426,12 @@ public static class SyncHelper
                                 serverAccessToken = dev.AccessToken;
                                 break;
                             }
-                            foreach (var c in dev?.Connections ?? [])
+                            foreach (var conn in dev?.Connections ?? [])
                             {
-                                if (string.IsNullOrWhiteSpace(c?.Uri) || targetServerUrlNorm == null)
+                                if (string.IsNullOrWhiteSpace(conn?.Uri) || targetServerUrlNorm == null)
                                     continue;
                                 if (
-                                    Uri.TryCreate(c.Uri.TrimEnd('/'), UriKind.Absolute, out var connUri)
+                                    Uri.TryCreate(conn.Uri.TrimEnd('/'), UriKind.Absolute, out var connUri)
                                     && Uri.TryCreate(targetServerUrlNorm, UriKind.Absolute, out var tgtUri)
                                     && string.Equals(connUri.Host, tgtUri.Host, StringComparison.OrdinalIgnoreCase)
                                     && connUri.Port == tgtUri.Port
@@ -440,7 +440,7 @@ public static class SyncHelper
                                     serverAccessToken = dev!.AccessToken;
                                     break;
                                 }
-                                if (string.Equals(c.Uri.TrimEnd('/'), targetServerUrlNorm, StringComparison.OrdinalIgnoreCase))
+                                if (string.Equals(conn.Uri.TrimEnd('/'), targetServerUrlNorm, StringComparison.OrdinalIgnoreCase))
                                 {
                                     serverAccessToken = dev!.AccessToken;
                                     break;

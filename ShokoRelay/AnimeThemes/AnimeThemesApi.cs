@@ -156,7 +156,7 @@ public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesAp
     {
         string json = JsonSerializer.Serialize(new { query, variables }, s_jsonOptions);
 
-        for (int i = 0; i < 2; i++)
+        for (int attempt = 0; attempt < 2; attempt++)
         {
             await RateLimitAsync(cancellationToken).ConfigureAwait(false);
 

@@ -93,8 +93,8 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
                 try
                 {
                     var parsed = AnimeThemesHelper.ParseMappingContentWithComments(await File.ReadAllTextAsync(mapPath, cancellationToken).ConfigureAwait(false)).Entries;
-                    foreach (var e in parsed.Where(e => e.AniDbId > 0))
-                        mappedFilesWithAnidb.Add(Path.GetFileName(e.FilePath));
+                    foreach (var entry in parsed.Where(e => e.AniDbId > 0))
+                        mappedFilesWithAnidb.Add(Path.GetFileName(entry.FilePath));
                 }
                 catch { }
             }

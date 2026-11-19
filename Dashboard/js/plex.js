@@ -42,11 +42,11 @@
    */
   async function startPlexAuth() {
     const res = await fetchJson(base + "/plex/auth");
-    const d = getData(res);
+    const pinData = getData(res);
 
-    if (!res.ok || !d?.pinId || !d?.authUrl) return setPlexStartAction();
+    if (!res.ok || !pinData?.pinId || !pinData?.authUrl) return setPlexStartAction();
 
-    plexPinId = d.pinId;
+    plexPinId = pinData.pinId;
     const authAction = el("plex-auth-action");
     if (authAction) {
       // Hide the initial buttons while the login link is active
@@ -96,10 +96,10 @@
     window._sr.isPlexLinked = isLinked;
     window._sr.updateControlStates?.(settings);
 
-    const b = (id, path, type) => window._sr.bindConfig(id, path, settings, saveSettings, type);
-    b("extra-plex-users", "Automation.ExtraPlexUsers", "text");
-    b("plex-scan-vfs", "Automation.ScanOnVfsRefresh", "check");
-    b("plex-scrobble", "Automation.AutoScrobble", "check");
+    const bindField = (id, path, type) => window._sr.bindConfig(id, path, settings, saveSettings, type);
+    bindField("extra-plex-users", "Automation.ExtraPlexUsers", "text");
+    bindField("plex-scan-vfs", "Automation.ScanOnVfsRefresh", "check");
+    bindField("plex-scrobble", "Automation.AutoScrobble", "check");
 
     const authAction = el("plex-auth-action");
     if (authAction) authAction.querySelectorAll(".plex-auth-state").forEach((e) => (e.hidden = !(isLinked ? e.tagName === "DIV" : e.tagName === "BUTTON")));

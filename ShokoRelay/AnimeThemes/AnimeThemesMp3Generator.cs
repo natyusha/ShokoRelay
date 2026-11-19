@@ -159,12 +159,12 @@ public class AnimeThemesMp3Generator(
 
             Parallel.ForEach(
                 roots,
-                r =>
+                root =>
                 {
-                    foreach (var f in Directory.EnumerateFiles(r!, "Theme.mp3", SearchOption.AllDirectories))
+                    foreach (var file in Directory.EnumerateFiles(root!, "Theme.mp3", SearchOption.AllDirectories))
                     {
-                        string dir = Path.GetDirectoryName(f)!;
-                        if (!VfsShared.IsPathIgnored(dir, videoService, Settings, excluded, relativeTo: r, isDirectory: true))
+                        string dir = Path.GetDirectoryName(file)!;
+                        if (!VfsShared.IsPathIgnored(dir, videoService, Settings, excluded, relativeTo: root, isDirectory: true))
                             newCache.TryAdd(dir, "|");
                     }
                 }
@@ -380,8 +380,8 @@ public class AnimeThemesMp3Generator(
                         .Select(
                             (t, index) =>
                             {
-                                string s = t.Slug ?? "";
-                                var (baseSlug, _) = AnimeThemesHelper.ParseSlug(s);
+                                string slug = t.Slug ?? "";
+                                var (baseSlug, _) = AnimeThemesHelper.ParseSlug(slug);
                                 int num = AnimeThemesHelper.ExtractSlugNumber(baseSlug);
 
                                 int group = AnimeThemesHelper.IsOp(baseSlug) ? 1 : (AnimeThemesHelper.IsEd(baseSlug) ? 2 : 3);
@@ -435,9 +435,9 @@ public class AnimeThemesMp3Generator(
             {
                 resp.EnsureSuccessStatusCode();
                 temp = Path.Combine(Path.GetTempPath(), $"at-{Guid.NewGuid():N}{Path.GetExtension(audioUrl)}");
-                await using var i = await resp.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-                await using var o = File.Create(temp);
-                await i.CopyToAsync(o, cancellationToken).ConfigureAwait(false);
+                await using var streamIn = await resp.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+                await using var streamOut = File.Create(temp);
+                await streamIn.CopyToAsync(streamOut, cancellationToken).ConfigureAwait(false);
             }
 
             var dur = await ffmpegService.ProbeDurationAsync(temp, cancellationToken).ConfigureAwait(false);
@@ -587,11 +587,11 @@ public class AnimeThemesMp3Generator(
                                 return;
 
                             var vf = videoService.GetVideoFileByAbsolutePath(vid);
-                            var s = vf?.Video?.Episodes?.FirstOrDefault()?.Series;
-                            if (s == null)
+                            var series = vf?.Video?.Episodes?.FirstOrDefault()?.Series;
+                            if (series == null)
                                 return;
 
-                            var anime = await _apiClient.FetchAnimeThemesAsync(s.AnidbAnimeID, token).ConfigureAwait(false);
+                            var anime = await _apiClient.FetchAnimeThemesAsync(series.AnidbAnimeID, token).ConfigureAwait(false);
                             var animethemes = anime?.FirstOrDefault()?.Animethemes ?? [];
                             var op = animethemes.Where(t => t.Slug != null && AnimeThemesHelper.IsOp(t.Slug)).OrderBy(t => AnimeThemesHelper.ExtractSlugNumber(t.Slug!)).FirstOrDefault();
                             var ed = animethemes.Where(t => t.Slug != null && AnimeThemesHelper.IsEd(t.Slug)).OrderBy(t => AnimeThemesHelper.ExtractSlugNumber(t.Slug!)).FirstOrDefault();
@@ -611,7 +611,7 @@ public class AnimeThemesMp3Generator(
                                     SetCacheEntry(folder, $"{slug}|{upgrade}");
                                     Interlocked.Exchange(ref cacheUpdated, 1);
                                 }
-                                upgrades.Add($"{s.GetDisplayTitle() ?? s.LocalID.ToString()} [{s.LocalID}] (Currently: {slug}, Available: {newUpgrade})");
+                                upgrades.Add($"{series.GetDisplayTitle() ?? series.LocalID.ToString()} [{series.LocalID}] (Currently: {slug}, Available: {newUpgrade})");
                             }
                             else if (!string.IsNullOrEmpty(upgrade))
                             {

@@ -97,9 +97,9 @@ public static class OverrideHelper
 
                     var group = new List<int> { primaryId };
 
-                    for (int i = 1; i < parts.Count; i++)
+                    for (int partIdx = 1; partIdx < parts.Count; partIdx++)
                     {
-                        var (secId, secRules) = ParsePart(parts[i]);
+                        var (secId, secRules) = ParsePart(parts[partIdx]);
                         if (secId <= 0)
                             continue;
 

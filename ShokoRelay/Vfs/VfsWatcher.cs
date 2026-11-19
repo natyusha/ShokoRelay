@@ -580,15 +580,15 @@ public class VfsWatcher(
                     continue;
 
                 var ratingKeys = new List<int>();
-                for (int i = 0; i < maxRetries; i++)
+                for (int retry = 0; retry < maxRetries; retry++)
                 {
                     ratingKeys = await plexLibrary.FindRatingKeysForShokoSeriesInSectionAsync(series.LocalID, target, metadataService, token).ConfigureAwait(false);
                     if (ratingKeys.Count > 0)
                         break;
 
-                    if (i < maxRetries - 1)
+                    if (retry < maxRetries - 1)
                     {
-                        if (i == 0 && isDeferred)
+                        if (retry == 0 && isDeferred)
                             logger.LogDebug(
                                 "VFS: Waiting for Plex to index series -> {Title} [{LocalId}] in library '{Library}' on {Server}...",
                                 series.GetDisplayTitle(),

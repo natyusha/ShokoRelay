@@ -188,11 +188,11 @@ public static class ReportHelper
                         attached[matchIdx >= 0 ? matchIdx : 0].Add(sec);
                     }
 
-                    for (int i = 0; i < primaries.Count; i++)
+                    for (int primIdx = 0; primIdx < primaries.Count; primIdx++)
                     {
-                        var (sourceOrder, source, displayName, count) = primaries[i];
+                        var (sourceOrder, source, displayName, count) = primaries[primIdx];
                         var sbSplit = new StringBuilder($"{source},{TextHelper.EscapeCsvCommas(displayName)},{count}");
-                        foreach (var (_, sourceAtch, displayNameAtch, countAtch) in attached[i])
+                        foreach (var (_, sourceAtch, displayNameAtch, countAtch) in attached[primIdx])
                             sbSplit.Append($";{sourceAtch},{TextHelper.EscapeCsvCommas(displayNameAtch)},{countAtch}");
                         rows.Add((sourceOrder, displayName, count, sbSplit.ToString()));
                     }
@@ -217,8 +217,8 @@ public static class ReportHelper
                 else
                 {
                     sbLine.Append($"{ordered[0].Source},{TextHelper.EscapeCsvCommas(ordered[0].DisplayName)},{ordered[0].Count}");
-                    for (int i = 1; i < ordered.Count; i++)
-                        sbLine.Append($";{ordered[i].Source},{TextHelper.EscapeCsvCommas(ordered[i].DisplayName)},{ordered[i].Count}");
+                    for (int ordIdx = 1; ordIdx < ordered.Count; ordIdx++)
+                        sbLine.Append($";{ordered[ordIdx].Source},{TextHelper.EscapeCsvCommas(ordered[ordIdx].DisplayName)},{ordered[ordIdx].Count}");
                 }
 
                 rows.Add((primaryOrder, primaryName, primaryCount, sbLine.ToString()));

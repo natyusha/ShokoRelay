@@ -91,9 +91,9 @@ public static class MapHelper
     public static SeriesFileData GetSeriesFileDataMerged(ISeries primary, IEnumerable<ISeries> extras, IMetadataService metadataService)
     {
         var all = BuildFileMappings(primary, metadataService);
-        foreach (var s in extras ?? [])
-            if (s != null)
-                all.AddRange(BuildFileMappings(s, metadataService));
+        foreach (var extraSeries in extras ?? [])
+            if (extraSeries != null)
+                all.AddRange(BuildFileMappings(extraSeries, metadataService));
 
         // A single physical crossover file linked to multiple Shoko series in an override group will produce duplicate mappings. This ensures the VFS only builds the file once.
         var deduped = all.DistinctBy(m => (m.Video.LocalID, m.Coords, m.PartIndex, m.IsVariation)).ToList();
@@ -118,16 +118,16 @@ public static class MapHelper
     {
         var seriesList = series.GetOverrideGroup(metadataService).Select(metadataService.GetShokoSeriesByID).OfType<ISeries>();
         var seenVideoIds = new HashSet<int>();
-        foreach (var s in seriesList)
+        foreach (var seriesItem in seriesList)
         {
-            foreach (var ep in s.Episodes)
+            foreach (var ep in seriesItem.Episodes)
             {
                 if (IsHidden(ep) || ep.Videos == null)
                     continue;
 
-                foreach (var v in ep.Videos)
-                    if (seenVideoIds.Add(v.LocalID))
-                        yield return v;
+                foreach (var video in ep.Videos)
+                    if (seenVideoIds.Add(video.LocalID))
+                        yield return video;
             }
         }
     }
@@ -164,10 +164,10 @@ public static class MapHelper
         foreach (var (episode, videos) in seriesEpisodes)
         {
             var coords = GetPlexCoordinates(episode, prefId, tmdbOrderingLookup);
-            foreach (var v in videos)
+            foreach (var video in videos)
             {
-                if (!videoToEps.TryGetValue(v.LocalID, out var list))
-                    videoToEps[v.LocalID] = list = [];
+                if (!videoToEps.TryGetValue(video.LocalID, out var list))
+                    videoToEps[video.LocalID] = list = [];
                 list.Add((episode, coords));
             }
         }

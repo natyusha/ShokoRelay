@@ -250,13 +250,13 @@
    * @returns {{text: string, errorCount: number}} Summarized details.
    */
   function summarizeResult(res) {
-    const d = getData(res);
-    if (!d) return { text: "", errorCount: 0 };
-    if (d.errors && typeof d.errors === "object" && !Array.isArray(d.errors)) {
-      const msgs = Object.values(d.errors).flat();
+    const resData = getData(res);
+    if (!resData) return { text: "", errorCount: 0 };
+    if (resData.errors && typeof resData.errors === "object" && !Array.isArray(resData.errors)) {
+      const msgs = Object.values(resData.errors).flat();
       if (msgs.length > 0) return { text: msgs.join(", "), errorCount: msgs.length };
     }
-    if (res.ok === false && d.title && !d.message) return { text: d.title, errorCount: 1 };
+    if (res.ok === false && resData.title && !resData.message) return { text: resData.title, errorCount: 1 };
 
     const parts = [];
     const keys = {
@@ -270,14 +270,14 @@
     let errorCount = 0;
 
     Object.entries(keys).forEach(([label, aliases]) => {
-      const match = aliases.find((k) => d[k] !== undefined && d[k] !== null);
+      const match = aliases.find((k) => resData[k] !== undefined && resData[k] !== null);
       if (match === undefined) return;
-      const v = d[match];
-      const n = label === "errors" ? (Array.isArray(v) ? v.length : Number(v) || 0) : v;
-      if (label === "errors") errorCount = n;
-      if (label !== "errors" || n > 0) parts.push(`${label}: ${n}`);
+      const val = resData[match];
+      const count = label === "errors" ? (Array.isArray(val) ? val.length : Number(val) || 0) : val;
+      if (label === "errors") errorCount = count;
+      if (label !== "errors" || count > 0) parts.push(`${label}: ${count}`);
     });
-    const text = parts.length ? parts.join(", ") : typeof d === "string" ? (d.length > 200 ? d.substring(0, 200) + "..." : d) : "";
+    const text = parts.length ? parts.join(", ") : typeof resData === "string" ? (resData.length > 200 ? resData.substring(0, 200) + "..." : resData) : "";
     return { text, errorCount };
   }
 
@@ -291,28 +291,28 @@
   function showToast(message, type = "info", timeout = 5000) {
     const container = el("toast-container");
     if (!container) return null;
-    const t = document.createElement("div");
-    t.className = `toast ${type || "info"}`;
-    t.tabIndex = 0;
-    t.innerHTML = `<span class="toast-message">${message}</span>`;
+    const toast = document.createElement("div");
+    toast.className = `toast ${type || "info"}`;
+    toast.tabIndex = 0;
+    toast.innerHTML = `<span class="toast-message">${message}</span>`;
     if (timeout > 0) {
       const bar = document.createElement("div");
       bar.className = "toast-progress-bar";
       bar.style.animationDuration = `${timeout}ms`;
-      t.appendChild(bar);
+      toast.appendChild(bar);
     }
-    container.appendChild(t);
-    requestAnimationFrame(() => t.classList.add("visible"));
+    container.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add("visible"));
     const dismiss = () => {
-      t.classList.remove("visible");
-      setTimeout(() => t.remove(), 300);
+      toast.classList.remove("visible");
+      setTimeout(() => toast.remove(), 300);
     };
     let timer = timeout > 0 ? setTimeout(dismiss, timeout) : null;
-    t.onclick = () => {
+    toast.onclick = () => {
       clearTimeout(timer);
       dismiss();
     };
-    return t;
+    return toast;
   }
 
   /**
@@ -465,13 +465,13 @@
       target[last] = value;
     },
     bindConfig: (target, path, config, persistFn, type = "text") => {
-      const e = typeof target === "string" ? el(target) : target;
-      if (!e) return;
+      const elem = typeof target === "string" ? el(target) : target;
+      if (!elem) return;
       const val = window._sr.getValueByPath(config, path);
-      if (type === "check") e.checked = !!val;
-      else e.value = val ?? "";
-      e.onchange = async () => {
-        let newVal = type === "check" ? e.checked : type === "number" ? Number(e.value) || 0 : e.value;
+      if (type === "check") elem.checked = !!val;
+      else elem.value = val ?? "";
+      elem.onchange = async () => {
+        let newVal = type === "check" ? elem.checked : type === "number" ? Number(elem.value) || 0 : elem.value;
         window._sr.setValueByPath(config, path, newVal);
         await persistFn(config);
       };

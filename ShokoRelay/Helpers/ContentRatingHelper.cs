@@ -52,14 +52,14 @@ public static class ContentRatingHelper
         var tags = (series as IShokoSeries)?.Tags;
         if (tags != null)
         {
-            foreach (var t in tags)
+            foreach (var tag in tags)
             {
-                if (t == null)
+                if (tag == null)
                     continue;
-                var name = t.Name?.Trim();
+                var name = tag.Name?.Trim();
                 if (string.IsNullOrWhiteSpace(name))
                     continue;
-                if (t.ID.Source == MetadataSource.User)
+                if (tag.ID.Source == MetadataSource.User)
                     continue;
                 if (!s_ratingTags.Contains(name))
                     continue;
@@ -70,14 +70,14 @@ public static class ContentRatingHelper
         // Build AniDB weight dictionary and populate tagSet for precision-based decisions (defaults to 0 when not present).
         if (series is IShokoSeries ss && ss.AnidbAnime?.Tags is IReadOnlyList<IAnidbTagForAnime> atags)
         {
-            foreach (var t in atags)
+            foreach (var animeTag in atags)
             {
-                var name = t?.Name?.Trim();
+                var name = animeTag?.Name?.Trim();
                 if (string.IsNullOrWhiteSpace(name) || !s_ratingTags.Contains(name))
                     continue;
                 var lower = name.ToLowerInvariant();
                 tagSet.Add(lower);
-                anidbWeights[lower] = t!.Weight;
+                anidbWeights[lower] = animeTag!.Weight;
             }
         }
 
@@ -104,10 +104,10 @@ public static class ContentRatingHelper
                 {
                     if (!tagSet.Contains(key))
                         continue;
-                    var w = anidbWeights.TryGetValue(key, out var ww) ? ww : 0;
-                    if (w >= tvma)
+                    int weight = anidbWeights.TryGetValue(key, out int tagWeight) ? tagWeight : 0;
+                    if (weight >= tvma)
                         return ("TV-MA" + descriptor, false);
-                    if (w >= tv14 && contentRating != "TV-MA")
+                    if (weight >= tv14 && contentRating != "TV-MA")
                         contentRating = "TV-14";
                 }
                 return null;
