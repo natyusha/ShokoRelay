@@ -116,9 +116,9 @@ public class ShokoController(
             plexMetadata.ClearCache();
             return Ok(new RelayResponse<object>());
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            return BadRequest(new RelayResponse<object>(Status: "error", Message: ex.Message));
+            return BadRequest(new RelayResponse<object>(Status: "error", Message: exception.Message));
         }
     }
 
@@ -240,19 +240,24 @@ public class ShokoController(
                 .ToList();
 
             var json = JsonSerializer.Serialize(new { roots });
+            var currentLastWrite = IoFile.GetLastWriteTimeUtc(VfsShared.BlueprintFilePath);
+            var currentVersion = VfsShared.BlueprintVersion;
             lock (s_treeCacheLock)
             {
-                s_cachedTreeJson = json;
-                s_lastBlueprintWriteUtc = lastWrite;
-                s_lastBlueprintVersion = version;
+                if (currentLastWrite == lastWrite && currentVersion == version)
+                {
+                    s_cachedTreeJson = json;
+                    s_lastBlueprintWriteUtc = lastWrite;
+                    s_lastBlueprintVersion = version;
+                }
             }
 
             // Bypass MVC's default Newtonsoft.Json formatter and return explicit System.Text.Json to preserve attribute-based casing
             return Content(json, "application/json");
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            Logger.LogWarning(ex, "Shoko: Failed to parse VFS blueprint cache");
+            Logger.LogWarning(exception, "Shoko: Failed to parse VFS blueprint cache");
             return EmptyTree();
         }
     }
@@ -384,7 +389,7 @@ public class ShokoController(
     public async Task<IActionResult> StartWatchedSyncNow()
     {
         if (!await SyncHelper.SyncLock.WaitAsync(0).ConfigureAwait(false))
-            return Conflict(new RelayResponse<object>(Status: "busy", Message: "A conflicting operation is already in progress. Please wait for it to complete."));
+            return Conflict(new RelayResponse<object>(Status: "busy", Message: "A conflicting operation is already in progress. Please wait for item to complete."));
 
         try
         {
@@ -404,9 +409,9 @@ public class ShokoController(
                 )
             );
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            return StatusCode(500, new RelayResponse<object>(Status: "error", Message: ex.Message));
+            return StatusCode(500, new RelayResponse<object>(Status: "error", Message: exception.Message));
         }
         finally
         {

@@ -84,9 +84,9 @@ public class SyncToPlex(
                 shokoUserLookup[mappedUsername] = resolved = userService.GetUserByUsername(mappedUsername);
             if (resolved == null)
             {
-                string msg = $"Mapped Shoko user '{mappedUsername}' not found for Plex user '{plexUserName}'";
-                logger.LogWarning("WatchedSyncService: {Message}", msg);
-                result = SyncHelper.RecordError(result, result.PerUser, plexUserName, msg);
+                string message = $"Mapped Shoko user '{mappedUsername}' not found for Plex user '{plexUserName}'";
+                logger.LogWarning("WatchedSyncService: {Message}", message);
+                result = SyncHelper.RecordError(result, result.PerUser, plexUserName, message);
             }
             return resolved;
         }
@@ -192,9 +192,9 @@ public class SyncToPlex(
                         {
                             if (!dryRun)
                             {
-                                using var req = plexClient.CreateRequest(HttpMethod.Get, $"/:/scrobble?identifier=com.plexapp.plugins.library&key={plexItem.RatingKey}", target.ServerUrl, userToken);
-                                using var resp = await plexClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
-                                if (!resp.IsSuccessStatusCode)
+                                using var request = plexClient.CreateRequest(HttpMethod.Get, $"/:/scrobble?identifier=com.plexapp.plugins.library&key={plexItem.RatingKey}", target.ServerUrl, userToken);
+                                using var response = await plexClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+                                if (!response.IsSuccessStatusCode)
                                 {
                                     result = SyncHelper.RecordError(result, result.PerUser, userName, $"Failed to scrobble RatingKey {plexItem.RatingKey} on {target.ServerName}");
                                     continue;

@@ -19,7 +19,7 @@ public partial class VfsBuilder
         }
 
         logger.LogInformation("VFS Audit: Starting task...");
-        var sw = Stopwatch.StartNew();
+        var stopwatch = Stopwatch.StartNew();
 
         var removed = new ConcurrentBag<string>();
         var errors = new ConcurrentBag<string>();
@@ -89,9 +89,9 @@ public partial class VfsBuilder
                                     if (rootDict.TryRemove(parsedFolderId, out _))
                                         Interlocked.Exchange(ref blueprintUpdated, 1);
                         }
-                        catch (Exception ex)
+                        catch (Exception exception)
                         {
-                            errors.Add($"Failed to delete orphaned folder {seriesFolder}: {ex.Message}");
+                            errors.Add($"Failed to delete orphaned folder {seriesFolder}: {exception.Message}");
                         }
                         return;
                     }
@@ -104,9 +104,9 @@ public partial class VfsBuilder
                     {
                         filesToAudit = [.. Directory.EnumerateFiles(seriesFolder, "*", SearchOption.AllDirectories)];
                     }
-                    catch (Exception ex)
+                    catch (Exception exception)
                     {
-                        errors.Add($"Failed to enumerate series folder {seriesFolder}: {ex.Message}");
+                        errors.Add($"Failed to enumerate series folder {seriesFolder}: {exception.Message}");
                         return;
                     }
 
@@ -122,9 +122,9 @@ public partial class VfsBuilder
                                 removed.Add($"[Broken Link] {file}");
                             }
                         }
-                        catch (Exception ex)
+                        catch (Exception exception)
                         {
-                            errors.Add($"Failed to process file {file}: {ex.Message}");
+                            errors.Add($"Failed to process file {file}: {exception.Message}");
                         }
                     }
 
@@ -149,13 +149,13 @@ public partial class VfsBuilder
         if (blueprintUpdated > 0)
             VfsShared.SaveBlueprint(blueprint);
 
-        sw.Stop();
+        stopwatch.Stop();
         logger.LogInformation(
             "VFS Audit: Task finished -> seriesChecked={Checked}, brokenLinksRemoved={Broken}, orphanedFoldersRemoved={Orphaned} in {Elapsed}ms.",
             seriesChecked,
             brokenLinks,
             orphanedFolders,
-            sw.ElapsedMilliseconds
+            stopwatch.ElapsedMilliseconds
         );
         return new VfsAuditResult(seriesChecked, brokenLinks, orphanedFolders, [.. removed.OrderBy(item => item)], [.. errors.OrderBy(item => item)]);
     }

@@ -23,15 +23,15 @@ public static class ReportHelper
     {
         try
         {
-            var sb = new StringBuilder();
-            builder(sb, data);
+            var stringBuilder = new StringBuilder();
+            builder(stringBuilder, data);
             string logsDir = LogsDirectory;
             Directory.CreateDirectory(logsDir);
-            File.WriteAllText(Path.Combine(logsDir, fileName), sb.ToString(), Encoding.UTF8);
+            File.WriteAllText(Path.Combine(logsDir, fileName), stringBuilder.ToString(), Encoding.UTF8);
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            logger?.LogWarning(ex, "ReportHelper: Failed to write {FileName}", fileName);
+            logger?.LogWarning(exception, "ReportHelper: Failed to write {FileName}", fileName);
         }
     }
 
@@ -85,8 +85,8 @@ public static class ReportHelper
         if (customUrl != null)
             builder.AppendLine($"  Configured Override URL  : {customUrl}");
 
-        var tvLibs = libs.Where(lib => !string.Equals(lib.Type, "movie", StringComparison.OrdinalIgnoreCase)).ToList();
-        var movieLibs = libs.Where(lib => string.Equals(lib.Type, "movie", StringComparison.OrdinalIgnoreCase)).ToList();
+        var tvLibs = libs.Where(library => !string.Equals(library.Type, "movie", StringComparison.OrdinalIgnoreCase)).ToList();
+        var movieLibs = libs.Where(library => string.Equals(library.Type, "movie", StringComparison.OrdinalIgnoreCase)).ToList();
 
         void PrintLib(PlexAvailableLibrary library)
         {
@@ -101,15 +101,15 @@ public static class ReportHelper
         if (tvLibs.Count > 0)
         {
             builder.AppendLine().AppendLine("TV Shows Libraries:");
-            foreach (var lib in tvLibs)
-                PrintLib(lib);
+            foreach (var library in tvLibs)
+                PrintLib(library);
         }
 
         if (movieLibs.Count > 0)
         {
             builder.AppendLine().AppendLine("Movie Libraries:");
-            foreach (var lib in movieLibs)
-                PrintLib(lib);
+            foreach (var library in movieLibs)
+                PrintLib(library);
         }
     }
 
@@ -153,7 +153,7 @@ public static class ReportHelper
         if (result.ErrorsList.Count > 0)
         {
             items.Add("Errors:");
-            items.AddRange(result.ErrorsList.Select(err => $"  ERROR: {err}"));
+            items.AddRange(result.ErrorsList.Select(error => $"  ERROR: {error}"));
         }
 
         BuildReport(builder, "Collection Build Report", stats, "Details:", items);
@@ -194,7 +194,7 @@ public static class ReportHelper
         if (result.ErrorsList.Count > 0)
         {
             items.Add("Errors:");
-            items.AddRange(result.ErrorsList.Select(err => $"  ERROR: {err}"));
+            items.AddRange(result.ErrorsList.Select(error => $"  ERROR: {error}"));
         }
 
         BuildReport(builder, "Audience Rating Report", stats, "Details:", items);
@@ -214,7 +214,7 @@ public static class ReportHelper
             ["Errors"] = result.Errors,
         };
         var items = result.UploadedDetails.OrderBy(detail => detail).Select(detail => $"UPLOADED: {detail}").ToList();
-        items.AddRange(result.ErrorsList.OrderBy(err => err).Select(err => $"ERROR: {err}"));
+        items.AddRange(result.ErrorsList.OrderBy(error => error).Select(error => $"ERROR: {error}"));
         BuildReport(builder, "Plex Image Sync Report", stats, "Details:", items);
     }
 
@@ -242,8 +242,8 @@ public static class ReportHelper
         if (result.TrashElapsed.HasValue)
         {
             builder.AppendLine($"  - Empty Plex Trash         : {result.TrashElapsed.Value.TotalSeconds:F2}s");
-            foreach (var msg in result.TrashMessages ?? [])
-                builder.AppendLine($"    -> {msg}");
+            foreach (var message in result.TrashMessages ?? [])
+                builder.AppendLine($"    -> {message}");
         }
     }
 
@@ -297,7 +297,7 @@ public static class ReportHelper
             items.Add("Skipped Items:");
             items.AddRange(result.SkippedDetails.OrderBy(skippedItem => skippedItem).Select(skippedItem => $"SKIPPED: {skippedItem}"));
         }
-        items.AddRange(result.Errors.OrderBy(err => err).Select(err => $"ERROR: {err}"));
+        items.AddRange(result.Errors.OrderBy(error => error).Select(error => $"ERROR: {error}"));
 
         BuildReport(builder, "VFS Generation Report", stats, "Report Details:", items);
     }
@@ -315,7 +315,7 @@ public static class ReportHelper
             ["Errors"] = result.Errors.Count,
         };
         var items = result.RemovedItems.OrderBy(removedItem => removedItem).ToList();
-        items.AddRange(result.Errors.OrderBy(err => err).Select(err => $"ERROR: {err}"));
+        items.AddRange(result.Errors.OrderBy(error => error).Select(error => $"ERROR: {error}"));
         BuildReport(builder, "VFS Audit Report", stats, "Details:", items);
     }
 
@@ -338,7 +338,7 @@ public static class ReportHelper
         if (plexMessages?.Count > 0)
         {
             items.Add("Plex Trash Status:");
-            items.AddRange(plexMessages.Select(msg => $"  {msg}"));
+            items.AddRange(plexMessages.Select(message => $"  {message}"));
             items.Add("");
         }
         if (removed?.Count > 0)
@@ -423,7 +423,7 @@ public static class ReportHelper
             stats["Filter"] = string.Join(", ", filter);
 
         var items = result.CacheEntries.OrderBy(entry => entry.VfsPath).Select(entry => $"{entry.VfsPath} (VideoID: {entry.VideoId})").ToList();
-        items.AddRange(result.Errors.OrderBy(err => err).Select(err => $"ERROR: {err}"));
+        items.AddRange(result.Errors.OrderBy(error => error).Select(error => $"ERROR: {error}"));
 
         BuildReport(builder, "AnimeThemes: VFS Build Report", stats, "Planned Links & Errors:", items);
     }
@@ -507,7 +507,7 @@ public static class ReportHelper
         if (result.ErrorsList.Count > 0)
         {
             items.Add("Errors:");
-            items.AddRange(result.ErrorsList.OrderBy(err => err).Select(err => $"ERROR: {err}"));
+            items.AddRange(result.ErrorsList.OrderBy(error => error).Select(error => $"ERROR: {error}"));
         }
 
         BuildReport(builder, "AnimeThemes: MP3 Audit Report", stats, "Details:", items);
@@ -525,7 +525,7 @@ public static class ReportHelper
             ["Errors"] = result.Errors,
         };
         var items = result.Downloads.OrderBy(download => download).Select(download => $"DOWNLOADED: {download}").ToList();
-        items.AddRange(result.Messages.OrderBy(msg => msg).Select(msg => $"MESSAGE: {msg}"));
+        items.AddRange(result.Messages.OrderBy(message => message).Select(message => $"MESSAGE: {message}"));
         BuildReport(builder, "AnimeThemes: WebM Download Report", stats, "Details:", items);
     }
 
@@ -624,9 +624,9 @@ public static class ReportHelper
 
                             foreach (var (variantKey, vStats) in localGroup.Variants)
                             {
-                                if (!globalGroup.Variants.TryGetValue(variantKey, out var gv))
-                                    globalGroup.Variants[variantKey] = gv = new VariantStats();
-                                gv.Count += vStats.Count;
+                                if (!globalGroup.Variants.TryGetValue(variantKey, out var genreValues))
+                                    globalGroup.Variants[variantKey] = genreValues = new VariantStats();
+                                genreValues.Count += vStats.Count;
                             }
                         }
                     }
@@ -726,15 +726,15 @@ public static class ReportHelper
                     for (int primIdx = 0; primIdx < primaries.Count; primIdx++)
                     {
                         var (sourceOrder, source, displayName, count) = primaries[primIdx];
-                        var sbSplit = new StringBuilder($"{source},{TextHelper.EscapeCsvCommas(displayName)},{count}");
+                        var stringBuilderSplit = new StringBuilder($"{source},{TextHelper.EscapeCsvCommas(displayName)},{count}");
                         foreach (var (_, sourceAtch, displayNameAtch, countAtch) in attached[primIdx])
-                            sbSplit.Append($";{sourceAtch},{TextHelper.EscapeCsvCommas(displayNameAtch)},{countAtch}");
-                        rows.Add((sourceOrder, displayName, count, sbSplit.ToString()));
+                            stringBuilderSplit.Append($";{sourceAtch},{TextHelper.EscapeCsvCommas(displayNameAtch)},{countAtch}");
+                        rows.Add((sourceOrder, displayName, count, stringBuilderSplit.ToString()));
                     }
                     continue;
                 }
 
-                var sbLine = new StringBuilder();
+                var stringBuilderLine = new StringBuilder();
                 int primaryOrder = ordered[0].SourceOrder;
                 string primaryName = ordered[0].DisplayName;
                 int primaryCount = ordered[0].Count;
@@ -744,29 +744,29 @@ public static class ReportHelper
                 {
                     primaryName = group.MergeTarget;
                     primaryCount = group.SeriesIds.Count;
-                    sbLine.Append($"Override,{TextHelper.EscapeCsvCommas(primaryName)},{primaryCount}");
+                    stringBuilderLine.Append($"Override,{TextHelper.EscapeCsvCommas(primaryName)},{primaryCount}");
                     foreach (var (_, source, displayName, count) in ordered)
-                        sbLine.Append($";{source},{TextHelper.EscapeCsvCommas(displayName)},{count}");
+                        stringBuilderLine.Append($";{source},{TextHelper.EscapeCsvCommas(displayName)},{count}");
                 }
                 // Case B: Has a natural winner (or target match) as ordered[0], append any subsequent variants/plurals/sources after ';'
                 else
                 {
-                    sbLine.Append($"{ordered[0].Source},{TextHelper.EscapeCsvCommas(ordered[0].DisplayName)},{ordered[0].Count}");
+                    stringBuilderLine.Append($"{ordered[0].Source},{TextHelper.EscapeCsvCommas(ordered[0].DisplayName)},{ordered[0].Count}");
                     for (int ordIdx = 1; ordIdx < ordered.Count; ordIdx++)
-                        sbLine.Append($";{ordered[ordIdx].Source},{TextHelper.EscapeCsvCommas(ordered[ordIdx].DisplayName)},{ordered[ordIdx].Count}");
+                        stringBuilderLine.Append($";{ordered[ordIdx].Source},{TextHelper.EscapeCsvCommas(ordered[ordIdx].DisplayName)},{ordered[ordIdx].Count}");
                 }
 
-                rows.Add((primaryOrder, primaryName, primaryCount, sbLine.ToString()));
+                rows.Add((primaryOrder, primaryName, primaryCount, stringBuilderLine.ToString()));
             }
 
-            var sb = new StringBuilder();
-            sb.AppendLine($"## {title} Report ##").AppendLine();
-            sb.AppendLine($"#source,{columnName},count");
+            var stringBuilder = new StringBuilder();
+            stringBuilder.AppendLine($"## {title} Report ##").AppendLine();
+            stringBuilder.AppendLine($"#source,{columnName},count");
 
             foreach (var (_, _, _, line) in rows.OrderBy(row => row.SourceOrder).ThenByDescending(row => row.Count).ThenBy(row => row.Name, StringComparer.OrdinalIgnoreCase))
-                sb.AppendLine(line);
+                stringBuilder.AppendLine(line);
 
-            return sb.ToString();
+            return stringBuilder.ToString();
         }
     }
 

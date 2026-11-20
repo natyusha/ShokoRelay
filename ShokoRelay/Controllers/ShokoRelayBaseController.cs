@@ -222,11 +222,11 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
             TaskHelper.CompleteTask(taskName, (actionResult as OkObjectResult)?.Value!);
             return actionResult;
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            var err = new { status = "error", message = ex.Message };
-            TaskHelper.CompleteTask(taskName, err);
-            return BadRequest(new RelayResponse<object>(Status: "error", Message: ex.Message));
+            var error = new { status = "error", message = exception.Message };
+            TaskHelper.CompleteTask(taskName, error);
+            return BadRequest(new RelayResponse<object>(Status: "error", Message: exception.Message));
         }
         finally
         {
@@ -397,24 +397,24 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
             return collected;
         var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var (lib, srv) in pairs)
+        foreach (var (library, srv) in pairs)
         {
-            var key = !string.IsNullOrWhiteSpace(lib.Uuid) ? lib.Uuid : $"{srv.PreferredUri}::{lib.Id}";
+            var key = !string.IsNullOrWhiteSpace(library.Uuid) ? library.Uuid : $"{srv.PreferredUri}::{library.Id}";
             if (!seenKeys.Add(key))
                 continue;
 
             collected.Add(
                 new PlexAvailableLibrary
                 {
-                    Id = lib.Id,
-                    Title = lib.Title,
-                    Type = lib.Type,
-                    Agent = lib.Agent,
-                    Uuid = !string.IsNullOrWhiteSpace(lib.Uuid) ? lib.Uuid : key,
+                    Id = library.Id,
+                    Title = library.Title,
+                    Type = library.Type,
+                    Agent = library.Agent,
+                    Uuid = !string.IsNullOrWhiteSpace(library.Uuid) ? library.Uuid : key,
                     ServerId = srv.Id,
                     ServerName = srv.Name,
                     ServerUrl = srv.PreferredUri ?? string.Empty,
-                    Locations = lib.Locations,
+                    Locations = library.Locations,
                 }
             );
         }

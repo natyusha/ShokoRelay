@@ -52,7 +52,7 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
         const string TaskName = ShokoRelayConstants.TaskPlexRatingsApply;
         bool startedTask = TaskHelper.StartTask(TaskName);
         logger.LogInformation("CriticRatingService: Starting task...");
-        var sw = Stopwatch.StartNew();
+        var stopwatch = Stopwatch.StartNew();
         try
         {
             var (processedShows, updatedShows, processedEpisodes, updatedEpisodes, errors) = (0, 0, 0, 0, 0);
@@ -61,11 +61,11 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
             var prefIdCache = new Dictionary<int, string?>();
 
             if (!plexClient.IsEnabled)
-                return new ApplyRatingsResult(0, 0, 0, 0, 0, errorsList, appliedChanges, sw.Elapsed);
+                return new ApplyRatingsResult(0, 0, 0, 0, 0, errorsList, appliedChanges, stopwatch.Elapsed);
 
             var allowedSet = allowedSeriesIds != null ? new HashSet<int>(allowedSeriesIds.Select(id => OverrideHelper.GetPrimary(id, metadataService))) : null;
             if (allowedSet is { Count: 0 })
-                return new ApplyRatingsResult(0, 0, 0, 0, 0, errorsList, appliedChanges, sw.Elapsed);
+                return new ApplyRatingsResult(0, 0, 0, 0, 0, errorsList, appliedChanges, stopwatch.Elapsed);
 
             async Task ProcessShowRating(PlexMetadataItem item, PlexLibraryTarget target)
             {
@@ -230,9 +230,9 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                         {
                             if (target.LibraryType == PlexLibraryType.Movie)
                             {
-                                using var req = plexClient.CreateRequest(HttpMethod.Get, $"/library/metadata/{ratingKey}?X-Plex-Container-Start=0&X-Plex-Container-Size=1", target.ServerUrl);
-                                using var resp = await plexClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
-                                if ((await PlexApi.ReadContainerAsync(resp, cancellationToken).ConfigureAwait(false))?.Metadata?.FirstOrDefault() is { } movieItem)
+                                using var request = plexClient.CreateRequest(HttpMethod.Get, $"/library/metadata/{ratingKey}?X-Plex-Container-Start=0&X-Plex-Container-Size=1", target.ServerUrl);
+                                using var response = await plexClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+                                if ((await PlexApi.ReadContainerAsync(response, cancellationToken).ConfigureAwait(false))?.Metadata?.FirstOrDefault() is { } movieItem)
                                     await ProcessMovieRating(movieItem, target).ConfigureAwait(false);
                             }
                             else
@@ -268,9 +268,9 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                     }
                 }
             }
-            sw.Stop();
-            logger.LogInformation("CriticRatingService: Task finished -> Updated {SeriesCount} series and {EpisodeCount} episodes in {Elapsed}ms", updatedShows, updatedEpisodes, sw.ElapsedMilliseconds);
-            return new ApplyRatingsResult(processedShows, updatedShows, processedEpisodes, updatedEpisodes, errors, errorsList, appliedChanges, sw.Elapsed);
+            stopwatch.Stop();
+            logger.LogInformation("CriticRatingService: Task finished -> Updated {SeriesCount} series and {EpisodeCount} episodes in {Elapsed}ms", updatedShows, updatedEpisodes, stopwatch.ElapsedMilliseconds);
+            return new ApplyRatingsResult(processedShows, updatedShows, processedEpisodes, updatedEpisodes, errors, errorsList, appliedChanges, stopwatch.Elapsed);
         }
         finally
         {
@@ -298,9 +298,9 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
 
         try
         {
-            using var req = plexClient.CreateRequest(HttpMethod.Put, path, target.ServerUrl);
-            using var resp = await plexClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
-            return resp.IsSuccessStatusCode;
+            using var request = plexClient.CreateRequest(HttpMethod.Put, path, target.ServerUrl);
+            using var response = await plexClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            return response.IsSuccessStatusCode;
         }
         catch
         {

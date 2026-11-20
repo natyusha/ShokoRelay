@@ -205,11 +205,11 @@ public static class MapHelper
             if (sortedEpisodes.Select(item => item.Episode.Type).Distinct().Count() > 1)
             {
                 var distinctPrimarySeriesCount = (video.CrossReferences ?? [])
-                    .Where(cr => cr.ShokoEpisode != null)
-                    .Select(cr =>
+                    .Where(xref => xref.ShokoEpisode != null)
+                    .Select(xref =>
                     {
-                        if (!seriesToPrimary.TryGetValue(cr.ShokoEpisode!.ShokoSeriesID, out var primaryId))
-                            seriesToPrimary[cr.ShokoEpisode.ShokoSeriesID] = primaryId = OverrideHelper.GetPrimary(cr.ShokoEpisode.ShokoSeriesID, metadataService);
+                        if (!seriesToPrimary.TryGetValue(xref.ShokoEpisode!.ShokoSeriesID, out var primaryId))
+                            seriesToPrimary[xref.ShokoEpisode.ShokoSeriesID] = primaryId = OverrideHelper.GetPrimary(xref.ShokoEpisode.ShokoSeriesID, metadataService);
                         return primaryId;
                     })
                     .Distinct()
@@ -217,7 +217,7 @@ public static class MapHelper
 
                 if (distinctPrimarySeriesCount > 1)
                 {
-                    var firstXrefId = (video.CrossReferences ?? []).FirstOrDefault(cr => cr.ShokoEpisode != null && sortedEpisodes.Any(item => item.Episode.ID == cr.ShokoEpisode.ID))?.ShokoEpisode?.ID;
+                    var firstXrefId = (video.CrossReferences ?? []).FirstOrDefault(xref => xref.ShokoEpisode != null && sortedEpisodes.Any(item => item.Episode.ID == xref.ShokoEpisode.ID))?.ShokoEpisode?.ID;
                     if (firstXrefId is not null)
                     {
                         var primaryType = sortedEpisodes.First(item => item.Episode.ID == firstXrefId).Episode.Type;
@@ -240,7 +240,7 @@ public static class MapHelper
         }
 
         // Apply fallback rules for "Other" (Featurette) season coordinates, remapping them to Standard or Specials folders if those are empty
-        var (s1, s0) = (seasonsSet.Contains(PlexConstants.SeasonStandard), seasonsSet.Contains(PlexConstants.SeasonSpecials));
+        var (hasStandardSeason, hasSpecialsSeason) = (seasonsSet.Contains(PlexConstants.SeasonStandard), seasonsSet.Contains(PlexConstants.SeasonSpecials));
 
         foreach (var key in videoCoords.Keys.ToList())
         {
@@ -248,8 +248,8 @@ public static class MapHelper
             if (coords.Season == PlexConstants.SeasonOther)
             {
                 coords.Season =
-                    !s1 ? PlexConstants.SeasonStandard
-                    : !s0 ? PlexConstants.SeasonSpecials
+                    !hasStandardSeason ? PlexConstants.SeasonStandard
+                    : !hasSpecialsSeason ? PlexConstants.SeasonSpecials
                     : coords.Season;
                 videoCoords[key] = (coords, deduped);
             }
@@ -286,9 +286,9 @@ public static class MapHelper
             var (coords, deduped) = info;
             var firstEpisode = deduped[0].Episode;
             var fileList = episodeFileLists.GetValueOrDefault(firstEpisode.ID);
-            var (fIdx, fCount) = (fileList?.FindIndex(item => item.LocalID == video.LocalID) ?? 0, fileList?.Count ?? 1);
+            var (fileIndex, fileCount) = (fileList?.FindIndex(item => item.LocalID == video.LocalID) ?? 0, fileList?.Count ?? 1);
             string fileName = Path.GetFileName(video.Files?.FirstOrDefault()?.Path ?? "");
-            bool allowPt = fCount > 1 && VfsHelper.HasPlexSplitTag(fileName) && deduped.Select(entry => entry.Episode.Type).Distinct().Count() <= 1;
+            bool allowPt = fileCount > 1 && VfsHelper.HasPlexSplitTag(fileName) && deduped.Select(entry => entry.Episode.Type).Distinct().Count() <= 1;
 
             // TMDB Episode metadata override for multi-part files
             IEpisode? tmdbEpisode = null;
@@ -299,9 +299,11 @@ public static class MapHelper
                     var rawEps = se.GetLinkedEpisodes(MetadataSource.TMDB);
                     tmdbEpsCache[se.LocalID] = tmdbEps = rawEps is { Count: > 0 } ? SelectPreferredTmdbOrdering(rawEps, prefId) : [];
                 }
-                tmdbEpisode = tmdbEps.ElementAtOrDefault(fIdx);
+                tmdbEpisode = tmdbEps.ElementAtOrDefault(fileIndex);
             }
-            result.Add(new FileMapping(video, [.. deduped.Select(item => item.Episode)], firstEpisode, coords, fileName, allowPt ? fIdx + 1 : null, allowPt ? fCount : 1, tmdbEpisode, video.IsVariation));
+            result.Add(
+                new FileMapping(video, [.. deduped.Select(item => item.Episode)], firstEpisode, coords, fileName, allowPt ? fileIndex + 1 : null, allowPt ? fileCount : 1, tmdbEpisode, video.IsVariation)
+            );
         }
         // Deduplicate mappings by Video ID and Coordinates. This prevents duplicate VFS entries (v1/v2) for crossover series that have been consolidated into a single folder via VFS Overrides.
         return [.. result.DistinctBy(mapping => (mapping.Video.LocalID, mapping.Coords, mapping.PartIndex, mapping.IsVariation))];
@@ -318,7 +320,7 @@ public static class MapHelper
 
         var deduped = new List<(IEpisode Episode, PlexCoords Coords)>();
         var index = new Dictionary<(int, int), int>();
-        var xrefPos = video.CrossReferences?.Where(cr => cr.ShokoEpisode != null).Select((xref, index) => (id: xref.ShokoEpisode!.ID, i: index)).ToDictionary(pair => pair.id, pair => pair.i);
+        var xrefPos = video.CrossReferences?.Where(xref => xref.ShokoEpisode != null).Select((xref, index) => (id: xref.ShokoEpisode!.ID, i: index)).ToDictionary(pair => pair.id, pair => pair.i);
         foreach (var entry in eps)
         {
             var key = (entry.Coords.Season, entry.Coords.Episode);

@@ -3,7 +3,7 @@
  * @description Dedicated logic for building and persisting the Provider Settings form on the Shoko Relay dashboard.
  */
 (() => {
-  const { configUrl, el, esc, fetchJson, showToast, getValueByPath, setValueByPath, openModal, bindConfig, unwrapConfig, saveSettings } = window._sr;
+  const { configUrl, element, esc, fetchJson, showToast, getValueByPath, setValueByPath, openModal, bindConfig, unwrapConfig, saveSettings } = window._sr;
 
   // #region Config Helpers
   /**
@@ -19,8 +19,8 @@
       const saved = localStorage.getItem(`details-state-${details.id}`);
       if (saved !== null) details.open = saved === "true";
     }
-    details.querySelector("summary")?.addEventListener("click", (ev) => {
-      ev.preventDefault();
+    details.querySelector("summary")?.addEventListener("click", (event) => {
+      event.preventDefault();
       if (anim) anim.cancel();
       const isOpening = !details.open;
       if (isOpening) details.open = true;
@@ -43,7 +43,7 @@
    */
   window._sr.updateControlStates = (config) => {
     const isPlexLinked = !!window._sr.isPlexLinked;
-    const isSyncActive = el("sync-users")?.value !== "4";
+    const isSyncActive = element("sync-users")?.value !== "4";
 
     document.querySelectorAll(".plex-auth, .sync-user").forEach((elem) => {
       const reqPlex = elem.classList.contains("plex-auth");
@@ -52,11 +52,11 @@
 
       if (["INPUT", "BUTTON", "SELECT", "TEXTAREA"].includes(elem.tagName)) elem.disabled = isDisabled;
 
-      const msg = isDisabled ? (reqPlex && !isPlexLinked ? "Requires Plex Authentication" : "Requires Sync Users to be Selected") : "";
+      const message = isDisabled ? (reqPlex && !isPlexLinked ? "Requires Plex Authentication" : "Requires Sync Users to be Selected") : "";
       const parent = elem.closest("label, .w100, .dsbld-wrap") || elem.parentElement;
 
       if (parent) {
-        if (msg) parent.title = msg;
+        if (message) parent.title = message;
         else {
           delete parent.dataset.tooltipText;
           parent.removeAttribute("title");
@@ -65,7 +65,7 @@
       }
     });
 
-    const overridesBtn = el("vfs-overrides");
+    const overridesBtn = element("vfs-overrides");
     const cfg = config || window.relaySettings;
     if (overridesBtn && cfg) {
       const isDisabled = !(window._sr.getValueByPath(cfg, "Advanced.TmdbEpNumbering") || window._sr.getValueByPath(cfg, "Advanced.MergeTmdbSeries"));
@@ -85,14 +85,14 @@
 
   /**
    * Parses a flags enum value (bitmask integer or comma-separated string) into a numeric bitmask.
-   * @param {number|string} val - The raw value from the configuration payload.
+   * @param {number|string} value - The raw value from the configuration payload.
    * @param {Array<{name: string, value: number}>} enumValues - The single-bit flag schema definitions.
    * @returns {number} The resolved integer bitmask.
    */
-  function parseFlagsValue(val, enumValues) {
-    if (typeof val === "number") return val;
-    if (typeof val !== "string" || !val.trim()) return 0;
-    const trimmed = val.trim();
+  function parseFlagsValue(value, enumValues) {
+    if (typeof value === "number") return value;
+    if (typeof value !== "string" || !value.trim()) return 0;
+    const trimmed = value.trim();
     if (/^\d+$/.test(trimmed)) return Number(trimmed);
     if (trimmed.toLowerCase() === "all") return enumValues.reduce((acc, enumVal) => acc | enumVal.value, 0);
     if (trimmed.toLowerCase() === "none") return 0;
@@ -153,14 +153,14 @@
       menu.appendChild(itemLabel);
     });
 
-    trigger.onclick = (clickEv) => {
-      clickEv.stopPropagation();
+    trigger.onclick = (clickEvent) => {
+      clickEvent.stopPropagation();
       const willOpen = !container.classList.contains("open");
       document.querySelectorAll(".multiselect.open").forEach((elOpen) => elOpen.classList.remove("open"));
       if (willOpen) container.classList.add("open");
     };
 
-    menu.onclick = (clickEv) => clickEv.stopPropagation();
+    menu.onclick = (clickEvent) => clickEvent.stopPropagation();
 
     updateSummary();
     container.append(trigger, menu);
@@ -198,13 +198,13 @@
     rightArea.value = keys.map((key) => (keyOnLeft ? mappingDict[key] : key)).join("\n");
 
     leftArea.onchange = rightArea.onchange = async () => {
-      const val = {};
+      const value = {};
       const lLines = leftArea.value.split("\n");
       const rLines = rightArea.value.split("\n");
-      lLines.forEach((leftVal, idx) => {
-        if (leftVal.trim() && rLines[idx]?.trim()) val[keyOnLeft ? leftVal.trim() : rLines[idx].trim()] = keyOnLeft ? rLines[idx].trim() : leftVal.trim();
+      lLines.forEach((leftVal, index) => {
+        if (leftVal.trim() && rLines[index]?.trim()) value[keyOnLeft ? leftVal.trim() : rLines[index].trim()] = keyOnLeft ? rLines[index].trim() : leftVal.trim();
       });
-      setValueByPath(config, prop.Path, val);
+      setValueByPath(config, prop.Path, value);
       await saveSettings(config);
     };
   }
@@ -216,17 +216,17 @@
    * @returns {Promise<void>}
    */
   async function loadConfig() {
-    if (!el("config-form")) return;
+    if (!element("config-form")) return;
     const [schemaRes, configRes] = await Promise.all([fetchJson(configUrl + "/schema"), fetchJson(configUrl)]);
-    if (!schemaRes.ok || !configRes.ok) return showToast("Failed To Load Config", "error", 0);
+    if (!schemaRes.isOk || !configRes.isOk) return showToast("Failed to Load Config", "error", 0);
 
     const schema = schemaRes.data.properties || [];
     const rawCfg = configRes.data || {};
     const config = window._sr.syncConfig(unwrapConfig(rawCfg));
-    const overridesBtn = el("vfs-overrides");
+    const overridesBtn = element("vfs-overrides");
 
-    el("config-form").innerHTML = "";
-    if (el("overrides-text")) el("overrides-text").value = rawCfg.overrides || "";
+    element("config-form").innerHTML = "";
+    if (element("overrides-text")) element("overrides-text").value = rawCfg.overrides || "";
 
     const primarySection = document.createElement("details");
     const primaryContent = document.createElement("div");
@@ -321,7 +321,7 @@
             const nextVal = Number(input.value) || 0;
             if (nextVal !== 0) {
               const verifyRes = await fetchJson(`${window._sr.base}/auth/verify?force=true`, {}, false);
-              if (!verifyRes.ok) {
+              if (!verifyRes.isOk) {
                 const authed = await window._sr.ensureAuth?.({ dismissable: true });
                 if (!authed) {
                   input.value = String(getValueByPath(config, prop.Path) ?? 0);
@@ -365,19 +365,19 @@
     });
 
     if (primaryContent.children.length > 1) {
-      el("config-form").appendChild(primarySection);
+      element("config-form").appendChild(primarySection);
       primarySection.appendChild(primaryContent);
       initDetailsAnimation(primarySection, primaryContent);
     }
 
     if (langContent.children.length > 1) {
-      el("config-form").appendChild(langSection);
+      element("config-form").appendChild(langSection);
       langSection.appendChild(langContent);
       initDetailsAnimation(langSection, langContent);
     }
 
     if (advContent.children.length > 1) {
-      el("config-form").appendChild(advSection);
+      element("config-form").appendChild(advSection);
       advSection.appendChild(advContent);
       initDetailsAnimation(advSection, advContent);
     }
@@ -391,7 +391,7 @@
     };
     for (const [id, path] of Object.entries(autoMap)) {
       bindField(id, "Automation." + path, "number");
-      const inputEl = el(id);
+      const inputEl = element(id);
       if (inputEl) {
         inputEl.oninput = () => {
           inputEl.value = inputEl.value.replace(id === "shoko-utc-offset" ? /[^-0-9]/g : /[^0-9]/g, "");
@@ -410,10 +410,10 @@
 
   // #region Initialization
   // Help Modal Logic
-  const helpBtn = el("settings-help-open");
+  const helpBtn = element("settings-help-open");
   if (helpBtn)
     helpBtn.onclick = () => {
-      const modal = el("settings-help-modal");
+      const modal = element("settings-help-modal");
       openModal(modal);
     };
 

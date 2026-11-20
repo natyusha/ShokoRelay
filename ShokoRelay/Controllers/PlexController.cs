@@ -85,9 +85,9 @@ public class PlexController(
                 )
             );
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            return StatusCode(502, new RelayResponse<object>(Status: "error", Message: ex.Message));
+            return StatusCode(502, new RelayResponse<object>(Status: "error", Message: exception.Message));
         }
     }
 
@@ -114,9 +114,9 @@ public class PlexController(
             {
                 await ConfigProvider.RefreshAdminUsername(plexAuth, cancellationToken).ConfigureAwait(false);
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
-                Logger.LogWarning(ex, "Plex: Failed to fetch admin name");
+                Logger.LogWarning(exception, "Plex: Failed to fetch admin name");
             }
 
             try
@@ -124,16 +124,16 @@ public class PlexController(
                 var discovery = await plexAuth.DiscoverShokoLibrariesAsync(pin.AuthToken, ConfigProvider.GetPlexClientIdentifier(), cancellationToken).ConfigureAwait(false);
                 PersistDiscoveryResults(discovery);
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
-                Logger.LogWarning(ex, "Plex: Discovery failed");
+                Logger.LogWarning(exception, "Plex: Discovery failed");
             }
 
             return Ok(new RelayResponse<object>(Data: new { tokenSaved = true }));
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            return StatusCode(502, new RelayResponse<object>(Status: "error", Message: ex.Message));
+            return StatusCode(502, new RelayResponse<object>(Status: "error", Message: exception.Message));
         }
     }
 
@@ -245,9 +245,9 @@ public class PlexController(
                     else
                         errors.Add($"Rating keys not found in Plex for series -> {series.GetDisplayTitle()} [{series.LocalID}] on {target.ServerName}");
                 }
-                catch (Exception ex)
+                catch (Exception exception)
                 {
-                    errors.Add($"Error refreshing metadata for series -> {series.GetDisplayTitle()} [{series.LocalID}] on {target.ServerName}: {ex.Message}");
+                    errors.Add($"Error refreshing metadata for series -> {series.GetDisplayTitle()} [{series.LocalID}] on {target.ServerName}: {exception.Message}");
                 }
         }
 
@@ -339,9 +339,9 @@ public class PlexController(
             // Case sensitive to prevent a type conflict between "guid" (string) and "Guid" (array)
             evt = JsonSerializer.Deserialize<PlexWebhookPayload>(payloadJson, s_webhookJsonOptions);
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            Logger.LogWarning(ex, "Plex: Failed to deserialize webhook payload. Raw JSON: {Json}", payloadJson);
+            Logger.LogWarning(exception, "Plex: Failed to deserialize webhook payload. Raw JSON: {Json}", payloadJson);
         }
 
         if (evt?.Metadata == null)

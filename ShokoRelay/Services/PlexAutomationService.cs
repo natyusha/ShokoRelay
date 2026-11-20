@@ -44,7 +44,7 @@ public class PlexAutomationService(CollectionService collectionService, CriticRa
     /// <returns>A <see cref="PlexAutomationRunResult"/> containing the aggregated execution metrics.</returns>
     public async Task<PlexAutomationRunResult> RunAutomationAsync(IProgress<decimal>? progress = null, CancellationToken token = default)
     {
-        var sw = Stopwatch.StartNew();
+        var stopwatch = Stopwatch.StartNew();
         progress?.Report(10);
 
         var swCollections = Stopwatch.StartNew();
@@ -79,17 +79,17 @@ public class PlexAutomationService(CollectionService collectionService, CriticRa
             var swTrash = Stopwatch.StartNew();
             foreach (var target in plexClient.GetConfiguredTargets())
             {
-                var (_, _, msg) = await plexClient.EmptyTrashWithSafetyAsync(target, threshold, false, token).ConfigureAwait(false);
-                trashMessages.Add($"[{target.Title}] {msg}");
+                var (_, _, message) = await plexClient.EmptyTrashWithSafetyAsync(target, threshold, false, token).ConfigureAwait(false);
+                trashMessages.Add($"[{target.Title}] {message}");
             }
             swTrash.Stop();
             trashElapsed = swTrash.Elapsed;
         }
 
-        sw.Stop();
+        stopwatch.Stop();
         progress?.Report(100);
 
-        return new PlexAutomationRunResult(sw.Elapsed, swCollections.Elapsed, collectionRes, swRatings.Elapsed, ratingRes, imageSyncElapsed, imageSyncRes, trashElapsed, trashMessages);
+        return new PlexAutomationRunResult(stopwatch.Elapsed, swCollections.Elapsed, collectionRes, swRatings.Elapsed, ratingRes, imageSyncElapsed, imageSyncRes, trashElapsed, trashMessages);
     }
 
     #endregion

@@ -6,15 +6,15 @@
   // #region Helpers
   /**
    * Prevents rapid execution of expensive functions like tree rendering.
-   * @param {Function} fn - The function to debounce.
+   * @param {Function} callback - The function to debounce.
    * @param {number} ms - Delay in milliseconds.
    * @returns {Function} A debounced wrapper around the supplied function.
    */
-  window._sr.debounce = (fn, ms) => {
+  window._sr.debounce = (callback, ms) => {
     let timeout;
     return (...args) => {
       clearTimeout(timeout);
-      timeout = setTimeout(() => fn(...args), ms);
+      timeout = setTimeout(() => callback(...args), ms);
     };
   };
   // #endregion
@@ -39,12 +39,12 @@
       debouncedRender();
     };
 
-    input.onkeydown = (ev) => {
-      if (ev.key === "Enter") {
-        ev.preventDefault();
+    input.onkeydown = (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
         input.blur();
-      } else if (ev.key === "Escape") {
-        ev.preventDefault();
+      } else if (event.key === "Escape") {
+        event.preventDefault();
         input.value = "";
         if (clearBtn) clearBtn.hidden = true;
         renderFn();
@@ -62,10 +62,10 @@
     }
 
     // Global Key Listener for search focus (shared across browser and player)
-    window.addEventListener("keydown", (ev) => {
+    window.addEventListener("keydown", (event) => {
       if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA" || document.querySelector(".modal-overlay.open")) return;
-      if (ev.key === "/") {
-        ev.preventDefault();
+      if (event.key === "/") {
+        event.preventDefault();
         input.focus();
       }
     });
@@ -74,13 +74,13 @@
   /**
    * Constructs a standard folder details node with deferred child rendering, wrapping the title in a flex-safe span.
    * @param {string} name - The plain display text for the folder summary.
-   * @param {HTMLUListElement} listEl - The container element to append items to.
+   * @param {HTMLUListElement} listElement - The container element to append items to.
    * @param {Function} renderFn - The callback function that generates and appends children.
    * @param {boolean} isOpen - If true, forces children to render immediately.
    * @param {string} [extraHtml=""] - Optional HTML appended after the escaped title span.
    * @returns {HTMLDetailsElement} The completed folder details node.
    */
-  window._sr.createLazyDetails = (name, listEl, renderFn, isOpen, extraHtml = "") => {
+  window._sr.createLazyDetails = (name, listElement, renderFn, isOpen, extraHtml = "") => {
     const details = document.createElement("details");
     const summary = document.createElement("summary");
     details.open = isOpen;
@@ -88,21 +88,21 @@
     summary.dataset.tooltipOverflowOnly = "true";
     const titleSpan = name ? `<span class="vfs-title" data-tooltip-overflow-only="true">${window._sr.esc(name)}</span>` : "";
     summary.innerHTML = `<span class="tree-icon expand"></span><span class="tree-icon collapse"></span>${titleSpan}${extraHtml}`;
-    summary.addEventListener("click", (ev) => {
-      if (ev.target.closest(".vfs-link")) ev.stopPropagation();
+    summary.addEventListener("click", (event) => {
+      if (event.target.closest(".vfs-link")) event.stopPropagation();
     });
     details.appendChild(summary);
 
     if (isOpen) {
       details.dataset.rendered = "true";
-      renderFn(listEl);
-      details.appendChild(listEl);
+      renderFn(listElement);
+      details.appendChild(listElement);
     } else {
       details.ontoggle = () => {
         if (details.open && !details.dataset.rendered) {
           details.dataset.rendered = "true";
-          renderFn(listEl);
-          details.appendChild(listEl);
+          renderFn(listElement);
+          details.appendChild(listElement);
         }
       };
     }

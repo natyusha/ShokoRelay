@@ -127,9 +127,9 @@ public sealed class FfmpegService(string applicationPath, string dataPath, ILogg
                     else
                         logger.LogWarning("FfmpegService: Configured FFmpeg path does not exist -> {Path}", full);
                 }
-                catch (Exception ex)
+                catch (Exception exception)
                 {
-                    logger.LogWarning(ex, "FfmpegService: Failed to resolve configured FFmpeg path");
+                    logger.LogWarning(exception, "FfmpegService: Failed to resolve configured FFmpeg path");
                 }
             }
 
@@ -201,11 +201,11 @@ public sealed class FfmpegService(string applicationPath, string dataPath, ILogg
     /// <param name="workingDir">Optional working directory for the process.</param>
     private async Task RunProcessAsync(string fileName, IReadOnlyList<string> args, Stream? stdIn, Stream? stdOut, CancellationToken cancellationToken, string? workingDir = null)
     {
-        var psi = CreateProcessStartInfo(fileName, args, workingDir);
-        psi.RedirectStandardInput = stdIn != null;
-        psi.RedirectStandardOutput = stdOut != null;
+        var startInfo = CreateProcessStartInfo(fileName, args, workingDir);
+        startInfo.RedirectStandardInput = stdIn != null;
+        startInfo.RedirectStandardOutput = stdOut != null;
 
-        using var process = new Process { StartInfo = psi, EnableRaisingEvents = false };
+        using var process = new Process { StartInfo = startInfo, EnableRaisingEvents = false };
         var stderr = new StringBuilder();
         process.ErrorDataReceived += (_, eventArgs) =>
         {
@@ -267,10 +267,10 @@ public sealed class FfmpegService(string applicationPath, string dataPath, ILogg
     /// <returns>The full string content of the process's standard output.</returns>
     private async Task<string> RunProcessCaptureAsync(string fileName, IReadOnlyList<string> args, CancellationToken cancellationToken)
     {
-        var psi = CreateProcessStartInfo(fileName, args);
-        psi.RedirectStandardOutput = true;
+        var startInfo = CreateProcessStartInfo(fileName, args);
+        startInfo.RedirectStandardOutput = true;
 
-        using var process = new Process { StartInfo = psi, EnableRaisingEvents = false };
+        using var process = new Process { StartInfo = startInfo, EnableRaisingEvents = false };
         var stderr = new StringBuilder();
         process.ErrorDataReceived += (_, eventArgs) =>
         {

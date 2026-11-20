@@ -118,8 +118,8 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
         {
             while (hasNext && !cancellationToken.IsCancellationRequested)
             {
-                var resp = await _apiClient.FetchAnimePageAsync(query.Year, query.Season, query.Name, page, cancellationToken).ConfigureAwait(false);
-                var animeList = resp?.Data;
+                var response = await _apiClient.FetchAnimePageAsync(query.Year, query.Season, query.Name, page, cancellationToken).ConfigureAwait(false);
+                var animeList = response?.Data;
                 if (animeList == null || animeList.Count == 0)
                     break;
 
@@ -178,7 +178,7 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
                                 existingFiles[safeBasename] = relPath; // Add to cache so it isn't downloaded again if it appears in another anime
                                 downloaded++;
                             }
-                            catch (HttpRequestException ex) when (ex.StatusCode is HttpStatusCode.ServiceUnavailable or HttpStatusCode.TooManyRequests)
+                            catch (HttpRequestException exception) when (exception.StatusCode is HttpStatusCode.ServiceUnavailable or HttpStatusCode.TooManyRequests)
                             {
                                 if (File.Exists(targetPath))
                                     try
@@ -216,7 +216,7 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
                                     throw new RateLimitAbortException($"Task aborted. Rate limit retry failed for theme ID {theme.Id}: {retryEx.Message}");
                                 }
                             }
-                            catch (Exception ex) when (ex is not RateLimitAbortException)
+                            catch (Exception exception) when (exception is not RateLimitAbortException)
                             {
                                 if (File.Exists(targetPath))
                                     try
@@ -226,27 +226,27 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
                                     catch { }
 
                                 errors++;
-                                messages.Add($"Failed to download theme ID {theme.Id}: {ex.Message}");
-                                logger.LogWarning(ex, "AnimeThemes WebM: Failed to download theme ID -> {ThemeId}", theme.Id);
+                                messages.Add($"Failed to download theme ID {theme.Id}: {exception.Message}");
+                                logger.LogWarning(exception, "AnimeThemes WebM: Failed to download theme ID -> {ThemeId}", theme.Id);
                             }
                         }
-                        catch (Exception ex) when (ex is not RateLimitAbortException)
+                        catch (Exception exception) when (exception is not RateLimitAbortException)
                         {
                             errors++;
-                            messages.Add($"Failed to process theme ID {theme.Id}: {ex.Message}");
-                            logger.LogWarning(ex, "AnimeThemes WebM: Failed to process theme ID -> {ThemeId}", theme.Id);
+                            messages.Add($"Failed to process theme ID {theme.Id}: {exception.Message}");
+                            logger.LogWarning(exception, "AnimeThemes WebM: Failed to process theme ID -> {ThemeId}", theme.Id);
                         }
                     }
                 }
 
-                hasNext = resp?.PaginatorInfo?.HasMorePages ?? false;
+                hasNext = response?.PaginatorInfo?.HasMorePages ?? false;
                 page++;
             }
         }
-        catch (RateLimitAbortException ex)
+        catch (RateLimitAbortException exception)
         {
             errors++;
-            messages.Add(ex.Message);
+            messages.Add(exception.Message);
         }
         finally
         {

@@ -32,7 +32,7 @@ namespace ShokoRelay.Controllers;
 [ApiController]
 [ApiVersion(ShokoRelayConstants.ApiVersion)]
 [Route(ShokoRelayConstants.BasePath)]
-public partial class DashboardController(
+public class DashboardController(
     ConfigProvider configProvider,
     IMetadataService metadataService,
     PlexClient plexLibrary,
@@ -47,10 +47,6 @@ public partial class DashboardController(
     #region Setup
 
     private static readonly FileExtensionContentTypeProvider s_contentTypeProvider = new();
-
-    /// <summary>Regex matching valid Shoko theme identifiers.</summary>
-    [GeneratedRegex(@"^[A-Za-z0-9][A-Za-z0-9_-]*$")]
-    private static partial Regex ThemeIdRegex();
 
     #endregion
 
@@ -214,9 +210,9 @@ public partial class DashboardController(
                 RelayAuthSession.SignOut(HttpContext);
             return Ok(new { status = "ok" });
         }
-        catch (ArgumentException ex)
+        catch (ArgumentException exception)
         {
-            return BadRequest(new { status = "error", message = ex.Message });
+            return BadRequest(new { status = "error", message = exception.Message });
         }
     }
 
@@ -236,7 +232,7 @@ public partial class DashboardController(
             return Content(string.Empty, "text/css");
 
         string themeId = Path.GetFileName(rawThemeId);
-        if (!ThemeIdRegex().IsMatch(themeId))
+        if (!TextHelper.ThemeIdRegex().IsMatch(themeId))
             return Content(string.Empty, "text/css");
         if (string.Equals(themeId, "shoko-gray", StringComparison.OrdinalIgnoreCase))
             return Content(
@@ -253,7 +249,7 @@ public partial class DashboardController(
                   --hover-color: #64b3ff;
                   --danger-color: #ff6c6c;
                   --warning-color: #f9c851;
-                  --ok-color: #10c469;
+                  --isOk-color: #10c469;
                   --logo-outline: #000;
                   --logo-skin: #fdf5e8;
                   --logo-face-shadow: #fe514d;
@@ -306,22 +302,22 @@ public partial class DashboardController(
                           --bg-color: var(--panel-background-alt, #0f0f0f);
                           --panel-color: var(--panel-background, #1c1c1c);
                           --border-color: var(--panel-border, #0f0f0f);
-                          --inset-color: var(--panel-input, #151515);
+                          --inset-color: var(--panel-in, #151515);
                           --text-color: var(--panel-text, #ddd);
                           --highlight-color: var(--panel-icon-action, #94aad1);
                           --button-color: var(--button-primary, #a497b0);
                           --hover-color: var(--button-primary-hover, #ea005e);
                           --danger-color: var(--panel-icon-danger, #cc0000);
                           --warning-color: var(--panel-icon-warning, #f9c851);
-                          --ok-color: var(--panel-text-important, #00ab3f);
+                          --isOk-color: var(--panel-text-important, #00ab3f);
                         }
                         """,
                     "text/css"
                 );
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            Logger.LogWarning(ex, "Dashboard: Failed to generate dynamic mapped CSS for theme {ThemeId}", themeId);
+            Logger.LogWarning(exception, "Dashboard: Failed to generate dynamic mapped CSS for theme {ThemeId}", themeId);
             return Content(string.Empty, "text/css");
         }
     }
@@ -463,10 +459,10 @@ public partial class DashboardController(
                 bool isFlags = propType.IsDefined(typeof(FlagsAttribute), false);
                 var values = Enum.GetValues(propType)
                     .Cast<object>()
-                    .Select(val =>
+                    .Select(value =>
                     {
-                        int enumValue = Convert.ToInt32(val);
-                        string memberName = Enum.GetName(propType, val) ?? enumValue.ToString();
+                        int enumValue = Convert.ToInt32(value);
+                        string memberName = Enum.GetName(propType, value) ?? enumValue.ToString();
                         return new { name = propType.GetField(memberName)?.GetCustomAttribute<DisplayAttribute>()?.Name ?? memberName, value = enumValue };
                     })
                     .Where(enumItem => !isFlags || (enumItem.value > 0 && (enumItem.value & (enumItem.value - 1)) == 0))

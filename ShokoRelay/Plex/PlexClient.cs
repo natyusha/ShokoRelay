@@ -135,17 +135,17 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
         {
             try
             {
-                using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{tgt.SectionId}/refresh?path={Uri.EscapeDataString(guessedPath)}", tgt.ServerUrl);
-                using var resp = await httpClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
-                if (resp.IsSuccessStatusCode)
+                using var request = CreateRequest(HttpMethod.Get, $"/library/sections/{tgt.SectionId}/refresh?path={Uri.EscapeDataString(guessedPath)}", tgt.ServerUrl);
+                using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                if (response.IsSuccessStatusCode)
                 {
                     anyOk = true;
                     logger.LogDebug("PlexClient: refresh triggered for -> '{Path}' on {ServerUrl}:{SectionId}", guessedPath, tgt.ServerUrl, tgt.SectionId);
                 }
                 else
-                    logger.LogWarning("PlexClient: refresh failed ({StatusCode}) for folder -> '{Path}' in section {SectionId}", resp.StatusCode, guessedPath, tgt.SectionId);
+                    logger.LogWarning("PlexClient: refresh failed ({StatusCode}) for folder -> '{Path}' in section {SectionId}", response.StatusCode, guessedPath, tgt.SectionId);
             }
-            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+            catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
             {
                 logger.LogWarning("PlexClient: Network timeout triggering refresh for '{Path}' in section {SectionId}", guessedPath, tgt.SectionId);
             }
@@ -172,17 +172,17 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
 
         try
         {
-            using var req = CreateRequest(HttpMethod.Put, $"/library/metadata/{ratingKey}/refresh", target.ServerUrl);
-            using var resp = await httpClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+            using var request = CreateRequest(HttpMethod.Put, $"/library/metadata/{ratingKey}/refresh", target.ServerUrl);
+            using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
 
-            if (resp.IsSuccessStatusCode)
+            if (response.IsSuccessStatusCode)
                 logger.LogDebug("PlexClient: Metadata refresh triggered for RatingKey {RatingKey} on {ServerName}", ratingKey, target.ServerName);
             else
-                logger.LogWarning("PlexClient: Metadata refresh failed ({StatusCode}) for RatingKey {RatingKey} on {ServerName}", resp.StatusCode, ratingKey, target.ServerName);
+                logger.LogWarning("PlexClient: Metadata refresh failed ({StatusCode}) for RatingKey {RatingKey} on {ServerName}", response.StatusCode, ratingKey, target.ServerName);
 
-            return resp.IsSuccessStatusCode;
+            return response.IsSuccessStatusCode;
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
         {
             logger.LogWarning("PlexClient: Network timeout triggering metadata refresh for RatingKey {RatingKey}", ratingKey);
             return false;
@@ -201,17 +201,17 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
 
         try
         {
-            using var req = CreateRequest(HttpMethod.Put, $"/library/metadata/{ratingKey}/analyze", target.ServerUrl);
-            using var resp = await httpClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+            using var request = CreateRequest(HttpMethod.Put, $"/library/metadata/{ratingKey}/analyze", target.ServerUrl);
+            using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
 
-            if (resp.IsSuccessStatusCode)
+            if (response.IsSuccessStatusCode)
                 logger.LogDebug("PlexClient: Media analysis triggered for RatingKey {RatingKey} on {ServerName}", ratingKey, target.ServerName);
             else
-                logger.LogWarning("PlexClient: Media analysis failed ({StatusCode}) for RatingKey {RatingKey} on {ServerName}", resp.StatusCode, ratingKey, target.ServerName);
+                logger.LogWarning("PlexClient: Media analysis failed ({StatusCode}) for RatingKey {RatingKey} on {ServerName}", response.StatusCode, ratingKey, target.ServerName);
 
-            return resp.IsSuccessStatusCode;
+            return response.IsSuccessStatusCode;
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
         {
             logger.LogWarning("PlexClient: Network timeout triggering media analysis for RatingKey {RatingKey}", ratingKey);
             return false;
@@ -289,15 +289,15 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
 
             return (true, trashedItems, $"Successfully processed {trashedSize} trashed items ({percent:F1}%).");
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
         {
             logger.LogWarning("PlexClient: Network timeout during empty trash for section {SectionId}", target.SectionId);
             return (false, [], $"Network timeout during trash processing.");
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            logger.LogWarning(ex, "PlexClient: Failed to process empty trash for section {SectionId}", target.SectionId);
-            return (false, [], $"Exception during trash processing: {ex.Message}");
+            logger.LogWarning(exception, "PlexClient: Failed to process empty trash for section {SectionId}", target.SectionId);
+            return (false, [], $"Exception during trash processing: {exception.Message}");
         }
     }
 
@@ -315,12 +315,12 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
     {
         if (string.IsNullOrWhiteSpace(baseServerUrl))
             throw new ArgumentException("Base server URL must be supplied", nameof(baseServerUrl));
-        var req = new HttpRequestMessage(method, new Uri(new Uri(baseServerUrl.TrimEnd('/')), path));
-        req.Headers.TryAddWithoutValidation("X-Plex-Token", !string.IsNullOrWhiteSpace(plexUserToken) ? plexUserToken : Token);
+        var request = new HttpRequestMessage(method, new Uri(new Uri(baseServerUrl.TrimEnd('/')), path));
+        request.Headers.TryAddWithoutValidation("X-Plex-Token", !string.IsNullOrWhiteSpace(plexUserToken) ? plexUserToken : Token);
         if (!string.IsNullOrWhiteSpace(ClientIdentifier))
-            req.Headers.TryAddWithoutValidation("X-Plex-Client-Identifier", ClientIdentifier);
-        req.Headers.TryAddWithoutValidation("Accept", "application/json");
-        return req;
+            request.Headers.TryAddWithoutValidation("X-Plex-Client-Identifier", ClientIdentifier);
+        request.Headers.TryAddWithoutValidation("Accept", "application/json");
+        return request;
     }
 
     /// <summary>Sends an HTTP request to the Plex server.</summary>
@@ -348,23 +348,23 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
                 string? trimmedUrl = !string.IsNullOrWhiteSpace(customUrl) ? customUrl.Trim().TrimEnd('/') : null;
                 _cachedTargets =
                 [
-                    .. libs.Select(lib => new PlexLibraryTarget
+                    .. libs.Select(library => new PlexLibraryTarget
                     {
-                        SectionId = lib.Id,
-                        Title = lib.Title,
-                        Type = lib.Type,
-                        Uuid = lib.Uuid,
-                        ServerId = lib.ServerId,
-                        ServerName = lib.ServerName,
-                        ServerUrl = trimmedUrl ?? lib.ServerUrl,
-                        LibraryType = (lib.Type ?? "").ToLowerInvariant() switch
+                        SectionId = library.Id,
+                        Title = library.Title,
+                        Type = library.Type,
+                        Uuid = library.Uuid,
+                        ServerId = library.ServerId,
+                        ServerName = library.ServerName,
+                        ServerUrl = trimmedUrl ?? library.ServerUrl,
+                        LibraryType = (library.Type ?? "").ToLowerInvariant() switch
                         {
                             "movie" => PlexLibraryType.Movie,
                             "artist" => PlexLibraryType.Music,
                             "photo" => PlexLibraryType.Photo,
                             _ => PlexLibraryType.Show,
                         },
-                        Locations = lib.Locations ?? [],
+                        Locations = library.Locations ?? [],
                     }),
                 ];
             }
@@ -387,16 +387,16 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
 
         string preferredUri = !string.IsNullOrWhiteSpace(Settings.Advanced.PlexServerUrl) ? Settings.Advanced.PlexServerUrl.Trim().TrimEnd('/') : server!.PreferredUri;
 
-        using var req = CreateRequest(HttpMethod.Get, "/library/sections", preferredUri);
-        using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
-        if (!resp.IsSuccessStatusCode)
+        using var request = CreateRequest(HttpMethod.Get, "/library/sections", preferredUri);
+        using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
             return null;
 
-        var content = await resp.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             using var doc = JsonDocument.Parse(content);
-            if (!doc.RootElement.TryGetProperty("MediaContainer", out var mc) || !mc.TryGetProperty("Directory", out var dirs))
+            if (!doc.RootElement.TryGetProperty("MediaContainer", out var metadataClient) || !metadataClient.TryGetProperty("Directory", out var dirs))
                 return null;
 
             foreach (var dir in dirs.EnumerateArray())
@@ -429,9 +429,9 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
                 }
             }
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            logger.LogWarning(ex, "PlexClient: Failed to parse sections for fallback library target '{LibraryName}'", libraryName);
+            logger.LogWarning(exception, "PlexClient: Failed to parse sections for fallback library target '{LibraryName}'", libraryName);
         }
 
         return null;
@@ -468,13 +468,13 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
                 foreach (var episode in episodes)
                 {
                     string guid = $"{ShokoRelayConstants.MovieAgentScheme}://movie/{PlexConstants.MoviePrefix}{episode.LocalID}";
-                    using var req = CreateRequest(
+                    using var request = CreateRequest(
                         HttpMethod.Get,
                         $"/library/sections/{target.SectionId}/all?guid={Uri.EscapeDataString(guid)}&X-Plex-Container-Start=0&X-Plex-Container-Size=1",
                         target.ServerUrl
                     );
-                    using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
-                    var item = (await PlexApi.ReadContainerAsync(resp, cancellationToken).ConfigureAwait(false))?.Metadata?.FirstOrDefault();
+                    using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+                    var item = (await PlexApi.ReadContainerAsync(response, cancellationToken).ConfigureAwait(false))?.Metadata?.FirstOrDefault();
                     if (int.TryParse(item?.RatingKey, out int key))
                         keys.Add(key);
                 }
@@ -483,15 +483,19 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
             else
             {
                 string guid = $"{ShokoRelayConstants.AgentScheme}://show/{primaryId}";
-                using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?guid={Uri.EscapeDataString(guid)}&X-Plex-Container-Start=0&X-Plex-Container-Size=1", target.ServerUrl);
-                using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
-                var item = (await PlexApi.ReadContainerAsync(resp, cancellationToken).ConfigureAwait(false))?.Metadata?.FirstOrDefault();
+                using var request = CreateRequest(
+                    HttpMethod.Get,
+                    $"/library/sections/{target.SectionId}/all?guid={Uri.EscapeDataString(guid)}&X-Plex-Container-Start=0&X-Plex-Container-Size=1",
+                    target.ServerUrl
+                );
+                using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+                var item = (await PlexApi.ReadContainerAsync(response, cancellationToken).ConfigureAwait(false))?.Metadata?.FirstOrDefault();
                 return int.TryParse(item?.RatingKey, out int key) ? [key] : [];
             }
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            logger.LogTrace(ex, "PlexClient: Failed to find rating key for Shoko series {SeriesId} in section {SectionId}", shokoSeriesId, target.SectionId);
+            logger.LogTrace(exception, "PlexClient: Failed to find rating key for Shoko series {SeriesId} in section {SectionId}", shokoSeriesId, target.SectionId);
             return [];
         }
     }
@@ -535,14 +539,14 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
             if (minLastViewed.HasValue)
                 queryParams.Add($"lastViewedAt>={minLastViewed.Value}");
 
-            using var req = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?{string.Join("&", queryParams)}", target.ServerUrl, token);
-            using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
-            if (!resp.IsSuccessStatusCode)
+            using var request = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?{string.Join("&", queryParams)}", target.ServerUrl, token);
+            using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
             {
-                logger.LogWarning("PlexClient: Failed to query section {SectionId} on {ServerName} (HTTP {StatusCode})", target.SectionId, target.ServerName, resp.StatusCode);
+                logger.LogWarning("PlexClient: Failed to query section {SectionId} on {ServerName} (HTTP {StatusCode})", target.SectionId, target.ServerName, response.StatusCode);
                 break;
             }
-            var cont = await PlexApi.ReadContainerAsync(resp, cancellationToken).ConfigureAwait(false);
+            var cont = await PlexApi.ReadContainerAsync(response, cancellationToken).ConfigureAwait(false);
             if (cont?.Metadata == null || cont.Metadata.Count == 0)
                 break;
             results.AddRange(cont.Metadata);
@@ -648,12 +652,12 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
         if (list.Length == 0)
             return path;
 
-        string input = PlexHelper.NormalizePathForPlex(path);
-        var (matchIn, matchOut) = list.FirstOrDefault(pair => input.StartsWith(pair.In, StringComparison.OrdinalIgnoreCase));
+        string inputPath = PlexHelper.NormalizePathForPlex(path);
+        var (matchIn, matchOut) = list.FirstOrDefault(pair => inputPath.StartsWith(pair.In, StringComparison.OrdinalIgnoreCase));
         if (matchIn == null)
             return path;
 
-        string remainder = input.Length > matchIn.Length ? input[matchIn.Length..].TrimStart('/') : "";
+        string remainder = inputPath.Length > matchIn.Length ? inputPath[matchIn.Length..].TrimStart('/') : "";
         string result = string.IsNullOrEmpty(remainder) ? matchOut : $"{matchOut.TrimEnd('/')}/{remainder}";
 
         return shokoToPlex ? result : result.Replace('/', Path.DirectorySeparatorChar);

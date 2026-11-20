@@ -56,8 +56,8 @@ internal static class VfsShared
     public static bool IsVfsEnabledFolder(IManagedFolder? folder) =>
         folder != null
         && (!folder.DropFolderType.HasFlag(DropFolderType.Source) || folder.DropFolderType.HasFlag(DropFolderType.Destination))
-        && !(Settings.Advanced.ManagedFolderExclusions?.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) ?? []).Any(ex =>
-            string.Equals(ex, folder.ID.ToString(), StringComparison.OrdinalIgnoreCase) || string.Equals(ex, folder.Name, StringComparison.OrdinalIgnoreCase)
+        && !(Settings.Advanced.ManagedFolderExclusions?.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) ?? []).Any(exception =>
+            string.Equals(exception, folder.ID.ToString(), StringComparison.OrdinalIgnoreCase) || string.Equals(exception, folder.Name, StringComparison.OrdinalIgnoreCase)
         );
 
     /// <summary>Determines the root import path for a video file.</summary>
@@ -257,18 +257,18 @@ internal static class VfsShared
         {
             try
             {
-                var fi = new FileInfo(dest);
-                if (fi.Exists || fi.LinkTarget != null)
+                var fileInfo = new FileInfo(dest);
+                if (fileInfo.Exists || fileInfo.LinkTarget != null)
                 {
-                    if (string.Equals(NormalizeSeparators(fi.LinkTarget ?? string.Empty), NormalizeSeparators(relativeTarget), PathComparison))
+                    if (string.Equals(NormalizeSeparators(fileInfo.LinkTarget ?? string.Empty), NormalizeSeparators(relativeTarget), PathComparison))
                         return true;
 
-                    fi.Delete();
+                    fileInfo.Delete();
                 }
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
-                logger.LogWarning(ex, "VFS: Unable to remove existing link at -> {Dest}", dest);
+                logger.LogWarning(exception, "VFS: Unable to remove existing link at -> {Dest}", dest);
                 return false;
             }
         }
@@ -276,16 +276,16 @@ internal static class VfsShared
         // Internal wrapper around the OS file APIs to create standard filesystem relative symbolic links.
         try
         {
-            var sw = Stopwatch.StartNew();
+            var stopwatch = Stopwatch.StartNew();
             var info = File.CreateSymbolicLink(dest, relativeTarget);
-            sw.Stop();
-            if (sw.ElapsedMilliseconds > 20)
-                logger.LogDebug("VFS: Symlink created -> '{Link}' in {Elapsed}ms", dest, sw.ElapsedMilliseconds); // only log slow operations, to avoid spamming the logs
+            stopwatch.Stop();
+            if (stopwatch.ElapsedMilliseconds > 20)
+                logger.LogDebug("VFS: Symlink created -> '{Link}' in {Elapsed}ms", dest, stopwatch.ElapsedMilliseconds); // only log slow operations, to avoid spamming the logs
             return info.Exists;
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            logger.LogDebug(ex, "VFS: Symlink creation failed -> {Link}", dest);
+            logger.LogDebug(exception, "VFS: Symlink creation failed -> {Link}", dest);
             return false;
         }
     }
@@ -475,7 +475,7 @@ internal static class VfsShared
     /// <summary>Atomically writes text content to a target file via a temporary file move.</summary>
     /// <param name="path">The target file path.</param>
     /// <param name="content">The text content to write.</param>
-    public static void WriteTextAtomic(string path, string content) => WriteAtomic(path, tmp => File.WriteAllText(tmp, content));
+    public static void WriteTextAtomic(string path, string content) => WriteAtomic(path, temporaryPath => File.WriteAllText(temporaryPath, content));
 
     /// <summary>Asynchronously and atomically writes text content to a target file via a temporary file move.</summary>
     /// <param name="path">The target file path.</param>
@@ -483,12 +483,12 @@ internal static class VfsShared
     /// <param name="cancellationToken">Optional cancellation token.</param>
     /// <returns>A task representing the asynchronous write operation.</returns>
     public static Task WriteTextAtomicAsync(string path, string content, CancellationToken cancellationToken = default) =>
-        WriteAtomicAsync(path, (tmp, ct) => File.WriteAllTextAsync(tmp, content, ct), cancellationToken);
+        WriteAtomicAsync(path, (temporaryPath, cancellationToken) => File.WriteAllTextAsync(temporaryPath, content, cancellationToken), cancellationToken);
 
     /// <summary>Atomically writes lines of text to a target file via a temporary file move.</summary>
     /// <param name="path">The target file path.</param>
     /// <param name="lines">The lines to write.</param>
-    public static void WriteLinesAtomic(string path, IEnumerable<string> lines) => WriteAtomic(path, tmp => File.WriteAllLines(tmp, lines));
+    public static void WriteLinesAtomic(string path, IEnumerable<string> lines) => WriteAtomic(path, temporaryPath => File.WriteAllLines(temporaryPath, lines));
 
     /// <summary>Asynchronously and atomically writes lines of text to a target file via a temporary file move.</summary>
     /// <param name="path">The target file path.</param>
@@ -496,7 +496,7 @@ internal static class VfsShared
     /// <param name="cancellationToken">Optional cancellation token.</param>
     /// <returns>A task representing the asynchronous write operation.</returns>
     public static Task WriteLinesAtomicAsync(string path, IEnumerable<string> lines, CancellationToken cancellationToken = default) =>
-        WriteAtomicAsync(path, (tmp, ct) => File.WriteAllLinesAsync(tmp, lines, ct), cancellationToken);
+        WriteAtomicAsync(path, (temporaryPath, cancellationToken) => File.WriteAllLinesAsync(temporaryPath, lines, cancellationToken), cancellationToken);
 
     /// <summary>Loads the VFS blueprint cache from disk.</summary>
     /// <returns>The deserialized concurrent dictionary representing the blueprint cache.</returns>
@@ -525,10 +525,10 @@ internal static class VfsShared
     {
         try
         {
-            WriteAtomic(BlueprintFilePath, tmp =>
+            WriteAtomic(BlueprintFilePath, temporaryPath =>
             {
-                using var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None);
-                JsonSerializer.Serialize(fs, blueprint);
+                using var fileStream = new FileStream(temporaryPath, FileMode.Create, FileAccess.Write, FileShare.None);
+                JsonSerializer.Serialize(fileStream, blueprint);
             });
             Interlocked.Increment(ref s_blueprintVersion);
         }

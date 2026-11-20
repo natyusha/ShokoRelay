@@ -3,7 +3,7 @@
  * @description Dedicated logic for Shoko VFS and Automation tasks on the Shoko Relay dashboard.
  */
 (() => {
-  const { base, shokoBase, configUrl, el, esc, fetchJson, showToast, toastOperation, summarizeResult, initToggle, openModal, setButtonLoading, getData } = window._sr;
+  const { base, shokoBase, configUrl, element, fetchJson, showToast, toastOperation, summarizeResult, initToggle, openModal, setButtonLoading, getData } = window._sr;
 
   // #region Helpers
   /**
@@ -18,7 +18,7 @@
     };
 
     Object.entries(links).forEach(([id, path]) => {
-      const anchor = el(id);
+      const anchor = element(id);
       if (anchor) anchor.href = shokoBase + path;
     });
   };
@@ -41,7 +41,7 @@
    * @returns {void}
    */
   function initShokoSanitizers() {
-    const vfsFilter = el("vfs-filter");
+    const vfsFilter = element("vfs-filter");
     if (vfsFilter) {
       vfsFilter.oninput = () => {
         vfsFilter.value = vfsFilter.value.replace(/[^aA0-9,\s]/g, "").toLowerCase();
@@ -57,8 +57,8 @@
    */
   window._sr.getVfsParams = () => {
     const params = new URLSearchParams();
-    const filter = el("vfs-filter")?.value;
-    const clean = el("vfs-clean")?.getAttribute("aria-pressed") === "true";
+    const filter = element("vfs-filter")?.value;
+    const clean = element("vfs-clean")?.getAttribute("aria-pressed") === "true";
     if (filter) params.set("filter", filter);
     params.set("clean", clean);
     params.set("run", "true");
@@ -71,23 +71,23 @@
   initToggle("vfs-clean", true);
 
   // Wire up the VFS Overrides Editor modal.
-  const overridesBtn = el("vfs-overrides");
+  const overridesBtn = element("vfs-overrides");
   if (overridesBtn) {
-    const overridesText = el("overrides-text");
+    const overridesText = element("overrides-text");
     if (overridesText) overridesText.placeholder = OVERRIDES_PLACEHOLDER;
     overridesBtn.onclick = async () => {
-      const modal = el("overrides-modal");
+      const modal = element("overrides-modal");
 
       // Load current overrides content from server config.
       try {
         const cfgRes = await fetchJson(configUrl);
-        if (cfgRes.ok) overridesText.value = cfgRes.data?.overrides || "";
+        if (cfgRes.isOk) overridesText.value = cfgRes.data?.overrides || "";
       } catch {}
       const close = openModal(modal);
-      el("overrides-cancel").onclick = close;
-      el("overrides-save").onclick = async () => {
-        const res = await fetchJson(base + "/vfs/overrides", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(overridesText.value) });
-        if (res.ok) {
+      element("overrides-cancel").onclick = close;
+      element("overrides-save").onclick = async () => {
+        const response = await fetchJson(base + "/vfs/overrides", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(overridesText.value) });
+        if (response.isOk) {
           showToast("VFS Overrides Saved", "success");
           close();
         }
@@ -98,7 +98,7 @@
 
   // #region Shoko: Automation
   /** @type {HTMLSelectElement} Dropdown element for configuring synchronized users. */
-  const syncUsersSelect = el("sync-users");
+  const syncUsersSelect = element("sync-users");
 
   /**
    * Refreshes the active control states when the sync users settings change.
@@ -117,13 +117,13 @@
   }
 
   // Managed User and Admin Watched-State Synchronization Modal.
-  if (el("shoko-sync-watched")) {
-    el("shoko-sync-watched").onclick = () => {
-      const modal = el("sync-modal");
-      const startBtn = el("sync-start-button");
-      const dryBtn = el("sync-dry-button");
-      const dirToggle = el("sync-direction-toggle");
-      const dirArrow = el("sync-direction-arrow");
+  if (element("shoko-sync-watched")) {
+    element("shoko-sync-watched").onclick = () => {
+      const modal = element("sync-modal");
+      const startBtn = element("sync-start-button");
+      const dryBtn = element("sync-dry-button");
+      const dirToggle = element("sync-direction-toggle");
+      const dirArrow = element("sync-direction-arrow");
 
       /** @type {boolean} True if syncing Plex to Shoko, false for Shoko to Plex. */
       let dirImport = localStorage.getItem("shoko-sync-direction") === "import";
@@ -161,38 +161,38 @@
 
         const queryParams = new URLSearchParams({
           dryRun: isDryRun,
-          ratings: el("sync-ratings").checked,
-          progress: el("sync-progress").checked,
+          ratings: element("sync-ratings").checked,
+          progress: element("sync-progress").checked,
         });
 
-        const usersVal = el("sync-users").value;
+        const usersVal = element("sync-users").value;
         const usersMap = { 0: "all", 1: "admin", 2: "extra", 3: "advanced", 4: "none" };
         queryParams.set("users", usersMap[usersVal] || "none");
 
-        const libName = el("sync-library")?.value.trim();
+        const libName = element("sync-library")?.value.trim();
         if (libName) queryParams.set("libraryName", libName);
         if (dirImport) queryParams.set("import", "true");
 
-        const res = await fetchJson(`${base}/sync-watched?${queryParams}`);
+        const response = await fetchJson(`${base}/sync-watched?${queryParams}`);
         startToast?.remove();
         setButtonLoading(targetBtn, false);
 
         if (window._sr.tasks.shokoSyncWatched) await fetchJson(`${base}/tasks/clear/${window._sr.tasks.shokoSyncWatched}`, { method: "POST" }, false); // Clear the task immediately on the server to prevent the background poller from firing a duplicate toast
-        if (res.ok) {
-          const syncData = getData(res);
+        if (response.isOk) {
+          const syncData = getData(response);
 
           // Generate a robust summary combining standard counts and custom "Votes" data
-          const summary = (summarizeResult(res).text || `processed ${syncData.Processed ?? 0}`) + (syncData.VotesFound ? `, votes: ${syncData.VotesFound}` : "");
+          const summary = (summarizeResult(response).text || `processed ${syncData.Processed ?? 0}`) + (syncData.VotesFound ? `, votes: ${syncData.VotesFound}` : "");
 
-          toastOperation(res, "Sync", { summary, hideOnSucceed: 0 });
+          toastOperation(response, "Sync", { summary, hideOnSucceed: 0 });
         } else {
-          toastOperation(res, "Sync", { hideOnSucceed: 0 });
+          toastOperation(response, "Sync", { hideOnSucceed: 0 });
         }
       };
 
       startBtn.onclick = () => performSync(false);
       dryBtn.onclick = () => performSync(true);
-      el("sync-cancel-button").onclick = close;
+      element("sync-cancel-button").onclick = close;
     };
   }
   // #endregion

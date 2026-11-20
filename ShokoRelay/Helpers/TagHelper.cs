@@ -43,7 +43,7 @@ public static partial class TagHelper
     private static readonly FrozenDictionary<string, string> s_forceSpecial = new[] {
         "-Christian", "-Japanese", "AnimeFesta", "ComicFesta", "d'Etat", "JDrama", "noitaminA",                                          // AniDB
         "VTuber", "YouTuber"                                                                                                             // TMDB
-    }.ToFrozenDictionary(str => str, str => str, StringComparer.OrdinalIgnoreCase);
+    }.ToFrozenDictionary(text => text, text => text, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Default blacklisted tag keys loaded from the embedded CSV resource.</summary>
     private static readonly FrozenSet<string> s_defaultTagBlacklist;
@@ -245,7 +245,7 @@ public static partial class TagHelper
         var state = GetOrCreateTagCacheState(key);
         EnsureWarmed(state, key, metadataService);
 
-        bool shouldRecord = series is IShokoSeries ss && state.RecordedSeriesIds.TryAdd(ss.LocalID, 0);
+        bool shouldRecord = series is IShokoSeries shokoSeries && state.RecordedSeriesIds.TryAdd(shokoSeries.LocalID, 0);
 
         return
         [
@@ -294,12 +294,12 @@ public static partial class TagHelper
             return string.Empty;
 
         var normalized = text.Normalize(NormalizationForm.FormD);
-        var sb = new StringBuilder(normalized.Length);
+        var stringBuilderNorm = new StringBuilder(normalized.Length);
         foreach (char ch in normalized)
             if (CharUnicodeInfo.GetUnicodeCategory(ch) != UnicodeCategory.NonSpacingMark && char.IsLetterOrDigit(ch))
-                sb.Append(char.ToLowerInvariant(ch));
+                stringBuilderNorm.Append(char.ToLowerInvariant(ch));
 
-        string key = sb.ToString();
+        string key = stringBuilderNorm.ToString();
 
         // Simple plural stemming for deduplication keys (preserves display names)
         if (key.Length > 4 && key.EndsWith("ies", StringComparison.Ordinal))

@@ -16,11 +16,11 @@ public static partial class PlexHelper
             return null;
 
         var span = guid.AsSpan();
-        int idx = span.IndexOf("/show/");
-        if (idx < 0)
+        int index = span.IndexOf("/show/");
+        if (index < 0)
             return null;
 
-        var idSpan = span[(idx + 6)..];
+        var idSpan = span[(index + 6)..];
         int end = 0;
         while (end < idSpan.Length && char.IsAsciiDigit(idSpan[end]))
             end++;
@@ -248,8 +248,7 @@ public static partial class PlexHelper
                 : suffix is "-art" or "-backdrop" or "-background" or "-fanart" ? ImageEntityType.Backdrop
                 : ImageEntityType.Primary;
 
-            var img =
-                ImageHelper.FilterImagesByLanguage((primarySeries as IWithImages)?.GetAvailableImages(imgType) ?? [], Settings.TmdbImageLanguage, false).FirstOrDefault()
+            var img = ImageHelper.FilterImagesByLanguage((primarySeries as IWithImages)?.GetAvailableImages(imgType) ?? [], Settings.TmdbImageLanguage, false).FirstOrDefault()
                 ?? ImageHelper
                     .FilterImagesByLanguage((primarySeries.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault() as IWithImages)?.GetAvailableImages(imgType) ?? [], Settings.TmdbImageLanguage, false)
                     .FirstOrDefault();
@@ -287,12 +286,12 @@ public static partial class PlexHelper
     {
         if (id <= 0)
             return false;
-        string str = value.Trim();
-        if (str.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
-            str = str[..^suffix.Length].Trim();
+        string text = value.Trim();
+        if (text.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            text = text[..^suffix.Length].Trim();
         else if (suffix != "")
             return false;
-        return int.TryParse(str.StartsWith("c", StringComparison.OrdinalIgnoreCase) ? str[1..] : str, out int parsed) && parsed == id;
+        return int.TryParse(text.StartsWith("c", StringComparison.OrdinalIgnoreCase) ? text[1..] : text, out int parsed) && parsed == id;
     }
 
     /// <summary>Determines if a filename base matches a specific normalized title and suffix.</summary>

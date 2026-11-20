@@ -3,40 +3,40 @@
  * @description Logic for the Shoko Relay stand-alone AnimeThemes VFS video player.
  */
 (() => {
-  const { base, shokoBase, configUrl, el, fetchJson, unwrapConfig, setValueByPath, openModal, updatePlaybackTooltip, saveSettings, getData, initSearchInteractions } = window._sr;
+  const { base, shokoBase, configUrl, element, fetchJson, unwrapConfig, setValueByPath, openModal, updatePlaybackTooltip, saveSettings, getData, initSearchInteractions } = window._sr;
 
   // DOM Elements - UI Indicators
-  /** @type {HTMLElement} */ const playerTime = el("time-display");
-  /** @type {HTMLElement} */ const playerVolText = el("volume-text");
-  /** @type {HTMLElement} */ const playerFullscreenBtn = el("fullscreen");
-  /** @type {HTMLElement} */ const playerCloseBtn = el("close-session");
-  /** @type {HTMLElement} */ const playerMuteBtn = el("volume-icon");
-  /** @type {HTMLElement} */ const playerContainer = el("video").parentElement;
-  /** @type {HTMLVideoElement} */ const playerVideo = el("video");
-  /** @type {HTMLElement} */ const playerVideoBtn = el("video-toggle");
+  /** @type {HTMLElement} */ const playerTime = element("time-display");
+  /** @type {HTMLElement} */ const playerVolText = element("volume-text");
+  /** @type {HTMLElement} */ const playerFullscreenBtn = element("fullscreen");
+  /** @type {HTMLElement} */ const playerCloseBtn = element("close-session");
+  /** @type {HTMLElement} */ const playerMuteBtn = element("volume-icon");
+  /** @type {HTMLElement} */ const playerContainer = element("video").parentElement;
+  /** @type {HTMLVideoElement} */ const playerVideo = element("video");
+  /** @type {HTMLElement} */ const playerVideoBtn = element("video-toggle");
 
   // DOM Elements - Navigation & Search
-  /** @type {HTMLElement} */ const playerTree = el("tree");
-  /** @type {HTMLInputElement} */ const uiFilter = el("filter");
-  /** @type {HTMLElement} */ const uiFilterClear = el("filter-clear");
-  /** @type {HTMLElement} */ const playerNextBtn = el("next");
-  /** @type {HTMLElement} */ const playerModeBtn = el("mode");
-  /** @type {HTMLElement} */ const playerSortBtn = el("sort-toggle");
+  /** @type {HTMLElement} */ const playerTree = element("tree");
+  /** @type {HTMLInputElement} */ const uiFilter = element("filter");
+  /** @type {HTMLElement} */ const uiFilterClear = element("filter-clear");
+  /** @type {HTMLElement} */ const playerNextBtn = element("next");
+  /** @type {HTMLElement} */ const playerModeBtn = element("mode");
+  /** @type {HTMLElement} */ const playerSortBtn = element("sort-toggle");
 
   // DOM Elements - Metadata Header
-  /** @type {HTMLElement} */ const playerTitle = el("title");
-  /** @type {HTMLElement} */ const playerAnime = el("anime");
-  /** @type {HTMLElement} */ const playerAnidb = el("anidb");
-  /** @type {HTMLElement} */ const playerNowPlayingFav = el("now-playing-fav");
-  /** @type {HTMLElement} */ const playerLocateBtn = el("locate-current");
+  /** @type {HTMLElement} */ const playerTitle = element("title");
+  /** @type {HTMLElement} */ const playerAnime = element("anime");
+  /** @type {HTMLElement} */ const playerAnidb = element("anidb");
+  /** @type {HTMLElement} */ const playerNowPlayingFav = element("now-playing-fav");
+  /** @type {HTMLElement} */ const playerLocateBtn = element("locate-current");
 
   // DOM Elements - Progress Bar
-  /** @type {HTMLElement} */ const playerFill = el("player-progress-fill");
-  /** @type {HTMLElement} */ const playerTrack = el("player-progress-track");
+  /** @type {HTMLElement} */ const playerFill = element("player-progress-fill");
+  /** @type {HTMLElement} */ const playerTrack = element("player-progress-track");
 
   // DOM Elements - Help
-  /** @type {HTMLElement} */ const helpModal = el("player-help-modal");
-  /** @type {HTMLElement} */ const helpOpenBtn = el("help-open");
+  /** @type {HTMLElement} */ const helpModal = element("player-help-modal");
+  /** @type {HTMLElement} */ const helpOpenBtn = element("help-open");
 
   /** @type {Function|null} Reference to the active modal close callback to support toggle hotkeys. */
   let activeModalClose = null;
@@ -70,13 +70,13 @@
   // #region Helpers
   /**
    * Resets the idle timer and reveals the UI, suspending it if hovering over controls.
-   * @param {MouseEvent} ev - The mouse movement event.
+   * @param {MouseEvent} event - The mouse movement event.
    * @returns {void}
    */
-  const resetIdle = (ev) => {
+  const resetIdle = (event) => {
     playerContainer.classList.remove("idle");
     clearTimeout(idleTimer);
-    if (!ev.target.closest(".ui-btn, #player-progress-track, #volume-text")) idleTimer = setTimeout(() => playerContainer.classList.add("idle"), 2000);
+    if (!event.target.closest(".ui-btn, #player-progress-track, #volume-text")) idleTimer = setTimeout(() => playerContainer.classList.add("idle"), 2000);
   };
 
   /**
@@ -152,10 +152,10 @@
 
   /**
    * Decodes unicode escape sequences back into their actual Unicode characters.
-   * @param {string} str - The string containing escape sequences.
+   * @param {string} stringValue - The string containing escape sequences.
    * @returns {string} A decoded string.
    */
-  const decodeUnicode = (str) => (str || "").replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+  const decodeUnicode = (stringValue) => (stringValue || "").replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
 
   /**
    * Cycles through an array of modes in a specific direction.
@@ -165,8 +165,8 @@
    * @returns {string} The newly selected mode.
    */
   const cycleMode = (current, modes, dir = 1) => {
-    const idx = modes.indexOf(current);
-    return modes[(idx + dir + modes.length) % modes.length];
+    const index = modes.indexOf(current);
+    return modes[(index + dir + modes.length) % modes.length];
   };
 
   /**
@@ -280,7 +280,7 @@
    */
   const syncFavouriteControls = () => {
     const allowed = canModifyServerState();
-    el("player")?.classList.toggle("fav-disabled", !allowed);
+    element("player")?.classList.toggle("fav-disabled", !allowed);
     if (playerNowPlayingFav) {
       playerNowPlayingFav.setAttribute("aria-disabled", String(!allowed));
       playerNowPlayingFav.title = allowed ? "Favourite" : "Authentication required to modify favourites";
@@ -307,14 +307,14 @@
   async function toggleFavourite(videoId, heartEl) {
     if (!canModifyServerState()) return;
     if (!videoId || videoId <= 0) return console.warn("VideoId missing.");
-    const res = await fetchJson(base + "/animethemes/webm/favourites", {
+    const response = await fetchJson(base + "/animethemes/webm/favourites", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(videoId),
     });
 
-    const isFav = getData(res)?.isFavourite;
-    if (res.ok && isFav !== undefined) {
+    const isFav = getData(response)?.isFavourite;
+    if (response.isOk && isFav !== undefined) {
       isFav ? favourites.add(videoId) : favourites.delete(videoId);
 
       if (heartEl) heartEl.classList.toggle("favourited", isFav);
@@ -352,7 +352,7 @@
      * @returns {HTMLLIElement} The completed file list item node.
      */
     const createFileLeaf = (item, displayName) => {
-      const li = document.createElement("li");
+      const listItem = document.createElement("li");
       const leaf = document.createElement("div");
       leaf.className = `leaf ${item.path === currentWebmPath ? "active" : ""}`;
       leaf.dataset.path = item.path;
@@ -363,8 +363,8 @@
       heart.textContent = "❤";
       heart.setAttribute("aria-disabled", String(!favAllowed));
       if (!favAllowed) heart.title = "Authentication Required to Modify Favourites";
-      heart.onclick = (ev) => {
-        ev.stopPropagation();
+      heart.onclick = (event) => {
+        event.stopPropagation();
         if (canModifyServerState()) toggleFavourite(item.videoId, heart);
       };
 
@@ -380,8 +380,8 @@
         playFile(item.path);
       };
       leaf.append(heart, text);
-      li.appendChild(leaf);
-      return li;
+      listItem.appendChild(leaf);
+      return listItem;
     };
 
     /**
@@ -394,13 +394,13 @@
      * @returns {HTMLLIElement} The completed folder list item node.
      */
     const createFolderNode = (name, renderFn, isOpen, isMissing = false, extraHtml = "") => {
-      const li = document.createElement("li");
-      const ul = document.createElement("ul");
-      const details = window._sr.createLazyDetails(name, ul, renderFn, isOpen, extraHtml);
+      const listItem = document.createElement("li");
+      const unorderedList = document.createElement("ul");
+      const details = window._sr.createLazyDetails(name, unorderedList, renderFn, isOpen, extraHtml);
       const summary = details.querySelector("summary");
       if (isMissing) summary.querySelector(".vfs-title")?.classList.add("tree-missing");
-      li.appendChild(details);
-      return li;
+      listItem.appendChild(details);
+      return listItem;
     };
 
     /**
@@ -584,8 +584,8 @@
     if (playerNowPlayingFav && item) {
       playerNowPlayingFav.style.pointerEvents = "auto";
       playerNowPlayingFav.classList.toggle("favourited", favourites.has(item.videoId));
-      playerNowPlayingFav.onclick = (ev) => {
-        ev.stopPropagation();
+      playerNowPlayingFav.onclick = (event) => {
+        event.stopPropagation();
         if (canModifyServerState()) toggleFavourite(item.videoId, playerNowPlayingFav);
       };
     }
@@ -703,11 +703,11 @@
       return;
     }
 
-    const res = await fetchJson(configUrl);
-    if (res.ok) {
-      const cfg = unwrapConfig(getData(res));
-      setValueByPath(cfg, "Playback.AnimeThemesWebmMode", next);
-      await saveSettings(cfg);
+    const response = await fetchJson(configUrl);
+    if (response.isOk) {
+      const config = unwrapConfig(getData(response));
+      setValueByPath(config, "Playback.AnimeThemesWebmMode", next);
+      await saveSettings(config);
     }
   }
   // #endregion
@@ -724,7 +724,7 @@
     if (savedVol !== null) playerVideo.volume = parseFloat(savedVol);
     if (savedMuted !== null) playerVideo.muted = savedMuted === "true";
 
-    ["play", "pause", "ended", "loadstart"].forEach((ev) => playerVideo.addEventListener(ev, syncPlaybackUI));
+    ["play", "pause", "ended", "loadstart"].forEach((event) => playerVideo.addEventListener(event, syncPlaybackUI));
 
     const updateProgressLoop = () => {
       syncProgressUI();
@@ -772,22 +772,22 @@
     playerVideo.ondblclick = toggleFullscreen;
 
     if (playerTrack) {
-      const updateSeek = (ev) => {
+      const updateSeek = (event) => {
         if (!playerVideo.duration) return;
         const rect = playerTrack.getBoundingClientRect();
-        const pos = (ev.clientX - rect.left) / rect.width;
+        const pos = (event.clientX - rect.left) / rect.width;
         playerVideo.currentTime = Math.max(0, Math.min(1, pos)) * playerVideo.duration;
         if (playerVideo.paused) syncProgressUI();
       };
-      playerTrack.onmousedown = (ev) => {
-        if (ev.button === 1 && playerVideo.src) {
-          ev.preventDefault();
+      playerTrack.onmousedown = (event) => {
+        if (event.button === 1 && playerVideo.src) {
+          event.preventDefault();
           playerVideo.paused ? playerVideo.play() : playerVideo.pause();
           return;
         }
-        if (ev.button === 0) {
-          updateSeek(ev);
-          const onMouseMove = (moveEv) => updateSeek(moveEv);
+        if (event.button === 0) {
+          updateSeek(event);
+          const onMouseMove = (moveEvent) => updateSeek(moveEvent);
           const onMouseUp = () => {
             window.removeEventListener("mousemove", onMouseMove);
             window.removeEventListener("mouseup", onMouseUp);
@@ -809,31 +809,31 @@
     };
 
     if (playerMuteBtn) {
-      playerMuteBtn.onclick = (ev) => {
-        ev.stopPropagation();
+      playerMuteBtn.onclick = (event) => {
+        event.stopPropagation();
         if (playerVideo.src) playerVideo.muted = !playerVideo.muted;
       };
       playerMuteBtn.addEventListener(
         "wheel",
-        (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          resetIdle(ev);
-          stepVolume(ev.deltaY < 0 ? 0.05 : -0.05);
+        (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          resetIdle(event);
+          stepVolume(event.deltaY < 0 ? 0.05 : -0.05);
         },
         { passive: false },
       );
     }
 
     if (playerVolText) {
-      playerVolText.onclick = (ev) => ev.stopPropagation();
+      playerVolText.onclick = (event) => event.stopPropagation();
       playerVolText.addEventListener(
         "wheel",
-        (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          resetIdle(ev);
-          stepVolume(ev.deltaY < 0 ? 0.05 : -0.05);
+        (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          resetIdle(event);
+          stepVolume(event.deltaY < 0 ? 0.05 : -0.05);
         },
         { passive: false },
       );
@@ -906,18 +906,18 @@
       playerVideoBtn.setAttribute("data-state", savedVideoState);
       playerVideoBtn.title = savedVideoState === "on" ? "Turn Video Off" : "Turn Video On";
       playerContainer.classList.toggle("video-off", savedVideoState === "off");
-      playerVideoBtn.onclick = (ev) => {
-        ev.stopPropagation();
+      playerVideoBtn.onclick = (event) => {
+        event.stopPropagation();
         toggleVideo();
       };
     }
 
-    window.addEventListener("keydown", (ev) => {
+    window.addEventListener("keydown", (event) => {
       if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA" || document.querySelector(".modal-overlay.open")) return;
-      const key = ev.key.toLowerCase();
+      const key = event.key.toLowerCase();
       const handledKeys = [" ", "k", "arrowleft", "arrowright", "j", "l", ",", ".", "b", "n", ";", "'", "arrowdown", "arrowup", "m", "f", "v", "r", "g", "h", "?", "q"];
       if (!handledKeys.includes(key)) return;
-      ev.preventDefault();
+      event.preventDefault();
       const isShuffle = playerModeBtn?.getAttribute("data-mode") === "shuffle";
       // prettier-ignore
       switch (key) {
@@ -952,12 +952,12 @@
       const canReadConfig = canModifyServerState();
       const [treeRes, cfgRes, favRes] = await Promise.all([
         fetchJson(base + "/animethemes/webm/tree"),
-        canReadConfig ? fetchJson(configUrl) : Promise.resolve({ ok: false }),
+        canReadConfig ? fetchJson(configUrl) : Promise.resolve({ isOk: false }),
         fetchJson(base + "/animethemes/webm/favourites"),
       ]);
-      if (favRes.ok) favourites = new Set(getData(favRes) || []);
+      if (favRes.isOk) favourites = new Set(getData(favRes) || []);
       const treePayload = getData(treeRes);
-      if (treeRes.ok) {
+      if (treeRes.isOk) {
         webmTreeData = (treePayload?.items || [])
           .map((item) => {
             item._searchIndex = `${item.group} ${item.series} ${decodeUnicode(item.file)} ${item.relPath || ""}`.toLowerCase().replace(/[\u200B\u200A]/g, "");
@@ -984,7 +984,7 @@
         }
       }
       if (playerModeBtn) {
-        const mode = canReadConfig && cfgRes.ok ? unwrapConfig(getData(cfgRes)).Playback.AnimeThemesWebmMode || "off" : localStorage.getItem("player-playback-mode") || treePayload?.playbackMode || "off";
+        const mode = canReadConfig && cfgRes.isOk ? unwrapConfig(getData(cfgRes)).Playback.AnimeThemesWebmMode || "off" : localStorage.getItem("player-playback-mode") || treePayload?.playbackMode || "off";
         playerModeBtn.setAttribute("data-mode", mode);
         updatePlaybackTooltip(playerModeBtn);
       }

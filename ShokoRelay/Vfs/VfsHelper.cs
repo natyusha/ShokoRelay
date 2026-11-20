@@ -125,13 +125,13 @@ public static partial class VfsHelper
     /// <param name="name">The season folder name to parse.</param>
     /// <returns>A tuple sorting standard seasons numerically before named folders.</returns>
     public static (bool IsSeason, int SeasonNumber, string Name) GetSeasonSortKey(string name) =>
-        (name.StartsWith("Season ", StringComparison.OrdinalIgnoreCase) && int.TryParse(name[7..], out int num)) ? (true, num, string.Empty) : (false, 0, name);
+        (name.StartsWith("Season ", StringComparison.OrdinalIgnoreCase) && int.TryParse(name[7..], out int numberValue)) ? (true, numberValue, string.Empty) : (false, 0, name);
 
     /// <summary>Resolves the Plex-compatible season number for any given VFS folder name.</summary>
     /// <param name="name">The season folder name.</param>
     /// <returns>The numeric season ID, or <c>null</c> if unrecognized.</returns>
     public static int? GetSeasonId(string name) =>
-        name.StartsWith("Season ", StringComparison.OrdinalIgnoreCase) && int.TryParse(name[7..], out int num) ? num
+        name.StartsWith("Season ", StringComparison.OrdinalIgnoreCase) && int.TryParse(name[7..], out int numberValue) ? numberValue
         : string.Equals(name, "Specials", StringComparison.OrdinalIgnoreCase) ? PlexConstants.SeasonSpecials
         : PlexConstants.ExtraSeasons.FirstOrDefault(kvp => string.Equals(kvp.Value.Folder, name, StringComparison.OrdinalIgnoreCase)) is var match && match.Value.Folder != null ? match.Key
         : null;

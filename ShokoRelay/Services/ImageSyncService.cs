@@ -53,7 +53,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
     /// <returns>A summary result containing statistics on the synchronization run.</returns>
     public async Task<ImageSyncResult> SyncImagesAsync(IEnumerable<int>? allowedSeriesIds = null, CancellationToken cancellationToken = default)
     {
-        var sw = Stopwatch.StartNew();
+        var stopwatch = Stopwatch.StartNew();
         await _syncLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -93,9 +93,9 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
             // Sync Local Series Images (Posters, Backdrops, Logos)
             await SyncLocalSeriesImagesAsync(allSeries, errorsBag, uploadedBag, AddStats, cancellationToken).ConfigureAwait(false);
 
-            sw.Stop();
-            logger.LogInformation("ImageSyncService: Finished synchronization -> uploaded {UploadedCount} new images to Shoko in {Elapsed}ms", uploaded, sw.ElapsedMilliseconds);
-            return new ImageSyncResult(processed, uploaded, skipped, errors, [.. uploadedBag.OrderBy(item => item)], [.. errorsBag.OrderBy(item => item)], sw.Elapsed);
+            stopwatch.Stop();
+            logger.LogInformation("ImageSyncService: Finished synchronization -> uploaded {UploadedCount} new images to Shoko in {Elapsed}ms", uploaded, stopwatch.ElapsedMilliseconds);
+            return new ImageSyncResult(processed, uploaded, skipped, errors, [.. uploadedBag.OrderBy(item => item)], [.. errorsBag.OrderBy(item => item)], stopwatch.Elapsed);
         }
         finally
         {
@@ -192,9 +192,8 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                     if (allowedSet != null && !allowedSet.Contains(primarySeriesId))
                         return;
 
-                    var fileData = fileDataCache.GetOrAdd(
-                        primarySeriesId,
-                        seriesId => metadataService.GetShokoSeriesByID(seriesId) is { } primarySeries ? MapHelper.GetConsolidatedSeriesFileData(primarySeries, metadataService) : null
+                    var fileData = fileDataCache.GetOrAdd(primarySeriesId, seriesId =>
+                        metadataService.GetShokoSeriesByID(seriesId) is { } primarySeries ? MapHelper.GetConsolidatedSeriesFileData(primarySeries, metadataService) : null
                     );
                     var matchingMappings = fileData?.Mappings.Where(mapping => mapping.Episodes.Any(mappedEpisode => mappedEpisode.ID == episode.ID)).ToList() ?? [];
                     var mappedCoords = matchingMappings.FirstOrDefault()?.Coords;
@@ -362,12 +361,12 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
 
                 await Parallel.ForEachAsync(items, DefaultParallelOptions(cancellationToken), ProcessThumbnailItem).ConfigureAwait(false);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception exception) when (exception is not OperationCanceledException)
             {
                 sectionScanFailed = true;
                 addStats(true, false, false, true);
-                errorsBag.Add($"Failed to scan Plex section {target.SectionId}: {ex.Message}");
-                logger.LogWarning(ex, "ImageSyncService: Failed to scan library section {SectionId}", target.SectionId);
+                errorsBag.Add($"Failed to scan Plex section {target.SectionId}: {exception.Message}");
+                logger.LogWarning(exception, "ImageSyncService: Failed to scan library section {SectionId}", target.SectionId);
             }
         }
 
@@ -459,55 +458,51 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
     )
     {
         await Parallel
-            .ForEachAsync(
-                allSeries,
-                DefaultParallelOptions(cancellationToken),
-                async (series, token) =>
+            .ForEachAsync(allSeries, DefaultParallelOptions(cancellationToken), async (series, token) =>
+            {
+                foreach (var config in s_seriesImageConfigs)
                 {
-                    foreach (var config in s_seriesImageConfigs)
+                    if (OverrideHelper.GetPrimary(series.LocalID, metadataService) != series.LocalID)
                     {
-                        if (OverrideHelper.GetPrimary(series.LocalID, metadataService) != series.LocalID)
+                        if (
+                            series
+                                .GetImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = config.Type, LinkedEntityImages = false })
+                                .Any(item => item.Source == ServiceRegistration.RelaySource)
+                        )
                         {
-                            if (
-                                series
-                                    .GetImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = config.Type, LinkedEntityImages = false })
-                                    .Any(item => item.Source == ServiceRegistration.RelaySource)
-                            )
-                            {
-                                await PurgeEntityImagesAsync(series, config.Type, xref => xref.Source == ServiceRegistration.RelaySource).ConfigureAwait(false);
-                                addStats(false, false, false, false);
-                            }
-                            continue;
+                            await PurgeEntityImagesAsync(series, config.Type, xref => xref.Source == ServiceRegistration.RelaySource).ConfigureAwait(false);
+                            addStats(false, false, false, false);
                         }
-
-                        // Find a local artwork file for a series based on a prioritized list of allowed filenames
-                        string? foundFile = VfsShared
-                            .ResolveSeriesVfsPaths(series, metadataService)
-                            .Where(Directory.Exists)
-                            .SelectMany(Directory.EnumerateFiles)
-                            .Where(file => PlexConstants.LocalMediaAssets.Artwork.ContainsKey(Path.GetExtension(file)))
-                            .Select(file => new { File = file, Index = Array.FindIndex(config.Names, name => string.Equals(Path.GetFileNameWithoutExtension(file), name, StringComparison.OrdinalIgnoreCase)) })
-                            .Where(item => item.Index >= 0)
-                            .OrderBy(item => item.Index)
-                            .FirstOrDefault()
-                            ?.File;
-
-                        var (fileExists, wasUploaded, wasSkipped, hasError) = await ProcessLocalAssetAsync(
-                                foundFile,
-                                series,
-                                config.Type,
-                                config.Label,
-                                $"series {series.GetDisplayTitle()} [{series.LocalID}]",
-                                $"[Local {config.Label}] {series.GetDisplayTitle()}",
-                                uploadedBag,
-                                errsBag
-                            )
-                            .ConfigureAwait(false);
-
-                        addStats(fileExists, wasUploaded, wasSkipped, hasError);
+                        continue;
                     }
+
+                    // Find a local artwork file for a series based on a prioritized list of allowed filenames
+                    string? foundFile = VfsShared
+                        .ResolveSeriesVfsPaths(series, metadataService)
+                        .Where(Directory.Exists)
+                        .SelectMany(Directory.EnumerateFiles)
+                        .Where(file => PlexConstants.LocalMediaAssets.Artwork.ContainsKey(Path.GetExtension(file)))
+                        .Select(file => new { File = file, Index = Array.FindIndex(config.Names, name => string.Equals(Path.GetFileNameWithoutExtension(file), name, StringComparison.OrdinalIgnoreCase)) })
+                        .Where(item => item.Index >= 0)
+                        .OrderBy(item => item.Index)
+                        .FirstOrDefault()
+                        ?.File;
+
+                    var (fileExists, wasUploaded, wasSkipped, hasError) = await ProcessLocalAssetAsync(
+                            foundFile,
+                            series,
+                            config.Type,
+                            config.Label,
+                            $"series {series.GetDisplayTitle()} [{series.LocalID}]",
+                            $"[Local {config.Label}] {series.GetDisplayTitle()}",
+                            uploadedBag,
+                            errsBag
+                        )
+                        .ConfigureAwait(false);
+
+                    addStats(fileExists, wasUploaded, wasSkipped, hasError);
                 }
-            )
+            })
             .ConfigureAwait(false);
     }
 
@@ -615,10 +610,10 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
             }
             return (true, true, false, false);
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            errorsBag.Add($"Failed to process {label} for -> {entityName}: {ex.Message}");
-            logger.LogWarning(ex, "ImageSyncService: Failed to upload {Label} for -> {Entity}", label, entityName);
+            errorsBag.Add($"Failed to process {label} for -> {entityName}: {exception.Message}");
+            logger.LogWarning(exception, "ImageSyncService: Failed to upload {Label} for -> {Entity}", label, entityName);
             return (true, false, false, true);
         }
     }
@@ -706,10 +701,10 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
             logger.LogWarning("ImageSyncService: Timed out fetching Plex thumbnail for {LogName}", episodeLogName);
             return (true, false, false, true);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            errorsBag.Add($"[Plex Thumbnail Exception] {episodeLogName}: {ex.Message}");
-            logger.LogWarning(ex, "ImageSyncService: Failed to process Plex thumbnail for {LogName}", episodeLogName);
+            errorsBag.Add($"[Plex Thumbnail Exception] {episodeLogName}: {exception.Message}");
+            logger.LogWarning(exception, "ImageSyncService: Failed to process Plex thumbnail for {LogName}", episodeLogName);
             return (true, false, false, true);
         }
     }
@@ -768,9 +763,9 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                     await imageManager.PurgeImage(oldImage).ConfigureAwait(false);
             }
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            logger.LogWarning(ex, "ImageSyncService: Failed to purge stale images for entity of type {Type}", entity.GetType().Name);
+            logger.LogWarning(exception, "ImageSyncService: Failed to purge stale images for entity of type {Type}", entity.GetType().Name);
         }
     }
 

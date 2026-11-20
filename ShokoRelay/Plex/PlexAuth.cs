@@ -170,9 +170,9 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
     /// <returns>A list of library info objects.</returns>
     public async Task<List<PlexLibraryInfo>> GetPlexLibrariesAsync(string token, string cid, string url, CancellationToken cancellationToken = default)
     {
-        using var req = CreateRequest(HttpMethod.Get, new Uri($"{url.TrimEnd('/')}/library/sections"), token, cid);
-        using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
-        var wrapper = await ReadJsonAsync<LibrarySectionsResponse>(resp, cancellationToken).ConfigureAwait(false);
+        using var request = CreateRequest(HttpMethod.Get, new Uri($"{url.TrimEnd('/')}/library/sections"), token, cid);
+        using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        var wrapper = await ReadJsonAsync<LibrarySectionsResponse>(response, cancellationToken).ConfigureAwait(false);
         return wrapper
             ?.MediaContainer?.Directory?.Select(directory => new PlexLibraryInfo(
                 int.TryParse(directory.Key, out int id) ? id : 0,
@@ -182,7 +182,7 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
                 directory.Uuid ?? "",
                 directory.Locations?.Select(loc => loc.Path).ToList() ?? []
             ))
-            .Where(lib => lib.Id > 0)
+            .Where(library => library.Id > 0)
             .ToList()
             ?? [];
     }
@@ -211,13 +211,13 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
                     cts.CancelAfter(TimeSpan.FromSeconds(5));
 
                     var libs = await GetPlexLibrariesAsync(token, cid, uri, cts.Token).ConfigureAwait(false);
-                    var matched = libs.Where(lib =>
-                            string.Equals(lib.Agent, ShokoRelayConstants.AgentScheme, StringComparison.OrdinalIgnoreCase)
-                            || string.Equals(lib.Agent, ShokoRelayConstants.MovieAgentScheme, StringComparison.OrdinalIgnoreCase)
+                    var matched = libs.Where(library =>
+                            string.Equals(library.Agent, ShokoRelayConstants.AgentScheme, StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(library.Agent, ShokoRelayConstants.MovieAgentScheme, StringComparison.OrdinalIgnoreCase)
                         )
                         .ToList();
-                    foreach (var lib in matched)
-                        list.Add((lib, srv with { PreferredUri = uri }));
+                    foreach (var library in matched)
+                        list.Add((library, srv with { PreferredUri = uri }));
 
                     if (matched.Count > 0)
                         logger.LogInformation("Plex Discovery: Connected to server -> {Name} ... {Uri} (Type: {Type}, Libraries: {Count})", srv.Name, uri, isFallback ? "Fallback" : "Preferred", matched.Count);
@@ -227,9 +227,9 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
                 {
                     throw;
                 }
-                catch (Exception ex)
+                catch (Exception exception)
                 {
-                    logger.LogDebug("Plex Discovery: Connection to {Uri} failed for server -> {Name} ... {Error}", uri, srv.Name, ex.GetBaseException().Message);
+                    logger.LogDebug("Plex Discovery: Connection to {Uri} failed for server -> {Name} ... {Error}", uri, srv.Name, exception.GetBaseException().Message);
                     return false;
                 }
             }
@@ -238,12 +238,12 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
             {
                 var srv = servers[srvIdx];
                 string? customUrl = !string.IsNullOrWhiteSpace(Settings.Advanced.PlexServerUrl) ? Settings.Advanced.PlexServerUrl.Trim().TrimEnd('/') : null;
-                var ok =
+                var isOk =
                     (!string.IsNullOrEmpty(customUrl) && await TryConnectAsync(customUrl, srv with { PreferredUri = customUrl }, false).ConfigureAwait(false))
                     || (!string.IsNullOrEmpty(srv.PreferredUri) && await TryConnectAsync(srv.PreferredUri, srv, false).ConfigureAwait(false));
 
                 // Fallback: If preferred URI failed, try other endpoints
-                if (!ok && devices.FirstOrDefault(device => string.Equals(device.ClientIdentifier, srv.Id, StringComparison.OrdinalIgnoreCase)) is { } dev && dev.Connections != null)
+                if (!isOk && devices.FirstOrDefault(device => string.Equals(device.ClientIdentifier, srv.Id, StringComparison.OrdinalIgnoreCase)) is { } dev && dev.Connections != null)
                 {
                     var conns = srv.HttpsRequired ? dev.Connections.Where(conn => conn.Uri?.StartsWith("https", StringComparison.Ordinal) == true) : dev.Connections;
                     foreach (var conn in conns)
@@ -255,13 +255,13 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
                         if (await TryConnectAsync(conn.Uri, workingSrv, true).ConfigureAwait(false))
                         {
                             servers[srvIdx] = workingSrv;
-                            ok = true;
+                            isOk = true;
                             break;
                         }
                     }
                 }
 
-                if (!ok)
+                if (!isOk)
                     logger.LogWarning("Plex Discovery: Failed to establish any connection to server -> {Name} ... check for DNS rebinding protection, firewall rules, or docker network isolation", srv.Name);
             }
         }
@@ -278,9 +278,9 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
     /// <returns>A list of home users.</returns>
     public async Task<List<PlexHomeUser>> GetHomeUsersAsync(string adminToken, CancellationToken cancellationToken = default)
     {
-        using var req = CreateRequest(HttpMethod.Get, new Uri($"{BaseUrl}/api/v2/home/users"), adminToken);
-        using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
-        var result = await ReadJsonAsync<PlexHomeResponse>(resp, cancellationToken).ConfigureAwait(false);
+        using var request = CreateRequest(HttpMethod.Get, new Uri($"{BaseUrl}/api/v2/home/users"), adminToken);
+        using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        var result = await ReadJsonAsync<PlexHomeResponse>(response, cancellationToken).ConfigureAwait(false);
         return result?.Users ?? [];
     }
 
@@ -297,15 +297,15 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
 
         try
         {
-            using var req = CreateRequest(HttpMethod.Get, new Uri($"{BaseUrl}/api/servers/{Uri.EscapeDataString(serverId)}/shared_servers"), adminToken, acceptJson: false);
-            using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
-            if (!resp.IsSuccessStatusCode)
+            using var request = CreateRequest(HttpMethod.Get, new Uri($"{BaseUrl}/api/servers/{Uri.EscapeDataString(serverId)}/shared_servers"), adminToken, acceptJson: false);
+            using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
             {
-                logger.LogWarning("PlexAuth: Failed to query Shared Servers for server {ServerId} (HTTP {StatusCode})", serverId, resp.StatusCode);
+                logger.LogWarning("PlexAuth: Failed to query Shared Servers for server {ServerId} (HTTP {StatusCode})", serverId, response.StatusCode);
                 return users;
             }
 
-            var content = await resp.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             if (string.IsNullOrWhiteSpace(content))
                 return users;
 
@@ -342,9 +342,9 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
                 users.Add(new PlexSharedServerUser(attrs["id"]?.Value, attrs["userID"]?.Value, attrs["username"]?.Value ?? attrs["name"]?.Value, attrs["email"]?.Value, attrs["accessToken"]?.Value));
             }
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            logger.LogWarning(ex, "PlexAuth: Failed to parse Shared Servers response for server {ServerId}", serverId);
+            logger.LogWarning(exception, "PlexAuth: Failed to parse Shared Servers response for server {ServerId}", serverId);
         }
 
         return users;
@@ -362,15 +362,15 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
 
         try
         {
-            using var req = CreateRequest(HttpMethod.Get, new Uri($"{BaseUrl}/api/users"), adminToken, acceptJson: false);
-            using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
-            if (!resp.IsSuccessStatusCode)
+            using var request = CreateRequest(HttpMethod.Get, new Uri($"{BaseUrl}/api/users"), adminToken, acceptJson: false);
+            using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
             {
-                logger.LogDebug("PlexAuth: Failed to query Plex users list (HTTP {StatusCode})", resp.StatusCode);
+                logger.LogDebug("PlexAuth: Failed to query Plex users list (HTTP {StatusCode})", response.StatusCode);
                 return friends;
             }
 
-            var content = await resp.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             if (string.IsNullOrWhiteSpace(content))
                 return friends;
 
@@ -386,9 +386,9 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
                 friends.Add(new PlexFriendUser(attrs["id"]?.Value, attrs["title"]?.Value, attrs["username"]?.Value, attrs["email"]?.Value));
             }
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            logger.LogDebug(ex, "PlexAuth: Failed to parse Plex users list");
+            logger.LogDebug(exception, "PlexAuth: Failed to parse Plex users list");
         }
 
         return friends;
@@ -412,15 +412,15 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
         {
             try
             {
-                using var req = CreateRequest(HttpMethod.Post, uri, adminToken, acceptJson: acceptJson);
-                using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
-                if (!resp.IsSuccessStatusCode)
+                using var request = CreateRequest(HttpMethod.Post, uri, adminToken, acceptJson: acceptJson);
+                using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+                if (!response.IsSuccessStatusCode)
                 {
-                    logger.LogWarning("PlexAuth: SwitchHomeUser failed for user {UserId} at {Path} (HTTP {StatusCode})", userId, uri.AbsolutePath, resp.StatusCode);
+                    logger.LogWarning("PlexAuth: SwitchHomeUser failed for user {UserId} at {Path} (HTTP {StatusCode})", userId, uri.AbsolutePath, response.StatusCode);
                     return null;
                 }
 
-                var content = await resp.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
                 if (string.IsNullOrWhiteSpace(content))
                     return null;
 
@@ -435,9 +435,9 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
                 var node = doc.SelectSingleNode("//user") ?? doc.DocumentElement;
                 return node?.Attributes?["authToken"]?.Value ?? node?.Attributes?["authenticationToken"]?.Value;
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
-                logger.LogWarning(ex, "PlexAuth: Failed to parse Switch User response at {Path}", uri.AbsolutePath);
+                logger.LogWarning(exception, "PlexAuth: Failed to parse Switch User response at {Path}", uri.AbsolutePath);
                 return null;
             }
         }
@@ -449,11 +449,11 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
     /// <returns>Account info or null.</returns>
     public async Task<PlexAccountInfo?> GetAccountInfoAsync(string token, CancellationToken cancellationToken = default)
     {
-        using var req = CreateRequest(HttpMethod.Get, new Uri($"{BaseUrl}/api/v2/user"), token);
-        using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
-        if (!resp.IsSuccessStatusCode)
+        using var request = CreateRequest(HttpMethod.Get, new Uri($"{BaseUrl}/api/v2/user"), token);
+        using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
             return null;
-        var content = await resp.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         using var doc = JsonDocument.Parse(content);
         return new PlexAccountInfo(
             doc.RootElement.TryGetProperty("title", out var titleProp) ? titleProp.GetString() : null,
@@ -473,8 +473,8 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
     {
         try
         {
-            using var req = CreateRequest(HttpMethod.Delete, new Uri($"{BaseUrl}/api/v2/user/authentication"), token, cid);
-            await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
+            using var request = CreateRequest(HttpMethod.Delete, new Uri($"{BaseUrl}/api/v2/user/authentication"), token, cid);
+            await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
@@ -495,17 +495,17 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
     /// <returns>A pre-configured HttpRequestMessage instance.</returns>
     private HttpRequestMessage CreateRequest(HttpMethod method, Uri url, string? token = null, string? cid = null, bool acceptJson = true)
     {
-        var req = new HttpRequestMessage(method, url);
-        req.Headers.TryAddWithoutValidation("X-Plex-Client-Identifier", cid ?? configProvider.GetPlexClientIdentifier());
-        req.Headers.TryAddWithoutValidation("X-Plex-Device-Name", "Shoko Server");
-        req.Headers.TryAddWithoutValidation("X-Plex-Version", ShokoRelayConstants.Version);
-        req.Headers.TryAddWithoutValidation("X-Plex-Product", ShokoRelayConstants.Name);
-        req.Headers.TryAddWithoutValidation("X-Plex-Device", RuntimeInformation.OSDescription);
-        req.Headers.TryAddWithoutValidation("X-Plex-Platform", "Shoko Plugin");
-        req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(acceptJson ? "application/json" : "application/xml"));
+        var request = new HttpRequestMessage(method, url);
+        request.Headers.TryAddWithoutValidation("X-Plex-Client-Identifier", cid ?? configProvider.GetPlexClientIdentifier());
+        request.Headers.TryAddWithoutValidation("X-Plex-Device-Name", "Shoko Server");
+        request.Headers.TryAddWithoutValidation("X-Plex-Version", ShokoRelayConstants.Version);
+        request.Headers.TryAddWithoutValidation("X-Plex-Product", ShokoRelayConstants.Name);
+        request.Headers.TryAddWithoutValidation("X-Plex-Device", RuntimeInformation.OSDescription);
+        request.Headers.TryAddWithoutValidation("X-Plex-Platform", "Shoko Plugin");
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(acceptJson ? "application/json" : "application/xml"));
         if (!string.IsNullOrEmpty(token))
-            req.Headers.TryAddWithoutValidation("X-Plex-Token", token);
-        return req;
+            request.Headers.TryAddWithoutValidation("X-Plex-Token", token);
+        return request;
     }
 
     /// <summary>Extracts a property from a JSON element as a string regardless of whether it is encoded as a string or number.</summary>
@@ -520,22 +520,22 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
 
     /// <summary>Reads and deserializes a JSON HTTP response body into a strongly-typed object with error logging.</summary>
     /// <typeparam name="T">The target type to deserialize the response content into.</typeparam>
-    /// <param name="resp">The HTTP response message to read from.</param>
+    /// <param name="response">The HTTP response message to read from.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task representing the async operation containing the deserialized object, or default on failure.</returns>
-    private async Task<T?> ReadJsonAsync<T>(HttpResponseMessage resp, CancellationToken cancellationToken)
+    private async Task<T?> ReadJsonAsync<T>(HttpResponseMessage response, CancellationToken cancellationToken)
     {
-        if (!resp.IsSuccessStatusCode)
+        if (!response.IsSuccessStatusCode)
             return default;
-        var content = await resp.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             return JsonSerializer.Deserialize<T>(content, s_jsonOptions);
         }
-        catch (JsonException ex)
+        catch (JsonException exception)
         {
             string snippet = content.Length > 512 ? content[..512] : content;
-            logger.LogWarning(ex, "PlexAuth: Failed to parse JSON -> Body starts with {Snippet}", snippet);
+            logger.LogWarning(exception, "PlexAuth: Failed to parse JSON -> Body starts with {Snippet}", snippet);
             return default;
         }
     }

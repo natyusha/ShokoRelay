@@ -26,14 +26,14 @@
    * @param {string} id - The ID of the element to retrieve.
    * @returns {HTMLElement|null} The DOM element.
    */
-  const el = (id) => document.getElementById(id);
+  const element = (id) => document.getElementById(id);
 
   /**
    * Escapes characters in a string to prevent HTML attribute and content syntax corruption.
-   * @param {string} str - The raw string to escape.
+   * @param {string} stringValue - The raw string to escape.
    * @returns {string} The HTML-safe escaped string.
    */
-  const esc = (str) => (str ?? "").toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  const esc = (stringValue) => (stringValue ?? "").toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
   /** @type {number} Default auto-dismiss duration (ms) for transient toasts. Use 0 for persistent toasts. */
   const TOAST_MS = 5000;
@@ -48,7 +48,7 @@
    * @returns {void}
    */
   function setAuthLocked(locked) {
-    const dash = el("dashboard");
+    const dash = element("dashboard");
     if (!dash) return;
     dash.classList.toggle("auth-locked", locked);
     dash.querySelectorAll("button, input, select, textarea").forEach((ctrl) => {
@@ -74,7 +74,7 @@
     if (authPromptPromise) return authPromptPromise;
 
     authPromptPromise = new Promise((resolve) => {
-      let overlay = el("auth-modal");
+      let overlay = element("auth-modal");
       if (!overlay) {
         overlay = document.createElement("div");
         overlay.id = "auth-modal";
@@ -98,10 +98,10 @@
         document.body.appendChild(overlay);
       }
 
-      const usernameInput = el("auth-username");
-      const passwordInput = el("auth-password");
-      const submitBtn = el("auth-submit");
-      const cancelBtn = el("auth-cancel");
+      const usernameInput = element("auth-username");
+      const passwordInput = element("auth-password");
+      const submitBtn = element("auth-submit");
+      const cancelBtn = element("auth-cancel");
       usernameInput.value = "";
       passwordInput.value = "";
       cancelBtn.hidden = !dismissable;
@@ -109,16 +109,16 @@
       let close = () => {};
       /**
        * Completes the authentication prompt and resolves the pending promise.
-       * @param {boolean} ok - True if login succeeded, false if dismissed.
+       * @param {boolean} isOk - True if login succeeded, false if dismissed.
        * @param {boolean} [fromModalClose=false] - Whether invoked from the modal close callback.
        * @returns {void}
        */
-      const finish = (ok, fromModalClose = false) => {
+      const finish = (isOk, fromModalClose = false) => {
         if (!authPromptPromise) return;
         authPromptPromise = null;
-        if (ok) authGeneration++;
+        if (isOk) authGeneration++;
         if (!fromModalClose) close();
-        resolve(ok);
+        resolve(isOk);
       };
       close = openModal(overlay, () => finish(false, true), dismissable);
       setTimeout(() => usernameInput.focus(), 15);
@@ -152,8 +152,8 @@
         }
       };
 
-      const onKeyDown = (ev) => {
-        if (ev.key === "Enter") submitBtn.click();
+      const onKeyDown = (event) => {
+        if (event.key === "Enter") submitBtn.click();
       };
       usernameInput.onkeydown = onKeyDown;
       passwordInput.onkeydown = onKeyDown;
@@ -167,12 +167,12 @@
    * @returns {Promise<boolean>} True once the session is authorized or auth is not required.
    */
   async function checkInitialAuth() {
-    const isPlayer = !!el("player");
+    const isPlayer = !!element("player");
     if (!isPlayer) setAuthLocked(true);
     try {
-      const res = await fetch(`${base}/auth/verify${isPlayer ? "?player=true" : ""}`);
-      if (res.ok) {
-        const data = await res.json().catch(() => ({}));
+      const response = await fetch(`${base}/auth/verify${isPlayer ? "?player=true" : ""}`);
+      if (response.ok) {
+        const data = await response.json().catch(() => ({}));
         window._sr.authState = {
           authenticated: !!data.authenticated,
           required: !!data.required,
@@ -181,9 +181,9 @@
         if (!isPlayer) setAuthLocked(false);
         return true;
       }
-      if (res.status === 401 || res.status === 403) {
-        const ok = await ensureAuth({ dismissable: false });
-        if (ok) {
+      if (response.status === 401 || response.status === 403) {
+        const isOk = await ensureAuth({ dismissable: false });
+        if (isOk) {
           window._sr.authState = { authenticated: true, required: true, allowPlayerAccess: false };
           if (!isPlayer) setAuthLocked(false);
           return true;
@@ -201,57 +201,57 @@
    * @param {string} url - The URL to fetch.
    * @param {RequestInit} [opts] - Optional fetch options.
    * @param {boolean} [allowPrompt=true] - Whether to prompt for authentication on 401/403 responses.
-   * @returns {Promise<{ok: boolean, status: number, data: *}>} The normalized fetch response object.
+   * @returns {Promise<{isOk: boolean, status: number, data: *}>} The normalized fetch response object.
    */
   async function fetchJson(url, opts = {}, allowPrompt = true) {
     try {
       const requestGen = authGeneration;
-      const res = await fetch(url, opts);
-      if ((res.status === 401 || res.status === 403) && allowPrompt) {
+      const response = await fetch(url, opts);
+      if ((response.status === 401 || response.status === 403) && allowPrompt) {
         if (authGeneration !== requestGen) return fetchJson(url, opts, false);
         setAuthLocked(true);
-        const ok = await ensureAuth({ dismissable: false });
-        if (ok) {
+        const isOk = await ensureAuth({ dismissable: false });
+        if (isOk) {
           setAuthLocked(false);
           return fetchJson(url, opts, false);
         }
       }
-      const text = await res.text();
+      const text = await response.text();
       try {
-        return { ok: res.ok, status: res.status, data: JSON.parse(text) };
+        return { isOk: response.ok, status: response.status, data: JSON.parse(text) };
       } catch {
-        return { ok: res.ok, status: res.status, data: text };
+        return { isOk: response.ok, status: response.status, data: text };
       }
-    } catch (err) {
-      console.error("fetchJson error for", url, err);
-      return { ok: false, status: 0, data: { error: String(err), message: err?.message ?? String(err), url } };
+    } catch (error) {
+      console.error("fetchJson error for", url, error);
+      return { isOk: false, status: 0, data: { error: String(error), message: error?.message ?? String(error), url } };
     }
   }
 
   /**
    * Extracts the inner data object from a standardized server response envelope.
-   * @param {Object} res - The normalized fetch response object.
+   * @param {Object} response - The normalized fetch response object.
    * @returns {*} The actual result data.
    */
-  function getData(res) {
-    return res?.data?.Data ?? res?.data?.data ?? res?.data;
+  function getData(response) {
+    return response?.data?.Data ?? response?.data?.data ?? response?.data;
   }
   // #endregion
 
   // #region Helpers
   /**
    * Build a human-readable summary string and error count from common API response fields.
-   * @param {Object} res - The normalized fetch response object.
+   * @param {Object} response - The normalized fetch response object.
    * @returns {{text: string, errorCount: number}} Summarized details.
    */
-  function summarizeResult(res) {
-    const resData = getData(res);
+  function summarizeResult(response) {
+    const resData = getData(response);
     if (!resData) return { text: "", errorCount: 0 };
     if (resData.errors && typeof resData.errors === "object" && !Array.isArray(resData.errors)) {
       const msgs = Object.values(resData.errors).flat();
       if (msgs.length > 0) return { text: msgs.join(", "), errorCount: msgs.length };
     }
-    if (res.ok === false && resData.title && !resData.message) return { text: resData.title, errorCount: 1 };
+    if (response.isOk === false && resData.title && !resData.message) return { text: resData.title, errorCount: 1 };
 
     const parts = [];
     const keys = {
@@ -267,8 +267,8 @@
     Object.entries(keys).forEach(([label, aliases]) => {
       const match = aliases.find((key) => resData[key] !== undefined && resData[key] !== null);
       if (match === undefined) return;
-      const val = resData[match];
-      const count = label === "errors" ? (Array.isArray(val) ? val.length : Number(val) || 0) : val;
+      const value = resData[match];
+      const count = label === "errors" ? (Array.isArray(value) ? value.length : Number(value) || 0) : value;
       if (label === "errors") errorCount = count;
       if (label !== "errors" || count > 0) parts.push(`${label}: ${count}`);
     });
@@ -284,7 +284,7 @@
    * @returns {HTMLElement|null} The toast element.
    */
   function showToast(message, type = "info", timeout = 5000) {
-    const container = el("toast-container");
+    const container = element("toast-container");
     if (!container) return null;
     const toast = document.createElement("div");
     toast.className = `toast ${type || "info"}`;
@@ -312,24 +312,24 @@
 
   /**
    * Show success/error toasts for HTTP responses with log-link injection and summary.
-   * @param {Object} res - The normalized fetch response object.
+   * @param {Object} response - The normalized fetch response object.
    * @param {string} label - Identifies the operation.
    * @param {Object} [opts] - Display options.
    * @returns {void}
    */
-  function toastOperation(res, label, opts = {}) {
+  function toastOperation(response, label, opts = {}) {
     const { summary, hideOnSucceed, type } = opts;
-    const { text, errorCount } = summarizeResult(res);
-    const logUrl = res.data?.logUrl || res.data?.LogUrl;
+    const { text, errorCount } = summarizeResult(response);
+    const logUrl = response.data?.logUrl || response.data?.LogUrl;
     const logLink = logUrl ? `[<a href="${esc(logUrl)}" target="_blank" rel="noopener noreferrer" class="log-link">view log</a>]` : "";
 
-    if (res.ok) {
-      const display = summary || res.data?.message || res.data?.Message || (res.data?.status !== "ok" ? res.data?.status : null) || text || "Complete";
+    if (response.isOk) {
+      const display = summary || response.data?.message || response.data?.Message || (response.data?.status !== "ok" ? response.data?.status : null) || text || "Complete";
       const toastType = type || (errorCount > 0 ? "error" : "success");
       const persistence = errorCount > 0 ? 0 : (hideOnSucceed ?? (logUrl ? 0 : TOAST_MS)); // Always persist if there are errors. Otherwise, respect the hideOnSucceed override.
       showToast(`${esc(label)}: ${esc(display)} ${logLink}`, toastType, persistence);
     } else {
-      const display = summary || res.data?.message || res.data?.Message || text || (typeof res.data === "string" ? res.data : JSON.stringify(res.data));
+      const display = summary || response.data?.message || response.data?.Message || text || (typeof response.data === "string" ? response.data : JSON.stringify(response.data));
       showToast(`${esc(label)} Failed: ${esc(display)} ${logLink}`, "error", 0);
     }
   }
@@ -356,8 +356,8 @@
       }
       onClose?.();
     };
-    const onOverlay = (ev) => ev.target === modal && close();
-    const onKey = (ev) => ev.key === "Escape" && close();
+    const onOverlay = (event) => event.target === modal && close();
+    const onKey = (event) => event.key === "Escape" && close();
     if (dismissable) {
       modal.addEventListener("click", onOverlay);
       document.addEventListener("keydown", onKey);
@@ -395,13 +395,13 @@
       const cleanCfg = JSON.parse(JSON.stringify(config));
       delete cleanCfg.PlexLibrary;
       delete cleanCfg.PlexAuth;
-      const res = await fetchJson(configUrl, {
+      const response = await fetchJson(configUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(cleanCfg),
       });
-      if (!res.ok) toastOperation(res, "Settings Save");
-      return res;
+      if (!response.isOk) toastOperation(response, "Settings Save");
+      return response;
     });
     pendingSettingsSave = run.catch(() => {});
     return run;
@@ -425,7 +425,7 @@
     shokoBase,
     configUrl,
     authReady,
-    el,
+    element,
     esc,
     TOAST_MS,
     ensureAuth,
@@ -458,22 +458,22 @@
     unwrapConfig: (data) => (data?.payload !== undefined ? data.payload || {} : data || {}),
     /**
      * Retrieves a nested property value using a dot-delimited path.
-     * @param {Object} obj - The source object.
+     * @param {Object} objectValue - The source object.
      * @param {string} path - The dot-delimited property path.
      * @returns {*} The resolved property value, or undefined.
      */
-    getValueByPath: (obj, path) => path.split(".").reduce((curr, key) => curr?.[key], obj),
+    getValueByPath: (objectValue, path) => path.split(".").reduce((curr, key) => curr?.[key], objectValue),
     /**
      * Sets a nested property value using a dot-delimited path, creating intermediate objects as needed.
-     * @param {Object} obj - The target object.
+     * @param {Object} objectValue - The target object.
      * @param {string} path - The dot-delimited property path.
      * @param {*} value - The value to assign.
      * @returns {void}
      */
-    setValueByPath: (obj, path, value) => {
+    setValueByPath: (objectValue, path, value) => {
       const parts = path.split(".");
       const last = parts.pop();
-      const target = parts.reduce((curr, key) => ((curr[key] ??= {}), curr[key]), obj);
+      const target = parts.reduce((curr, key) => ((curr[key] ??= {}), curr[key]), objectValue);
       target[last] = value;
     },
     /**
@@ -486,11 +486,11 @@
      * @returns {void}
      */
     bindConfig: (target, path, config, persistFn, type = "text") => {
-      const elem = typeof target === "string" ? el(target) : target;
+      const elem = typeof target === "string" ? element(target) : target;
       if (!elem) return;
-      const val = window._sr.getValueByPath(config, path);
-      if (type === "check") elem.checked = !!val;
-      else elem.value = val ?? "";
+      const value = window._sr.getValueByPath(config, path);
+      if (type === "check") elem.checked = !!value;
+      else elem.value = value ?? "";
       elem.onchange = async () => {
         let newVal = type === "check" ? elem.checked : type === "number" ? Number(elem.value) || 0 : elem.value;
         window._sr.setValueByPath(config, path, newVal);
@@ -516,7 +516,7 @@
    * @returns {void}
    */
   function initTooltips() {
-    if (el("shoko-tooltip")) return;
+    if (element("shoko-tooltip")) return;
     const tooltipEl = document.createElement("div");
     tooltipEl.id = "shoko-tooltip";
     tooltipEl.className = "tooltip-core tooltip-box tooltip-dark tooltip-place-top";
@@ -536,21 +536,21 @@
       tooltipEl.setAttribute("aria-hidden", "false");
       const disabledChild = target.tagName !== "LABEL" ? target.querySelector(":disabled, [disabled]") : null;
       const rect = disabledChild ? disabledChild.getBoundingClientRect() : target.getBoundingClientRect();
-      const vw = document.documentElement.clientWidth;
-      const vh = document.documentElement.clientHeight;
+      const viewportWidth = document.documentElement.clientWidth;
+      const viewportHeight = document.documentElement.clientHeight;
       const margin = 10;
       let place = "top";
       let top = rect.top - tooltipEl.offsetHeight - margin;
       let left = rect.left + rect.width / 2 - tooltipEl.offsetWidth / 2;
       if (top < margin) {
-        const spaceBelow = vh - rect.bottom;
+        const spaceBelow = viewportHeight - rect.bottom;
         if (spaceBelow > tooltipEl.offsetHeight + margin) {
           top = rect.bottom + margin;
           place = "bottom";
         }
       }
       const minLeft = margin;
-      const maxLeft = vw - tooltipEl.offsetWidth - margin;
+      const maxLeft = viewportWidth - tooltipEl.offsetWidth - margin;
       const clampedLeft = Math.max(minLeft, Math.min(left, maxLeft));
       const arrow = tooltipEl.querySelector(".tooltip-arrow");
       if (arrow) arrow.style.marginLeft = `${left - clampedLeft}px`;

@@ -236,15 +236,15 @@ internal static partial class AnimeThemesHelper
     internal static Dictionary<string, string> ReadId3v2Tags(string filePath)
     {
         var tags = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        using var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
         Span<byte> header = stackalloc byte[10];
-        if (fs.Read(header) < 10 || header[0] != 'I' || header[1] != 'D' || header[2] != '3')
+        if (fileStream.Read(header) < 10 || header[0] != 'I' || header[1] != 'D' || header[2] != '3')
             return tags;
 
         int tagSize = (header[6] << 21) | (header[7] << 14) | (header[8] << 7) | header[9];
         int maxRead = Math.Min(tagSize, 65536);
         byte[] tagBytes = new byte[maxRead];
-        int bytesRead = fs.Read(tagBytes, 0, maxRead);
+        int bytesRead = fileStream.Read(tagBytes, 0, maxRead);
         int pos = 0;
         while (pos + 10 <= bytesRead)
         {
@@ -256,7 +256,7 @@ internal static partial class AnimeThemesHelper
                 break;
             if (id.StartsWith('T') && id != "TXXX" && frameSize > 1)
             {
-                string val = tagBytes[pos + 10] switch
+                string value = tagBytes[pos + 10] switch
                 {
                     1 => Encoding.Unicode.GetString(tagBytes, pos + 11, frameSize - 1),
                     2 => Encoding.BigEndianUnicode.GetString(tagBytes, pos + 11, frameSize - 1),
@@ -271,7 +271,7 @@ internal static partial class AnimeThemesHelper
                     "TALB" => "Album",
                     _ => id,
                 };
-                tags[tagKey] = val.TrimEnd('\0').Replace("\uFEFF", "", StringComparison.Ordinal);
+                tags[tagKey] = value.TrimEnd('\0').Replace("\uFEFF", "", StringComparison.Ordinal);
             }
             pos += 10 + frameSize;
         }
@@ -328,7 +328,7 @@ internal static partial class AnimeThemesHelper
                     fields[11] == "1",
                     fields[12] == "1",
                     fields[13],
-                    int.TryParse(fields[14], out var res) ? res : 0,
+                    int.TryParse(fields[14], out var parsedResult) ? parsedResult : 0,
                     fields[15],
                     fields[16]
                 )
@@ -343,27 +343,27 @@ internal static partial class AnimeThemesHelper
     /// <returns>A formatted CSV string.</returns>
     internal static string SerializeMapping(List<string>? comments, List<AnimeThemesMappingEntry> entries)
     {
-        var sb = new StringBuilder();
+        var stringBuilder = new StringBuilder();
         if (comments != null && comments.Count > 0)
         {
             int lastIndex = comments.Count - 1;
             while (lastIndex >= 0 && string.IsNullOrWhiteSpace(comments[lastIndex]))
                 lastIndex--;
 
-            for (int idx = 0; idx <= lastIndex; idx++)
-                sb.AppendLine(comments[idx]);
-            sb.AppendLine();
+            for (int index = 0; index <= lastIndex; index++)
+                stringBuilder.AppendLine(comments[index]);
+            stringBuilder.AppendLine();
         }
         else
         {
-            sb.AppendLine("## Shoko Relay AniDB AnimeThemes Xrefs ##\n");
+            stringBuilder.AppendLine("## Shoko Relay AniDB AnimeThemes Xrefs ##\n");
         }
 
-        sb.AppendLine("# filepath, videoId, anidbId, nc, slug, version, songTitle, artistName, lyrics, subbed, uncen, nsfw, spoiler, source, resolution, episodes, overlap");
+        stringBuilder.AppendLine("# filepath, videoId, anidbId, nc, slug, version, songTitle, artistName, lyrics, subbed, uncen, nsfw, spoiler, source, resolution, episodes, overlap");
 
         foreach (var entry in entries)
-            sb.AppendLine(SerializeEntry(entry));
-        return sb.ToString();
+            stringBuilder.AppendLine(SerializeEntry(entry));
+        return stringBuilder.ToString();
     }
 
     /// <summary>Serialize a single AnimeThemesMappingEntry to a comma-separated line.</summary>
@@ -403,7 +403,7 @@ internal static partial class AnimeThemesHelper
     /// <summary>Extracts the numeric suffix from a theme slug, defaulting to 1 if unnumbered or unparseable.</summary>
     /// <param name="baseSlug">The base slug to extract numbers from.</param>
     /// <returns>The extracted number, or 1 if unnumbered.</returns>
-    internal static int ExtractSlugNumber(string baseSlug) => NumberRegex().Match(baseSlug) is { Success: true } match && int.TryParse(match.Value, out var num) ? num : 1;
+    internal static int ExtractSlugNumber(string baseSlug) => NumberRegex().Match(baseSlug) is { Success: true } match && int.TryParse(match.Value, out var numberValue) ? numberValue : 1;
 
     /// <summary>Standardizes a raw or display theme slug into the canonical 'OP#' or 'ED#' format.</summary>
     /// <param name="slug">The slug string to parse.</param>
@@ -417,8 +417,8 @@ internal static partial class AnimeThemesHelper
         if (match.Success)
         {
             string type = match.Groups[1].Value.StartsWith("O", StringComparison.OrdinalIgnoreCase) ? "OP" : "ED";
-            string num = string.IsNullOrEmpty(match.Groups[2].Value) ? "1" : match.Groups[2].Value;
-            return type + num;
+            string numberValue = string.IsNullOrEmpty(match.Groups[2].Value) ? "1" : match.Groups[2].Value;
+            return type + numberValue;
         }
         return rawSlug;
     }

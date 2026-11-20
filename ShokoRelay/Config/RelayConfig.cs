@@ -554,13 +554,13 @@ public class AdvancedConfig
     public int EmptyPlexTrashThreshold { get; set; } = 1;
 
     /// <summary>Plex RefreshMetadataAsync delay.</summary>
-    [Display(Name = "Plex Fixup Delay", Description = "A delay (in minutes) post VFS file add *req. 'Force Partial Scans'")]
+    [Display(Name = "Plex Fixup Delay", Description = "A delay (in minutes) post VFS file add *Requires 'Force Partial Scans'")]
     [Range(1, 60, ErrorMessage = "Plex Fixup Delay must be between 1 and 60")]
     [DefaultValue(2)]
     public int PlexFixupDelay { get; set; } = 2;
 
     /// <summary>Plex partial scan delay, and rating key polling interval for deferred mode.</summary>
-    [Display(Name = "Plex Scan Delay", Description = "A delay (in seconds) post VFS file add *req. 'Force Partial Scans'")]
+    [Display(Name = "Plex Scan Delay", Description = "A delay (in seconds) post VFS file add *Requires 'Force Partial Scans'")]
     [Range(1, 60, ErrorMessage = "Plex Scan Delay must be between 1 and 60")]
     [DefaultValue(5)]
     public int PlexScanDelay { get; set; } = 5;

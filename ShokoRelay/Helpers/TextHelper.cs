@@ -63,6 +63,10 @@ public static partial class TextHelper
     [GeneratedRegex(@"^[a-zA-Z0-9.\-_]+(:\d+)?$|^\[[a-fA-F0-9:]+\](:\d+)?$")]
     public static partial Regex ForwardedHostRegex();
 
+    /// <summary>Regex matching valid Shoko theme identifiers.</summary>
+    [GeneratedRegex(@"^[A-Za-z0-9][A-Za-z0-9_-]*$")]
+    public static partial Regex ThemeIdRegex();
+
     #endregion
 
     #region General Text Helpers
@@ -74,9 +78,9 @@ public static partial class TextHelper
     public const string HairSpace = "\u200A";
 
     /// <summary>Replace runs of two or more whitespace characters with a single space.</summary>
-    /// <param name="input">The string to process.</param>
+    /// <param name="inputText">The string to process.</param>
     /// <returns>The condensed string.</returns>
-    public static string CondenseSpaces(string input) => CondenseSpacesRegex().Replace(input, " ");
+    public static string CondenseSpaces(string inputText) => CondenseSpacesRegex().Replace(inputText, " ");
 
     /// <summary>Replace literal commas with the unicode escape \u002C.</summary>
     /// <param name="value">The string to escape.</param>
@@ -392,7 +396,7 @@ public static partial class TextHelper
             resolvedSeriesTitle = "Unknown";
 
         // Fast-path: Check if there is more than 1 main episode by skipping the first match. This avoids iterating over the entire episode list.
-        bool hasMultipleMainEpisodes = series.Episodes.Where(ep => ep.Type == EpisodeType.Episode).Skip(1).Any();
+        bool hasMultipleMainEpisodes = series.Episodes.Where(episode => episode.Type == EpisodeType.Episode).Skip(1).Any();
         if (!hasMultipleMainEpisodes)
             return resolvedSeriesTitle;
 

@@ -153,9 +153,9 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
                         logger.LogDebug("SourceLinkService: Created link -> {Link}", logMsg);
                     }
                 }
-                catch (Exception ex)
+                catch (Exception exception)
                 {
-                    logger.LogError(ex, "SourceLinkService: SourceLink failed for source -> {Path}", srcInfo.Path);
+                    logger.LogError(exception, "SourceLinkService: SourceLink failed for source -> {Path}", srcInfo.Path);
                 }
             }
 
@@ -167,9 +167,9 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
                 {
                     await videoService.NotifyVideoFileChangeDetected(dir).ConfigureAwait(false);
                 }
-                catch (Exception ex)
+                catch (Exception exception)
                 {
-                    logger.LogWarning(ex, "SourceLinkService: Failed to notify directory change for {Dir}", dir);
+                    logger.LogWarning(exception, "SourceLinkService: Failed to notify directory change for {Dir}", dir);
                 }
         }
 
@@ -225,14 +225,14 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
                             deleted += PurgeDirectoryLinks(entry, protectedFolders, details, logger);
                     }
                 }
-                catch (Exception ex)
+                catch (Exception exception)
                 {
-                    logger.LogWarning(ex, "SourceLinkService: Failed to purge entry -> {Entry}", entry);
+                    logger.LogWarning(exception, "SourceLinkService: Failed to purge entry -> {Entry}", entry);
                 }
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            logger.LogTrace(ex, "SourceLinkService: Purge failed for -> {Path}", path);
+            logger.LogTrace(exception, "SourceLinkService: Purge failed for -> {Path}", path);
         }
         return deleted;
     }

@@ -75,7 +75,7 @@ public class CollectionService(
         await _buildLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         bool startedTask = TaskHelper.StartTask(TaskName);
         logger.LogInformation("CollectionService: Starting task...");
-        var sw = Stopwatch.StartNew();
+        var stopwatch = Stopwatch.StartNew();
         try
         {
             var (created, uploaded, alreadyUploaded, errors, uniqueSeries) = (0, 0, 0, 0, new HashSet<int>());
@@ -84,7 +84,7 @@ public class CollectionService(
             var targets = plexClient.GetConfiguredTargets();
 
             if (targets.Count == 0 || allowedIds is { Count: 0 })
-                return new BuildCollectionsResult(0, 0, 0, 0, 0, 0, 0, createdList, uploadedDetails, [], errorsList, sw.Elapsed);
+                return new BuildCollectionsResult(0, 0, 0, 0, 0, 0, 0, createdList, uploadedDetails, [], errorsList, stopwatch.Elapsed);
 
             var excludedKeywords = (Settings.Advanced.CollectionExclusions ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
@@ -109,7 +109,7 @@ public class CollectionService(
 
             // Prune cache entries belonging to library sections that are no longer configured or discovered in Plex
             var validSectionIds = new HashSet<string>(targets.Select(target => target.SectionId.ToString()));
-            var staleSectionKeys = cache.Keys.Where(cacheKey => cacheKey.IndexOf('|') is int idx && idx > 0 && !validSectionIds.Contains(cacheKey[..idx])).ToList();
+            var staleSectionKeys = cache.Keys.Where(cacheKey => cacheKey.IndexOf('|') is int index && index > 0 && !validSectionIds.Contains(cacheKey[..index])).ToList();
             if (staleSectionKeys.Count > 0)
             {
                 foreach (var key in staleSectionKeys)
@@ -151,9 +151,9 @@ public class CollectionService(
                                         }
                                         catch { }
                             }
-                            catch (Exception ex)
+                            catch (Exception exception)
                             {
-                                logger.LogWarning(ex, "CollectionService: Failed to prune {Folder} for collection '{Title}'", folder, collection.Title);
+                                logger.LogWarning(exception, "CollectionService: Failed to prune {Folder} for collection '{Title}'", folder, collection.Title);
                             }
                         }
                     }
@@ -174,9 +174,9 @@ public class CollectionService(
                         var ratingKeys = await plexClient.FindRatingKeysForShokoSeriesInSectionAsync(seriesId, target, metadataService, cancellationToken).ConfigureAwait(false);
                         foreach (var ratingKey in ratingKeys)
                         {
-                            using var req = plexClient.CreateRequest(HttpMethod.Get, $"/library/metadata/{ratingKey}?X-Plex-Container-Start=0&X-Plex-Container-Size=1", target.ServerUrl);
-                            using var resp = await plexClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
-                            if ((await PlexApi.ReadContainerAsync(resp, cancellationToken).ConfigureAwait(false))?.Metadata?.FirstOrDefault() is { } item)
+                            using var request = plexClient.CreateRequest(HttpMethod.Get, $"/library/metadata/{ratingKey}?X-Plex-Container-Start=0&X-Plex-Container-Size=1", target.ServerUrl);
+                            using var response = await plexClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+                            if ((await PlexApi.ReadContainerAsync(response, cancellationToken).ConfigureAwait(false))?.Metadata?.FirstOrDefault() is { } item)
                                 items.Add(item);
                         }
                     }
@@ -409,8 +409,8 @@ public class CollectionService(
                 }
                 catch { }
 
-            sw.Stop();
-            logger.LogInformation("CollectionService: Task finished -> {Count} collections assigned in {Elapsed}ms", created, sw.ElapsedMilliseconds);
+            stopwatch.Stop();
+            logger.LogInformation("CollectionService: Task finished -> {Count} collections assigned in {Elapsed}ms", created, stopwatch.ElapsedMilliseconds);
             return new BuildCollectionsResult(
                 uniqueSeries.Count,
                 created,
@@ -423,7 +423,7 @@ public class CollectionService(
                 uploadedDetails,
                 deletedList,
                 errorsList,
-                sw.Elapsed
+                stopwatch.Elapsed
             );
         }
         finally

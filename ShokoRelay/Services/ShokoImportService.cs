@@ -21,18 +21,18 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
             if (videoService.GetAllManagedFolders() is { } managedFolders)
                 folders = [.. managedFolders.Select(folder => folder.Name ?? folder.Path ?? string.Empty).Where(name => !string.IsNullOrEmpty(name))];
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            logger.LogWarning(ex, "ShokoImportService: failed to query managed folders");
+            logger.LogWarning(exception, "ShokoImportService: failed to query managed folders");
         }
 
         try
         {
             await videoService.ScheduleScanForManagedFolders(onlyDropSources: false, forceScan: true).ConfigureAwait(false);
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            logger.LogWarning(ex, "ShokoImportService: failed to schedule folder scan");
+            logger.LogWarning(exception, "ShokoImportService: failed to schedule folder scan");
         }
 
         return folders;

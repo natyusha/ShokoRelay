@@ -161,18 +161,18 @@ public class SyncToShoko(
                 shokoUserLookup[mappedUsername] = resolved = userService.GetUserByUsername(mappedUsername);
             if (resolved == null)
             {
-                string msg = $"Mapped Shoko user '{mappedUsername}' not found for Plex user '{plexUserName}'";
-                logger.LogWarning("WatchedSyncService: {Message}", msg);
-                result = SyncHelper.RecordError(result, result.PerUser, plexUserName, msg);
+                string message = $"Mapped Shoko user '{mappedUsername}' not found for Plex user '{plexUserName}'";
+                logger.LogWarning("WatchedSyncService: {Message}", message);
+                result = SyncHelper.RecordError(result, result.PerUser, plexUserName, message);
             }
             return resolved;
         }
 
-        IEpisodeUserData? GetCachedUserData(IShokoEpisode ep, IUser targetShokoUser)
+        IEpisodeUserData? GetCachedUserData(IShokoEpisode episode, IUser targetShokoUser)
         {
-            var key = (targetShokoUser.LocalID, ep.LocalID);
+            var key = (targetShokoUser.LocalID, episode.LocalID);
             if (!userDataCache.TryGetValue(key, out var epUserData))
-                userDataCache[key] = epUserData = userDataService.GetEpisodeUserData(ep, targetShokoUser);
+                userDataCache[key] = epUserData = userDataService.GetEpisodeUserData(episode, targetShokoUser);
             return epUserData;
         }
 

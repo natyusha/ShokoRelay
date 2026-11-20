@@ -5,7 +5,7 @@
 (() => {
   if (window.self === window.top) document.documentElement.style.scrollbarGutter = "stable";
 
-  const { base, el, TOAST_MS, fetchJson, showToast, toastOperation, getData, openModal } = window._sr;
+  const { base, element, TOAST_MS, fetchJson, showToast, toastOperation, getData, openModal } = window._sr;
 
   /** @type {string[]} Array of all managed task identifiers configured on the server. */
   const MANAGED_TASK_IDS = Object.values(window._sr?.tasks || {});
@@ -39,14 +39,14 @@
     if (isTaskSyncing) return;
     isTaskSyncing = true;
     try {
-      const res = await fetchJson(base + "/tasks/active", {}, false);
-      if (!res.ok) return;
-      const activeTasks = getData(res) || [];
+      const response = await fetchJson(base + "/tasks/active", {}, false);
+      if (!response.isOk) return;
+      const activeTasks = getData(response) || [];
       const isAutoRunning = activeTasks.includes(window._sr.tasks.plexAutomationRun);
       const isPlexLinked = !!window._sr.isPlexLinked;
 
       MANAGED_TASK_IDS.forEach((id) => {
-        const btn = el(id);
+        const btn = element(id);
         if (!btn) return;
 
         if (isAutoRunning && [window._sr.tasks.plexCollectionsBuild, window._sr.tasks.plexRatingsApply, window._sr.tasks.plexImagesSync].includes(id)) {
@@ -60,15 +60,15 @@
 
       const completeRes = await fetchJson(base + "/tasks/completed", {}, false);
       const completeData = getData(completeRes);
-      if (completeRes.ok && completeData) {
+      if (completeRes.isOk && completeData) {
         let hasNewLogs = false;
         for (const [taskName, result] of Object.entries(completeData)) {
-          const btn = el(taskName);
+          const btn = element(taskName);
           if (btn?.classList.contains("clicking")) continue;
           const isOk = (result.status || result.Status || "").toLowerCase() === "ok";
           const filterInput = btn?.dataset.relayPersistIfEmpty ? document.querySelector(btn.dataset.relayPersistIfEmpty) : null;
 
-          toastOperation({ ok: isOk, data: result }, taskName.replace(/-/g, " "), { hideOnSucceed: filterInput?.value?.trim() ? TOAST_MS : 0 });
+          toastOperation({ isOk: isOk, data: result }, taskName.replace(/-/g, " "), { hideOnSucceed: filterInput?.value?.trim() ? TOAST_MS : 0 });
           await fetchJson(base + `/tasks/clear/${taskName}`, { method: "POST" }, false);
           hasNewLogs = true;
           if (taskName === window._sr.tasks.plexAuthRefresh) window._sr.refreshPlexState?.();
@@ -85,17 +85,17 @@
    * @returns {Promise<void>}
    */
   async function loadLogs() {
-    const logsList = el("logs-list");
+    const logsList = element("logs-list");
     if (!logsList) return;
 
-    const res = await fetchJson(base + "/logs/list");
-    if (res.ok) {
-      const files = getData(res) || [];
+    const response = await fetchJson(base + "/logs/list");
+    if (response.isOk) {
+      const files = getData(response) || [];
       if (files.length > 0) {
         logsList.innerHTML = "";
         files.forEach((file) => {
-          const li = document.createElement("li");
-          li.className = "log-item";
+          const listItem = document.createElement("li");
+          listItem.className = "log-item";
 
           const link = document.createElement("a");
           link.href = `${base}/logs/${file.name}`;
@@ -107,8 +107,8 @@
           const small = document.createElement("small");
           small.textContent = ` (${file.name})`;
 
-          li.append(link, small);
-          logsList.appendChild(li);
+          listItem.append(link, small);
+          logsList.appendChild(listItem);
         });
       } else {
         logsList.innerHTML = '<li class="placeholder">No log reports generated yet. Click any "Generate" or automation button on the dashboard to start a task.</li>';
@@ -147,7 +147,7 @@
    * @returns {HTMLElement|null} The resolved button element.
    */
   function initToggle(btn, defaultState = false) {
-    const elBtn = typeof btn === "string" ? el(btn) : btn;
+    const elBtn = typeof btn === "string" ? element(btn) : btn;
     if (!elBtn) return null;
     if (!elBtn.hasAttribute("aria-pressed")) elBtn.setAttribute("aria-pressed", String(!!defaultState));
     elBtn.onclick = () => elBtn.setAttribute("aria-pressed", elBtn.getAttribute("aria-pressed") === "true" ? "false" : "true");
@@ -167,15 +167,15 @@
      * @returns {void}
      */
     withButtonAction: (btn, handler) => {
-      const elBtn = typeof btn === "string" ? el(btn) : btn;
+      const elBtn = typeof btn === "string" ? element(btn) : btn;
       if (elBtn) elBtn.onclick = () => runAction(elBtn, handler);
     },
   });
   // #endregion
 
   // #region Global Dispatcher
-  document.addEventListener("click", (ev) => {
-    const target = ev.target.closest("[data-relay-endpoint], [data-relay-action]");
+  document.addEventListener("click", (event) => {
+    const target = event.target.closest("[data-relay-endpoint], [data-relay-action]");
     if (!target) return;
 
     const action = async (btn, forceDryRun = false) => {
@@ -200,27 +200,27 @@
           if (input && !input.value.trim()) hideOnSucceed = 0;
         }
         showToast(`${label}${forceDryRun ? " (Dry Run)" : ""}: Processing...`, "info", TOAST_MS);
-        const res = await fetchJson(url, { method });
-        toastOperation(res, label, { hideOnSucceed });
-        if (btn.id === window._sr.tasks.plexAuthRefresh && res.ok) window._sr.refreshPlexState?.();
+        const response = await fetchJson(url, { method });
+        toastOperation(response, label, { hideOnSucceed });
+        if (btn.id === window._sr.tasks.plexAuthRefresh && response.isOk) window._sr.refreshPlexState?.();
       } else if (actionKey) {
         const handler = window._sr.actions[actionKey];
         if (handler) await handler(btn);
       }
     };
 
-    ev.preventDefault();
+    event.preventDefault();
     const confirmMsg = target.dataset.relayConfirm;
     if (confirmMsg) {
-      const modal = el("confirm-modal");
-      const msg = el("confirm-message");
-      const execBtn = el("confirm-exec");
-      const dryBtn = el("confirm-dry");
-      msg.innerHTML = confirmMsg;
+      const modal = element("confirm-modal");
+      const message = element("confirm-message");
+      const execBtn = element("confirm-exec");
+      const dryBtn = element("confirm-dry");
+      message.innerHTML = confirmMsg;
       execBtn.textContent = target.dataset.relayConfirmButton || "Confirm";
       dryBtn.style.display = target.dataset.relayConfirmDry === "true" ? "" : "none"; // Dynamically display the Dry Run button only if explicitly supported by the action
       const close = openModal(modal);
-      el("confirm-cancel").onclick = close;
+      element("confirm-cancel").onclick = close;
       execBtn.onclick = () => {
         close();
         runAction(target, (btn) => action(btn, false));

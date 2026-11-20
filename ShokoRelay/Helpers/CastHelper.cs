@@ -363,7 +363,7 @@ public static class CastHelper
 
         if (Settings.CompanyListings && item is ISeries series)
         {
-            var anidbMergedStudios = (metadataService != null && series is IShokoSeries { AnidbAnimeID: > 0 } ss) ? metadataService.GetMergedStudios(ss.AnidbAnimeID) : [];
+            var anidbMergedStudios = (metadataService != null && series is IShokoSeries { AnidbAnimeID: > 0 } shokoSeries) ? metadataService.GetMergedStudios(shokoSeries.AnidbAnimeID) : [];
 
             var animationStudioNames = anidbMergedStudios.Select(studio => studio.Name).Where(name => !string.IsNullOrWhiteSpace(name)).ToHashSet(StringComparer.OrdinalIgnoreCase);
             var networkNames = tmdbSeries?.Networks?.Select(network => network.Name).Where(name => !string.IsNullOrWhiteSpace(name)).ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
@@ -474,12 +474,12 @@ public static class CastHelper
             trimmed = trimmed[..^5].TrimEnd();
 
         var normalized = trimmed.Normalize(NormalizationForm.FormD);
-        var sb = new StringBuilder(normalized.Length);
+        var stringBuilderNorm = new StringBuilder(normalized.Length);
         foreach (char ch in normalized)
             if (CharUnicodeInfo.GetUnicodeCategory(ch) != UnicodeCategory.NonSpacingMark && char.IsLetterOrDigit(ch))
-                sb.Append(char.ToLowerInvariant(ch));
+                stringBuilderNorm.Append(char.ToLowerInvariant(ch));
 
-        return sb.ToString();
+        return stringBuilderNorm.ToString();
     }
 
     /// <summary>Assemble an array of <see cref="TagItem"/> objects representing the series' studios, utilizing Shoko's native cross-source merging.</summary>
@@ -490,11 +490,11 @@ public static class CastHelper
     {
         EnsureWarmed(metadataService);
 
-        if (series is not IShokoSeries { AnidbAnimeID: > 0 } ss || metadataService.GetMergedStudios(ss.AnidbAnimeID) is not { Count: > 0 } studios)
+        if (series is not IShokoSeries { AnidbAnimeID: > 0 } shokoSeries || metadataService.GetMergedStudios(shokoSeries.AnidbAnimeID) is not { Count: > 0 } studios)
             return [];
 
-        if (s_recordedSeriesIds.TryAdd(ss.LocalID, 0))
-            RecordSeriesCredits(ss, null);
+        if (s_recordedSeriesIds.TryAdd(shokoSeries.LocalID, 0))
+            RecordSeriesCredits(shokoSeries, null);
 
         return
         [

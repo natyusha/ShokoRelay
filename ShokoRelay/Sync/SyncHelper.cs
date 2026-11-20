@@ -450,9 +450,9 @@ public static class SyncHelper
                                 break;
                         }
                     }
-                    catch (Exception ex)
+                    catch (Exception exception)
                     {
-                        logger?.LogDebug(ex, "WatchedSyncService: failed to resolve server access token for Home user; falling back to switched user token");
+                        logger?.LogDebug(exception, "WatchedSyncService: failed to resolve server access token for Home user; falling back to switched user token");
                     }
 
                     return tokenCache.ResolvedTokens[cacheKey] = (!string.IsNullOrWhiteSpace(serverAccessToken) ? serverAccessToken : switchedToken, false);
@@ -461,9 +461,9 @@ public static class SyncHelper
                 logger?.LogInformation("WatchedSyncService: SwitchHomeUser returned no token for Home user '{User}' (id={Id}); checking Shared Servers...", userName, matchedHome.Id);
             }
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            logger?.LogWarning(ex, "WatchedSyncService: failed Home lookup for Plex user '{User}'", userName);
+            logger?.LogWarning(exception, "WatchedSyncService: failed Home lookup for Plex user '{User}'", userName);
         }
 
         // Fallback for regular non-Home Plex friends (or Home users whose switch failed) via Shared Servers API
@@ -533,9 +533,9 @@ public static class SyncHelper
                     return tokenCache.ResolvedTokens[cacheKey] = (sharedMatch.AccessToken, true);
                 }
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
-                logger?.LogWarning(ex, "WatchedSyncService: failed Shared Server lookup for Plex user '{User}'", userName);
+                logger?.LogWarning(exception, "WatchedSyncService: failed Shared Server lookup for Plex user '{User}'", userName);
             }
         }
 
@@ -606,9 +606,9 @@ public static class SyncHelper
                 var (effectiveToken, isSharedFriend) = await ResolvePlexUserTokenAsync(plexAuth, configProvider, target, name, pin, tokenCache, logger, cancellationToken).ConfigureAwait(false);
                 if (string.IsNullOrWhiteSpace(effectiveToken))
                 {
-                    string msg = $"Could not resolve Plex access token for configured user '{name}' on '{target.ServerName}'";
-                    logger?.LogWarning("WatchedSyncService: {Message}", msg);
-                    result = RecordError(result, result.PerUser, name, msg);
+                    string message = $"Could not resolve Plex access token for configured user '{name}' on '{target.ServerName}'";
+                    logger?.LogWarning("WatchedSyncService: {Message}", message);
+                    result = RecordError(result, result.PerUser, name, message);
                     continue;
                 }
 
@@ -628,11 +628,11 @@ public static class SyncHelper
                 );
                 userBuckets.Add(new PlexUserBucket(name, shokoUser, list, effectiveToken, isSharedFriend));
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
-                string msg = $"Failed to fetch {typeLabel} for Plex user '{name}' from {target.ServerUrl}:{target.SectionId}";
-                logger?.LogWarning(ex, "WatchedSyncService: {Message}", msg);
-                result = RecordError(result, result.PerUser, name, $"{msg} -> {ex.Message}");
+                string message = $"Failed to fetch {typeLabel} for Plex user '{name}' from {target.ServerUrl}:{target.SectionId}";
+                logger?.LogWarning(exception, "WatchedSyncService: {Message}", message);
+                result = RecordError(result, result.PerUser, name, $"{message} -> {exception.Message}");
             }
         }
 

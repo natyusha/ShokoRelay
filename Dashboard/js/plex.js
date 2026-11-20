@@ -3,7 +3,7 @@
  * @description Dedicated logic for the Plex Auth and Automations on the Shoko Relay dashboard.
  */
 (() => {
-  const { base, configUrl, el, fetchJson, unwrapConfig, saveSettings, getData, withButtonAction } = window._sr;
+  const { base, configUrl, element, fetchJson, unwrapConfig, saveSettings, getData, withButtonAction } = window._sr;
 
   /** @type {string} The unique identifier for the current Plex PIN request. */
   let plexPinId = "";
@@ -28,9 +28,9 @@
    */
   function setPlexStartAction() {
     stopPlexPolling();
-    const authAction = el("plex-auth-action");
+    const authAction = element("plex-auth-action");
     if (authAction) authAction.querySelectorAll(".plex-auth-state").forEach((elem) => (elem.hidden = elem.tagName !== "BUTTON"));
-    el("plex-login")?.remove();
+    element("plex-login")?.remove();
     withButtonAction("plex-start", startPlexAuth);
   }
   // #endregion
@@ -41,19 +41,19 @@
    * @returns {Promise<void>}
    */
   async function startPlexAuth() {
-    const res = await fetchJson(base + "/plex/auth");
-    const pinData = getData(res);
+    const response = await fetchJson(base + "/plex/auth");
+    const pinData = getData(response);
 
-    if (!res.ok || !pinData?.pinId || !pinData?.authUrl) return setPlexStartAction();
+    if (!response.isOk || !pinData?.pinId || !pinData?.authUrl) return setPlexStartAction();
 
     plexPinId = pinData.pinId;
-    const authAction = el("plex-auth-action");
+    const authAction = element("plex-auth-action");
     if (authAction) {
       // Hide the initial buttons while the login link is active
       authAction.querySelectorAll(".plex-auth-state").forEach((elem) => (elem.hidden = true));
 
       // Create or update the login link
-      let loginLink = el("plex-login");
+      let loginLink = element("plex-login");
       if (!loginLink) {
         loginLink = document.createElement("a");
         loginLink.id = "plex-login";
@@ -69,7 +69,7 @@
       const sRes = await fetchJson(`${base}/plex/auth/status?pinId=${encodeURIComponent(plexPinId)}`);
       const sData = getData(sRes);
 
-      if (sRes.ok && sData?.tokenSaved) {
+      if (sRes.isOk && sData?.tokenSaved) {
         stopPlexPolling();
         refreshPlexState();
       }
@@ -82,14 +82,14 @@
    */
   async function refreshPlexState() {
     await window._sr.flushSaves?.();
-    const res = await fetchJson(configUrl);
-    if (!res.ok) {
+    const response = await fetchJson(configUrl);
+    if (!response.isOk) {
       window._sr.isPlexLinked = false;
       window._sr.updateControlStates?.();
       return;
     }
 
-    const settings = window._sr.syncConfig(unwrapConfig(res.data));
+    const settings = window._sr.syncConfig(unwrapConfig(response.data));
     const plex = settings.PlexLibrary || {};
     const isLinked = !!plex.HasToken;
 
@@ -101,18 +101,18 @@
     bindField("plex-scan-vfs", "Automation.ScanOnVfsRefresh", "check");
     bindField("plex-scrobble", "Automation.AutoScrobble", "check");
 
-    const authAction = el("plex-auth-action");
+    const authAction = element("plex-auth-action");
     if (authAction) authAction.querySelectorAll(".plex-auth-state").forEach((elem) => (elem.hidden = !(isLinked ? elem.tagName === "DIV" : elem.tagName === "BUTTON")));
 
     if (!isLinked) {
       withButtonAction("plex-start", startPlexAuth);
     } else {
-      el("plex-login")?.remove();
-      const unlinkBtn = el("plex-unlink");
+      element("plex-login")?.remove();
+      const unlinkBtn = element("plex-unlink");
       if (unlinkBtn) unlinkBtn.onclick = unlinkPlex;
     }
 
-    const libStatus = el("plex-libraries-status");
+    const libStatus = element("plex-libraries-status");
     if (libStatus) {
       const count = (plex.DiscoveredLibraries || []).length;
       let text = "(No Libraries Detected)";
@@ -123,7 +123,7 @@
 
     // Resolve the Plex Web App link dynamically from discovered targets
     const plexWebUrl = settings.Advanced?.PlexServerUrl || plex.DiscoveredLibraries?.[0]?.ServerUrl || plex.DiscoveredServers?.[0]?.PreferredUri || "";
-    const webLink = el("plex-web-link");
+    const webLink = element("plex-web-link");
     if (webLink) {
       webLink.onclick = () => plexWebUrl && window.open(plexWebUrl, "_blank", "noopener,noreferrer");
       webLink.title = plexWebUrl ? `Open Plex Web @ ${plexWebUrl}` : "Open Plex Web App";

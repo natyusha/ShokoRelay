@@ -3,20 +3,20 @@
  * @description Logic for the Shoko Relay VFS Browser, providing a hierarchical view of the virtual filesystem.
  */
 (() => {
-  const { base, shokoBase, el, esc, fetchJson, showToast, toastOperation, getData, initSearchInteractions, TOAST_MS } = window._sr;
+  const { base, shokoBase, element, esc, fetchJson, showToast, toastOperation, getData, initSearchInteractions, TOAST_MS } = window._sr;
 
   /** @type {HTMLElement} The container element for the VFS tree. */
-  const vfsTree = el("tree");
+  const vfsTree = element("tree");
   /** @type {HTMLInputElement} The search filter input element. */
-  const uiFilter = el("filter");
+  const uiFilter = element("filter");
   /** @type {HTMLButtonElement} The clear button for the search filter. */
-  const uiFilterClear = el("filter-clear");
+  const uiFilterClear = element("filter-clear");
   /** @type {HTMLElement} The element displaying the total series count. */
-  const vfsCount = el("vfs-count");
+  const vfsCount = element("vfs-count");
   /** @type {HTMLButtonElement} The button used to refresh VFS Browser series titles and tree data. */
-  const vfsRefresh = el("vfs-refresh");
+  const vfsRefresh = element("vfs-refresh");
   /** @type {HTMLElement} The container element for the root selection tabs. */
-  const rootTabs = el("root-tabs");
+  const rootTabs = element("root-tabs");
 
   /** @type {string} Local storage key for persisting the active tab. */
   const TABS_KEY = "vfs-active-tab";
@@ -37,14 +37,14 @@
     const taskName = window._sr.tasks.vfsBuild;
 
     showToast(`${label}: Refreshing...`, "info", TOAST_MS);
-    const res = await fetchJson(`${base}/vfs?run=true&clean=false&filter=${id}`);
+    const response = await fetchJson(`${base}/vfs?run=true&clean=false&filter=${id}`);
 
     // Immediately clear the task result on the server. This prevents syncActiveTasks in script.js from showing a redundant fallback toast for this operation.
     if (taskName) await fetchJson(`${base}/tasks/clear/${taskName}`, { method: "POST" }, false);
 
-    toastOperation(res, label, { hideOnSucceed: TOAST_MS });
+    toastOperation(response, label, { hideOnSucceed: TOAST_MS });
 
-    if (res.ok) await loadVfsTree(false); // Reload the tree data in-place without showing the full loading spinner
+    if (response.isOk) await loadVfsTree(false); // Reload the tree data in-place without showing the full loading spinner
   }
 
   /**
@@ -151,7 +151,7 @@
     }
 
     const existing = rootTabs.querySelectorAll(".tab-btn");
-    const matchesRoots = existing.length === displayRoots.length && [...existing].every((btn, idx) => btn.textContent === displayRoots[idx].name);
+    const matchesRoots = existing.length === displayRoots.length && [...existing].every((btn, index) => btn.textContent === displayRoots[index].name);
     if (matchesRoots && existing.length > 0) {
       existing.forEach((btn) => btn.classList.toggle("active", btn.textContent === activeTabName));
       return;
@@ -186,10 +186,10 @@
     const [treeRes, mp3Res] = await Promise.all([fetchJson(treeEndpoint), fetchJson(`${base}/animethemes/mp3/cache`)]);
 
     window._sr.mp3Cache = {};
-    if (mp3Res.ok) {
+    if (mp3Res.isOk) {
       const data = getData(mp3Res) || {};
-      for (const [key, val] of Object.entries(data)) {
-        const parts = (val || "").split("|");
+      for (const [key, value] of Object.entries(data)) {
+        const parts = (value || "").split("|");
         window._sr.mp3Cache[key.replace(/\\/g, "/").toLowerCase()] = {
           slug: parts[0] || "",
           upgrade: parts[1] || "",
@@ -197,7 +197,7 @@
       }
     }
 
-    if (treeRes.ok) {
+    if (treeRes.isOk) {
       const roots = getData(treeRes)?.roots || [];
       if (roots.length > 1) {
         const allRoot = buildAllTab(roots);
@@ -223,7 +223,7 @@
    * @returns {HTMLLIElement} The file list item element.
    */
   const createFileLeaf = (file) => {
-    const li = document.createElement("li");
+    const listItem = document.createElement("li");
     const leaf = document.createElement("div");
     leaf.className = "leaf";
 
@@ -240,8 +240,8 @@
     sourceSpan.dataset.tooltipOverflowOnly = "true";
 
     leaf.append(nameSpan, sourceSpan);
-    li.appendChild(leaf);
-    return li;
+    listItem.appendChild(leaf);
+    return listItem;
   };
 
   /**
@@ -282,11 +282,11 @@
   /**
    * Dynamically renders and appends the seasons and root files for a specific series.
    * @param {Object} series - The series data object.
-   * @param {HTMLUListElement} ul - The container element to append items to.
+   * @param {HTMLUListElement} unorderedList - The container element to append items to.
    * @param {boolean} [forceRender=false] - If true, forces nested season files to render immediately.
    * @returns {void}
    */
-  function renderSeriesContents(series, ul, forceRender = false) {
+  function renderSeriesContents(series, unorderedList, forceRender = false) {
     const movieSeasons = (series.seasons || []).filter((season) => season.name.startsWith("Movie ❯ "));
     const regularSeasons = (series.seasons || []).filter((season) => !season.name.startsWith("Movie ❯ "));
     let movieCount = 0;
@@ -320,14 +320,14 @@
       );
 
       seasonLi.appendChild(seasonDet);
-      ul.appendChild(seasonLi);
+      unorderedList.appendChild(seasonLi);
     };
 
     // Movie Branches First
     movieSeasons.forEach(renderSeason);
 
     // Root Files Second (e.g. Theme.mp3)
-    (series.rootFiles || []).forEach((file) => ul.appendChild(createFileLeaf(file)));
+    (series.rootFiles || []).forEach((file) => unorderedList.appendChild(createFileLeaf(file)));
 
     // Regular TV Seasons Third
     regularSeasons.forEach(renderSeason);
@@ -356,11 +356,11 @@
     rootUl.className = "tree";
 
     items.forEach((series) => {
-      const li = document.createElement("li");
-      const ul = document.createElement("ul");
+      const listItem = document.createElement("li");
+      const unorderedList = document.createElement("ul");
       const details = window._sr.createLazyDetails(
         "",
-        ul,
+        unorderedList,
         (container) => {
           renderSeriesContents(series, container, false);
         },
@@ -372,9 +372,9 @@
       refresh.className = "refresh-btn";
       refresh.textContent = "⟳";
       refresh.title = "Refresh VFS Folder";
-      refresh.onclick = (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
+      refresh.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
         refreshSeries(series.id);
       };
 
@@ -414,9 +414,9 @@
       }
 
       if (!hasTheme) {
-        theme.onclick = async (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
+        theme.onclick = async (event) => {
+          event.preventDefault();
+          event.stopPropagation();
 
           if (!firstFile || !firstFile.source) {
             showToast("VFS: No physical source files found to resolve paths", "error", TOAST_MS);
@@ -428,17 +428,17 @@
           const label = `Theme MP3 [${series.id}]`;
           showToast(`${label}: Generating...`, "info", TOAST_MS);
 
-          const res = await fetchJson(`${base}/animethemes/mp3?path=${encodeURIComponent(physicalPath)}`);
-          toastOperation(res, label, { hideOnSucceed: TOAST_MS });
+          const response = await fetchJson(`${base}/animethemes/mp3?path=${encodeURIComponent(physicalPath)}`);
+          toastOperation(response, label, { hideOnSucceed: TOAST_MS });
 
-          const themeData = getData(res);
-          if (res.ok && (themeData?.Status === "ok" || themeData?.status === "ok")) refreshSeries(series.id);
+          const themeData = getData(response);
+          if (response.isOk && (themeData?.Status === "ok" || themeData?.status === "ok")) refreshSeries(series.id);
         };
       } else {
         // Swallows the click to prevent the parent VFS details folder from toggling
-        theme.onclick = (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
+        theme.onclick = (event) => {
+          event.preventDefault();
+          event.stopPropagation();
         };
       }
 
@@ -453,8 +453,8 @@
       summary.appendChild(theme);
       summary.insertAdjacentHTML("beforeend", titleHtml);
       summary.title = series.title; // Set exact title override
-      li.appendChild(details);
-      rootUl.appendChild(li);
+      listItem.appendChild(details);
+      rootUl.appendChild(listItem);
     });
 
     vfsTree.appendChild(rootUl);

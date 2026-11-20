@@ -19,16 +19,23 @@ namespace ShokoRelay;
 public class ServiceRegistration : IPluginServiceRegistration
 {
     /// <summary>The explicitly registered metadata source used to claim ownership of local images uploaded by this plugin.</summary>
-    public static MetadataSource RelaySource { get; private set; } = null!;
+    public static MetadataSource RelaySource { get; private set; }
 
     /// <summary>The explicitly registered metadata source used to claim ownership of Plex thumbnails uploaded by this plugin.</summary>
-    public static MetadataSource RelayPlexSource { get; private set; } = null!;
+    public static MetadataSource RelayPlexSource { get; private set; }
+
+    /// <summary>Initializes metadata sources before any reflective resolution or service provider building occurs.</summary>
+    static ServiceRegistration()
+    {
+        RelaySource = MetadataSource.Register("Shoko Relay (Local)", ShokoRelayConstants.RelaySourceId, local: true, description: "Local images uploaded and managed by Shoko Relay.");
+        RelayPlexSource = MetadataSource.Register("Shoko Relay (Plex)", ShokoRelayConstants.RelayPlexSourceId, local: true, description: "Plex thumbnails uploaded and managed by Shoko Relay.");
+    }
 
     /// <inheritdoc/>
     public static void RegisterServices(IServiceCollection serviceCollection, IApplicationPaths applicationPaths)
     {
-        RelaySource = MetadataSource.Register("Shoko Relay (Local)", ShokoRelayConstants.RelaySourceId, local: true, description: "Local images uploaded and managed by Shoko Relay.");
-        RelayPlexSource = MetadataSource.Register("Shoko Relay (Plex)", ShokoRelayConstants.RelayPlexSourceId, local: true, description: "Plex thumbnails uploaded and managed by Shoko Relay.");
+        _ = RelaySource;
+        _ = RelayPlexSource;
 
         serviceCollection.AddHttpContextAccessor();
 
@@ -191,9 +198,9 @@ public class ShokoRelay : BackgroundService
             _logger.LogInformation("Relay waiting for Shoko Server to reach 'Started' state...");
             await _systemService.WaitForStartupAsync().WaitAsync(stoppingToken).ConfigureAwait(false);
         }
-        catch (StartupFailedException ex)
+        catch (StartupFailedException exception)
         {
-            _logger.LogError(ex, "Shoko Server failed to start -> Relay exiting.");
+            _logger.LogError(exception, "Shoko Server failed to start -> Relay exiting.");
             return;
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -221,9 +228,9 @@ public class ShokoRelay : BackgroundService
                         CastHelper.WarmCache(_metadataService, stoppingToken);
                     }
                     catch (OperationCanceledException) { }
-                    catch (Exception ex)
+                    catch (Exception exception)
                     {
-                        _logger.LogWarning(ex, "Relay: Failed to warm tag/credit caches");
+                        _logger.LogWarning(exception, "Relay: Failed to warm tag/credit caches");
                     }
                 },
                 stoppingToken

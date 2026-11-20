@@ -46,7 +46,7 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
         // Refresh the override cache to catch any link changes made in Shoko since the last operation. This includes VFS Overrides and if MergeTmdbSeries is enabled auto merged TMDB series as well.
         OverrideHelper.Reload();
 
-        var (sw, created, skipped, seriesProcessed, planned) = (Stopwatch.StartNew(), 0, 0, 0, 0);
+        var (stopwatch, created, skipped, seriesProcessed, planned) = (Stopwatch.StartNew(), 0, 0, 0, 0);
         var seriesDetailsBag = new ConcurrentBag<SeriesProcessDetails>();
         var cleanupDetails = new List<RootCleanupDetails>();
         var skippedDetailsBag = new ConcurrentBag<string>();
@@ -124,7 +124,7 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
         {
             try
             {
-                var seriesSw = Stopwatch.StartNew();
+                var seriesStopwatch = Stopwatch.StartNew();
 
                 // SeriesNode structure: { id, anidbId, title, seasons: { "Season 1": [ { name, source } ] }, rootFiles: [ { name, source } ] }
                 var seasonsByRoot = new Dictionary<string, Dictionary<string, Dictionary<string, string>>>(VfsShared.PathComparer);
@@ -184,7 +184,7 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
                 // Capture individual series details for the log report
                 bool isMovie = MapHelper.IsMovie(series);
                 bool doMovie = isMovie && Settings.Advanced.MovieGenerationMode != MovieGenerationMode.Disabled;
-                seriesDetailsBag.Add(new SeriesProcessDetails($"{series.GetDisplayTitle() ?? series.LocalID.ToString()} [{series.LocalID}]", seriesSw.ElapsedMilliseconds, sCreated, doMovie));
+                seriesDetailsBag.Add(new SeriesProcessDetails($"{series.GetDisplayTitle() ?? series.LocalID.ToString()} [{series.LocalID}]", seriesStopwatch.ElapsedMilliseconds, sCreated, doMovie));
 
                 if (sCreated > 0 || sErrors.Count > 0)
                     logger.LogDebug(
@@ -193,7 +193,7 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
                         series.GetDisplayTitle(),
                         series.LocalID,
                         sCreated,
-                        seriesSw.ElapsedMilliseconds
+                        seriesStopwatch.ElapsedMilliseconds
                     );
 
                 Interlocked.Add(ref created, sCreated);
@@ -201,23 +201,23 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
                 Interlocked.Add(ref planned, sPlanned);
                 foreach (var skippedItem in sSkippedList)
                     skippedDetailsBag.Add(skippedItem);
-                foreach (var err in sErrors)
-                    errorsBag.Add(err);
+                foreach (var error in sErrors)
+                    errorsBag.Add(error);
                 Interlocked.Increment(ref seriesProcessed);
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
-                errorsBag.Add($"Failed series {series.GetDisplayTitle()} [{series.LocalID}]: {ex.Message}");
-                logger.LogError(ex, "VFS: Build failed for series -> {DisplayTitle} [{LocalId}]", series.GetDisplayTitle(), series.LocalID);
+                errorsBag.Add($"Failed series {series.GetDisplayTitle()} [{series.LocalID}]: {exception.Message}");
+                logger.LogError(exception, "VFS: Build failed for series -> {DisplayTitle} [{LocalId}]", series.GetDisplayTitle(), series.LocalID);
             }
         });
 
-        sw.Stop(); // Capture total elapsed time here
+        stopwatch.Stop(); // Capture total elapsed time here
         var errors = errorsBag.ToList();
 
         logger.LogInformation(
             "VFS: Build completed in {Elapsed}ms -> processed={Processed}, consolidated={Consolidated}, created={Created}, skipped={Skipped}, errors={Errors}",
-            sw.ElapsedMilliseconds,
+            stopwatch.ElapsedMilliseconds,
             seriesProcessed,
             consolidatedCount,
             created,
@@ -238,7 +238,7 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
             planned,
             [.. seriesDetailsBag.OrderBy(item => item.Name)],
             cleanupDetails,
-            sw.Elapsed
+            stopwatch.Elapsed
         );
     }
 
@@ -509,7 +509,7 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
 
         try
         {
-            var cleanSw = Stopwatch.StartNew();
+            var cleanStopwatch = Stopwatch.StartNew();
             Parallel.ForEach(Directory.GetDirectories(path), DefaultParallelOptions(), dir =>
             {
                 try
@@ -519,8 +519,8 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
                 catch { }
             });
             Directory.Delete(path, true);
-            cleanupDetails.Add(new RootCleanupDetails(path, cleanSw.ElapsedMilliseconds));
-            logger.LogInformation("VFS: Cleaned {Type}root folder -> '{Path}' in {Elapsed}ms", isMovieRoot ? "movie " : "", path, cleanSw.ElapsedMilliseconds);
+            cleanupDetails.Add(new RootCleanupDetails(path, cleanStopwatch.ElapsedMilliseconds));
+            logger.LogInformation("VFS: Cleaned {Type}root folder -> '{Path}' in {Elapsed}ms", isMovieRoot ? "movie " : "", path, cleanStopwatch.ElapsedMilliseconds);
             if (recreate)
             {
                 Directory.CreateDirectory(path);
@@ -531,9 +531,9 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
                 catch { }
             }
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            logger.LogWarning(ex, "VFS: Failed to clean {Type}root -> {Path}", isMovieRoot ? "movie " : "", path);
+            logger.LogWarning(exception, "VFS: Failed to clean {Type}root -> {Path}", isMovieRoot ? "movie " : "", path);
         }
     }
 
@@ -589,10 +589,10 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
                         logger.LogInformation("VFS: Pruned empty/orphaned series folder -> {Path}", path);
                     }
                 }
-                catch (Exception ex)
+                catch (Exception exception)
                 {
-                    onError($"Prune failed {path}: {ex.Message}");
-                    logger.LogWarning(ex, "VFS: Failed to prune series path -> {Path}", path);
+                    onError($"Prune failed {path}: {exception.Message}");
+                    logger.LogWarning(exception, "VFS: Failed to prune series path -> {Path}", path);
                 }
             }
 
@@ -610,10 +610,10 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
                         logger.LogInformation("VFS: Pruned empty/orphaned movie folder -> {Path}", mPath);
                     }
                 }
-                catch (Exception ex)
+                catch (Exception exception)
                 {
-                    onError($"Prune failed {mPath}: {ex.Message}");
-                    logger.LogWarning(ex, "VFS: Failed to prune movie path -> {Path}", mPath);
+                    onError($"Prune failed {mPath}: {exception.Message}");
+                    logger.LogWarning(exception, "VFS: Failed to prune movie path -> {Path}", mPath);
                 }
             }
         }

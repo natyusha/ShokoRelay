@@ -75,10 +75,10 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
             int count = AnimeThemesHelper.ParseMappingContentWithComments(content).Entries.Count;
             return (count, $"AnimeThemes mapping import - {DateTime.Now:yyyy-MM-dd HH:mm:ss}\nUrl: {rawUrl}\nEntries: {count}");
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            logger.LogWarning(ex, "AnimeThemes Map: Failed to import mapping from URL");
-            return (0, "Import failed: " + ex.Message);
+            logger.LogWarning(exception, "AnimeThemes Map: Failed to import mapping from URL");
+            return (0, "Import failed: " + exception.Message);
         }
     }
 
@@ -181,12 +181,12 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
                             logger.LogDebug("AnimeThemes Map: Mapped '{Path}' -> VideoID: {VideoId}, AniDB ID: {AnidbId}", item.Rel, lookup.VideoId, lookup.AniDbId);
                         }
                     }
-                    catch (Exception ex)
+                    catch (Exception exception)
                     {
                         int year = AnimeThemesHelper.GetYearForSort(item.Rel);
-                        string errMsg = $"{item.Rel}: {ex.Message}";
+                        string errMsg = $"{item.Rel}: {exception.Message}";
                         errorsBag.Add((year, item.Rel, errMsg));
-                        logger.LogWarning(ex, "AnimeThemes Map: Exception mapping '{Path}' -> {Error}", item.Rel, ex.Message);
+                        logger.LogWarning(exception, "AnimeThemes Map: Exception mapping '{Path}' -> {Error}", item.Rel, exception.Message);
                         Interlocked.Increment(ref errors);
                     }
                 })
@@ -264,9 +264,9 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
                     else
                         logger.LogWarning("AnimeThemes Map: Failed to auto-map '{Path}' -> Metadata missing", relPath);
                 }
-                catch (Exception ex)
+                catch (Exception exception)
                 {
-                    logger.LogWarning(ex, "AnimeThemes Map: Exception auto-mapping '{Path}'", relPath);
+                    logger.LogWarning(exception, "AnimeThemes Map: Exception auto-mapping '{Path}'", relPath);
                 }
             }
 
@@ -434,7 +434,7 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
                 throw new FileNotFoundException("Mapping file not found");
 
             var entries = AnimeThemesHelper.ParseMappingContentWithComments(await File.ReadAllTextAsync(mapPath, cancellationToken).ConfigureAwait(false)).Entries;
-            var (sw, state) = (Stopwatch.StartNew(), new MappingState());
+            var (stopwatch, state) = (Stopwatch.StartNew(), new MappingState());
             string themeRootName = VfsShared.ResolveAnimeThemesFolderName();
             string vfsRoot = VfsShared.ResolveRootFolderName();
 
@@ -473,7 +473,7 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
 
                 Interlocked.Increment(ref state.Matched);
                 var isFilteredRun = seriesFilter?.Any() == true;
-                var myPrefixes = folderGroup.Select(series => overrideOrder.IndexOf(series!.LocalID) is var idx && idx > 0 ? $"P{idx + 1} ❯ " : null).ToHashSet();
+                var myPrefixes = folderGroup.Select(series => overrideOrder.IndexOf(series!.LocalID) is var index && index > 0 ? $"P{index + 1} ❯ " : null).ToHashSet();
 
                 foreach (var vfsPath in vfsPaths)
                 {
@@ -674,13 +674,13 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
                     await VfsShared.WriteLinesAtomicAsync(cachePath, newCacheLines, cancellationToken).ConfigureAwait(false);
                 }
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
-                logger.LogWarning(ex, "AnimeThemes VFS: Failed to save webm cache");
+                logger.LogWarning(exception, "AnimeThemes VFS: Failed to save webm cache");
             }
 
-            logger.LogInformation("AnimeThemes VFS: Task finished -> {Count} links created in {Elapsed}ms.", state.Created, sw.ElapsedMilliseconds);
-            return new AnimeThemesMappingApplyResult(state.Created, state.Skipped, state.Matched, [.. state.Errors], [.. state.CacheEntries], sw.Elapsed);
+            logger.LogInformation("AnimeThemes VFS: Task finished -> {Count} links created in {Elapsed}ms.", state.Created, stopwatch.ElapsedMilliseconds);
+            return new AnimeThemesMappingApplyResult(state.Created, state.Skipped, state.Matched, [.. state.Errors], [.. state.CacheEntries], stopwatch.Elapsed);
         }
         finally
         {
@@ -760,12 +760,22 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
 
     #region Internal Classes
 
+    /// <summary>Maintains intermediate progress and result counters for mapping tasks.</summary>
     private class MappingState
     {
+        /// <summary>Total links successfully created.</summary>
         public int Created;
+
+        /// <summary>Total files skipped.</summary>
         public int Skipped;
+
+        /// <summary>Total series matched.</summary>
         public int Matched;
+
+        /// <summary>Thread-safe collection of error messages.</summary>
         public ConcurrentBag<string> Errors = [];
+
+        /// <summary>Thread-safe collection of generated cache entries.</summary>
         public ConcurrentBag<WebmCacheEntry> CacheEntries = [];
     }
 

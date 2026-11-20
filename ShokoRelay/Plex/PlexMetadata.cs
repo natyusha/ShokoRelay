@@ -592,7 +592,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
     /// <param name="tags">The source tag names to process.</param>
     /// <returns>An array of anonymous tag objects, or null if empty.</returns>
     private static object[]? CreateTagArray(IEnumerable<string>? tags) =>
-        tags?.Where(tag => !string.IsNullOrWhiteSpace(tag)).Distinct(StringComparer.OrdinalIgnoreCase).Select(tag => (object)new { tag }).ToArray() is { Length: > 0 } arr ? arr : null;
+        tags?.Where(tag => !string.IsNullOrWhiteSpace(tag)).Distinct(StringComparer.OrdinalIgnoreCase).Select(tag => (object)new { tag }).ToArray() is { Length: > 0 } arrayValue ? arrayValue : null;
 
     /// <summary>Builds an array of external cross-reference GUIDs (TMDB/TVDB/IMDB) for a series or movie.</summary>
     /// <param name="series">The Shoko series metadata.</param>
@@ -624,7 +624,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
                 ? $"tvdb://{epTvdbId}"
                 : (tmdbMovie?.GetCrossSourceID("tvdb", MetadataEntityType.Movie) is { } movieTvdbId ? $"tvdb://{movieTvdbId}" : null),
             .. tmdbEps is { Count: > 0 } list
-                ? list.SelectMany(ep => ep.GetCrossSourceID("tvdb", MetadataEntityType.Episode) is { } tvdbId ? [$"tmdb://{ep.ID.ID}", $"tvdb://{tvdbId}"] : new[] { $"tmdb://{ep.ID.ID}" })
+                ? list.SelectMany(episode => episode.GetCrossSourceID("tvdb", MetadataEntityType.Episode) is { } tvdbId ? [$"tmdb://{episode.ID.ID}", $"tvdb://{tvdbId}"] : new[] { $"tmdb://{episode.ID.ID}" })
                 : [],
         ]);
 
@@ -664,8 +664,8 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
                 .DistinctBy(primarySeries => primarySeries.LocalID)
                 .Select(primarySeries => (object)new { guid = primarySeries.GetPlexGuid(), tag = primarySeries.PreferredTitle?.Value ?? primarySeries.DefaultTitle?.Value })
                 .ToArray()
-                is { Length: > 0 } arr
-                ? arr
+                is { Length: > 0 } arrayValue
+                ? arrayValue
                 : null
             : null;
 
@@ -681,12 +681,12 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
     private static object[]? BuildRatingArray(double? tmdbRating, double? anidbRating)
     {
         var ratings = new List<object>();
-        static object CreateRating(string image, double val) =>
+        static object CreateRating(string image, double value) =>
             new
             {
                 image,
                 type = "audience",
-                value = (float)val,
+                value = (float)value,
             };
 
         if (Settings.AnidbAsRottenTomatoes && anidbRating > 0)

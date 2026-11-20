@@ -22,13 +22,13 @@ public static class ActionScheduleHelper
 
     /// <summary>Translates a raw hour interval into optimal clock-aligned triggers and applies them if changed.</summary>
     /// <typeparam name="TAction">The scheduled action type to synchronize.</typeparam>
-    /// <param name="svc">The native scheduled action service.</param>
+    /// <param name="scheduledActionService">The native scheduled action service.</param>
     /// <param name="freqHours">The configured interval in hours.</param>
     /// <param name="offset">The configured UTC offset in hours.</param>
-    private static void Sync<TAction>(IScheduledActionService svc, int freqHours, int offset)
+    private static void Sync<TAction>(IScheduledActionService scheduledActionService, int freqHours, int offset)
         where TAction : class, IScheduledAction
     {
-        var actionInfo = svc.GetScheduledAction<TAction>();
+        var actionInfo = scheduledActionService.GetScheduledAction<TAction>();
         if (actionInfo == null)
             return;
 
@@ -58,7 +58,7 @@ public static class ActionScheduleHelper
         bool identical = actionInfo.Triggers.Count == triggers.Count && actionInfo.Triggers.ToHashSet().SetEquals(triggers);
 
         if (!identical)
-            svc.SetTriggers(actionInfo.ID, triggers);
+            scheduledActionService.SetTriggers(actionInfo.ID, triggers);
     }
 
     #endregion

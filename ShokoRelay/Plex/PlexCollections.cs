@@ -87,9 +87,9 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient, ILogg
             var createdMeta = createdContainer?.Metadata?.FirstOrDefault(col => string.Equals(col.Title, collectionName, StringComparison.OrdinalIgnoreCase));
             return int.TryParse(createdMeta?.RatingKey, out int createdId) ? createdId : null;
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
         {
-            logger.LogWarning("PlexCollections: Network error during collection creation for {Title}: {Message}", collectionName, ex.Message);
+            logger.LogWarning("PlexCollections: Network error during collection creation for {Title}: {Message}", collectionName, exception.Message);
             return null;
         }
     }
@@ -117,10 +117,10 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient, ILogg
                 return false;
             }
 
-            using var fs = new FileStream(imagePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var fileStream = new FileStream(imagePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             using var request = plexClient.CreateRequest(HttpMethod.Post, $"/library/metadata/{collectionId}/{subEndpoint}", target.ServerUrl);
 
-            var content = new StreamContent(fs);
+            var content = new StreamContent(fileStream);
             content.Headers.ContentType = new MediaTypeHeaderValue(ImageHelper.GetMimeType(Path.GetExtension(imagePath)) ?? "image/jpeg");
             request.Content = content;
 
@@ -138,9 +138,9 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient, ILogg
                 body?.Length > 1024 ? body[..1024] + "..." : body
             );
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            logger.LogWarning(ex, "PlexCollections: {Action} failed for {ServerUrl}:{SectionId}", action, target.ServerUrl, target.SectionId);
+            logger.LogWarning(exception, "PlexCollections: {Action} failed for {ServerUrl}:{SectionId}", action, target.ServerUrl, target.SectionId);
         }
         return false;
     }
@@ -284,9 +284,9 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient, ILogg
                 body?.Length > 1024 ? body[..1024] + "..." : body
             );
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            logger.LogWarning(ex, "PlexCollections: {Action} failed for {ServerUrl}:{SectionId}", actionName, target.ServerUrl, target.SectionId);
+            logger.LogWarning(exception, "PlexCollections: {Action} failed for {ServerUrl}:{SectionId}", actionName, target.ServerUrl, target.SectionId);
         }
         return false;
     }

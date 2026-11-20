@@ -210,8 +210,8 @@ public class VfsWatcher(
             {
                 if (xref.AnidbAnimeID is { } animeId && animeId > 0 && metadataService.GetShokoSeriesByAnidbID(animeId) is { } series)
                     seriesIds.Add(series.GetPrimaryId(metadataService));
-                else if (xref.AnidbEpisodeID > 0 && metadataService.GetShokoEpisodeByAnidbID(xref.AnidbEpisodeID) is { } ep)
-                    seriesIds.Add(OverrideHelper.GetPrimary(ep.ShokoSeriesID, metadataService));
+                else if (xref.AnidbEpisodeID > 0 && metadataService.GetShokoEpisodeByAnidbID(xref.AnidbEpisodeID) is { } episode)
+                    seriesIds.Add(OverrideHelper.GetPrimary(episode.ShokoSeriesID, metadataService));
             }
         }
 
@@ -397,18 +397,18 @@ public class VfsWatcher(
                     await VfsShared.VfsLock.WaitAsync(stopToken).ConfigureAwait(false); // Wait for any active dashboard VFS operations to complete before processing the automated queue
                     try
                     {
-                        var sw = Stopwatch.StartNew();
+                        var stopwatch = Stopwatch.StartNew();
                         var result = builder.Build(seriesIds, cleanRoot: false);
 
                         // Restore AnimeThemes links for the affected series if a mapping file exists
                         if (File.Exists(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileAtMapping)))
                             await atMapping.ApplyMappingAsync(seriesIds, stopToken).ConfigureAwait(false);
 
-                        sw.Stop();
+                        stopwatch.Stop();
                         logger.LogInformation(
                             "VFS: Batch refreshed for {Count} series in {Elapsed}ms -> created={Created} planned={Planned} skipped={Skipped} seriesProcessed={Processed} errors={Errors}",
                             seriesIds.Count,
-                            sw.ElapsedMilliseconds,
+                            stopwatch.ElapsedMilliseconds,
                             result.CreatedLinks,
                             result.PlannedLinks,
                             result.Skipped,
@@ -432,9 +432,9 @@ public class VfsWatcher(
             {
                 break;
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
-                logger.LogWarning(ex, "VFS: Batch refresh failed");
+                logger.LogWarning(exception, "VFS: Batch refresh failed");
             }
 
             try
@@ -522,10 +522,10 @@ public class VfsWatcher(
                 await action(cts.Token).ConfigureAwait(false);
             }
             catch (OperationCanceledException) { }
-            catch (Exception ex)
+            catch (Exception exception)
             {
                 var title = metadataService.GetShokoSeriesByID(seriesId)?.GetDisplayTitle() ?? "Series";
-                logger.LogError(ex, "VFS: Scheduled action failed for series -> {Title} [{SeriesId}]", title, seriesId);
+                logger.LogError(exception, "VFS: Scheduled action failed for series -> {Title} [{SeriesId}]", title, seriesId);
             }
             finally
             {
@@ -702,9 +702,9 @@ public class VfsWatcher(
             }
         }
         catch (OperationCanceledException) { }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            logger.LogError(ex, "VFS: Metadata fixup failed for series -> {Title} [{LocalId}]", metadataService.GetShokoSeriesByID(seriesId)?.GetDisplayTitle() ?? seriesId.ToString(), seriesId);
+            logger.LogError(exception, "VFS: Metadata fixup failed for series -> {Title} [{LocalId}]", metadataService.GetShokoSeriesByID(seriesId)?.GetDisplayTitle() ?? seriesId.ToString(), seriesId);
         }
     }
 

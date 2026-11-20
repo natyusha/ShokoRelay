@@ -190,9 +190,9 @@ public class AnimeThemesMp3Generator(
             SaveCacheToFile();
             logger.LogInformation("AnimeThemes MP3: Theme.mp3 cache refreshed -> {FolderCount} folders found across {RootCount} roots", _themeMp3Cache.Count, roots.Count);
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            logger.LogWarning(ex, "AnimeThemes MP3: RefreshThemeMp3Cache -> Repositories not ready");
+            logger.LogWarning(exception, "AnimeThemes MP3: RefreshThemeMp3Cache -> Repositories not ready");
             _themeMp3Cache ??= new(VfsShared.PathComparer);
         }
     }
@@ -254,9 +254,9 @@ public class AnimeThemesMp3Generator(
 
         if (VfsHelper.IsInVfsRoot(root, out string vfsRoot))
         {
-            string msg = $"Cannot execute batch generation inside the VFS directory '{vfsRoot}'. Target your physical managed folder instead.";
-            logger.LogWarning("AnimeThemes MP3: {Message}", msg);
-            return new ThemeMp3BatchResult(root, [new(root, "error", msg)], 0, 0, 1);
+            string message = $"Cannot execute batch generation inside the VFS directory '{vfsRoot}'. Target your physical managed folder instead.";
+            logger.LogWarning("AnimeThemes MP3: {Message}", message);
+            return new ThemeMp3BatchResult(root, [new(root, "error", message)], 0, 0, 1);
         }
 
         logger.LogInformation("AnimeThemes MP3: Starting batch generation for root -> {Root}", root);
@@ -310,17 +310,17 @@ public class AnimeThemesMp3Generator(
         {
             await Parallel.ForEachAsync(folders, DefaultParallelOptions(cancellationToken), async (folder, token) =>
             {
-                var res = await ProcessSingleAsync(query with { Path = folder, Batch = true }, processedSeries, token).ConfigureAwait(false);
+                var processResult = await ProcessSingleAsync(query with { Path = folder, Batch = true }, processedSeries, token).ConfigureAwait(false);
                 lock (results)
                 {
-                    results.Add(res);
-                    if (res.Status == "ok")
+                    results.Add(processResult);
+                    if (processResult.Status == "ok")
                     {
                         processed++;
-                        if (!string.IsNullOrWhiteSpace(res.Folder))
-                            newlyGenerated.Add((res.Folder, AnimeThemesHelper.StandardizeSlug(res.Slug)));
+                        if (!string.IsNullOrWhiteSpace(processResult.Folder))
+                            newlyGenerated.Add((processResult.Folder, AnimeThemesHelper.StandardizeSlug(processResult.Slug)));
                     }
-                    else if (res.Status == "skipped")
+                    else if (processResult.Status == "skipped")
                         skipped++;
                     else
                         errors++;
@@ -446,7 +446,7 @@ public class AnimeThemesMp3Generator(
                     })
                     .ToList();
 
-                int idx = 0;
+                int index = 0;
                 if (string.IsNullOrEmpty(query.Slug))
                 {
                     var (bestTheme, bestIndex, _, _) = validThemes
@@ -455,10 +455,10 @@ public class AnimeThemesMp3Generator(
                             {
                                 string slug = theme.Slug ?? "";
                                 var (baseSlug, _) = AnimeThemesHelper.ParseSlug(slug);
-                                int num = AnimeThemesHelper.ExtractSlugNumber(baseSlug);
+                                int numberValue = AnimeThemesHelper.ExtractSlugNumber(baseSlug);
 
                                 int group = AnimeThemesHelper.IsOp(baseSlug) ? 1 : (AnimeThemesHelper.IsEd(baseSlug) ? 2 : 3);
-                                return (Theme: theme, OriginalIndex: index, Group: group, Number: num);
+                                return (Theme: theme, OriginalIndex: index, Group: group, Number: numberValue);
                             }
                         )
                         .OrderBy(item => item.Group)
@@ -467,12 +467,12 @@ public class AnimeThemesMp3Generator(
                         .FirstOrDefault();
 
                     if (bestTheme != null)
-                        idx = bestIndex;
+                        index = bestIndex;
                 }
 
-                if (validThemes.Count > idx)
+                if (validThemes.Count > index)
                 {
-                    var themeDetail = await _apiClient.FetchAnimeThemeWithArtistsAsync(validThemes[idx].Id, cancellationToken).ConfigureAwait(false);
+                    var themeDetail = await _apiClient.FetchAnimeThemeWithArtistsAsync(validThemes[index].Id, cancellationToken).ConfigureAwait(false);
                     audioUrl = themeDetail?.Animethemeentries?.FirstOrDefault()?.Videos?.Nodes?.FirstOrDefault()?.Audio?.Link;
 
                     if (!string.IsNullOrEmpty(audioUrl))
@@ -505,17 +505,17 @@ public class AnimeThemesMp3Generator(
 
             // Download an audio file to a temporary location on disk
             logger.LogDebug("AnimeThemes MP3: Downloading audio from {Url}", audioUrl);
-            using (var resp = await httpClient.GetAsync(audioUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false))
+            using (var response = await httpClient.GetAsync(audioUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false))
             {
-                resp.EnsureSuccessStatusCode();
+                response.EnsureSuccessStatusCode();
                 temp = Path.Combine(Path.GetTempPath(), $"at-{Guid.NewGuid():N}{Path.GetExtension(audioUrl)}");
-                await using var streamIn = await resp.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+                await using var streamIn = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
                 await using var streamOut = File.Create(temp);
                 await streamIn.CopyToAsync(streamOut, cancellationToken).ConfigureAwait(false);
             }
 
-            var dur = await ffmpegService.ProbeDurationAsync(temp, cancellationToken).ConfigureAwait(false);
-            string title = dur.TotalSeconds < 100 && !string.IsNullOrEmpty(songTitle) ? songTitle + " (TV Size)" : songTitle;
+            var duration = await ffmpegService.ProbeDurationAsync(temp, cancellationToken).ConfigureAwait(false);
+            string title = duration.TotalSeconds < 100 && !string.IsNullOrEmpty(songTitle) ? songTitle + " (TV Size)" : songTitle;
 
             logger.LogDebug("AnimeThemes MP3: Converting audio for -> {Title} [{LocalId}] ({Slug})", series.GetDisplayTitle(), series.LocalID, slugDisplay);
             await ffmpegService.ConvertToMp3FileAsync(temp, "Theme.mp3", title, slugDisplay, artist, animeTitle, cancellationToken, folder).ConfigureAwait(false);
@@ -561,9 +561,9 @@ public class AnimeThemesMp3Generator(
                             }
                         }
                     }
-                    catch (Exception ex)
+                    catch (Exception exception)
                     {
-                        logger.LogWarning(ex, "AnimeThemes MP3: Failed to trigger Plex refresh for series -> {Title} [{LocalId}]", series.GetDisplayTitle(), series.LocalID);
+                        logger.LogWarning(exception, "AnimeThemes MP3: Failed to trigger Plex refresh for series -> {Title} [{LocalId}]", series.GetDisplayTitle(), series.LocalID);
                     }
                 });
             }
@@ -572,12 +572,12 @@ public class AnimeThemesMp3Generator(
                 AddToThemeMp3Cache(folder, AnimeThemesHelper.StandardizeSlug(slugRaw));
 
             logger.LogInformation("AnimeThemes MP3: Successfully generated Theme.mp3 -> {Title} [{LocalId}] ({Slug})", series.GetDisplayTitle(), series.LocalID, slugDisplay);
-            return new(folder, "ok", null, themePath, vfsLink, animeTitle, animeSlug, series.LocalID, slugRaw, dur.TotalSeconds);
+            return new(folder, "ok", null, themePath, vfsLink, animeTitle, animeSlug, series.LocalID, slugRaw, duration.TotalSeconds);
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            logger.LogError(ex, "AnimeThemes MP3: Failed to process -> {Folder}", folder);
-            return new(folder, "error", ex.Message);
+            logger.LogError(exception, "AnimeThemes MP3: Failed to process -> {Folder}", folder);
+            return new(folder, "error", exception.Message);
         }
         finally
         {
@@ -668,18 +668,21 @@ public class AnimeThemesMp3Generator(
 
                         var anime = await _apiClient.FetchAnimeThemesAsync(series.AnidbAnimeID, token).ConfigureAwait(false);
                         var animethemes = anime?.FirstOrDefault()?.Animethemes ?? [];
-                        var op = animethemes.Where(theme => theme.Slug != null && AnimeThemesHelper.IsOp(theme.Slug)).OrderBy(theme => AnimeThemesHelper.ExtractSlugNumber(theme.Slug!)).FirstOrDefault();
-                        var ed = animethemes.Where(theme => theme.Slug != null && AnimeThemesHelper.IsEd(theme.Slug)).OrderBy(theme => AnimeThemesHelper.ExtractSlugNumber(theme.Slug!)).FirstOrDefault();
+                        var operation = animethemes.Where(theme => theme.Slug != null && AnimeThemesHelper.IsOp(theme.Slug)).OrderBy(theme => AnimeThemesHelper.ExtractSlugNumber(theme.Slug!)).FirstOrDefault();
+                        var episodeDuration = animethemes
+                            .Where(theme => theme.Slug != null && AnimeThemesHelper.IsEd(theme.Slug))
+                            .OrderBy(theme => AnimeThemesHelper.ExtractSlugNumber(theme.Slug!))
+                            .FirstOrDefault();
 
-                        int? opNum = op?.Slug != null ? AnimeThemesHelper.ExtractSlugNumber(op.Slug) : null;
-                        int? edNum = ed?.Slug != null ? AnimeThemesHelper.ExtractSlugNumber(ed.Slug) : null;
+                        int? opNum = operation?.Slug != null ? AnimeThemesHelper.ExtractSlugNumber(operation.Slug) : null;
+                        int? edNum = episodeDuration?.Slug != null ? AnimeThemesHelper.ExtractSlugNumber(episodeDuration.Slug) : null;
 
-                        bool hasOpUpgrade = op != null && (isEd || (isOp && opNum.HasValue && opNum.Value < currentSlugNum));
-                        bool hasEdUpgrade = !isOp && isEd && !isEd1 && op == null && ed != null && edNum.HasValue && edNum.Value < currentSlugNum;
+                        bool hasOpUpgrade = operation != null && (isEd || (isOp && opNum.HasValue && opNum.Value < currentSlugNum));
+                        bool hasEdUpgrade = !isOp && isEd && !isEd1 && operation == null && episodeDuration != null && edNum.HasValue && edNum.Value < currentSlugNum;
 
                         if (hasOpUpgrade || hasEdUpgrade)
                         {
-                            string newUpgrade = (hasOpUpgrade ? op!.Slug : ed!.Slug)!;
+                            string newUpgrade = (hasOpUpgrade ? operation!.Slug : episodeDuration!.Slug)!;
                             if (newUpgrade != upgrade)
                             {
                                 upgrade = newUpgrade;
@@ -695,10 +698,10 @@ public class AnimeThemesMp3Generator(
                             Interlocked.Exchange(ref cacheUpdated, 1);
                         }
                     }
-                    catch (Exception ex)
+                    catch (Exception exception)
                     {
-                        errors.Add($"Failed to audit {folder}: {ex.Message}");
-                        logger.LogWarning(ex, "AnimeThemes MP3: Failed to audit -> {Folder}", folder);
+                        errors.Add($"Failed to audit {folder}: {exception.Message}");
+                        logger.LogWarning(exception, "AnimeThemes MP3: Failed to audit -> {Folder}", folder);
                     }
                 }
             }

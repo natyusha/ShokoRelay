@@ -153,7 +153,7 @@ public class AnimeThemesController(
 
         // Single generation does not require a persistent log file, but still uses the VfsLock for safety.
         if (!await VfsShared.VfsLock.WaitAsync(0).ConfigureAwait(false))
-            return Conflict(new RelayResponse<object>(Status: "busy", Message: "A conflicting operation is already in progress. Please wait for it to complete."));
+            return Conflict(new RelayResponse<object>(Status: "busy", Message: "A conflicting operation is already in progress. Please wait for item to complete."));
 
         try
         {
@@ -269,9 +269,9 @@ public class AnimeThemesController(
                 foreach (var entry in entries)
                     videoIdToRelPath.TryAdd(entry.VideoId, entry.FilePath);
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
-                Logger.LogWarning(ex, "AnimeThemes Player: Failed to parse mapping CSV for webm tree");
+                Logger.LogWarning(exception, "AnimeThemes Player: Failed to parse mapping CSV for webm tree");
             }
         }
 
@@ -356,7 +356,7 @@ public class AnimeThemesController(
                             relPath = videoIdToRelPath.GetValueOrDefault(videoId),
                             path = pathRaw.Replace('\\', '/').Trim(),
                             videoId,
-                            nc = (flags & 1) != 0,
+                            normalizationCount = (flags & 1) != 0,
                             lyrics = (flags & 2) != 0,
                             subs = (flags & 4) != 0,
                             uncen = (flags & 8) != 0,
@@ -368,9 +368,9 @@ public class AnimeThemesController(
                     );
                 }
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
-                Logger.LogWarning(ex, "AnimeThemes Player: Failed to parse webm cache");
+                Logger.LogWarning(exception, "AnimeThemes Player: Failed to parse webm cache");
             }
         }
 
@@ -437,7 +437,7 @@ public class AnimeThemesController(
                                 relPath = entry.FilePath,
                                 path = absolutePath.Replace('\\', '/').Trim(),
                                 videoId = entry.VideoId,
-                                nc = entry.Nc,
+                                normalizationCount = entry.Nc,
                                 lyrics = entry.Lyrics,
                                 subs = entry.Subbed,
                                 uncen = entry.Uncen,
@@ -450,9 +450,9 @@ public class AnimeThemesController(
                     }
                 }
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
-                Logger.LogWarning(ex, "AnimeThemes Player: Failed to append missing themes to tree");
+                Logger.LogWarning(exception, "AnimeThemes Player: Failed to append missing themes to tree");
             }
         }
 
@@ -536,9 +536,9 @@ public class AnimeThemesController(
                 VfsShared.WriteLinesAtomic(path, ids.Order().Select(id => id.ToString()));
                 return Ok(new RelayResponse<object>(Data: new { videoId, isFavourite = ids.Contains(videoId) }));
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
-                return StatusCode(500, new RelayResponse<object>(Status: "error", Message: ex.Message));
+                return StatusCode(500, new RelayResponse<object>(Status: "error", Message: exception.Message));
             }
         }
     }

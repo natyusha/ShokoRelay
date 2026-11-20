@@ -104,10 +104,10 @@ public partial class ConfigProvider : IDisposable
     /// <returns>The detected base URL without trailing slash, or <c>null</c> when no HTTP context is active.</returns>
     private string? DetectRequestBaseUrl()
     {
-        if (_httpContextAccessor?.HttpContext is not { } ctx)
+        if (_httpContextAccessor?.HttpContext is not { } httpContext)
             return null;
 
-        var request = ctx.Request;
+        var request = httpContext.Request;
 
         // Inspect standard proxy headers to accurately detect HTTPS scheme and external hostname
         var scheme = request.Headers["X-Forwarded-Proto"].FirstOrDefault()?.Split(',')[0].Trim();
@@ -204,15 +204,15 @@ public partial class ConfigProvider : IDisposable
 
     #region Sanitization
 
-    /// <summary>Convert any JsonElement trees within <paramref name="obj"/> into plain CLR values.</summary>
-    /// <param name="obj">The JSON element or object to sanitize.</param>
+    /// <summary>Convert any JsonElement trees within <paramref name="objectValue"/> into plain CLR values.</summary>
+    /// <param name="objectValue">The JSON element or object to sanitize.</param>
     /// <returns>A sanitized object containing only plain CLR types.</returns>
-    public object SanitizeConfigObject(object obj) =>
-        obj switch
+    public object SanitizeConfigObject(object objectValue) =>
+        objectValue switch
         {
-            JsonElement je => SanitizeConfigElement(je),
+            JsonElement jsonElement => SanitizeConfigElement(jsonElement),
             null => null!,
-            _ => SanitizeConfigObject(JsonSerializer.Deserialize<object>(JsonSerializer.Serialize(obj, s_options), s_options)!),
+            _ => SanitizeConfigObject(JsonSerializer.Deserialize<object>(JsonSerializer.Serialize(objectValue, s_options), s_options)!),
         };
 
     /// <summary>Recursively converts a <see cref="JsonElement"/> into plain primitive or dictionary types.</summary>
@@ -273,9 +273,9 @@ public partial class ConfigProvider : IDisposable
             {
                 loaded = File.Exists(_filePath) ? JsonSerializer.Deserialize<RelayConfig>(ReadFileWithRetry(_filePath), s_options) ?? new() : new();
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
-                _logger?.LogWarning(ex, "Config: Failed to load settings -> Using defaults temporarily");
+                _logger?.LogWarning(exception, "Config: Failed to load settings -> Using defaults temporarily");
                 var fallback = new RelayConfig();
                 ApplyDefaultValues(fallback);
                 NormalizeVfsRoots(fallback);
@@ -388,7 +388,7 @@ public partial class ConfigProvider : IDisposable
             && Validator.TryValidateObject(settings.Playback, new ValidationContext(settings.Playback), validationResults, true)
             && Validator.TryValidateObject(settings.Advanced, new ValidationContext(settings.Advanced), validationResults, true);
         if (!isValid)
-            throw new ArgumentException($"Config validation failed: {string.Join("; ", validationResults.Select(result => result.ErrorMessage).Where(msg => !string.IsNullOrWhiteSpace(msg)))}");
+            throw new ArgumentException($"Config validation failed: {string.Join("; ", validationResults.Select(result => result.ErrorMessage).Where(message => !string.IsNullOrWhiteSpace(message)))}");
         NormalizePathMappings(settings);
         NormalizeSubtitleMappings(settings);
         NormalizeCsvFields(settings);
@@ -443,9 +443,9 @@ public partial class ConfigProvider : IDisposable
                 _cachedAdminUsername = null;
             }
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            _logger?.LogWarning(ex, "Config: Failed to delete token file");
+            _logger?.LogWarning(exception, "Config: Failed to delete token file");
         }
     }
 
@@ -479,7 +479,7 @@ public partial class ConfigProvider : IDisposable
     /// <param name="autoUrl">Auto-detected Shoko Server URL.</param>
     private void WriteTokenFile(string? token, string? clientIdentifier, string? adminUsername, List<PlexAvailableServer>? servers = null, List<PlexAvailableLibrary>? libraries = null, string? autoUrl = null)
     {
-        var tf = new TokenFile
+        var tokenFile = new TokenFile
         {
             Token = token ?? "",
             ClientIdentifier = clientIdentifier ?? "",
@@ -491,10 +491,10 @@ public partial class ConfigProvider : IDisposable
         lock (_settingsLock)
         {
             Volatile.Write(ref _suppressTokenWatcherUntil, Environment.TickCount64 + 500);
-            VfsShared.WriteTextAtomic(_tokenPath, JsonSerializer.Serialize(tf, s_options));
-            _cachedTokenFile = tf;
-            _cachedServers = tf.Servers;
-            _cachedAdminUsername = tf.AdminUsername;
+            VfsShared.WriteTextAtomic(_tokenPath, JsonSerializer.Serialize(tokenFile, s_options));
+            _cachedTokenFile = tokenFile;
+            _cachedServers = tokenFile.Servers;
+            _cachedAdminUsername = tokenFile.AdminUsername;
         }
     }
 
@@ -714,11 +714,11 @@ public partial class ConfigProvider : IDisposable
             }
             catch { }
 
-            string val =
+            string value =
                 (PlexHelper.NormalizePathForPlex(mappingPair.Value.Trim()) is var plexPath && !plexPath.StartsWith('/') && !plexPath.Contains(':') && !plexPath.StartsWith("//", StringComparison.Ordinal))
                     ? "/" + plexPath
                     : plexPath;
-            return (Key: key, Value: val);
+            return (Key: key, Value: value);
         });
 
         // Deduplicate keys before dictionary creation to prevent ArgumentException if duplicate paths were entered
@@ -780,26 +780,26 @@ public partial class ConfigProvider : IDisposable
     }
 
     /// <summary>Applies default values to string properties on an object hierarchy where [DefaultValue] attributes exist.</summary>
-    /// <param name="obj">The object to apply default values to.</param>
-    private static void ApplyDefaultValues(object obj)
+    /// <param name="objectValue">The object to apply default values to.</param>
+    private static void ApplyDefaultValues(object objectValue)
     {
-        foreach (var prop in obj.GetType().GetProperties().Where(prop => prop.CanRead && prop.CanWrite))
+        foreach (var prop in objectValue.GetType().GetProperties().Where(prop => prop.CanRead && prop.CanWrite))
         {
-            if (prop.PropertyType == typeof(string) && string.IsNullOrWhiteSpace(prop.GetValue(obj) as string) && prop.GetCustomAttribute<DefaultValueAttribute>() is { } defaultAttr)
-                prop.SetValue(obj, defaultAttr.Value);
-            else if (prop.PropertyType.IsClass && prop.PropertyType != typeof(string) && !typeof(IDictionary).IsAssignableFrom(prop.PropertyType) && prop.GetValue(obj) is { } nestedObj)
+            if (prop.PropertyType == typeof(string) && string.IsNullOrWhiteSpace(prop.GetValue(objectValue) as string) && prop.GetCustomAttribute<DefaultValueAttribute>() is { } defaultAttr)
+                prop.SetValue(objectValue, defaultAttr.Value);
+            else if (prop.PropertyType.IsClass && prop.PropertyType != typeof(string) && !typeof(IDictionary).IsAssignableFrom(prop.PropertyType) && prop.GetValue(objectValue) is { } nestedObj)
                 ApplyDefaultValues(nestedObj);
         }
     }
 
     /// <summary>Recursively scans an object for properties with [Range] attributes and clamps their values accordingly.</summary>
-    /// <param name="obj">The configuration object to normalize.</param>
+    /// <param name="objectValue">The configuration object to normalize.</param>
     /// <param name="logger">Optional logger instance for trace reporting.</param>
-    private static void NormalizeSettings(object obj, ILogger? logger = null)
+    private static void NormalizeSettings(object objectValue, ILogger? logger = null)
     {
-        if (obj == null)
+        if (objectValue == null)
             return;
-        var type = obj.GetType();
+        var type = objectValue.GetType();
         var props = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
 
         foreach (var prop in props)
@@ -811,21 +811,21 @@ public partial class ConfigProvider : IDisposable
             var range = prop.GetCustomAttribute<RangeAttribute>();
             if (range != null && prop.PropertyType == typeof(int))
             {
-                int currentVal = (int)prop.GetValue(obj)!;
+                int currentVal = (int)prop.GetValue(objectValue)!;
                 int min = Convert.ToInt32(range.Minimum);
                 int max = Convert.ToInt32(range.Maximum);
 
                 int clampedVal = Math.Clamp(currentVal, min, max);
                 if (currentVal != clampedVal)
                 {
-                    prop.SetValue(obj, clampedVal);
+                    prop.SetValue(objectValue, clampedVal);
                     logger?.LogTrace("Config: Clamped {Property} from {Original} to {Clamped}", prop.Name, currentVal, clampedVal);
                 }
             }
             // Recurse into nested config classes (AutomationConfig, AdvancedConfig, etc.)
             else if (prop.PropertyType.IsClass && prop.PropertyType != typeof(string) && !typeof(IEnumerable).IsAssignableFrom(prop.PropertyType))
             {
-                var subObj = prop.GetValue(obj);
+                var subObj = prop.GetValue(objectValue);
                 if (subObj != null)
                     NormalizeSettings(subObj, logger);
             }

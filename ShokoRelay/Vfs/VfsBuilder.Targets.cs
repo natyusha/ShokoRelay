@@ -78,7 +78,7 @@ public partial class VfsBuilder
                     // Resolve Primary IDs to allow local asset linking for crossover files that have been consolidated via VFS Overrides.
                     bool isCrossover =
                         mapping.Video?.CrossReferences is { Count: > 1 } xrefs
-                        && xrefs.Where(cr => cr.ShokoEpisode != null).Select(cr => OverrideHelper.GetPrimary(cr.ShokoEpisode!.ShokoSeriesID, metadataService)).Distinct().Count() > 1;
+                        && xrefs.Where(xref => xref.ShokoEpisode != null).Select(xref => OverrideHelper.GetPrimary(xref.ShokoEpisode!.ShokoSeriesID, metadataService)).Distinct().Count() > 1;
 
                     if (!isCrossover)
                     {
@@ -92,10 +92,10 @@ public partial class VfsBuilder
                     state.Errors.Add($"Link failed: {sourceInfo.Src} -> {destFilePath}");
                 }
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
                 state.Skipped++;
-                state.Errors.Add($"Error processing mapping for {mapping.FileName}: {ex.Message}");
+                state.Errors.Add($"Error processing mapping for {mapping.FileName}: {exception.Message}");
             }
 
         FlushSeriesMetadataLinks(state);

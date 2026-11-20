@@ -3,7 +3,7 @@
  * @description Dedicated logic for AnimeThemes VFS and Theme.mp3 generation on the Shoko Relay dashboard.
  */
 (() => {
-  const { base, el, esc, TOAST_MS, fetchJson, showToast, toastOperation, initToggle, updatePlaybackTooltip, getData, summarizeResult } = window._sr;
+  const { base, element, esc, TOAST_MS, fetchJson, showToast, toastOperation, initToggle, updatePlaybackTooltip, getData, summarizeResult } = window._sr;
 
   // #region Param Providers
   /**
@@ -12,8 +12,8 @@
    */
   window._sr.getAtParams = () => {
     const params = new URLSearchParams();
-    ["path", "slug", "offset"].forEach((key) => window._sr.setIfNotEmpty(params, key, el(`at-${key}`)?.value));
-    ["seasonal", "force", "batch"].forEach((toggle) => el(`at-mp3-${toggle}`)?.getAttribute("aria-pressed") === "true" && params.set(toggle, "true"));
+    ["path", "slug", "offset"].forEach((key) => window._sr.setIfNotEmpty(params, key, element(`at-${key}`)?.value));
+    ["seasonal", "force", "batch"].forEach((toggle) => element(`at-mp3-${toggle}`)?.getAttribute("aria-pressed") === "true" && params.set(toggle, "true"));
     return params;
   };
 
@@ -23,7 +23,7 @@
    */
   window._sr.getAtMapParams = () => {
     const params = new URLSearchParams();
-    window._sr.setIfNotEmpty(params, "filter", el("at-filter-map")?.value);
+    window._sr.setIfNotEmpty(params, "filter", element("at-filter-map")?.value);
     return params;
   };
 
@@ -46,14 +46,14 @@
       const label = "AnimeThemes MP3";
 
       showToast(`${label}: Generating...`, "info", TOAST_MS);
-      const res = await fetchJson(`${base}/animethemes/mp3?${queryParams}`);
-      const resData = getData(res);
+      const response = await fetchJson(`${base}/animethemes/mp3?${queryParams}`);
+      const resData = getData(response);
 
       const status = resData?.Status || resData?.status;
       const message = resData?.Message || resData?.message;
       const folder = resData?.Folder || resData?.folder || queryParams.get("path");
 
-      let summary = summarizeResult(res).text;
+      let summary = summarizeResult(response).text;
       let isNoTheme = false;
 
       // Handle specific skip scenarios for user-friendly feedback
@@ -70,8 +70,8 @@
         summary = message || "Unknown error";
       }
 
-      if (res.ok || status === "skipped") {
-        toastOperation(res, label, {
+      if (response.isOk || status === "skipped") {
+        toastOperation(response, label, {
           summary: summary || status || "Complete",
           hideOnSucceed: isBatch ? 0 : TOAST_MS,
           type: isNoTheme ? "warning" : undefined,
@@ -90,7 +90,7 @@
           if (playPath) playThemeMp3(playPath);
         }
       } else {
-        toastOperation(res, label, { summary, hideOnSucceed: 0 });
+        toastOperation(response, label, { summary, hideOnSucceed: 0 });
       }
     },
   });
@@ -118,29 +118,29 @@
   /** @type {string|null} The folder path of the currently playing theme. */
   let atCurrentFolder = null;
 
-  const atTrack = el("at-progress-track");
-  const atFill = el("at-progress-fill");
+  const atTrack = element("at-progress-track");
+  const atFill = element("at-progress-fill");
 
   /**
    * Initializes real-time input sanitization event listeners for the Slug, Offset, and Filter fields.
    * @returns {void}
    */
   function initAtSanitizers() {
-    const slugInput = el("at-slug");
+    const slugInput = element("at-slug");
     if (slugInput) {
       slugInput.oninput = () => {
         slugInput.value = slugInput.value.replace(/[^a-zA-Z0-9-]/g, "").toUpperCase();
       };
     }
 
-    const offsetInput = el("at-offset");
+    const offsetInput = element("at-offset");
     if (offsetInput) {
       offsetInput.oninput = () => {
         offsetInput.value = offsetInput.value.replace(/[^0-9]/g, "");
       };
     }
 
-    const mapFilter = el("at-filter-map");
+    const mapFilter = element("at-filter-map");
     if (mapFilter) {
       mapFilter.oninput = () => {
         mapFilter.value = mapFilter.value.replace(/[^aA0-9,\s]/g, "").toLowerCase();
@@ -166,14 +166,14 @@
    */
   async function showNowPlaying(folderPath) {
     try {
-      const res = await fetch(`${base}/animethemes/mp3/stream?path=${encodeURIComponent(folderPath)}`, { method: "HEAD" });
+      const response = await fetch(`${base}/animethemes/mp3/stream?path=${encodeURIComponent(folderPath)}`, { method: "HEAD" });
       const getHeader = (headerKey) => {
-        const val = res.headers.get(headerKey);
-        if (!val) return "";
+        const value = response.headers.get(headerKey);
+        if (!value) return "";
         try {
-          return decodeURIComponent(val);
+          return decodeURIComponent(value);
         } catch {
-          return val;
+          return value;
         }
       };
       const title = getHeader("X-Theme-Title");
@@ -196,12 +196,12 @@
    * @returns {void}
    */
   function syncPlaybackUI() {
-    const isEnabled = el("at-playback")?.getAttribute("aria-pressed") === "true";
+    const isEnabled = element("at-playback")?.getAttribute("aria-pressed") === "true";
     const isActive = isEnabled && atAudio?.src && !atAudio.ended;
     atTrack?.classList.toggle("active", isActive);
     atTrack?.classList.toggle("paused", atAudio?.paused);
     if (!isActive && atFill) atFill.style.width = "0%";
-    const playBtn = el("at-play");
+    const playBtn = element("at-play");
     if (playBtn) {
       const isPlaying = atAudio && !atAudio.paused && !atAudio.ended;
       playBtn.setAttribute("data-state", isPlaying ? "playing" : "idle");
@@ -210,12 +210,12 @@
   }
 
   if (atTrack) {
-    atTrack.onclick = (ev) => {
-      if (atAudio?.duration && isFinite(atAudio.duration)) atAudio.currentTime = ((ev.clientX - atTrack.getBoundingClientRect().left) / atTrack.offsetWidth) * atAudio.duration;
+    atTrack.onclick = (event) => {
+      if (atAudio?.duration && isFinite(atAudio.duration)) atAudio.currentTime = ((event.clientX - atTrack.getBoundingClientRect().left) / atTrack.offsetWidth) * atAudio.duration;
     };
-    atTrack.onmousedown = (ev) => {
-      if (ev.button === 1 && atAudio?.src) {
-        ev.preventDefault();
+    atTrack.onmousedown = (event) => {
+      if (event.button === 1 && atAudio?.src) {
+        event.preventDefault();
         atAudio.paused ? atAudio.play() : atAudio.pause();
       }
     };
@@ -229,23 +229,23 @@
    * @returns {Promise<void>}
    */
   async function playThemeMp3(folderPath) {
-    if (el("at-playback")?.getAttribute("aria-pressed") !== "true" || !folderPath) return;
+    if (element("at-playback")?.getAttribute("aria-pressed") !== "true" || !folderPath) return;
     if (!atAudio) {
       atAudio = new Audio();
       atAudio.volume = 0.5;
       atAudio.ontimeupdate = () => atFill && (atFill.style.width = (atAudio.currentTime / atAudio.duration) * 100 + "%");
-      ["play", "pause"].forEach((ev) => atAudio.addEventListener(ev, syncPlaybackUI));
+      ["play", "pause"].forEach((event) => atAudio.addEventListener(event, syncPlaybackUI));
       atAudio.onended = async () => {
         syncPlaybackUI();
-        if (el("at-mode")?.getAttribute("data-mode") === "shuffle") {
-          const res = await fetchJson(base + "/animethemes/mp3/random");
-          const randomData = getData(res);
+        if (element("at-mode")?.getAttribute("data-mode") === "shuffle") {
+          const response = await fetchJson(base + "/animethemes/mp3/random");
+          const randomData = getData(response);
           if (randomData?.path) playThemeMp3(randomData.path);
         } else dismissNowPlaying();
       };
     }
     atAudio.src = `${base}/animethemes/mp3/stream?path=${encodeURIComponent(folderPath)}`;
-    atAudio.loop = el("at-mode")?.getAttribute("data-mode") === "loop";
+    atAudio.loop = element("at-mode")?.getAttribute("data-mode") === "loop";
     atAudio.play().catch(() => {});
     atCurrentFolder = folderPath;
     showNowPlaying(folderPath);
@@ -255,16 +255,16 @@
   // #region MP3 - Configuration
   /**
    * Initialize AnimeThemes config bindings.
-   * @param {Object} cfg - The current config object.
+   * @param {Object} config - The current config object.
    * @param {Function} persist - Async function to save config changes.
    * @returns {void}
    */
-  window._sr.initAtConfig = (cfg, persist) => {
-    const playback = el("at-playback");
-    const modeButton = el("at-mode");
-    const playButton = el("at-play");
+  window._sr.initAtConfig = (config, persist) => {
+    const playback = element("at-playback");
+    const modeButton = element("at-mode");
+    const playButton = element("at-play");
 
-    const getVal = (path) => window._sr.getValueByPath(cfg, path);
+    const getVal = (path) => window._sr.getValueByPath(config, path);
 
     if (playback) {
       const sync = (isVisible) => {
@@ -290,8 +290,8 @@
           dismissNowPlaying();
         }
 
-        window._sr.setValueByPath(cfg, "Playback.AnimeThemesMp3Playback", nextPressed);
-        await persist(cfg);
+        window._sr.setValueByPath(config, "Playback.AnimeThemesMp3Playback", nextPressed);
+        await persist(config);
       };
     }
 
@@ -305,8 +305,8 @@
         modeButton.setAttribute("data-mode", nextMode);
         updatePlaybackTooltip(modeButton);
         if (atAudio) atAudio.loop = nextMode === "loop";
-        window._sr.setValueByPath(cfg, "Playback.AnimeThemesMp3Mode", nextMode);
-        await persist(cfg);
+        window._sr.setValueByPath(config, "Playback.AnimeThemesMp3Mode", nextMode);
+        await persist(config);
       };
     }
 
@@ -317,8 +317,8 @@
           atAudio.play();
           if (atCurrentFolder) showNowPlaying(atCurrentFolder);
         } else {
-          const res = await fetchJson(base + "/animethemes/mp3/random");
-          const randomData = getData(res);
+          const response = await fetchJson(base + "/animethemes/mp3/random");
+          const randomData = getData(response);
           randomData?.path ? playThemeMp3(randomData.path) : showToast("No Theme.mp3 Files Found", "error", window._sr.TOAST_MS);
         }
       };
