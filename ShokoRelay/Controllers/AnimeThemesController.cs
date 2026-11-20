@@ -146,14 +146,7 @@ public class AnimeThemesController(
             return await ExecuteTrackedTaskAsync(
                     ShokoRelayConstants.TaskAtMp3Build,
                     ReportHelper.BuildAtMp3Report,
-                    async () =>
-                    {
-                        var batch = await animeThemesMp3Generator.ProcessBatchAsync(query, CancellationToken.None).ConfigureAwait(false);
-                        animeThemesMp3Generator.AddBatchToThemeMp3Cache(
-                            batch.Items.Where(item => item.Status == "ok" && !string.IsNullOrWhiteSpace(item.Folder)).Select(item => (item.Folder, AnimeThemesHelper.StandardizeSlug(item.Slug)))
-                        );
-                        return batch;
-                    },
+                    () => animeThemesMp3Generator.ProcessBatchAsync(query, CancellationToken.None),
                     VfsShared.VfsLock
                 )
                 .ConfigureAwait(false);
@@ -165,8 +158,6 @@ public class AnimeThemesController(
         try
         {
             var result = await animeThemesMp3Generator.ProcessSingleAsync(query, null, CancellationToken.None).ConfigureAwait(false);
-            if (result.Status == "ok" && !string.IsNullOrWhiteSpace(result.Folder))
-                animeThemesMp3Generator.AddToThemeMp3Cache(result.Folder, AnimeThemesHelper.StandardizeSlug(result.Slug));
             return result.Status == "error" ? BadRequest(new RelayResponse<object>(Status: "error", Message: result.Message, Data: result)) : Ok(new RelayResponse<ThemeMp3OperationResult>(Data: result));
         }
         finally

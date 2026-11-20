@@ -308,27 +308,48 @@ public class AnimeThemesMp3Generator(
             .ToList();
 
         var processedSeries = new ConcurrentDictionary<int, byte>();
+        var newlyGenerated = new ConcurrentBag<(string Folder, string Slug)>();
+        bool wasCancelled = false;
 
-        await Parallel.ForEachAsync(
-            folders,
-            DefaultParallelOptions(cancellationToken),
-            async (folder, token) =>
-            {
-                var res = await ProcessSingleAsync(query with { Path = folder, Batch = true }, processedSeries, token).ConfigureAwait(false);
-                lock (results)
+        try
+        {
+            await Parallel.ForEachAsync(
+                folders,
+                DefaultParallelOptions(cancellationToken),
+                async (folder, token) =>
                 {
-                    results.Add(res);
-                    if (res.Status == "ok")
-                        processed++;
-                    else if (res.Status == "skipped")
-                        skipped++;
-                    else
-                        errors++;
+                    var res = await ProcessSingleAsync(query with { Path = folder, Batch = true }, processedSeries, token).ConfigureAwait(false);
+                    lock (results)
+                    {
+                        results.Add(res);
+                        if (res.Status == "ok")
+                        {
+                            processed++;
+                            if (!string.IsNullOrWhiteSpace(res.Folder))
+                                newlyGenerated.Add((res.Folder, AnimeThemesHelper.StandardizeSlug(res.Slug)));
+                        }
+                        else if (res.Status == "skipped")
+                            skipped++;
+                        else
+                            errors++;
+                    }
                 }
-            }
-        );
+            );
+        }
+        catch (OperationCanceledException)
+        {
+            wasCancelled = true;
+            logger.LogInformation("AnimeThemes MP3: Batch generation cancelled -> flushing {Count} generated theme(s) to cache...", newlyGenerated.Count);
+            lock (results)
+                results.Add(new(root, "cancelled", "Batch generation was cancelled."));
+        }
+        finally
+        {
+            if (!newlyGenerated.IsEmpty)
+                AddBatchToThemeMp3Cache(newlyGenerated);
+        }
 
-        logger.LogInformation("AnimeThemes MP3: Batch generation finished -> {Processed} processed, {Skipped} skipped, {Errors} errors", processed, skipped, errors);
+        logger.LogInformation("AnimeThemes MP3: Batch generation {Status} -> {Processed} processed, {Skipped} skipped, {Errors} errors", wasCancelled ? "cancelled" : "finished", processed, skipped, errors);
         return new ThemeMp3BatchResult(root, results, processed, skipped, errors);
     }
 
@@ -555,6 +576,9 @@ public class AnimeThemesMp3Generator(
                     }
                 });
             }
+
+            if (!query.Batch)
+                AddToThemeMp3Cache(folder, AnimeThemesHelper.StandardizeSlug(slugRaw));
 
             logger.LogInformation("AnimeThemes MP3: Successfully generated Theme.mp3 -> {Title} [{LocalId}] ({Slug})", series.GetDisplayTitle(), series.LocalID, slugDisplay);
             return new(folder, "ok", null, themePath, vfsLink, animeTitle, animeSlug, series.LocalID, slugRaw, dur.TotalSeconds);
