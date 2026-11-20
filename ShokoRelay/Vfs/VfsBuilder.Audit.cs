@@ -27,8 +27,13 @@ public partial class VfsBuilder
 
         string rootName = VfsShared.ResolveRootFolderName();
         string movieRootName = VfsShared.ResolveMovieRootFolderName();
-        var allRoots =
-            videoService.GetAllManagedFolders()?.Where(VfsShared.IsVfsEnabledFolder).Select(folder => folder.Path).Where(path => !string.IsNullOrWhiteSpace(path)).Distinct(VfsShared.PathComparer).ToList()
+        var allRoots = videoService
+            .GetAllManagedFolders()
+            ?.Where(VfsShared.IsVfsEnabledFolder)
+            .Select(folder => folder.Path)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(VfsShared.PathComparer)
+            .ToList()
             ?? [];
 
         var validFolderIds = new HashSet<int>();
@@ -47,7 +52,7 @@ public partial class VfsBuilder
                     validFolderIds.Add(folderId);
 
                 if (doMovie)
-                    foreach (var episode in series.Episodes.Where(ep => ep.Type == EpisodeType.Episode))
+                    foreach (var episode in series.Episodes.Where(episode => episode.Type == EpisodeType.Episode))
                         validMovieFolders.Add(episode.LocalID);
             }
         }
@@ -63,84 +68,78 @@ public partial class VfsBuilder
                 if (!Directory.Exists(vfsRoot))
                     continue;
 
-                Parallel.ForEach(
-                    Directory.GetDirectories(vfsRoot),
-                    DefaultParallelOptions(cancellationToken),
-                    seriesFolder =>
+                Parallel.ForEach(Directory.GetDirectories(vfsRoot), DefaultParallelOptions(cancellationToken), seriesFolder =>
+                {
+                    string folderName = Path.GetFileName(seriesFolder);
+
+                    // Ignore special files/folders like .ignore
+                    if (folderName.StartsWith('.'))
+                        return;
+
+                    if (!int.TryParse(folderName, out int parsedFolderId) || !validIds.Contains(parsedFolderId))
                     {
-                        string folderName = Path.GetFileName(seriesFolder);
-
-                        // Ignore special files/folders like .ignore
-                        if (folderName.StartsWith('.'))
-                            return;
-
-                        if (!int.TryParse(folderName, out int parsedFolderId) || !validIds.Contains(parsedFolderId))
-                        {
-                            try
-                            {
-                                Directory.Delete(seriesFolder, true);
-                                Interlocked.Increment(ref orphanedFolders);
-                                removed.Add($"[Orphaned Series] {seriesFolder}");
-
-                                if (parsedFolderId > 0)
-                                    foreach (var rootDict in blueprint.Values)
-                                        if (rootDict.TryRemove(parsedFolderId, out _))
-                                            Interlocked.Exchange(ref blueprintUpdated, 1);
-                            }
-                            catch (Exception ex)
-                            {
-                                errors.Add($"Failed to delete orphaned folder {seriesFolder}: {ex.Message}");
-                            }
-                            return;
-                        }
-
-                        Interlocked.Increment(ref seriesChecked);
-
-                        var filesToAudit = new List<string>();
-
                         try
                         {
-                            filesToAudit = [.. Directory.EnumerateFiles(seriesFolder, "*", SearchOption.AllDirectories)];
+                            Directory.Delete(seriesFolder, true);
+                            Interlocked.Increment(ref orphanedFolders);
+                            removed.Add($"[Orphaned Series] {seriesFolder}");
+
+                            if (parsedFolderId > 0)
+                                foreach (var rootDict in blueprint.Values)
+                                    if (rootDict.TryRemove(parsedFolderId, out _))
+                                        Interlocked.Exchange(ref blueprintUpdated, 1);
                         }
                         catch (Exception ex)
                         {
-                            errors.Add($"Failed to enumerate series folder {seriesFolder}: {ex.Message}");
-                            return;
+                            errors.Add($"Failed to delete orphaned folder {seriesFolder}: {ex.Message}");
                         }
+                        return;
+                    }
 
-                        foreach (var file in filesToAudit)
+                    Interlocked.Increment(ref seriesChecked);
+
+                    var filesToAudit = new List<string>();
+
+                    try
+                    {
+                        filesToAudit = [.. Directory.EnumerateFiles(seriesFolder, "*", SearchOption.AllDirectories)];
+                    }
+                    catch (Exception ex)
+                    {
+                        errors.Add($"Failed to enumerate series folder {seriesFolder}: {ex.Message}");
+                        return;
+                    }
+
+                    foreach (var file in filesToAudit)
+                    {
+                        try
                         {
-                            try
+                            var info = new FileInfo(file);
+                            if (info.LinkTarget != null && !info.Exists)
                             {
-                                var info = new FileInfo(file);
-                                if (info.LinkTarget != null && !info.Exists)
-                                {
-                                    File.Delete(file);
-                                    Interlocked.Increment(ref brokenLinks);
-                                    removed.Add($"[Broken Link] {file}");
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                errors.Add($"Failed to process file {file}: {ex.Message}");
+                                File.Delete(file);
+                                Interlocked.Increment(ref brokenLinks);
+                                removed.Add($"[Broken Link] {file}");
                             }
                         }
-
-                        foreach (var subDir in Directory.EnumerateDirectories(seriesFolder, "*", SearchOption.AllDirectories).OrderByDescending(dir => dir.Length))
+                        catch (Exception ex)
                         {
-                            try
-                            {
-                                if (!Directory.EnumerateFileSystemEntries(subDir).Any())
-                                {
-                                    Directory.Delete(subDir, false);
-                                    Interlocked.Increment(ref orphanedFolders);
-                                    removed.Add($"[Empty Folder] {subDir}");
-                                }
-                            }
-                            catch { }
+                            errors.Add($"Failed to process file {file}: {ex.Message}");
                         }
                     }
-                );
+
+                    foreach (var subDir in Directory.EnumerateDirectories(seriesFolder, "*", SearchOption.AllDirectories).OrderByDescending(dir => dir.Length))
+                        try
+                        {
+                            if (!Directory.EnumerateFileSystemEntries(subDir).Any())
+                            {
+                                Directory.Delete(subDir, false);
+                                Interlocked.Increment(ref orphanedFolders);
+                                removed.Add($"[Empty Folder] {subDir}");
+                            }
+                        }
+                        catch { }
+                });
             }
         }
 

@@ -94,11 +94,9 @@ public static partial class TagHelper
                 asm.GetManifestResourceNames().FirstOrDefault(name => name.EndsWith(ShokoRelayConstants.FileDefaultTagOverrides, StringComparison.OrdinalIgnoreCase)) is { } resName
                 && asm.GetManifestResourceStream(resName) is { } stream
             )
-            {
                 using (stream)
                 using (var reader = new StreamReader(stream, Encoding.UTF8))
                     return TextHelper.ParseOverrides(reader, NormalizeTagKey);
-            }
         }
         catch { }
 
@@ -398,14 +396,10 @@ public static partial class TagHelper
 
         // Primary Pass: Capitalize words and apply Upper/Lower lists
         string result = WordRegex()
-            .Replace(
-                text.ToLowerInvariant(),
-                match =>
-                    s_forceLower.Contains(match.Value) ? match.Value.ToLowerInvariant()
-                    : s_forceUpper.Contains(match.Value) ? match.Value.ToUpperInvariant()
-                    // Capitalise all words accounting for apostrophes first
-                    : char.ToUpperInvariant(match.Value[0]) + match.Value[1..]
-            );
+            .Replace(text.ToLowerInvariant(), match => s_forceLower.Contains(match.Value) ? match.Value.ToLowerInvariant()
+                : s_forceUpper.Contains(match.Value) ? match.Value.ToUpperInvariant()
+                // Capitalise all words accounting for apostrophes first
+                : char.ToUpperInvariant(match.Value[0]) + match.Value[1..]);
 
         // Force capitalise the first character no matter what
         result = char.ToUpperInvariant(result[0]) + result[1..];

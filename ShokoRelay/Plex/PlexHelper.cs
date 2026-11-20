@@ -272,11 +272,9 @@ public static partial class PlexHelper
     {
         var roots = new HashSet<string>(VfsShared.PathComparer);
         foreach (var video in MapHelper.GetActiveVideos(series, metadataService))
-        {
-            foreach (var file in video.Files ?? [])
-                if (file != null && VfsShared.ResolveImportRootPath(file) is string importRoot)
-                    roots.Add(importRoot);
-        }
+        foreach (var file in video.Files ?? [])
+            if (file != null && VfsShared.ResolveImportRootPath(file) is string importRoot)
+                roots.Add(importRoot);
         return roots;
     }
 

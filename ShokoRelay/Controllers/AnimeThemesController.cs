@@ -414,7 +414,8 @@ public class AnimeThemesController(
                         if (entry.AniDbId > 0)
                         {
                             if (!localSeriesHasFiles.TryGetValue(entry.AniDbId, out bool hasFiles))
-                                localSeriesHasFiles[entry.AniDbId] = hasFiles = MetadataService.GetShokoSeriesByAnidbID(entry.AniDbId) is { } ls && ls.Episodes.Any(ep => ep.Videos?.Count > 0);
+                                localSeriesHasFiles[entry.AniDbId] = hasFiles =
+                                    MetadataService.GetShokoSeriesByAnidbID(entry.AniDbId) is { } localSeries && localSeries.Episodes.Any(episode => episode.Videos?.Count > 0);
                             if (hasFiles)
                                 continue;
                         }

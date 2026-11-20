@@ -33,7 +33,7 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
 {
     #region Setup
 
-    private readonly AnimeThemesApi _api = apiClient;
+    private readonly AnimeThemesApi _apiClient = apiClient;
 
     #endregion
 
@@ -84,14 +84,12 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
         // Build a cache of existing files to prevent downloading duplicates already organized in different folders
         var existingFiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         if (Directory.Exists(baseThemePath))
-        {
             try
             {
                 foreach (var file in Directory.EnumerateFiles(baseThemePath, "*.webm", SearchOption.AllDirectories))
                     existingFiles.TryAdd(Path.GetFileName(file), "/" + Path.GetRelativePath(baseThemePath, file).Replace('\\', '/'));
             }
             catch { }
-        }
 
         // Cache files that already have a valid AniDB ID mapping to avoid redundant processing
         var mappedFilesWithAnidb = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -100,7 +98,6 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
         try
         {
             if (File.Exists(mapPath))
-            {
                 try
                 {
                     var parsed = AnimeThemesHelper.ParseMappingContentWithComments(await File.ReadAllTextAsync(mapPath, cancellationToken).ConfigureAwait(false)).Entries;
@@ -108,7 +105,6 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
                         mappedFilesWithAnidb.Add(Path.GetFileName(entry.FilePath));
                 }
                 catch { }
-            }
         }
         finally
         {
@@ -122,7 +118,7 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
         {
             while (hasNext && !cancellationToken.IsCancellationRequested)
             {
-                var resp = await _api.FetchAnimePageAsync(query.Year, query.Season, query.Name, page, cancellationToken).ConfigureAwait(false);
+                var resp = await _apiClient.FetchAnimePageAsync(query.Year, query.Season, query.Name, page, cancellationToken).ConfigureAwait(false);
                 var animeList = resp?.Data;
                 if (animeList == null || animeList.Count == 0)
                     break;
@@ -139,7 +135,7 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
                     {
                         try
                         {
-                            var details = await _api.FetchAnimeThemeWithArtistsAsync(theme.Id, cancellationToken).ConfigureAwait(false);
+                            var details = await _apiClient.FetchAnimeThemeWithArtistsAsync(theme.Id, cancellationToken).ConfigureAwait(false);
                             var video = details?.Animethemeentries?.FirstOrDefault()?.Videos?.Nodes?.FirstOrDefault();
 
                             if (video == null || string.IsNullOrWhiteSpace(video.Link) || string.IsNullOrWhiteSpace(video.Basename))
@@ -174,8 +170,8 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
                                 using var videoResp = await httpClient.GetAsync(video.Link, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
                                 videoResp.EnsureSuccessStatusCode();
 
-                                await using var fs = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
-                                await videoResp.Content.CopyToAsync(fs, cancellationToken).ConfigureAwait(false);
+                                await using var fileStream = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
+                                await videoResp.Content.CopyToAsync(fileStream, cancellationToken).ConfigureAwait(false);
 
                                 downloads.Add(safeBasename);
                                 downloadedItems.Add((relPath, safeBasename));
@@ -199,8 +195,8 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
                                     using var retryResp = await httpClient.GetAsync(video.Link, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
                                     retryResp.EnsureSuccessStatusCode();
 
-                                    await using var fs = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
-                                    await retryResp.Content.CopyToAsync(fs, cancellationToken).ConfigureAwait(false);
+                                    await using var fileStream = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
+                                    await retryResp.Content.CopyToAsync(fileStream, cancellationToken).ConfigureAwait(false);
 
                                     downloads.Add(safeBasename);
                                     downloadedItems.Add((relPath, safeBasename));
@@ -246,6 +242,11 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
                 hasNext = resp?.PaginatorInfo?.HasMorePages ?? false;
                 page++;
             }
+        }
+        catch (RateLimitAbortException ex)
+        {
+            errors++;
+            messages.Add(ex.Message);
         }
         finally
         {

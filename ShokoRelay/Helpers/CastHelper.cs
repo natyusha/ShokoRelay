@@ -77,11 +77,9 @@ public static class CastHelper
                 asm.GetManifestResourceNames().FirstOrDefault(resName => resName.EndsWith(ShokoRelayConstants.FileDefaultCreditOverrides, StringComparison.OrdinalIgnoreCase)) is { } resName
                 && asm.GetManifestResourceStream(resName) is { } stream
             )
-            {
                 using (stream)
                 using (var reader = new StreamReader(stream, Encoding.UTF8))
                     return TextHelper.ParseOverrides(reader, NormalizeCreditKey);
-            }
         }
         catch { }
 
@@ -120,29 +118,25 @@ public static class CastHelper
                 (series, local) =>
                 {
                     local.SeenInSeries.Clear();
-                    EnumerateSeriesCredits(
-                        series,
-                        null,
-                        (rawName, isPerson, isAnidb) =>
+                    EnumerateSeriesCredits(series, null, (rawName, isPerson, isAnidb) =>
+                    {
+                        if (string.IsNullOrWhiteSpace(rawName))
+                            return;
+
+                        if (!local.ResolveCache.TryGetValue(rawName, out var resolved))
                         {
-                            if (string.IsNullOrWhiteSpace(rawName))
-                                return;
-
-                            if (!local.ResolveCache.TryGetValue(rawName, out var resolved))
-                            {
-                                string trimmed = rawName.Trim();
-                                string norm = NormalizeCreditKey(trimmed);
-                                bool skip = norm.Length == 0 || s_creditMerges.ContainsKey(norm) || IsCreditBlacklisted(trimmed);
-                                resolved = local.ResolveCache[rawName] = (trimmed, norm, skip);
-                            }
-
-                            if (resolved.Skip || !local.SeenInSeries.Add((isPerson, isAnidb, resolved.NormKey)))
-                                return;
-
-                            var key = (isPerson, isAnidb, resolved.NormKey, resolved.Trimmed);
-                            local.Counts[key] = local.Counts.GetValueOrDefault(key, 0) + 1;
+                            string trimmed = rawName.Trim();
+                            string norm = NormalizeCreditKey(trimmed);
+                            bool skip = norm.Length == 0 || s_creditMerges.ContainsKey(norm) || IsCreditBlacklisted(trimmed);
+                            resolved = local.ResolveCache[rawName] = (trimmed, norm, skip);
                         }
-                    );
+
+                        if (resolved.Skip || !local.SeenInSeries.Add((isPerson, isAnidb, resolved.NormKey)))
+                            return;
+
+                        var key = (isPerson, isAnidb, resolved.NormKey, resolved.Trimmed);
+                        local.Counts[key] = local.Counts.GetValueOrDefault(key, 0) + 1;
+                    });
                 },
                 local =>
                 {
@@ -166,27 +160,23 @@ public static class CastHelper
     {
         var seenInSeries = new HashSet<(bool IsPerson, string NormKey, int Priority)>();
 
-        EnumerateSeriesCredits(
-            series,
-            tmdbSeries,
-            (rawName, isPerson, isAnidb) =>
+        EnumerateSeriesCredits(series, tmdbSeries, (rawName, isPerson, isAnidb) =>
+        {
+            if (string.IsNullOrWhiteSpace(rawName) || IsCreditBlacklisted(rawName))
+                return;
+
+            string trimmed = rawName.Trim();
+            string norm = NormalizeCreditKey(trimmed);
+            if (norm.Length == 0 || s_creditMerges.ContainsKey(norm))
+                return;
+
+            int priority = isAnidb ? 1 : 2;
+            if (seenInSeries.Add((isPerson, norm, priority)))
             {
-                if (string.IsNullOrWhiteSpace(rawName) || IsCreditBlacklisted(rawName))
-                    return;
-
-                string trimmed = rawName.Trim();
-                string norm = NormalizeCreditKey(trimmed);
-                if (norm.Length == 0 || s_creditMerges.ContainsKey(norm))
-                    return;
-
-                int priority = isAnidb ? 1 : 2;
-                if (seenInSeries.Add((isPerson, norm, priority)))
-                {
-                    var targetCache = isAnidb ? s_anidbCreditNames : s_tmdbCreditNames;
-                    targetCache.GetOrAdd((isPerson, norm), _ => new CacheHelper.GlobalNameEntry()).ResolveDisplayName(trimmed, priority, record: true);
-                }
+                var targetCache = isAnidb ? s_anidbCreditNames : s_tmdbCreditNames;
+                targetCache.GetOrAdd((isPerson, norm), _ => new CacheHelper.GlobalNameEntry()).ResolveDisplayName(trimmed, priority, record: true);
             }
-        );
+        });
     }
 
     /// <summary>Enumerates all valid cast, crew, and studio credits for a series, yielding raw name, person flag, and AniDB ownership.</summary>
@@ -264,16 +254,16 @@ public static class CastHelper
 
         if (item is ISeries seriesItem)
         {
-            if (seriesItem is IShokoSeries ss && s_recordedSeriesIds.TryAdd(ss.LocalID, 0))
+            if (seriesItem is IShokoSeries shokoSeries && s_recordedSeriesIds.TryAdd(shokoSeries.LocalID, 0))
                 RecordSeriesCredits(seriesItem, tmdbSeries);
 
             // Pre-populate global studio thumbs from this series' TMDB studios so both crew and company listings can reference them
             foreach (var studio in (seriesItem.Studios ?? []).Concat(tmdbSeries?.Studios ?? []))
                 if (studio.ID.Source == MetadataSource.TMDB && studio is IWithImages withImages && !string.IsNullOrWhiteSpace(studio.Name))
                 {
-                    string sKey = NormalizeCreditKey(ResolvePreferredCreditName(studio.Name, false, 2));
-                    if (!s_globalStudioThumbs.ContainsKey(sKey) && withImages.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, forceRemote: true) is { } logoUrl)
-                        s_globalStudioThumbs[sKey] = logoUrl;
+                    string studioKey = NormalizeCreditKey(ResolvePreferredCreditName(studio.Name, false, 2));
+                    if (!s_globalStudioThumbs.ContainsKey(studioKey) && withImages.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, forceRemote: true) is { } logoUrl)
+                        s_globalStudioThumbs[studioKey] = logoUrl;
                 }
         }
 

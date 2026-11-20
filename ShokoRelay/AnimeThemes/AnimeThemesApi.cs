@@ -167,13 +167,25 @@ public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesAp
 
             if (response.StatusCode == HttpStatusCode.TooManyRequests)
             {
+                if (attempt == 1)
+                {
+                    logger?.LogWarning("AnimeThemes: Rate limit exceeded (429) on retry.");
+                    return default;
+                }
+
                 DateTimeOffset rateLimitReset;
                 lock (_quotaLock)
                     rateLimitReset = _rateLimitReset;
 
-                var wait = response.Headers.RetryAfter?.Delta ?? (rateLimitReset > DateTimeOffset.UtcNow ? rateLimitReset - DateTimeOffset.UtcNow : TimeSpan.FromSeconds(60));
-                logger?.LogWarning("AnimeThemes: Rate limit exceeded (429). Retrying after {Seconds:F1}s", wait.TotalSeconds);
-                await Task.Delay(wait, cancellationToken).ConfigureAwait(false);
+                var wait = response.Headers.RetryAfter?.Delta
+                    ?? (
+                        response.Headers.RetryAfter?.Date is { } retryDate
+                            ? retryDate - DateTimeOffset.UtcNow
+                            : (rateLimitReset > DateTimeOffset.UtcNow ? rateLimitReset - DateTimeOffset.UtcNow : TimeSpan.FromSeconds(60))
+                    );
+                logger?.LogWarning("AnimeThemes: Rate limit exceeded (429). Retrying after {Seconds:F1}s", Math.Max(0, wait.TotalSeconds));
+                if (wait > TimeSpan.Zero)
+                    await Task.Delay(wait, cancellationToken).ConfigureAwait(false);
                 continue;
             }
 
@@ -187,7 +199,7 @@ public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesAp
             var result = await JsonSerializer.DeserializeAsync<GraphQlResponse<T>>(stream, s_jsonOptions, cancellationToken).ConfigureAwait(false);
 
             if (result?.Errors != null && result.Errors.Count > 0)
-                logger?.LogWarning("AnimeThemes: GraphQL returned errors: {Errors}", string.Join(", ", result.Errors.Select(err => err.Message)));
+                logger?.LogWarning("AnimeThemes: GraphQL returned errors: {Errors}", string.Join(", ", result.Errors.Select(error => error.Message)));
 
             return result?.Data;
         }
@@ -201,10 +213,10 @@ public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesAp
     {
         lock (_quotaLock)
         {
-            if (response.Headers.TryGetValues("X-RateLimit-Remaining", out var remVals) && int.TryParse(remVals.FirstOrDefault(), out int remaining))
+            if (response.Headers.TryGetValues("X-RateLimit-Remaining", out var remainingValues) && int.TryParse(remainingValues.FirstOrDefault(), out int remaining))
                 _rateLimitRemaining = remaining;
 
-            if (response.Headers.TryGetValues("X-RateLimit-Reset", out var resetVals) && long.TryParse(resetVals.FirstOrDefault(), out long resetVal))
+            if (response.Headers.TryGetValues("X-RateLimit-Reset", out var resetValues) && long.TryParse(resetValues.FirstOrDefault(), out long resetVal))
                 _rateLimitReset =
                     resetVal > 10_000_000_000L ? DateTimeOffset.FromUnixTimeMilliseconds(resetVal)
                     : resetVal > 1_000_000_000L ? DateTimeOffset.FromUnixTimeSeconds(resetVal)

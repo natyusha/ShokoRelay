@@ -117,7 +117,7 @@ public class SyncToShoko(
             if (string.IsNullOrWhiteSpace(cacheKey))
                 return null;
 
-            if (!episodeCache.TryGetValue(cacheKey, out var ep))
+            if (!episodeCache.TryGetValue(cacheKey, out var episode))
             {
                 if (isLegacyFallback)
                 {
@@ -125,32 +125,32 @@ public class SyncToShoko(
                     if (!string.IsNullOrWhiteSpace(filePath))
                     {
                         string mapped = plexClient.MapPlexPathToShokoPath(filePath);
-                        var vid = videoService.GetVideoFileByAbsolutePath(mapped);
-                        if (vid == null)
+                        var videoFile = videoService.GetVideoFileByAbsolutePath(mapped);
+                        if (videoFile == null)
                         {
                             string normPath = VfsShared.NormalizeSeparators(filePath);
-                            string fName = Path.GetFileName(normPath);
+                            string fileName = Path.GetFileName(normPath);
                             string? parent = Path.GetFileName(Path.GetDirectoryName(normPath));
-                            string suffix = !string.IsNullOrEmpty(parent) ? $"{Path.DirectorySeparatorChar}{parent}{Path.DirectorySeparatorChar}{fName}" : $"{Path.DirectorySeparatorChar}{fName}";
+                            string suffix = !string.IsNullOrEmpty(parent) ? $"{Path.DirectorySeparatorChar}{parent}{Path.DirectorySeparatorChar}{fileName}" : $"{Path.DirectorySeparatorChar}{fileName}";
 
-                            vid = videoService
+                            videoFile = videoService
                                 .GetAllVideoFiles()
-                                ?.FirstOrDefault(vid => !string.IsNullOrWhiteSpace(vid.Path) && VfsShared.NormalizeSeparators(vid.Path).EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
+                                ?.FirstOrDefault(file => !string.IsNullOrWhiteSpace(file.Path) && VfsShared.NormalizeSeparators(file.Path).EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
                         }
-                        ep = vid?.Video?.Episodes?.FirstOrDefault();
+                        episode = videoFile?.Video?.Episodes?.FirstOrDefault();
 
-                        if (ep == null)
+                        if (episode == null)
                             logger.LogDebug("WatchedSyncService: Legacy fallback failed to resolve Shoko episode for file '{FilePath}'", filePath);
                     }
                     else
                         logger.LogDebug("WatchedSyncService: Legacy fallback failed because Plex returned no file path for RatingKey {RatingKey}", item.RatingKey);
                 }
                 else
-                    ep = PlexHelper.ExtractShokoEpisodeIdFromGuid(item.Guid) is { } epId ? metadataService.GetShokoEpisodeByID(epId) : null;
+                    episode = PlexHelper.ExtractShokoEpisodeIdFromGuid(item.Guid) is { } episodeId ? metadataService.GetShokoEpisodeByID(episodeId) : null;
 
-                episodeCache[cacheKey] = ep;
+                episodeCache[cacheKey] = episode;
             }
-            return ep;
+            return episode;
         }
 
         IUser? ResolveTargetShokoUser(string? mappedUsername, string plexUserName)
@@ -212,22 +212,22 @@ public class SyncToShoko(
                         .ConfigureAwait(false);
                     result = prResult;
 
-                    foreach (var pb in progressBuckets)
+                    foreach (var progressBucket in progressBuckets)
                     {
-                        var existingIndex = userBuckets.FindIndex(bucket => string.Equals(bucket.Name, pb.Name, StringComparison.OrdinalIgnoreCase));
+                        var existingIndex = userBuckets.FindIndex(bucket => string.Equals(bucket.Name, progressBucket.Name, StringComparison.OrdinalIgnoreCase));
                         if (existingIndex >= 0)
-                            userBuckets[existingIndex].Items.AddRange(pb.Items);
+                            userBuckets[existingIndex].Items.AddRange(progressBucket.Items);
                         else
-                            userBuckets.Add(pb);
+                            userBuckets.Add(progressBucket);
                     }
                 }
             }
 
             foreach (var bucket in userBuckets)
             {
-                string uName = bucket.Name;
+                string userName = bucket.Name;
                 var items = bucket.Items;
-                if (ResolveTargetShokoUser(bucket.ShokoUsername, uName) is not { } targetShokoUser)
+                if (ResolveTargetShokoUser(bucket.ShokoUsername, userName) is not { } targetShokoUser)
                     continue;
 
                 string? mappedLabel = string.IsNullOrWhiteSpace(bucket.ShokoUsername) ? null : targetShokoUser.Username;
@@ -237,42 +237,42 @@ public class SyncToShoko(
                 {
                     if (item.LibrarySectionId.HasValue && item.LibrarySectionId != target.SectionId)
                     {
-                        result = SyncHelper.IncSkipped(result, result.PerUser, uName);
+                        result = SyncHelper.IncSkipped(result, result.PerUser, userName);
                         continue;
                     }
 
                     if (!isLegacyFallback && string.IsNullOrWhiteSpace(item.Guid))
                         continue;
 
-                    result = SyncHelper.IncProcessed(result, result.PerUser, uName);
+                    result = SyncHelper.IncProcessed(result, result.PerUser, userName);
 
-                    if (GetCachedEpisode(item) is not { } ep || appliedWatchedIds.Contains((targetShokoUser.LocalID, ep.LocalID)))
+                    if (GetCachedEpisode(item) is not { } episode || appliedWatchedIds.Contains((targetShokoUser.LocalID, episode.LocalID)))
                     {
-                        result = SyncHelper.IncSkipped(result, result.PerUser, uName);
+                        result = SyncHelper.IncSkipped(result, result.PerUser, userName);
                         continue;
                     }
 
-                    var epUserData = GetCachedUserData(ep, targetShokoUser);
+                    var epUserData = GetCachedUserData(episode, targetShokoUser);
                     bool alreadyWatched = epUserData?.IsWatched == true;
 
                     bool isWatchedInPlex = item.ViewCount > 0;
                     bool hasProgressInPlex = item.ViewOffset > 0;
 
-                    bool wouldMark = isWatchedInPlex && !alreadyWatched && (ep.Videos?.Count > 0);
+                    bool wouldMark = isWatchedInPlex && !alreadyWatched && (episode.Videos?.Count > 0);
                     bool wouldUpdateProgress = false;
 
-                    if (!isWatchedInPlex && hasProgressInPlex && !alreadyWatched && !appliedProgressIds.Contains((targetShokoUser.LocalID, ep.LocalID)) && ep.Videos?.Count > 0)
+                    if (!isWatchedInPlex && hasProgressInPlex && !alreadyWatched && !appliedProgressIds.Contains((targetShokoUser.LocalID, episode.LocalID)) && episode.Videos?.Count > 0)
                         wouldUpdateProgress =
-                            userDataService.GetVideoUserData(ep.Videos.First(), targetShokoUser) is not { } existingData
+                            userDataService.GetVideoUserData(episode.Videos.First(), targetShokoUser) is not { } existingData
                             || Math.Abs(existingData.ProgressPosition.TotalMilliseconds - item.ViewOffset!.Value) >= 5000;
 
                     DateTime? watchedAt = SyncHelper.UnixSecondsToDateTime(item.LastViewedAt);
 
                     string? prefId = null;
-                    if (ep.Series != null && !prefIdCache.TryGetValue(ep.ShokoSeriesID, out prefId))
-                        prefIdCache[ep.ShokoSeriesID] = prefId = MapHelper.GetPreferredTmdbOrderingId(ep.Series);
+                    if (episode.Series != null && !prefIdCache.TryGetValue(episode.ShokoSeriesID, out prefId))
+                        prefIdCache[episode.ShokoSeriesID] = prefId = MapHelper.GetPreferredTmdbOrderingId(episode.Series);
 
-                    var coords = PlexMapping.GetPlexCoordinates(ep, prefId, metadataService: metadataService);
+                    var coords = PlexMapping.GetPlexCoordinates(episode, prefId, metadataService: metadataService);
                     string typeLabel = target.LibraryType == PlexLibraryType.Movie ? "movie" : "episode";
 
                     if (wouldMark)
@@ -280,21 +280,21 @@ public class SyncToShoko(
                         if (!dryRun)
                         {
                             await userDataService
-                                .SetEpisodeWatchedStatus(ep, targetShokoUser, true, watchedAt, videoReason: VideoUserDataSaveReason.UserInteraction, noVideoPropagation: false, updateStatsNow: false)
+                                .SetEpisodeWatchedStatus(episode, targetShokoUser, true, watchedAt, videoReason: VideoUserDataSaveReason.UserInteraction, noVideoPropagation: false, updateStatsNow: false)
                                 .ConfigureAwait(false);
 
-                            if (ep.Series is { } parentSeries)
+                            if (episode.Series is { } parentSeries)
                                 seriesToUpdateStats.TryAdd(parentSeries.LocalID, parentSeries);
                         }
-                        appliedWatchedIds.Add((targetShokoUser.LocalID, ep.LocalID));
-                        result = SyncHelper.IncMarkedWatched(result, result.PerUser, uName);
+                        appliedWatchedIds.Add((targetShokoUser.LocalID, episode.LocalID));
+                        result = SyncHelper.IncMarkedWatched(result, result.PerUser, userName);
                         logger.LogInformation(
                             "WatchedSyncService: {Prefix}Plex -> Shoko: {User} marked {Type} -> {Title} [{SeriesId}] - S{Season:D2}E{Episode:D2} (RatingKey: {RatingKey})",
                             logPrefix,
-                            uName,
+                            userName,
                             typeLabel,
-                            ep.Series?.GetDisplayTitle(),
-                            ep.ShokoSeriesID,
+                            episode.Series?.GetDisplayTitle(),
+                            episode.ShokoSeriesID,
                             coords.Season,
                             coords.Episode,
                             item.RatingKey
@@ -305,18 +305,18 @@ public class SyncToShoko(
                         if (!dryRun)
                         {
                             var update = new VideoUserDataUpdate { ProgressPosition = TimeSpan.FromMilliseconds(item.ViewOffset!.Value), LastUpdatedAt = DateTime.UtcNow };
-                            foreach (var video in ep.Videos!)
+                            foreach (var video in episode.Videos!)
                                 await userDataService.SaveVideoUserData(video, targetShokoUser, update, VideoUserDataSaveReason.PlaybackProgress).ConfigureAwait(false);
                         }
-                        appliedProgressIds.Add((targetShokoUser.LocalID, ep.LocalID));
-                        result = SyncHelper.IncProgressUpdated(result, result.PerUser, uName);
+                        appliedProgressIds.Add((targetShokoUser.LocalID, episode.LocalID));
+                        result = SyncHelper.IncProgressUpdated(result, result.PerUser, userName);
                         logger.LogInformation(
                             "WatchedSyncService: {Prefix}Plex -> Shoko: {User} updated progress for {Type} -> {Title} [{SeriesId}] - S{Season:D2}E{Episode:D2} (RatingKey: {RatingKey}) to {Offset}",
                             logPrefix,
-                            uName,
+                            userName,
                             typeLabel,
-                            ep.Series?.GetDisplayTitle(),
-                            ep.ShokoSeriesID,
+                            episode.Series?.GetDisplayTitle(),
+                            episode.ShokoSeriesID,
                             coords.Season,
                             coords.Episode,
                             item.RatingKey,
@@ -324,21 +324,21 @@ public class SyncToShoko(
                         );
                     }
                     else
-                        result = SyncHelper.IncSkipped(result, result.PerUser, uName);
+                        result = SyncHelper.IncSkipped(result, result.PerUser, userName);
 
                     SyncHelper.AddPerUserChange(
                         result.PerUserChanges,
-                        uName,
+                        userName,
                         SyncHelper.MakeChange(
-                            uName,
+                            userName,
                             shokoUser: mappedLabel,
                             libraryName: target.Title,
-                            ep.LocalID,
-                            $"{ep.Series?.GetDisplayTitle()} [{ep.ShokoSeriesID}]",
+                            episode.LocalID,
+                            $"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}]",
                             item.ParentIndex ?? 0,
                             item.Index ?? 0,
                             item.RatingKey,
-                            item.Guid ?? (target.LibraryType == PlexLibraryType.Movie ? ep.GetPlexMovieGuid() : ep.GetPlexGuid()),
+                            item.Guid ?? (target.LibraryType == PlexLibraryType.Movie ? episode.GetPlexMovieGuid() : episode.GetPlexGuid()),
                             null,
                             watchedAt,
                             wouldMark || wouldUpdateProgress,
@@ -347,14 +347,14 @@ public class SyncToShoko(
                         )
                     );
 
-                    if (actualVotes && item.UserRating.HasValue && appliedRatedIds.Add((targetShokoUser.LocalID, ep.LocalID)))
+                    if (actualVotes && item.UserRating.HasValue && appliedRatedIds.Add((targetShokoUser.LocalID, episode.LocalID)))
                     {
                         result = SyncHelper.IncVotesFound(result);
                         double clampedRating = Math.Clamp(item.UserRating.Value, 1.0, 10.0);
                         if (epUserData?.UserRating == null || Math.Abs(epUserData.UserRating.Value - clampedRating) > 0.05)
                         {
                             if (!dryRun)
-                                await userDataService.RateEpisode(ep, targetShokoUser, clampedRating).ConfigureAwait(false);
+                                await userDataService.RateEpisode(episode, targetShokoUser, clampedRating).ConfigureAwait(false);
                             result = SyncHelper.IncVotesUpdated(result);
                         }
                         else

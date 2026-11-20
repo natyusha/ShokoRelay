@@ -3,7 +3,7 @@ using System.Globalization;
 
 namespace ShokoRelay.Services;
 
-#region Interface & Models
+#region Data Models
 
 /// <summary>Represents a specific rating update for the report log.</summary>
 /// <param name="Title">Display title of the item.</param>
@@ -133,7 +133,7 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                 // Resolve the critic rating for an episode based on user configuration
                 double? rating = Settings.CriticRatingMode switch
                 {
-                    CriticRatingMode.TMDB => episode.GetLinkedEpisodes(MetadataSource.TMDB)?.FirstOrDefault() is { Rating: > 0 } tmdbEp ? tmdbEp.Rating : null,
+                    CriticRatingMode.TMDB => episode.GetLinkedEpisodes(MetadataSource.TMDB)?.FirstOrDefault() is { Rating: > 0 } tmdbEpisode ? tmdbEpisode.Rating : null,
                     CriticRatingMode.AniDB => episode.Rating > 0 ? episode.Rating : null,
                     _ => null,
                 };
@@ -185,7 +185,7 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                     CriticRatingMode.TMDB => (episode.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault() ?? episode.Series?.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault())
                         is { Rating: > 0 } tmdbMovie
                         ? tmdbMovie.Rating
-                        : (episode.GetLinkedEpisodes(MetadataSource.TMDB)?.FirstOrDefault() is { Rating: > 0 } tmdbEp ? tmdbEp.Rating : null),
+                        : (episode.GetLinkedEpisodes(MetadataSource.TMDB)?.FirstOrDefault() is { Rating: > 0 } tmdbEpisode ? tmdbEpisode.Rating : null),
                     CriticRatingMode.AniDB => episode.Rating > 0 ? episode.Rating : (episode.Series?.Rating > 0 ? episode.Series.Rating : null),
                     _ => null,
                 };

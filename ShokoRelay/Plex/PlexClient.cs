@@ -462,12 +462,12 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
                     .Select(metadataService.GetShokoSeriesByID)
                     .OfType<IShokoSeries>()
                     .SelectMany(groupSeries => groupSeries.Episodes)
-                    .DistinctBy(ep => ep.LocalID)
-                    .Where(ep => ep.Type == EpisodeType.Episode && ep.Videos.Count > 0 && !MapHelper.IsHidden(ep));
+                    .DistinctBy(episode => episode.LocalID)
+                    .Where(episode => episode.Type == EpisodeType.Episode && episode.Videos.Count > 0 && !MapHelper.IsHidden(episode));
 
-                foreach (var ep in episodes)
+                foreach (var episode in episodes)
                 {
-                    string guid = $"{ShokoRelayConstants.MovieAgentScheme}://movie/{PlexConstants.MoviePrefix}{ep.LocalID}";
+                    string guid = $"{ShokoRelayConstants.MovieAgentScheme}://movie/{PlexConstants.MoviePrefix}{episode.LocalID}";
                     using var req = CreateRequest(
                         HttpMethod.Get,
                         $"/library/sections/{target.SectionId}/all?guid={Uri.EscapeDataString(guid)}&X-Plex-Container-Start=0&X-Plex-Container-Size=1",

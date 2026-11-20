@@ -475,12 +475,11 @@ public static class SyncHelper
                 tokenCache.AdminDevices ??= (await plexAuth.GetPlexServerListAsync(adminToken, configProvider.GetPlexClientIdentifier(), cancellationToken).ConfigureAwait(false)).Devices;
                 string normTarget = target.ServerUrl.TrimEnd('/');
                 var ownedServers = tokenCache.AdminDevices.Where(device => device.Owned && device.Provides?.Contains("server", StringComparison.OrdinalIgnoreCase) == true).ToList();
-                serverId =
-                    ownedServers
-                        .FirstOrDefault(device =>
-                            device.Connections?.Any(conn => !string.IsNullOrWhiteSpace(conn.Uri) && string.Equals(conn.Uri.TrimEnd('/'), normTarget, StringComparison.OrdinalIgnoreCase)) == true
-                        )
-                        ?.ClientIdentifier
+                serverId = ownedServers
+                    .FirstOrDefault(device =>
+                        device.Connections?.Any(conn => !string.IsNullOrWhiteSpace(conn.Uri) && string.Equals(conn.Uri.TrimEnd('/'), normTarget, StringComparison.OrdinalIgnoreCase)) == true
+                    )
+                    ?.ClientIdentifier
                     ?? (ownedServers.Count == 1 ? ownedServers[0].ClientIdentifier : null)
                     ?? string.Empty;
             }

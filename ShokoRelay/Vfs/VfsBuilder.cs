@@ -120,109 +120,97 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
         }
 
         // Process series in parallel
-        Parallel.ForEach(
-            seriesList,
-            DefaultParallelOptions(),
-            series =>
+        Parallel.ForEach(seriesList, DefaultParallelOptions(), series =>
+        {
+            try
             {
-                try
+                var seriesSw = Stopwatch.StartNew();
+
+                // SeriesNode structure: { id, anidbId, title, seasons: { "Season 1": [ { name, source } ] }, rootFiles: [ { name, source } ] }
+                var seasonsByRoot = new Dictionary<string, Dictionary<string, Dictionary<string, string>>>(VfsShared.PathComparer);
+                var rootFilesByRoot = new Dictionary<string, Dictionary<string, string>>(VfsShared.PathComparer);
+                int folderId = series.GetPrimaryId(metadataService);
+
+                // Ensure stale entries for this series are removed across all roots before rebuilding its node.
+                foreach (var rootDict in blueprint.Values)
+                    rootDict.TryRemove(folderId, out _);
+
+                var (sCreated, sSkipped, sSkippedList, sErrors, sPlanned) = BuildSeries(series, rootName, isCleanBuild, isFiltered, ignoredFolders, session, (vfsRoot, season, fileName, source) =>
                 {
-                    var seriesSw = Stopwatch.StartNew();
+                    if (string.IsNullOrEmpty(season))
+                    {
+                        if (!rootFilesByRoot.TryGetValue(vfsRoot, out var rootFiles))
+                            rootFilesByRoot[vfsRoot] = rootFiles = new(StringComparer.OrdinalIgnoreCase);
+                        rootFiles.TryAdd(fileName, source ?? "Local Metadata");
+                    }
+                    else
+                    {
+                        if (!seasonsByRoot.TryGetValue(vfsRoot, out var rootSeasons))
+                            seasonsByRoot[vfsRoot] = rootSeasons = new(StringComparer.OrdinalIgnoreCase);
+                        if (!rootSeasons.TryGetValue(season, out var seasonDict))
+                            rootSeasons[season] = seasonDict = new(StringComparer.OrdinalIgnoreCase);
+                        seasonDict.TryAdd(fileName, source ?? "Local Metadata");
+                    }
+                });
 
-                    // SeriesNode structure: { id, anidbId, title, seasons: { "Season 1": [ { name, source } ] }, rootFiles: [ { name, source } ] }
-                    var seasonsByRoot = new Dictionary<string, Dictionary<string, Dictionary<string, string>>>(VfsShared.PathComparer);
-                    var rootFilesByRoot = new Dictionary<string, Dictionary<string, string>>(VfsShared.PathComparer);
-                    int folderId = series.GetPrimaryId(metadataService);
+                var rootsInvolved = rootFilesByRoot.Keys.Concat(seasonsByRoot.Keys).Distinct(VfsShared.PathComparer).ToList();
+                if (sCreated > 0 || rootsInvolved.Count > 0)
+                {
+                    foreach (var root in rootsInvolved)
+                    {
+                        var rootFiles = rootFilesByRoot.GetValueOrDefault(root) ?? [];
+                        var seasonMap = seasonsByRoot.GetValueOrDefault(root) ?? [];
+                        blueprint
+                            .GetOrAdd(root, _ => new())
+                            .TryAdd(
+                                folderId,
+                                new VfsBlueprintSeries(
+                                    folderId,
+                                    series.AnidbAnimeID,
+                                    TextHelper.ResolveFullSeriesTitles(series).DisplayTitle,
+                                    rootFiles.OrderBy(file => file.Key).Select(file => new VfsBlueprintFile(file.Key, file.Value)),
+                                    seasonMap
+                                        .OrderBy(kvp => VfsHelper.GetSeasonSortKey(kvp.Key))
+                                        .Select(kvp => new VfsBlueprintSeason(
+                                            kvp.Key,
+                                            VfsHelper.GetSeasonId(kvp.Key),
+                                            kvp.Value.OrderBy(file => file.Key).Select(file => new VfsBlueprintFile(file.Key, file.Value))
+                                        ))
+                                )
+                            );
+                    }
+                }
 
-                    // Ensure stale entries for this series are removed across all roots before rebuilding its node.
-                    foreach (var rootDict in blueprint.Values)
-                        rootDict.TryRemove(folderId, out _);
+                // Capture individual series details for the log report
+                bool isMovie = MapHelper.IsMovie(series);
+                bool doMovie = isMovie && Settings.Advanced.MovieGenerationMode != MovieGenerationMode.Disabled;
+                seriesDetailsBag.Add(new SeriesProcessDetails($"{series.GetDisplayTitle() ?? series.LocalID.ToString()} [{series.LocalID}]", seriesSw.ElapsedMilliseconds, sCreated, doMovie));
 
-                    var (sCreated, sSkipped, sSkippedList, sErrors, sPlanned) = BuildSeries(
-                        series,
-                        rootName,
-                        isCleanBuild,
-                        isFiltered,
-                        ignoredFolders,
-                        session,
-                        (vfsRoot, season, fileName, source) =>
-                        {
-                            if (string.IsNullOrEmpty(season))
-                            {
-                                if (!rootFilesByRoot.TryGetValue(vfsRoot, out var rootFiles))
-                                    rootFilesByRoot[vfsRoot] = rootFiles = new(StringComparer.OrdinalIgnoreCase);
-                                rootFiles.TryAdd(fileName, source ?? "Local Metadata");
-                            }
-                            else
-                            {
-                                if (!seasonsByRoot.TryGetValue(vfsRoot, out var rootSeasons))
-                                    seasonsByRoot[vfsRoot] = rootSeasons = new(StringComparer.OrdinalIgnoreCase);
-                                if (!rootSeasons.TryGetValue(season, out var seasonDict))
-                                    rootSeasons[season] = seasonDict = new(StringComparer.OrdinalIgnoreCase);
-                                seasonDict.TryAdd(fileName, source ?? "Local Metadata");
-                            }
-                        }
+                if (sCreated > 0 || sErrors.Count > 0)
+                    logger.LogDebug(
+                        "VFS: Processed {Type} -> {DisplayTitle} [{LocalId}] ({CreatedCount} links created) in {ElapsedMs}ms",
+                        doMovie ? "movie" : "series",
+                        series.GetDisplayTitle(),
+                        series.LocalID,
+                        sCreated,
+                        seriesSw.ElapsedMilliseconds
                     );
 
-                    var rootsInvolved = rootFilesByRoot.Keys.Concat(seasonsByRoot.Keys).Distinct(VfsShared.PathComparer).ToList();
-                    if (sCreated > 0 || rootsInvolved.Count > 0)
-                    {
-                        foreach (var root in rootsInvolved)
-                        {
-                            var rootFiles = rootFilesByRoot.GetValueOrDefault(root) ?? [];
-                            var seasonMap = seasonsByRoot.GetValueOrDefault(root) ?? [];
-                            blueprint
-                                .GetOrAdd(root, _ => new())
-                                .TryAdd(
-                                    folderId,
-                                    new VfsBlueprintSeries(
-                                        folderId,
-                                        series.AnidbAnimeID,
-                                        TextHelper.ResolveFullSeriesTitles(series).DisplayTitle,
-                                        rootFiles.OrderBy(file => file.Key).Select(file => new VfsBlueprintFile(file.Key, file.Value)),
-                                        seasonMap
-                                            .OrderBy(kvp => VfsHelper.GetSeasonSortKey(kvp.Key))
-                                            .Select(kvp => new VfsBlueprintSeason(
-                                                kvp.Key,
-                                                VfsHelper.GetSeasonId(kvp.Key),
-                                                kvp.Value.OrderBy(file => file.Key).Select(file => new VfsBlueprintFile(file.Key, file.Value))
-                                            ))
-                                    )
-                                );
-                        }
-                    }
-
-                    // Capture individual series details for the log report
-                    bool isMovie = MapHelper.IsMovie(series);
-                    bool doMovie = isMovie && Settings.Advanced.MovieGenerationMode != MovieGenerationMode.Disabled;
-                    seriesDetailsBag.Add(new SeriesProcessDetails($"{series.GetDisplayTitle() ?? series.LocalID.ToString()} [{series.LocalID}]", seriesSw.ElapsedMilliseconds, sCreated, doMovie));
-
-                    if (sCreated > 0 || sErrors.Count > 0)
-                        logger.LogDebug(
-                            "VFS: Processed {Type} -> {DisplayTitle} [{LocalId}] ({CreatedCount} links created) in {ElapsedMs}ms",
-                            doMovie ? "movie" : "series",
-                            series.GetDisplayTitle(),
-                            series.LocalID,
-                            sCreated,
-                            seriesSw.ElapsedMilliseconds
-                        );
-
-                    Interlocked.Add(ref created, sCreated);
-                    Interlocked.Add(ref skipped, sSkipped);
-                    Interlocked.Add(ref planned, sPlanned);
-                    foreach (var skippedItem in sSkippedList)
-                        skippedDetailsBag.Add(skippedItem);
-                    foreach (var err in sErrors)
-                        errorsBag.Add(err);
-                    Interlocked.Increment(ref seriesProcessed);
-                }
-                catch (Exception ex)
-                {
-                    errorsBag.Add($"Failed series {series.GetDisplayTitle()} [{series.LocalID}]: {ex.Message}");
-                    logger.LogError(ex, "VFS: Build failed for series -> {DisplayTitle} [{LocalId}]", series.GetDisplayTitle(), series.LocalID);
-                }
+                Interlocked.Add(ref created, sCreated);
+                Interlocked.Add(ref skipped, sSkipped);
+                Interlocked.Add(ref planned, sPlanned);
+                foreach (var skippedItem in sSkippedList)
+                    skippedDetailsBag.Add(skippedItem);
+                foreach (var err in sErrors)
+                    errorsBag.Add(err);
+                Interlocked.Increment(ref seriesProcessed);
             }
-        );
+            catch (Exception ex)
+            {
+                errorsBag.Add($"Failed series {series.GetDisplayTitle()} [{series.LocalID}]: {ex.Message}");
+                logger.LogError(ex, "VFS: Build failed for series -> {DisplayTitle} [{LocalId}]", series.GetDisplayTitle(), series.LocalID);
+            }
+        });
 
         sw.Stop(); // Capture total elapsed time here
         var errors = errorsBag.ToList();
@@ -280,16 +268,13 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
         // Retrieve the files and episode mappings for a series, leveraging the build-session cache
         var fileData = !EnforceTmdbNumbering
             ? session.SeriesFileDataCache.GetOrAdd(series.LocalID, _ => MapHelper.GetSeriesFileData(series, metadataService))
-            : session.SeriesFileDataCache.GetOrAdd(
-                folderId,
-                _ =>
-                {
-                    var group = OverrideHelper.GetGroup(folderId, metadataService).Select(metadataService.GetShokoSeriesByID).OfType<IShokoSeries>().ToList();
-                    return group.Count <= 1
-                        ? MapHelper.GetSeriesFileData(group.FirstOrDefault() ?? series, metadataService)
-                        : MapHelper.GetSeriesFileDataMerged(group[0], group.Skip(1).Cast<ISeries>(), metadataService);
-                }
-            );
+            : session.SeriesFileDataCache.GetOrAdd(folderId, _ =>
+            {
+                var group = OverrideHelper.GetGroup(folderId, metadataService).Select(metadataService.GetShokoSeriesByID).OfType<IShokoSeries>().ToList();
+                return group.Count <= 1
+                    ? MapHelper.GetSeriesFileData(group.FirstOrDefault() ?? series, metadataService)
+                    : MapHelper.GetSeriesFileDataMerged(group[0], group.Skip(1).Cast<ISeries>(), metadataService);
+            });
 
         if (!fileData.Mappings.Any())
         {
@@ -525,18 +510,14 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
         try
         {
             var cleanSw = Stopwatch.StartNew();
-            Parallel.ForEach(
-                Directory.GetDirectories(path),
-                DefaultParallelOptions(),
-                dir =>
+            Parallel.ForEach(Directory.GetDirectories(path), DefaultParallelOptions(), dir =>
+            {
+                try
                 {
-                    try
-                    {
-                        Directory.Delete(dir, true);
-                    }
-                    catch { }
+                    Directory.Delete(dir, true);
                 }
-            );
+                catch { }
+            });
             Directory.Delete(path, true);
             cleanupDetails.Add(new RootCleanupDetails(path, cleanSw.ElapsedMilliseconds));
             logger.LogInformation("VFS: Cleaned {Type}root folder -> '{Path}' in {Elapsed}ms", isMovieRoot ? "movie " : "", path, cleanSw.ElapsedMilliseconds);
@@ -566,13 +547,11 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
         {
             Directory.CreateDirectory(path);
             if (isRoot)
-            {
                 try
                 {
                     File.WriteAllText(Path.Combine(path, ".ignore"), "");
                 }
                 catch { }
-            }
         }
     }
 
@@ -593,8 +572,8 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
         var movieEpIds = new HashSet<int>(extraMovieEpIds ?? []);
         if (pruneMovies)
             foreach (int groupSeriesId in OverrideHelper.GetGroup(folderId, metadataService))
-                if (metadataService.GetShokoSeriesByID(groupSeriesId) is { Episodes: { } eps })
-                    foreach (var episode in eps.Where(episode => episode.Type == EpisodeType.Episode))
+                if (metadataService.GetShokoSeriesByID(groupSeriesId) is { Episodes: { } episodes })
+                    foreach (var episode in episodes.Where(episode => episode.Type == EpisodeType.Episode))
                         movieEpIds.Add(episode.LocalID);
 
         foreach (var root in roots)

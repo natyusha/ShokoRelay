@@ -108,24 +108,24 @@ public class VfsWatcher(
             orderingService.EpisodeHiddenChanged -= OnEpisodeHiddenChanged;
 
             lock (_gate)
+            {
                 _stopCts?.Cancel();
+                _stopCts?.Dispose();
+                _stopCts = null;
+            }
 
             foreach (var cts in _pendingMetadataFixups.Values)
-            {
                 try
                 {
                     cts.Cancel();
                 }
                 catch { }
-            }
             foreach (var cts in _pendingLibraryScans.Values)
-            {
                 try
                 {
                     cts.Cancel();
                 }
                 catch { }
-            }
 
             _pendingMetadataFixups.Clear();
             _pendingLibraryScans.Clear();
@@ -480,7 +480,7 @@ public class VfsWatcher(
         {
             string actionName = Settings.Advanced.DeferVfsCreationUntilFixup ? "deferred VFS creation" : "metadata fixup";
             logger.LogDebug("VFS: Scheduling {Action} for series -> {Title} [{LocalId}] in {Delay} minute(s)", actionName, series.GetDisplayTitle(), series.LocalID, Settings.Advanced.PlexFixupDelay);
-            ScheduleDebouncedAction(series.LocalID, Settings.Advanced.PlexFixupDelay * 60, _pendingMetadataFixups, token => RunMetadataFixupAsync(series, token));
+            ScheduleDebouncedAction(series.LocalID, Settings.Advanced.PlexFixupDelay * 60, _pendingMetadataFixups, token => RunMetadataFixupAsync(series.LocalID, token));
         }
     }
 
@@ -499,19 +499,15 @@ public class VfsWatcher(
             cts = CancellationTokenSource.CreateLinkedTokenSource(stopCts.Token);
         }
 
-        tracker.AddOrUpdate(
-            seriesId,
-            cts,
-            (_, existing) =>
+        tracker.AddOrUpdate(seriesId, cts, (_, existing) =>
+        {
+            try
             {
-                try
-                {
-                    existing.Cancel();
-                }
-                catch { }
-                return cts;
+                existing.Cancel();
             }
-        );
+            catch { }
+            return cts;
+        });
 
         _ = Task.Run(async () =>
         {
@@ -550,55 +546,53 @@ public class VfsWatcher(
         if (!Settings.Automation.ScanOnVfsRefresh)
             return;
 
-        ScheduleDebouncedAction(
-            series.LocalID,
-            Settings.Advanced.PlexScanDelay,
-            _pendingLibraryScans,
-            async token =>
+        ScheduleDebouncedAction(series.LocalID, Settings.Advanced.PlexScanDelay, _pendingLibraryScans, async token =>
+        {
+            foreach (var path in VfsShared.ResolveSeriesVfsPaths(series, metadataService))
             {
-                foreach (var path in VfsShared.ResolveSeriesVfsPaths(series, metadataService))
-                {
-                    if (Directory.Exists(path) && Directory.EnumerateFileSystemEntries(path).Any())
-                        await plexLibrary.RefreshSectionPathAsync(path, token).ConfigureAwait(false);
-                    else
-                        logger.LogDebug("VFS: Library scan for series -> {Title} [{LocalId}] skipped; path '{Path}' not ready or empty", series.GetDisplayTitle(), series.LocalID, path);
-                }
+                if (Directory.Exists(path) && Directory.EnumerateFileSystemEntries(path).Any())
+                    await plexLibrary.RefreshSectionPathAsync(path, token).ConfigureAwait(false);
+                else
+                    logger.LogDebug("VFS: Library scan for series -> {Title} [{LocalId}] skipped; path '{Path}' not ready or empty", series.GetDisplayTitle(), series.LocalID, path);
             }
-        );
+        });
     }
 
     /// <summary>Worker task that performs the actual metadata fixup logic, critic rating application, and optional image synchronization after the debounce delay has settled.</summary>
-    /// <param name="series">The Shoko series metadata.</param>
+    /// <param name="seriesId">The Shoko series ID.</param>
     /// <param name="token">Cancellation token.</param>
     /// <returns>A task representing the fixup operation.</returns>
-    private async Task RunMetadataFixupAsync(IShokoSeries series, CancellationToken token)
+    private async Task RunMetadataFixupAsync(int seriesId, CancellationToken token)
     {
         try
         {
             bool isDeferred = Settings.Advanced.DeferVfsCreationUntilFixup;
 
             // Invalidate cached metadata so Plex receives the fresh, updated series context upon refresh
-            plexMetadata.InvalidateCache(series.LocalID);
+            plexMetadata.InvalidateCache(seriesId);
 
             await VfsShared.VfsLock.WaitAsync(token).ConfigureAwait(false);
             try
             {
                 // Regenerate the VFS to account for cases where the episode/season numbering was updated in Shoko after the initial file event was processed
-                var vfsResult = builder.Build(series.LocalID, cleanRoot: false);
+                var vfsResult = builder.Build(seriesId, cleanRoot: false);
                 if (vfsResult.CreatedLinks > 0)
-                    logger.LogInformation("VFS: {Action} links -> {Title} [{LocalId}] during fixup phase", isDeferred ? "Created" : "Re-generated", series.GetDisplayTitle(), series.LocalID);
+                {
+                    string title = metadataService.GetShokoSeriesByID(seriesId)?.GetDisplayTitle() ?? seriesId.ToString();
+                    logger.LogInformation("VFS: {Action} links -> {Title} [{LocalId}] during fixup phase", isDeferred ? "Created" : "Re-generated", title, seriesId);
+                }
 
                 // Restore AnimeThemes links for this specific series if a mapping file exists to prevent the pruned folder from losing them
                 if (File.Exists(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileAtMapping)))
-                    await atMapping.ApplyMappingAsync([series.LocalID], token).ConfigureAwait(false);
+                    await atMapping.ApplyMappingAsync([seriesId], token).ConfigureAwait(false);
             }
             finally
             {
                 VfsShared.VfsLock.Release();
             }
 
-            // If Plex is not linked exit since VFS creation is complete and the Plex APIs called below cannot be used
-            if (!plexLibrary.IsEnabled)
+            // Re-resolve the series fresh after the debounce delay and exit if deleted or Plex is unlinked
+            if (!plexLibrary.IsEnabled || metadataService.GetShokoSeriesByID(seriesId) is not { } series)
                 return;
 
             // Wait to allow the filesystem to settle, or for Plex's native auto-scanner to index the newly generated VFS symlinks
@@ -710,7 +704,7 @@ public class VfsWatcher(
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            logger.LogError(ex, "VFS: Metadata fixup failed for series -> {Title} [{LocalId}]", series.GetDisplayTitle(), series.LocalID);
+            logger.LogError(ex, "VFS: Metadata fixup failed for series -> {Title} [{LocalId}]", metadataService.GetShokoSeriesByID(seriesId)?.GetDisplayTitle() ?? seriesId.ToString(), seriesId);
         }
     }
 

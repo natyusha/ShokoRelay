@@ -320,13 +320,13 @@ public static partial class TextHelper
     /// <summary>Compute the best title to display for an episode, handling ambiguous names and TMDB reassignments.</summary>
     /// <param name="episode">Episode metadata.</param>
     /// <param name="displaySeriesTitle">Resolved series title for fallback.</param>
-    /// <param name="tmdbEp">Optional pre-resolved TMDB episode override.</param>
+    /// <param name="tmdbEpisode">Optional pre-resolved TMDB episode override.</param>
     /// <returns>The resolved episode title string.</returns>
-    public static string ResolveEpisodeTitle(IEpisode episode, string displaySeriesTitle, IEpisode? tmdbEp = null)
+    public static string ResolveEpisodeTitle(IEpisode episode, string displaySeriesTitle, IEpisode? tmdbEpisode = null)
     {
         string raw = GetTitleByLanguage(episode, Settings.EpisodeTitleLanguage);
-        var resolvedTmdbEp = tmdbEp ?? (episode as IShokoEpisode)?.GetLinkedEpisodes(MetadataSource.TMDB)?.FirstOrDefault();
-        string? tmdbTitle = resolvedTmdbEp != null ? GetTitleByLanguage(resolvedTmdbEp, Settings.EpisodeTitleLanguage) : null;
+        var resolvedTmdbEpisode = tmdbEpisode ?? (episode as IShokoEpisode)?.GetLinkedEpisodes(MetadataSource.TMDB)?.FirstOrDefault();
+        string? tmdbTitle = resolvedTmdbEpisode != null ? GetTitleByLanguage(resolvedTmdbEpisode, Settings.EpisodeTitleLanguage) : null;
 
         // Replace ambiguous single entry titles (like "OVA") with the series title
         if (episode.EpisodeNumber == 1 && s_ambiguousTitles.Contains(raw))
@@ -367,7 +367,12 @@ public static partial class TextHelper
     public static bool IsMultiEpisodeMovieFile(IEpisode episode) =>
         episode is IShokoEpisode { Videos: { Count: > 0 } vids } shokoEp
         && vids.Any(video =>
-            video.Episodes.Where(ep => ep.Type == EpisodeType.Episode && ep.ShokoSeriesID == shokoEp.ShokoSeriesID && !MapHelper.IsHidden(ep)).Select(ep => ep.LocalID).Distinct().Skip(1).Any()
+            video
+                .Episodes.Where(episode => episode.Type == EpisodeType.Episode && episode.ShokoSeriesID == shokoEp.ShokoSeriesID && !MapHelper.IsHidden(episode))
+                .Select(episode => episode.LocalID)
+                .Distinct()
+                .Skip(1)
+                .Any()
         );
 
     /// <summary>Compute the best title to display for a standalone movie, omitting the episode title if the series only contains one main episode, the file spans multiple episodes, or the episode title is ambiguous.</summary>

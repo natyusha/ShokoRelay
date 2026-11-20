@@ -2,7 +2,7 @@ using Shoko.Abstractions.Video.Services;
 
 namespace ShokoRelay.Services;
 
-#region Interface & Models
+#region Data Models
 
 /// <summary>Result returned by the source link processing operation.</summary>
 /// <param name="Count">Number of links created or purged.</param>
@@ -163,7 +163,6 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
                 await File.WriteAllLinesAsync(fullTxtPath, lines).ConfigureAwait(false);
 
             foreach (var dir in dirsToScan)
-            {
                 try
                 {
                     await videoService.NotifyVideoFileChangeDetected(dir).ConfigureAwait(false);
@@ -172,7 +171,6 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
                 {
                     logger.LogWarning(ex, "SourceLinkService: Failed to notify directory change for {Dir}", dir);
                 }
-            }
         }
 
         logger.LogInformation("SourceLinkService: Finished mapping operation -> {Count} links created.", count);
@@ -195,15 +193,14 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
         try
         {
             foreach (var entry in Directory.EnumerateFileSystemEntries(path))
-            {
                 try
                 {
                     var name = Path.GetFileName(entry);
                     if (protectedFolders.Contains(name))
                         continue;
 
-                    var attr = File.GetAttributes(entry);
-                    if (attr.HasFlag(FileAttributes.ReparsePoint))
+                    var attributes = File.GetAttributes(entry);
+                    if (attributes.HasFlag(FileAttributes.ReparsePoint))
                     {
                         if (Directory.Exists(entry))
                             Directory.Delete(entry);
@@ -232,7 +229,6 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
                 {
                     logger.LogWarning(ex, "SourceLinkService: Failed to purge entry -> {Entry}", entry);
                 }
-            }
         }
         catch (Exception ex)
         {

@@ -144,14 +144,14 @@ public static class OverrideHelper
                         continue;
 
                     string tStr = match.Groups[1].Value;
-                    EpisodeType eType = EpisodeType.FromPrefix(tStr.ToUpperInvariant());
+                    EpisodeType episodeType = EpisodeType.FromPrefix(tStr.ToUpperInvariant());
 
-                    int startEp = match.Groups[2].Success ? int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture) : 1;
-                    int endEp = match.Groups[3].Success ? int.Parse(match.Groups[3].Value, CultureInfo.InvariantCulture) : (match.Groups[2].Success ? startEp : int.MaxValue);
+                    int startEpisode = match.Groups[2].Success ? int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture) : 1;
+                    int endEpisode = match.Groups[3].Success ? int.Parse(match.Groups[3].Value, CultureInfo.InvariantCulture) : (match.Groups[2].Success ? startEpisode : int.MaxValue);
                     int targetS = int.Parse(match.Groups[4].Value, CultureInfo.InvariantCulture);
                     int targetE = int.Parse(match.Groups[5].Value, CultureInfo.InvariantCulture);
 
-                    ruleList.Add(new CustomCoordRule(eType, startEp, endEp, targetS, targetE));
+                    ruleList.Add(new CustomCoordRule(episodeType, startEpisode, endEpisode, targetS, targetE));
                 }
             }
         }

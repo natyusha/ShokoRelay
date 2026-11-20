@@ -32,7 +32,7 @@ namespace ShokoRelay.Controllers;
 [ApiController]
 [ApiVersion(ShokoRelayConstants.ApiVersion)]
 [Route(ShokoRelayConstants.BasePath)]
-public class DashboardController(
+public partial class DashboardController(
     ConfigProvider configProvider,
     IMetadataService metadataService,
     PlexClient plexLibrary,
@@ -47,6 +47,10 @@ public class DashboardController(
     #region Setup
 
     private static readonly FileExtensionContentTypeProvider s_contentTypeProvider = new();
+
+    /// <summary>Regex matching valid Shoko theme identifiers.</summary>
+    [GeneratedRegex(@"^[A-Za-z0-9][A-Za-z0-9_-]*$")]
+    private static partial Regex ThemeIdRegex();
 
     #endregion
 
@@ -232,6 +236,8 @@ public class DashboardController(
             return Content(string.Empty, "text/css");
 
         string themeId = Path.GetFileName(rawThemeId);
+        if (!ThemeIdRegex().IsMatch(themeId))
+            return Content(string.Empty, "text/css");
         if (string.Equals(themeId, "shoko-gray", StringComparison.OrdinalIgnoreCase))
             return Content(
                 """

@@ -174,16 +174,16 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
         using var resp = await httpClient.SendAsync(req, cancellationToken).ConfigureAwait(false);
         var wrapper = await ReadJsonAsync<LibrarySectionsResponse>(resp, cancellationToken).ConfigureAwait(false);
         return wrapper
-                ?.MediaContainer?.Directory?.Select(directory => new PlexLibraryInfo(
-                    int.TryParse(directory.Key, out int id) ? id : 0,
-                    directory.Title ?? "",
-                    directory.Type ?? "",
-                    directory.Agent ?? "",
-                    directory.Uuid ?? "",
-                    directory.Locations?.Select(loc => loc.Path).ToList() ?? []
-                ))
-                .Where(lib => lib.Id > 0)
-                .ToList()
+            ?.MediaContainer?.Directory?.Select(directory => new PlexLibraryInfo(
+                int.TryParse(directory.Key, out int id) ? id : 0,
+                directory.Title ?? "",
+                directory.Type ?? "",
+                directory.Agent ?? "",
+                directory.Uuid ?? "",
+                directory.Locations?.Select(loc => loc.Path).ToList() ?? []
+            ))
+            .Where(lib => lib.Id > 0)
+            .ToList()
             ?? [];
     }
 

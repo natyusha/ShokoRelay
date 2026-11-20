@@ -2,7 +2,7 @@ using System.Diagnostics;
 
 namespace ShokoRelay.Services;
 
-#region Models
+#region Data Models
 
 /// <summary>Result of a full Plex automation run containing elapsed times and individual sub-task results.</summary>
 /// <param name="TotalElapsed">The total elapsed time for the entire automation run.</param>

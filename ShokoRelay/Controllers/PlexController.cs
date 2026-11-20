@@ -220,7 +220,6 @@ public class PlexController(
             plexMetadata.InvalidateCache(series.LocalID);
 
             foreach (var target in targets)
-            {
                 try
                 {
                     var ratingKeys = await PlexLibrary.FindRatingKeysForShokoSeriesInSectionAsync(series.LocalID, target, MetadataService, HttpContext.RequestAborted).ConfigureAwait(false);
@@ -250,7 +249,6 @@ public class PlexController(
                 {
                     errors.Add($"Error refreshing metadata for series -> {series.GetDisplayTitle()} [{series.LocalID}] on {target.ServerName}: {ex.Message}");
                 }
-            }
         }
 
         return errors.Count > 0 && refreshedCount == 0
@@ -379,8 +377,7 @@ public class PlexController(
                 }
 
                 string? accountIdStr = evt.Account?.Id is > 0 ? evt.Account.Id.Value.ToString() : null;
-                mappedShokoUser =
-                    ConfigProvider.ResolveMappedShokoUsername(plexUser, adminName, evt.Owner == true)
+                mappedShokoUser = ConfigProvider.ResolveMappedShokoUsername(plexUser, adminName, evt.Owner == true)
                     ?? (accountIdStr != null ? ConfigProvider.ResolveMappedShokoUsername(accountIdStr, adminName, evt.Owner == true) : null);
                 bool isExtra = ConfigProvider
                     .GetExtraPlexUserEntries()

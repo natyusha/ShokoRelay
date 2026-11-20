@@ -176,18 +176,15 @@ public class AnimeThemesMp3Generator(
 
             var newCache = new ConcurrentDictionary<string, string>(VfsShared.PathComparer);
 
-            Parallel.ForEach(
-                roots,
-                root =>
+            Parallel.ForEach(roots, root =>
+            {
+                foreach (var file in Directory.EnumerateFiles(root!, "Theme.mp3", SearchOption.AllDirectories))
                 {
-                    foreach (var file in Directory.EnumerateFiles(root!, "Theme.mp3", SearchOption.AllDirectories))
-                    {
-                        string dir = Path.GetDirectoryName(file)!;
-                        if (!VfsShared.IsPathIgnored(dir, videoService, Settings, excluded, relativeTo: root, isDirectory: true))
-                            newCache.TryAdd(dir, "|");
-                    }
+                    string dir = Path.GetDirectoryName(file)!;
+                    if (!VfsShared.IsPathIgnored(dir, videoService, Settings, excluded, relativeTo: root, isDirectory: true))
+                        newCache.TryAdd(dir, "|");
                 }
-            );
+            });
 
             _themeMp3Cache = newCache;
             SaveCacheToFile();
@@ -204,7 +201,6 @@ public class AnimeThemesMp3Generator(
     private void LoadCacheFromFile()
     {
         if (File.Exists(ThemeCacheFilePath))
-        {
             try
             {
                 var dict = new ConcurrentDictionary<string, string>(
@@ -224,7 +220,6 @@ public class AnimeThemesMp3Generator(
             {
                 logger.LogWarning("AnimeThemes MP3: Failed to read {FileName} -> Attempting full scan", ShokoRelayConstants.FileAtMp3Cache);
             }
-        }
         RefreshThemeMp3CacheInternal();
     }
 
@@ -313,28 +308,24 @@ public class AnimeThemesMp3Generator(
 
         try
         {
-            await Parallel.ForEachAsync(
-                folders,
-                DefaultParallelOptions(cancellationToken),
-                async (folder, token) =>
+            await Parallel.ForEachAsync(folders, DefaultParallelOptions(cancellationToken), async (folder, token) =>
+            {
+                var res = await ProcessSingleAsync(query with { Path = folder, Batch = true }, processedSeries, token).ConfigureAwait(false);
+                lock (results)
                 {
-                    var res = await ProcessSingleAsync(query with { Path = folder, Batch = true }, processedSeries, token).ConfigureAwait(false);
-                    lock (results)
+                    results.Add(res);
+                    if (res.Status == "ok")
                     {
-                        results.Add(res);
-                        if (res.Status == "ok")
-                        {
-                            processed++;
-                            if (!string.IsNullOrWhiteSpace(res.Folder))
-                                newlyGenerated.Add((res.Folder, AnimeThemesHelper.StandardizeSlug(res.Slug)));
-                        }
-                        else if (res.Status == "skipped")
-                            skipped++;
-                        else
-                            errors++;
+                        processed++;
+                        if (!string.IsNullOrWhiteSpace(res.Folder))
+                            newlyGenerated.Add((res.Folder, AnimeThemesHelper.StandardizeSlug(res.Slug)));
                     }
+                    else if (res.Status == "skipped")
+                        skipped++;
+                    else
+                        errors++;
                 }
-            );
+            });
         }
         catch (OperationCanceledException)
         {
@@ -624,98 +615,94 @@ public class AnimeThemesMp3Generator(
 
         logger.LogInformation("AnimeThemes MP3: Starting audit of {Count} cached themes...", cache.Count);
 
-        await Parallel.ForEachAsync(
-            cache,
-            DefaultParallelOptions(cancellationToken),
-            async (kvp, token) =>
+        await Parallel.ForEachAsync(cache, DefaultParallelOptions(cancellationToken), async (kvp, token) =>
+        {
+            string folder = kvp.Key;
+            var parts = (kvp.Value ?? "").Split('|', 2);
+            string slug = parts[0];
+            string upgrade = parts.Length > 1 ? parts[1] : "";
+
+            string themePath = Path.Combine(folder, "Theme.mp3");
+            if (!File.Exists(themePath))
+                return;
+
+            if (string.IsNullOrEmpty(slug))
+                try
+                {
+                    var tags = AnimeThemesHelper.ReadId3v2Tags(themePath);
+                    if (tags.TryGetValue("Slug", out var rawSlug) && !string.IsNullOrEmpty(rawSlug))
+                    {
+                        slug = AnimeThemesHelper.StandardizeSlug(rawSlug);
+                        SetCacheEntry(folder, $"{slug}|{upgrade}");
+                        Interlocked.Increment(ref fixes);
+                        Interlocked.Exchange(ref cacheUpdated, 1);
+                    }
+                }
+                catch { }
+
+            logger.LogDebug("AnimeThemes MP3: Auditing file -> {ThemePath} (Slug: {Slug})", themePath, string.IsNullOrEmpty(slug) ? "Unknown" : slug);
+
+            if (!string.IsNullOrEmpty(slug))
             {
-                string folder = kvp.Key;
-                var parts = (kvp.Value ?? "").Split('|', 2);
-                string slug = parts[0];
-                string upgrade = parts.Length > 1 ? parts[1] : "";
+                bool isOp = AnimeThemesHelper.IsOp(slug);
+                bool isOp1 = AnimeThemesHelper.IsOp1(slug);
+                bool isEd = AnimeThemesHelper.IsEd(slug);
+                bool isEd1 = AnimeThemesHelper.IsEd1(slug);
+                int currentSlugNum = AnimeThemesHelper.ExtractSlugNumber(slug);
 
-                string themePath = Path.Combine(folder, "Theme.mp3");
-                if (!File.Exists(themePath))
-                    return;
+                if (isOp && !isOp1)
+                    overriddenOps.Add($"{folder} | {slug}");
+                else if (isEd && !isEd1)
+                    overriddenEds.Add($"{folder} | {slug}");
 
-                if (string.IsNullOrEmpty(slug))
+                if (!isOp1)
+                {
+                    Interlocked.Increment(ref processed);
                     try
                     {
-                        var tags = AnimeThemesHelper.ReadId3v2Tags(themePath);
-                        if (tags.TryGetValue("Slug", out var rawSlug) && !string.IsNullOrEmpty(rawSlug))
+                        string? videoPath = Directory
+                            .EnumerateFiles(folder, "*", SearchOption.AllDirectories)
+                            .FirstOrDefault(file => videoService.IsAllowedVideoExtension(file) && !VfsShared.IsPathIgnored(file, videoService, Settings));
+                        if (videoPath == null || !videoFileLookup.Value.TryGetValue(videoPath, out var series))
+                            return;
+
+                        var anime = await _apiClient.FetchAnimeThemesAsync(series.AnidbAnimeID, token).ConfigureAwait(false);
+                        var animethemes = anime?.FirstOrDefault()?.Animethemes ?? [];
+                        var op = animethemes.Where(theme => theme.Slug != null && AnimeThemesHelper.IsOp(theme.Slug)).OrderBy(theme => AnimeThemesHelper.ExtractSlugNumber(theme.Slug!)).FirstOrDefault();
+                        var ed = animethemes.Where(theme => theme.Slug != null && AnimeThemesHelper.IsEd(theme.Slug)).OrderBy(theme => AnimeThemesHelper.ExtractSlugNumber(theme.Slug!)).FirstOrDefault();
+
+                        int? opNum = op?.Slug != null ? AnimeThemesHelper.ExtractSlugNumber(op.Slug) : null;
+                        int? edNum = ed?.Slug != null ? AnimeThemesHelper.ExtractSlugNumber(ed.Slug) : null;
+
+                        bool hasOpUpgrade = op != null && (isEd || (isOp && opNum.HasValue && opNum.Value < currentSlugNum));
+                        bool hasEdUpgrade = !isOp && isEd && !isEd1 && op == null && ed != null && edNum.HasValue && edNum.Value < currentSlugNum;
+
+                        if (hasOpUpgrade || hasEdUpgrade)
                         {
-                            slug = AnimeThemesHelper.StandardizeSlug(rawSlug);
-                            SetCacheEntry(folder, $"{slug}|{upgrade}");
-                            Interlocked.Increment(ref fixes);
+                            string newUpgrade = (hasOpUpgrade ? op!.Slug : ed!.Slug)!;
+                            if (newUpgrade != upgrade)
+                            {
+                                upgrade = newUpgrade;
+                                SetCacheEntry(folder, $"{slug}|{upgrade}");
+                                Interlocked.Exchange(ref cacheUpdated, 1);
+                            }
+                            upgrades.Add($"{series.GetDisplayTitle() ?? series.LocalID.ToString()} [{series.LocalID}] (Currently: {slug}, Available: {newUpgrade})");
+                        }
+                        else if (!string.IsNullOrEmpty(upgrade))
+                        {
+                            upgrade = "";
+                            SetCacheEntry(folder, $"{slug}|");
                             Interlocked.Exchange(ref cacheUpdated, 1);
                         }
                     }
-                    catch { }
-
-                logger.LogDebug("AnimeThemes MP3: Auditing file -> {ThemePath} (Slug: {Slug})", themePath, string.IsNullOrEmpty(slug) ? "Unknown" : slug);
-
-                if (!string.IsNullOrEmpty(slug))
-                {
-                    bool isOp = AnimeThemesHelper.IsOp(slug);
-                    bool isOp1 = AnimeThemesHelper.IsOp1(slug);
-                    bool isEd = AnimeThemesHelper.IsEd(slug);
-                    bool isEd1 = AnimeThemesHelper.IsEd1(slug);
-                    int currentSlugNum = AnimeThemesHelper.ExtractSlugNumber(slug);
-
-                    if (isOp && !isOp1)
-                        overriddenOps.Add($"{folder} | {slug}");
-                    else if (isEd && !isEd1)
-                        overriddenEds.Add($"{folder} | {slug}");
-
-                    if (!isOp1)
+                    catch (Exception ex)
                     {
-                        Interlocked.Increment(ref processed);
-                        try
-                        {
-                            string? videoPath = Directory
-                                .EnumerateFiles(folder, "*", SearchOption.AllDirectories)
-                                .FirstOrDefault(file => videoService.IsAllowedVideoExtension(file) && !VfsShared.IsPathIgnored(file, videoService, Settings));
-                            if (videoPath == null || !videoFileLookup.Value.TryGetValue(videoPath, out var series))
-                                return;
-
-                            var anime = await _apiClient.FetchAnimeThemesAsync(series.AnidbAnimeID, token).ConfigureAwait(false);
-                            var animethemes = anime?.FirstOrDefault()?.Animethemes ?? [];
-                            var op = animethemes.Where(theme => theme.Slug != null && AnimeThemesHelper.IsOp(theme.Slug)).OrderBy(theme => AnimeThemesHelper.ExtractSlugNumber(theme.Slug!)).FirstOrDefault();
-                            var ed = animethemes.Where(theme => theme.Slug != null && AnimeThemesHelper.IsEd(theme.Slug)).OrderBy(theme => AnimeThemesHelper.ExtractSlugNumber(theme.Slug!)).FirstOrDefault();
-
-                            int? opNum = op?.Slug != null ? AnimeThemesHelper.ExtractSlugNumber(op.Slug) : null;
-                            int? edNum = ed?.Slug != null ? AnimeThemesHelper.ExtractSlugNumber(ed.Slug) : null;
-
-                            bool hasOpUpgrade = op != null && (isEd || (isOp && opNum.HasValue && opNum.Value < currentSlugNum));
-                            bool hasEdUpgrade = !isOp && isEd && !isEd1 && op == null && ed != null && edNum.HasValue && edNum.Value < currentSlugNum;
-
-                            if (hasOpUpgrade || hasEdUpgrade)
-                            {
-                                string newUpgrade = (hasOpUpgrade ? op!.Slug : ed!.Slug)!;
-                                if (newUpgrade != upgrade)
-                                {
-                                    upgrade = newUpgrade;
-                                    SetCacheEntry(folder, $"{slug}|{upgrade}");
-                                    Interlocked.Exchange(ref cacheUpdated, 1);
-                                }
-                                upgrades.Add($"{series.GetDisplayTitle() ?? series.LocalID.ToString()} [{series.LocalID}] (Currently: {slug}, Available: {newUpgrade})");
-                            }
-                            else if (!string.IsNullOrEmpty(upgrade))
-                            {
-                                upgrade = "";
-                                SetCacheEntry(folder, $"{slug}|");
-                                Interlocked.Exchange(ref cacheUpdated, 1);
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            errors.Add($"Failed to audit {folder}: {ex.Message}");
-                            logger.LogWarning(ex, "AnimeThemes MP3: Failed to audit -> {Folder}", folder);
-                        }
+                        errors.Add($"Failed to audit {folder}: {ex.Message}");
+                        logger.LogWarning(ex, "AnimeThemes MP3: Failed to audit -> {Folder}", folder);
                     }
                 }
             }
-        );
+        });
 
         if (cacheUpdated != 0)
             lock (_cacheLock)

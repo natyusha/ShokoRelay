@@ -26,6 +26,7 @@ namespace ShokoRelay.Controllers;
 /// <param name="imageManager">Shoko image manager.</param>
 /// <param name="imageSyncService">Shoko image sync service.</param>
 /// <param name="vfsWatcher">VFS filesystem event watcher.</param>
+/// <param name="plexMetadata">Plex metadata mapper.</param>
 /// <param name="scheduledActionService">Shoko scheduled action service.</param>
 /// <param name="logger">Logger instance.</param>
 [RelayAdminAuthorize]
@@ -46,6 +47,7 @@ public class ShokoController(
     IImageManager imageManager,
     ImageSyncService imageSyncService,
     VfsWatcher vfsWatcher,
+    PlexMetadata plexMetadata,
     IScheduledActionService scheduledActionService,
     ILogger<ShokoController> logger
 ) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary, logger)
@@ -111,6 +113,7 @@ public class ShokoController(
             Logger.LogInformation("Shoko: Updating VFS overrides file...");
             VfsShared.WriteTextAtomic(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileVfsOverrides), content ?? string.Empty);
             OverrideHelper.Reload();
+            plexMetadata.ClearCache();
             return Ok(new RelayResponse<object>());
         }
         catch (Exception ex)
@@ -175,13 +178,12 @@ public class ShokoController(
         try
         {
             // Normalize Managed Folder paths to remove trailing slashes for consistent comparison with blueprint keys. Filter out folders that are disabled for VFS.
-            var managedFolders =
-                videoService
-                    .GetAllManagedFolders()
-                    ?.Where(VfsShared.IsVfsEnabledFolder)
-                    .Select(folder => new { Path = folder.Path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), folder.Name })
-                    .OrderByDescending(folder => folder.Path.Length)
-                    .ToList()
+            var managedFolders = videoService
+                .GetAllManagedFolders()
+                ?.Where(VfsShared.IsVfsEnabledFolder)
+                .Select(folder => new { Path = folder.Path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), folder.Name })
+                .OrderByDescending(folder => folder.Path.Length)
+                .ToList()
                 ?? [];
 
             using var stream = new FileStream(VfsShared.BlueprintFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);

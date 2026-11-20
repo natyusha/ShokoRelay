@@ -512,8 +512,8 @@
   function locateCurrentInTree() {
     if (!currentWebmPath) return;
 
-    const item = webmTreeData.find((themeItem) => themeItem.path === currentWebmPath);
-    if (!item) return;
+    const currentItem = webmTreeData.find((themeItem) => themeItem.path === currentWebmPath);
+    if (!currentItem) return;
 
     // Collapse all open folders to reset the tree state before locating
     playerTree.querySelectorAll("details[open]").forEach((details) => (details.open = false));
@@ -522,17 +522,23 @@
     const pathSegments = [];
 
     if (useFolderView) {
-      const parts = (item.relPath || `Unknown/${item.file}`).replace(/\\/g, "/").split("/").filter(Boolean);
+      const parts = (currentItem.relPath || `Unknown/${currentItem.file}`).replace(/\\/g, "/").split("/").filter(Boolean);
       parts.pop();
-      parts.push(item.series);
+      parts.push(currentItem.series);
       pathSegments.push(...parts);
     } else {
-      pathSegments.push(item.group, item.series);
+      const groupSeriesCount = new Set(
+        getFilteredItems()
+          .filter((entry) => entry.group === currentItem.group)
+          .map((entry) => entry.series),
+      ).size;
+      if (groupSeriesCount > 1 || currentItem.group === MISSING_LABEL) pathSegments.push(currentItem.group);
+      pathSegments.push(currentItem.series);
     }
 
     let currentScope = playerTree;
-    pathSegments.forEach((seg) => {
-      const details = [...currentScope.querySelectorAll("details")].find((detailsEl) => getSummaryTitle(detailsEl.querySelector("summary")) === seg);
+    pathSegments.forEach((segment) => {
+      const details = [...currentScope.querySelectorAll("details")].find((detailsEl) => getSummaryTitle(detailsEl.querySelector("summary")) === segment);
       if (details) {
         details.open = true;
         if (!details.dataset.rendered) details.dispatchEvent(new Event("toggle"));

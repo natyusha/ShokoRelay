@@ -504,7 +504,6 @@ internal static class VfsShared
     {
         var blueprint = new ConcurrentDictionary<string, ConcurrentDictionary<int, VfsBlueprintSeries>>(PathComparer);
         if (File.Exists(BlueprintFilePath))
-        {
             try
             {
                 using var stream = new FileStream(BlueprintFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
@@ -517,7 +516,6 @@ internal static class VfsShared
                     }
             }
             catch { }
-        }
         return blueprint;
     }
 
@@ -527,14 +525,11 @@ internal static class VfsShared
     {
         try
         {
-            WriteAtomic(
-                BlueprintFilePath,
-                tmp =>
-                {
-                    using var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None);
-                    JsonSerializer.Serialize(fs, blueprint);
-                }
-            );
+            WriteAtomic(BlueprintFilePath, tmp =>
+            {
+                using var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None);
+                JsonSerializer.Serialize(fs, blueprint);
+            });
             Interlocked.Increment(ref s_blueprintVersion);
         }
         catch { }

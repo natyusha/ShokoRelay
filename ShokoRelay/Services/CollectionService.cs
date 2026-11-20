@@ -4,7 +4,7 @@ using Shoko.Abstractions.Video.Services;
 
 namespace ShokoRelay.Services;
 
-#region Interface & Models
+#region Data Models
 
 /// <summary>Result returned by <see cref="CollectionService.BuildCollectionsAsync"/>.</summary>
 /// <param name="Processed">Number of series processed.</param>
@@ -127,9 +127,9 @@ public class CollectionService(
                 foreach (var target in targets)
                 {
                     var collections = await plexClient.GetSectionCollectionsAsync(target, cancellationToken).ConfigureAwait(false) ?? [];
-                    foreach (var col in collections)
+                    foreach (var collection in collections)
                     {
-                        var metaDir = col.GetMetadataDirectory();
+                        var metaDir = collection.GetMetadataDirectory();
                         if (string.IsNullOrEmpty(metaDir))
                             continue;
 
@@ -153,7 +153,7 @@ public class CollectionService(
                             }
                             catch (Exception ex)
                             {
-                                logger.LogWarning(ex, "CollectionService: Failed to prune {Folder} for collection '{Title}'", folder, col.Title);
+                                logger.LogWarning(ex, "CollectionService: Failed to prune {Folder} for collection '{Title}'", folder, collection.Title);
                             }
                         }
                     }
@@ -224,24 +224,24 @@ public class CollectionService(
                     if (string.IsNullOrWhiteSpace(item.Guid) || !int.TryParse(item.RatingKey, out int plexKey))
                         continue;
 
-                    int? sid = null;
+                    int? seriesId = null;
                     if (isMovieTarget)
                     {
                         var epId = PlexHelper.ExtractShokoEpisodeIdFromGuid(item.Guid);
                         if (epId.HasValue)
-                            sid = metadataService.GetShokoEpisodeByID(epId.Value)?.ShokoSeriesID;
+                            seriesId = metadataService.GetShokoEpisodeByID(epId.Value)?.ShokoSeriesID;
                     }
                     else
-                        sid = PlexHelper.ExtractShokoSeriesIdFromGuid(item.Guid);
+                        seriesId = PlexHelper.ExtractShokoSeriesIdFromGuid(item.Guid);
 
-                    if (!sid.HasValue || (allowedIds != null && !allowedIds.Contains(sid.Value)))
+                    if (!seriesId.HasValue || (allowedIds != null && !allowedIds.Contains(seriesId.Value)))
                         continue;
 
-                    uniqueSeries.Add(sid.Value);
-                    var series = metadataService.GetShokoSeriesByID(sid.Value);
+                    uniqueSeries.Add(seriesId.Value);
+                    var series = metadataService.GetShokoSeriesByID(seriesId.Value);
                     var collectionName = series != null ? mapper.GetCollectionName(series) : null;
 
-                    logger.LogTrace("CollectionService: Processing series -> {Title} [{SeriesId}] (RatingKey: {RatingKey})", series?.GetDisplayTitle() ?? "Unknown", sid.Value, item.RatingKey);
+                    logger.LogTrace("CollectionService: Processing series -> {Title} [{SeriesId}] (RatingKey: {RatingKey})", series?.GetDisplayTitle() ?? "Unknown", seriesId.Value, item.RatingKey);
 
                     // Skip standard metadata assignment if only refreshing poster assets
                     if (applyAssignment)
@@ -255,16 +255,16 @@ public class CollectionService(
                                 continue;
 
                             // Remove if the series belongs to a different group (rename) or is now a solo group (null)
-                            if (collectionName == null || !string.Equals(staleName, collectionName, StringComparison.OrdinalIgnoreCase))
-                            {
-                                if (await plexCollections.RemoveCollectionFromItemAsync(plexKey, staleName!, target, cancellationToken).ConfigureAwait(false))
-                                    logger.LogInformation(
-                                        "CollectionService: Removed incorrect collection '{Collection}' from -> {Title} [{SeriesId}]",
-                                        staleName,
-                                        series?.GetDisplayTitle() ?? item.Title,
-                                        sid.Value
-                                    );
-                            }
+                            if (
+                                (collectionName == null || !string.Equals(staleName, collectionName, StringComparison.OrdinalIgnoreCase))
+                                && await plexCollections.RemoveCollectionFromItemAsync(plexKey, staleName!, target, cancellationToken).ConfigureAwait(false)
+                            )
+                                logger.LogInformation(
+                                    "CollectionService: Removed incorrect collection '{Collection}' from -> {Title} [{SeriesId}]",
+                                    staleName,
+                                    series?.GetDisplayTitle() ?? item.Title,
+                                    seriesId.Value
+                                );
                         }
 
                         if (!string.IsNullOrEmpty(collectionName) && !alreadyHasCorrect)
@@ -273,13 +273,13 @@ public class CollectionService(
                             if (assignmentOk)
                             {
                                 created++;
-                                logger.LogInformation("CollectionService: Assigned '{Collection}' to -> {Title} [{SeriesId}]", collectionName, series?.GetDisplayTitle() ?? item.Title, sid.Value);
-                                createdList.Add(new CollectionAssignmentDetail(target.Title, target.SectionId, collectionName, sid.Value, plexKey, isMovieTarget));
+                                logger.LogInformation("CollectionService: Assigned '{Collection}' to -> {Title} [{SeriesId}]", collectionName, series?.GetDisplayTitle() ?? item.Title, seriesId.Value);
+                                createdList.Add(new CollectionAssignmentDetail(target.Title, target.SectionId, collectionName, seriesId.Value, plexKey, isMovieTarget));
                             }
                             else
                             {
                                 errors++;
-                                errorsList.Add($"Failed assignment: {sid.Value}");
+                                errorsList.Add($"Failed assignment: {seriesId.Value}");
                             }
                         }
                     }
@@ -301,8 +301,7 @@ public class CollectionService(
                                 var group = metadataService.GetShokoGroupByID(series!.TopLevelGroupID);
                                 var primarySeries = group?.MainSeries ?? group?.Series?.FirstOrDefault() ?? series!;
                                 var desc = TextHelper.GetDescriptionByLanguage(primarySeries, Settings.DescriptionLanguage);
-                                var tmdbDesc =
-                                    primarySeries.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault()?.PreferredOverview?.Value
+                                var tmdbDesc = primarySeries.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault()?.PreferredOverview?.Value
                                     ?? primarySeries.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault()?.PreferredOverview?.Value;
                                 var summary = TextHelper.SanitizeSummaryWithFallback(desc, tmdbDesc, Settings.SummaryMode);
                                 await plexCollections.UpdateCollectionMetadataAsync(cid, collectionName, summary, target, cancellationToken).ConfigureAwait(false);
@@ -354,13 +353,11 @@ public class CollectionService(
                 }
 
                 // Apply custom images to smart collections
-                foreach (var col in collections)
-                {
-                    if (PlexHelper.IsPlexTrue(col.Smart) && int.TryParse(col.RatingKey, out int cid) && !string.IsNullOrEmpty(col.Title))
-                    {
+                foreach (var collection in collections)
+                    if (PlexHelper.IsPlexTrue(collection.Smart) && int.TryParse(collection.RatingKey, out int collectionId) && !string.IsNullOrEmpty(collection.Title))
                         foreach (var (prefix, suffix, suffixes, label, _) in PlexConstants.CollectionImageConfigs)
                         {
-                            var posterPath = PlexHelper.FindCollectionImagePath(null, col.Title, cid, suffixes, metadataService, globalRoots);
+                            var posterPath = PlexHelper.FindCollectionImagePath(null, collection.Title, collectionId, suffixes, metadataService, globalRoots);
                             if (!string.IsNullOrEmpty(posterPath) && File.Exists(posterPath))
                             {
                                 long ticks = 0;
@@ -371,9 +368,9 @@ public class CollectionService(
                                 catch { }
 
                                 string cacheVal = $"{posterPath}?t={ticks}";
-                                string cacheKey = $"{target.SectionId}|sc{cid}|{prefix}";
+                                string cacheKey = $"{target.SectionId}|sc{collectionId}|{prefix}";
 
-                                bool plexHasPoster = prefix != "posters" || (col.Thumb != null && !col.Thumb.Contains("/composite/", StringComparison.OrdinalIgnoreCase));
+                                bool plexHasPoster = prefix != "posters" || (collection.Thumb != null && !collection.Thumb.Contains("/composite/", StringComparison.OrdinalIgnoreCase));
 
                                 if (plexHasPoster && cache.TryGetValue(cacheKey, out var lastVal) && string.Equals(lastVal, cacheVal, StringComparison.Ordinal))
                                 {
@@ -381,18 +378,16 @@ public class CollectionService(
                                     continue;
                                 }
 
-                                if (await plexCollections.UploadCollectionImageAsync(cid, posterPath, prefix, target, cancellationToken).ConfigureAwait(false))
+                                if (await plexCollections.UploadCollectionImageAsync(collectionId, posterPath, prefix, target, cancellationToken).ConfigureAwait(false))
                                 {
                                     cache[cacheKey] = cacheVal;
                                     cacheModified = true;
                                     uploaded++;
-                                    uploadedDetails.Add(new CollectionUploadDetail(target.Title, isMovieTarget, $"custom {label}", col.Title, cid));
-                                    logger.LogInformation("CollectionService: Applied custom {Label} to smart collection -> {Title} (RatingKey: {RatingKey})", label, col.Title, cid);
+                                    uploadedDetails.Add(new CollectionUploadDetail(target.Title, isMovieTarget, $"custom {label}", collection.Title, collectionId));
+                                    logger.LogInformation("CollectionService: Applied custom {Label} to smart collection -> {Title} (RatingKey: {RatingKey})", label, collection.Title, collectionId);
                                 }
                             }
                         }
-                    }
-                }
             }
 
             var deletedList = new List<CollectionDeletionDetail>();
@@ -400,21 +395,19 @@ public class CollectionService(
                 deletedList = await plexCollections.DeleteEmptyCollectionsAsync(cancellationToken).ConfigureAwait(false);
 
             if (deletedList.Count > 0)
-                foreach (var deleted in deletedList)
-                foreach (var cacheKey in cache.Keys.Where(key => key.Contains($"|{deleted.RatingKey}|") || key.Contains($"|sc{deleted.RatingKey}|")).ToList())
+                foreach (var deletion in deletedList)
+                foreach (var cacheKey in cache.Keys.Where(key => key.Contains($"|{deletion.RatingKey}|") || key.Contains($"|sc{deletion.RatingKey}|")).ToList())
                 {
                     cache.Remove(cacheKey);
                     cacheModified = true;
                 }
 
             if (cacheModified)
-            {
                 try
                 {
                     VfsShared.WriteLinesAtomic(cachePath, cache.Select(pair => $"{pair.Key}|{pair.Value}"));
                 }
                 catch { }
-            }
 
             sw.Stop();
             logger.LogInformation("CollectionService: Task finished -> {Count} collections assigned in {Elapsed}ms", created, sw.ElapsedMilliseconds);

@@ -79,15 +79,11 @@ public static partial class VfsHelper
 
         string processed = name;
         if (name.AsSpan().IndexOfAny(InvalidFileNameChars) >= 0)
-            processed = string.Create(
-                name.Length,
-                name,
-                (chars, state) =>
-                {
-                    for (int charIdx = 0; charIdx < state.Length; charIdx++)
-                        chars[charIdx] = InvalidFileNameChars.Contains(state[charIdx]) ? ' ' : state[charIdx];
-                }
-            );
+            processed = string.Create(name.Length, name, (chars, state) =>
+            {
+                for (int charIdx = 0; charIdx < state.Length; charIdx++)
+                    chars[charIdx] = InvalidFileNameChars.Contains(state[charIdx]) ? ' ' : state[charIdx];
+            });
 
         var cleaned = TextHelper.CondenseSpaces(processed).Trim().TrimEnd('.');
         return cleaned.Length > 0 ? cleaned : "Unknown";
@@ -112,15 +108,11 @@ public static partial class VfsHelper
             cleanedTitle = $"E{TextHelper.ZeroWidthSpace}nding{cleanedTitle[6..]}";
 
         if (cleanedTitle.AsSpan().IndexOfAny(s_replacementChars) >= 0)
-            cleanedTitle = string.Create(
-                cleanedTitle.Length,
-                cleanedTitle,
-                (chars, state) =>
-                {
-                    for (int charIdx = 0; charIdx < state.Length; charIdx++)
-                        chars[charIdx] = ReplacementCharMap.TryGetValue(state[charIdx], out var m) ? m : state[charIdx];
-                }
-            );
+            cleanedTitle = string.Create(cleanedTitle.Length, cleanedTitle, (chars, state) =>
+            {
+                for (int charIdx = 0; charIdx < state.Length; charIdx++)
+                    chars[charIdx] = ReplacementCharMap.TryGetValue(state[charIdx], out var replacementChar) ? replacementChar : state[charIdx];
+            });
 
         return WhitespaceRegex().Replace(cleanedTitle, " ").Trim(' ');
     }
@@ -250,11 +242,11 @@ public static partial class VfsHelper
         bool isVariation = false
     )
     {
-        string ep = s_extraTypePrefixes.TryGetValue(extra.Subtype, out var pref) ? pref + mapping.Coords.Episode.ToString($"D{pad}") : mapping.Coords.Episode.ToString($"D{pad}");
+        string episode = s_extraTypePrefixes.TryGetValue(extra.Subtype, out var pref) ? pref + mapping.Coords.Episode.ToString($"D{pad}") : mapping.Coords.Episode.ToString($"D{pad}");
         int totalParts = partCount ?? mapping.PartCount;
         string part = totalParts > 1 ? $"-pt{partIdx ?? mapping.PartIndex}" : (vIdx.HasValue ? $"-dup{vIdx}" : "");
 
-        string name = $"{ep}{part} ❯ {CleanEpisodeTitleForFilename(TextHelper.ResolveEpisodeTitle(mapping.PrimaryEpisode, seriesTitle))}";
+        string name = $"{episode}{part} ❯ {CleanEpisodeTitleForFilename(TextHelper.ResolveEpisodeTitle(mapping.PrimaryEpisode, seriesTitle))}";
         if (isVariation && totalParts <= 1)
             name += "[variation]";
         return SanitizeName(name + ext);
@@ -335,10 +327,10 @@ public static partial class VfsHelper
                 if (!expectedFiles.Contains(file))
                     try
                     {
-                        var fi = new FileInfo(file);
+                        var fileInfo = new FileInfo(file);
 
                         // Allow AnimeThemesMapping to manage its own files
-                        if (fi.LinkTarget != null && fi.LinkTarget.Contains(themeRootName, StringComparison.OrdinalIgnoreCase))
+                        if (fileInfo.LinkTarget != null && fileInfo.LinkTarget.Contains(themeRootName, StringComparison.OrdinalIgnoreCase))
                             continue;
 
                         File.Delete(file);
@@ -347,14 +339,12 @@ public static partial class VfsHelper
 
             var dirs = Directory.EnumerateDirectories(seriesPath, "*", SearchOption.AllDirectories).OrderByDescending(dir => dir.Length).ToList();
             foreach (var dir in dirs)
-            {
                 try
                 {
                     if (!Directory.EnumerateFileSystemEntries(dir).Any())
                         Directory.Delete(dir);
                 }
                 catch { }
-            }
         }
     }
 
@@ -368,23 +358,20 @@ public static partial class VfsHelper
     {
         string themeRootPath = Path.Combine(importRoot, themeRootName);
         var cache = session
-            .PhysicalThemeCaches.GetOrAdd(
-                themeRootPath,
-                root => new Lazy<Dictionary<string, string>>(() =>
+            .PhysicalThemeCaches.GetOrAdd(themeRootPath, root => new Lazy<Dictionary<string, string>>(() =>
+            {
+                var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                if (Directory.Exists(root))
                 {
-                    var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                    if (Directory.Exists(root))
+                    try
                     {
-                        try
-                        {
-                            foreach (string file in Directory.EnumerateFiles(root, "*.webm", SearchOption.AllDirectories))
-                                dict[Path.GetRelativePath(root, file).Replace('\\', '/').TrimLeadingSlashes()] = Path.GetFullPath(file);
-                        }
-                        catch { }
+                        foreach (string file in Directory.EnumerateFiles(root, "*.webm", SearchOption.AllDirectories))
+                            dict[Path.GetRelativePath(root, file).Replace('\\', '/').TrimLeadingSlashes()] = Path.GetFullPath(file);
                     }
-                    return dict;
-                })
-            )
+                    catch { }
+                }
+                return dict;
+            }))
             .Value;
 
         string normalizedRel = relativePath.Replace('\\', '/').TrimLeadingSlashes();

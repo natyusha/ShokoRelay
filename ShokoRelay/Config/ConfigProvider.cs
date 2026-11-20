@@ -242,7 +242,6 @@ public partial class ConfigProvider : IDisposable
     private static string ReadFileWithRetry(string path)
     {
         for (int attempt = 0; attempt < 3; attempt++)
-        {
             try
             {
                 return File.ReadAllText(path);
@@ -253,7 +252,6 @@ public partial class ConfigProvider : IDisposable
                     throw;
                 Thread.Sleep(50);
             }
-        }
         return string.Empty;
     }
 
@@ -299,24 +297,24 @@ public partial class ConfigProvider : IDisposable
     public RelayConfig GetEffectiveSettings()
     {
         var settings = GetSettings();
-        var ctx = _httpContextAccessor?.HttpContext;
-        if (ctx == null || ctx.Request.Method != HttpMethods.Get)
+        var httpContext = _httpContextAccessor?.HttpContext;
+        if (httpContext == null || httpContext.Request.Method != HttpMethods.Get)
             return settings;
 
-        if (ctx.Items.TryGetValue("EffectiveRelayConfig", out var cached) && cached is RelayConfig cachedConfig)
+        if (httpContext.Items.TryGetValue("EffectiveRelayConfig", out var cached) && cached is RelayConfig cachedConfig)
             return cachedConfig;
 
         var overrides = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         // Extract from Path Segment (options/{overrides})
-        var overridePath = ctx.Request.RouteValues["overrides"]?.ToString();
+        var overridePath = httpContext.Request.RouteValues["overrides"]?.ToString();
         if (!string.IsNullOrWhiteSpace(overridePath))
             foreach (var pair in overridePath.Split(';', StringSplitOptions.RemoveEmptyEntries))
                 if (pair.Split('=', 2) is { Length: 2 } pairTokens)
                     overrides[pairTokens[0].Trim()] = pairTokens[1].Trim();
 
         // Extract from Query String (fallback for testing)
-        foreach (var queryParam in ctx.Request.Query)
+        foreach (var queryParam in httpContext.Request.Query)
             overrides[queryParam.Key] = queryParam.Value.ToString();
 
         if (overrides.Count == 0 || !s_overridableProps.Any(prop => overrides.ContainsKey(prop.Name)))
@@ -324,25 +322,21 @@ public partial class ConfigProvider : IDisposable
 
         var cloned = JsonSerializer.Deserialize<RelayConfig>(JsonSerializer.Serialize(settings, s_options), s_options)!;
         foreach (var prop in s_overridableProps)
-        {
-            if (overrides.TryGetValue(prop.Name, out var val) && !string.IsNullOrWhiteSpace(val))
-            {
+            if (overrides.TryGetValue(prop.Name, out var rawValue) && !string.IsNullOrWhiteSpace(rawValue))
                 try
                 {
                     if (prop.PropertyType == typeof(string))
-                        prop.SetValue(cloned, val);
+                        prop.SetValue(cloned, rawValue);
                     else if (prop.PropertyType == typeof(bool))
-                        prop.SetValue(cloned, string.Equals(val, "1") || string.Equals(val, "true", StringComparison.OrdinalIgnoreCase));
+                        prop.SetValue(cloned, string.Equals(rawValue, "1") || string.Equals(rawValue, "true", StringComparison.OrdinalIgnoreCase));
                     else if (prop.PropertyType.IsEnum)
-                        prop.SetValue(cloned, Enum.Parse(prop.PropertyType, val, true));
+                        prop.SetValue(cloned, Enum.Parse(prop.PropertyType, rawValue, true));
                 }
                 catch
                 { /* Ignore invalid override values */
                 }
-            }
-        }
 
-        ctx.Items["EffectiveRelayConfig"] = cloned;
+        httpContext.Items["EffectiveRelayConfig"] = cloned;
         return cloned;
     }
 
